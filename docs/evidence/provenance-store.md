@@ -1,0 +1,29 @@
+# Internal evidence and provenance store
+
+`src/evidence/store.mjs` is an internal persistence core for source evidence and extracted fact provenance. `src/verification/provenance/index.mjs` exposes a narrow in-process adapter over the fact operations. These files do not define a public package contract, canonical request/package serialization, authenticated route, or complete issue-10 integration. Those pieces remain dependent on the shared contracts and application composition root.
+
+## Persistence and concurrency
+
+The store creates one `evidence.sqlite` database under a private directory named by a SHA-256 tenant scope. SQLite stores the sanitized evidence/fact manifest and encrypted bundle rows together. Every store operation uses `BEGIN IMMEDIATE`; new encrypted bundles, metadata changes, and expiry deletes commit or roll back in one transaction. SQLite owns cross-process locking and releases an interrupted writer's transaction when the process exits. A per-tenant in-process promise queue prevents synchronous SQLite busy-waits from blocking an earlier async operation in the same process. Lock timeout failures surface as `EVIDENCE_BUSY`; there is no age-based stale-lock takeover.
+
+The database uses rollback-journal mode, `synchronous=FULL`, `secure_delete=ON`, and private file permissions. The store sets tenant directories to mode `0700`, sets the database file to `0600`, and rejects an existing database path that is a symbolic link or non-regular file. Configure `directory` from trusted server-side composition. The implementation assumes the parent storage path and its filesystem administrators are trusted; it does not defend against a same-user attacker racing filesystem path replacement or an administrator directly editing the database. Use a local filesystem that supports SQLite locking and durability; no network-filesystem coordination guarantee is made.
+
+The runtime uses the built-in `node:sqlite` `DatabaseSync` API and adds no npm dependency or native addon. This implementation was exercised with Node `v22.23.3`. In that release the module is available without `--experimental-sqlite`, but Node marks it Stability 1.1, Active development; the `DatabaseSync` busy-timeout option is available from Node `v22.16.0`. Host support outside the tested runtime is not asserted. See the [Node.js v22.23.3 SQLite documentation](https://nodejs.org/download/release/v22.23.3/docs/api/sqlite.html).
+
+## Tenant, privacy, and retention boundary
+
+The application injects `resolveTenant`, `resolveKey`, `resolveRetention`, and the private-read authorization hooks. The store derives tenant identity from `resolveTenant` and accepts only opaque, process-local tenant/evidence/position/fact handles afterward; public caller-supplied tenant fields are not part of its inputs. Returned handles and metadata are frozen. The retention capability is opaque and must bind to the existing privacy decision at the composition root. The store caps expiry by the injected decision and its configured maximum; facts cannot outlive their supporting evidence.
+
+The complete source is hashed transiently and is not persisted as plaintext. Only caller-selected text ranges or JSON pointers that exactly match the source are persisted, inside AES-256-GCM encrypted bundles. Fact raw and normalized values are encrypted as well. A fresh 32-byte key is resolved from the injected key service for each payload/fact operation; the store does not contain a production key. The authenticated-encryption associated data binds the tenant hash, bundle kind, and immutable record ID. Source URLs and redirect chains are inside encrypted evidence bundles; source identity indexes use a keyed HMAC.
+
+Private payload reads require both an injected authorization callback and an injected consumer. There is no raw-payload return method. If private access hooks are not configured, private reads fail closed. Expiry deletes encrypted bundle rows and strips content hashes, timestamps, policy details, source HMAC linkage, and support links from tombstones in the same database transaction. An evidence tombstone retains only its opaque ID and expired state; expired facts retain only their opaque ID and expired state. The store does not change or silently extend the upstream privacy retention decision.
+
+## Provenance semantics
+
+Facts distinguish `sourced`, `inferred`, `customer_supplied`, `missing`, and `conflicting` states, and preserve raw and normalized values separately. A sourced/inferred support must refer to an authorized evidence handle, an issued position handle, the matching full-source hash, and the saved position hash. Date-only precision stays date-only; the store does not infer a time or timezone. Conflicts preserve each candidate and its own supports.
+
+`duplicateGroupId` groups records with exactly identical source bytes within a tenant. It is a duplicate marker, not evidence that other sources are independent. Every fact support reports `independence: 'unknown'`; the API intentionally exposes no independent-support count because different hashes, publishers, hostnames, and brand names do not establish independent origin. Authority is not inferred from branding. Attribution-aware independence can be added only when a trusted provenance signal exists.
+
+## Validation boundary
+
+The tests use synthetic tenant keys and retention capabilities. They cover process restart, same-process and cross-process competing writes, SIGKILL rollback of staged ciphertext and metadata, busy timeout with a live writer, symlink rejection, hash/position/scope validation, idempotency and changed-byte versions, conservative syndication grouping, and expiry cleanup. This is persistence and fact-validation core coverage, not proof that the broader event-intelligence package or authentication routes are complete.

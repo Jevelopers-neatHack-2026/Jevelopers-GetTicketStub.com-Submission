@@ -11,6 +11,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CASES = Object.freeze({
   "safe-retrieval": ["tests/security"],
   "content-privacy": ["tests/privacy", "tests/security/injection"],
+  evidence: ["tests/evidence"],
   evals: ["tests/evals"],
   "research-api": ["tests/api"],
   "verify-runner": ["tests/runner"],
