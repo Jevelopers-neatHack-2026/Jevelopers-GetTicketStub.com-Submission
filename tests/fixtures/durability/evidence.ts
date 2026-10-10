@@ -7,6 +7,6 @@ export function evidence(name: string, value: unknown): void {
 	mkdirSync(directory, { recursive: true });
 	writeFileSync(
 		join(directory, `${name}.json`),
-		`${JSON.stringify(value, null, 2)}\n`,
+		`${JSON.stringify({ ...(typeof value === "object" && value !== null ? value : { value }), executionNonce: process.env["PP_DURABILITY_EXECUTION_NONCE"] ?? null }, null, 2)}\n`,
 	);
 }
