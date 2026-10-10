@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -73,6 +74,42 @@ class HandoffCheckerTests(unittest.TestCase):
     @staticmethod
     def checks(report: dict, check_id: str) -> list[dict]:
         return [item for item in report["checks"] if item["id"] == check_id]
+
+    def assert_prerequisite_inventory(self, report: dict, kind: str) -> None:
+        spec = checker.HANDOFF_SPECS[kind]
+        expected_ids = {
+            f"handoff:{kind}",
+            "trusted-evidence-verifier",
+            *(f"pin:{component_id}" for component_id in spec.components),
+            *(f"artifact:{artifact_id}" for artifact_id in spec.artifacts),
+            *(f"fixture:{fixture_id}" for fixture_id in spec.fixtures),
+            *(f"crosswalk:{item_id}" for item_id in spec.crosswalk),
+        }
+        owners = {
+            f"handoff:{kind}": spec.owner_role,
+            "trusted-evidence-verifier": spec.owner_role,
+            **{f"pin:{component_id}": checker.COMPONENTS[component_id]["owner_role"] for component_id in spec.components},
+            **{f"artifact:{artifact_id}": item.owner_role for artifact_id, item in spec.artifacts.items()},
+            **{f"fixture:{fixture_id}": item.owner_role for fixture_id, item in spec.fixtures.items()},
+            **{f"crosswalk:{item_id}": checker._crosswalk_owner(kind, spec, item_id) for item_id in spec.crosswalk},
+        }
+        entries = {item["id"]: item for item in report["missing_deliverables"]}
+        self.assertEqual(set(entries), expected_ids)
+        self.assertEqual(report["summary"]["missing_deliverables"], len(entries))
+        self.assertEqual(report["summary"]["required_artifacts"], len(spec.artifacts))
+        self.assertEqual(report["summary"]["required_fixtures"], len(spec.fixtures))
+        for item_id, owner in owners.items():
+            with self.subTest(kind=kind, item=item_id):
+                self.assertEqual(entries[item_id]["owner_role"], owner)
+                self.assertIsInstance(entries[item_id]["reason"], str)
+                self.assertTrue(entries[item_id]["reason"].strip())
+                self.assertIsInstance(entries[item_id]["next_action"], str)
+                self.assertTrue(entries[item_id]["next_action"].strip())
+                if item_id != "trusted-evidence-verifier":
+                    self.assertIn("prerequisite", entries[item_id]["reason"])
+        self.assertEqual(report["readiness_status"], "INVALID")
+        self.assertEqual(report["exit_code"], 2)
+        self.assertFalse(report["ready"])
 
     def test_checked_in_manifest_is_pending_for_all_four_scopes(self) -> None:
         for kind in checker.KINDS:
@@ -339,6 +376,10 @@ class HandoffCheckerTests(unittest.TestCase):
         report = self.audit("handoff-consumer")
         check = self.checks(report, "handoff-consumer.crosswalk.program_epic_reference.resolution")[0]
         self.assertEqual(check["status"], "untrusted")
+        missing = [item for item in report["missing_deliverables"] if item["id"] == "crosswalk:program_epic_reference"]
+        self.assertEqual(len(missing), 1)
+        self.assertEqual(missing[0]["owner_role"], "Agent and research")
+        self.assertTrue(missing[0]["next_action"])
         self.assertNotEqual(report["readiness_status"], "READY")
 
     def test_alternate_component_manifest_path_is_rejected_before_any_read(self) -> None:
@@ -353,6 +394,14 @@ class HandoffCheckerTests(unittest.TestCase):
         self.assertEqual(report["readiness_status"], "INVALID")
         self.assertEqual(self.checks(report, "manifest.component_manifest")[0]["status"], "invalid")
         self.assertFalse(any(item["id"].startswith("component_manifest.") for item in report["checks"]))
+
+        self.restore_inputs()
+        self.manifest["component_manifest"] = "tests/contracts/evidence/alternate-component.json"
+        self.save_manifest()
+        with patch.object(checker, "_read_local_file", wraps=checker._read_local_file) as read_local:
+            report = self.audit("handoff-contracts")
+        self.assertEqual([call.args[1] for call in read_local.call_args_list], ["tests/contracts/handoff-manifest.json"])
+        self.assert_prerequisite_inventory(report, "handoff-contracts")
 
     def test_fifo_evidence_fails_promptly_as_invalid_json_report(self) -> None:
         fifo = self.root / "release/handoff-evidence/fifo-receipt"
@@ -721,6 +770,128 @@ class HandoffCheckerTests(unittest.TestCase):
                 item = next(row for row in report["missing_deliverables"] if row["id"] == f"crosswalk:{item_id}")
                 self.assertEqual(item["owner_role"], expected_owner)
 
+    def test_crosswalk_resolution_transitions_keep_actionable_identity(self) -> None:
+        cases = (
+            ("handoff-contracts", "scope_approval_fields"),
+            ("handoff-metering", "trace_delivery_ack_recovery"),
+            ("provider-readiness", "budget_owner_and_revocation"),
+            ("handoff-consumer", "package_identity_version_hash"),
+        )
+        malformed_resolutions = (False, [], {}, "", " \t\n")
+        for kind, item_id in cases:
+            spec = checker.HANDOFF_SPECS[kind]
+            expected_owner = checker._crosswalk_owner(kind, spec, item_id)
+            self.restore_inputs()
+            baseline = self.audit(kind)
+            baseline_count = baseline["summary"]["missing_deliverables"]
+            self.assertEqual(baseline["exit_code"], 1)
+            baseline_rows = [item for item in baseline["missing_deliverables"] if item["id"] == f"crosswalk:{item_id}"]
+            self.assertEqual(len(baseline_rows), 1)
+
+            for resolution in malformed_resolutions:
+                with self.subTest(kind=kind, item=item_id, resolution=resolution):
+                    self.restore_inputs()
+                    self.manifest["handoffs"][kind]["crosswalk"][item_id]["resolution"] = resolution
+                    self.save_manifest()
+                    report = self.audit(kind)
+                    rows = [item for item in report["missing_deliverables"] if item["id"] == f"crosswalk:{item_id}"]
+                    self.assertEqual(len(rows), 1)
+                    self.assertEqual(rows[0]["owner_role"], expected_owner)
+                    self.assertTrue(rows[0]["next_action"].strip())
+                    self.assertEqual(rows[0]["actual"]["resolution_claim"], resolution)
+                    self.assertEqual(report["summary"]["missing_deliverables"], baseline_count)
+                    self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+                    self.assertEqual(report["exit_code"], 2)
+
+            with self.subTest(kind=kind, item=item_id, mutation="valid-untrusted-string"):
+                self.restore_inputs()
+                self.manifest["handoffs"][kind]["crosswalk"][item_id]["resolution"] = "Owner decision text supplied without trusted proof"
+                self.save_manifest()
+                report = self.audit(kind)
+                check = self.checks(report, f"{kind}.crosswalk.{item_id}.resolution")[0]
+                rows = [item for item in report["missing_deliverables"] if item["id"] == f"crosswalk:{item_id}"]
+                self.assertEqual(check["status"], "untrusted")
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["owner_role"], expected_owner)
+                self.assertEqual(rows[0]["actual"]["resolution_claim"], "Owner decision text supplied without trusted proof")
+                self.assertEqual(report["summary"]["missing_deliverables"], baseline_count)
+                self.assertEqual(report["exit_code"], 1)
+
+            for field, claimed_value in (("owner_role", "Synthetic wrong role"), ("expectation", "Synthetic wrong expectation")):
+                with self.subTest(kind=kind, item=item_id, mismatched_field=field):
+                    self.restore_inputs()
+                    row = self.manifest["handoffs"][kind]["crosswalk"][item_id]
+                    row[field] = claimed_value
+                    row["resolution"] = "Owner decision text supplied without trusted proof"
+                    self.save_manifest()
+                    report = self.audit(kind)
+                    rows = [item for item in report["missing_deliverables"] if item["id"] == f"crosswalk:{item_id}"]
+                    self.assertEqual(len(rows), 1)
+                    self.assertEqual(rows[0]["owner_role"], expected_owner)
+                    self.assertEqual(rows[0]["actual"][f"{field}_claim"], claimed_value)
+                    self.assertTrue(rows[0]["next_action"].strip())
+                    self.assertEqual(report["summary"]["missing_deliverables"], baseline_count)
+                    self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+                    self.assertEqual(report["exit_code"], 2)
+
+    def test_prerequisite_failures_preserve_selected_scope_inventory(self) -> None:
+        case_names = (
+            "invalid-version",
+            "omitted-other-scope",
+            "null-component-path",
+            "alternate-component-path",
+            "unreadable-manifest",
+            "malformed-manifest",
+            "non-object-manifest",
+            "missing-component-file",
+            "symlink-component-file",
+            "non-object-component-file",
+        )
+        for kind in checker.KINDS:
+            for case_name in case_names:
+                with self.subTest(kind=kind, prerequisite=case_name):
+                    self.restore_inputs()
+                    if case_name == "invalid-version":
+                        self.manifest["schema_version"] = True
+                    elif case_name == "omitted-other-scope":
+                        other_kind = next(candidate for candidate in checker.KINDS if candidate != kind)
+                        self.manifest["handoffs"].pop(other_kind)
+                    elif case_name == "null-component-path":
+                        self.manifest["component_manifest"] = None
+                    elif case_name == "alternate-component-path":
+                        self.manifest["component_manifest"] = "tests/contracts/evidence/alternate-component.json"
+                        _write_json(self.root / self.manifest["component_manifest"], self.components)
+                    elif case_name in {"unreadable-manifest", "malformed-manifest", "non-object-manifest"}:
+                        pass
+                    elif case_name in {"missing-component-file", "symlink-component-file"}:
+                        self.component_path.unlink()
+                    elif case_name == "non-object-component-file":
+                        self.component_path.write_text("null\n", encoding="utf-8")
+                    self.save_manifest()
+
+                    if case_name == "unreadable-manifest":
+                        self.manifest_path.unlink()
+                    elif case_name == "malformed-manifest":
+                        self.manifest_path.write_text("{\n", encoding="utf-8")
+                    elif case_name == "non-object-manifest":
+                        self.manifest_path.write_text("null\n", encoding="utf-8")
+                    elif case_name == "symlink-component-file":
+                        component_copy = self.root / "component-manifest-copy.json"
+                        _write_json(component_copy, self.components)
+                        self.component_path.symlink_to(component_copy)
+
+                    if case_name == "alternate-component-path":
+                        with patch.object(checker, "_read_local_file", wraps=checker._read_local_file) as read_local:
+                            report = self.audit(kind)
+                        self.assertEqual([call.args[1] for call in read_local.call_args_list], ["tests/contracts/handoff-manifest.json"])
+                    else:
+                        report = self.audit(kind)
+
+                    self.assert_prerequisite_inventory(report, kind)
+                    if case_name in {"unreadable-manifest", "malformed-manifest", "non-object-manifest"}:
+                        self.assertTrue(any(item["id"] == "manifest.read" or item["id"] == "manifest.shape" for item in report["checks"]))
+                    if case_name in {"missing-component-file", "symlink-component-file", "non-object-component-file"}:
+                        self.assertTrue(any(item["id"] == "component_manifest.read" or item["id"] == "component_manifest.shape" for item in report["checks"]))
 
 if __name__ == "__main__":
     unittest.main()

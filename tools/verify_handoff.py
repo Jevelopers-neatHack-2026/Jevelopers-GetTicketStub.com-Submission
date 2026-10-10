@@ -777,6 +777,10 @@ def _missing(report: dict[str, Any], item_id: str, owner_role: str, expected: An
     })
 
 
+def _crosswalk_owner(kind: str, spec: HandoffSpec, item_id: str) -> str:
+    return CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
+
+
 def _missing_handoff_contents(kind: str, spec: HandoffSpec, report: dict[str, Any], reason: str) -> None:
     """Keep absent scope inventories explicit when their parent object is unusable."""
     _missing(
@@ -805,7 +809,7 @@ def _missing_handoff_contents(kind: str, spec: HandoffSpec, report: dict[str, An
         _missing(report, f"fixture:{fixture_id}", fixture.owner_role, fixture.expected, None, reason,
                  "Execute this acceptance fixture against the pinned real artifacts and provide an accessible sanitized receipt.")
     for item_id, description in spec.crosswalk.items():
-        owner = CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
+        owner = _crosswalk_owner(kind, spec, item_id)
         _missing(report, f"crosswalk:{item_id}", owner, description, None, reason,
                  "Record the external producer/consumer decision with its pinned review artifact.")
 
@@ -1193,7 +1197,7 @@ def _check_component_bindings(
         _add_check(report, f"{kind}.related_provider.{provider_id}", "separate release record; not a blocker for this narrow handoff", {"status": provider.get("status") if provider else "missing", "mode": provider.get("mode") if provider else "missing"}, "informational")
 
 
-def _validate_manifest_header(manifest: Any, report: dict[str, Any], kind: str) -> bool:
+def _validate_manifest_header(manifest: Any, report: dict[str, Any]) -> bool:
     if type(manifest) is not dict:
         _add_check(report, "manifest.shape", "JSON object", _typename(manifest), "invalid")
         return False
@@ -1226,13 +1230,9 @@ def _validate_manifest_header(manifest: Any, report: dict[str, Any], kind: str) 
     handoffs = manifest.get("handoffs")
     if type(handoffs) is not dict:
         _add_check(report, "manifest.handoffs", list(KINDS), _typename(handoffs), "invalid")
-        _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "requested handoff is unavailable because the handoff inventory is not an object")
         return False
-    missing_kinds = set(KINDS) - set(handoffs)
     if set(handoffs) != set(KINDS):
         _add_check(report, "manifest.handoff_inventory", list(KINDS), sorted(handoffs), "invalid")
-        if kind in missing_kinds:
-            _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "requested handoff key is omitted")
         valid = False
     else:
         _add_check(report, "manifest.handoff_inventory", list(KINDS), sorted(handoffs), "pass")
@@ -1297,41 +1297,63 @@ def _check_crosswalk(kind: str, spec: HandoffSpec, value: Any, report: dict[str,
     if type(value) is not dict:
         _add_check(report, f"{kind}.crosswalk", sorted(spec.crosswalk), _typename(value), "invalid")
         for item_id, description in spec.crosswalk.items():
-            owner = CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
+            owner = _crosswalk_owner(kind, spec, item_id)
             _missing(report, f"crosswalk:{item_id}", owner, description, None, "required crosswalk inventory is missing or malformed", "Record the external producer/consumer decision with its pinned review artifact.")
         return
     if set(value) != set(spec.crosswalk):
         _add_check(report, f"{kind}.crosswalk.inventory", sorted(spec.crosswalk), {"present": sorted(value), "missing": sorted(set(spec.crosswalk) - set(value)), "unexpected": sorted(set(value) - set(spec.crosswalk))}, "invalid")
     for item_id, expected_description in spec.crosswalk.items():
-        expected_owner = CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
+        expected_owner = _crosswalk_owner(kind, spec, item_id)
         item = value.get(item_id)
         label = f"{kind}.crosswalk.{item_id}"
         if type(item) is not dict or set(item) != {"expectation", "resolution", "owner_role"}:
             _add_check(report, label, ["expectation", "owner_role", "resolution"], _typename(item), "invalid")
             actual = {"record": _typename(item)}
-            if type(item) is dict and "owner_role" in item:
-                actual["owner_role_claim"] = item["owner_role"]
+            if type(item) is dict:
+                for field in ("expectation", "owner_role", "resolution"):
+                    if field in item:
+                        actual[f"{field}_claim"] = item[field]
             _missing(report, f"crosswalk:{item_id}", expected_owner, expected_description, actual, "required crosswalk decision is absent or malformed", "Record the external producer/consumer decision with its pinned review artifact.")
             continue
+        row_issues: list[str] = []
         if item["expectation"] != expected_description:
             _add_check(report, f"{label}.expectation", expected_description, item["expectation"], "mismatch")
+            row_issues.append("crosswalk expectation differs from the trusted specification")
         if item["owner_role"] != expected_owner:
             _add_check(report, f"{label}.owner_role", expected_owner, item["owner_role"], "mismatch")
+            row_issues.append("crosswalk owner differs from the trusted owner mapping")
         resolution = item["resolution"]
         if resolution is None:
             _add_check(report, f"{label}.resolution", "owner-reviewed resolution", None, "missing", "checker expectation is not a canonical field decision")
-            _missing(report, f"crosswalk:{item_id}", expected_owner, expected_description, {"resolution": None, "owner_role_claim": item["owner_role"]}, "field or behavior decision remains undecided", "Obtain the exact field decision from the listed contract owners and update the pinned crosswalk artifact.")
+            row_issues.append("field or behavior decision remains undecided")
         elif kind == "handoff-consumer" and item_id == "program_epic_reference":
             expected_url = "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/3"
             if type(resolution) is str and resolution == expected_url:
                 _add_check(report, f"{label}.resolution", expected_url, resolution, "untrusted", "the known coordinator URL is informational and does not prove program coverage or consumer readiness")
+                row_issues.append("coordinator URL is an untrusted reference, not proof of program coverage")
             else:
                 _add_check(report, f"{label}.resolution", expected_url, resolution, "mismatch", "the crosswalk must identify the sole harness coordinator epic")
-                _missing(report, f"crosswalk:{item_id}", expected_owner, expected_description, resolution, "coordinator reference is not the required epic URL", "Record the exact coordinator URL after owner review; the link itself remains informational.")
+                row_issues.append("coordinator reference does not match the required epic URL")
         elif type(resolution) is str and resolution.strip():
             _add_check(report, f"{label}.resolution", "owner-reviewed resolution", resolution, "untrusted", "a manifest string does not authenticate the external decision")
+            row_issues.append("resolution string is an unauthenticated claim")
         else:
             _add_check(report, f"{label}.resolution", "null or non-empty decision string", resolution, "invalid")
+            row_issues.append("resolution is empty or malformed")
+        actual = {
+            "expectation_claim": item["expectation"],
+            "owner_role_claim": item["owner_role"],
+            "resolution_claim": resolution,
+        }
+        _missing(
+            report,
+            f"crosswalk:{item_id}",
+            expected_owner,
+            expected_description,
+            actual,
+            "; ".join(row_issues) if row_issues else "external decision remains unverified",
+            "Correct claims to match the trusted owner and expectation, obtain the owner-reviewed decision, preserve its pinned evidence, and use the accepted verifier.",
+        )
 
 
 def _check_artifacts(
@@ -1571,7 +1593,7 @@ def _check_fixtures(
         _validate_usage(item["usage"], f"{label}.usage", report)
 
 
-def _load_manifest(root: Path, manifest_relpath: str, kind: str, report: dict[str, Any]) -> dict[str, Any] | None:
+def _load_manifest(root: Path, manifest_relpath: str, report: dict[str, Any]) -> dict[str, Any] | None:
     try:
         parts = _safe_relative_path(manifest_relpath)
         if "/".join(parts) != "tests/contracts/handoff-manifest.json":
@@ -1580,11 +1602,9 @@ def _load_manifest(root: Path, manifest_relpath: str, kind: str, report: dict[st
         manifest = _parse_json(raw, "handoff manifest")
     except InputProblem as exc:
         _add_check(report, "manifest.read", "bounded local tests/contracts/handoff-manifest.json", manifest_relpath, "invalid", str(exc))
-        _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "required manifest could not be read safely")
         return None
     if type(manifest) is not dict:
         _add_check(report, "manifest.shape", "JSON object", _typename(manifest), "invalid")
-        _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "top-level handoff manifest must be a JSON object")
         return None
     return manifest
 
@@ -1612,21 +1632,37 @@ def audit(root: Path, manifest_path: str, kind: str) -> dict[str, Any]:
             "A reported fixture pass is an untrusted claim until independently authenticated and tied to accepted artifact pins.",
         ],
     }
-    manifest = _load_manifest(root, manifest_path, kind, report)
+    manifest = _load_manifest(root, manifest_path, report)
     if manifest is None:
+        _missing_handoff_contents(
+            kind, spec, report,
+            "manifest prerequisite was unavailable or malformed, so the selected handoff could not be evaluated",
+        )
         return _finish_report(report)
-    if not _validate_manifest_header(manifest, report, kind):
+    if not _validate_manifest_header(manifest, report):
+        _missing_handoff_contents(
+            kind, spec, report,
+            "manifest header prerequisite failed validation, so the selected handoff could not be evaluated",
+        )
         return _finish_report(report)
 
     component_path = manifest.get("component_manifest")
     components_manifest = _load_component_manifest(root, component_path, report)
     if components_manifest is None:
+        _missing_handoff_contents(
+            kind, spec, report,
+            "component-manifest prerequisite could not be loaded safely, so the selected handoff could not be evaluated",
+        )
         return _finish_report(report)
     components = _check_component_records(components_manifest.get("components"), root, report)
     providers, provider_gaps = _check_provider_records(components_manifest.get("provider_surfaces"), report)
     handoffs = manifest.get("handoffs", {})
     if kind not in handoffs:
         _add_check(report, f"{kind}.present", "required handoff object", None, "invalid")
+        _missing_handoff_contents(
+            kind, spec, report,
+            "requested handoff prerequisite is absent, so its required identities could not be evaluated",
+        )
         return _finish_report(report)
     _check_handoff_structure(kind, handoffs[kind], spec, root, components, providers, provider_gaps, report)
     # A trusted verifier is mandatory for readiness, even if every file hash and every
