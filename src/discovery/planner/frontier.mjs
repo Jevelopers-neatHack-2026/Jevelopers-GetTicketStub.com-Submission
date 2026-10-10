@@ -62,9 +62,11 @@ const GLOBAL_HALT_REASONS = new Set([
 
 export class DiscoveryFrontierError extends Error {
   constructor(code = 'FRONTIER_STORAGE') {
-    super(ERROR_MESSAGES[Object.hasOwn(ERROR_MESSAGES, code) ? code : 'FRONTIER_STORAGE']);
+    const safeCode = typeof code === 'string' && Object.hasOwn(ERROR_MESSAGES, code)
+      ? code : 'FRONTIER_STORAGE';
+    super(ERROR_MESSAGES[safeCode]);
     this.name = 'DiscoveryFrontierError';
-    this.code = Object.hasOwn(ERROR_MESSAGES, code) ? code : 'FRONTIER_STORAGE';
+    this.code = safeCode;
   }
 }
 
@@ -195,7 +197,8 @@ function normalizeLocator(value) {
 
 function normalizeSourceReference(value, exactUrl) {
   const input = ownRecord(value, new Set(['evidenceId', 'contentHash', 'locator', 'field', 'value']));
-  if (!input || !validId(input.evidenceId, 160) || !HEX_SHA256.test(input.contentHash ?? '')
+  if (!input || !validId(input.evidenceId, 160) || typeof input.contentHash !== 'string'
+    || !HEX_SHA256.test(input.contentHash)
     || !validText(input.field, 160) || !validText(input.value, 8_192) || input.value !== exactUrl) fail();
   return {
     evidenceId: input.evidenceId,

@@ -354,6 +354,108 @@ test('authenticated tenant scopes isolate runs and snapshots are immutable; malf
   }), codeIs('FRONTIER_INVALID_INPUT'));
 });
 
+test('seed and completion content hashes reject coercion without invoking hooks or changing state', async (t) => {
+  const { store, scope } = await harness(t);
+  const url = 'https://events.example.com/hash-source';
+  const sourceBase = sourceRef(url, 'hash-source');
+  let hookCalls = 0;
+  const forgedHash = {
+    toString() { hookCalls += 1; return HASH_A; },
+    toJSON() { hookCalls += 1; return 'forged-non-hash'; },
+  };
+  const hostilePrimitive = {};
+  Object.defineProperty(hostilePrimitive, Symbol.toPrimitive, {
+    get() {
+      hookCalls += 1;
+      throw new Error('PRIVATE_REFERENCE_SENTINEL');
+    },
+  });
+  const hostileSerialization = {
+    toString() { hookCalls += 1; return HASH_A; },
+  };
+  Object.defineProperty(hostileSerialization, 'toJSON', {
+    get() {
+      hookCalls += 1;
+      throw new Error('PRIVATE_REFERENCE_SENTINEL');
+    },
+  });
+  const hostileStringifier = {};
+  Object.defineProperty(hostileStringifier, 'toString', {
+    get() {
+      hookCalls += 1;
+      throw new Error('PRIVATE_REFERENCE_SENTINEL');
+    },
+  });
+  const invalidHashes = [
+    [HASH_A],
+    new String(HASH_A),
+    forgedHash,
+    Symbol('private'),
+    17n,
+    hostilePrimitive,
+    hostileSerialization,
+    hostileStringifier,
+  ];
+  const sanitizedInputError = (error) => error instanceof DiscoveryFrontierError
+    && error.code === 'FRONTIER_INVALID_INPUT'
+    && error.message === 'invalid frontier input'
+    && error.cause === undefined
+    && !String(error).includes('PRIVATE_REFERENCE_SENTINEL');
+
+  for (const [index, contentHash] of invalidHashes.entries()) {
+    const runId = `invalid-content-hash-seed-${index}`;
+    await assert.rejects(store.createRun(scope, {
+      runId,
+      seeds: [{ url, sourceRefs: [{ ...sourceBase, contentHash }] }],
+    }), sanitizedInputError);
+    await assert.rejects(store.getSnapshot(scope, runId), codeIs('FRONTIER_NOT_FOUND'));
+  }
+
+  const runId = 'invalid-content-hash-completion';
+  await seedRun(store, scope, runId);
+  const claim = await store.claimNext(scope, runId, { workerId: 'hash-worker', claimKey: 'hash-claim' });
+  await store.admitAttempt(scope, runId, {
+    leaseToken: claim.leaseToken,
+    attemptKey: 'hash-attempt',
+    kind: 'initial',
+    url: claim.candidate.canonicalUrl,
+  });
+  const before = await store.getSnapshot(scope, runId);
+  for (const [index, contentHash] of invalidHashes.entries()) {
+    const suggestionUrl = `https://events.example.com/hash-link-${index}`;
+    await assert.rejects(store.completeCandidate(scope, runId, {
+      leaseToken: claim.leaseToken,
+      completionKey: `invalid-hash-completion-${index}`,
+      outcome: 'links_observed',
+      suggestions: [{
+        url: suggestionUrl,
+        sourceRefs: [{ ...sourceRef(suggestionUrl, `invalid-hash-ref-${index}`), contentHash }],
+      }],
+    }), sanitizedInputError);
+    assert.deepEqual(await store.getSnapshot(scope, runId), before);
+  }
+  assert.equal(hookCalls, 0);
+
+  const validCompletionUrl = 'https://events.example.com/valid-hash-link';
+  const completed = await store.completeCandidate(scope, runId, {
+    leaseToken: claim.leaseToken,
+    completionKey: 'valid-hash-completion',
+    outcome: 'links_observed',
+    suggestions: [{
+      url: validCompletionUrl,
+      sourceRefs: [sourceRef(validCompletionUrl, 'valid-hash-completion-ref', HASH_B)],
+    }],
+  });
+  assert.equal(completed.observations.find(({ suppliedUrl }) => suppliedUrl === validCompletionUrl)
+    .sourceRefs[0].contentHash, HASH_B);
+
+  const accepted = await store.createRun(scope, {
+    runId: 'valid-content-hash',
+    seeds: [{ url, sourceRefs: [sourceBase] }],
+  });
+  assert.equal(accepted.observations[0].sourceRefs[0].contentHash, HASH_A);
+});
+
 test('input, fanout, and URL bounds fail without storing partial observations or leaking values in errors', async (t) => {
   const { store, scope } = await harness(t);
   await assert.rejects(store.createRun(scope, {
@@ -376,6 +478,22 @@ test('input, fanout, and URL bounds fail without storing partial observations or
   const unchanged = await store.getSnapshot(scope, runId);
   assert.equal(unchanged.candidates.length, 1);
   assert.equal(unchanged.candidates[0].state, 'leased');
+});
+
+test('unknown error codes use fixed diagnostics without coercing caller values', () => {
+  let hookCalls = 0;
+  const hostileCode = {};
+  Object.defineProperty(hostileCode, Symbol.toPrimitive, {
+    get() {
+      hookCalls += 1;
+      throw new Error('PRIVATE_REFERENCE_SENTINEL');
+    },
+  });
+  const error = new DiscoveryFrontierError(hostileCode);
+  assert.equal(error.code, 'FRONTIER_STORAGE');
+  assert.equal(error.message, 'frontier storage operation failed');
+  assert.equal(String(error).includes('PRIVATE_REFERENCE_SENTINEL'), false);
+  assert.equal(hookCalls, 0);
 });
 
 test('no transport or provider is called by the frontier core and source authority stays unknown', async (t) => {
