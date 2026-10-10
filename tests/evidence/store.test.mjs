@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash, randomUUID } from 'node:crypto';
+import { createCipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
 import { createEvidenceStore, EvidenceStoreError } from '../../src/evidence/store.mjs';
+import { createProvenancePort } from '../../src/verification/provenance/index.mjs';
 
 const EPOCH = Date.parse('2026-10-10T15:00:00.000Z');
 
@@ -14,8 +15,14 @@ function request(tenantId, allowPrivate = true) {
   return Object.freeze({ principal: Object.freeze({ tenantId }), allowPrivate });
 }
 
+function mutableRequest(tenantId, allowPrivate = true) {
+  return { principal: { tenantId }, allowPrivate };
+}
+
 function createHarness(t, overrides = {}, clock = { value: EPOCH }) {
+  const { factRetentionMs, factPolicyIdForCall, ...storeOverrides } = overrides;
   const permits = new WeakMap();
+  let factPolicyCall = 0;
   const sourceText = 'Event: Moon Night\nDate: 2027-06-20\nVenue: Civic Hall';
   const createPermit = (tenantId, durationMs = 10_000) => {
     const handle = Object.freeze(Object.create(null));
@@ -39,15 +46,22 @@ function createHarness(t, overrides = {}, clock = { value: EPOCH }) {
           const permit = permits.get(retentionHandle);
           if (!permit || permit.tenantId !== tenantId) throw new Error('RETENTION-CANARY-DO-NOT-LOG');
           expiresAtMs = permit.expiresAtMs;
+        } else if (Number.isSafeInteger(factRetentionMs)) {
+          expiresAtMs = nowMs + factRetentionMs;
         }
         return {
-          expiresAtMs: expiresAtMs ?? nowMs + 5_000,
-          policyId: 'synthetic-private-source',
+          expiresAtMs: expiresAtMs ?? nowMs + (factRetentionMs ?? 5_000),
+          policyId: kind === 'fact' && typeof factPolicyIdForCall === 'function'
+            ? factPolicyIdForCall(factPolicyCall++)
+            : 'synthetic-private-source',
           policyVersion: '1',
           accessPolicy: 'tenant_private',
         };
       },
       authorizePrivateAccess({ tenantId, request: authenticatedRequest }) {
+        return authenticatedRequest?.principal?.tenantId === tenantId && authenticatedRequest.allowPrivate === true;
+      },
+      authorizePrivateAccessCurrent({ tenantId, request: authenticatedRequest }) {
         return authenticatedRequest?.principal?.tenantId === tenantId && authenticatedRequest.allowPrivate === true;
       },
       consumePrivatePayload({ source, positions }) {
@@ -63,7 +77,7 @@ function createHarness(t, overrides = {}, clock = { value: EPOCH }) {
       maxPositionCount: 16,
       maxStoredPayloadBytes: 128 * 1024,
       maxRetentionMs: 60_000,
-      ...overrides,
+      ...storeOverrides,
     };
     const openStore = () => createEvidenceStore(options);
     const store = openStore();
@@ -111,6 +125,47 @@ function inspectTenantDatabase(directory, tenantId = 'tenant-a') {
   } finally {
     database.close();
   }
+}
+
+function updateSealedBundle(directory, id, bytes, tenantId = 'tenant-a', kind = 'evidence') {
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+  const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'));
+  try {
+    database.prepare('UPDATE sealed_bundles SET sealed = ? WHERE kind = ? AND id = ?').run(bytes, kind, id);
+  } finally {
+    database.close();
+  }
+}
+
+function padSealedBundleTo(directory, id, targetBytes) {
+  const tenantHash = createHash('sha256').update('event-intelligence:tenant:v1:tenant-a').digest('hex');
+  const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'));
+  try {
+    const row = database.prepare("SELECT sealed FROM sealed_bundles WHERE kind = 'evidence' AND id = ?").get(id);
+    assert.ok(row);
+    assert.ok(row.sealed.byteLength <= targetBytes);
+    const padded = Buffer.concat([Buffer.from(row.sealed), Buffer.alloc(targetBytes - row.sealed.byteLength, 0x20)]);
+    database.prepare("UPDATE sealed_bundles SET sealed = ? WHERE kind = 'evidence' AND id = ?").run(padded, id);
+    return padded;
+  } finally {
+    database.close();
+  }
+}
+
+function encryptSyntheticFact(tenantId, factId, payload) {
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+  const key = createHash('sha256').update(`${tenantId}:fact:synthetic-test-key`).digest();
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  cipher.setAAD(Buffer.from(`event-intelligence:evidence:v1:${tenantHash}:fact:${factId}`, 'utf8'));
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
+  return Buffer.from(JSON.stringify({
+    version: 1,
+    keyId: 'fact-v1',
+    iv: iv.toString('base64'),
+    tag: cipher.getAuthTag().toString('base64'),
+    ciphertext: ciphertext.toString('base64'),
+  }), 'utf8');
 }
 
 function assertOnlyTombstoneFields(records) {
@@ -262,6 +317,7 @@ test('stores tenant-private evidence encrypted and reopens evidence and fact han
       return { expiresAtMs: sourceExpiresAtMs ?? nowMs + 5_000, policyId: 'synthetic-private-source', policyVersion: '1', accessPolicy: 'tenant_private' };
     },
     authorizePrivateAccess: ({ tenantId, request: auth }) => auth?.principal?.tenantId === tenantId && auth.allowPrivate === true,
+    authorizePrivateAccessCurrent: ({ tenantId, request: auth }) => auth?.principal?.tenantId === tenantId && auth.allowPrivate === true,
     consumePrivatePayload: ({ source, positions }) => ({ sourceUrl: source.sourceUrl, snapshots: positions.map((position) => position.content.toString('utf8')) }),
     now: () => clock.value,
     maxRetentionMs: 60_000,
@@ -468,6 +524,97 @@ test('date precision, customer input, explicit missing values, and conflicts rem
   assert.equal(conflict.candidates.every((candidate) => !Object.hasOwn(candidate, 'independentSupportCount')), true);
 });
 
+test('method-bearing sourced, inferred, and conflicting facts survive private-tree cleanup and restart', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const firstEvidence = await ingest(harness.store, scope, 'Event: First method source', harness.createPermit, {
+    sourceUrl: 'https://method-one.example.test/event', canonicalUrl: 'https://method-one.example.test/event',
+  });
+  const secondEvidence = await ingest(harness.store, scope, 'Event: Second method source', harness.createPermit, {
+    sourceUrl: 'https://method-two.example.test/event', canonicalUrl: 'https://method-two.example.test/event',
+  });
+  const sourcedHandle = await harness.store.appendFact(scope, {
+    field: 'event_name',
+    status: 'sourced',
+    rawValue: { label: 'source', nested: [{ text: 'raw' }] },
+    normalizedValue: { label: 'normalized', nested: [{ text: 'clean' }] },
+    method: { name: 'source-reader', version: '1' },
+    supports: [supportFor(firstEvidence)],
+  }, request('tenant-a'));
+  const inferredHandle = await harness.store.appendFact(scope, {
+    field: 'event_date',
+    status: 'inferred',
+    rawValue: { date: 'June 20, 2027' },
+    normalizedValue: { date: '2027-06-20' },
+    method: { name: 'date-normalizer', version: '2' },
+    supports: [supportFor(firstEvidence)],
+  }, request('tenant-a'));
+  const conflictHandle = await harness.store.appendFact(scope, {
+    field: 'venue',
+    status: 'conflicting',
+    candidates: [
+      {
+        originStatus: 'inferred',
+        rawValue: { venue: 'First Hall', details: ['east'] },
+        normalizedValue: { venue: 'First Hall' },
+        method: { name: 'venue-normalizer', version: '3' },
+        supports: [supportFor(firstEvidence)],
+      },
+      {
+        originStatus: 'sourced',
+        rawValue: { venue: 'Second Hall' },
+        normalizedValue: { venue: 'Second Hall' },
+        supports: [supportFor(secondEvidence)],
+      },
+    ],
+  }, request('tenant-a'));
+
+  const sourcedFact = await harness.store.readFact(scope, sourcedHandle, request('tenant-a'));
+  const inferredFact = await harness.store.readFact(scope, inferredHandle, request('tenant-a'));
+  const conflictFact = await harness.store.readFact(scope, conflictHandle, request('tenant-a'));
+  const expectedIds = {
+    sourced: sourcedFact.factId,
+    inferred: inferredFact.factId,
+    conflict: conflictFact.factId,
+  };
+  const assertMethods = (facts) => {
+    const sourced = facts.find((fact) => fact.factId === expectedIds.sourced);
+    const inferred = facts.find((fact) => fact.factId === expectedIds.inferred);
+    const conflict = facts.find((fact) => fact.factId === expectedIds.conflict);
+    assert.deepEqual({ ...sourced.method }, { name: 'source-reader', version: '1' });
+    assert.deepEqual({ ...inferred.method }, { name: 'date-normalizer', version: '2' });
+    assert.deepEqual({ ...conflict.candidates[0].method }, { name: 'venue-normalizer', version: '3' });
+    assert.equal(sourced.rawValue.nested[0].text, 'raw');
+    assert.equal(sourced.normalizedValue.nested[0].text, 'clean');
+    assert.equal(Object.isFrozen(sourced.method), true);
+    assert.equal(Object.isFrozen(conflict.candidates[0].method), true);
+    assert.equal(Object.isFrozen(sourced.rawValue.nested[0]), true);
+  };
+
+  assertMethods([sourcedFact, inferredFact, conflictFact]);
+  assertMethods(await harness.store.listFacts(scope, request('tenant-a')));
+  assertMethods((await harness.store.materializeSelected(scope, {
+    evidence: [], facts: [sourcedHandle, inferredHandle, conflictHandle],
+  }, request('tenant-a'))).facts);
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const reopenedFacts = await Promise.all([
+    reopened.lookupFact(reopenedScope, expectedIds.sourced),
+    reopened.lookupFact(reopenedScope, expectedIds.inferred),
+    reopened.lookupFact(reopenedScope, expectedIds.conflict),
+  ]);
+  assertMethods([
+    await reopened.readFact(reopenedScope, reopenedFacts[0], request('tenant-a')),
+    await reopened.readFact(reopenedScope, reopenedFacts[1], request('tenant-a')),
+    await reopened.readFact(reopenedScope, reopenedFacts[2], request('tenant-a')),
+  ]);
+  assertMethods(await reopened.listFacts(reopenedScope, request('tenant-a')));
+  assertMethods((await reopened.materializeSelected(reopenedScope, {
+    evidence: [], facts: reopenedFacts,
+  }, request('tenant-a'))).facts);
+});
+
 test('exact and altered syndicated copies do not claim independent support without attribution evidence', async (t) => {
   const { store, createPermit } = await createHarness(t);
   const scope = await store.scopeForAuthenticatedRequest(request('tenant-a'));
@@ -524,6 +671,399 @@ test('expiry removes encrypted snapshots and fact values, retains a sanitized to
   assert.equal(databaseText.includes('Moon Night'), false);
   assert.equal(databaseText.includes('Event: '), false);
   assert.equal((await store.purgeExpired(scope)) >= 0, true);
+});
+
+test('selected materialization returns immutable stored provenance and only selected fact values', async (t) => {
+  const finalCalls = [];
+  const harness = await createHarness(t, {
+    authorizePrivateAccessCurrent({ tenantId, request: auth, action, evidenceIds, factIds }) {
+      finalCalls.push({ tenantId, action, evidenceIds: [...evidenceIds], factIds: [...factIds] });
+      return auth?.principal?.tenantId === tenantId && auth.allowPrivate === true;
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const first = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, {
+    sourceUrl: 'https://events.example.test/night?observed=old',
+    canonicalUrl: 'https://events.example.test/night',
+    contentType: 'text/plain',
+    retrievedAt: '2026-10-10T14:59:59.000Z',
+  });
+  const replay = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, {
+    sourceUrl: 'https://events.example.test/night?observed=new',
+    canonicalUrl: 'https://events.example.test/night',
+    contentType: 'application/ld+json',
+    retrievedAt: '2026-10-10T15:00:00.000Z',
+  });
+  assert.equal(replay.created, false);
+  assert.equal(replay.metadata.evidenceId, first.metadata.evidenceId);
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Moon Night', normalizedValue: 'Moon Night', supports: [supportFor(first)],
+  }, request('tenant-a'));
+
+  const selected = await harness.store.materializeSelected(scope, {
+    evidence: [first.evidence],
+    facts: [factHandle],
+  }, request('tenant-a'));
+  const factOnly = await harness.store.materializeSelected(scope, {
+    evidence: [],
+    facts: [factHandle],
+  }, request('tenant-a'));
+
+  assert.equal(selected.evidence.length, 1);
+  assert.equal(selected.facts.length, 1);
+  assert.equal(factOnly.evidence.length, 1, 'the fact support source is included from persisted linkage');
+  assert.equal(factOnly.evidence[0].metadata.evidenceId, first.metadata.evidenceId);
+  assert.equal(factOnly.facts[0].factId, selected.facts[0].factId);
+  assert.equal(selected.facts[0].rawValue, 'Moon Night');
+  assert.equal(selected.evidence[0].source.sourceUrl, 'https://events.example.test/night?observed=old');
+  assert.equal(selected.evidence[0].source.contentType, 'text/plain');
+  assert.equal(selected.evidence[0].source.sourceKind, 'external');
+  assert.equal(selected.evidence[0].source.retrievedAt, '2026-10-10T14:59:59.000Z');
+  assert.equal(selected.evidence[0].source.contentHash, first.metadata.contentHash);
+  assert.equal(selected.evidence[0].metadata.retrievedAt, first.metadata.retrievedAt);
+  assert.notEqual(selected.evidence[0].positions[0].contentHash, first.metadata.contentHash);
+  assert.equal(JSON.stringify(selected).includes('Event: Moon Night'), false, 'raw source and excerpt bytes are not returned');
+  assert.equal(Object.isFrozen(selected), true);
+  assert.deepEqual(finalCalls, [
+    {
+      tenantId: 'tenant-a',
+      action: 'materialize_selected',
+      evidenceIds: [first.metadata.evidenceId],
+      factIds: [selected.facts[0].factId],
+    },
+    {
+      tenantId: 'tenant-a',
+      action: 'materialize_selected',
+      evidenceIds: [first.metadata.evidenceId],
+      factIds: [selected.facts[0].factId],
+    },
+  ]);
+  await assert.rejects(
+    harness.store.materializeSelected(scope, { evidence: Array(9).fill(first.evidence), facts: [] }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID',
+  );
+  await assert.rejects(
+    harness.store.materializeSelected(scope, { evidence: [], facts: Array(129).fill(factHandle) }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID',
+  );
+});
+
+test('selected encrypted-byte budgets accept the exact aggregate ceiling and reject one byte over before key resolution', async (t) => {
+  let payloadKeyResolutions = 0;
+  const harness = await createHarness(t, {
+    resolveKey({ tenantId, purpose, keyId }) {
+      const selectedId = `${purpose}-v1`;
+      if (purpose === 'payload') payloadKeyResolutions += 1;
+      if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+      return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const first = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, {
+    sourceUrl: 'https://events.example.test/sealed-one',
+    canonicalUrl: 'https://events.example.test/sealed-one',
+  });
+  const second = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, {
+    sourceUrl: 'https://events.example.test/sealed-two',
+    canonicalUrl: 'https://events.example.test/sealed-two',
+  });
+  const third = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, {
+    sourceUrl: 'https://events.example.test/sealed-three',
+    canonicalUrl: 'https://events.example.test/sealed-three',
+  });
+  const exactBundleBytes = 4 * 1024 * 1024;
+  padSealedBundleTo(harness.directory, first.metadata.evidenceId, exactBundleBytes);
+  padSealedBundleTo(harness.directory, second.metadata.evidenceId, exactBundleBytes);
+
+  const beforeExactRead = payloadKeyResolutions;
+  const exact = await harness.store.materializeSelected(scope, {
+    evidence: [first.evidence, second.evidence], facts: [],
+  }, request('tenant-a'));
+  assert.equal(exact.evidence.length, 2);
+  assert.equal(payloadKeyResolutions, beforeExactRead + 2);
+
+  const beforeAggregateOver = payloadKeyResolutions;
+  await assert.rejects(harness.store.materializeSelected(scope, {
+    evidence: [first.evidence, second.evidence, third.evidence], facts: [],
+  }, request('tenant-a')), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  assert.equal(payloadKeyResolutions, beforeAggregateOver, 'aggregate size is rejected using SQLite length() before copying/decrypting');
+
+  updateSealedBundle(harness.directory, second.metadata.evidenceId,
+    Buffer.concat([Buffer.alloc(exactBundleBytes + 1, 0x20)]));
+  await assert.rejects(harness.store.materializeSelected(scope, {
+    evidence: [second.evidence], facts: [],
+  }, request('tenant-a')), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  assert.equal(payloadKeyResolutions, beforeAggregateOver, 'per-record cap is checked before key resolution');
+});
+
+test('selected position-byte budget accepts one MiB and rejects the next byte without a partial result', async (t) => {
+  const harness = await createHarness(t, {
+    maxSourceBytes: 2 * 1024 * 1024,
+    maxPositionCount: 128,
+    maxStoredPayloadBytes: 2 * 1024 * 1024,
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const positionSize = 64 * 1024;
+  const source = 'a'.repeat(8 * positionSize);
+  const positions = Array.from({ length: 8 }, (_, index) => ({
+    locator: { kind: 'text-range', startByte: index * positionSize, endByte: (index + 1) * positionSize },
+    content: source.slice(index * positionSize, (index + 1) * positionSize),
+  }));
+  const ingestSegmented = (suffix) => harness.store.ingestEvidence(scope, {
+    sourceUrl: `https://events.example.test/positions-${suffix}`,
+    canonicalUrl: `https://events.example.test/positions-${suffix}`,
+    content: source,
+    contentType: 'text/plain',
+    retrievedAt: '2026-10-10T14:59:59.000Z',
+    sourceKind: 'external',
+    positions,
+    retentionHandle: harness.createPermit('tenant-a'),
+  });
+  const first = await ingestSegmented('first');
+  const second = await ingestSegmented('second');
+  const exact = await harness.store.materializeSelected(scope, {
+    evidence: [first.evidence, second.evidence], facts: [],
+  }, request('tenant-a'));
+  assert.equal(exact.evidence.reduce((count, item) => count + item.positions.length, 0), 16);
+
+  const tiny = await harness.store.ingestEvidence(scope, {
+    sourceUrl: 'https://events.example.test/positions-over',
+    canonicalUrl: 'https://events.example.test/positions-over',
+    content: 'z',
+    contentType: 'text/plain',
+    retrievedAt: '2026-10-10T14:59:59.000Z',
+    sourceKind: 'external',
+    positions: [{ locator: { kind: 'text-range', startByte: 0, endByte: 1 }, content: 'z' }],
+    retentionHandle: harness.createPermit('tenant-a'),
+  });
+  await assert.rejects(harness.store.materializeSelected(scope, {
+    evidence: [first.evidence, second.evidence, tiny.evidence], facts: [],
+  }, request('tenant-a')), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+});
+
+test('fact plaintext budget accepts its exact per-record ceiling and rejects one byte over before key resolution', async (t) => {
+  let factKeyResolutions = 0;
+  const harness = await createHarness(t, {
+    resolveKey({ tenantId, purpose, keyId }) {
+      const selectedId = `${purpose}-v1`;
+      if (purpose === 'fact') factKeyResolutions += 1;
+      if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+      return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'small', normalizedValue: 'small', supports: [supportFor(evidence)],
+  }, request('tenant-a'));
+  const factId = (await harness.store.readFact(scope, factHandle, request('tenant-a'))).factId;
+  const manifest = inspectTenantDatabase(harness.directory).manifest;
+  const record = manifest.facts[factId];
+  const evidenceRecord = manifest.records[record.supportEvidenceIds[0]];
+  const support = {
+    evidenceId: evidenceRecord.id,
+    positionId: evidenceRecord.positionIds[0],
+    contentHash: evidenceRecord.contentHash,
+    sourceKind: 'external',
+    duplicateGroupId: evidenceRecord.duplicateGroupId,
+  };
+  const targetPlaintextBytes = 256 * 1024;
+  const payload = {
+    field: 'event_name',
+    status: 'sourced',
+    rawValue: [],
+    normalizedValue: 'value',
+    supports: [support],
+  };
+  const fillerStrings = [...Array(65)].map(() => 'a'.repeat(4_000));
+  payload.rawValue = [...fillerStrings, ''];
+  const bytesWithoutRemainder = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+  const remainderLength = targetPlaintextBytes - bytesWithoutRemainder;
+  assert.ok(remainderLength >= 0 && remainderLength <= 4_000);
+  payload.rawValue[65] = 'a'.repeat(remainderLength);
+  assert.equal(Buffer.byteLength(JSON.stringify(payload), 'utf8'), targetPlaintextBytes);
+  updateSealedBundle(harness.directory, factId, encryptSyntheticFact('tenant-a', factId, payload), 'tenant-a', 'fact');
+
+  const beforeExactFact = factKeyResolutions;
+  const exact = await harness.store.readFact(scope, factHandle, request('tenant-a'));
+  assert.equal(exact.rawValue.length, 66);
+  assert.equal(factKeyResolutions, beforeExactFact + 1);
+
+  payload.rawValue[65] += 'a';
+  assert.equal(Buffer.byteLength(JSON.stringify(payload), 'utf8'), targetPlaintextBytes + 1);
+  updateSealedBundle(harness.directory, factId, encryptSyntheticFact('tenant-a', factId, payload), 'tenant-a', 'fact');
+  const beforeOverLimit = factKeyResolutions;
+  await assert.rejects(harness.store.readFact(scope, factHandle, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  assert.equal(factKeyResolutions, beforeOverLimit, 'fact bytes are checked from the sealed envelope before key resolution');
+});
+
+test('selected provenance byte budget accepts the exact ceiling and rejects an additional source', async (t) => {
+  const harness = await createHarness(t, { maxPositionCount: 128 });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const makeUrl = (prefix, length) => {
+    assert.ok(prefix.length <= length);
+    return prefix + 'x'.repeat(length - prefix.length);
+  };
+  const longSourceUrl = (index) => makeUrl(`https://events.example.test/source-${index}/`, 4096);
+  const longCanonicalUrl = (index) => makeUrl(`https://events.example.test/canonical-${index}/`, 4096);
+  const longRedirectPrefix = 'https://redirect.example.test/';
+  const tenantHash = createHash('sha256').update('event-intelligence:tenant:v1:tenant-a').digest('hex');
+  const sourceHash = createHash('sha256').update('x').digest('hex');
+  const duplicateGroupId = createHash('sha256')
+    .update(`event-intelligence:duplicate:v1:${tenantHash}:${sourceHash}`).digest('hex');
+  const retrievedAt = '2026-10-10T14:59:59.000Z';
+  const createdAt = new Date(EPOCH).toISOString();
+  const locator = { kind: 'text-range', startByte: 0, endByte: 1 };
+  const locatorBytes = Buffer.byteLength(JSON.stringify(locator), 'utf8');
+  const fixedProvenanceBytes = Array.from({ length: 6 }, (_, index) => {
+    const sourceUrl = longSourceUrl(index);
+    const canonicalUrl = longCanonicalUrl(index);
+    const recordMetadataBytes = 256 + Buffer.byteLength(
+      randomUUID() + sourceHash + duplicateGroupId + retrievedAt + createdAt
+        + 'synthetic-private-source' + '1' + 'payload-v1',
+      'utf8',
+    ) + 36 + 64;
+    const sourceDescriptorBytes = 256 + Buffer.byteLength(
+      sourceUrl + canonicalUrl + 'text/plain' + 'external' + retrievedAt + sourceHash,
+      'utf8',
+    );
+    return recordMetadataBytes + sourceDescriptorBytes + locatorBytes + 128;
+  }).reduce((total, bytes) => total + bytes, 0);
+  const exactRedirectBytes = 512 * 1024 - fixedProvenanceBytes;
+  assert.ok(exactRedirectBytes > 0 && exactRedirectBytes <= 6 * 20 * 4096);
+  let unassignedRedirectBytes = exactRedirectBytes;
+  const exactRecords = [];
+  for (let index = 0; index < 6; index += 1) {
+    const redirectChain = [];
+    let thisRecordBytes = Math.min(unassignedRedirectBytes, 20 * 4096);
+    while (thisRecordBytes > 0) {
+      const length = Math.min(thisRecordBytes, 4096);
+      redirectChain.push(makeUrl(longRedirectPrefix, length));
+      thisRecordBytes -= length;
+      unassignedRedirectBytes -= length;
+    }
+    const result = await harness.store.ingestEvidence(scope, {
+      sourceUrl: longSourceUrl(index),
+      canonicalUrl: longCanonicalUrl(index),
+      redirectChain,
+      content: 'x',
+      contentType: 'text/plain',
+      retrievedAt,
+      sourceKind: 'external',
+      positions: [{ locator, content: 'x' }],
+      retentionHandle: harness.createPermit('tenant-a'),
+    });
+    exactRecords.push(result);
+  }
+  assert.equal(unassignedRedirectBytes, 0);
+  const exact = await harness.store.materializeSelected(scope, {
+    evidence: exactRecords.map((record) => record.evidence), facts: [],
+  }, request('tenant-a'));
+  assert.equal(exact.evidence.length, 6);
+
+  const seventh = await harness.store.ingestEvidence(scope, {
+    sourceUrl: 'https://events.example.test/provenance-extra',
+    canonicalUrl: 'https://events.example.test/provenance-extra',
+    content: 'x',
+    contentType: 'text/plain',
+    retrievedAt,
+    sourceKind: 'external',
+    positions: [{ locator, content: 'x' }],
+    retentionHandle: harness.createPermit('tenant-a'),
+  });
+  await assert.rejects(harness.store.materializeSelected(scope, {
+    evidence: [...exactRecords.map((record) => record.evidence), seventh.evidence], facts: [],
+  }, request('tenant-a')), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+});
+
+test('listFacts charges duplicate support references in conflicting candidates before publishing', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const external = await ingest(harness.store, scope, 'Event: External hall', harness.createPermit, {
+    sourceUrl: 'https://external-hall.example.test/event',
+    canonicalUrl: 'https://external-hall.example.test/event',
+  });
+  const customer = await ingest(harness.store, scope, 'Customer: 會場甲', harness.createPermit, {
+    sourceKind: 'customer_supplied',
+    sourceUrl: 'https://customer-hall.invalid/event',
+    canonicalUrl: 'https://customer-hall.invalid/event',
+  });
+  const externalSupport = supportFor(external);
+  const customerSupport = supportFor(customer);
+  const conflictHandle = await harness.store.appendFact(scope, {
+    field: 'event_venue',
+    status: 'conflicting',
+    candidates: [
+      {
+        originStatus: 'inferred',
+        rawValue: { value: 'Hall A – 東側' },
+        normalizedValue: { value: 'Hall A – east' },
+        method: { name: 'venue-normalizer', version: '1' },
+        supports: [externalSupport, externalSupport],
+      },
+      {
+        originStatus: 'customer_supplied',
+        rawValue: { value: '會場甲' },
+        normalizedValue: { value: 'Customer Hall A' },
+        supports: [customerSupport, customerSupport],
+      },
+    ],
+  }, request('tenant-a'));
+
+  const facts = await harness.store.listFacts(scope, request('tenant-a'));
+  assert.equal(facts.length, 1);
+  assert.equal(facts[0].factId, (await harness.store.readFact(scope, conflictHandle, request('tenant-a'))).factId);
+  assert.equal(facts[0].candidates[0].supports.length, 2);
+  assert.equal(facts[0].candidates[1].supports.length, 2);
+  assert.equal(facts[0].candidates[0].rawValue.value, 'Hall A – 東側');
+  assert.equal(facts[0].candidates[1].normalizedValue.value, 'Customer Hall A');
+});
+
+test('listFacts accepts the exact aggregate provenance ceiling and rejects the next fact as a whole', async (t) => {
+  const harness = await createHarness(t, {
+    factPolicyIdForCall(index) {
+      return index === 21 ? `é${'p'.repeat(51)}` : 'p';
+    },
+    resolveKey({ tenantId, purpose, keyId }) {
+      const selectedId = purpose === 'fact' ? 'f' : `${purpose}-v1`;
+      if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+      return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, 'Event: Exact list budget', harness.createPermit);
+  const support = supportFor(evidence);
+  // The persisted support uses fixed UUID/hash/source-kind/group fields. Each
+  // duplicated reference is charged separately by the public-list budget.
+  const persistedSupportBytes = 192 + 36 + 36 + 64 + Buffer.byteLength('external', 'utf8') + 64;
+  assert.equal(persistedSupportBytes, 400);
+
+  const factHandles = [];
+  for (let index = 0; index < 22; index += 1) {
+    const supportCount = index < 20 ? 64 : index === 20 ? 11 : 1;
+    factHandles.push(await harness.store.appendFact(scope, {
+      field: 'event_name',
+      status: 'sourced',
+      rawValue: { value: `Event ${index}` },
+      normalizedValue: { value: `Event ${index}` },
+      supports: Array.from({ length: supportCount }, () => support),
+    }, request('tenant-a')));
+  }
+  const factMetadataBaseBytes = 192 + 36 + Buffer.byteLength('sourcedfp1', 'utf8') + 36 + 64;
+  const expectedAggregateBytes = 22 * factMetadataBaseBytes
+    + Buffer.byteLength(`é${'p'.repeat(51)}`, 'utf8') - Buffer.byteLength('p', 'utf8')
+    + (20 * 64 + 11 + 1) * persistedSupportBytes;
+  assert.equal(expectedAggregateBytes, 512 * 1024);
+  const exact = await harness.store.listFacts(scope, request('tenant-a'));
+  assert.equal(exact.length, 22);
+  assert.equal(exact.reduce((sum, fact) => sum + fact.supports.length, 0), 20 * 64 + 11 + 1);
+
+  await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Next', normalizedValue: 'Next', supports: [support],
+  }, request('tenant-a'));
+  await assert.rejects(harness.store.listFacts(scope, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
 });
 
 test('withPrivatePayload expiry rejection commits cleanup before returning the typed error', async (t) => {
@@ -655,6 +1195,466 @@ test('fact reads recheck expiry after an asynchronous key resolution and commit 
   await assertTombstonesAfterReopen(harness, evidence.metadata.evidenceId, fact.factId);
 });
 
+test('readFact denies a principal switch during the final asynchronous key resolution', async (t) => {
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) });
+  const authRequest = mutableRequest('tenant-a');
+  const scope = await harness.store.scopeForAuthenticatedRequest(authRequest);
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Private tenant A', normalizedValue: 'Private tenant A', supports: [supportFor(evidence)],
+  }, authRequest);
+
+  const gate = keyGate.arm('fact');
+  const pending = harness.store.readFact(scope, factHandle, authRequest);
+  await gate.reached;
+  authRequest.principal.tenantId = 'tenant-b';
+  gate.release();
+  let returned;
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined, 'the old tenant fact is never published');
+  await assert.rejects(harness.store.readFact(scope, factHandle, authRequest),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+});
+
+test('readFact denies authorization-only revocation during the final asynchronous key resolution', async (t) => {
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) });
+  const authRequest = mutableRequest('tenant-a');
+  const scope = await harness.store.scopeForAuthenticatedRequest(authRequest);
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Still private', normalizedValue: 'Still private', supports: [supportFor(evidence)],
+  }, authRequest);
+
+  const gate = keyGate.arm('fact');
+  const pending = harness.store.readFact(scope, factHandle, authRequest);
+  await gate.reached;
+  authRequest.allowPrivate = false;
+  gate.release();
+  let returned;
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined);
+  await assert.rejects(harness.store.readFact(scope, factHandle, authRequest),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+});
+
+test('readFact preserves bounded legacy support for more than eight distinct evidence records', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = [];
+  for (let index = 0; index < 9; index += 1) {
+    evidence.push(await ingest(harness.store, scope, `Event source ${index}`, harness.createPermit, {
+      sourceUrl: `https://source-${index}.example.test/event`,
+      canonicalUrl: `https://source-${index}.example.test/event`,
+    }));
+  }
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name',
+    status: 'sourced',
+    rawValue: 'Supported by nine sources',
+    normalizedValue: 'Supported by nine sources',
+    supports: evidence.map(supportFor),
+  }, request('tenant-a'));
+
+  const fact = await harness.store.readFact(scope, factHandle, request('tenant-a'));
+  assert.equal(fact.rawValue, 'Supported by nine sources');
+  const listed = await harness.store.listFacts(scope, request('tenant-a'));
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].supports.length, 9, 'tenant listing keeps its legacy support bound');
+  await assert.rejects(
+    harness.store.materializeSelected(scope, { evidence: [], facts: [factHandle] }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID',
+    'the composer-facing selected API remains capped at eight evidence records',
+  );
+});
+
+test('materializeSelected catches request changes during its final async authorization callback', async (t) => {
+  let signalEntered;
+  let releaseAuthorization;
+  const entered = new Promise((resolve) => { signalEntered = resolve; });
+  const blocked = new Promise((resolve) => { releaseAuthorization = resolve; });
+  const authRequest = mutableRequest('tenant-a');
+  const harness = await createHarness(t, {
+    authorizePrivateAccess: async ({ tenantId, request: current, action }) => {
+      if (action === 'materialize_selected') {
+        signalEntered();
+        await blocked;
+        return tenantId === 'tenant-a';
+      }
+      return current?.principal?.tenantId === tenantId && current.allowPrivate === true;
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(authRequest);
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  const pending = harness.store.materializeSelected(scope, { evidence: [evidence.evidence], facts: [] }, authRequest);
+  await entered;
+  authRequest.allowPrivate = false;
+  releaseAuthorization();
+  let returned;
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined, 'a stale asynchronous precheck cannot release the source');
+});
+
+test('materializeSelected denies a rejected native promise from the synchronous final authorization hook', async (t) => {
+  const harness = await createHarness(t, {
+    authorizePrivateAccessCurrent: () => Promise.reject(new Error('AUTH-CANARY-DO-NOT-LOG')),
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  await assert.rejects(harness.store.materializeSelected(scope, { evidence: [evidence.evidence], facts: [] }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED'
+      && !error.message.includes('CANARY'));
+});
+
+test('private release requires a current synchronous Boolean authorization with no legacy fallback', async (t) => {
+  let thenGetterCalls = 0;
+  const hostileThenable = Object.defineProperty({}, 'then', {
+    get() {
+      thenGetterCalls += 1;
+      throw new Error('THENABLE-CANARY-DO-NOT-LOG');
+    },
+  });
+  const cases = [
+    ['missing final hook', undefined],
+    ['false result', () => false],
+    ['throwing hook', () => { throw new Error('AUTH-CANARY-DO-NOT-LOG'); }],
+    ['non-Boolean result', () => hostileThenable],
+  ];
+  for (const [label, authorizePrivateAccessCurrent] of cases) {
+    const harness = await createHarness(t, { authorizePrivateAccessCurrent });
+    const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+    const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+    await assert.rejects(
+      harness.store.materializeSelected(scope, { evidence: [evidence.evidence], facts: [] }, request('tenant-a')),
+      (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED'
+        && !error.message.includes('CANARY'),
+      label,
+    );
+  }
+  assert.equal(thenGetterCalls, 0, 'a caller thenable is never assimilated');
+});
+
+test('listFacts denies a principal change during final asynchronous key resolution', async (t) => {
+  const keyGate = createKeyGate();
+  const authRequest = mutableRequest('tenant-a');
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) });
+  const scope = await harness.store.scopeForAuthenticatedRequest(authRequest);
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Private list value', normalizedValue: 'Private list value', supports: [supportFor(evidence)],
+  }, authRequest);
+
+  const gate = keyGate.arm('fact');
+  const pending = harness.store.listFacts(scope, authRequest);
+  await gate.reached;
+  authRequest.principal.tenantId = 'tenant-b';
+  gate.release();
+  let returned;
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined, 'listFacts never releases a stale private snapshot');
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+});
+
+test('listFacts resolves keys outside the SQLite tenant queue so a trusted key callback can reenter storage', { timeout: 3_000 }, async (t) => {
+  let nestedRead = null;
+  const resolveKey = async ({ tenantId, purpose, keyId }) => {
+    if (nestedRead) {
+      const reenter = nestedRead;
+      nestedRead = null;
+      await reenter();
+    }
+    const selectedId = `${purpose}-v1`;
+    if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+    return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+  };
+  const harness = await createHarness(t, { resolveKey });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'List value', normalizedValue: 'List value', supports: [supportFor(evidence)],
+  }, request('tenant-a'));
+  nestedRead = () => harness.store.getEvidenceMetadata(scope, evidence.evidence);
+
+  const result = await harness.store.listFacts(scope, request('tenant-a'));
+  assert.equal(result.length, 1);
+  assert.equal(result[0].rawValue, 'List value');
+  assert.equal(nestedRead, null);
+});
+
+test('withPrivatePayload does not return a consumer result if the consumer changes current authorization', async (t) => {
+  const authRequest = mutableRequest('tenant-a');
+  const harness = await createHarness(t, {
+    consumePrivatePayload({ request: current }) {
+      current.allowPrivate = false;
+      return { privateValue: 'must not reach the caller' };
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(authRequest);
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+
+  let returned;
+  const pending = harness.store.withPrivatePayload(scope, evidence.evidence, authRequest);
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined);
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+});
+
+test('withPrivatePayload rejects a custom thenable consumer result without assimilating it', async (t) => {
+  let thenCalls = 0;
+  const harness = await createHarness(t, {
+    consumePrivatePayload: () => ({ then() { thenCalls += 1; } }),
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+
+  await assert.rejects(harness.store.withPrivatePayload(scope, evidence.evidence, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+  assert.equal(thenCalls, 0, 'the async API never adopts a consumer-supplied thenable');
+});
+
+test('withPrivatePayload returns frozen arrays with standard operations despite hostile inherited then', async (t) => {
+  let thenCalls = 0;
+  const consumerArray = ['value', { nested: ['second'] }];
+  Object.setPrototypeOf(consumerArray, {
+    then(resolve) {
+      thenCalls += 1;
+      return resolve('adopted');
+    },
+  });
+  const harness = await createHarness(t, { consumePrivatePayload: () => consumerArray });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+
+  const result = await harness.store.withPrivatePayload(scope, evidence.evidence, request('tenant-a'));
+  assert.equal(Array.isArray(result), true);
+  assert.equal(result[1].nested[0], 'second');
+  assert.equal(typeof result.map, 'function');
+  assert.deepEqual([...result].map((value) => typeof value === 'string' ? value : value.nested[0]), ['value', 'second']);
+  assert.deepEqual(result.map((value) => typeof value === 'string' ? value : 'nested'), ['value', 'nested']);
+  assert.equal(Object.isFrozen(result), true);
+  assert.equal(Object.isFrozen(result[1]), true);
+  assert.equal(Object.isFrozen(result[1].nested), true);
+  assert.equal(Object.hasOwn(result, 'then'), true);
+  assert.equal(result.then, undefined);
+  assert.equal(thenCalls, 0);
+});
+
+test('withPrivatePayload denies own array thenables and safely observes rejected native Promises', async (t) => {
+  let thenCalls = 0;
+  const ownThenArray = ['value'];
+  Object.defineProperty(ownThenArray, 'then', {
+    value() { thenCalls += 1; },
+    enumerable: false,
+  });
+  const first = await createHarness(t, { consumePrivatePayload: () => ownThenArray });
+  const firstScope = await first.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const firstEvidence = await ingest(first.store, firstScope, first.sourceText, first.createPermit);
+  await assert.rejects(first.store.withPrivatePayload(firstScope, firstEvidence.evidence, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+  assert.equal(thenCalls, 0);
+
+  const second = await createHarness(t, {
+    consumePrivatePayload: () => Promise.reject(new Error('PRIVATE-CONSUMER-CANARY')),
+  });
+  const secondScope = await second.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const secondEvidence = await ingest(second.store, secondScope, second.sourceText, second.createPermit);
+  await assert.rejects(second.store.withPrivatePayload(secondScope, secondEvidence.evidence, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+});
+
+test('selected materialization honors cancellation while a key resolver is pending', async (t) => {
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  const controller = new AbortController();
+  const gate = keyGate.arm('payload');
+  const pending = harness.store.materializeSelected(scope, {
+    evidence: [evidence.evidence], facts: [],
+  }, request('tenant-a'), controller.signal);
+  await gate.reached;
+  controller.abort();
+  gate.release();
+  let returned;
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined, 'aborted preparation never publishes a partial result');
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED');
+});
+
+test('selected materialization rejects a shorter-lived earlier fact after a later fact decrypt and commits only tombstones', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args), factRetentionMs: 5_000 }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const firstEvidence = await ingest(harness.store, scope, 'Event: First\nDate: 2027-06-20', harness.createPermit, {
+    durationMs: 10_000,
+    sourceUrl: 'https://first.example.test/event',
+    canonicalUrl: 'https://first.example.test/event',
+  });
+  const firstFact = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'First private value', normalizedValue: 'First', supports: [supportFor(firstEvidence)],
+  }, request('tenant-a'));
+  const firstFactRecord = await harness.store.readFact(scope, firstFact, request('tenant-a'));
+
+  clock.value = EPOCH + 4_000;
+  const secondEvidence = await ingest(harness.store, scope, 'Event: Second\nDate: 2027-06-21', harness.createPermit, {
+    durationMs: 10_000,
+    sourceUrl: 'https://second.example.test/event',
+    canonicalUrl: 'https://second.example.test/event',
+  });
+  const secondFact = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Second private value', normalizedValue: 'Second', supports: [supportFor(secondEvidence)],
+  }, request('tenant-a'));
+  const secondFactRecord = await harness.store.readFact(scope, secondFact, request('tenant-a'));
+
+  const gate = keyGate.arm('fact', 2);
+  const pending = harness.store.materializeSelected(scope, {
+    evidence: [firstEvidence.evidence, secondEvidence.evidence],
+    facts: [firstFact, secondFact],
+  }, request('tenant-a'));
+  await gate.reached;
+  clock.value = EPOCH + 5_001;
+  gate.release();
+  let returned;
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined, 'an aggregate never returns a partial fact set');
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  const state = inspectTenantDatabase(harness.directory);
+  assert.deepEqual(Object.keys(state.manifest.facts[firstFactRecord.factId]).sort(), ['id', 'state']);
+  assert.equal(state.manifest.records[firstEvidence.metadata.evidenceId].state, 'available', 'the source outlives its shorter fact');
+  assert.equal(state.manifest.facts[secondFactRecord.factId].state, 'available');
+  assert.equal(state.bundleCount, 3, 'only the expired fact ciphertext is deleted');
+});
+
+test('selected materialization rejects an earlier source expiry during a later source decrypt', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const first = await ingest(harness.store, scope, 'Event: First source', harness.createPermit, {
+    durationMs: 1_000, sourceUrl: 'https://first.example.test/source', canonicalUrl: 'https://first.example.test/source',
+  });
+  const second = await ingest(harness.store, scope, 'Event: Second source', harness.createPermit, {
+    durationMs: 10_000, sourceUrl: 'https://second.example.test/source', canonicalUrl: 'https://second.example.test/source',
+  });
+  const gate = keyGate.arm('payload', 2);
+  const pending = harness.store.materializeSelected(scope, { evidence: [first.evidence, second.evidence], facts: [] }, request('tenant-a'));
+  await gate.reached;
+  clock.value = EPOCH + 1_001;
+  gate.release();
+  let returned;
+  await pending.then((value) => { returned = value; }, () => {});
+  assert.equal(returned, undefined);
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  const state = inspectTenantDatabase(harness.directory);
+  assert.deepEqual(Object.keys(state.manifest.records[first.metadata.evidenceId]).sort(), ['id', 'state']);
+  assert.equal(state.manifest.records[second.metadata.evidenceId].state, 'available');
+  assert.equal(state.bundleCount, 1);
+});
+
+test('final authorization runs outside SQLite write transactions and persisted state is reread synchronously after it', async (t) => {
+  let directory;
+  let evidenceId;
+  let writeTransactionAcquired = false;
+  const harness = await createHarness(t, {
+    authorizePrivateAccessCurrent({ tenantId, request: auth, action }) {
+      if (action === 'materialize_selected') {
+        const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+        const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'), { timeout: 250 });
+        try {
+          database.exec('BEGIN IMMEDIATE');
+          writeTransactionAcquired = true;
+          database.exec('ROLLBACK');
+        } finally {
+          database.close();
+        }
+      }
+      return auth?.principal?.tenantId === tenantId && auth.allowPrivate === true;
+    },
+  });
+  directory = harness.directory;
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  evidenceId = evidence.metadata.evidenceId;
+  const selected = await harness.store.materializeSelected(scope, { evidence: [evidence.evidence], facts: [] }, request('tenant-a'));
+  assert.equal(selected.evidence.length, 1);
+  assert.equal(writeTransactionAcquired, true, 'the final host callback can acquire SQLite write ownership without queue deadlock');
+});
+
+test('selected materialization rereads persisted expiry and store time after the final synchronous authorization callback', async (t) => {
+  const clock = { value: EPOCH };
+  const harness = await createHarness(t, {
+    authorizePrivateAccessCurrent({ tenantId, request: auth, action }) {
+      if (action === 'materialize_selected') clock.value = EPOCH + 1_000;
+      return auth?.principal?.tenantId === tenantId && auth.allowPrivate === true;
+    },
+  }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+  await assert.rejects(harness.store.materializeSelected(scope, { evidence: [evidence.evidence], facts: [] }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory), 1, 0);
+});
+
+test('selected materialization observes a persisted expiry committed during final authorization', async (t) => {
+  let directory;
+  let evidenceId;
+  const harness = await createHarness(t, {
+    authorizePrivateAccessCurrent({ tenantId, request: auth, action }) {
+      if (action === 'materialize_selected') {
+        const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+        const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'));
+        try {
+          database.exec('BEGIN IMMEDIATE');
+          const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(tenantHash);
+          const manifest = JSON.parse(row.document);
+          manifest.records[evidenceId] = { id: evidenceId, state: 'expired' };
+          database.prepare('UPDATE evidence_manifest SET document = ? WHERE tenant_hash = ?').run(JSON.stringify(manifest), tenantHash);
+          database.prepare("DELETE FROM sealed_bundles WHERE kind = 'evidence' AND id = ?").run(evidenceId);
+          database.exec('COMMIT');
+        } finally {
+          database.close();
+        }
+      }
+      return auth?.principal?.tenantId === tenantId && auth.allowPrivate === true;
+    },
+  });
+  directory = harness.directory;
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  evidenceId = evidence.metadata.evidenceId;
+  await assert.rejects(harness.store.materializeSelected(scope, { evidence: [evidence.evidence], facts: [] }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory), 1, 0);
+});
+
+test('selected materialization resolves keys outside the tenant write queue so trusted key callbacks can reenter storage', { timeout: 3_000 }, async (t) => {
+  let nestedRead = null;
+  const resolveKey = async ({ tenantId, purpose, keyId }) => {
+    if (nestedRead) {
+      const reenter = nestedRead;
+      nestedRead = null;
+      await reenter();
+    }
+    const selectedId = `${purpose}-v1`;
+    if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+    return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+  };
+  const harness = await createHarness(t, { resolveKey });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  nestedRead = () => harness.store.getEvidenceMetadata(scope, evidence.evidence);
+  const result = await harness.store.materializeSelected(scope, { evidence: [evidence.evidence], facts: [] }, request('tenant-a'));
+  assert.equal(result.evidence[0].metadata.contentHash, evidence.metadata.contentHash);
+  assert.equal(nestedRead, null);
+});
+
 test('listFacts rejects its snapshot if a later decrypt expires an earlier fact', async (t) => {
   const clock = { value: EPOCH };
   const keyGate = createKeyGate();
@@ -777,6 +1777,88 @@ test('new evidence and fact writes roll back if key resolution crosses retention
   assertExpiredDiskState(inspectTenantDatabase(factHarness.directory), 1, 0);
 });
 
+test('listFacts returns a frozen empty list for a new or rolled-back tenant, including after reopen', async (t) => {
+  let failFactKey = false;
+  let revokeCurrent = false;
+  const authRequest = mutableRequest('tenant-a');
+  const harness = await createHarness(t, {
+    resolveKey({ tenantId, purpose, keyId }) {
+      if (failFactKey && purpose === 'fact') throw new Error('SYNTHETIC-KEY-FAILURE');
+      const selectedId = `${purpose}-v1`;
+      if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+      return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+    },
+    authorizePrivateAccess({ tenantId, request: current }) {
+      return current?.principal?.tenantId === tenantId && current.allowPrivate === true;
+    },
+    authorizePrivateAccessCurrent({ tenantId, request: current }) {
+      if (revokeCurrent) {
+        current.allowPrivate = false;
+        return false;
+      }
+      return current?.principal?.tenantId === tenantId && current.allowPrivate === true;
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(authRequest);
+  const port = createProvenancePort(harness.store);
+
+  const initial = await harness.store.listFacts(scope, authRequest);
+  assert.deepEqual(initial, []);
+  assert.equal(Object.isFrozen(initial), true);
+  assert.deepEqual(await port.list(scope, authRequest), []);
+  await assert.rejects(harness.store.listFacts(scope, request('tenant-a', false)),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+
+  revokeCurrent = true;
+  await assert.rejects(harness.store.listFacts(scope, authRequest),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
+  revokeCurrent = false;
+  authRequest.allowPrivate = true;
+
+  failFactKey = true;
+  await assert.rejects(harness.store.appendFact(scope, {
+    field: 'event_timezone', status: 'missing', reason: 'not_observed',
+  }, authRequest), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_KEY_UNAVAILABLE');
+  assert.equal(inspectTenantDatabase(harness.directory).manifest, null, 'the failed first write leaves no manifest');
+  failFactKey = false;
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(authRequest);
+  const reopenedPort = createProvenancePort(reopened);
+  const afterRollback = await reopened.listFacts(reopenedScope, authRequest);
+  assert.deepEqual(afterRollback, []);
+  assert.equal(Object.isFrozen(afterRollback), true);
+  assert.deepEqual(await reopenedPort.list(reopenedScope, authRequest), []);
+});
+
+test('listFacts rejects a manifest that disappears after a nonempty snapshot', async (t) => {
+  let directory;
+  let deleteManifestAtFinalGate = false;
+  const harness = await createHarness(t, {
+    authorizePrivateAccessCurrent({ tenantId, request: auth, action }) {
+      if (deleteManifestAtFinalGate && action === 'list_facts') {
+        const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+        const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'));
+        try {
+          database.prepare('DELETE FROM evidence_manifest WHERE tenant_hash = ?').run(tenantHash);
+        } finally {
+          database.close();
+        }
+      }
+      return auth?.principal?.tenantId === tenantId && auth.allowPrivate === true;
+    },
+  });
+  directory = harness.directory;
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  await harness.store.appendFact(scope, {
+    field: 'event_timezone', status: 'missing', reason: 'not_observed',
+  }, request('tenant-a'));
+  deleteManifestAtFinalGate = true;
+  await assert.rejects(harness.store.listFacts(scope, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INTEGRITY');
+  assert.equal(inspectTenantDatabase(harness.directory).manifest, null);
+});
+
 test('metadata serializes a cleared predecessor link as null after predecessor expiry', async (t) => {
   const harness = await createHarness(t);
   const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
@@ -788,6 +1870,172 @@ test('metadata serializes a cleared predecessor link as null after predecessor e
   const metadata = await harness.store.getEvidenceMetadata(scope, second.evidence);
   assert.equal(metadata.previousEvidenceId, null);
   assert.equal(JSON.parse(JSON.stringify(metadata)).previousEvidenceId, null);
+});
+
+test('live successors remain readable after predecessor expiry before and after restart', async (t) => {
+  const clock = { value: EPOCH };
+  const harness = await createHarness(t, {
+    consumePrivatePayload({ metadata, source, positions }) {
+      return {
+        previousEvidenceId: metadata.previousEvidenceId,
+        sourceUrl: source.sourceUrl,
+        snapshots: positions.map((position) => position.content.toString('utf8')),
+      };
+    },
+  }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const predecessor = await ingest(harness.store, scope, 'Event: First retained version', harness.createPermit, {
+    durationMs: 1_000,
+  });
+  const successor = await ingest(harness.store, scope, 'Event: Second retained version', harness.createPermit, {
+    durationMs: 5_000,
+  });
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Second retained version',
+    normalizedValue: 'Second retained version', supports: [supportFor(successor)],
+  }, request('tenant-a'));
+  const initialFact = await harness.store.readFact(scope, factHandle, request('tenant-a'));
+
+  const assertSuccessorReads = async (store, tenantScope, evidenceHandle, currentFactHandle) => {
+    const metadata = await store.getEvidenceMetadata(tenantScope, evidenceHandle);
+    assert.equal(metadata.state, 'available');
+    assert.equal(metadata.previousEvidenceId, null);
+    const positions = await store.listEvidencePositions(tenantScope, evidenceHandle, request('tenant-a'));
+    assert.equal(positions.length, 1);
+    const payload = await store.withPrivatePayload(tenantScope, evidenceHandle, request('tenant-a'));
+    assert.equal(payload.previousEvidenceId, null);
+    assert.equal(payload.snapshots[0], 'Second retained version');
+    const fact = await store.readFact(tenantScope, currentFactHandle, request('tenant-a'));
+    assert.equal(fact.rawValue, 'Second retained version');
+    const selected = await store.materializeSelected(tenantScope, {
+      evidence: [evidenceHandle], facts: [currentFactHandle],
+    }, request('tenant-a'));
+    assert.equal(selected.evidence[0].metadata.previousEvidenceId, null);
+    assert.equal(selected.facts[0].rawValue, 'Second retained version');
+  };
+
+  clock.value = EPOCH + 1_001;
+  await assertSuccessorReads(harness.store, scope, successor.evidence, factHandle);
+  const afterExpiry = inspectTenantDatabase(harness.directory);
+  assert.deepEqual(Object.keys(afterExpiry.manifest.records[predecessor.metadata.evidenceId]).sort(), ['id', 'state']);
+  assert.equal(afterExpiry.manifest.records[successor.metadata.evidenceId].previousId, undefined);
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const reopenedSuccessor = await reopened.lookupEvidence(reopenedScope, successor.metadata.evidenceId);
+  const reopenedFact = await reopened.lookupFact(reopenedScope, initialFact.factId);
+  await assertSuccessorReads(reopened, reopenedScope, reopenedSuccessor, reopenedFact);
+  const reopenedPredecessor = await reopened.lookupEvidence(reopenedScope, predecessor.metadata.evidenceId);
+  assert.equal((await reopened.getEvidenceMetadata(reopenedScope, reopenedPredecessor)).state, 'expired');
+});
+
+test('selected reads accept an expiry-driven predecessor unlink during later asynchronous preparation', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const predecessor = await ingest(harness.store, scope, 'Event: Old source bytes', harness.createPermit, {
+    durationMs: 1_000,
+  });
+  const successor = await ingest(harness.store, scope, 'Event: New source bytes', harness.createPermit, {
+    durationMs: 10_000,
+  });
+  assert.equal(successor.metadata.previousEvidenceId, predecessor.metadata.evidenceId);
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'New source bytes',
+    normalizedValue: 'New source bytes', supports: [supportFor(successor)],
+  }, request('tenant-a'));
+
+  const gate = keyGate.arm('fact');
+  const pending = harness.store.materializeSelected(scope, {
+    evidence: [successor.evidence], facts: [factHandle],
+  }, request('tenant-a'));
+  await gate.reached;
+  clock.value = EPOCH + 1_001;
+  const currentMetadata = await harness.store.getEvidenceMetadata(scope, successor.evidence);
+  assert.equal(currentMetadata.previousEvidenceId, null, JSON.stringify({
+    now: clock.value,
+    predecessor: inspectTenantDatabase(harness.directory).manifest.records[predecessor.metadata.evidenceId],
+    successor: inspectTenantDatabase(harness.directory).manifest.records[successor.metadata.evidenceId],
+  }));
+  gate.release();
+
+  const selected = await pending;
+  assert.equal(selected.evidence[0].metadata.previousEvidenceId, null);
+  assert.equal(selected.facts[0].rawValue, 'New source bytes');
+  const state = inspectTenantDatabase(harness.directory);
+  assert.deepEqual(Object.keys(state.manifest.records[predecessor.metadata.evidenceId]).sort(), ['id', 'state']);
+  assert.equal(state.manifest.records[successor.metadata.evidenceId].previousId, undefined);
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const reopenedFact = await reopened.lookupFact(reopenedScope, selected.facts[0].factId);
+  assert.equal((await reopened.readFact(reopenedScope, reopenedFact, request('tenant-a'))).rawValue, 'New source bytes');
+});
+
+test('private payload receives current predecessor metadata after asynchronous decryption', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, {
+    resolveKey: (args) => keyGate.resolve(args),
+    consumePrivatePayload: ({ metadata }) => ({ previousEvidenceId: metadata.previousEvidenceId }),
+  }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const predecessor = await ingest(harness.store, scope, 'Event: Payload predecessor', harness.createPermit, {
+    durationMs: 1_000,
+  });
+  const successor = await ingest(harness.store, scope, 'Event: Payload successor', harness.createPermit, {
+    durationMs: 10_000,
+  });
+  assert.equal(successor.metadata.previousEvidenceId, predecessor.metadata.evidenceId);
+
+  const gate = keyGate.arm('payload');
+  const pending = harness.store.withPrivatePayload(scope, successor.evidence, request('tenant-a'));
+  await gate.reached;
+  clock.value = EPOCH + 1_001;
+  const metadata = await harness.store.getEvidenceMetadata(scope, successor.evidence);
+  assert.equal(metadata.previousEvidenceId, null);
+  gate.release();
+  const consumed = await pending;
+  assert.equal(consumed.previousEvidenceId, null);
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const reopenedSuccessor = await reopened.lookupEvidence(reopenedScope, successor.metadata.evidenceId);
+  const reopenedConsumed = await reopened.withPrivatePayload(
+    reopenedScope, reopenedSuccessor, request('tenant-a'),
+  );
+  assert.equal(reopenedConsumed.previousEvidenceId, null);
+});
+
+test('predecessor normalization does not hide a substantive evidence metadata change', async (t) => {
+  let directory;
+  let evidenceId;
+  const harness = await createHarness(t, {
+    authorizePrivateAccessCurrent({ tenantId, request: auth, action }) {
+      if (action === 'materialize_selected') {
+        const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+        const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'));
+        try {
+          const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(tenantHash);
+          const manifest = JSON.parse(row.document);
+          manifest.records[evidenceId].contentHash = 'f'.repeat(64);
+          database.prepare('UPDATE evidence_manifest SET document = ? WHERE tenant_hash = ?').run(JSON.stringify(manifest), tenantHash);
+        } finally {
+          database.close();
+        }
+      }
+      return auth?.principal?.tenantId === tenantId && auth.allowPrivate === true;
+    },
+  });
+  directory = harness.directory;
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  evidenceId = evidence.metadata.evidenceId;
+  await assert.rejects(harness.store.materializeSelected(scope, {
+    evidence: [evidence.evidence], facts: [],
+  }, request('tenant-a')),
+  (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INTEGRITY');
 });
 
 test('source positions are verified against text ranges and JSON pointers before persistence', async (t) => {
