@@ -1,0 +1,569 @@
+{
+  "contract": "JobCommandAcknowledgement",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "JobCommandAcknowledgement",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000000100",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "job_id": "123e4567-e89b-42d3-a456-000000000002",
+    "request_id": "123e4567-e89b-42d3-a456-000000000018",
+    "idempotency_key": "cancel_1",
+    "command": "cancel",
+    "expected_revision": 1,
+    "revision": 2,
+    "disposition": "accepted",
+    "job_ref": {
+      "contract": "JobStatus",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000002",
+      "revision": 2,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "error": null,
+    "execution_state": "not_dispatched",
+    "usage_completeness": "unknown"
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "artifact_id": "123e4567-e89b-42d3-a456-000000000040",
+        "design_id": "123e4567-e89b-42d3-a456-000000000041",
+        "design_version_id": "123e4567-e89b-42d3-a456-000000000042",
+        "trace_id": "123e4567-e89b-42d3-a456-000000000043",
+        "evidence_id": "123e4567-e89b-42d3-a456-000000000044"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing-policy",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "wrong-type",
+      "category": "type",
+      "set": {
+        "billing_mode": 1
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "unknown-enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "capabilities": [
+          "publish"
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "invalid-date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "semantic",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000002",
+            "revision": 2,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "prior": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000002",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "running",
+          "outcome": "unknown",
+          "execution_state": "not_dispatched",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [],
+          "error": null
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-tenant",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000099"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000002",
+            "revision": 2,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "prior": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000002",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "running",
+          "outcome": "unknown",
+          "execution_state": "not_dispatched",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [],
+          "error": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "resume-after-terminal",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "command": "resume"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000002",
+            "revision": 2,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "prior": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000002",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "cancelled",
+          "outcome": "cancelled",
+          "execution_state": "not_dispatched",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [],
+          "error": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "TERMINAL_JOB",
+        "path": "/command"
+      }
+    },
+    {
+      "id": "cancel-uncertain-known-accounting",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "execution_state": "uncertain",
+        "usage_completeness": "complete"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000002",
+            "revision": 2,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "prior": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000002",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "running",
+          "outcome": "unknown",
+          "execution_state": "uncertain",
+          "usage_completeness": "complete",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [],
+          "error": null
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "unsafe-cancel-ack-reset",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000002",
+            "revision": 2,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "prior": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000002",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "running",
+          "outcome": "unknown",
+          "execution_state": "uncertain",
+          "usage_completeness": "complete",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [],
+          "error": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNCERTAIN_EXECUTION",
+        "path": "/execution_state"
+      }
+    },
+    {
+      "id": "duplicate-ack",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "disposition": "duplicate"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "job_ref": {
+            "contract": "JobStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000002",
+            "revision": 2,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "prior": {
+          "contract": "JobStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000101",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000002",
+          "workflow_id": "123e4567-e89b-42d3-a456-000000000003",
+          "run_id": "123e4567-e89b-42d3-a456-000000000004",
+          "revision": 1,
+          "state": "running",
+          "outcome": "unknown",
+          "execution_state": "not_dispatched",
+          "usage_completeness": "unknown",
+          "progress": {
+            "completed": 1,
+            "total": 10,
+            "unit": "steps"
+          },
+          "lease_attempt_id": "123e4567-e89b-42d3-a456-000000000005",
+          "checkpoint_ref": null,
+          "result_refs": [],
+          "error": null
+        },
+        "previous_command": {
+          "contract": "Cancellation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "job_id": "123e4567-e89b-42d3-a456-000000000002",
+          "request_id": "123e4567-e89b-42d3-a456-000000000018",
+          "idempotency_key": "cancel_1",
+          "command": "cancel",
+          "expected_revision": 1,
+          "requested_at": "2026-10-10T12:00:00Z",
+          "reason_code": "customer_requested"
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    }
+  ]
+}

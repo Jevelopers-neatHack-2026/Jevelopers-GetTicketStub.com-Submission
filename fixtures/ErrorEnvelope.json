@@ -1,0 +1,381 @@
+{
+  "contract": "ErrorEnvelope",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "ErrorEnvelope",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000000100",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "error": {
+      "code": "INVALID_PAYLOAD",
+      "category": "validation",
+      "safe_message": "Request cannot be completed.",
+      "module": "shared-contracts",
+      "operation": "validate",
+      "retryable": false,
+      "blocking_condition": "review",
+      "side_effects": "none",
+      "usage_state": "unknown",
+      "validation_paths": [
+        "/field"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "artifact_id": "123e4567-e89b-42d3-a456-000000000040",
+        "design_id": "123e4567-e89b-42d3-a456-000000000041",
+        "design_version_id": "123e4567-e89b-42d3-a456-000000000042",
+        "trace_id": "123e4567-e89b-42d3-a456-000000000043",
+        "evidence_id": "123e4567-e89b-42d3-a456-000000000044"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing-policy",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "wrong-type",
+      "category": "type",
+      "set": {
+        "billing_mode": 1
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "unknown-enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "capabilities": [
+          "publish"
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "invalid-date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "semantic",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {}
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-tenant",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000099"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {}
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "timeout-known-accounting",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "error": {
+          "code": "TIMEOUT",
+          "category": "timeout",
+          "safe_message": "Request cannot be completed.",
+          "module": "shared-contracts",
+          "operation": "validate",
+          "retryable": false,
+          "blocking_condition": "review",
+          "side_effects": "unknown",
+          "usage_state": "complete",
+          "validation_paths": [
+            "/field"
+          ]
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {}
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "timeout-cannot-claim-no-side-effects",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "error": {
+          "code": "TIMEOUT",
+          "category": "timeout",
+          "safe_message": "Request cannot be completed.",
+          "module": "shared-contracts",
+          "operation": "validate",
+          "retryable": false,
+          "blocking_condition": "review",
+          "side_effects": "none",
+          "usage_state": "complete",
+          "validation_paths": [
+            "/field"
+          ]
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {}
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNKNOWN_SIDE_EFFECT",
+        "path": "/error/side_effects"
+      }
+    },
+    {
+      "id": "unknown-usage-must-not-be-complete",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "error": {
+          "code": "UNKNOWN_USAGE",
+          "category": "uncertainty",
+          "safe_message": "Outcome remains unknown.",
+          "module": "shared-contracts",
+          "operation": "validate",
+          "retryable": false,
+          "blocking_condition": "review",
+          "side_effects": "unknown",
+          "usage_state": "complete",
+          "validation_paths": [
+            "/field"
+          ]
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {}
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNKNOWN_USAGE",
+        "path": "/error/usage_state"
+      }
+    },
+    {
+      "id": "private-diagnostic-message",
+      "category": "structural",
+      "set": {
+        "error": {
+          "code": "INVALID_PAYLOAD",
+          "category": "validation",
+          "safe_message": "SYNTHETIC customer prompt",
+          "module": "shared-contracts",
+          "operation": "validate",
+          "retryable": false,
+          "blocking_condition": "review",
+          "side_effects": "none",
+          "usage_state": "unknown",
+          "validation_paths": [
+            "/field"
+          ]
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/error/safe_message"
+      }
+    },
+    {
+      "id": "unknown-error-code",
+      "category": "structural",
+      "set": {
+        "error": {
+          "code": "NEW_RANDOM_CODE",
+          "category": "validation",
+          "safe_message": "Request cannot be completed.",
+          "module": "shared-contracts",
+          "operation": "validate",
+          "retryable": false,
+          "blocking_condition": "review",
+          "side_effects": "none",
+          "usage_state": "unknown",
+          "validation_paths": [
+            "/field"
+          ]
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/error/code"
+      }
+    },
+    {
+      "id": "malformed-reference-hash",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "error": {
+          "code": "INVALID_PAYLOAD",
+          "category": "validation",
+          "safe_message": "Request cannot be completed.",
+          "module": "shared-contracts",
+          "operation": "validate",
+          "retryable": false,
+          "blocking_condition": "review",
+          "side_effects": "none",
+          "usage_state": "unknown",
+          "validation_paths": [
+            "/field"
+          ],
+          "diagnostic_ref": {
+            "contract": "ConversionPolicy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000066",
+            "revision": 1,
+            "content_hash": "sha256:bad"
+          }
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {}
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/error/diagnostic_ref/content_hash"
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@ Public schemas, validation and compatibility fixtures.
 
 ## Implementation status
 
-The local foundation provides CommonEnvelope and EvidenceProjection 1.0.0 candidates, exact schema primitives, generated ESM validators/declarations, privacy/context helpers and offline tooling. Domain schemas #9-28, named owner agreement and accepted consumer integrations remain pending. This package is private and unreleased; no license or publication decision is implied.
+Candidate package 0.2.0 provides the two foundation contracts and all 20 operations wire exports for #9-14, an injected DecisionPort, derived ESM validators/declarations, pure context/semantic helpers and offline fixtures. Domain schemas #15-28, named owner agreement and accepted consumer integrations remain pending. This package is private and unreleased; no license or publication decision is implied.
 
 Use Node 22.23.3 (see .node-version), npm and the exact package-lock.json. After provisioning the cache once, every check runs offline:
 
@@ -25,6 +25,8 @@ npm pack --dry-run
 ```
 
 The full-catalog commands `contracts:check`, `contracts:fixtures` and `contracts:compat` fail for each missing domain leaf. `--foundation` is an explicit local scope for the two candidates, not release evidence. `contracts:inventory` supports --require-owner, --require-consumer, --require-leaf, --require-version-policy, --require-field-classification, --policy-only, --require-fixtures, --require-docs and --require-consumer-pins. Owner checks require named reviewer/owner acknowledgements; consumer pin checks require accepted exact revisions and passing evidence. --policy-only checks field-classification policy without silently claiming domain completeness. Missing artifacts are failures, not skipped tests. Unknown commands, duplicate/unknown flags and missing flag values fail.
+
+`--implemented` selects all 22 current candidates without claiming full release coverage. Use it for contracts:check, contracts:fixtures, contracts:compat and scoped inventory checks. The [operations guide](docs/operations-contracts.md) links schemas/fixtures, exact decimal and uncertainty rules, server-supplied contexts, independent reporting/outcome semantics, and explicit Score profile adapters. The [operations consumer](examples/operations-consumer.mjs) runs from the installed local archive with zero provider calls. Structural scoped types now support other contract discriminators; OperationCode/OperationResult describe semantic rejections without expanding the foundation ValidationCode union. Package 0.2.0 records these additions while foundation schema bytes stay pinned.
 
 `contracts:compat -- --before old-schema.json --after new-schema.json` classifies a local schema change conservatively. Required additions, removals, type/unit/constraint changes and unsafe enum changes require a breaking-impact review; documentation-only changes pass. [Candidate baselines](compatibility/baselines.json) bind exact schema bytes to detect same-version drift. They are local immutability guards, not owner acceptance or historical consumer versions. [Fixture manifest](generated/fixture-manifest.json) records exact fixture file hashes and the common digest.
 

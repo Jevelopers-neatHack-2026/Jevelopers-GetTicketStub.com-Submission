@@ -13,7 +13,7 @@ jobs:
           cache: npm
       - name: Provision locked dependency cache
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify offline foundation candidates
+      - name: Verify offline implemented candidates
         env:
           npm_config_offline: 'true'
           npm_config_audit: 'false'
@@ -22,9 +22,9 @@ jobs:
           npm ci --ignore-scripts
           npm run build
           npm test
-          npm run contracts:check -- --foundation
-          npm run contracts:fixtures -- --foundation
-          npm run contracts:compat -- --foundation
+          npm run contracts:check -- --implemented
+          npm run contracts:fixtures -- --implemented
+          npm run contracts:compat -- --implemented
           npm run contracts:inventory -- --require-consumer --require-leaf --require-version-policy
           npm run contracts:inventory -- --require-field-classification --policy-only
           npm run docs:check

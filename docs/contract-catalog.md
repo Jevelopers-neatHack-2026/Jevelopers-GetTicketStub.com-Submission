@@ -1,31 +1,31 @@
 # Contract Catalog
 
-This is the maintained inventory. The JSON record below is consumed by `contracts:inventory`. Foundation candidates are implemented locally and await owner review. All domain leaves are unimplemented. Paths and versions remain null until artifacts exist; no planned export counts as an implementation.
+This is the maintained inventory. The JSON record below is consumed by `contracts:inventory`. Foundation candidates are implemented locally and await owner review. Operations leaves #9-14 now have local candidates; domain leaves #15-28 remain unimplemented. Paths and versions remain null until artifacts exist; no planned export counts as an implementation.
 
 | Export | Leaf | Producers | Consumers | State |
 | --- | --- | --- | --- | --- |
 | CommonEnvelope | #7 SC-04 | shared-contracts | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors, cost-intelligence, team-dashboard, integration-evals, getticketstub.com | foundation_candidate |
 | EvidenceProjection | #8 SC-11 | shared-contracts | integration-evals, team-dashboard, getticketstub.com | foundation_candidate |
-| ErrorEnvelope | #9 SC-08.ERROR | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors, cost-intelligence | getticketstub.com, agent-harness, team-dashboard, integration-evals | unimplemented |
-| PartialFailure | #9 SC-08.ERROR | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors, cost-intelligence | getticketstub.com, agent-harness, team-dashboard, integration-evals | unimplemented |
-| JobStatus | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | unimplemented |
-| JobProgress | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | unimplemented |
-| Cancellation | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | unimplemented |
-| JobCommandAcknowledgement | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | unimplemented |
-| UsageEvent | #11 SC-06.USAGE | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors | cost-intelligence, integration-evals | unimplemented |
-| BudgetReservation | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| ReserveRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| ReserveResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| SettleRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| SettleResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| ReleaseRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| ReleaseResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| QueryRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| QueryResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | unimplemented |
-| FinancialSummary | #13 SC-06.SUMMARY | cost-intelligence | team-dashboard, getticketstub.com, integration-evals | unimplemented |
-| DecisionPortRequest | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | unimplemented |
-| DecisionPortResult | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | unimplemented |
-| DecisionReceipt | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | unimplemented |
+| ErrorEnvelope | #9 SC-08.ERROR | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors, cost-intelligence | getticketstub.com, agent-harness, team-dashboard, integration-evals | operations_candidate |
+| PartialFailure | #9 SC-08.ERROR | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors, cost-intelligence | getticketstub.com, agent-harness, team-dashboard, integration-evals | operations_candidate |
+| JobStatus | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | operations_candidate |
+| JobProgress | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | operations_candidate |
+| Cancellation | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | operations_candidate |
+| JobCommandAcknowledgement | #10 SC-08.JOB | agent-harness | getticketstub.com, event-intelligence, creative-engine, team-dashboard, integration-evals | operations_candidate |
+| UsageEvent | #11 SC-06.USAGE | agent-harness, event-intelligence, creative-engine, print-production, fulfillment-connectors | cost-intelligence, integration-evals | operations_candidate |
+| BudgetReservation | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| ReserveRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| ReserveResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| SettleRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| SettleResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| ReleaseRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| ReleaseResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| QueryRequest | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| QueryResult | #12 SC-06.RESERVATION | cost-intelligence, agent-harness, event-intelligence, creative-engine | cost-intelligence, agent-harness, event-intelligence, creative-engine | operations_candidate |
+| FinancialSummary | #13 SC-06.SUMMARY | cost-intelligence | team-dashboard, getticketstub.com, integration-evals | operations_candidate |
+| DecisionPortRequest | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | operations_candidate |
+| DecisionPortResult | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | operations_candidate |
+| DecisionReceipt | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | operations_candidate |
 | ProjectRequest | #15 SC-02.PROJECT | getticketstub.com | agent-harness | unimplemented |
 | ResearchRequest | #16 SC-02.RESEARCH | agent-harness | event-intelligence | unimplemented |
 | EventIntelligencePackage | #17 SC-02.RESEARCH-PACKAGE | event-intelligence | creative-engine, agent-harness, getticketstub.com, integration-evals | unimplemented |
@@ -148,15 +148,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "typed failure without retry authority",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/ErrorEnvelope/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ErrorEnvelope_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/ErrorEnvelope.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -187,15 +187,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "typed failure without retry authority",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/PartialFailure/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/PartialFailure_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/PartialFailure.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -222,15 +222,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "workflow state and cancellation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/JobStatus/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/JobStatus_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/JobStatus.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -257,15 +257,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "workflow state and cancellation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/JobProgress/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/JobProgress_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/JobProgress.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -292,15 +292,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "workflow state and cancellation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/Cancellation/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/Cancellation_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/Cancellation.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -327,15 +327,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "workflow state and cancellation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/JobCommandAcknowledgement/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/JobCommandAcknowledgement_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/JobCommandAcknowledgement.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -363,15 +363,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "observation without financial posting",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/UsageEvent/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/UsageEvent_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/UsageEvent.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -400,15 +400,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/BudgetReservation/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/BudgetReservation_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/BudgetReservation.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -437,15 +437,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/ReserveRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ReserveRequest_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/ReserveRequest.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -474,15 +474,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/ReserveResult/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ReserveResult_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/ReserveResult.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -511,15 +511,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/SettleRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/SettleRequest_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/SettleRequest.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -548,15 +548,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/SettleResult/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/SettleResult_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/SettleResult.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -585,15 +585,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/ReleaseRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ReleaseRequest_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/ReleaseRequest.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -622,15 +622,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/ReleaseResult/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ReleaseResult_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/ReleaseResult.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -659,15 +659,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/QueryRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/QueryRequest_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/QueryRequest.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -696,15 +696,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "cost-intelligence alone authorizes reservations; command names pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/QueryResult/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/QueryResult_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/QueryResult.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -729,15 +729,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "read-only financial projection",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "cost-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/FinancialSummary/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/FinancialSummary_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/FinancialSummary.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -765,15 +765,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "bounded injected decisions without approval authority",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/DecisionPortRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/DecisionPortRequest_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/DecisionPortRequest.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -801,15 +801,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "bounded injected decisions without approval authority",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/DecisionPortResult/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/DecisionPortResult_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/DecisionPortResult.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -837,15 +837,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "bounded injected decisions without approval authority",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "operations_candidate",
+      "schema_path": "schemas/DecisionReceipt/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/DecisionReceipt_1_0_0.d.ts",
+      "helper": "tooling/operations.mjs",
+      "fixtures": "fixtures/DecisionReceipt.json",
+      "docs": "docs/operations-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public projection stays allowlisted",
       "acceptance": null
     },
     {
@@ -1458,6 +1458,22 @@ This is the maintained inventory. The JSON record below is consumed by `contract
         "agent-harness"
       ]
     }
+  ],
+  "interfaces": [
+    {
+      "name": "DecisionPort",
+      "issue": 14,
+      "requirement": "SC-05",
+      "kind": "injected_contract_only_port",
+      "state": "operations_candidate",
+      "generated_export": "generated/operations.d.ts",
+      "helper": "tooling/operations.mjs",
+      "request_contract": "DecisionPortRequest",
+      "result_contract": "DecisionPortResult",
+      "fixtures": "fixtures/DecisionPortRequest.json",
+      "docs": "docs/operations-contracts.md",
+      "acceptance": null
+    }
   ]
 }
 ```
@@ -1469,3 +1485,5 @@ The budget command labels inventory the reserve/settle/release/query request/res
 See [identity rules](identity-policy.md), [privacy](privacy-policy.md), [version policy](../compatibility/version-policy.json), [requirements](requirements.json), and [consumer discovery and handoff](../compatibility/consumers.json). Historical architecture snapshots provide context; this catalog and future accepted schemas govern migration.
 
 Foundation navigation: [CommonEnvelope schema](../schemas/CommonEnvelope/1.0.0.json), [type](../generated/CommonEnvelope_1_0_0.d.ts), [fixtures](../fixtures/CommonEnvelope.json); [EvidenceProjection schema](../schemas/EvidenceProjection/1.0.0.json), [type](../generated/EvidenceProjection_1_0_0.d.ts), [fixtures](../fixtures/EvidenceProjection.json); [runtime helpers](../tooling/runtime.mjs). Domain paths stay null until implemented.
+
+Operations navigation: [contracts and helper guide](operations-contracts.md), [installed consumer example](../examples/operations-consumer.mjs), [generated port API](../generated/operations.d.ts). Each operations entry above has a real schema, declaration and fixture path; owner acknowledgement remains null.

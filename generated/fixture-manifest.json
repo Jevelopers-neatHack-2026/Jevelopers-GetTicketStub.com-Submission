@@ -1,8 +1,28 @@
 {
   "files": {
+    "fixtures/BudgetReservation.json": "sha256:3f560759bf93265f732490366a7e0c85696875c122830e19394deb52ae74eb93",
+    "fixtures/Cancellation.json": "sha256:90df772982a35a4bf6af5d82cb3b37f861c5e2e2538553fce55b89f8516b244f",
     "fixtures/CommonEnvelope.json": "sha256:e67c1cb4abdbad4dfeccca3870bf414227b2540fa45f494b959def2395248dac",
-    "fixtures/EvidenceProjection.json": "sha256:801584ea9641e4bf5ed24bc11a1c5b9d12011136e3854fec7e24caab223a0ba4"
+    "fixtures/DecisionPortRequest.json": "sha256:ebe4fc23510269ce1f2df157ecaa82af22a1422addcd8564822c8c55b83be76d",
+    "fixtures/DecisionPortResult.json": "sha256:f007e09e4e084b8b5d07d2e75c0db44cf280d4c1a82563e2ae54dd306308fb85",
+    "fixtures/DecisionReceipt.json": "sha256:69a7075ea84d696f6293de8600dbb80a134f6789b5da84082e8996cf1c137a92",
+    "fixtures/ErrorEnvelope.json": "sha256:02e549419655094434b3d50dcdd8b0424f2b8d04a7fb6ac21192569c1332de70",
+    "fixtures/EvidenceProjection.json": "sha256:801584ea9641e4bf5ed24bc11a1c5b9d12011136e3854fec7e24caab223a0ba4",
+    "fixtures/FinancialSummary.json": "sha256:fc979b3afee9ae2bda810dc899e5a0c64e29030e13fdc4049aa80b61f8f854e9",
+    "fixtures/JobCommandAcknowledgement.json": "sha256:7069d27ff9503d0c6ded16203b7996ecdefe758cd793aa63e14ace30c75a77cc",
+    "fixtures/JobProgress.json": "sha256:0632d135643cad31b8699b83055f1e325d7325910253d54daf9c05d5d2d87b33",
+    "fixtures/JobStatus.json": "sha256:d2517cfe44961199fb228b363fbcb0dd79120d37e874d55d905d53d88265e0bb",
+    "fixtures/PartialFailure.json": "sha256:144cfb2ae0482a552362b28a817cf21dac57146d7d83e665d164d49ef7fb3d84",
+    "fixtures/QueryRequest.json": "sha256:36908cdece33ef81273bc95ba8768d3dcaa9837a306cb944fe1a33c0c6f1d36b",
+    "fixtures/QueryResult.json": "sha256:53701a0dc52a36b47020cc079782e090a304a68fbdb3193b4b140308d7ca4bbf",
+    "fixtures/ReleaseRequest.json": "sha256:02d6230d3cfebf9849b4dc3a19ce39073a45c048382563ccd0000ebf3f85c21b",
+    "fixtures/ReleaseResult.json": "sha256:77bf0e4af1c4e22fc2573577bf4cae91bcdba5abf92fbd7d95c15ed9178215d2",
+    "fixtures/ReserveRequest.json": "sha256:343374f57f5116ce7ac58a6aebfe6a53f37381f3eabe3b17953173c4eb151fc2",
+    "fixtures/ReserveResult.json": "sha256:784e4977c90992237eb0e6c022fe765f5b98086db277016befa15e8419f03677",
+    "fixtures/SettleRequest.json": "sha256:8d434f8868dfc99765ed58cc2f1ed5a1b232626b85d7aefec50cc884eb238563",
+    "fixtures/SettleResult.json": "sha256:c544828632d87de21743f7efd5266ca03f2b24dcb807e1ea95afb7ba3760595b",
+    "fixtures/UsageEvent.json": "sha256:18545509313076b0d7b18819e41aeb9f7dd6bcf5e5ab697c73f96145893d6b0c"
   },
-  "digest": "sha256:d8b963a9a8f6d67a8aab13f9aee27011cd5bc2bc519956171e5666dbf6a6227e",
-  "status": "synthetic_foundation_only"
+  "digest": "sha256:71941acc99fc3849993963e5ff64616b4f983ce4bc5285d7c77e9f9f26a0e3a5",
+  "status": "synthetic_candidates_only"
 }

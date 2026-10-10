@@ -1,5 +1,5 @@
 import { validateContract, validatePrimitive, checkTrustedContext, ContractError } from '../generated/index.js';
-import type { CommonEnvelope, TenantId, ProjectId, ValidationCode } from '../generated/index.js';
+import type { CommonEnvelope, TenantId, ProjectId, ValidationCode, TrustedContext } from '../generated/index.js';
 
 type Assert<T extends true> = T;
 type DistinctIdentity = Assert<ProjectId extends TenantId ? false : true>;
@@ -14,10 +14,10 @@ export function typedInvalidBytesError(): { readonly error: ContractError; reado
   return { error, invalidBytes: error.code === 'INVALID_BYTES' };
 }
 
-export function typedBoundary(input: unknown): CommonEnvelope | undefined {
+export function typedBoundary(input: unknown, authenticatedExpectations: TrustedContext): CommonEnvelope | undefined {
   const parsed = validateContract('CommonEnvelope', input);
   if (!parsed.ok) return undefined;
-  const scope = checkTrustedContext(parsed.value, { tenant_id: parsed.value.tenant_id, project_id: parsed.value.project_id });
+  const scope = checkTrustedContext(parsed.value, authenticatedExpectations);
   return scope.ok ? scope.value : undefined;
 }
 

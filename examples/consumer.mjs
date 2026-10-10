@@ -6,7 +6,10 @@ import evidenceFixture from '@jevelopers/shared-contracts/fixtures/EvidenceProje
 const parsed = validateContract('CommonEnvelope', fixture.valid);
 assert.equal(parsed.ok, true);
 if (!parsed.ok) throw new Error('Fixture did not parse');
-assert.equal(checkTrustedContext(parsed.value, { tenant_id: parsed.value.tenant_id, project_id: parsed.value.project_id }).ok, true);
+// Independently supplied synthetic server context; production obtains it from its authenticated adapter.
+const authenticatedExpectations = { tenant_id: '123e4567-e89b-42d3-a456-426614174000', project_id: '123e4567-e89b-42d3-a456-426614174000' };
+assert.equal(checkTrustedContext(parsed.value, authenticatedExpectations).ok, true);
+assert.deepEqual(checkTrustedContext({ ...parsed.value, tenant_id: '123e4567-e89b-42d3-a456-426614174001' }, authenticatedExpectations), { ok: false, errors: [{ code: 'SCOPE_MISMATCH', path: '/tenant_id' }] });
 const rejected = validateContract('CommonEnvelope', { ...fixture.valid, schema_version: '2.0.0' });
 assert.equal(rejected.ok, false);
 if (rejected.ok) throw new Error('Unsupported version accepted');

@@ -6,5 +6,5 @@
     "verbatimModuleSyntax": true, "isolatedModules": true, "noEmit": true,
     "skipLibCheck": false
   },
-  "include": ["generated/**/*.d.ts", "tests/types.ts"]
+  "include": ["generated/**/*.d.ts", "tests/*.ts"]
 }

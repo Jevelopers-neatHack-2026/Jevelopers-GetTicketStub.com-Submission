@@ -1,7 +1,7 @@
 {
-  "mode": "discovery_only",
+  "mode": "discovery_only_local_operations_candidates",
   "shared_source_revision": null,
-  "package_version": "0.1.0",
+  "package_version": "0.2.0",
   "repositories": [
     {
       "repository": "agent-harness",
@@ -1141,5 +1141,6 @@
       "migration_owner": "agent-harness/shared-contracts",
       "acceptance": null
     }
-  ]
+  ],
+  "implementation_note": "Operations candidate package 0.2.0 is local producer work. All actual consumer schema pins, package integrity, results and acknowledgements remain pending."
 }

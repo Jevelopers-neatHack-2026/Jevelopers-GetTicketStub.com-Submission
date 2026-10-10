@@ -1,0 +1,426 @@
+{
+  "contract": "PartialFailure",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "PartialFailure",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000000100",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "batch_id": "123e4567-e89b-42d3-a456-000000000012",
+    "policy_ref": {
+      "contract": "policy",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000015",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "acceptance_policy": "partial",
+    "successful_item_ids": [
+      "item_a"
+    ],
+    "failures": [
+      {
+        "item_id": "item_b",
+        "error": {
+          "code": "INVALID_PAYLOAD",
+          "category": "validation",
+          "safe_message": "Request cannot be completed.",
+          "module": "shared-contracts",
+          "operation": "validate",
+          "retryable": false,
+          "blocking_condition": "review",
+          "side_effects": "none",
+          "usage_state": "unknown",
+          "validation_paths": [
+            "/field"
+          ]
+        }
+      }
+    ],
+    "unprocessed_item_ids": []
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "artifact_id": "123e4567-e89b-42d3-a456-000000000040",
+        "design_id": "123e4567-e89b-42d3-a456-000000000041",
+        "design_version_id": "123e4567-e89b-42d3-a456-000000000042",
+        "trace_id": "123e4567-e89b-42d3-a456-000000000043",
+        "evidence_id": "123e4567-e89b-42d3-a456-000000000044"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing-policy",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "wrong-type",
+      "category": "type",
+      "set": {
+        "billing_mode": 1
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "unknown-enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "capabilities": [
+          "publish"
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "invalid-date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "semantic",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item_ids": [
+          "item_a",
+          "item_b"
+        ],
+        "acceptance_policy": "partial"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-tenant",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000099"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item_ids": [
+          "item_a",
+          "item_b"
+        ],
+        "acceptance_policy": "partial"
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "duplicate-item",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "successful_item_ids": [
+          "item_a",
+          "item_a"
+        ]
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item_ids": [
+          "item_a",
+          "item_b"
+        ],
+        "acceptance_policy": "partial"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_BATCH",
+        "path": "/failures"
+      }
+    },
+    {
+      "id": "missing-item",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "successful_item_ids": []
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item_ids": [
+          "item_a",
+          "item_b"
+        ],
+        "acceptance_policy": "partial"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_BATCH",
+        "path": "/failures"
+      }
+    },
+    {
+      "id": "foreign-item",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "successful_item_ids": [
+          "foreign"
+        ]
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item_ids": [
+          "item_a",
+          "item_b"
+        ],
+        "acceptance_policy": "partial"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_BATCH",
+        "path": "/failures"
+      }
+    },
+    {
+      "id": "all-or-nothing-rejects-usable-success",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "acceptance_policy": "all_or_nothing"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item_ids": [
+          "item_a",
+          "item_b"
+        ],
+        "acceptance_policy": "all_or_nothing"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_BATCH",
+        "path": "/successful_item_ids"
+      }
+    },
+    {
+      "id": "timeout-known-accounting",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "failures": [
+          {
+            "item_id": "item_b",
+            "error": {
+              "code": "TIMEOUT",
+              "category": "timeout",
+              "safe_message": "Request cannot be completed.",
+              "module": "shared-contracts",
+              "operation": "validate",
+              "retryable": false,
+              "blocking_condition": "review",
+              "side_effects": "unknown",
+              "usage_state": "complete",
+              "validation_paths": [
+                "/field"
+              ]
+            }
+          }
+        ]
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "item_ids": [
+          "item_a",
+          "item_b"
+        ],
+        "acceptance_policy": "partial"
+      },
+      "expected": {
+        "ok": true
+      }
+    }
+  ]
+}

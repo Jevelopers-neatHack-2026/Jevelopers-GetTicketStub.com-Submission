@@ -1,0 +1,2533 @@
+{
+  "contract": "DecisionPortRequest",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "DecisionPortRequest",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000000100",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "request_id": "123e4567-e89b-42d3-a456-000000000011",
+    "batch_id": "123e4567-e89b-42d3-a456-000000000012",
+    "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+    "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+    "attempt_number": 1,
+    "attempt_limit": 3,
+    "deadline_at": "2026-10-10T13:00:00Z",
+    "cancellation_ref": {
+      "contract": "Cancellation",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000013",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "model_ref": {
+      "contract": "model",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000014",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policy_ref": {
+      "contract": "policy",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000015",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "budget_ref": {
+      "contract": "BudgetReservation",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000006",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "state_ref": {
+      "contract": "DecisionState",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000016",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "execution_mode": "independent_batch",
+    "acceptance_policy": "partial",
+    "prior_answers": {},
+    "questions": {
+      "choice_1": {
+        "type": "choice",
+        "instructions": "Select one permitted candidate.",
+        "depends_on": [],
+        "criteria": {
+          "go": "Permitted action",
+          "review": "Request review"
+        },
+        "eligible_candidate_ids": [
+          "go",
+          "review"
+        ],
+        "minimum_confidence": 0.5
+      },
+      "score_1": {
+        "type": "score",
+        "profile": "structured-index-v1",
+        "instructions": "Rate quality.",
+        "depends_on": [],
+        "criteria": [
+          "low",
+          "high"
+        ],
+        "minimum_confidence": 0.5
+      },
+      "noul_1": {
+        "type": "noul",
+        "instructions": "Is the evidence sufficient?",
+        "depends_on": [],
+        "criteria": {
+          "true": "Sufficient",
+          "false": "Insufficient"
+        },
+        "uncertain_band": {
+          "lower": 0.4,
+          "upper": 0.6
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "artifact_id": "123e4567-e89b-42d3-a456-000000000040",
+        "design_id": "123e4567-e89b-42d3-a456-000000000041",
+        "design_version_id": "123e4567-e89b-42d3-a456-000000000042",
+        "trace_id": "123e4567-e89b-42d3-a456-000000000043",
+        "evidence_id": "123e4567-e89b-42d3-a456-000000000044"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing-policy",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "wrong-type",
+      "category": "type",
+      "set": {
+        "billing_mode": 1
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "unknown-enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "capabilities": [
+          "publish"
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "invalid-date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "semantic",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-tenant",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000099"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "attempt-limit",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "attempt_number": 4
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "POLICY_MISMATCH",
+        "path": "/attempt_number"
+      }
+    },
+    {
+      "id": "expired-request",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "deadline_at": "2026-10-10T11:00:00Z"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "EXPIRED",
+        "path": "/deadline_at"
+      }
+    },
+    {
+      "id": "cyclic-batch",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "questions": {
+          "choice_1": {
+            "type": "choice",
+            "instructions": "Select one permitted candidate.",
+            "depends_on": [
+              "score_1"
+            ],
+            "criteria": {
+              "go": "Permitted action",
+              "review": "Request review"
+            },
+            "eligible_candidate_ids": [
+              "go",
+              "review"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "score",
+            "profile": "structured-index-v1",
+            "instructions": "Rate quality.",
+            "depends_on": [
+              "choice_1"
+            ],
+            "criteria": [
+              "low",
+              "high"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "instructions": "Is the evidence sufficient?",
+            "depends_on": [],
+            "criteria": {
+              "true": "Sufficient",
+              "false": "Insufficient"
+            },
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "CYCLIC_DEPENDENCY",
+        "path": "/questions"
+      }
+    },
+    {
+      "id": "dependent-siblings",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "questions": {
+          "choice_1": {
+            "type": "choice",
+            "instructions": "Select one permitted candidate.",
+            "depends_on": [
+              "score_1"
+            ],
+            "criteria": {
+              "go": "Permitted action",
+              "review": "Request review"
+            },
+            "eligible_candidate_ids": [
+              "go",
+              "review"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "score",
+            "profile": "structured-index-v1",
+            "instructions": "Rate quality.",
+            "depends_on": [],
+            "criteria": [
+              "low",
+              "high"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "instructions": "Is the evidence sufficient?",
+            "depends_on": [],
+            "criteria": {
+              "true": "Sufficient",
+              "false": "Insufficient"
+            },
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "DEPENDENT_BATCH",
+        "path": "/questions/choice_1/depends_on"
+      }
+    },
+    {
+      "id": "extra-candidate",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "questions": {
+          "choice_1": {
+            "type": "choice",
+            "instructions": "Select one permitted candidate.",
+            "depends_on": [],
+            "criteria": {
+              "go": "Permitted action",
+              "review": "Request review",
+              "publish": "Privileged action"
+            },
+            "eligible_candidate_ids": [
+              "go",
+              "review",
+              "publish"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "score",
+            "profile": "structured-index-v1",
+            "instructions": "Rate quality.",
+            "depends_on": [],
+            "criteria": [
+              "low",
+              "high"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "instructions": "Is the evidence sufficient?",
+            "depends_on": [],
+            "criteria": {
+              "true": "Sufficient",
+              "false": "Insufficient"
+            },
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "POLICY_MISMATCH",
+        "path": "/questions/choice_1/eligible_candidate_ids"
+      }
+    },
+    {
+      "id": "altered-state-hash",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "state_ref": {
+          "contract": "DecisionState",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000016",
+          "revision": 1,
+          "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/state_ref"
+      }
+    },
+    {
+      "id": "staged-dependency",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "questions": {
+          "choice_1": {
+            "type": "choice",
+            "instructions": "Select one permitted candidate.",
+            "depends_on": [
+              "previous"
+            ],
+            "criteria": {
+              "go": "Permitted action",
+              "review": "Request review"
+            },
+            "eligible_candidate_ids": [
+              "go",
+              "review"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "score",
+            "profile": "structured-index-v1",
+            "instructions": "Rate quality.",
+            "depends_on": [],
+            "criteria": [
+              "low",
+              "high"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "instructions": "Is the evidence sufficient?",
+            "depends_on": [],
+            "criteria": {
+              "true": "Sufficient",
+              "false": "Insufficient"
+            },
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "prior_answers": {
+          "previous": {
+            "contract": "DecisionReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000062",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "prior_answers/previous": {
+            "contract": "DecisionReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000062",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "legacy-profile-preserved",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "questions": {
+          "choice_1": {
+            "type": "choice",
+            "instructions": "Select one permitted candidate.",
+            "depends_on": [],
+            "criteria": {
+              "go": "Permitted action",
+              "review": "Request review"
+            },
+            "eligible_candidate_ids": [
+              "go",
+              "review"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "score",
+            "profile": "ei-string-v1",
+            "instructions": "Rate quality.",
+            "depends_on": [],
+            "criteria": "Producer's opaque criteria text",
+            "minimum_confidence": 0.5,
+            "index_labels": [
+              "low",
+              "high"
+            ],
+            "legacy_legend": "Producer's opaque legend text"
+          },
+          "noul_1": {
+            "type": "noul",
+            "instructions": "Is the evidence sufficient?",
+            "depends_on": [],
+            "criteria": {
+              "true": "Sufficient",
+              "false": "Insufficient"
+            },
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "caller-attempt-limit",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "attempt_limit": 100
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "POLICY_MISMATCH",
+        "path": "/attempt_limit"
+      }
+    },
+    {
+      "id": "caller-confidence-threshold",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "questions": {
+          "choice_1": {
+            "type": "choice",
+            "instructions": "Select one permitted candidate.",
+            "depends_on": [],
+            "criteria": {
+              "go": "Permitted action",
+              "review": "Request review"
+            },
+            "eligible_candidate_ids": [
+              "go",
+              "review"
+            ],
+            "minimum_confidence": 0
+          },
+          "score_1": {
+            "type": "score",
+            "profile": "structured-index-v1",
+            "instructions": "Rate quality.",
+            "depends_on": [],
+            "criteria": [
+              "low",
+              "high"
+            ],
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "instructions": "Is the evidence sufficient?",
+            "depends_on": [],
+            "criteria": {
+              "true": "Sufficient",
+              "false": "Insufficient"
+            },
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "POLICY_MISMATCH",
+        "path": "/questions/choice_1/minimum_confidence"
+      }
+    },
+    {
+      "id": "expired-current-finance-budget",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T11:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "BUDGET_UNAVAILABLE",
+        "path": "/budget_ref"
+      }
+    },
+    {
+      "id": "legacy-version-not-silently-migrated",
+      "category": "semantic",
+      "mode": "semantic",
+      "set": {
+        "schema_version": "1.0"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "cancellation_ref": {
+            "contract": "Cancellation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000013",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "model_ref": {
+            "contract": "model",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000015",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "budget_ref": {
+            "contract": "BudgetReservation",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000006",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "state_ref": {
+            "contract": "DecisionState",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000016",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "usage_ref": {
+            "contract": "UsageEvent",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000017",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_question_ids": [
+          "choice_1",
+          "score_1",
+          "noul_1"
+        ],
+        "allowed_candidates": {
+          "choice_1": [
+            "go",
+            "review"
+          ]
+        },
+        "allowed_score_profiles": [
+          "structured-index-v1",
+          "ei-string-v1"
+        ],
+        "attempt_limit": 3,
+        "question_policies": {
+          "choice_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "score_1": {
+            "type": "confidence",
+            "minimum_confidence": 0.5
+          },
+          "noul_1": {
+            "type": "noul",
+            "uncertain_band": {
+              "lower": 0.4,
+              "upper": 0.6
+            }
+          }
+        },
+        "budget": {
+          "contract": "BudgetReservation",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000000100",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "cost-intelligence",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "reservation_id": "123e4567-e89b-42d3-a456-000000000006",
+          "budget_scope_id": "123e4567-e89b-42d3-a456-000000000007",
+          "logical_operation_id": "123e4567-e89b-42d3-a456-000000000008",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000009",
+          "decision": "granted",
+          "lifecycle": "held",
+          "held": {
+            "amount": "0.010000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "consumed": {
+            "amount": "0.000000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "expires_at": "2026-10-10T13:00:00Z",
+          "revision": 1,
+          "execution_state": "not_dispatched",
+          "usage_completeness": "complete",
+          "idempotency_key": "reserve_1",
+          "authority_ref": {
+            "contract": "cost-intelligence",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000010",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "settlement_ref": null
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    }
+  ]
+}

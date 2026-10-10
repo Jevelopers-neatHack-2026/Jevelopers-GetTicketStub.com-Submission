@@ -3,7 +3,8 @@ import { resolve, relative, isAbsolute } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { root, readJson, schemaFiles, compiler, outputs } from './generate.mjs';
-import { validateContract, parseContract, checkTrustedContext, hashBytes, hashManifest } from '../tooling/runtime.mjs';
+import { validateContract, parseContract, checkTrustedContext, hashBytes, hashManifest, canonicalJson } from '../tooling/runtime.mjs';
+import { checkOperation, compareUsageIdentity } from '../tooling/operations.mjs';
 import { schemaImpact } from './compatibility.mjs';
 
 const knownConsumers = ['agent-harness', 'event-intelligence', 'creative-engine', 'print-production', 'fulfillment-connectors', 'cost-intelligence', 'team-dashboard', 'integration-evals', 'getticketstub.com'];
@@ -44,6 +45,7 @@ export function classifications(schema, taxonomy, path = '') {
 export function assertFixture(result, expected) {
   if (expected.ok) {
     if (!result.ok) throw new Error('Positive fixture rejected');
+    if (Object.hasOwn(expected, 'value') && canonicalJson(result.value) !== canonicalJson(expected.value)) throw new Error('Fixture value mismatch');
   } else if (result.ok || !result.errors.some(error => error.code === expected.code && error.path === expected.path)) throw new Error('Negative fixture did not produce expected code/path');
 }
 export async function runFixtures(entry) {
@@ -57,7 +59,9 @@ export async function runFixtures(entry) {
     const payload = structuredClone(manifest.valid);
     for (const key of fixture.remove ?? []) delete payload[key];
     Object.assign(payload, fixture.set ?? {});
-    if (fixture.mode === 'context') result = checkTrustedContext(payload, fixture.expected_context);
+    if (fixture.mode === 'semantic') result = checkOperation(entry.name, payload, fixture.context);
+    else if (fixture.mode === 'relationship') result = compareUsageIdentity(fixture.prior, payload);
+    else if (fixture.mode === 'context') result = checkTrustedContext(payload, fixture.expected_context);
     else if (fixture.mode === 'parse') result = parseContract(entry.name, fixture.json);
     else result = validateContract(entry.name, payload);
     try { assertFixture(result, fixture.expected); } catch (error) {
@@ -119,7 +123,7 @@ export async function consumerChecks(manifest, paths = {}) {
 
 export async function execute(command, options) {
   const entries = await catalog();
-  const selected = options.contract ? entries.filter(entry => entry.name === options.contract || entry.group === options.contract) : options.foundation ? entries.filter(entry => entry.state === 'foundation_candidate') : entries;
+  const selected = options.contract ? entries.filter(entry => entry.name === options.contract || entry.group === options.contract) : options.foundation ? entries.filter(entry => entry.state === 'foundation_candidate') : options.implemented ? entries.filter(entry => entry.schema_path) : entries;
   const failures = [];
   const add = (code, entry, extra = {}) => failures.push({ code, ...(entry ? { contract: entry.name } : {}), ...extra });
   if (!selected.length) add('UNKNOWN_CONTRACT');
@@ -210,7 +214,7 @@ export async function execute(command, options) {
       break;
     }
     case 'docs': {
-      for (const path of ['README.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md']) {
+      for (const path of ['README.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md']) {
         const text = await readFile(root + path, 'utf8');
         for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
           if (/^(https?:|#)/.test(match[1])) continue;
@@ -227,14 +231,14 @@ export async function execute(command, options) {
     }
     default: add('UNKNOWN_COMMAND');
   }
-  return { command, scope: options.before || options.after ? 'schema_comparison' : options.contract ?? (options.foundation ? 'foundation_only' : 'full_catalog'), status: failures.length ? 'failed_or_blocked' : 'passed', checked: options.before || options.after ? 2 : command === 'consumers' ? knownConsumers.length : selected.length, failures };
+  return { command, scope: options.before || options.after ? 'schema_comparison' : options.contract ?? (options.foundation ? 'foundation_only' : options.implemented ? 'implemented_candidates_only' : 'full_catalog'), status: failures.length ? 'failed_or_blocked' : 'passed', checked: options.before || options.after ? 2 : command === 'consumers' ? knownConsumers.length : selected.length, failures };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [command, ...args] = process.argv.slice(2);
   const flags = ['require-owner', 'require-consumer', 'require-leaf', 'require-version-policy', 'require-field-classification', 'policy-only', 'require-fixtures', 'require-docs', 'require-consumer-pins'];
   const valued = ['contract', 'manifest', 'paths', 'before', 'after'];
-  const allowed = { check: ['contract', 'foundation'], fixtures: ['contract', 'foundation'], compat: ['foundation', 'before', 'after'], inventory: [...flags, 'foundation'], consumers: ['manifest', 'paths'], docs: [] };
+  const allowed = { check: ['contract', 'foundation', 'implemented'], fixtures: ['contract', 'foundation', 'implemented'], compat: ['foundation', 'implemented', 'before', 'after'], inventory: [...flags, 'foundation', 'implemented'], consumers: ['manifest', 'paths'], docs: [] };
   if (!Object.hasOwn(allowed, command)) throw new Error('Unknown command');
   if (args.length === 1 && args[0] === '--help') console.log('contracts ' + command + ' ' + allowed[command].map(flag => '--' + flag + (valued.includes(flag) ? ' VALUE' : '')).join(' '));
   else {
@@ -248,7 +252,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         options[flag] = value;
       } else options[flag] = true;
     }
-    if (options.contract && options.foundation) throw new Error('Choose contract or foundation scope');
+    if ([options.contract, options.foundation, options.implemented].filter(Boolean).length > 1) throw new Error('Choose one contract-check scope');
     const result = await execute(command, options);
     console.log(JSON.stringify(result, null, 2));
     if (result.failures.length) process.exitCode = 1;

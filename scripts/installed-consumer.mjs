@@ -19,6 +19,8 @@ try {
   run('npm', ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', join(directory, first.filename)], directory);
   await cp(root + 'examples/consumer.mjs', join(directory, 'consumer.mjs'));
   console.log(run(process.execPath, ['consumer.mjs'], directory).trim());
+  await cp(root + 'examples/operations-consumer.mjs', join(directory, 'operations-consumer.mjs'));
+  console.log(run(process.execPath, ['operations-consumer.mjs'], directory).trim());
   console.log(JSON.stringify({ archive_hash: digest, reproducible: true, runtime_dependencies: 0 }));
 } finally {
   await rm(directory, { recursive: true, force: true });

@@ -237,7 +237,7 @@ test('full catalog schema checks fail for each absent named domain export', asyn
   const result = await execute('check', {});
   assert.equal(result.status, 'failed_or_blocked');
   assert.ok(result.failures.some(entry => entry.contract === 'ProjectRequest' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
-  assert.ok(result.failures.some(entry => entry.contract === 'DecisionPortRequest' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
+  assert.ok(result.failures.some(entry => entry.contract === 'ResearchRequest' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
 });
 
 for (const [flag, code] of [['require-owner', 'BLOCKED_OWNER_ACCEPTANCE'], ['require-fixtures', 'MISSING_FIXTURES'], ['require-docs', 'MISSING_DISCOVERABLE_ARTIFACT'], ['require-consumer-pins', 'BLOCKED_CONSUMER_PIN'], ['require-field-classification', 'MISSING_CLASSIFIED_SCHEMA']]) test('inventory flag ' + flag + ' fails on missing release evidence', async () => {

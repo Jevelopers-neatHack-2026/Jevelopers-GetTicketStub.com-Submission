@@ -13,6 +13,7 @@ function immutableDeclaration(source) {
     function visit(node) {
       const child = ts.visitEachChild(node, visit, context);
       if (ts.isPropertySignature(child)) return ts.factory.updatePropertySignature(child, [ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword)], child.name, child.questionToken, child.type);
+      if (ts.isIndexSignatureDeclaration(child)) return ts.factory.updateIndexSignature(child, [ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword)], child.parameters, child.type);
       if (ts.isArrayTypeNode(child)) return ts.factory.createTypeOperatorNode(ts.SyntaxKind.ReadonlyKeyword, child);
       return child;
     }
@@ -34,7 +35,7 @@ export async function schemaFiles() {
   return result;
 }
 export function compiler() {
-  const ajv = new Ajv2020({ strict: true, allErrors: true, ownProperties: true, coerceTypes: false, useDefaults: false, removeAdditional: false, code: { source: true, esm: true, formats: false } });
+  const ajv = new Ajv2020({ strict: true, allErrors: true, inlineRefs: false, ownProperties: true, coerceTypes: false, useDefaults: false, removeAdditional: false, code: { source: true, esm: true, formats: false } });
   ajv.addKeyword({ keyword: 'x-classification', schemaType: 'string' });
   ajv.addKeyword({ keyword: 'tsType', schemaType: 'string' });
   ajv.addFormat('uuid', /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
@@ -46,6 +47,10 @@ export async function outputs() {
   const paths = await schemaFiles();
   const ajv = compiler();
   const schemas = await Promise.all(paths.map(readJson));
+  const packageManifest = await readJson('package.json');
+  const localSchemas = new Map(schemas.map(schema => [schema.$id, schema]));
+  const refOptions = { resolve: { file: false, http: false, local: { order: 1, canRead: file => localSchemas.has(file.url), read: file => structuredClone(localSchemas.get(file.url)) } } };
+  for (const schema of schemas) ajv.addSchema(schema);
   const versions = {};
   const exports = {};
   const primitiveValidators = {};
@@ -56,24 +61,26 @@ export async function outputs() {
     const version = schema.properties.schema_version.const;
     if (!/^\d+\.\d+\.\d+$/.test(version) || !/^[A-Z][A-Za-z0-9]+$/.test(schema.title) || paths[index] !== `schemas/${schema.title}/${version}.json` || schema.$id !== `https://schemas.jevelopers.org/${schema.title}/${version}`) throw new Error('Schema identity/path mismatch: ' + paths[index]);
     if (Object.hasOwn(versions[schema.title] ?? {}, version)) throw new Error('Duplicate contract version');
-    ajv.addSchema(schema);
     const exportName = schema.title + '_' + version.replaceAll('.', '_');
     versions[schema.title] ??= {};
     versions[schema.title][version] = exportName;
     exports[exportName] = schema.$id;
     for (const [name, definition] of Object.entries(schema.$defs ?? {})) {
+      if (!definition.tsType) continue;
       if (Object.hasOwn(primitiveValidators, name)) throw new Error('Duplicate primitive: ' + name);
       const primitiveExport = 'Primitive' + name;
       exports[primitiveExport] = schema.$id + '#/$defs/' + name;
       primitiveValidators[name] = primitiveExport;
-      const declaration = await compile(definition, name, { bannerComment: '', unknownAny: true });
+      const declaration = await compile(definition, name, { bannerComment: '', unknownAny: true, $refOptions: refOptions });
       primitiveDeclarations += immutableDeclaration(declaration);
     }
     const source = await readFile(root + paths[index]);
     manifest.push({ contract: schema.title, version, schema_id: schema.$id, path: paths[index], sha256: createHash('sha256').update(source).digest('hex') });
-    const declaration = await compile(schema, schema.title, { bannerComment: "import type { Brand } from './brands.js';", cwd: root, $refOptions: { resolve: { http: false } }, additionalProperties: false, unknownAny: true });
+    const declaration = await compile(schema, schema.title, { bannerComment: "import type { Brand } from './brands.js';", cwd: root, $refOptions: refOptions, additionalProperties: false, unknownAny: true });
     result.set(exportName + '.d.ts', immutableDeclaration(declaration));
   }
+  exports.DefinitionVersionedReference = 'https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference';
+  exports.DefinitionDecisionQuestion = 'https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/properties/questions/additionalProperties';
   const bundled = await build({ stdin: { contents: standalone.default(ajv, exports), resolveDir: root, sourcefile: 'validators.mjs' }, bundle: true, write: false, metafile: true, format: 'esm', platform: 'node', target: 'node22', legalComments: 'none' });
   const validation = bundled.outputFiles[0].text;
   if (Object.values(bundled.metafile.outputs).some(output => output.imports.length)) throw new Error('Standalone validators require a runtime dependency');
@@ -83,13 +90,18 @@ export async function outputs() {
   const fixtureFiles = (await readdir(root + 'fixtures')).filter(name => name.endsWith('.json')).sort();
   const fixtureHashes = {};
   for (const name of fixtureFiles) fixtureHashes['fixtures/' + name] = 'sha256:' + createHash('sha256').update(await readFile(root + 'fixtures/' + name)).digest('hex');
-  result.set('fixture-manifest.json', JSON.stringify({ files: fixtureHashes, digest: 'sha256:' + createHash('sha256').update(JSON.stringify(fixtureHashes)).digest('hex'), status: 'synthetic_foundation_only' }, null, 2) + '\n');
-  result.set('schema-manifest.json', JSON.stringify({ package_version: '0.1.0', source_revision: null, status: 'unreleased_foundation', toolchain: { ajv: '8.17.1', esbuild: '0.25.12', typescript: '5.9.3', json_schema_to_typescript: '15.0.4', node: '22.23.3' }, schemas: manifest }, null, 2) + '\n');
+  result.set('fixture-manifest.json', JSON.stringify({ files: fixtureHashes, digest: 'sha256:' + createHash('sha256').update(JSON.stringify(fixtureHashes)).digest('hex'), status: 'synthetic_candidates_only' }, null, 2) + '\n');
+  result.set('schema-manifest.json', JSON.stringify({ package_version: packageManifest.version, source_revision: null, status: 'unreleased_candidates', toolchain: { ajv: '8.17.1', esbuild: '0.25.12', typescript: '5.9.3', json_schema_to_typescript: '15.0.4', node: '22.23.3' }, schemas: manifest }, null, 2) + '\n');
   result.set('brands.d.ts', 'declare const brand: unique symbol;\nexport type Brand<T, Name extends string> = T & { readonly [brand]: Name };\n');
   const names = Object.keys(versions);
-  result.set('index.mjs', "export { validateContract, parseContract, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport { versions } from './registry.mjs';\n");
+  result.set('index.mjs', "export { validateContract, parseContract, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport { versions } from './registry.mjs';\n");
+  result.set('operations.d.ts', (await readFile(root + 'tooling/operations-api.d.ts', 'utf8')).replace('../generated/index.js', './index.js'));
+  const details = localSchemas.get('https://schemas.jevelopers.org/ErrorEnvelope/1.0.0').$defs.ErrorDetail.oneOf;
+  const errorRegistry = Object.fromEntries(details.map(detail => [detail.properties.code.const, { category: detail.properties.category.const, safe_message: detail.properties.safe_message.const }]));
+  result.set('error-registry.mjs', 'const records = ' + JSON.stringify(errorRegistry, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const errorRegistry = Object.freeze(records);\n');
   result.set('index.d.ts', names.map(name => `import type { ${name} } from './${versions[name][Object.keys(versions[name]).at(-1)]}.js';\nexport type { ${name} } from './${versions[name][Object.keys(versions[name]).at(-1)]}.js';`).join('\n') + `
 export type { Brand } from './brands.js';
+export * from './operations.js';
 export type * from './primitives.js';
 import type * as Primitives from './primitives.js';
 export type PrimitiveName = keyof PrimitiveMap;
@@ -103,7 +115,7 @@ export type TrustedContext = Pick<CommonEnvelope, 'tenant_id' | 'project_id'> & 
 export declare function validateContract<K extends ContractName>(contract: K, value: unknown): Result<ContractMap[K]>;
 export declare function parseContract<K extends ContractName>(contract: K, json: string): Result<ContractMap[K]>;
 export declare function validatePrimitive<K extends keyof PrimitiveMap>(name: K, value: unknown): Result<PrimitiveMap[K]>;
-export declare function checkTrustedContext<T extends CommonEnvelope>(value: T, expected: TrustedContext): Result<T>;
+export declare function checkTrustedContext<T extends TrustedContext>(value: T, expected: TrustedContext): Result<T>;
 export declare function projectEvidence(value: unknown): Result<EvidenceProjection>;
 export declare function canonicalJson(value: unknown): string;
 export declare function hashManifest(value: unknown): string;
