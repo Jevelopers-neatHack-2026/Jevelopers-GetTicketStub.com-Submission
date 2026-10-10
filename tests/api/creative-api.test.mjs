@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { canonicalHash, computeDesignVersionHash, ContractError } from "../../src/contracts/index.mjs";
+import { canonicalHash, canonicalSerialize, computeDesignVersionHash, ContractError } from "../../src/contracts/index.mjs";
 import { ApprovalHandoffContractError, createConsumptionReceipt, hashCompositionLayerManifest } from "../../src/contracts/approval-handoff.mjs";
 import { FakeMeteringAuthority } from "../../fixtures/contracts/metering/fake-authority.mjs";
 import { MeteringContractError } from "../../src/contracts/metering.mjs";
@@ -66,6 +66,44 @@ function sortedVersions(values) {
   return [...values].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at) || a.design_version_id.localeCompare(b.design_version_id));
 }
 
+function memoryTelemetryOutbox() {
+  const events = new Map();
+  const observations = new Map();
+  return Object.freeze({
+    events,
+    observations,
+    async append(event) {
+      const previous = events.get(event.event_id);
+      if (previous && JSON.stringify(previous) !== JSON.stringify(event)) throw new Error("event identity conflict");
+      events.set(event.event_id, structuredClone(event));
+      return { status: previous ? "duplicate" : "recorded", event_id: event.event_id };
+    },
+    async stagePendingEvidence(event) {
+      const previous = events.get(event.event_id);
+      if (previous && JSON.stringify(previous) !== JSON.stringify(event)) throw new Error("event identity conflict");
+      events.set(event.event_id, structuredClone(event));
+      return { status: previous ? "duplicate" : "recorded", event_id: event.event_id };
+    },
+    async enqueueUsageObservation({ observation }) {
+      const key = observation.source_observation_id;
+      const previous = observations.get(key);
+      if (previous && JSON.stringify(previous.observation) !== JSON.stringify(observation)) throw new Error("observation identity conflict");
+      const record_ref = previous?.record_ref ?? `usage-record:${key}`;
+      observations.set(key, { record_ref, observation: structuredClone(observation), status: "pending" });
+      return { status: previous ? "duplicate" : "recorded", record_ref, source_observation_id: key, payload_hash: "sha256:test" };
+    },
+    async acknowledgeEnqueuedObservation({ record_ref, source_observation_id, effective_billable_attempt_id, authority_status }) {
+      const record = observations.get(source_observation_id);
+      if (!record || record.record_ref !== record_ref || record.observation.billable_attempt_id !== effective_billable_attempt_id) {
+        return { status: "mismatch", source_observation_id };
+      }
+      record.status = "delivered";
+      record.authority_status = authority_status;
+      return { status: "acknowledged", source_observation_id };
+    },
+  });
+}
+
 function afterCursor(item, cursor) {
   return item.occurred_at < cursor.occurred_at ||
     (item.occurred_at === cursor.occurred_at && item.design_version_id > cursor.design_version_id);
@@ -85,7 +123,7 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
   const leaseTokens = new Map();
   const dispatchIntents = [];
   const calls = { storage: [], provider: 0, reserve: 0, usage: [], approval: 0, handoff: 0, cancel: 0, inspection: 0, decision: 0,
-    decisionReservationRefs: [], traces: [] };
+    providerReservationRefs: [], inspectionReservationRefs: [], decisionReservationRefs: [], traces: [] };
   let generated = 0;
   let jobCounter = 0;
   let idCounter = 0;
@@ -159,6 +197,15 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
         if (job.status !== "running") return { status: "lease_lost" };
         if (beforeDispatchAuthorize) await beforeDispatchAuthorize(input);
         if (!contextFenceMatches(input.context_fence)) return { status: "stale_context" };
+        const existing = dispatchIntents.find((intent) => intent.job_id === input.job_id &&
+          intent.transport_attempt_id === input.transport_attempt_id);
+        if (existing) {
+          const sameFence = canonicalSerialize(existing.context_fence) === canonicalSerialize(input.context_fence);
+          const sameAttempt = (existing.billable_attempt_id ?? null) === (input.billable_attempt_id ?? null);
+          return sameFence && sameAttempt
+            ? { status: "authorized", dispatch_intent_ref: existing.dispatch_intent_ref }
+            : { status: "lease_lost" };
+        }
         dispatchIntentCounter += 1;
         const dispatch_intent_ref = `dispatch-intent:${input.job_id}:${dispatchIntentCounter}`;
         dispatchIntents.push({ job_id: input.job_id, transport_attempt_id: input.transport_attempt_id,
@@ -329,11 +376,13 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
     resolveRoute() { return structuredClone(imageRoute); },
     async generate(input) {
       calls.provider += 1;
+      calls.providerReservationRefs.push(input.reservation_ref);
       await input.recordTransportAttempt(input.transport_attempt_id);
       return providerImpl ? fixtureProviderOutput(await providerImpl("generate", input)) : providerOutput();
     },
     async edit(input) {
       calls.provider += 1;
+      calls.providerReservationRefs.push(input.reservation_ref);
       await input.recordTransportAttempt(input.transport_attempt_id);
       return providerImpl ? fixtureProviderOutput(await providerImpl("edit", input)) : providerOutput();
     },
@@ -418,6 +467,7 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
     } }; },
     async inspect(input) {
       calls.inspection += 1;
+      calls.inspectionReservationRefs.push(input.reservation_ref);
       const transport_attempt_id = input.transport_attempt_id;
       await input.recordTransportAttempt(transport_attempt_id);
       return { tenant_id: input.scope.tenant_id, project_id: input.scope.project_id, brief_id: input.brief.brief_id,
@@ -453,7 +503,14 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
               probabilities: Object.fromEntries(q.criteria.map((_, index) => [String(index), index === 0 ? 1 : 0])), confidence: 1 } }])),
       usage: { completeness: "complete", input_tokens: 1, output_tokens: 1, provider_request_id: `provider:jev:${input.billable_attempt_id}` } }); },
   };
-  const portMap = { jobs, storage, provider, metering, approval, handoff, trace, decisionPort, inspection };
+  const portMap = { jobs, storage, provider, metering, approval, handoff, trace, decisionPort, inspection,
+    telemetry: { outbox: memoryTelemetryOutbox(), modes: { provider_execution_mode: "mock", commerce_mode: "simulated" },
+      usage_profiles: {
+        image_generation: "creative.normalized-token-usage/1",
+        image_edit: "creative.normalized-token-usage/1",
+        vision_observation: "creative.normalized-token-usage/1",
+        jev_decision: "typesafe.systemone-usage/2026-10-10",
+      } } };
   for (const key of omit) delete portMap[key];
 
   const api = createCreativeApi({
@@ -554,6 +611,10 @@ test("valid generation is metered before dispatch and publishes a validated immu
   assert.equal(response.result.design_version.brief_id, "brief-api-1");
   assert.equal(state.calls.reserve, 1);
   assert.equal(state.calls.provider, 1);
+  const providerReservationRef = state.calls.providerReservationRefs[0];
+  assert.equal(typeof providerReservationRef, "string");
+  assert.equal(state.authority.reservations.has(providerReservationRef), true);
+  assert.equal(state.authority.reservations.get(providerReservationRef).reservation_id, providerReservationRef);
   assert.equal(state.calls.usage.length, 1);
   assert.equal(state.calls.usage[0].completeness, "complete");
   assert.equal(state.designs.has(response.result.design_version.design_version_id), true);
@@ -743,6 +804,10 @@ test("inspect, compare, and list use scoped reads and deterministic keyset pagin
   const { api, state } = await setup({ secondDesign: true });
   const inspected = await api.invoke(actor(), request("inspect", { brief_id: "brief-api-1", design_version_id: "design-api-1" }, "inspect-valid"));
   assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  const inspectionReservationRef = state.calls.inspectionReservationRefs[0];
+  assert.equal(typeof inspectionReservationRef, "string");
+  assert.equal(state.authority.reservations.has(inspectionReservationRef), true);
+  assert.equal(state.authority.reservations.get(inspectionReservationRef).reservation_id, inspectionReservationRef);
   const compared = await api.invoke(actor(), request("compare", {
     brief_id: "brief-api-1", left_design_version_id: "design-api-1", right_design_version_id: "design-api-2",
   }));
@@ -762,7 +827,7 @@ test("inspect, compare, and list use scoped reads and deterministic keyset pagin
   assert.equal(state.calls.provider, 0);
 });
 
-test("inspection output omits unknown provider usage fields and untrusted notes", async () => {
+test("inspection usage with unknown provider fields is metered as incomplete without retaining raw fields", async () => {
   await loadPlans();
   const { api, ports, state } = await setup();
   const inspect = ports.inspection.inspect;
@@ -775,8 +840,12 @@ test("inspection output omits unknown provider usage fields and untrusted notes"
   const response = await api.invoke(actor(), request("inspect", {
     brief_id: "brief-api-1", design_version_id: "design-api-1",
   }, "inspect-usage-scrub"));
-  assert.equal(response.ok, true, JSON.stringify(response));
-  assert.deepEqual(response.result.usage, { completeness: "complete", input_tokens: 1, output_tokens: 1 });
+  assert.equal(response.ok, false, JSON.stringify(response));
+  assert.equal(response.error.code, "unavailable");
+  assert.equal(state.calls.usage.length, 1);
+  assert.equal(state.calls.usage[0].completeness, "partial");
+  assert.ok(state.calls.usage[0].missing_fields.includes("usage.unmapped_extension"));
+  assert.equal(JSON.stringify(state.calls.usage).includes("SYNTHETIC-NOT-A-REAL-CREDENTIAL"), false);
   assert.equal(JSON.stringify(response).includes("SYNTHETIC-NOT-A-REAL-CREDENTIAL"), false);
 });
 
@@ -1759,6 +1828,26 @@ test("missing provider and decision ports fail closed without reporting a comple
   assert.equal(missingDispatchFence.state.calls.reserve, 1);
 });
 
+test("missing durable telemetry fails closed before reservation or provider dispatch", async () => {
+  const missing = await setup({ withDesign: false, omit: ["telemetry"] });
+  const response = await missing.api.invoke(actor(), generationRequest("action-no-telemetry"));
+  assert.equal(response.ok, false);
+  assert.equal(response.error.code, "unavailable");
+  assert.equal(missing.state.calls.reserve, 0);
+  assert.equal(missing.state.calls.provider, 0);
+  assert.equal(missing.state.current.get(missing.state.brief.brief_id), undefined);
+});
+
+test("missing explicit usage profile fails before reservation or provider dispatch", async () => {
+  const harness = await setup({ withDesign: false });
+  delete harness.ports.telemetry.usage_profiles.image_generation;
+  const response = await harness.api.invoke(actor(), generationRequest("action-no-usage-profile"));
+  assert.equal(response.ok, false);
+  assert.equal(response.error.code, "unavailable");
+  assert.equal(harness.state.calls.reserve, 0);
+  assert.equal(harness.state.calls.provider, 0);
+});
+
 test("decision execution binds the exact reserved attempt and uses the pinned JEV route", async () => {
   await loadPlans();
   const harness = await setup({ withDesign: false });
@@ -1824,7 +1913,55 @@ test("port failure messages and malformed provider usage never leak or become ze
   assert.equal(invalidUsage.error.code, "unavailable");
   assert.equal(malformed.state.calls.usage[0].completeness, "unknown");
   assert.equal((malformed.state.calls.usage[0].usage_units ?? []).some((unit) => unit.name === "input_tokens"), false);
-  assert.ok(malformed.state.calls.usage[0].missing_fields.includes("input_tokens"));
+  assert.ok(malformed.state.calls.usage[0].missing_fields.includes("usage.input_tokens.invalid"));
+});
+
+test("provider error usage snapshots data descriptors without invoking missing-field getters", async () => {
+  await loadPlans();
+  let missingFieldsGetterCalls = 0;
+  let missingFieldsMapCalls = 0;
+  const missingFields = [];
+  missingFields.length = 1;
+  Object.defineProperty(missingFields, "0", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      missingFieldsGetterCalls += 1;
+      return "output_tokens";
+    },
+  });
+  Object.defineProperty(missingFields, "map", {
+    enumerable: true,
+    value() {
+      missingFieldsMapCalls += 1;
+      return ["Bearer synthetic-private-value"];
+    },
+  });
+  const rawUsage = { completeness: "partial", input_tokens: 17, output_tokens: 4 };
+  rawUsage.missing_fields = missingFields;
+  const providerError = new Error("provider returned a partial result");
+  Object.defineProperty(providerError, "usage", { value: rawUsage, enumerable: true });
+  Object.defineProperty(providerError, "provider_outcome", { value: "failed", enumerable: true });
+
+  const harness = await setup({
+    withDesign: false,
+    providerImpl: async () => { throw providerError; },
+  });
+  const response = await harness.api.invoke(actor(), generationRequest("action-error-usage-accessor"));
+  assert.equal(response.ok, false);
+  assert.equal(response.error.code, "unavailable");
+  assert.equal(missingFieldsGetterCalls, 0);
+  assert.equal(missingFieldsMapCalls, 0);
+  assert.equal(harness.state.calls.usage.length, 1);
+  const observed = harness.state.calls.usage[0];
+  assert.equal(observed.completeness, "partial");
+  assert.ok(observed.usage_units.some((unit) => unit.name === "input_tokens" && unit.quantity === "17"));
+  assert.ok(observed.missing_fields.includes("usage.unmapped_extension"));
+  const reservation = [...harness.state.authority.reservations.values()][0];
+  assert.ok(reservation);
+  assert.equal(reservation.state, "held_for_reconciliation");
+  assert.equal(JSON.stringify(response).includes("output_tokens"), false);
+  assert.equal(JSON.stringify(harness.state.calls.usage).includes("synthetic-private-value"), false);
 });
 
 test("asset inputs require the action-specific granted permission", async () => {

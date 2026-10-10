@@ -22,11 +22,14 @@ import {
   validateConsumptionReceipt,
   verifyHandoffApproval,
 } from "../contracts/approval-handoff.mjs";
+import { MeteringContractError, METERING_PROPOSAL_VERSION } from "../contracts/metering.mjs";
 import {
-  MeteringContractError,
-  METERING_PROPOSAL_VERSION,
-  executeMeteredAttempt,
-} from "../contracts/metering.mjs";
+  createUsageObservation,
+  executeCreativeMeteredAttempt,
+  projectPublicTelemetry,
+  TelemetryBoundaryError,
+  USAGE_PROFILE,
+} from "../telemetry/index.mjs";
 import { hashArtifactBytes } from "../storage/content-addressed.mjs";
 
 export const CREATIVE_API_VERSION = "1.0";
@@ -430,6 +433,78 @@ function publicJob(job, operation_id) {
   }), job.operation ?? "unknown", "job");
 }
 
+async function validateTelemetryEvidenceStatus(value, operation, expected = {}, evidenceOutbox) {
+  const legacyEvidenceStatus = async () => {
+    if (!isRecord(evidenceOutbox) || typeof evidenceOutbox.hasAttemptEvidence !== "function") {
+      throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+    }
+    let status;
+    try {
+      status = await evidenceOutbox.hasAttemptEvidence({
+        tenant_id: expected.tenant_id,
+        project_id: expected.project_id,
+        budget_scope_id: expected.budget_scope_id,
+        logical_operation_id: expected.logical_operation_id,
+        billable_attempt_id: expected.billable_attempt_id,
+      });
+    } catch {
+      throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+    }
+    if (status !== "not_found") {
+      throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+    }
+    // Pre-integration jobs have no local evidence records. This status makes
+    // that absence explicit without claiming any sink or owner acceptance.
+    return Object.freeze({ local_status: "unknown" });
+  };
+  if (value === undefined) return await legacyEvidenceStatus();
+  if (!isRecord(value)) throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+  assertStoredOnlyKeys(value, ["local_status", "pending_event_id", "pending_event_staged", "pending_event", "pending_event_hash"],
+    operation, "stored_result.telemetry_evidence");
+  if (!["recorded", "duplicate", "pending", "unknown"].includes(value.local_status)) {
+    throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+  }
+  if (value.local_status === "unknown") {
+    if (value.pending_event_id !== undefined || value.pending_event_staged !== undefined ||
+      value.pending_event !== undefined || value.pending_event_hash !== undefined) {
+      throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+    }
+    return await legacyEvidenceStatus();
+  }
+  if (value.local_status !== "pending") {
+    if (value.pending_event_id !== undefined || value.pending_event_staged !== undefined ||
+      value.pending_event !== undefined || value.pending_event_hash !== undefined) {
+      throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+    }
+    return Object.freeze({ local_status: value.local_status });
+  }
+  publicIdentifier(value.pending_event_id, "stored_result.telemetry_evidence.pending_event_id", operation, 256);
+  if (typeof value.pending_event_staged !== "boolean") {
+    throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+  }
+  if (value.pending_event_staged) {
+    if (value.pending_event !== undefined || value.pending_event_hash !== undefined) {
+      throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+    }
+    return Object.freeze({ local_status: "pending", pending_event_id: value.pending_event_id,
+      pending_event_staged: true });
+  }
+  const event = value.pending_event;
+  if (!isRecord(event) || event.schema_version !== "creative.telemetry.evidence/v1" ||
+    event.event_type !== "attempt_outcome" || event.event_id !== value.pending_event_id ||
+    typeof value.pending_event_hash !== "string" || canonicalHash(event) !== value.pending_event_hash ||
+    (expected.tenant_id !== undefined && event.tenant_id !== expected.tenant_id) ||
+    (expected.project_id !== undefined && event.project_id !== expected.project_id) ||
+    (expected.budget_scope_id !== undefined && event.budget_scope_id !== expected.budget_scope_id) ||
+    (expected.logical_operation_id !== undefined && event.logical_operation_id !== expected.logical_operation_id) ||
+    (expected.billable_attempt_id !== undefined && event.billable_attempt_id !== expected.billable_attempt_id)) {
+    throw new CreativeApiError("unavailable", operation, "stored_result.telemetry_evidence");
+  }
+  assertPublicIdentifiers(event, operation, "stored_result.telemetry_evidence.pending_event");
+  return Object.freeze({ local_status: "pending", pending_event_id: value.pending_event_id,
+    pending_event_staged: false, pending_event: event, pending_event_hash: value.pending_event_hash });
+}
+
 function safeDiagnosticRef(value, fallback) {
   return typeof value === "string" && /^[a-zA-Z0-9_.:-]{1,200}$/.test(value) &&
     !hasSensitivePublicText(value) ? value : fallback;
@@ -522,61 +597,187 @@ function startDeadline(operation, durationMs, clock = Date.now) {
   });
 }
 
-function exactUsageQuantity(value) {
-  if (Number.isSafeInteger(value) && value >= 0) return String(value);
-  if (typeof value === "string" && /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/.test(value)) return value;
-  return undefined;
+function usageObservation(attempt, trustedScope, rawUsage, profile, transportAttemptId, idFactory) {
+  return createUsageObservation({
+    attempt,
+    trustedScope,
+    usage: isRecord(rawUsage) ? rawUsage : {},
+    profile,
+    sourceObservationId: `usage:${idFactory()}`,
+    source: "provider_response",
+    transportAttemptId,
+  });
 }
 
-function usageObservation(attempt, rawUsage, idFactory = () => globalThis.crypto.randomUUID()) {
-  const usage = isRecord(rawUsage) ? rawUsage : {};
-  let completeness = ["complete", "partial", "unknown", "incomplete"].includes(usage.completeness)
-    ? usage.completeness : "unknown";
-  if (completeness === "incomplete") completeness = "partial";
-  const missing = new Set(Array.isArray(usage.missing_fields)
-    ? usage.missing_fields.filter((item) => typeof item === "string" && /^[a-zA-Z0-9_.-]{1,120}$/.test(item))
-    : []);
-  const units = [];
-  for (const field of ["input_tokens", "output_tokens"]) {
-    if (!Object.hasOwn(usage, field)) {
-      if (completeness === "complete") missing.add(field);
-      continue;
+const OMIT_FAILURE_USAGE_VALUE = Symbol("omit_failure_usage_value");
+
+function snapshotFailureUsage(value) {
+  const state = { nodes: 0, bytes: 0, incomplete: false, seen: new WeakSet() };
+
+  function copy(current, depth) {
+    state.nodes += 1;
+    if (state.nodes > 512 || depth > 12) {
+      state.incomplete = true;
+      return OMIT_FAILURE_USAGE_VALUE;
     }
-    const quantity = exactUsageQuantity(usage[field]);
-    if (quantity === undefined) {
-      missing.add(field);
-      continue;
+    if (current === null || typeof current === "boolean") return current;
+    if (typeof current === "string") {
+      if (current.length > 16 * 1024 || state.bytes + current.length > 16 * 1024) {
+        state.incomplete = true;
+        return OMIT_FAILURE_USAGE_VALUE;
+      }
+      state.bytes += current.length;
+      return current;
     }
-    units.push({ name: field, quantity, relation: "standalone" });
+    if (typeof current === "number") {
+      if (!Number.isFinite(current)) {
+        state.incomplete = true;
+        return OMIT_FAILURE_USAGE_VALUE;
+      }
+      return current;
+    }
+    if (typeof current !== "object") {
+      state.incomplete = true;
+      return OMIT_FAILURE_USAGE_VALUE;
+    }
+    if (state.seen.has(current)) {
+      state.incomplete = true;
+      return OMIT_FAILURE_USAGE_VALUE;
+    }
+    state.seen.add(current);
+    try {
+      if (Array.isArray(current)) {
+        if (Object.getPrototypeOf(current) !== Array.prototype) {
+          state.incomplete = true;
+          return OMIT_FAILURE_USAGE_VALUE;
+        }
+        const lengthDescriptor = Object.getOwnPropertyDescriptor(current, "length");
+        const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, "value")
+          ? lengthDescriptor.value
+          : undefined;
+        if (!Number.isSafeInteger(length) || length < 0 || length > 256) {
+          state.incomplete = true;
+          return OMIT_FAILURE_USAGE_VALUE;
+        }
+        const result = [];
+        let outputIndex = 0;
+        for (let index = 0; index < length; index += 1) {
+          const descriptor = Object.getOwnPropertyDescriptor(current, String(index));
+          if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+            state.incomplete = true;
+            continue;
+          }
+          const child = copy(descriptor.value, depth + 1);
+          if (child === OMIT_FAILURE_USAGE_VALUE) continue;
+          Object.defineProperty(result, String(outputIndex), {
+            value: child,
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          });
+          outputIndex += 1;
+        }
+        return result;
+      }
+
+      const prototype = Object.getPrototypeOf(current);
+      if (prototype !== Object.prototype && prototype !== null) {
+        state.incomplete = true;
+        return OMIT_FAILURE_USAGE_VALUE;
+      }
+      const keys = Reflect.ownKeys(current);
+      const result = Object.create(null);
+      for (const key of keys) {
+        if (state.nodes >= 512) {
+          state.incomplete = true;
+          break;
+        }
+        if (typeof key !== "string") {
+          state.incomplete = true;
+          continue;
+        }
+        if (key.length > 1024 || state.bytes + key.length > 16 * 1024) {
+          state.incomplete = true;
+          continue;
+        }
+        state.bytes += key.length;
+        const descriptor = Object.getOwnPropertyDescriptor(current, key);
+        if (!descriptor || !descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+          state.incomplete = true;
+          continue;
+        }
+        const child = copy(descriptor.value, depth + 1);
+        if (child === OMIT_FAILURE_USAGE_VALUE) continue;
+        Object.defineProperty(result, key, {
+          value: child,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      }
+      return result;
+    } catch {
+      state.incomplete = true;
+      return OMIT_FAILURE_USAGE_VALUE;
+    } finally {
+      state.seen.delete(current);
+    }
   }
-  if (completeness === "unknown") {
-    units.length = 0;
-    if (missing.size === 0) missing.add("provider_usage");
-  } else if (missing.size > 0 || units.length === 0) {
-    completeness = units.length === 0 ? "unknown" : "partial";
-    if (completeness === "unknown" && missing.size === 0) missing.add("provider_usage");
-    if (completeness === "partial" && missing.size === 0) missing.add("provider_usage_completeness");
+
+  const snapshot = copy(value, 0);
+  if (snapshot === OMIT_FAILURE_USAGE_VALUE || !isRecord(snapshot)) return undefined;
+  if (!state.incomplete) return snapshot;
+
+  function markIncomplete(counters) {
+    if (!isRecord(counters)) return;
+    if (counters.completeness !== "unknown") {
+      Object.defineProperty(counters, "completeness", {
+        value: "partial", enumerable: true, configurable: true, writable: true,
+      });
+    }
+    const existing = Array.isArray(counters.missing_fields) ? counters.missing_fields : [];
+    const missing = [];
+    for (let index = 0; index < existing.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(existing, String(index));
+      if (descriptor && Object.hasOwn(descriptor, "value") && typeof descriptor.value === "string") {
+        Object.defineProperty(missing, String(missing.length), {
+          value: descriptor.value, enumerable: true, configurable: true, writable: true,
+        });
+      }
+    }
+    if (!missing.some((field) => field === "usage.unmapped_extension")) {
+      Object.defineProperty(missing, String(missing.length), {
+        value: "usage.unmapped_extension", enumerable: true, configurable: true, writable: true,
+      });
+    }
+    Object.defineProperty(counters, "missing_fields", {
+      value: missing, enumerable: true, configurable: true, writable: true,
+    });
   }
-  const observation = {
-    schema_version: METERING_PROPOSAL_VERSION,
-    tenant_id: attempt.tenant_id,
-    project_id: attempt.project_id,
-    budget_scope_id: attempt.budget_scope_id,
-    logical_operation_id: attempt.logical_operation_id,
-    billable_attempt_id: attempt.billable_attempt_id,
-    source_observation_id: "usage:" + idFactory(),
-    source: "provider_response",
-    provider_name: attempt.provider.name,
-    model: attempt.provider.model,
-    environment: attempt.environment,
-    billing_mode: attempt.billing_mode,
-    completeness,
-    missing_fields: [...missing],
-  };
-  if (units.length > 0) observation.usage_units = units;
-  if (typeof usage.provider_request_id === "string") observation.provider_request_id = usage.provider_request_id;
-  if (typeof usage.transport_attempt_id === "string") observation.transport_attempt_id = usage.transport_attempt_id;
-  return observation;
+
+  markIncomplete(snapshot);
+  if (Object.hasOwn(snapshot, "usage")) markIncomplete(snapshot.usage);
+  return snapshot;
+}
+
+function providerFailureUsage(error) {
+  if (error === null || (typeof error !== "object" && typeof error !== "function")) return undefined;
+  let usageDescriptor;
+  let outcomeDescriptor;
+  try {
+    usageDescriptor = Object.getOwnPropertyDescriptor(error, "usage");
+    outcomeDescriptor = Object.getOwnPropertyDescriptor(error, "provider_outcome");
+    if (!usageDescriptor || !Object.hasOwn(usageDescriptor, "value") || !isRecord(usageDescriptor.value)) return undefined;
+    const snapshot = snapshotFailureUsage(usageDescriptor.value);
+    if (!snapshot) return undefined;
+    const projected = projectPublicTelemetry(snapshot, { maxDepth: 8, maxNodes: 256, maxBytes: 16 * 1024 });
+    const reportedOutcome = outcomeDescriptor && Object.hasOwn(outcomeDescriptor, "value")
+      ? outcomeDescriptor.value : undefined;
+    const providerOutcome = ["failed", "partial", "unknown"].includes(reportedOutcome) ? reportedOutcome : "unknown";
+    return Object.freeze({ usage: projected.value, provider_outcome: providerOutcome });
+  } catch {
+    return undefined;
+  }
 }
 
 function meteringFailure(outcome, operation) {
@@ -607,6 +808,7 @@ function safeError(error, operation) {
     return new CreativeApiError(code, operation, safeFieldPath(error.field));
   }
   if (error instanceof MeteringContractError) return new CreativeApiError("unavailable", operation, "metering", { retryable: true });
+  if (error instanceof TelemetryBoundaryError) return new CreativeApiError("unavailable", operation, "telemetry", { retryable: true });
   if (error?.module === "creative-engine.versions") {
     const versionCodeMap = Object.freeze({
       invalid_request: "invalid_request",
@@ -894,6 +1096,18 @@ export function createCreativeApi(options = {}) {
     contextFence) {
     if (preDispatchGuard) await preDispatchGuard();
     requiredPort(ports, "metering.reserveAttempt", request.operation);
+    const telemetry = ports.telemetry;
+    if (!isRecord(telemetry) || !isRecord(telemetry.modes) || !isRecord(telemetry.outbox) ||
+      typeof telemetry.outbox.append !== "function" ||
+      typeof telemetry.outbox.stagePendingEvidence !== "function" ||
+      typeof telemetry.outbox.enqueueUsageObservation !== "function") {
+      throw new CreativeApiError("unavailable", request.operation, "telemetry", { retryable: true });
+    }
+    const usageProfile = isRecord(telemetry.usage_profiles) && Object.hasOwn(telemetry.usage_profiles, operationKind)
+      ? telemetry.usage_profiles[operationKind] : undefined;
+    if (!Object.values(USAGE_PROFILE).includes(usageProfile)) {
+      throw new CreativeApiError("unavailable", request.operation, "telemetry.usage_profile", { retryable: true });
+    }
     const metering = ports.metering;
     const method = requiredPort(ports, portPath, request.operation);
     const checkedRoute = routeFor(route, request.operation);
@@ -930,16 +1144,53 @@ export function createCreativeApi(options = {}) {
       dispatchIntentRefs.set(transportAttemptId, intentRef);
       return intentRef;
     };
+    const revalidateTransport = async ({ transport_attempt_id, billable_attempt_id, dispatch_intent_ref, signal }) => {
+      boundedString(transport_attempt_id, "transport_attempt_id", 256);
+      if (billable_attempt_id !== attempt.billable_attempt_id || signal?.aborted || deadline.signal.aborted) {
+        throw new CreativeApiError("cancelled", request.operation, "dispatch_authorization");
+      }
+      await checkDispatchFence();
+      if (signal?.aborted || deadline.signal.aborted) {
+        throw new CreativeApiError("cancelled", request.operation, "dispatch_authorization");
+      }
+      let freshIntentRef;
+      try {
+        // This atomic, idempotent authorization is intentionally the final
+        // awaited fence after the external Finance ACK and before dispatch.
+        freshIntentRef = await authorizeJobDispatch(principal, request, started, transport_attempt_id,
+          billable_attempt_id, contextFence);
+      } catch (error) {
+        preDispatchError = error;
+        throw error;
+      }
+      if (freshIntentRef !== dispatch_intent_ref || signal?.aborted || deadline.signal.aborted) {
+        const error = new CreativeApiError(signal?.aborted || deadline.signal.aborted ? "cancelled" : "stale_version",
+          request.operation, "dispatch_authorization");
+        preDispatchError = error;
+        throw error;
+      }
+      dispatchIntentRefs.set(transport_attempt_id, freshIntentRef);
+    };
     let outcome;
+    let evidenceRefs = [];
+    let observationRef;
+    let telemetryEvidence;
     try {
-      outcome = await executeMeteredAttempt({
-      port: metering,
+      const telemetryResult = await executeCreativeMeteredAttempt({
+      meteringPort: metering,
+      evidencePort: telemetry.outbox,
+      observationOutbox: telemetry.outbox,
       request: attempt,
       trustedScope: meteredTrustedScope(principal),
+      modes: telemetry.modes,
+      idFactory,
+      clock: () => new Date(now()),
       signal: deadline.signal,
+      authorizeTransport: async ({ transport_attempt_id }) => authorizeTransport(transport_attempt_id),
+      revalidateTransport,
       dispatch: async (dispatchContext) => {
-        const transportAttemptId = boundedString(idFactory(), "transport_attempt_id", 256);
-        const dispatch_intent_ref = await authorizeTransport(transportAttemptId);
+        const transportAttemptId = dispatchContext.transport_attempt_id;
+        const dispatch_intent_ref = dispatchContext.dispatch_intent_ref;
         if (dispatchContext.signal?.aborted) throw new CreativeApiError("cancelled", request.operation, "deadline");
         let dispatched;
         try { dispatched = await invokePort({
@@ -955,23 +1206,43 @@ export function createCreativeApi(options = {}) {
           transportAttemptId,
           dispatch_intent_ref,
           async recordTransportAttempt(transportId) {
-            const intentRef = await authorizeTransport(transportId);
+            boundedString(transportId, "transport_attempt_id", 256);
             if (dispatchContext.signal?.aborted) throw new CreativeApiError("cancelled", request.operation, "deadline");
+            // The telemetry executor owns idempotent transport identity reuse
+            // and must revalidate the active job/context fence on every call.
             await dispatchContext.recordTransportAttempt(transportId);
+            const intentRef = dispatchIntentRefs.get(transportId);
+            if (!intentRef) throw new CreativeApiError("unavailable", request.operation, "dispatch_authorization");
             if (dispatchContext.signal?.aborted) throw new CreativeApiError("cancelled", request.operation, "deadline");
             return intentRef;
           },
           setDecisionRequest(value) { validatedDecisionRequest = value; },
-        }); } catch (error) { throw error; }
+        }); } catch (error) {
+          const failed = providerFailureUsage(error);
+          if (!failed) throw error;
+          const usage_observation = usageObservation(dispatchContext.attempt, meteredTrustedScope(principal),
+            failed.usage, usageProfile, transportAttemptId, idFactory);
+          return { provider_outcome: failed.provider_outcome, usage_observation };
+        }
         providerValue = dispatched?.value;
         const rawUsage = dispatched?.usage;
-        const usage_observation = usageObservation(dispatchContext.attempt, {
-          ...(isRecord(rawUsage) ? rawUsage : {}),
-          ...(rawUsage?.transport_attempt_id === undefined ? { transport_attempt_id: transportAttemptId } : {}),
-        }, idFactory);
+        const usage_observation = usageObservation(dispatchContext.attempt, meteredTrustedScope(principal),
+          rawUsage, usageProfile, transportAttemptId, idFactory);
         return { provider_outcome: dispatched?.provider_outcome ?? "succeeded", usage_observation };
       },
     });
+      outcome = telemetryResult.outcome;
+      evidenceRefs = telemetryResult.evidence_refs;
+      observationRef = telemetryResult.observation_ref;
+      if (telemetryResult.pending_evidence) {
+        const event = telemetryResult.pending_evidence;
+        const staged = evidenceRefs.includes(event.event_id);
+        telemetryEvidence = Object.freeze({ local_status: "pending", pending_event_id: event.event_id,
+          pending_event_staged: staged,
+          ...(!staged ? { pending_event: event, pending_event_hash: canonicalHash(event) } : {}) });
+      } else {
+        telemetryEvidence = Object.freeze({ local_status: telemetryResult.evidence_delivery });
+      }
     } finally {
       deadline.dispose();
     }
@@ -981,7 +1252,8 @@ export function createCreativeApi(options = {}) {
     }
     return { value: providerValue, attempt_id: attemptId, decision_request: validatedDecisionRequest,
       metering: outcome, transport_attempt_ids: Object.freeze([...dispatchIntentRefs.keys()]),
-      usage_ref: outcome.observation_ack?.source_observation_id };
+      usage_ref: observationRef ?? outcome.observation_ack?.source_observation_id,
+      evidence_refs: Object.freeze([...(evidenceRefs ?? [])]), telemetry_evidence: telemetryEvidence };
   }
 
   function decisionInput(decisionRequest, principal, request, brief, started) {
@@ -1140,10 +1412,10 @@ export function createCreativeApi(options = {}) {
       expectedCurrentDesignVersionId);
     const metered = await runMetered(principal, request, started, operation === "generate" ? "image_generation" : "image_edit", route, method,
       async ({ method: dispatch, scope, actor_id, started: job, route: resolved, attempt, signal, deadline_at,
-        transportAttemptId, dispatch_intent_ref, recordTransportAttempt }) => {
+        reservation_ref, transportAttemptId, dispatch_intent_ref, recordTransportAttempt }) => {
         const value = await dispatch(Object.freeze({ scope: started.scope, actor_id: principal.actor_id,
           job_id: started.job_id, attempt, route: resolved, brief, base_design: baseDesign, plan,
-          decision_result: decisionResult, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
+          decision_result: decisionResult, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
           recordTransportAttempt,
           signal, deadline_at }));
         return { value, usage: value?.usage, provider_outcome: "succeeded" };
@@ -1212,8 +1484,9 @@ export function createCreativeApi(options = {}) {
     const usageRefs = typeof metered.usage_ref === "string"
       ? [publicIdentifier(metered.usage_ref, "usage_ref", operation, 256)] : [];
     return { design, artifact_bytes: artifactBytes,
+      telemetry_evidence: metered.telemetry_evidence,
       creation_evidence: { transport_attempt_ids: [...metered.transport_attempt_ids], provider_request_ids: providerRequestIds,
-        usage_refs: usageRefs },
+        usage_refs: usageRefs, evidence_refs: [...metered.evidence_refs] },
       usage: { completeness: usage.completeness ?? "unknown" }, attempt_id: metered.attempt_id };
   }
 
@@ -1230,9 +1503,9 @@ export function createCreativeApi(options = {}) {
       const route = routeFor(await resolveRoute(Object.freeze({ scope, actor_id: principal.actor_id, design_version: design })), operation);
       await assertCurrentCreativeContext(scope, brief, design, operation);
       const metered = await runMetered(principal, request, started, "vision_observation", route, "inspection.inspect",
-        async ({ attempt, signal, deadline_at, transportAttemptId, dispatch_intent_ref, recordTransportAttempt }) => {
+        async ({ attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref, recordTransportAttempt }) => {
           const value = await inspect(Object.freeze({ scope, actor_id: principal.actor_id, job_id: started.job_id,
-            attempt, brief, design_version: design, transport_attempt_id: transportAttemptId,
+            attempt, brief, design_version: design, reservation_ref, transport_attempt_id: transportAttemptId,
             signal, deadline_at, dispatch_intent_ref, recordTransportAttempt }));
           return { value, usage: value?.usage, provider_outcome: "succeeded" };
         }, () => assertCurrentCreativeContext(scope, brief, design, operation),
@@ -1283,7 +1556,8 @@ export function createCreativeApi(options = {}) {
         brief_id: brief.brief_id, design_version_id: design.design_version_id,
         artifact_id: design.artifact.artifact_id, artifact_hash: design.artifact.content_hash,
         design_hash: design.design_hash, inspection_id: result.inspection_id,
-        observations: Object.freeze(observations), usage: inspectionUsage });
+        observations: Object.freeze(observations), usage: inspectionUsage,
+        telemetry_evidence: metered.telemetry_evidence });
       const output = { inspection, attempt_id: metered.attempt_id };
       const job = await publish(principal, request, started, output, async () => undefined, {
         brief_id: brief.brief_id, brief_hash: canonicalHash(brief),
@@ -1329,7 +1603,7 @@ export function createCreativeApi(options = {}) {
         transport_attempt_ids: Object.freeze([...(creationEvidence?.transport_attempt_ids ?? [])]),
         provider_request_ids: Object.freeze([...(creationEvidence?.provider_request_ids ?? [])]),
         usage_refs: Object.freeze([...(creationEvidence?.usage_refs ?? [])]),
-        trace_refs: Object.freeze([]),
+        trace_refs: Object.freeze([...(creationEvidence?.evidence_refs ?? [])]),
       });
       const saveInput = Object.freeze({ scope, brief_id: brief.brief_id,
         design_version: output.design,
@@ -1376,7 +1650,9 @@ export function createCreativeApi(options = {}) {
         if (!isRecord(saved) || saved.status !== "saved") throw new CreativeApiError("stale_version", operation);
       }, creativeContextFence(brief, baseDesign, branchMode ? undefined : (baseDesign?.design_version_id ?? null)));
       return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: CREATIVE_API_VERSION,
-        operation_id: job.job_id, job: publicJob(job, job.job_id), result: Object.freeze({ design_version: output.design, usage: output.usage }) }), operation);
+        operation_id: job.job_id, job: publicJob(job, job.job_id), result: Object.freeze({
+          design_version: output.design, usage: output.usage, telemetry_evidence: output.telemetry_evidence,
+        }) }), operation);
     }
     if (operation === "restore") {
       const brief = await loadBrief(scope, payload.brief_id, operation);
@@ -1524,7 +1800,7 @@ export function createCreativeApi(options = {}) {
       throw new CreativeApiError("unavailable", request.operation, "stored_result");
     }
     if (["generate", "edit"].includes(request.operation)) {
-      assertStoredOnlyKeys(job.result, ["design", "usage", "attempt_id"], request.operation, "stored_result");
+      assertStoredOnlyKeys(job.result, ["design", "usage", "attempt_id", "telemetry_evidence"], request.operation, "stored_result");
       const brief = await loadBrief(started.scope, request.payload.brief_id, request.operation);
       const stored = validateDesignVersion(job.result.design, {
         trustedScope: { ...started.scope, design_version_id: job.result.design?.design_version_id },
@@ -1532,10 +1808,15 @@ export function createCreativeApi(options = {}) {
       });
       const current = await loadDesign(started.scope, brief, stored.design_version_id, request.operation);
       if (canonicalSerialize(stored) !== canonicalSerialize(current) || !isRecord(job.result.usage) ||
-        job.result.usage.completeness !== "complete" || typeof job.result.attempt_id !== "string") {
+        job.result.usage.completeness !== "complete" || job.result.attempt_id !== current.billable_attempt_id) {
         throw new CreativeApiError("unavailable", request.operation, "stored_result");
       }
-      return Object.freeze({ design_version: current, usage: Object.freeze({ completeness: "complete" }) });
+      const telemetryEvidence = await validateTelemetryEvidenceStatus(job.result.telemetry_evidence, request.operation, {
+        tenant_id: principal.tenant_id, project_id: principal.project_id, budget_scope_id: principal.budget_scope_id,
+        logical_operation_id: request.action_id, billable_attempt_id: current.billable_attempt_id,
+      }, ports.telemetry?.outbox);
+      return Object.freeze({ design_version: current, usage: Object.freeze({ completeness: "complete" }),
+        telemetry_evidence: telemetryEvidence });
     }
     if (request.operation === "restore") {
       assertStoredOnlyKeys(job.result, ["selection"], request.operation, "stored_result");
@@ -1565,7 +1846,7 @@ export function createCreativeApi(options = {}) {
       const result = job.result.inspection;
       if (!isRecord(result)) throw new CreativeApiError("unavailable", request.operation, "stored_inspection");
       assertStoredOnlyKeys(result, ["tenant_id", "project_id", "brief_id", "design_version_id", "artifact_id", "artifact_hash",
-        "design_hash", "inspection_id", "observations", "usage"], request.operation, "stored_inspection");
+        "design_hash", "inspection_id", "observations", "usage", "telemetry_evidence"], request.operation, "stored_inspection");
       if (result.tenant_id !== principal.tenant_id || result.project_id !== principal.project_id || result.brief_id !== brief.brief_id ||
         result.design_version_id !== design.design_version_id || result.artifact_id !== design.artifact.artifact_id ||
         result.artifact_hash !== design.artifact.content_hash || result.design_hash !== design.design_hash ||
@@ -1606,10 +1887,15 @@ export function createCreativeApi(options = {}) {
       });
       if (typeof started.job.result.attempt_id !== "string") throw new CreativeApiError("unavailable", request.operation, "stored_inspection");
       publicIdentifier(result.inspection_id, "stored_inspection.inspection_id", request.operation, 256);
+      const telemetryEvidence = await validateTelemetryEvidenceStatus(result.telemetry_evidence, request.operation, {
+        tenant_id: principal.tenant_id, project_id: principal.project_id, budget_scope_id: principal.budget_scope_id,
+        logical_operation_id: request.action_id, billable_attempt_id: started.job.result.attempt_id,
+      }, ports.telemetry?.outbox);
       return Object.freeze({ tenant_id: result.tenant_id, project_id: result.project_id, brief_id: result.brief_id,
         design_version_id: result.design_version_id, artifact_id: result.artifact_id,
         artifact_hash: result.artifact_hash, design_hash: result.design_hash,
-        inspection_id: result.inspection_id, observations: Object.freeze(observations), usage: normalizedUsage });
+        inspection_id: result.inspection_id, observations: Object.freeze(observations), usage: normalizedUsage,
+        telemetry_evidence: telemetryEvidence });
     }
     if (request.operation === "handoff") {
       assertStoredOnlyKeys(job.result, ["handoff", "receipt", "handoff_created_at"], request.operation, "stored_result");
