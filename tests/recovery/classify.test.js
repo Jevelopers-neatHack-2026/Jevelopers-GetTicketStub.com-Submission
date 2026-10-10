@@ -50,6 +50,35 @@ function canonical(value) {
   return '{' + keys.map(key => JSON.stringify(key) + ':' + canonical(value[key])).join(',') + '}';
 }
 
+function savedResult(plan, stepId, args, output) {
+  const inputHash = 'sha256_' + createHash('sha256').update(canonical({
+    kind: 'agent-harness.private-local-input.v1',
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    args
+  }), 'utf8').digest('hex');
+  const resultHash = 'sha256_' + createHash('sha256').update(canonical({
+    kind: 'agent-harness.private-local-result.v1',
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    inputHash,
+    output
+  }), 'utf8').digest('hex');
+  return {
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    inputHash,
+    resultHash,
+    output
+  };
+}
+
 function privateData({
   workflowId = WORKFLOW_ID,
   planJson = makePlanJson(),
@@ -181,6 +210,7 @@ test('recovery reports ready work and committed results as evidence without prom
   let budget = createBudgetSnapshot(createLimitSet(), 1_000, 31_000);
   budget = advanceBudget(budget, 'step', 1_000, 0).state;
   budget = advanceBudget(budget, 'step', 1_000, 0).state;
+  budget = { ...budget, totalResultBytes: 2 };
   const complete = classifyRecovery(checkpointWithData(privateData({
     budget,
     completedResultsJson: JSON.stringify({ first, second })
@@ -190,6 +220,123 @@ test('recovery reports ready work and committed results as evidence without prom
     reason: 'ALL_LOCAL_RESULTS_MATCH_PINNED_IDENTITIES',
     actionable: false
   });
+});
+
+test('recovery rejects self-rehashed outputs and inconsistent persisted result-byte counts', () => {
+  const plan = readyRunIdentity();
+  const first = savedResult(plan, 'first', { left: 1, right: 2 }, 900);
+  const second = savedResult(plan, 'second', { left: 900, right: 2 }, 902);
+  let forgedBudget = createBudgetSnapshot(createLimitSet(), 1_000, 31_000);
+  forgedBudget = advanceBudget(forgedBudget, 'step', 1_000, 0).state;
+  forgedBudget = advanceBudget(forgedBudget, 'step', 1_000, 0).state;
+  forgedBudget = { ...forgedBudget, totalResultBytes: 6 };
+  const forged = classifyRecovery(checkpointWithData(privateData({
+    budget: forgedBudget,
+    completedResultsJson: JSON.stringify({ first, second })
+  })));
+  assert.deepEqual(forged, {
+    kind: 'quarantine',
+    reason: 'LOCAL_RESULT_IDENTITY_INVALID',
+    actionable: false
+  });
+
+  const forgedTextPlanJson = JSON.stringify({
+    kind: PLAN_KIND,
+    version: 1,
+    steps: [{ id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['left', 'right'] } }]
+  });
+  const textPlan = compilePlan(forgedTextPlanJson, createLimitSet(), undefined, WORKFLOW_ID);
+  const forgedText = savedResult(textPlan, 'text', { parts: ['left', 'right'] }, 'rewritten');
+  let forgedTextBudget = advanceBudget(
+    createBudgetSnapshot(createLimitSet(), 1_000, 31_000),
+    'step', 1_000, 0
+  ).state;
+  forgedTextBudget = { ...forgedTextBudget, totalResultBytes: Buffer.byteLength(JSON.stringify('rewritten'), 'utf8') };
+  const forgedTextRecovery = classifyRecovery(checkpointWithData(privateData({
+    planJson: forgedTextPlanJson,
+    budget: forgedTextBudget,
+    completedResultsJson: JSON.stringify({ text: forgedText })
+  })));
+  assert.equal(forgedTextRecovery.kind, 'quarantine');
+
+  const tightLimits = createLimitSet(JSON.stringify({ maxResultBytes: 2, maxTotalResultBytes: 3 }));
+  const oversizedPlanJson = JSON.stringify({
+    kind: PLAN_KIND,
+    version: 1,
+    steps: [{ id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['abc'] } }]
+  });
+  const oversizedPlan = compilePlan(oversizedPlanJson, tightLimits, undefined, WORKFLOW_ID);
+  const oversized = savedResult(oversizedPlan, 'text', { parts: ['abc'] }, 'abc');
+  let undercountedBudget = advanceBudget(
+    createBudgetSnapshot(tightLimits, 1_000, 31_000),
+    'step', 1_000, 0, tightLimits
+  ).state;
+  undercountedBudget = { ...undercountedBudget, totalResultBytes: 0 };
+  const savedSize = classifyRecovery(checkpointWithData(privateData({
+    planJson: oversizedPlanJson,
+    limitSet: tightLimits,
+    budget: undercountedBudget,
+    completedResultsJson: JSON.stringify({ text: oversized })
+  })));
+  assert.equal(savedSize.kind, 'quarantine');
+  assert.equal(savedSize.reason, 'LOCAL_RESULT_IDENTITY_INVALID');
+});
+
+test('recovery enforces plausible admission, retry, replan, and pending relationships', () => {
+  const noAdmission = classifyRecovery(checkpointWithData(privateData({ pendingStepId: 'first' })));
+  assert.equal(noAdmission.kind, 'stop');
+  assert.equal(noAdmission.reason, 'BUDGET_CHECKPOINT_INCONSISTENT');
+
+  const limits = createLimitSet();
+  let budget = createBudgetSnapshot(limits, 1_000, 31_000);
+  budget = advanceBudget(budget, 'step', 1_000, 0, limits).state;
+  budget = advanceBudget(budget, 'replay', 1_001, 1, limits).state;
+  const replay = classifyRecovery(checkpointWithData(privateData({
+    budget,
+    pendingStepId: 'first',
+    lastAdmissionKind: 'replay'
+  }), { observedAtMs: 1_002 }));
+  assert.equal(replay.kind, 'local-replay-candidate');
+
+  const replannedBudget = advanceBudget(budget, 'replan', 1_002, 2, limits).state;
+  const replanned = classifyRecovery(checkpointWithData(privateData({
+    budget: replannedBudget,
+    pendingStepId: 'first',
+    lastAdmissionKind: 'replay'
+  }), { observedAtMs: 1_003 }));
+  assert.equal(replanned.kind, 'local-replay-candidate');
+
+  const impossible = classifyRecovery(checkpointWithData(privateData({
+    pendingStepId: 'first',
+    budget: {
+      ...advanceBudget(createBudgetSnapshot(limits, 1_000, 31_000), 'step', 1_000, 0, limits).state,
+      stepAttempts: 1,
+      localRetries: 32,
+      replans: 8,
+      iterations: 1
+    }
+  })));
+  assert.equal(impossible.kind, 'stop');
+  assert.equal(impossible.reason, 'BUDGET_INVALID');
+});
+
+test('recovery enforces the pinned attempt-state cap after preserving unknown precedence', () => {
+  const limits = createLimitSet(JSON.stringify({ maxRecoveryAttemptStates: 1 }));
+  const exactCap = classifyRecovery(checkpointWithData(privateData({ limitSet: limits }), {
+    attemptStates: ['reconciled']
+  }));
+  assert.equal(exactCap.kind, 'local-ready-candidate');
+
+  const overflow = classifyRecovery(checkpointWithData(privateData({ limitSet: limits }), {
+    attemptStates: ['reconciled', 'reconciled']
+  }));
+  assert.equal(overflow.kind, 'stop');
+  assert.equal(overflow.reason, 'ATTEMPT_SNAPSHOT_LIMIT');
+
+  const unresolved = classifyRecovery(checkpointWithData(privateData({ limitSet: limits }), {
+    attemptStates: ['intent', 'reconciled']
+  }));
+  assert.equal(unresolved.kind, 'external-reconciliation-required');
 });
 
 test('an unresolved external effect is a barrier even when the checkpoint is absent', () => {
@@ -348,6 +495,18 @@ test('accessor, proxy, and raw provider values are not copied into recovery diag
   const safe = classifyRecovery(raw);
   assert.equal(JSON.stringify(safe).includes('customer-secret'), false);
   assert.equal(JSON.stringify(safe).includes('api_key'), false);
+});
+
+test('recovery JSON rejects duplicate members and integer precision normalization', () => {
+  const duplicate = recoverySnapshot().replace(
+    '"observedAtMs":1000',
+    '"observedAtMs":1000,"observedAtMs":1000'
+  );
+  assert.equal(classifyRecovery(duplicate).reason, 'RECOVERY_INPUT_INVALID');
+  const rounded = recoverySnapshot().replace('"version":2', '"version":2.0000000000000001');
+  assert.equal(classifyRecovery(rounded).reason, 'RECOVERY_INPUT_INVALID');
+  const negativeZero = recoverySnapshot().replace('"observedAtMs":1000', '"observedAtMs":-0');
+  assert.equal(classifyRecovery(negativeZero).reason, 'RECOVERY_INPUT_INVALID');
 });
 
 test('unknown external attempt states stop rather than being treated as completed', () => {

@@ -3,9 +3,11 @@ import { types as utilTypes } from 'node:util';
 import {
   advanceBudget,
   checkClockBudget,
+  getLimitValues,
   limitSetFromCheckpoint,
   validateBudgetSnapshot
 } from '../../orchestrator/internal/limits.js';
+import { parseBoundedJson } from '../../orchestrator/internal/json.js';
 import {
   compilePlan,
   getNextReadyStep,
@@ -84,36 +86,18 @@ function exactRecord(value, allowed, required, reason) {
   return output;
 }
 
-function scanDepth(source) {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (character === '\\') escaped = true;
-      else if (character === '"') inString = false;
-      continue;
-    }
-    if (character === '"') inString = true;
-    else if (character === '{' || character === '[') {
-      depth += 1;
-      if (depth > SNAPSHOT_MAX_DEPTH) throw new Error('SNAPSHOT_TOO_DEEP');
-    } else if (character === '}' || character === ']') {
-      depth -= 1;
-      if (depth < 0) throw new Error('SNAPSHOT_INVALID');
-    }
-  }
-}
-
 function parseSnapshot(snapshotJson) {
   if (typeof snapshotJson !== 'string') throw new Error('SNAPSHOT_INVALID');
   if (Buffer.byteLength(snapshotJson, 'utf8') > SNAPSHOT_MAX_BYTES) throw new Error('SNAPSHOT_TOO_LARGE');
-  scanDepth(snapshotJson);
   try {
-    return JSON.parse(snapshotJson);
-  } catch {
+    return parseBoundedJson(snapshotJson, {
+      maxBytes: SNAPSHOT_MAX_BYTES,
+      maxDepth: SNAPSHOT_MAX_DEPTH,
+      maxNodes: 32_768
+    });
+  } catch (error) {
+    if (error?.code === 'JSON_TOO_DEEP') throw new Error('SNAPSHOT_TOO_DEEP');
+    if (error?.code === 'JSON_TOO_LARGE') throw new Error('SNAPSHOT_TOO_LARGE');
     throw new Error('SNAPSHOT_INVALID');
   }
 }
@@ -395,6 +379,9 @@ export function classifyRecovery(snapshotJson) {
   } catch {
     return safeStopForError('LIMITS_INVALID');
   }
+  if (snapshot.externalAttemptStates.length > getLimitValues(limitSet).maxRecoveryAttemptStates) {
+    return stop('ATTEMPT_SNAPSHOT_LIMIT');
+  }
   try {
     plan = compilePlan(data.planJson, limitSet, undefined, data.workflowId);
   } catch {
@@ -419,8 +406,9 @@ export function classifyRecovery(snapshotJson) {
   }
   if (
     budget.stepsAdmitted < completed.resultCount
+    || budget.stepsAdmitted !== completed.resultCount + (data.pendingStepId === null ? 0 : 1)
+    || budget.totalResultBytes !== completed.totalResultBytes
     || budget.stepAttempts < budget.stepsAdmitted
-    || budget.iterations < budget.stepAttempts
     || (data.pendingStepId !== null
       && (data.lastAdmissionStepId !== data.pendingStepId || budget.stepAttempts < 1))
     || (data.pendingStepId === null && completed.resultCount > 0

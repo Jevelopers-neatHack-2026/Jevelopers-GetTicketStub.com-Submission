@@ -100,13 +100,23 @@ export function inspectWorkflowRecovery(input) {
       }
     );
     const observedAtMs = fields.store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
-    const classification = classifyRecovery(JSON.stringify({
+    let classification = classifyRecovery(JSON.stringify({
       before: projectWorkflow(snapshot.workflow),
       after: projectWorkflow(snapshot.workflow),
       checkpoint: projectCheckpoint(snapshot.checkpoint),
       externalAttemptStates: snapshot.externalAttemptStates,
       observedAtMs
     }));
+    if (
+      page.incomplete
+      && !['external-reconciliation-required', 'quarantine'].includes(classification.kind)
+    ) {
+      classification = Object.freeze({
+        kind: 'stop',
+        reason: 'RECOVERY_INSPECTION_INCOMPLETE',
+        actionable: false
+      });
+    }
     return Object.freeze({
       kind: classification.kind,
       reason: classification.reason,

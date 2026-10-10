@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 import {
   compilePlan,
@@ -12,6 +14,8 @@ import {
 import {
   executeLocalOperation,
   createDefaultRegistry,
+  getRegistrySemanticVersion,
+  getRegistryVersion,
   inspectOperation,
   listRegistryOperations
 } from '../../src/tools/internal/registry.js';
@@ -55,6 +59,43 @@ function errorCode(error) {
   return error instanceof PlanError ? error.code : undefined;
 }
 
+function canonical(value) {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+  return '{' + Object.keys(value).sort()
+    .map(key => JSON.stringify(key) + ':' + canonical(value[key])).join(',') + '}';
+}
+
+function savedResult(plan, stepId, args, output) {
+  const inputHash = 'sha256_' + createHash('sha256').update(canonical({
+    kind: 'agent-harness.private-local-input.v1',
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    args
+  }), 'utf8').digest('hex');
+  const resultHash = 'sha256_' + createHash('sha256').update(canonical({
+    kind: 'agent-harness.private-local-result.v1',
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    inputHash,
+    output
+  }), 'utf8').digest('hex');
+  return {
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    inputHash,
+    resultHash,
+    output
+  };
+}
+
 function numericChain(count) {
   const steps = [];
   for (let index = 0; index < count; index += 1) {
@@ -86,6 +127,35 @@ test('a private dependent plan computes local results with deterministic choice 
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.results), true);
   assert.equal(Object.isFrozen(result.results[0]), true);
+});
+
+test('elapsed allowance is checked after final and multi-step computation', () => {
+  const limitSet = createLimitSet(JSON.stringify({ maxElapsedMs: 5 }));
+  const single = compilePlan(planJson([addStep('one', 1, 2)]), limitSet);
+  const originalNow = performance.now;
+  function runWithSamples(samples, plan) {
+    let index = 0;
+    performance.now = () => samples[Math.min(index++, samples.length - 1)];
+    try {
+      return executePlanLocally(plan);
+    } finally {
+      performance.now = originalNow;
+    }
+  }
+
+  assert.equal(runWithSamples([0, 0, 0, 4, 4], single).status, 'completed');
+  for (const crossing of [5, 10]) {
+    assert.throws(
+      () => runWithSamples([0, 0, 0, crossing, crossing], single),
+      error => errorCode(error) === 'PLAN_LIMIT_STOP'
+    );
+  }
+
+  const multiple = compilePlan(planJson([addStep('one', 1, 2), addStep('two', 3, 4)]), limitSet);
+  assert.throws(
+    () => runWithSamples([0, 0, 0, 1, 1, 1, 1, 10, 10], multiple),
+    error => errorCode(error) === 'PLAN_LIMIT_STOP'
+  );
 });
 
 test('equivalent JSON key and step order produces the same plan and result identities', () => {
@@ -149,6 +219,98 @@ test('local result identity rejects a different workflow and modified output bef
     () => executeLocalStep(first, 'beta', JSON.stringify({ alpha: forged })),
     error => errorCode(error) === 'PLAN_RESULT_IDENTITY_INVALID'
   );
+});
+
+test('saved outputs are recomputed before reuse even when their public hashes are rebuilt', () => {
+  const source = planJson([
+    addStep('first', 1, 2),
+    addStep('second', { $result: 'first' }, 2, ['first'])
+  ]);
+  const plan = compilePlan(source);
+  const forgedFirst = savedResult(plan, 'first', { left: 1, right: 2 }, 900);
+  const forgedSecond = savedResult(plan, 'second', { left: 900, right: 2 }, 902);
+  const forgedJson = JSON.stringify({ first: forgedFirst, second: forgedSecond });
+
+  assert.notEqual(forgedFirst.resultHash, executeLocalStep(plan, 'first').resultHash);
+  assert.throws(
+    () => validateCompletedResults(plan, forgedJson),
+    error => errorCode(error) === 'PLAN_RESULT_IDENTITY_INVALID'
+  );
+  assert.throws(
+    () => executeLocalStep(plan, 'second', forgedJson),
+    error => errorCode(error) === 'PLAN_RESULT_IDENTITY_INVALID'
+  );
+
+  const actualFirst = executeLocalStep(plan, 'first');
+  const actualSecond = executeLocalStep(plan, 'second', JSON.stringify({ first: actualFirst }));
+  const actual = validateCompletedResults(plan, JSON.stringify({ first: actualFirst, second: actualSecond }));
+  assert.equal(actual.resultCount, 2);
+
+  const textPlan = compilePlan(planJson([{
+    id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['left', 'right'] }
+  }]));
+  const forgedText = savedResult(textPlan, 'text', { parts: ['left', 'right'] }, 'rewritten');
+  assert.throws(
+    () => validateCompletedResults(textPlan, JSON.stringify({ text: forgedText })),
+    error => errorCode(error) === 'PLAN_RESULT_IDENTITY_INVALID'
+  );
+});
+
+test('saved and fresh results use identical per-result and aggregate serialized-byte caps', () => {
+  const textPlan = planJson([{
+    id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['abc'] }
+  }]);
+  const tightResult = createLimitSet(JSON.stringify({ maxResultBytes: 2, maxTotalResultBytes: 3 }));
+  const tightPlan = compilePlan(textPlan, tightResult);
+  assert.throws(
+    () => executeLocalStep(tightPlan, 'text'),
+    error => errorCode(error) === 'PLAN_RESULT_TOO_LARGE'
+  );
+  const oversizedSaved = savedResult(tightPlan, 'text', { parts: ['abc'] }, 'abc');
+  assert.throws(
+    () => validateCompletedResults(tightPlan, JSON.stringify({ text: oversizedSaved })),
+    error => errorCode(error) === 'PLAN_RESULT_TOO_LARGE'
+  );
+
+  const exactMultibytePlan = compilePlan(planJson([{
+    id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['é'] }
+  }]), createLimitSet(JSON.stringify({ maxResultBytes: 4, maxTotalResultBytes: 4 })));
+  const exactMultibyte = executeLocalStep(exactMultibytePlan, 'text');
+  assert.equal(Buffer.byteLength(JSON.stringify(exactMultibyte.output), 'utf8'), 4);
+  assert.equal(validateCompletedResults(exactMultibytePlan, JSON.stringify({ text: exactMultibyte })).totalResultBytes, 4);
+
+  const shortMultibytePlan = compilePlan(planJson([{
+    id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['é'] }
+  }]), createLimitSet(JSON.stringify({ maxResultBytes: 3, maxTotalResultBytes: 3 })));
+  assert.throws(
+    () => executeLocalStep(shortMultibytePlan, 'text'),
+    error => errorCode(error) === 'PLAN_RESULT_TOO_LARGE'
+  );
+  const multibyteSaved = savedResult(shortMultibytePlan, 'text', { parts: ['é'] }, 'é');
+  assert.throws(
+    () => validateCompletedResults(shortMultibytePlan, JSON.stringify({ text: multibyteSaved })),
+    error => errorCode(error) === 'PLAN_RESULT_TOO_LARGE'
+  );
+
+  const aggregatePlan = compilePlan(planJson([
+    { id: 'first', operation: 'text.concat', dependsOn: [], args: { parts: ['a'] } },
+    { id: 'second', operation: 'text.concat', dependsOn: [], args: { parts: ['b'] } }
+  ]), createLimitSet(JSON.stringify({ maxResultBytes: 3, maxTotalResultBytes: 5 })));
+  const first = savedResult(aggregatePlan, 'first', { parts: ['a'] }, 'a');
+  const second = savedResult(aggregatePlan, 'second', { parts: ['b'] }, 'b');
+  assert.throws(
+    () => validateCompletedResults(aggregatePlan, JSON.stringify({ first, second })),
+    error => errorCode(error) === 'PLAN_RESULT_TOO_LARGE'
+  );
+});
+
+test('plan JSON rejects duplicate members and noncanonical integer number spellings', () => {
+  const duplicateVersion = '{"kind":"' + PLAN_KIND + '","version":999,"version":1,"steps":[]}';
+  const duplicateSteps = '{"kind":"' + PLAN_KIND + '","version":1,"steps":[],"steps":[]}';
+  const roundedVersion = '{"kind":"' + PLAN_KIND + '","version":1.0000000000000001,"steps":[]}';
+  for (const source of [duplicateVersion, duplicateSteps, roundedVersion]) {
+    assert.throws(() => compilePlan(source), error => errorCode(error) === 'PLAN_INPUT_INVALID');
+  }
 });
 
 test('object, accessor, proxy, and toJSON inputs are rejected without invoking caller code', () => {
@@ -221,6 +383,9 @@ test('the static registry rejects direct accessor and proxy arguments without re
 test('unknown operations and every external, provider, and privileged effect stay unavailable', () => {
   const registry = createDefaultRegistry();
   const metadata = listRegistryOperations(registry);
+  assert.equal(getRegistrySemanticVersion(registry), 1);
+  assert.equal(registry.semanticVersion, 1);
+  assert.equal(getRegistryVersion(registry), 'registry1_49af764199579a0386405cc00872d0fa9ff348d0badeedb80342eacd1a3096e4');
   assert.equal(Object.isFrozen(metadata), true);
 
   assert.equal(Object.hasOwn(registry, 'dispatch'), false);
@@ -304,7 +469,7 @@ test('plan identity rejects unsupported versions, unknown fields, and non-finite
     () => compilePlan(
       '{"kind":"' + PLAN_KIND + '","version":1,"steps":[{"id":"one","operation":"number.add","dependsOn":[],"args":{"left":1e400,"right":2}}]}'
     ),
-    error => errorCode(error) === 'PLAN_ARGUMENT_INVALID'
+    error => errorCode(error) === 'PLAN_INPUT_INVALID'
   );
 });
 

@@ -40,6 +40,17 @@ test('limit configuration is explicit, versioned, and can only tighten hard boun
   );
 });
 
+test('limit JSON rejects duplicate members and integer spellings that normalize', () => {
+  for (const source of [
+    '{"maxSteps":1,"maxSteps":32}',
+    '{"maxSteps":1.0000000000000001}',
+    '{"maxSteps":1e0}',
+    '{"maxSteps":9007199254740993}'
+  ]) {
+    assert.throws(() => createLimitSet(source), error => code(error) === 'INVALID_LIMITS');
+  }
+});
+
 test('object, accessor, and proxy limit inputs are rejected without invoking caller code', () => {
   let reads = 0;
   const accessor = {};

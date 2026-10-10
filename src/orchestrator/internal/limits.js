@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { types as utilTypes } from 'node:util';
+import { parseBoundedJson } from './json.js';
 
 const DEFAULTS = Object.freeze({
   maxPlanBytes: 32_768,
@@ -99,7 +100,10 @@ export function createLimitSet(overridesJson = '{}') {
 
   let parsed;
   try {
-    parsed = JSON.parse(overridesJson);
+    parsed = parseBoundedJson(overridesJson, {
+      maxBytes: 2_048,
+      maxDepth: 2
+    });
   } catch {
     fail('INVALID_LIMITS');
   }
@@ -206,12 +210,14 @@ export function validateBudgetSnapshot(snapshot, limitSet) {
     || fields.stepsAdmitted > limits.maxSteps
     || fields.stepAttempts < 0
     || fields.stepAttempts > limits.maxStepAttempts
+    || fields.stepAttempts !== fields.stepsAdmitted + fields.localRetries
     || fields.localRetries < 0
     || fields.localRetries > limits.maxLocalRetries
     || fields.replans < 0
     || fields.replans > limits.maxReplans
     || fields.iterations < 0
     || fields.iterations > limits.maxIterations
+    || fields.iterations < fields.stepAttempts + fields.replans
     || fields.totalResultBytes < 0
     || fields.totalResultBytes > limits.maxTotalResultBytes
   ) {

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
 import { DurableWorkflowStore, RuntimeError } from '@jevelopers/agent-harness-runtime';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from '../../src/internal/private-local-store-capability.js';
@@ -41,6 +43,14 @@ const SINGLE_PLAN = JSON.stringify({
   version: 1,
   steps: [{ id: 'only', operation: 'number.add', dependsOn: [], args: { left: 4, right: 5 } }]
 });
+const SELF_REHASH_PLAN = JSON.stringify({
+  kind: PLAN_KIND,
+  version: 1,
+  steps: [
+    { id: 'second', operation: 'number.add', dependsOn: ['first'], args: { left: { $result: 'first' }, right: 2 } },
+    { id: 'first', operation: 'number.add', dependsOn: [], args: { left: 1, right: 2 } }
+  ]
+});
 
 function mutableClock(startAtMs) {
   let current = startAtMs;
@@ -72,6 +82,60 @@ function storeTestPlan({ workflowId, planJson = SINGLE_PLAN, limitsJson = '{}' }
   const limitSet = createLimitSet(limitsJson);
   const plan = compilePlan(planJson, limitSet, undefined, workflowId);
   return { limitSet, plan };
+}
+
+function canonical(value) {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+  return '{' + Object.keys(value).sort()
+    .map(key => JSON.stringify(key) + ':' + canonical(value[key])).join(',') + '}';
+}
+
+function savedResult(plan, stepId, args, output) {
+  const inputHash = 'sha256_' + createHash('sha256').update(canonical({
+    kind: 'agent-harness.private-local-input.v1',
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    args
+  }), 'utf8').digest('hex');
+  const resultHash = 'sha256_' + createHash('sha256').update(canonical({
+    kind: 'agent-harness.private-local-result.v1',
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    inputHash,
+    output
+  }), 'utf8').digest('hex');
+  return {
+    stepId,
+    planHash: plan.planHash,
+    registryVersion: plan.registryVersion,
+    runIdentity: plan.runIdentity,
+    inputHash,
+    resultHash,
+    output
+  };
+}
+
+function rewriteLatestCheckpointJson(databasePath, workflowId, payload) {
+  const digest = createHash('sha256').update(payload, 'utf8').digest('hex');
+  const database = new DatabaseSync(databasePath);
+  database.exec('DROP TRIGGER workflow_checkpoints_no_update');
+  const latest = database.prepare(
+    'SELECT sequence FROM workflow_checkpoints WHERE workflow_id = ? ORDER BY sequence DESC LIMIT 1'
+  ).get(workflowId);
+  database.prepare(
+    'UPDATE workflow_checkpoints SET payload_json = ?, sha256 = ? WHERE workflow_id = ? AND sequence = ?'
+  ).run(payload, digest, workflowId, Number(latest.sequence));
+  database.close();
+}
+
+function rewriteLatestPrivateCheckpoint(databasePath, workflowId, data) {
+  rewriteLatestCheckpointJson(databasePath, workflowId, '{"schemaVersion":2,"data":' + canonical(data) + '}');
 }
 
 function makeAdmission(store, lease, planJson = SINGLE_PLAN, limitsJson = '{}', eventId = 'local-test:admit') {
@@ -285,6 +349,131 @@ test('the durable controller computes dependent local results and never repeats 
   });
   assert.equal(sameResult.resultHash, result.resultHash, JSON.stringify(sameResult));
   assert.equal(store.listEvents({ workflowId: lease.workflowId }).length, eventsBeforeReplay);
+});
+
+test('SQLite reopen rejects rehashed fabricated results and over-limit saved output', async t => {
+  const forged = temporaryDatabase('bounded-rehashed-result-');
+  t.after(() => forged.cleanup());
+  let store = openStore(forged.databasePath);
+  t.after(() => store.close());
+  const forgedLease = createRunningWorkflow(store, 'rehashed-result-run');
+  const valid = await runBoundedLocalPlan({
+    store,
+    workflowId: forgedLease.workflowId,
+    ownerId: forgedLease.ownerId,
+    fence: forgedLease.fence,
+    planJson: SELF_REHASH_PLAN
+  });
+  assert.equal(valid.status, 'completed');
+  const checkpoint = store.getCheckpoint(forgedLease.workflowId);
+  const plan = compilePlan(SELF_REHASH_PLAN, createLimitSet(checkpoint.data.limitsJson), undefined, forgedLease.workflowId);
+  const forgedFirst = savedResult(plan, 'first', { left: 1, right: 2 }, 900);
+  const forgedSecond = savedResult(plan, 'second', { left: 900, right: 2 }, 902);
+  const forgedData = {
+    ...checkpoint.data,
+    completedResultsJson: JSON.stringify({ first: forgedFirst, second: forgedSecond }),
+    budget: { ...checkpoint.data.budget, totalResultBytes: 6 }
+  };
+  const eventCountBeforeForgery = store.listEvents({ workflowId: forgedLease.workflowId }).length;
+  store.close();
+  rewriteLatestPrivateCheckpoint(forged.databasePath, forgedLease.workflowId, forgedData);
+
+  store = openStore(forged.databasePath);
+  const stopped = await runBoundedLocalPlan({
+    store,
+    workflowId: forgedLease.workflowId,
+    ownerId: forgedLease.ownerId,
+    fence: forgedLease.fence
+  });
+  assert.equal(stopped.status, 'stopped');
+  assert.equal(stopped.reason, 'PLAN_RESULT_IDENTITY_INVALID');
+  const inspection = inspectWorkflowRecovery({ store, workflowId: forgedLease.workflowId });
+  assert.equal(inspection.kind, 'quarantine');
+  assert.equal(inspection.reason, 'LOCAL_RESULT_IDENTITY_INVALID');
+  assert.equal(store.listEvents({ workflowId: forgedLease.workflowId }).length, eventCountBeforeForgery);
+
+  store.close();
+  const oversized = temporaryDatabase('bounded-saved-result-limit-');
+  t.after(() => oversized.cleanup());
+  store = openStore(oversized.databasePath);
+  t.after(() => store.close());
+  const oversizedLease = createRunningWorkflow(store, 'saved-result-limit-run');
+  const planJson = JSON.stringify({
+    kind: PLAN_KIND,
+    version: 1,
+    steps: [{ id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['abc'] } }]
+  });
+  const limitsJson = '{"maxResultBytes":2,"maxTotalResultBytes":3}';
+  const pending = await runBoundedLocalPlan({
+    store,
+    workflowId: oversizedLease.workflowId,
+    ownerId: oversizedLease.ownerId,
+    fence: oversizedLease.fence,
+    planJson,
+    limitsJson
+  });
+  assert.equal(pending.status, 'stopped');
+  assert.equal(pending.reason, 'PLAN_RESULT_TOO_LARGE');
+  const admitted = store.getCheckpoint(oversizedLease.workflowId);
+  assert.equal(admitted.data.pendingStepId, 'text');
+  assert.equal(admitted.data.budget.totalResultBytes, 0);
+  const tightPlan = compilePlan(planJson, createLimitSet(limitsJson), undefined, oversizedLease.workflowId);
+  const overLimit = savedResult(tightPlan, 'text', { parts: ['abc'] }, 'abc');
+  const oversizedData = {
+    ...admitted.data,
+    completedResultsJson: JSON.stringify({ text: overLimit }),
+    pendingStepId: null
+  };
+  store.close();
+  rewriteLatestPrivateCheckpoint(oversized.databasePath, oversizedLease.workflowId, oversizedData);
+
+  store = openStore(oversized.databasePath);
+  const recovered = await runBoundedLocalPlan({
+    store,
+    workflowId: oversizedLease.workflowId,
+    ownerId: oversizedLease.ownerId,
+    fence: oversizedLease.fence
+  });
+  assert.equal(recovered.status, 'stopped');
+  assert.equal(recovered.reason, 'PLAN_RESULT_TOO_LARGE');
+  const oversizedInspection = inspectWorkflowRecovery({ store, workflowId: oversizedLease.workflowId });
+  assert.equal(oversizedInspection.kind, 'quarantine');
+  assert.equal(oversizedInspection.reason, 'LOCAL_RESULT_IDENTITY_INVALID');
+  assert.equal(store.getCheckpoint(oversizedLease.workflowId).data.budget.totalResultBytes, 0);
+});
+
+test('checkpoint JSON rejects duplicate members while retaining generic finite-number compatibility', t => {
+  const numeric = temporaryDatabase('bounded-checkpoint-number-compatibility-');
+  t.after(() => numeric.cleanup());
+  const numericStore = openStore(numeric.databasePath);
+  numericStore.createWorkflow({
+    workflowId: 'checkpoint-large-finite-number',
+    checkpoint: { largeFinite: 1e21 },
+    eventId: 'checkpoint-large-finite-number:created'
+  });
+  assert.equal(numericStore.getCheckpoint('checkpoint-large-finite-number').data.largeFinite, 1e21);
+  numericStore.close();
+
+  const duplicate = temporaryDatabase('bounded-checkpoint-duplicate-member-');
+  t.after(() => duplicate.cleanup());
+  const duplicateStore = openStore(duplicate.databasePath);
+  duplicateStore.createWorkflow({
+    workflowId: 'checkpoint-duplicate-member',
+    checkpoint: { value: 1 },
+    eventId: 'checkpoint-duplicate-member:created'
+  });
+  duplicateStore.close();
+  rewriteLatestCheckpointJson(
+    duplicate.databasePath,
+    'checkpoint-duplicate-member',
+    '{"schemaVersion":2,"data":{"value":1,"value":2}}'
+  );
+  const reopened = openStore(duplicate.databasePath);
+  t.after(() => reopened.close());
+  assert.throws(
+    () => reopened.getCheckpoint('checkpoint-duplicate-member'),
+    error => error.code === 'CHECKPOINT_CORRUPT'
+  );
 });
 
 test('external, provider, privileged, unknown, and injected-mode plans stop before admission in every mode', async t => {
@@ -716,6 +905,66 @@ test('limit deadline and clock rollback remain pinned across recovery without co
   retryStore.close();
 });
 
+test('the durable controller stops after final compute crosses the pinned elapsed deadline', async t => {
+  const temporary = temporaryDatabase('bounded-final-compute-deadline-');
+  t.after(() => temporary.cleanup());
+  const store = openStore(temporary.databasePath, () => 40_000);
+  t.after(() => store.close());
+  const lease = createRunningWorkflow(store, 'final-compute-deadline-run');
+  const priorNow = performance.now;
+  const samples = [0, 0, 0, 10, 10];
+  let index = 0;
+  performance.now = () => samples[Math.min(index++, samples.length - 1)];
+  let result;
+  try {
+    result = await runBoundedLocalPlan({
+      store,
+      workflowId: lease.workflowId,
+      ownerId: lease.ownerId,
+      fence: lease.fence,
+      planJson: SINGLE_PLAN,
+      limitsJson: '{"maxElapsedMs":5}'
+    });
+  } finally {
+    performance.now = priorNow;
+  }
+  assert.equal(result.status, 'stopped');
+  assert.equal(result.reason, 'ELAPSED_LIMIT');
+  const checkpoint = store.getCheckpoint(lease.workflowId);
+  assert.equal(checkpoint.data.pendingStepId, 'only');
+  assert.equal(checkpoint.data.budget.stepAttempts, 1);
+  assert.equal(JSON.parse(checkpoint.data.completedResultsJson).only, undefined);
+  assert.equal(store.listEvents({ workflowId: lease.workflowId }).filter(event => event.type === 'private_local_step_completed').length, 0);
+
+  const commitBoundary = temporaryDatabase('bounded-final-commit-deadline-');
+  t.after(() => commitBoundary.cleanup());
+  const commitStore = openStore(commitBoundary.databasePath, () => 50_000);
+  t.after(() => commitStore.close());
+  const commitLease = createRunningWorkflow(commitStore, 'final-commit-deadline-run');
+  const commitSamples = [0, 0, 0, 0, 0, 0, 10, 10];
+  let commitIndex = 0;
+  performance.now = () => commitSamples[Math.min(commitIndex++, commitSamples.length - 1)];
+  let commitResult;
+  try {
+    commitResult = await runBoundedLocalPlan({
+      store: commitStore,
+      workflowId: commitLease.workflowId,
+      ownerId: commitLease.ownerId,
+      fence: commitLease.fence,
+      planJson: SINGLE_PLAN,
+      limitsJson: '{"maxElapsedMs":5}'
+    });
+  } finally {
+    performance.now = priorNow;
+  }
+  assert.equal(commitResult.status, 'stopped');
+  assert.equal(commitResult.reason, 'ELAPSED_LIMIT');
+  assert.equal(commitStore.getCheckpoint(commitLease.workflowId).data.pendingStepId, 'only');
+  assert.equal(commitStore.getCheckpoint(commitLease.workflowId).data.budget.stepAttempts, 1);
+  assert.equal(commitStore.listEvents({ workflowId: commitLease.workflowId })
+    .filter(event => event.type === 'private_local_step_completed').length, 0);
+});
+
 test('SQL failure after each admission and completion write rolls back the actual file database', async t => {
   const writeTargets = ['workflows', 'workflow_checkpoints', 'workflow_events', 'outbox'];
   for (const target of writeTargets) {
@@ -914,6 +1163,52 @@ test('pending-attempt inspection has stable bounded keyset pages and explicit in
   assert.equal(staleContinuation.incomplete, true);
 });
 
+test('incomplete attempt pages cannot return a local recovery candidate', t => {
+  const temporary = temporaryDatabase('bounded-incomplete-local-candidate-');
+  t.after(() => temporary.cleanup());
+  const store = openStore(temporary.databasePath);
+  t.after(() => store.close());
+  const lease = createRunningWorkflow(store, 'incomplete-local-candidate-run');
+  makeAdmission(store, lease, SINGLE_PLAN, '{}', 'incomplete-local-candidate:admit');
+
+  for (let index = 1; index <= 2; index += 1) {
+    const attemptId = `incomplete-attempt-${index}`;
+    const intent = store.recordDispatchIntent({
+      ...lease,
+      expectedRevision: store.getWorkflow(lease.workflowId).revision,
+      attemptId,
+      logicalOperationRef: `incomplete-logical-${index}`,
+      authorityHoldRef: `incomplete-opaque-hold-${index}`,
+      transportAttemptId: `incomplete-transport-${index}`,
+      eventId: `incomplete-page:${index}:intent`
+    });
+    const receipt = store.recordResponseReceipt({
+      ...lease,
+      expectedRevision: intent.revision,
+      attemptId,
+      receiptId: `incomplete-fixture-receipt-${index}`,
+      outcome: 'no_effect',
+      nextState: 'running',
+      responseBytes: Buffer.from(`synthetic reconciled fixture ${index}`),
+      nextCheckpoint: store.getCheckpoint(lease.workflowId).data,
+      eventId: `incomplete-page:${index}:receipt`
+    });
+    store.reconcilePendingReceipts({
+      ...lease,
+      expectedRevision: receipt.revision,
+      eventIdPrefix: `incomplete-page:${index}:reconcile`
+    });
+  }
+
+  const page = inspectWorkflowRecovery({ store, workflowId: lease.workflowId, pageSize: 1 });
+  assert.equal(page.incomplete, true);
+  assert.equal(page.hasMore, true);
+  assert.equal(page.attempts.length, 1);
+  assert.equal(page.kind, 'stop');
+  assert.equal(page.reason, 'RECOVERY_INSPECTION_INCOMPLETE');
+  assert.equal(page.actionable, false);
+});
+
 test('intent, unknown, and response-received attempts remain barriers with bounded evidence', async t => {
   for (const initialState of ['intent', 'outcome_unknown', 'response_received']) {
     const temporary = temporaryDatabase('bounded-external-barrier-' + initialState + '-');
@@ -966,7 +1261,8 @@ test('intent, unknown, and response-received attempts remain barriers with bound
       workflowId: lease.workflowId,
       ownerId: lease.ownerId,
       fence: lease.fence,
-      planJson: SINGLE_PLAN
+      planJson: SINGLE_PLAN,
+      limitsJson: '{"maxRecoveryAttemptStates":1}'
     });
     assert.equal(blocked.status, 'external-reconciliation-required', initialState);
     assert.equal(blocked.reason, 'EXTERNAL_OUTCOME_UNRESOLVED', initialState);
@@ -1050,6 +1346,19 @@ test('hostile controller inputs and provider-shaped outputs are quarantined with
   const completed = makeCompletion(store, lease, admission, 'hostile:completion-template');
   const workflow = store.getWorkflow(lease.workflowId);
   const checkpoint = store.getCheckpoint(lease.workflowId);
+  const selfRehashed = savedResult(admission.plan, admission.stepId, { left: 4, right: 5 }, 900);
+  const selfRehashedState = {
+    ...completed.controllerState,
+    completedResultsJson: JSON.stringify({ [admission.stepId]: selfRehashed }),
+    budget: { ...completed.controllerState.budget, totalResultBytes: 3 }
+  };
+  assert.throws(() => store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+    ...completed.input,
+    expectedRevision: workflow.revision,
+    expectedCheckpointSequence: checkpoint.sequence,
+    controllerState: selfRehashedState
+  }), error => error.code === 'CHECKPOINT_CORRUPT');
+  assert.equal(store.getCheckpoint(lease.workflowId).sequence, checkpoint.sequence);
   const replacements = [
     ['planJson', SINGLE_PLAN.replace('"left":4', '"left":3')],
     ['registryVersion', 'registry1_' + '0'.repeat(64)]
@@ -1069,6 +1378,56 @@ test('hostile controller inputs and provider-shaped outputs are quarantined with
   }
   assert.equal(store.getCheckpoint(lease.workflowId).sequence, checkpoint.sequence);
   assert.equal(store.getCheckpoint(lease.workflowId).data.completedResultsJson, '{}');
+});
+
+test('AbortSignal proxies are not read as cancellation authority', async t => {
+  const temporary = temporaryDatabase('bounded-abort-signal-input-');
+  t.after(() => temporary.cleanup());
+  const store = openStore(temporary.databasePath);
+  t.after(() => store.close());
+  const lease = createRunningWorkflow(store, 'abort-signal-input-run');
+  const checkpointBefore = store.getCheckpoint(lease.workflowId);
+  const eventsBefore = store.listEvents({ workflowId: lease.workflowId }).length;
+  const abortedGetter = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
+  assert.equal(typeof abortedGetter, 'function');
+
+  const controller = new AbortController();
+  assert.equal(abortedGetter.call(controller.signal), false);
+  controller.abort();
+  assert.equal(abortedGetter.call(controller.signal), true);
+
+  let proxyReads = 0;
+  const abortedSymbol = Reflect.ownKeys(controller.signal)
+    .find(key => typeof key === 'symbol' && String(key) === 'Symbol(kAborted)');
+  assert.equal(typeof abortedSymbol, 'symbol');
+  const masked = new Proxy(controller.signal, {
+    get(target, key) {
+      proxyReads += 1;
+      if (key === 'aborted' || key === abortedSymbol) return false;
+      return Reflect.get(target, key, target);
+    }
+  });
+  assert.equal(masked.aborted, false);
+  assert.equal(abortedGetter.call(masked), false);
+  const revoked = Proxy.revocable(new AbortController().signal, {});
+  revoked.revoke();
+  assert.throws(() => abortedGetter.call(revoked.proxy));
+
+  const signals = [new AbortController().signal, controller.signal, masked, revoked.proxy];
+  const readsAfterProbes = proxyReads;
+  for (const signal of signals) {
+    const result = await runBoundedLocalPlan({
+      store,
+      workflowId: lease.workflowId,
+      ownerId: lease.ownerId,
+      fence: lease.fence,
+      signal
+    });
+    assert.equal(result.reason, 'CONTROLLER_INPUT_INVALID');
+  }
+  assert.equal(proxyReads, readsAfterProbes);
+  assert.equal(store.getCheckpoint(lease.workflowId).sha256, checkpointBefore.sha256);
+  assert.equal(store.listEvents({ workflowId: lease.workflowId }).length, eventsBefore);
 });
 
 test('private controller entrypoint is not exported and evidence never enables rollout', async () => {

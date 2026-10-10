@@ -3,6 +3,7 @@ import { types as utilTypes } from 'node:util';
 
 const REGISTRY_DATA = new WeakMap();
 const REGISTRY_HANDLES = new WeakSet();
+const REGISTRY_SEMANTIC_VERSION = 1;
 
 const DEFINITIONS = Object.freeze([
   Object.freeze({
@@ -176,7 +177,9 @@ const HANDLERS = new Map([
 ]);
 
 function createRegistry() {
-  const manifest = JSON.stringify(DEFINITIONS.map(definition => [
+  // Bump this when handler behavior or validation semantics change. This is
+  // an explicit compatibility revision, not a hash of JavaScript function text.
+  const operationManifest = JSON.stringify(DEFINITIONS.map(definition => [
     definition.key,
     definition.version,
     definition.effect,
@@ -184,11 +187,17 @@ function createRegistry() {
     definition.input,
     definition.output
   ]));
-  const version = 'registry1_' + sha256(manifest);
+  // Semantic version 1 keeps its shipped manifest hash for recovery compatibility.
+  // A later semantic revision changes both the prefix and hashed manifest.
+  const manifest = REGISTRY_SEMANTIC_VERSION === 1
+    ? operationManifest
+    : JSON.stringify([REGISTRY_SEMANTIC_VERSION, operationManifest]);
+  const version = 'registry' + REGISTRY_SEMANTIC_VERSION + '_' + sha256(manifest);
   const metadata = Object.freeze(DEFINITIONS.map(definition => Object.freeze({ ...definition })));
   const operations = new Map(DEFINITIONS.map(definition => [definition.key, definition]));
   const handle = Object.freeze({
     kind: 'agent-harness.private-static-registry',
+    semanticVersion: REGISTRY_SEMANTIC_VERSION,
     version,
     operations: metadata
   });
@@ -209,6 +218,10 @@ export function isDefaultRegistry(registry) {
 
 export function getRegistryVersion(registry = DEFAULT_REGISTRY) {
   return registryData(registry)?.version ?? null;
+}
+
+export function getRegistrySemanticVersion(registry = DEFAULT_REGISTRY) {
+  return registryData(registry) ? REGISTRY_SEMANTIC_VERSION : null;
 }
 
 export function listRegistryOperations(registry = DEFAULT_REGISTRY) {

@@ -5,6 +5,16 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { RuntimeError, runtimeError } from './errors.js';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from './private-local-store-capability.js';
+import {
+  createLimitSet,
+  validateBudgetSnapshot
+} from '../orchestrator/internal/limits.js';
+import {
+  compilePlan,
+  getNextReadyStep,
+  validatePrivateCheckpointResults
+} from '../orchestrator/internal/plan.js';
+import { parseBoundedJson } from '../orchestrator/internal/json.js';
 
 export const INTERNAL_SCHEMA_VERSION = 5;
 const CHECKPOINT_SCHEMA_VERSION = 2;
@@ -227,6 +237,33 @@ function readLocalControllerState(value, operation) {
     || budget.localRetries > budget.stepAttempts
     || budget.replans > budget.iterations
   ) {
+    fail(operation, 'CHECKPOINT_CORRUPT', 'The private local checkpoint is invalid.');
+  }
+  try {
+    const limitSet = createLimitSet(fields.limitsJson);
+    if (limitSet.hash !== fields.limitsHash) throw new Error('limit identity');
+    const plan = compilePlan(fields.planJson, limitSet, undefined, fields.workflowId);
+    if (
+      plan.planHash !== fields.planHash
+      || plan.registryVersion !== fields.registryVersion
+      || plan.runIdentity !== fields.runIdentity
+    ) throw new Error('plan identity');
+    const validatedBudget = validateBudgetSnapshot(budget, limitSet);
+    const completed = validatePrivateCheckpointResults(plan, fields.completedResultsJson);
+    if (
+      completed.totalResultBytes !== validatedBudget.totalResultBytes
+      || validatedBudget.stepsAdmitted !== completed.resultCount + (fields.pendingStepId === null ? 0 : 1)
+      || (fields.pendingStepId !== null
+        && (fields.lastAdmissionStepId !== fields.pendingStepId
+          || getNextReadyStep(plan, fields.completedResultsJson) !== fields.pendingStepId))
+      || (fields.pendingStepId === null
+        && completed.resultCount > 0
+        && !completed.stepIds.includes(fields.lastAdmissionStepId))
+      || (fields.pendingStepId === null
+        && completed.resultCount === 0
+        && (validatedBudget.stepsAdmitted !== 0 || validatedBudget.stepAttempts !== 0))
+    ) throw new Error('controller history');
+  } catch {
     fail(operation, 'CHECKPOINT_CORRUPT', 'The private local checkpoint is invalid.');
   }
   fields.budget = Object.freeze({ ...budget });
@@ -1259,7 +1296,12 @@ export class DurableWorkflowStore {
       }
       let parsed;
       try {
-        parsed = JSON.parse(row.payload_json);
+        parsed = parseBoundedJson(row.payload_json, {
+          maxBytes: MAX_CHECKPOINT_SERIALIZED_BYTES,
+          maxDepth: MAX_CHECKPOINT_DEPTH + 4,
+          maxNodes: MAX_CHECKPOINT_NODES * 2 + 8,
+          allowUnsafeFiniteNumbers: true
+        });
       } catch {
         fail(operation, 'CHECKPOINT_CORRUPT', 'The latest workflow checkpoint is invalid.');
       }

@@ -187,8 +187,11 @@ function compilePinnedPlan(state, workflowId) {
     || plan.registryVersion !== state.registryVersion
     || plan.runIdentity !== state.runIdentity
   ) fail('CHECKPOINT_PLAN_IDENTITY_INVALID');
-  validateBudgetSnapshot(state.budget, limitSet);
-  validatePrivateCheckpointResults(plan, state.completedResultsJson);
+  const budget = validateBudgetSnapshot(state.budget, limitSet);
+  const completed = validatePrivateCheckpointResults(plan, state.completedResultsJson);
+  if (completed.totalResultBytes !== budget.totalResultBytes) {
+    fail('BUDGET_CHECKPOINT_INCONSISTENT');
+  }
   return { plan, limitSet };
 }
 
@@ -256,7 +259,8 @@ export function buildCompletedCheckpoint(state, plan, resultRecord, budget) {
   for (const key of Object.keys(previous).sort()) completed[key] = previous[key];
   completed[safeResult.stepId] = JSON.parse(resultJson);
   const completedResultsJson = JSON.stringify(completed);
-  validatePrivateCheckpointResults(plan, completedResultsJson);
+  const validated = validatePrivateCheckpointResults(plan, completedResultsJson);
+  if (validated.totalResultBytes !== budget.totalResultBytes) fail('BUDGET_CHECKPOINT_INCONSISTENT');
   return deepFreeze({
     ...fields,
     budget,
@@ -499,6 +503,16 @@ export async function runBoundedLocalPlan(input) {
       const byteRecord = recordResultBytes(state.budget, resultBytes, limitSet);
       if (!byteRecord.allowed) return controllerStop(byteRecord.reason, workflowId, checkpointSequence);
 
+      const wallAfterCompute = store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
+      const elapsedAfterCompute = elapsedNow(elapsedAtStart, initialMono);
+      const afterComputeClockReason = checkClockBudget(
+        state.budget,
+        wallAfterCompute,
+        elapsedAfterCompute,
+        limitSet
+      );
+      if (afterComputeClockReason) return controllerStop(afterComputeClockReason, workflowId, checkpointSequence);
+
       await yieldAtControllerBoundary();
       const beforeCommit = store._localControllerSnapshot(LOCAL_CONTROLLER_STORAGE_CAPABILITY, workflowId);
       checkpointSequence = beforeCommit.checkpoint.sequence;
@@ -519,6 +533,15 @@ export async function runBoundedLocalPlan(input) {
         elapsedMs: elapsed
       });
       const completedState = buildCompletedCheckpoint(state, plan, resultRecord, completedBudget);
+      const commitWallNow = store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
+      const commitElapsed = elapsedNow(elapsedAtStart, initialMono);
+      const commitClockReason = checkClockBudget(
+        completedState.budget,
+        commitWallNow,
+        commitElapsed,
+        limitSet
+      );
+      if (commitClockReason) return controllerStop(commitClockReason, workflowId, checkpointSequence);
       const completion = store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
         workflowId,
         ownerId: fields.ownerId,

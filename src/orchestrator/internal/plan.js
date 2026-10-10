@@ -3,12 +3,14 @@ import { performance } from 'node:perf_hooks';
 import { types as utilTypes } from 'node:util';
 import {
   advanceBudget,
+  checkClockBudget,
   checkStepDuration,
   createBudgetSnapshot,
   DEFAULT_LIMIT_SET,
   getLimitValues,
   recordResultBytes
 } from './limits.js';
+import { parseBoundedJson } from './json.js';
 import {
   createDefaultRegistry,
   executeLocalOperation,
@@ -109,30 +111,6 @@ function exactRecord(value, allowedKeys, requiredKeys, code = 'PLAN_INVALID_SHAP
   return result;
 }
 
-function scanJsonDepth(source, maxDepth) {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (character === '\\') escaped = true;
-      else if (character === '"') inString = false;
-      continue;
-    }
-    if (character === '"') {
-      inString = true;
-    } else if (character === '{' || character === '[') {
-      depth += 1;
-      if (depth > maxDepth) fail('PLAN_TOO_DEEP');
-    } else if (character === '}' || character === ']') {
-      depth -= 1;
-      if (depth < 0) fail('PLAN_INPUT_INVALID');
-    }
-  }
-}
-
 function cloneJson(value, limits, depth = 0, counter = { nodes: 0 }) {
   counter.nodes += 1;
   if (counter.nodes > 8_192 || depth > limits.maxDepth) fail('PLAN_BOUNDS_EXCEEDED');
@@ -181,10 +159,16 @@ function cloneJson(value, limits, depth = 0, counter = { nodes: 0 }) {
 function parseJson(source, maxBytes, maxDepth, sizeCode = 'PLAN_TOO_LARGE') {
   if (typeof source !== 'string') fail('PLAN_INPUT_INVALID');
   if (Buffer.byteLength(source, 'utf8') > maxBytes) fail(sizeCode);
-  scanJsonDepth(source, maxDepth);
   try {
-    return JSON.parse(source);
-  } catch {
+    return parseBoundedJson(source, {
+      maxBytes,
+      maxDepth,
+      maxNodes: 8_192,
+      integerNumbersOnly: true
+    });
+  } catch (error) {
+    if (error?.code === 'JSON_TOO_DEEP') fail('PLAN_TOO_DEEP');
+    if (error?.code === 'JSON_TOO_LARGE') fail('PLAN_BOUNDS_EXCEEDED');
     fail('PLAN_INPUT_INVALID');
   }
 }
@@ -360,6 +344,7 @@ function normalizedCompletedMap(planData, resultsJson) {
   const stepIds = new Set(planData.steps.map(step => step.id));
   const fields = exactRecord(parsed, stepIds, [], 'PLAN_RESULTS_INVALID');
   const results = new Map();
+  let totalResultBytes = 0;
   const orderedKeys = Object.keys(fields).sort(
     (left, right) => planData.schedule.indexOf(left) - planData.schedule.indexOf(right)
   );
@@ -397,6 +382,16 @@ function normalizedCompletedMap(planData, resultsJson) {
     if (raw.inputHash !== inputHash || !validOutput(step.operation, raw.output)) {
       fail('PLAN_RESULT_IDENTITY_INVALID');
     }
+    const computed = executeLocalOperation(planData.registry, step.operation, resolvedArgs);
+    if (!computed.ok || !validOutput(step.operation, computed.value)) {
+      fail('PLAN_RESULT_IDENTITY_INVALID');
+    }
+    const resultBytes = Buffer.byteLength(JSON.stringify(computed.value), 'utf8');
+    if (resultBytes > limits.maxResultBytes || totalResultBytes + resultBytes > limits.maxTotalResultBytes) {
+      fail('PLAN_RESULT_TOO_LARGE');
+    }
+    totalResultBytes += resultBytes;
+    if (!Object.is(raw.output, computed.value)) fail('PLAN_RESULT_IDENTITY_INVALID');
     const expectedResultHash = 'sha256_' + sha256(canonicalJson(resultPayload(
       step.id,
       planData.planHash,
@@ -406,9 +401,9 @@ function normalizedCompletedMap(planData, resultsJson) {
       raw.output
     )));
     if (raw.resultHash !== expectedResultHash) fail('PLAN_RESULT_IDENTITY_INVALID');
-    results.set(id, freezeResultRecord(raw));
+    results.set(id, freezeResultRecord({ ...raw, output: computed.value }));
   }
-  return results;
+  return { results, totalResultBytes };
 }
 
 function resolveValue(value, results, planData) {
@@ -651,23 +646,25 @@ export function getPlanStepIds(plan) {
 
 export function validateCompletedResults(plan, completedResultsJson = '{}') {
   const data = getPlanData(plan);
-  const results = normalizedCompletedMap(data, completedResultsJson);
+  const normalized = normalizedCompletedMap(data, completedResultsJson);
   return Object.freeze({
-    stepIds: Object.freeze(data.schedule.filter(id => results.has(id))),
-    resultCount: results.size
+    stepIds: Object.freeze(data.schedule.filter(id => normalized.results.has(id))),
+    resultCount: normalized.results.size,
+    totalResultBytes: normalized.totalResultBytes
   });
 }
 
 export function getNextReadyStep(plan, completedResultsJson = '{}') {
   const data = getPlanData(plan);
-  const results = normalizedCompletedMap(data, completedResultsJson);
-  return nextReadyStep(data, results);
+  const normalized = normalizedCompletedMap(data, completedResultsJson);
+  return nextReadyStep(data, normalized.results);
 }
 
 export function executeLocalStep(plan, stepId, completedResultsJson = '{}') {
   const data = getPlanData(plan);
   if (typeof stepId !== 'string' || !data.stepsById.has(stepId)) fail('PLAN_STEP_NOT_READY');
-  const results = normalizedCompletedMap(data, completedResultsJson);
+  const normalized = normalizedCompletedMap(data, completedResultsJson);
+  const results = normalized.results;
   if (results.has(stepId)) fail('PLAN_STEP_ALREADY_COMPLETE');
   const nextStepId = nextReadyStep(data, results);
   if (nextStepId !== stepId) fail('PLAN_STEP_NOT_READY');
@@ -708,6 +705,17 @@ export function executePlanLocally(
     const resultRecord = executeLocalStep(plan, stepId, JSON.stringify(completed));
     const durationMs = Math.max(0, Math.ceil(performance.now() - stepStarted));
     if (!checkStepDuration(durationMs, data.limitSet).allowed) fail('PLAN_LIMIT_STOP');
+    const elapsedAfterCompute = Math.max(0, Math.floor(performance.now() - monotonicStart));
+    const clockReason = checkClockBudget(
+      budget,
+      wallStart + elapsedAfterCompute,
+      elapsedAfterCompute,
+      data.limitSet
+    );
+    if (clockReason) {
+      if (clockReason.startsWith('CLOCK_')) fail('PLAN_CLOCK_STOP');
+      fail('PLAN_LIMIT_STOP');
+    }
 
     const resultBytes = Buffer.byteLength(canonicalJson(resultRecord.output), 'utf8');
     const byteRecord = recordResultBytes(budget, resultBytes, data.limitSet);
@@ -737,6 +745,17 @@ export function executePlanLocally(
     }
   };
   const resultHash = 'run1_' + sha256(canonicalJson(output));
+  const finalElapsed = Math.max(0, Math.floor(performance.now() - monotonicStart));
+  const finalClockReason = checkClockBudget(
+    budget,
+    wallStart + finalElapsed,
+    finalElapsed,
+    data.limitSet
+  );
+  if (finalClockReason) {
+    if (finalClockReason.startsWith('CLOCK_')) fail('PLAN_CLOCK_STOP');
+    fail('PLAN_LIMIT_STOP');
+  }
   return deepFreeze({ ...output, resultHash });
 }
 
