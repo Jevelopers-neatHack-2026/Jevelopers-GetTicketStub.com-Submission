@@ -196,7 +196,10 @@ function readPrivateCheckpointData(value) {
       'limitsHash',
       'budget',
       'completedResultsJson',
-      'pendingStepId'
+      'pendingStepId',
+      'lastAdmissionKind',
+      'lastAdmissionStepId',
+      'baseCheckpointData'
     ]),
     [
       'kind',
@@ -210,7 +213,10 @@ function readPrivateCheckpointData(value) {
       'limitsHash',
       'budget',
       'completedResultsJson',
-      'pendingStepId'
+      'pendingStepId',
+      'lastAdmissionKind',
+      'lastAdmissionStepId',
+      'baseCheckpointData'
     ],
     'CHECKPOINT_SHAPE_INVALID'
   );
@@ -357,7 +363,7 @@ export function classifyRecovery(snapshotJson) {
     return stop('CHECKPOINT_FOREIGN');
   }
   if (data.kind !== CHECKPOINT_KIND) return stop('CHECKPOINT_FOREIGN');
-  if (data.version !== 1) return stop('CHECKPOINT_UNSUPPORTED');
+  if (data.version !== 2) return stop('CHECKPOINT_UNSUPPORTED');
 
   if (typeof data.workflowId !== 'string' || data.workflowId !== after.workflowId) {
     return stop('CHECKPOINT_FOREIGN_WORKFLOW');
@@ -371,6 +377,11 @@ export function classifyRecovery(snapshotJson) {
     || typeof data.limitsHash !== 'string'
     || typeof data.completedResultsJson !== 'string'
     || !(data.pendingStepId === null || typeof data.pendingStepId === 'string')
+    || !['step', 'replay'].includes(data.lastAdmissionKind)
+    || !(data.lastAdmissionStepId === null || typeof data.lastAdmissionStepId === 'string')
+    || data.baseCheckpointData === null
+    || typeof data.baseCheckpointData !== 'object'
+    || Array.isArray(data.baseCheckpointData)
   ) {
     return stop('CHECKPOINT_CORRUPT');
   }
@@ -410,6 +421,12 @@ export function classifyRecovery(snapshotJson) {
     budget.stepsAdmitted < completed.resultCount
     || budget.stepAttempts < budget.stepsAdmitted
     || budget.iterations < budget.stepAttempts
+    || (data.pendingStepId !== null
+      && (data.lastAdmissionStepId !== data.pendingStepId || budget.stepAttempts < 1))
+    || (data.pendingStepId === null && completed.resultCount > 0
+      && !completed.stepIds.includes(data.lastAdmissionStepId))
+    || (data.pendingStepId === null && completed.resultCount === 0
+      && (data.lastAdmissionStepId !== null || budget.stepAttempts !== 0))
   ) {
     return stop('BUDGET_CHECKPOINT_INCONSISTENT');
   }

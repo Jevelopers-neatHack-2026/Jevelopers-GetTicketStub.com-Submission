@@ -57,7 +57,9 @@ function privateData({
   budget,
   completedResultsJson = '{}',
   pendingStepId = null,
-  version = 1,
+  version = 2,
+  lastAdmissionKind = 'step',
+  lastAdmissionStepId,
   kind = PRIVATE_CHECKPOINT_KIND,
   limitsJson,
   limitsHash,
@@ -66,6 +68,14 @@ function privateData({
   runIdentity
 } = {}) {
   const plan = compilePlan(planJson, limitSet, undefined, workflowId);
+  let inferredLastStep = lastAdmissionStepId;
+  if (inferredLastStep === undefined) {
+    if (pendingStepId !== null) inferredLastStep = pendingStepId;
+    else {
+      const resultIds = Object.keys(JSON.parse(completedResultsJson));
+      inferredLastStep = resultIds.at(-1) ?? null;
+    }
+  }
   return {
     kind,
     version,
@@ -78,7 +88,10 @@ function privateData({
     limitsHash: limitsHash ?? limitSet.hash,
     budget: budget ?? createBudgetSnapshot(limitSet, 1_000, 31_000),
     completedResultsJson,
-    pendingStepId
+    pendingStepId,
+    lastAdmissionKind,
+    lastAdmissionStepId: inferredLastStep,
+    baseCheckpointData: {}
   };
 }
 
@@ -210,8 +223,10 @@ test('missing, old, future, corrupt, and foreign checkpoints stop without adopti
   const foreign = privateData({ kind: 'generic-workflow-checkpoint' });
   assert.equal(classifyRecovery(checkpointWithData(foreign)).reason, 'CHECKPOINT_FOREIGN');
 
-  const unsupported = privateData({ version: 2 });
+  const unsupported = privateData({ version: 3 });
   assert.equal(classifyRecovery(checkpointWithData(unsupported)).reason, 'CHECKPOINT_UNSUPPORTED');
+  const oldPrivate = privateData({ version: 1 });
+  assert.equal(classifyRecovery(checkpointWithData(oldPrivate)).reason, 'CHECKPOINT_UNSUPPORTED');
 
   const differentWorkflow = privateData({ workflowId: 'wf-other' });
   assert.equal(
