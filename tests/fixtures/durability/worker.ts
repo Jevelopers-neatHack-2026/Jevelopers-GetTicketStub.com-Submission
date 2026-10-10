@@ -4,6 +4,7 @@ import {
 	hash,
 	parse,
 	idSchema,
+	limitsSchema,
 } from "../../../src/internal/durability.js";
 import {
 	LocalArtifactStore,
@@ -15,7 +16,12 @@ import { file, plan, scope } from "./fixture.js";
 
 const [path, mode, time = "1000", stageArg] = process.argv.slice(2);
 if (!path || !mode) throw new Error("fixture arguments required");
-const db = new DurabilityDatabase(path, undefined, () => Number(time));
+const limits = process.env["PP_DURABILITY_TEST_LIMITS"];
+const db = new DurabilityDatabase(
+	path,
+	limits ? parse(limitsSchema, JSON.parse(limits)) : undefined,
+	() => Number(time),
+);
 const store = new LocalArtifactStore(db);
 const jobs = new DurableBatchEngine(db);
 const outbox = new ObservationOutbox(db);
@@ -95,6 +101,23 @@ const main = () => {
 			if (claim) jobs.complete(scope, claim, [file()]);
 			process.send?.({ kind: "result", value: claim });
 			break;
+		}
+		case "job-denied": {
+			const job = jobs.create(scope, plan("denied-process", 1));
+			const claim = jobs.claim(scope);
+			if (!claim) throw new Error("fixture claim absent");
+			store.write(scope, claim.stage, file());
+			store.deny(scope, claim.operation);
+			return park({ job: job.id, claim });
+		}
+		case "job-cancel-budget": {
+			const job = jobs.create(scope, plan("cancel-budget-process", 10));
+			const claim = jobs.claim(scope);
+			if (!claim) throw new Error("fixture claim absent");
+			store.write(scope, claim.stage, file());
+			for (let i = 0; i < 8; i++) jobs.create(scope, plan(`pressure-${i}`, 1));
+			jobs.cancel(scope, job.id);
+			return park({ job: job.id, claim });
 		}
 		case "job-claim":
 		case "job-stage":

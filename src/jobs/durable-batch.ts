@@ -290,13 +290,6 @@ export class DurableBatchEngine {
 		);
 	}
 	private recover(scope: Scope): void {
-		const denied = this.db.sql
-			.prepare(
-				"SELECT j.id FROM jobs j JOIN operations o ON o.id=j.operation WHERE o.scope=? AND j.status IN('queued','running') AND (o.denied=1 OR EXISTS(SELECT 1 FROM rows r JOIN operations ro ON ro.id=r.operation WHERE r.job=j.id AND ro.denied=1))",
-			)
-			.all(scopeKey(scope));
-		for (const job of denied)
-			this.cancelInTransaction(scope, parse(idSchema, job["id"]));
 		const expired = this.db.sql
 			.prepare(
 				"SELECT r.* FROM rows r JOIN jobs j ON j.id=r.job JOIN operations o ON o.id=j.operation WHERE o.scope=? AND r.status='running' AND r.lease<=?",
@@ -352,6 +345,24 @@ export class DurableBatchEngine {
 		}
 	}
 	claim(scope: Scope): RowClaim | null {
+		this.db.transaction(() => {
+			const denied = this.db.sql
+				.prepare(
+					"SELECT j.id FROM jobs j JOIN operations o ON o.id=j.operation WHERE o.scope=? AND j.status IN('queued','running') AND (o.denied=1 OR EXISTS(SELECT 1 FROM rows r JOIN operations ro ON ro.id=r.operation WHERE r.job=j.id AND ro.denied=1))",
+				)
+				.all(scopeKey(scope));
+			for (const job of denied)
+				this.requestCancellation(scope, parse(idSchema, job["id"]));
+		});
+		this.db.transaction(() => {
+			const pending = this.db.sql
+				.prepare(
+					"SELECT c.job FROM cancellations c JOIN jobs j ON j.id=c.job JOIN operations o ON o.id=j.operation WHERE o.scope=? ORDER BY c.rowid",
+				)
+				.all(scopeKey(scope));
+			for (const job of pending)
+				this.cancelInTransaction(scope, parse(idSchema, job["job"]));
+		});
 		return this.db.transaction(() => {
 			this.recover(scope);
 			const active = this.db.sql
@@ -539,16 +550,40 @@ export class DurableBatchEngine {
 		});
 	}
 	cancel(scope: Scope, id: Id): void {
+		this.db.transaction(() => this.requestCancellation(scope, id));
 		this.db.transaction(() => this.cancelInTransaction(scope, id));
+	}
+	private requestCancellation(scope: Scope, id: Id): void {
+		const job = this.job(scope, id);
+		if (job.status !== "queued" && job.status !== "running") return;
+		this.db.sql
+			.prepare("UPDATE jobs SET status='cancelled' WHERE id=?")
+			.run(id);
+		this.db.sql
+			.prepare("UPDATE operations SET status='cancelled' WHERE id=?")
+			.run(job.operation);
+		this.db.sql
+			.prepare(
+				"UPDATE rows SET lease=NULL,fence=fence+1 WHERE job=? AND status IN('queued','running')",
+			)
+			.run(id);
+		this.db.sql.prepare("INSERT INTO cancellations(job) VALUES(?)").run(id);
 	}
 	private cancelInTransaction(scope: Scope, id: Id): void {
 		const job = this.job(scope, id);
-		if (job.status !== "queued" && job.status !== "running") return;
+		if (!this.db.sql.prepare("SELECT 1 FROM cancellations WHERE job=?").get(id))
+			return;
+		const count = this.db.sql
+			.prepare("SELECT COUNT(*) AS n FROM outbox WHERE status!='delivered'")
+			.get();
+		check(typeof count?.["n"] === "number", "INTEGRITY");
+		const capacity = this.db.limits.maxPendingEvents - count["n"];
+		if (capacity <= 0) return;
 		const rows = this.db.sql
 			.prepare(
-				"SELECT * FROM rows WHERE job=? AND status IN('queued','running')",
+				"SELECT * FROM rows WHERE job=? AND status IN('queued','running') ORDER BY ordinal LIMIT ?",
 			)
-			.all(id)
+			.all(id, capacity)
 			.map((row) => parse(rowSchema, row));
 		for (const row of rows) {
 			const publication = this.store.reconcilePublicationInTransaction(
@@ -592,13 +627,14 @@ export class DurableBatchEngine {
 					.run(row.stage);
 			}
 		}
-		this.db.sql
-			.prepare("UPDATE jobs SET status='cancelled' WHERE id=?")
-			.run(id);
-		this.db.sql
-			.prepare("UPDATE operations SET status='cancelled' WHERE id=?")
-			.run(job.operation);
+		const remaining = this.db.sql
+			.prepare(
+				"SELECT 1 FROM rows WHERE job=? AND status IN('queued','running') LIMIT 1",
+			)
+			.get(id);
+		if (remaining || rows.length === capacity) return;
 		observe(this.db, job.operation, "cancelled", null, "CANCELLED");
+		this.db.sql.prepare("DELETE FROM cancellations WHERE job=?").run(id);
 	}
 	private finish(scope: Scope, id: Id): void {
 		const job = this.job(scope, id);
