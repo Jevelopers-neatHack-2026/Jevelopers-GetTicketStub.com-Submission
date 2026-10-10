@@ -1,0 +1,22 @@
+# EI handoff artifact checker
+
+The checker records the narrow deliverables for EI-X01 through EI-X04. It is local readiness tooling, not a producer or consumer contract. Its manifest metadata is not a wire schema, and this repository does not define a second copy of the shared schemas.
+
+Run one handoff at a time:
+
+```sh
+python3 tools/verify_handoff.py --kind handoff-contracts --manifest tests/contracts/handoff-manifest.json
+python3 tools/verify_handoff.py --kind handoff-metering --manifest tests/contracts/handoff-manifest.json
+python3 tools/verify_handoff.py --kind provider-readiness --manifest tests/contracts/handoff-manifest.json
+python3 tools/verify_handoff.py --kind handoff-consumer --manifest tests/contracts/handoff-manifest.json
+```
+
+Exit 0 is reserved for readiness established by real pinned evidence and an accepted trusted evidence verifier. Exit 1 means the manifest is structurally readable but the handoff is blocked. Exit 2 means a malformed, mismatched or unsafe input needs repair. The report is JSON on stdout and includes expected versus actual values, owner roles, missing artifacts, fixture coverage and next actions. The checked-in manifest intentionally reports every external artifact and required fixture as pending, with `case_count: 0`. Each named fixture identity is one required manifest-level case; actual acceptance receipts should retain finer subcase counts when a scenario contains several assertions. A reported pass with zero executed cases fails, a skipped case remains missing, and positive self-reported counts remain untrusted until a verifier authenticates the run.
+
+The current checker has no trusted verifier. A review role string, GitHub issue state, `approved` boolean, reported test result, commit string, URL or matching file hash cannot establish authority or conformance. A matching SHA-256 says only that the local bytes match the digest recorded in the manifest. The checker will not load a verifier or command named by the manifest. Once the owners agree on an attestation format and trust root, a reviewed verifier must be implemented in this repository before owner or fixture claims can count.
+
+The checker reads only the manifest, the component inventory and explicitly referenced local evidence files. It caps each JSON manifest at 1 MiB, each evidence file at 2 MiB, JSON nesting at 32 levels, records at 256 and evidence references at 128 per run. It rejects duplicate keys, non-finite numbers, floating-point values, boolean-as-integer values, absolute paths, parent traversal, symlinks, hard links and non-regular files. Handoff receipts must be under `tests/contracts/evidence/`, `tests/providers/evidence/` or `tests/consumers/evidence/`; component pin receipts use `release/handoff-evidence/`. Inventories and per-record shapes further bound the number of references visited. It never fetches URLs, imports evidence code, executes a manifest command, reads credentials or scans directories for evidence.
+
+The `release/component-manifest.json` inventory distinguishes observed source revisions from accepted implementation pins. Creative main `65b8036194b3b962e1fd34f7193d54791cf07c88` is recorded as an available but unaccepted proposal. It contains local package and DecisionPort validators and related handoff proposals; its owner agreement inventory has 12 pending agreements and no accepted revision. Harness PR25 head `b3a18bb4748e0cabe39e392973658a5e20b2d97e` merged as main `29a9e2084e6d14c2cf35c7f4297c66687c1f32e5`. It adds an internal Node 22 durability/configuration/error foundation, but no public ports, JEV adapter or financial authority. Neither source revision clears an EI handoff.
+
+Synthetic tests exercise only parser, path, integrity and manifest checks. They do not test canonical schemas, account access, budget permission, trusted approval, an actual creative consumer or provider execution. Usage defaults to `unknown`, with a null amount and currency; unknown usage is never recorded as zero.

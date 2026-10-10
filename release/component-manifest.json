@@ -1,0 +1,199 @@
+{
+  "audit_date": "2026-10-10",
+  "components": [
+    {
+      "accepted_revision": null,
+      "id": "event-intelligence",
+      "mode": "unknown",
+      "observed_revision": "070279d179ca65cf3a336beeea73feb53f27831f",
+      "owner_role": "Agent and research",
+      "pin_evidence": null,
+      "repository": "Jevelopers-neatHack-2026/event-intelligence",
+      "state": "pending"
+    },
+    {
+      "accepted_revision": null,
+      "id": "shared-contracts",
+      "mode": "unknown",
+      "observed_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "owner_role": "Agent and research",
+      "pin_evidence": null,
+      "repository": "Jevelopers-neatHack-2026/shared-contracts",
+      "state": "pending"
+    },
+    {
+      "accepted_revision": null,
+      "id": "agent-harness",
+      "mode": "unknown",
+      "observed_revision": "29a9e2084e6d14c2cf35c7f4297c66687c1f32e5",
+      "owner_role": "Agent and research",
+      "pin_evidence": null,
+      "repository": "Jevelopers-neatHack-2026/agent-harness",
+      "state": "pending"
+    },
+    {
+      "accepted_revision": null,
+      "id": "creative-engine",
+      "mode": "unknown",
+      "observed_revision": "65b8036194b3b962e1fd34f7193d54791cf07c88",
+      "owner_role": "Creative and fulfillment",
+      "pin_evidence": null,
+      "repository": "Jevelopers-neatHack-2026/creative-engine",
+      "state": "pending"
+    },
+    {
+      "accepted_revision": null,
+      "id": "cost-intelligence",
+      "mode": "unknown",
+      "observed_revision": "a7b7484d60058708a5c32f8b3637d21f8b94a210",
+      "owner_role": "Finance and reliability",
+      "pin_evidence": null,
+      "repository": "Jevelopers-neatHack-2026/cost-intelligence",
+      "state": "pending"
+    },
+    {
+      "accepted_revision": null,
+      "id": "getticketstub.com",
+      "mode": "unknown",
+      "observed_revision": "5a2986454297dd6df97088a8fbde69adc771f7a0",
+      "owner_role": "Product and frontend",
+      "pin_evidence": null,
+      "repository": "Jevelopers-neatHack-2026/getticketstub.com",
+      "state": "pending"
+    }
+  ],
+  "notes": [
+    "Observed revisions are source-audit references, not accepted implementation pins.",
+    "All accepted revisions, owner acknowledgements, account access, budget authority and execution evidence remain pending.",
+    "Creative main 65b8036194b3b962e1fd34f7193d54791cf07c88 contains local proposals; its 12 owner agreements are pending and it is not canonical acceptance.",
+    "Harness PR25 source head b3a18bb4748e0cabe39e392973658a5e20b2d97e merged into main 29a9e2084e6d14c2cf35c7f4297c66687c1f32e5; the merged work is internal Node 22 durability/configuration/error work only, with no public ports, JEV adapter or finance authority.",
+    "No credentials, customer data, provider calls or charges are included."
+  ],
+  "peer_candidates": [
+    {
+      "accepted_revision": null,
+      "id": "creative-engine-contract-proposals",
+      "owner_agreement_status": {
+        "accepted": 0,
+        "independent_verification": "pending",
+        "pending": 12
+      },
+      "paths": [
+        "docs/contracts/canonical-owner-agreements.json",
+        "docs/contracts/creative-boundary.md",
+        "docs/contracts/decision-port.md",
+        "docs/contracts/metering.md",
+        "docs/contracts/approval-handoff.md",
+        "src/contracts/creative/v1.mjs",
+        "src/contracts/decision-port/v1.mjs"
+      ],
+      "repository": "Jevelopers-neatHack-2026/creative-engine",
+      "revision": "65b8036194b3b962e1fd34f7193d54791cf07c88",
+      "state": "available_unaccepted"
+    }
+  ],
+  "provider_surfaces": [
+    {
+      "account_project_eligibility": null,
+      "endpoint_api_version": null,
+      "id": "jev",
+      "mode": "unknown",
+      "model_id_version": null,
+      "owner_role": "Agent and research",
+      "parameters": null,
+      "rate_card_effective_date": null,
+      "rate_card_source": null,
+      "retry_limit": null,
+      "sdk_runtime_version": null,
+      "status": "pending",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      }
+    },
+    {
+      "account_project_eligibility": null,
+      "endpoint_api_version": null,
+      "id": "research-vision-reasoning",
+      "mode": "unknown",
+      "model_id_version": null,
+      "owner_role": "Agent and research",
+      "parameters": null,
+      "rate_card_effective_date": null,
+      "rate_card_source": null,
+      "retry_limit": null,
+      "sdk_runtime_version": null,
+      "status": "pending",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      }
+    },
+    {
+      "account_project_eligibility": null,
+      "endpoint_api_version": null,
+      "id": "budget-authorization",
+      "mode": "unknown",
+      "model_id_version": null,
+      "owner_role": "Finance and reliability",
+      "parameters": null,
+      "rate_card_effective_date": null,
+      "rate_card_source": null,
+      "retry_limit": null,
+      "sdk_runtime_version": null,
+      "status": "pending",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      }
+    },
+    {
+      "account_project_eligibility": null,
+      "endpoint_api_version": null,
+      "id": "gpt-image",
+      "mode": "unknown",
+      "model_id_version": null,
+      "owner_role": "Creative and fulfillment",
+      "parameters": null,
+      "rate_card_effective_date": null,
+      "rate_card_source": null,
+      "retry_limit": null,
+      "sdk_runtime_version": null,
+      "status": "pending",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      }
+    },
+    {
+      "account_project_eligibility": null,
+      "endpoint_api_version": null,
+      "id": "neatlogs",
+      "mode": "unknown",
+      "model_id_version": null,
+      "owner_role": "Agent and research",
+      "parameters": null,
+      "rate_card_effective_date": null,
+      "rate_card_source": null,
+      "retry_limit": null,
+      "sdk_runtime_version": null,
+      "status": "pending",
+      "usage": {
+        "amount": null,
+        "basis_ref": null,
+        "currency": null,
+        "status": "unknown"
+      }
+    }
+  ],
+  "schema": "event-intelligence/release-component-manifest",
+  "schema_version": 1
+}
