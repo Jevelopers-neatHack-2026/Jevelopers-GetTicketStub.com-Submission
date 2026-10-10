@@ -43,11 +43,11 @@ test("unimplemented reserved case fails when it collects zero test files", () =>
   assert.equal(summary.status, "failed");
 });
 
-test("evidence mock case runs only local durable-store and provenance fixtures", () => {
-  const result = runVerifier(["--case=evidence", "--mode=mock"]);
+test("evidence-facts mock case runs only local durable-store and provenance fixtures", () => {
+  const result = runVerifier(["--case=evidence-facts", "--mode=mock"]);
   const summary = summaryFrom(result.stdout);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(summary.case, "evidence");
+  assert.equal(summary.case, "evidence-facts");
   assert.equal(summary.mode, "mock");
   assert.equal(summary.status, "passed");
   assert.equal(summary.test_files, 2);
@@ -57,6 +57,16 @@ test("evidence mock case runs only local durable-store and provenance fixtures",
   assert.equal(summary.skipped_cases, 0);
   assert.equal(summary.provider_activity, "none");
   assert.equal(summary.fixture_scope, "local controlled fixtures only");
+});
+
+test("evidence remains a compatibility alias for the canonical evidence-facts case", () => {
+  const canonical = summaryFrom(runVerifier(["--case=evidence-facts", "--mode=mock"]).stdout);
+  const aliasResult = runVerifier(["--case=evidence", "--mode=mock"]);
+  const alias = summaryFrom(aliasResult.stdout);
+  assert.equal(aliasResult.status, 0, aliasResult.stderr);
+  assert.equal(alias.case, "evidence-facts");
+  assert.equal(alias.expected_cases, canonical.expected_cases);
+  assert.equal(alias.test_files, canonical.test_files);
 });
 
 test("Python policy checks have a separate unit-only route with faithful unittest counts", () => {

@@ -11,7 +11,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CASES = Object.freeze({
   "safe-retrieval": ["tests/security"],
   "content-privacy": ["tests/privacy", "tests/security/injection"],
-  evidence: ["tests/evidence"],
+  "evidence-facts": ["tests/evidence"],
   evals: ["tests/evals"],
   "research-api": ["tests/api"],
   "verify-runner": ["tests/runner"],
@@ -28,7 +28,11 @@ function optionsFromCli(args) {
     else if (current === "--case" || current === "--mode") parsed[current.slice(2)] = args[++index];
     else throw new Error("Unknown verification option");
   }
-  return { caseName: parsed.case ?? process.env.CASE, mode: parsed.mode ?? process.env.MODE };
+  const requestedCase = parsed.case ?? process.env.CASE;
+  return {
+    caseName: requestedCase === "evidence" ? "evidence-facts" : requestedCase,
+    mode: parsed.mode ?? process.env.MODE,
+  };
 }
 
 async function collectTestFiles(relativeDirectories) {

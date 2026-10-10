@@ -18,5 +18,5 @@ jobs:
           node-version: 22.23.3
           cache: npm
       - run: npm ci
-      - run: make verify CASE=evidence MODE=mock
+      - run: make verify CASE=evidence-facts MODE=mock
       - run: npm run typecheck
