@@ -106,6 +106,17 @@ export class LocalArtifactStore {
 		check(record !== undefined, "NOT_FOUND");
 		return parse(operationSchema, record);
 	}
+	private checkAccess(scope: Scope, id: Id): Operation {
+		const operation = this.operation(scope, id);
+		check(operation.denied === 0, "NOT_FOUND");
+		const parent = this.db.sql
+			.prepare(
+				"SELECT o.denied FROM rows r JOIN jobs j ON j.id=r.job JOIN operations o ON o.id=j.operation WHERE r.operation=?",
+			)
+			.get(id);
+		check(parent === undefined || parent["denied"] === 0, "NOT_FOUND");
+		return operation;
+	}
 	stage(scope: Scope, operation: Id): Id {
 		return this.db.transaction(() => {
 			const record = this.operation(scope, operation);
@@ -143,7 +154,10 @@ export class LocalArtifactStore {
 			.prepare("SELECT operation FROM stages WHERE id=? AND state='open'")
 			.get(stage);
 		check(row !== undefined, "WRITE_ONCE");
-		const operation = this.operation(scope, parse(idSchema, row["operation"]));
+		const operation = this.checkAccess(
+			scope,
+			parse(idSchema, row["operation"]),
+		);
 		check(
 			operation.status === "pending" && operation.denied === 0,
 			"WRITE_ONCE",
@@ -231,7 +245,10 @@ export class LocalArtifactStore {
 			.prepare("SELECT operation,state FROM stages WHERE id=?")
 			.get(stage);
 		check(row !== undefined, "NOT_FOUND");
-		const operation = this.operation(scope, parse(idSchema, row["operation"]));
+		const operation = this.checkAccess(
+			scope,
+			parse(idSchema, row["operation"]),
+		);
 		check(operation.denied === 0, "NOT_FOUND");
 		check(
 			expected.length > 0 && expected.length <= this.db.limits.maxFiles,
@@ -293,8 +310,15 @@ export class LocalArtifactStore {
 		return { id, operation: operation.id, set_digest: setDigest };
 	}
 	publicationInTransaction(scope: Scope, operation: Id): Publication | null {
-		const op = this.operation(scope, operation);
-		check(op.denied === 0, "NOT_FOUND");
+		this.checkAccess(scope, operation);
+		return this.reconcilePublicationInTransaction(scope, operation);
+	}
+	reconcilePublicationInTransaction(
+		scope: Scope,
+		operation: Id,
+	): Publication | null {
+		this.db.requireTransaction();
+		this.operation(scope, operation);
 		const row = this.db.sql
 			.prepare("SELECT * FROM publications WHERE operation=?")
 			.get(operation);
@@ -358,6 +382,7 @@ export class LocalArtifactStore {
 				.get(id, scopeKey(scope));
 			check(row !== undefined, "NOT_FOUND");
 			const publication = parse(publicationSchema, row);
+			this.checkAccess(scope, publication.operation);
 			const files = this.verifiedFiles(publication);
 			return { publication, files, handoffEligible: false };
 		});
