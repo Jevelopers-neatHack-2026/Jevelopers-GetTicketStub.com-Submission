@@ -2,22 +2,24 @@
 // Desk parts: the print-shop controls every studio screen is built from (review page: /parts).
 // Each part owns its press, its motion and its sound, so screens never wire feedback by hand.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { haptic, play, type Cue } from "@/customer/studio/feedback";
+import { haptic, play, type Cue, type PlayOptions } from "@/customer/studio/feedback";
 import type { Provenance } from "@/customer/studio/types";
 import s from "./Desk.module.css";
 import { CloseIcon, RegistrationIcon } from "./icons";
 
+const SUBTLE: PlayOptions = { emphasis: "subtle" };
+
 type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & { children: ReactNode };
 
 /** Pressed state that follows the pointer, plus the part's cue on release. */
-function usePress(cue: Cue | null, buzz: number | number[] = 0) {
+function usePress(cue: Cue | null, buzz: number | number[] = 0, opts?: PlayOptions) {
   const [pressed, setPressed] = useState(false);
   const down = useCallback(() => setPressed(true), []);
   const up = useCallback(() => setPressed(false), []);
   const fire = useCallback(() => {
-    if (cue) play(cue);
+    if (cue) play(cue, opts);
     if (buzz) haptic(buzz);
-  }, [cue, buzz]);
+  }, [cue, buzz, opts]);
   return {
     pressed,
     bind: {
@@ -56,7 +58,7 @@ export function Stamp({ children, price, block, className, onClick, ...rest }: B
 
 /** Secondary action: a raised sheet of card stock. */
 export function PaperButton({ children, block, className, onClick, ...rest }: ButtonProps & { block?: boolean }) {
-  const { bind, fire } = usePress("tick");
+  const { bind, fire } = usePress("tap", 6);
   return (
     <button
       {...rest}
@@ -73,9 +75,16 @@ export function PaperButton({ children, block, className, onClick, ...rest }: Bu
 }
 
 /** Tertiary action: plain text on a dotted tear line. */
-export function TearLink({ children, className, ...rest }: ButtonProps) {
+export function TearLink({ children, className, onClick, ...rest }: ButtonProps) {
   return (
-    <button {...rest} className={cx(s.tearLink, className)}>
+    <button
+      {...rest}
+      className={cx(s.tearLink, className)}
+      onClick={(e) => {
+        play("tap", SUBTLE);
+        onClick?.(e);
+      }}
+    >
       {children}
     </button>
   );
@@ -91,7 +100,7 @@ export function Tools({ children, label }: { children: ReactNode; label: string 
 
 /** A small labelled tool beside the stub. `active` marks a tool whose panel is open. */
 export function Tool({ icon, children, active, onClick, ...rest }: ButtonProps & { icon: ReactNode; active?: boolean }) {
-  const { bind, fire } = usePress("tick");
+  const { bind, fire } = usePress("tap", 6, SUBTLE);
   return (
     <button
       {...rest}
@@ -133,7 +142,7 @@ export function PunchTabs<T extends string>({ options, value, onChange, label }:
   const move = (dir: 1 | -1) => {
     const i = options.findIndex((o) => o.value === value);
     const next = options[(i + dir + options.length) % options.length];
-    play("tick");
+    play("select", { direction: dir > 0 ? "forward" : "back" });
     onChange(next.value);
     wrap.current?.querySelector<HTMLElement>(`[data-value="${CSS.escape(next.value)}"]`)?.focus();
   };
@@ -152,7 +161,9 @@ export function PunchTabs<T extends string>({ options, value, onChange, label }:
           className={s.tab}
           onClick={() => {
             if (o.value !== value) {
-              play("tick");
+              const from = options.findIndex((x) => x.value === value);
+              const to = options.findIndex((x) => x.value === o.value);
+              play("select", { direction: to > from ? "forward" : "back" });
               haptic(6);
               onChange(o.value);
             }
@@ -172,7 +183,7 @@ export function PunchTabs<T extends string>({ options, value, onChange, label }:
 
 /** A paper tag. Pass `pressed` to make it a toggle. */
 export function Tag({ children, count, pressed, onClick, ...rest }: ButtonProps & { count?: number; pressed?: boolean }) {
-  const { bind, fire } = usePress("tick");
+  const { bind, fire } = usePress("select", 4);
   return (
     <button
       {...rest}
@@ -219,7 +230,7 @@ export function FinishSwatches({ value, onChange, prices }: { value: FinishValue
           className={s.swatch}
           onClick={() => {
             if (value === it.v) return;
-            play(it.v === "matte" ? "tick" : "flick");
+            play(it.v === "matte" ? "select" : "flick");
             haptic(8);
             onChange(it.v);
           }}
@@ -242,7 +253,7 @@ export function Switch({ checked, onChange, children, hint }: { checked: boolean
       aria-checked={checked}
       className={s.switch}
       onClick={() => {
-        play(checked ? "tick" : "flick");
+        play("toggle", { direction: checked ? "back" : "forward" });
         haptic(6);
         onChange(!checked);
       }}
@@ -314,7 +325,8 @@ export function SandboxStrip({ children = "Sandbox prices. Nothing is charged." 
 export function PaperSheet({ open, onClose, title, children, stage }: { open: boolean; onClose: () => void; title: string; children: ReactNode; stage?: boolean }) {
   const opened = useRef(false);
   useEffect(() => {
-    if (open && !opened.current) play("drop");
+    if (open && !opened.current) play("open");
+    if (!open && opened.current) play("close");
     opened.current = open;
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -341,7 +353,7 @@ export function PaperSheet({ open, onClose, title, children, stage }: { open: bo
 
 /** Confirmation that lands like a rubber stamp ("Kept", "Pinned", "Sent"). */
 export function Stamped({ children }: { children: ReactNode }) {
-  useEffect(() => play("stamp"), []);
+  useEffect(() => play("success"), []);
   return (
     <span className={s.stamped} role="status">
       {children}

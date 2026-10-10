@@ -23,6 +23,7 @@ import {
   type FinishValue,
 } from "@/customer/desk/Desk";
 import { AskIcon, FlipIcon, FriendsIcon, RemixIcon } from "@/customer/desk/icons";
+import { play, stopPrint, type Cue, type Emphasis } from "@/customer/studio/feedback";
 import type { Material } from "@/customer/studio/types";
 import s from "./parts.module.css";
 
@@ -140,6 +141,59 @@ function Specimen({ stage }: { stage?: boolean }) {
   );
 }
 
+
+const CUES: { cue: Cue; job: string }[] = [
+  { cue: "tap", job: "Paper button, tool" },
+  { cue: "select", job: "Tab, tag, pick" },
+  { cue: "toggle", job: "Switch" },
+  { cue: "open", job: "Sheet opens" },
+  { cue: "close", job: "Sheet closes" },
+  { cue: "drop", job: "Stub set down" },
+  { cue: "stamp", job: "Main action" },
+  { cue: "success", job: "It worked" },
+  { cue: "flick", job: "Foil catches light" },
+  { cue: "flip", job: "Stub turns over" },
+  { cue: "tear", job: "Stub tears off" },
+  { cue: "pin", job: "Pinned to the wall" },
+  { cue: "print", job: "Printer runs (2 s)" },
+];
+
+function SoundBoard() {
+  const [emphasis, setEmphasis] = useState<Emphasis>("normal");
+  return (
+    <section className={s.sheets}>
+      <p className="desk-label">Sounds</p>
+      <p className={s.body}>Every cue has its own shape and job. Each one swells in instead of clicking, rings faintly in one small room, and varies a little each time it plays. Repeat one quickly and it gets lighter.</p>
+      <PunchTabs
+        label="Emphasis"
+        value={emphasis}
+        onChange={setEmphasis}
+        options={[
+          { value: "subtle", label: "Subtle", sub: "frequent" },
+          { value: "normal", label: "Normal" },
+          { value: "strong", label: "Strong", sub: "rare" },
+        ]}
+      />
+      <div className={s.cues}>
+        {CUES.map(({ cue, job }) => (
+          <button
+            key={cue}
+            type="button"
+            className={s.cue}
+            onClick={() => {
+              play(cue, { emphasis });
+              if (cue === "print") setTimeout(stopPrint, 2000);
+            }}
+          >
+            <span className={s.cueName}>{cue}</span>
+            <span className={s.cueJob}>{job}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Part({ name, job, children }: { name: string; job: string; children: React.ReactNode }) {
   return (
     <section className={s.part}>
@@ -174,6 +228,8 @@ export default function PartsBoard() {
           <span className="desk-label">Seat</span> Sec 104 · Row G · Seat 9 <span className="desk-label">Date</span> 12 Oct 2024 <span className="desk-label">Total</span> $104.00
         </p>
       </section>
+
+      <SoundBoard />
 
       <div className={s.cols}>
         <Specimen />

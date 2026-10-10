@@ -52,5 +52,5 @@ Stubs live in the browser (`localStorage`). Share links encode the stub in the U
 ## Brand rules applied
 
 - **Foil never pops:** eased per frame (`stub/useTilt.ts`, `stub/Foil.tsx`), following brand-kit `docs/material-foil.md`.
-- **Sound is on by default.** The cues are synthesized placeholders in `feedback.ts`, to be replaced with cuelume.dev assets.
+- **Sound is on by default.** Cues are synthesized in `feedback.ts` the way cuelume builds sounds (brand-kit `docs/motion-sound-haptics.md`). Audition them at `/parts`.
 - **Mobile first,** with a desktop layout from 960 px.

@@ -133,3 +133,35 @@
 .sheetBody > button:not(:last-child) {
   width: 100%;
 }
+
+.cues {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.cue {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--desk-rule-strong);
+  border-radius: 6px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  text-align: left;
+  box-shadow: 0 2px 0 var(--desk-ledge);
+  transition: transform var(--desk-press) ease-out, box-shadow var(--desk-press) ease-out;
+}
+.cue:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--desk-ledge);
+}
+.cueName {
+  font: var(--type-h3);
+  font-size: 1rem;
+  font-variation-settings: "SOFT" 30;
+}
+.cueJob {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
