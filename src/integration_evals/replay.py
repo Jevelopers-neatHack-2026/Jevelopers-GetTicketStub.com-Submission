@@ -7,6 +7,7 @@ from pydantic import Field
 
 from integration_evals.errors import fail
 from integration_evals.models import Mode, Outcome, Record, Run, Suite
+from integration_evals.report_validation import validate_run
 
 MAX_DIAGNOSTIC_RERUNS: Final = 2
 
@@ -30,6 +31,7 @@ class Flake(Record):
 
 def authorize_rerun(prior: Run, suite: Suite, rationale: str) -> None:
     """Forbid automatic safety, paid or ambiguous-dispatch retries."""
+    validate_run(prior, suite)
     if prior.attempt >= MAX_DIAGNOSTIC_RERUNS or not rationale.strip():
         fail("rerun_limit_or_rationale", prior.id)
     if any(result.mode in {Mode.SANDBOX, Mode.LIVE} for result in prior.results):
@@ -45,6 +47,7 @@ def authorize_rerun(prior: Run, suite: Suite, rationale: str) -> None:
 def link_rerun(prior: Run, candidate: Run, suite: Suite, rationale: str) -> Run:
     """Bind a separately executed receipt to its original failed attempt."""
     authorize_rerun(prior, suite, rationale)
+    validate_run(candidate, suite)
     fingerprints = (
         "integration_revision",
         "source_digest",
@@ -56,13 +59,20 @@ def link_rerun(prior: Run, candidate: Run, suite: Suite, rationale: str) -> Run:
         "clock",
         "components",
         "providers",
+        "working_tree_dirty",
+        "context",
+        "scope",
+        "selected_case_ids",
+        "runtime",
     )
     if any(getattr(prior, field) != getattr(candidate, field) for field in fingerprints):
         fail("rerun_input_drift", prior.id)
-    if tuple(result.case_id for result in prior.results) != tuple(
-        result.case_id for result in candidate.results
+    if tuple((result.case_id, result.mode) for result in prior.results) != tuple(
+        (result.case_id, result.mode) for result in candidate.results
     ):
         fail("rerun_selection_drift", prior.id)
+    if prior.id == candidate.id:
+        fail("rerun_identity_cycle", prior.id)
     return candidate.model_copy(
         update={"parent_id": prior.id, "attempt": prior.attempt + 1, "rationale": rationale}
     )
