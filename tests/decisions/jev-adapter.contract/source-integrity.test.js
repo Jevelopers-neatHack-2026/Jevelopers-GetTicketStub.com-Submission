@@ -3,9 +3,11 @@ import https from 'node:https';
 import { Resolver } from 'node:dns/promises';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
+import './network-guard.js';
 import { DurableWorkflowStore } from '@jevelopers/agent-harness-runtime';
 import { sendJevOnce } from '../../../src/adapters/jev/http-transport.js';
 import { temporaryDatabase } from '../../runtime/helpers.js';
+import { recordSyntheticMetric } from './synthetic-metrics.js';
 
 const PRIVATE_MARKER = 'SYNTHETIC_PRIVATE_SOURCE_MARKER';
 
@@ -47,13 +49,15 @@ test('privacy_identity: synthetic transport failure leaves existing private chec
   });
   const before = sourceSnapshot(store);
 
-  t.mock.method(Resolver.prototype, 'resolve4', () => Promise.resolve(['93.184.216.34']));
-  t.mock.method(Resolver.prototype, 'resolve6', () => Promise.resolve([]));
+  t.mock.method(Resolver.prototype, 'resolve4', () => { recordSyntheticMetric('controlled_dns_resolve4'); return Promise.resolve(['93.184.216.34']); });
+  t.mock.method(Resolver.prototype, 'resolve6', () => { recordSyntheticMetric('controlled_dns_resolve6'); return Promise.resolve([]); });
   t.mock.method(https, 'request', (_options, callback) => {
+    recordSyntheticMetric('controlled_https_request');
     const request = new EventEmitter();
     request.destroyed = false;
     request.destroy = () => { request.destroyed = true; };
     request.end = () => {
+      recordSyntheticMetric('controlled_https_write');
       const response = new EventEmitter();
       const body = Buffer.from(PRIVATE_MARKER, 'utf8');
       response.statusCode = 503;

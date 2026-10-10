@@ -1,16 +1,26 @@
 # JEV provider wire conformance
 
-**Status:** Phase A private wire prerequisite; synthetic/offline evidence only. This note does not close AH-05, approve a model/account, enable live execution, or satisfy Finance, tenant-authorization, shared-contract, engine, or release gates.
+**Status:** Phase A/B private wire and local-durability prerequisite; synthetic/offline evidence only. This note does not close AH-05, approve a model/account, enable live execution, or satisfy Finance, tenant-authorization, shared-contract, engine, or release gates.
 
-## Phase A boundary
+## Private adapter boundary
 
-`src/adapters/jev/` contains private TypeSafe request/response validation, one fixed-target HTTP send, retry recommendation data, and immutable in-memory usage observations. Nothing in this directory is exported by the package entrypoint or installed in an engine/default execution path. The runtime continues to reject `mode: "live"`.
+`src/adapters/jev/` contains private TypeSafe request/response validation, one fixed-target HTTP send, retry recommendation data, and a pure in-memory observation helper. The Phase B extension in `src/internal/durable-store.js` records the private observation in the existing SQLite store. Nothing in the JEV directory is exported by the package entrypoint or installed in an engine/default execution path. The runtime continues to reject `mode: "live"`.
 
 Every fixture and controlled HTTP/DNS response under `tests/fixtures/jev/` is synthetic. Tests replace DNS resolution and `https.request`; they do not contact TypeSafe or another external service. The API key supplied to the private send helper is an explicit internal argument. There is no `.env` reader or credential loader in this phase, and no real credential or spend authority was used.
 
-`createLocalAttemptObservation` returns an immutable object with a random local observation ID and separate logical-operation, opaque billable-attempt, and transport-attempt references. Its `persistence: "memory_only"` label is deliberate. It is neither a durable usage record nor a Finance event, reservation, grant, settlement, or proof that a failed/unknown request incurred no charge.
+`createLocalAttemptObservation` returns an immutable in-memory summary with a random local observation ID and separate logical-operation, opaque billable-attempt, and transport-attempt references. Its `persistence: "memory_only"` label is deliberate. It remains a pure helper and is not the durable capture path.
 
-Phase B must bind dispatch to the assigned canonical authorization/reservation and attempt identities, persist intent before any provider write, persist usage-or-unknown evidence in the existing SQLite store, and prove atomic migration plus process crash/restart and outbox behavior. Phase A adds no journal, database, store extension, or alternate persistence path. Until that integration is reviewed and transferred, the private transport must not be composed into application execution.
+No credential or spending authority is established here. Existing `authorityHoldRef` values remain opaque references, not grants. An HTTP status, timeout, rejected answer, or connection loss does not show that a provider call was free. No local outcome settles usage, releases a hold, or authorizes a retry.
+
+## Phase B SQLite evidence boundary
+
+The durable extension reuses the schema-v4 workflow database and migrates it atomically to schema v5 by adding `jev_dispatch_markers`, `jev_provider_observations`, and `jev_local_observation_outbox`. It leaves the existing workflow/checkpoint/event/outbox/receipt/attempt/hold references and telemetry cursor values intact. Older v1/v2/v3 stores still pass through their existing migrations before the v5 extension. A v4-to-v5 failure rolls back its new DDL and version change; future schema versions remain rejected before writes.
+
+An intent and transport identity are already recorded in `operation_attempts` and `transport_attempts`. Before the offline test sender can run, a fenced `jev_dispatch_markers` event is committed. An observation row then binds workflow, logical operation, billable attempt, and transport attempt, and stores only the pinned requested model, a bounded resolved model/request ID when available, valid integer token usage or a typed unknown reason, and a local decision-conformance summary. It stores no prompt, response body, credential, provider error text, or arbitrary request metadata. Exact source identity/fingerprint repeats deduplicate; a reused source identity with different content is rejected. A later known observation needs a distinct source reference and does not overwrite the earlier unknown record.
+
+The immutable observation, `jev_local_observation_recorded` workflow event, normal safe event-outbox row, and separate `jev_local_observation_outbox` delivery intent commit in one SQLite transaction. Local page reads are SQL-bounded. The local outbox label explicitly says `local_only_not_finance_acceptance`; its acknowledgement only marks local delivery and cannot acknowledge a Finance contract. The telemetry projector's existing event-type allowlist rejects JEV-specific event types, and JEV event rows contain no observation payload.
+
+The test-only orchestrator lives under the contract tests. It persists the durable intent and pre-send marker before invoking the real `sendJevOnce` code against controlled DNS/HTTPS fixtures. Failure to persist either prerequisite makes zero HTTP writes. If observation/outbox persistence fails after a possible write or response, the attempt remains unresolved and the helper never resends. Recovery stores explicit unknown evidence without provider dispatch, response receipt, success promotion, hold release, or an external `no_effect` claim. Late evidence can be recorded after cancellation, lease expiry, or fence change without changing workflow/checkpoint state. This is local operational evidence only; canonical authorization/reservation binding and Finance reconciliation remain unavailable external contracts.
 
 ## TypeSafe wire target and source facts
 
@@ -18,7 +28,7 @@ The fixed request target is `POST https://api.typesafe.ai:443/v1/systemone` with
 
 The API documents text-only state as a string, object, or array. Question instructions and structured descriptions can also be strings, objects, or arrays. Noul criteria may describe `true` and/or `false`; Choice criteria are a map with at most 255 options and nullable structured descriptions, with the local validator requiring at least one option; Score criteria are an ordered array of 2–10 structured descriptions.
 
-Questions in one request are evaluated independently against the same state. A later question cannot see a sibling answer from the same request. The wire adapter cannot infer semantic dependencies from arbitrary instructions. A dependent question must be built as a later request after code receives the earlier response; Phase B still needs the canonical durability boundary before claiming that answer is durable.
+Questions in one request are evaluated independently against the same state. A later question cannot see a sibling answer from the same request. The wire adapter cannot infer semantic dependencies from arbitrary instructions. A dependent question must be built as a later request after code receives the earlier response; local persistence still does not provide canonical decision promotion or authority.
 
 Sources checked 2026-10-10:
 
@@ -65,13 +75,13 @@ One monotonic 8-second budget covers DNS, connect, TLS, request write, headers, 
 
 ## Offline evidence and pending obligations
 
-Run the owned contract suite directly because Phase A does not own `package.json`, `Makefile`, or workflow integration:
+The owned synthetic suite is part of the normal runtime test command and CI workflow. The named evidence target runs that suite with controlled DNS/HTTPS and emits a sanitized, revision-bound report. The target requires Node v22.23.3 and accepts only the offline `mock` fixture:
 
 ```sh
 PATH=/Users/completetech/.cache/acv1-toolchains/node-v22.23.3-darwin-arm64/bin:$PATH \
-  node --test --test-concurrency=1 tests/decisions/jev-adapter.contract/*.test.js
+  make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline
 ```
 
-The test names identify `wire_positive`, `wire_adversarial`, `batch_semantics`, `fixed_surface_ssrf`, `deadline_cancel`, `retry_faults`, `durable_evidence`, `privacy_identity`, and `gates`. The durable-evidence tests cover immutable local identity only; they explicitly do not pass crash/reopen, intent, stale lease, or outbox acceptance. That group remains pending Phase B. CI integration and the repository's normal test/build/type commands remain separately required.
+The suite names the nine acceptance groups: `wire_positive`, `wire_adversarial`, `batch_semantics`, `fixed_surface_ssrf`, `deadline_cancel`, `retry_faults`, `durable_evidence`, `privacy_identity`, and `gates`. Its evidence report distinguishes dynamically executed test cases and controlled DNS/HTTPS/crash activity from static assertion call-site counts. The cumulative runtime suite separately covers v1/v2/v3 migrations, legacy runtime behavior, build, and strict types.
 
 No AH-05/JEV, Finance, contract, provider-account, tenant-authorization, engine-injection, evaluation, live, or release gate is closed by these private modules or fixtures. Required downstream artifacts include canonical shared-contract request/result/error/version fixtures and consumer acknowledgment; Finance-approved reservation/attempt-binding and known/unknown usage reconciliation contracts; server-derived tenant authorization; provider account/model/client eligibility evidence plus separately authorized spend; and evaluation-owned thresholds/held-out results. Full AH-05 and downstream handoffs remain open.

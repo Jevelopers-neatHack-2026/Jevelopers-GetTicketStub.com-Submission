@@ -23,7 +23,7 @@ function identities(attempt) {
   };
 }
 
-test('durable_evidence Phase A boundary: local usage observations are immutable and keep separate identities', () => {
+test('privacy_identity: pure observation helper keeps usage immutable and identities separate', () => {
   const request = fixture('positive-request.json');
   const good = fixture('positive-response.json');
   const valid = validateJevResponseBytes(bytes(good), request);
@@ -67,7 +67,7 @@ test('durable_evidence Phase A boundary: local usage observations are immutable 
   assert.equal(unsafeId.providerRequestId, null);
 });
 
-test('durable_evidence Phase A boundary: local observations do not claim crash recovery, outbox delivery, or finance settlement', () => {
+test('durable_evidence: in-memory helper remains separate from durable storage and finance authority', () => {
   const manifest = JSON.parse(readFileSync(new URL('../../fixtures/jev/fixture-manifest.json', import.meta.url), 'utf8'));
   const observation = createLocalAttemptObservation({
     logicalOperationRef: 'logical-crash-fixture',
@@ -116,7 +116,7 @@ test('gates: package exports contain no provider executor and live mode remains 
   assert.equal(Object.hasOwn(runtime, 'sendJevOnce'), false);
   assert.equal(Object.hasOwn(runtime, 'createJevDecisionPort'), false);
   assert.equal(Object.hasOwn(runtime, 'DecisionPort'), false);
-  assert.equal(runtime.INTERNAL_SCHEMA_VERSION, 4);
+  assert.equal(runtime.INTERNAL_SCHEMA_VERSION, 5);
   assert.throws(() => runtime.assertExecutionModeAvailable({ mode: 'live' }), error => {
     assert.equal(error.code, 'LIVE_EXECUTION_UNAVAILABLE');
     assert.match(error.message, /canonical ports and external authorities/u);

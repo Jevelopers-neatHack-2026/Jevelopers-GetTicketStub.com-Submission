@@ -4,9 +4,11 @@ import { Resolver } from 'node:dns/promises';
 import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import './network-guard.js';
 import { isPublicJevAddress } from '../../../src/adapters/jev/address-policy.js';
 import { sendJevOnce, JevTransportError } from '../../../src/adapters/jev/http-transport.js';
 import { JEV_MAX_RESPONSE_BYTES } from '../../../src/adapters/jev/safe-json.js';
+import { recordSyntheticMetric } from './synthetic-metrics.js';
 
 const API_KEY_FIXTURE = 'synthetic-offline-key';
 
@@ -22,11 +24,13 @@ function installSyntheticDns(t, { ipv4 = ['93.184.216.34'], ipv6 = [] } = {}) {
   const calls = { resolve4: 0, resolve6: 0 };
   t.mock.method(Resolver.prototype, 'resolve4', function resolve4(host) {
     assert.equal(host, 'api.typesafe.ai');
+    recordSyntheticMetric('controlled_dns_resolve4');
     calls.resolve4 += 1;
     return Promise.resolve([...ipv4]);
   });
   t.mock.method(Resolver.prototype, 'resolve6', function resolve6(host) {
     assert.equal(host, 'api.typesafe.ai');
+    recordSyntheticMetric('controlled_dns_resolve6');
     calls.resolve6 += 1;
     return Promise.resolve([...ipv6]);
   });
@@ -72,12 +76,14 @@ function installSyntheticHttps(t, {
 } = {}) {
   const observed = { calls: 0, sends: 0, options: null, requestBody: null, request: null };
   t.mock.method(https, 'request', (options, callback) => {
+    recordSyntheticMetric('controlled_https_request');
     observed.calls += 1;
     observed.options = options;
     const request = new EventEmitter();
     request.destroyed = false;
     request.destroy = () => { request.destroyed = true; };
     request.end = bytes => {
+      recordSyntheticMetric('controlled_https_write');
       observed.sends += 1;
       observed.requestBody = Buffer.from(bytes);
       if (onWrite) {
@@ -199,11 +205,13 @@ test('fixed_surface_ssrf: DNS results are used once and the lookup closure keeps
   const dns = installSyntheticDns(t, { ipv4: ['93.184.216.34'] });
   let options;
   t.mock.method(https, 'request', (captured, callback) => {
+    recordSyntheticMetric('controlled_https_request');
     options = captured;
     const request = new EventEmitter();
     request.destroyed = false;
     request.destroy = () => { request.destroyed = true; };
     request.end = () => {
+      recordSyntheticMetric('controlled_https_write');
       const response = fakeResponse(302, Buffer.from('synthetic redirect'), {
         headers: { location: 'https://127.0.0.1/private' }
       });
@@ -248,8 +256,8 @@ test('deadline_cancel: abort during DNS cancels the resolver and never creates H
   let calls = 0;
   let cancellations = 0;
   const pending = new Promise(() => {});
-  t.mock.method(Resolver.prototype, 'resolve4', () => { calls += 1; return pending; });
-  t.mock.method(Resolver.prototype, 'resolve6', () => { calls += 1; return pending; });
+  t.mock.method(Resolver.prototype, 'resolve4', () => { recordSyntheticMetric('controlled_dns_resolve4'); calls += 1; return pending; });
+  t.mock.method(Resolver.prototype, 'resolve6', () => { recordSyntheticMetric('controlled_dns_resolve6'); calls += 1; return pending; });
   t.mock.method(Resolver.prototype, 'cancel', () => { cancellations += 1; });
   const http = installSyntheticHttps(t);
   const result = sendJevOnce(validInput({ signal: controller.signal }));
@@ -270,11 +278,12 @@ test('deadline_cancel: abort during TLS closes the request before its single HTT
   installSyntheticDns(t);
   const observed = { calls: 0, sends: 0, request: null };
   t.mock.method(https, 'request', () => {
+    recordSyntheticMetric('controlled_https_request');
     observed.calls += 1;
     const request = new EventEmitter();
     request.destroyed = false;
     request.destroy = () => { request.destroyed = true; };
-    request.end = () => { observed.sends += 1; };
+    request.end = () => { recordSyntheticMetric('controlled_https_write'); observed.sends += 1; };
     observed.request = request;
     const socket = fakeSocket({ secure: false });
     setImmediate(() => {
