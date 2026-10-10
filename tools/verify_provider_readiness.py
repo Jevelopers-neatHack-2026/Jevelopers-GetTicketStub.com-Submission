@@ -109,9 +109,6 @@ ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 SAFE_ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 SAFE_REF_RE = re.compile(r"^(?:https://[^\s?#@]+|evidence:[A-Za-z0-9._/-]+|urn:[A-Za-z0-9][A-Za-z0-9._:/-]*)$")
 SLUG_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
-TYPE_SAFE_MODEL_RE = re.compile(r"^jev-\d+\.\d+\.\d+$")
-OPENAI_MODEL_RE = re.compile(r"^(?:gpt-[A-Za-z0-9][A-Za-z0-9._-]*|o\d+(?:-[A-Za-z0-9._-]+)?)$")
-GENERAL_MODEL_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,127}$")
 PINNED_SDK_VERSION_RE = re.compile(
     r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
 )
@@ -154,6 +151,46 @@ API_SURFACES: dict[tuple[str, str, str], tuple[str, frozenset[str]]] = {
         ),
     ),
 }
+
+# Bounded local identity policy, inspected against the official provider model
+# references on 2026-10-10. This catalog describes supported profile identities;
+# it does not select a model, approve a use, or prove an account can call it.
+_TEXT_CAPABILITIES = frozenset({"planner_reasoning", "generative_baseline"})
+_TEXT_APIS = frozenset({"responses", "chat_completions"})
+_IMAGE_CAPABILITIES = frozenset({"gpt_image"})
+_IMAGE_APIS = frozenset({"images"})
+DOCUMENTED_MODEL_PINS: dict[tuple[str, str], tuple[frozenset[str], frozenset[str]]] = {
+    ("typesafe", "jev-1.13.0"): (frozenset({"jev"}), frozenset({"systemone_v1"})),
+    ("openai", "gpt-4.1-2025-04-14"): (_TEXT_CAPABILITIES, _TEXT_APIS),
+    ("openai", "gpt-image-2-2026-04-21"): (_IMAGE_CAPABILITIES, _IMAGE_APIS),
+}
+DOCUMENTED_MODEL_ALIASES: dict[
+    tuple[str, str], tuple[str, frozenset[str], frozenset[str]]
+] = {
+    ("typesafe", "jev-latest"): (
+        "jev-1.13.0", frozenset({"jev"}), frozenset({"systemone_v1"})
+    ),
+    ("typesafe", "jev-preview"): (
+        "jev-1.13.0", frozenset({"jev"}), frozenset({"systemone_v1"})
+    ),
+    ("openai", "gpt-4.1"): (
+        "gpt-4.1-2025-04-14", _TEXT_CAPABILITIES, _TEXT_APIS
+    ),
+    ("openai", "gpt-image-2"): (
+        "gpt-image-2-2026-04-21", _IMAGE_CAPABILITIES, _IMAGE_APIS
+    ),
+}
+
+# These response surfaces document a response model identity. The Images API
+# response object does not contain a model field, so absence is permitted there;
+# a supplied image response identity is still checked against the pinned policy.
+LIVE_RESPONSE_MODEL_REQUIRED = frozenset(
+    {
+        ("typesafe", "systemone_v1"),
+        ("openai", "responses"),
+        ("openai", "chat_completions"),
+    }
+)
 
 
 class ProfileError(Exception):
@@ -273,16 +310,14 @@ def _valid_endpoint(provider: str | None, capability_id: str, endpoint: str, kin
     return endpoint in exact.get((provider or "", kind), set())
 
 
-def _is_alias(provider: str | None, model: str) -> bool:
-    lowered = model.lower()
-    if provider == "typesafe":
-        return lowered in {"jev-latest", "jev-preview"}
-    if provider == "openai":
-        return lowered.endswith(("-latest", "-preview"))
-    return False
-
-
-def _validate_model(model_record: Any, capability_id: str, provider: str | None, path: str, as_of: date) -> None:
+def _validate_model(
+    model_record: Any,
+    capability_id: str,
+    provider: str | None,
+    api_family: str | None,
+    path: str,
+    as_of: date,
+) -> None:
     fields = {
         "requested",
         "resolved",
@@ -339,35 +374,55 @@ def _validate_model(model_record: Any, capability_id: str, provider: str | None,
         _fail("MODEL_RECORD_INCONSISTENT", path, "A requested model requires an explicit identity policy.")
     if provider is None:
         _fail("PROVIDER_SELECTION_REQUIRED", path, "Select the provider before recording a requested model identity.")
-    if provider == "typesafe" and not (_is_alias(provider, requested) or TYPE_SAFE_MODEL_RE.fullmatch(requested)):
-        _fail("MODEL_UNSUPPORTED", f"{path}.requested", "Model identifier is not a supported TypeSafe model ID or documented alias.")
-    if provider == "openai" and not OPENAI_MODEL_RE.fullmatch(requested):
-        _fail("MODEL_UNSUPPORTED", f"{path}.requested", "Model identifier is outside the supported OpenAI model identifier form.")
-    if capability_id == "gpt_image" and requested == "gpt-image-2":
+    alias_policy = DOCUMENTED_MODEL_ALIASES.get((provider, requested))
+    if alias_policy is not None:
+        identity_expected, supported_capabilities, supported_api_families = alias_policy
+        alias = True
+    else:
+        pin_policy = DOCUMENTED_MODEL_PINS.get((provider, requested))
+        if pin_policy is None:
+            _fail(
+                "MODEL_UNSUPPORTED",
+                f"{path}.requested",
+                "Model identifier is not in the bounded documented provider identity policy.",
+            )
+        supported_capabilities, supported_api_families = pin_policy
+        identity_expected = requested
+        alias = False
+
+    if capability_id not in supported_capabilities:
         _fail(
-            "MODEL_SURFACE_MISMATCH",
+            "MODEL_UNSUPPORTED_FOR_CAPABILITY",
             f"{path}.requested",
-            "The Codex built-in image model is not evidence of an OpenAI API model selection.",
+            "Model identity is not supported for this capability.",
+        )
+    if api_family is not None and api_family not in supported_api_families:
+        _fail(
+            "MODEL_API_MISMATCH",
+            f"{path}.requested",
+            "Model identity is not supported by the configured capability API surface.",
         )
 
-    alias = _is_alias(provider, requested)
-    if expected_resolved is not None:
-        if provider == "typesafe":
-            expected_id_supported = TYPE_SAFE_MODEL_RE.fullmatch(expected_resolved) is not None
-        elif provider == "openai":
-            expected_id_supported = OPENAI_MODEL_RE.fullmatch(expected_resolved) is not None
-        else:
-            expected_id_supported = GENERAL_MODEL_ID_RE.fullmatch(expected_resolved) is not None
-        if not expected_id_supported or _is_alias(provider, expected_resolved):
-            _fail("MODEL_ALIAS_RESOLUTION_INVALID", f"{path}.expected_resolved", "Expected alias resolution must be an explicit pinned model identifier.")
+    if alias and identity_kind != "alias":
+        _fail(
+            "MODEL_ALIAS_POLICY_REQUIRED",
+            f"{path}.identity_kind",
+            "Documented model aliases require an approved alias policy and exact pinned resolution.",
+        )
+    if alias and policy_status != "approved":
+        _fail("MODEL_ALIAS_POLICY_REQUIRED", f"{path}.policy_status", "Documented model aliases require an explicit approved alias policy.")
+    if alias and expected_resolved is None:
+        _fail("MODEL_ALIAS_RESOLUTION_REQUIRED", f"{path}.expected_resolved", "Approved alias policy requires the exact pinned target.")
+    if alias and expected_resolved != identity_expected:
+        _fail(
+            "MODEL_ALIAS_RESOLUTION_INVALID",
+            f"{path}.expected_resolved",
+            "Alias resolution must match the exact pinned target in the documented identity policy.",
+        )
     if not alias and expected_resolved is not None:
         _fail("MODEL_RECORD_INCONSISTENT", f"{path}.expected_resolved", "Pinned model identities cannot carry alias-resolution policy fields.")
-    if alias and policy_status != "approved":
-        _fail("MODEL_ALIAS_POLICY_REQUIRED", f"{path}.policy_status", "Moving model aliases require an explicit approved alias policy.")
-    if alias and identity_kind != "alias":
-        _fail("MODEL_ALIAS_POLICY_REQUIRED", f"{path}.identity_kind", "Moving model aliases require an explicit approved alias policy.")
     if identity_kind == "alias" and not alias:
-        _fail("MODEL_ALIAS_POLICY_INVALID", f"{path}.identity_kind", "Alias policy must identify a documented moving alias.")
+        _fail("MODEL_ALIAS_POLICY_INVALID", f"{path}.identity_kind", "Alias policy must identify a documented provider model alias.")
     if policy_status == "approved":
         if approved_model != requested or approval_ref is None or approved_by_role is None or approved_at is None or revalidate_by is None:
             _fail("MODEL_APPROVAL_EVIDENCE_INCOMPLETE", path, "Approved model policy requires matching model, owner role, approval/revalidation dates, and evidence reference.")
@@ -375,14 +430,13 @@ def _validate_model(model_record: Any, capability_id: str, provider: str | None,
             _fail("OWNER_ROLE_UNSUPPORTED", f"{path}.approved_by_role", "Model policy approval must come from the assigned acceptance owner role.")
         if approved_at > as_of or revalidate_by < approved_at:
             _fail("MODEL_APPROVAL_DATE_INVALID", path, "Model policy approval and revalidation dates are inconsistent with the inspection date.")
-        if alias and expected_resolved is None:
-            _fail("MODEL_ALIAS_RESOLUTION_REQUIRED", path, "Approved alias policy requires the expected resolved model identity.")
+        if alias and expected_resolved != identity_expected:
+            _fail("MODEL_ALIAS_RESOLUTION_REQUIRED", path, "Approved alias policy requires the exact documented pinned target.")
     elif any(item is not None for item in (approved_model, expected_resolved, approval_ref, approved_by_role, approved_at, revalidate_by)):
         _fail("MODEL_RECORD_INCONSISTENT", path, "Pending model policy cannot carry approval fields.")
 
     if resolved is not None:
-        expected = expected_resolved if alias else requested
-        if expected is None or resolved != expected:
+        if resolved != identity_expected:
             _fail("MODEL_RESOLUTION_MISMATCH", f"{path}.resolved", "Resolved model identity does not match the approved requested identity.")
 
 
@@ -527,6 +581,7 @@ def _check_record_identity(
     as_of: date,
     require_model: bool,
     resolved_policy: str | None = None,
+    response_model_required: bool = False,
 ) -> list[dict[str, str]]:
     blockers: list[dict[str, str]] = []
     checked_at = _date(record["checked_at"], f"{path}.checked_at", nullable=True)
@@ -552,6 +607,12 @@ def _check_record_identity(
         actual_resolved = record["resolved_model"]
         if resolved_policy == "metadata" and actual_resolved is not None:
             _fail("METADATA_RESOLUTION_UNSUPPORTED", f"{path}.resolved_model", "Metadata checks cannot prove inference model resolution.")
+        if resolved_policy == "live" and response_model_required and actual_resolved is None:
+            _fail(
+                "LIVE_RESPONSE_MODEL_MISSING",
+                f"{path}.resolved_model",
+                "This successful provider response must include its actual model identity.",
+            )
         if resolved_policy == "live" and actual_resolved is not None:
             expected_resolved = config["model"]["expected_resolved"] or config["model"]["requested"]
             if actual_resolved != expected_resolved:
@@ -721,7 +782,14 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
                 profile_version=profile_version,
                 path=config_path,
             )
-            _validate_model(config["model"], cell_id, actual_provider, f"{config_path}.model", as_of)
+            _validate_model(
+                config["model"],
+                cell_id,
+                actual_provider,
+                api_family,
+                f"{config_path}.model",
+                as_of,
+            )
             credential_env = _string(config["credential_env"], f"{config_path}.credential_env", nullable=True)
             if credential_env is not None:
                 lowered_env_name = credential_env.lower()
@@ -858,6 +926,10 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
                     config={"account_ref": account_ref, "project_ref": project_ref, "model": config["model"]},
                     path=f"{path}.live", as_of=as_of, require_model=cell_id in MODEL_REQUIRED,
                     resolved_policy="live",
+                    response_model_required=(
+                        live["status"] == "observed"
+                        and (actual_provider, api_family) in LIVE_RESPONSE_MODEL_REQUIRED
+                    ),
                 )
             elif any(
                 live[field] is not None for field in ("checked_at", "valid_until", "endpoint", "account_ref", "project_ref", "requested_model", "resolved_model", "evidence_ref")
@@ -1215,6 +1287,8 @@ def _load_profile(path: Path) -> tuple[dict[str, Any] | None, str | None]:
         return None, "PROFILE_JSON_DUPLICATE_KEY"
     except (UnicodeDecodeError, json.JSONDecodeError):
         return None, "PROFILE_JSON_INVALID"
+    except RecursionError:
+        return None, "PROFILE_JSON_DEPTH_LIMIT"
     if not isinstance(profile, dict):
         return None, "PROFILE_ROOT_INVALID"
     return profile, None

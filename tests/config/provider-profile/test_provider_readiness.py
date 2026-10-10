@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -24,6 +25,32 @@ def load_fixture():
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
+def run_cli(profile_bytes, mode):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        profile_path = Path(temp_dir) / "profile.json"
+        profile_path.write_bytes(profile_bytes)
+        profile_path.chmod(0o600)
+        return subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(REPO_ROOT / "tools" / "verify_provider_readiness.py"),
+                "--profile",
+                str(profile_path),
+                "--mode",
+                mode,
+                "--as-of",
+                "2026-10-10",
+            ],
+            cwd=REPO_ROOT,
+            env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"},
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+
 def cell_for(profile, capability_id):
     return next(item for item in profile["capabilities"] if item["id"] == capability_id)
 
@@ -40,6 +67,40 @@ def select_direct_http(config, *, api_version="v1", policy_ref="evidence:runtime
 def select_pinned_sdk(config, *, name="typesafe-sdk-js", version="1.2.3", source_revision="a" * 40):
     config["sdk"] = {"name": name, "version": version, "source_revision": source_revision}
     config["client_selection"] = {"mode": "sdk", "api_version": None, "policy_ref": None}
+
+
+def set_approved_model(cell, requested, *, resolved, identity_kind="pinned", expected_resolved=None):
+    cell["configuration"]["model"].update(
+        {
+            "requested": requested,
+            "resolved": resolved,
+            "identity_kind": identity_kind,
+            "policy_status": "approved",
+            "approved_model": requested,
+            "expected_resolved": expected_resolved,
+            "approval_ref": "evidence:synthetic/model-policy",
+            "approved_by_role": cell["owner_role"],
+            "approved_at": "2026-10-01",
+            "revalidate_by": "2026-11-01",
+        }
+    )
+
+
+def set_profile_version(profile, version):
+    profile["schema_version"] = version
+    for cell in profile["capabilities"]:
+        config = cell["configuration"]
+        selection = config.pop("client_selection", None)
+        if version == "1.1":
+            config["client_selection"] = selection or {
+                "mode": "unselected",
+                "api_version": None,
+                "policy_ref": None,
+            }
+        elif selection is not None and selection["mode"] in {"sdk", "direct_http"} and config["sdk"] is None:
+            sdk_name = "typesafe-sdk-js" if config["provider"] == "typesafe" else "openai"
+            config["sdk"] = {"name": sdk_name, "version": "1.2.3", "source_revision": "a" * 40}
+    return profile
 
 
 def add_jev_admin_record(profile, *, valid_until="2026-10-20"):
@@ -79,6 +140,9 @@ def add_jev_admin_record(profile, *, valid_until="2026-10-20"):
 def make_live_observation(profile, capability_id, *, api_family, endpoint, model=None):
     cell = cell_for(profile, capability_id)
     config = cell["configuration"]
+    if capability_id in {"planner_reasoning", "generative_baseline"}:
+        cell["provider"] = "openai"
+        config["provider"] = "openai"
     account_ref = f"urn:synthetic:{capability_id}:account"
     project_ref = f"urn:synthetic:{capability_id}:project"
     config.update(
@@ -415,7 +479,7 @@ class ProviderReadinessTests(unittest.TestCase):
             "gpt_image",
             api_family="images",
             endpoint="https://api.openai.com/v1/images/generations",
-            model="gpt-image-1-2025-04-15",
+            model="gpt-image-2-2026-04-21",
         )
         errors, validated = self.validate(profile)
         self.assertEqual(errors, [])
@@ -497,39 +561,406 @@ class ProviderReadinessTests(unittest.TestCase):
         issue = self.first_issue(profile)
         self.assertEqual(issue["code"], "PROFILE_VERSION_UNSUPPORTED")
 
-    def test_codex_builtin_model_cannot_be_reused_as_an_engine_api_pin(self):
+    def test_codex_development_preference_does_not_imply_image_api_access(self):
         profile = load_fixture()
-        cell_for(profile, "gpt_image")["configuration"]["model"].update(
-            {"requested": "gpt-image-2", "identity_kind": "pinned"}
-        )
-        issue = self.first_issue(profile)
-        self.assertEqual(issue["code"], "MODEL_SURFACE_MISMATCH")
+        errors, validated = self.validate(profile)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        image = next(item for item in report["capabilities"] if item["id"] == "gpt_image")
+        self.assertEqual(report["development_execution"]["access_preference"], "codex_subscription")
+        self.assertEqual(report["development_execution"]["engine_api_integration"], "pending")
+        self.assertEqual(image["api_family"], None)
+        self.assertEqual(image["requested_model"], None)
+        self.assertEqual(image["eligibility"]["status"], "pending")
+        self.assertEqual(image["live_capability"], "pending")
 
-    def test_moving_alias_requires_explicit_approved_policy_and_expected_resolution(self):
-        profile = load_fixture()
-        cell = cell_for(profile, "jev")
-        model = cell["configuration"]["model"]
-        model.update({"requested": "jev-latest", "identity_kind": "alias"})
-        issue = self.first_issue(profile)
-        self.assertEqual(issue["code"], "MODEL_ALIAS_POLICY_REQUIRED")
-
-        model.update(
-            {
-                "policy_status": "approved",
-                "approved_model": "jev-latest",
-                "expected_resolved": "jev-1.13.0",
-                "approval_ref": "evidence:runtime/jev-alias-policy",
-                "approved_by_role": "Agent and research",
-                "approved_at": "2026-10-01",
-                "revalidate_by": "2026-11-01",
-            }
+        image_cell = cell_for(profile, "gpt_image")
+        config = image_cell["configuration"]
+        config.update(api_family="images", endpoint="https://api.openai.com/v1/images/generations")
+        select_direct_http(config)
+        set_approved_model(
+            image_cell,
+            "gpt-image-2",
+            resolved="gpt-image-2-2026-04-21",
+            identity_kind="alias",
+            expected_resolved="gpt-image-2-2026-04-21",
         )
         errors, validated = self.validate(profile)
         self.assertEqual(errors, [])
-        model["resolved"] = "jev-1.12.0"
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        image = next(item for item in report["capabilities"] if item["id"] == "gpt_image")
+        self.assertEqual(image["configuration_status"], "pending")
+        self.assertEqual(image["requested_model"], "gpt-image-2")
+        self.assertNotIn("MODEL_SELECTION_PENDING", {item["code"] for item in image["blockers"]})
+        self.assertNotIn("MODEL_POLICY_PENDING", {item["code"] for item in image["blockers"]})
+        self.assertEqual(image["eligibility"]["status"], "pending")
+        self.assertEqual(image["live_capability"], "pending")
+        self.assertEqual(report["development_execution"]["provider_metering"], "not_established")
+
+    def test_bounded_model_aliases_require_exact_approved_resolution_for_both_versions(self):
+        for version in ("1.0", "1.1"):
+            with self.subTest(schema_version=version):
+                profile = set_profile_version(load_fixture(), version)
+                planner = cell_for(profile, "planner_reasoning")
+                planner["provider"] = planner["configuration"]["provider"] = "openai"
+                planner["configuration"].update(
+                    api_family="responses", endpoint="https://api.openai.com/v1/responses"
+                )
+                if version == "1.1":
+                    select_direct_http(planner["configuration"])
+                else:
+                    planner["configuration"]["sdk"] = {
+                        "name": "openai", "version": "1.2.3", "source_revision": "a" * 40
+                    }
+
+                model = planner["configuration"]["model"]
+                model.update(
+                    {
+                        "requested": "gpt-4.1",
+                        "resolved": "gpt-4.1-2025-04-14",
+                        "identity_kind": "pinned",
+                        "policy_status": "approved",
+                        "approved_model": "gpt-4.1",
+                        "approval_ref": "evidence:synthetic/model-policy",
+                        "approved_by_role": planner["owner_role"],
+                        "approved_at": "2026-10-01",
+                        "revalidate_by": "2026-11-01",
+                    }
+                )
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_ALIAS_POLICY_REQUIRED")
+
+                set_approved_model(
+                    planner,
+                    "gpt-4.1",
+                    resolved="gpt-4.1-2025-04-14",
+                    identity_kind="alias",
+                    expected_resolved="gpt-4.1-2025-04-14",
+                )
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+                model["revalidate_by"] = "2026-10-09"
+                errors, validated = self.validate(profile)
+                self.assertEqual(errors, [])
+                report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+                planner_report = next(
+                    item for item in report["capabilities"] if item["id"] == "planner_reasoning"
+                )
+                self.assertIn("MODEL_POLICY_STALE", {item["code"] for item in planner_report["blockers"]})
+                model["revalidate_by"] = "2026-11-01"
+
+                model["resolved"] = "gpt-4.1-2025-01-01"
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_RESOLUTION_MISMATCH")
+                model["resolved"] = "gpt-4.1-2025-04-14"
+
+                model["expected_resolved"] = "gpt-4.1-2025-01-01"
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_ALIAS_RESOLUTION_INVALID")
+
+                set_approved_model(
+                    planner,
+                    "gpt-4.1-latest",
+                    resolved="gpt-4.1-latest",
+                    identity_kind="alias",
+                    expected_resolved="gpt-4.1-2025-04-14",
+                )
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_UNSUPPORTED")
+                self.assertNotIn("gpt-4.1-latest", issue["message"])
+
+                set_approved_model(
+                    planner,
+                    "gpt-4.1-2025-04-14",
+                    resolved="gpt-4.1-2025-04-14",
+                )
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+
+    def test_image_alias_and_snapshot_policy_is_exact_and_time_bounded_for_both_versions(self):
+        for version in ("1.0", "1.1"):
+            with self.subTest(schema_version=version):
+                profile = set_profile_version(load_fixture(), version)
+                image = cell_for(profile, "gpt_image")
+                config = image["configuration"]
+                config.update(api_family="images", endpoint="https://api.openai.com/v1/images/generations")
+                if version == "1.1":
+                    select_direct_http(config)
+                else:
+                    config["sdk"] = {"name": "openai", "version": "1.2.3", "source_revision": "a" * 40}
+                set_approved_model(
+                    image,
+                    "gpt-image-2",
+                    resolved="gpt-image-2-2026-04-21",
+                    identity_kind="alias",
+                    expected_resolved="gpt-image-2-2026-04-21",
+                )
+                errors, validated = self.validate(profile)
+                self.assertEqual(errors, [])
+                report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+                self.assertEqual(report["status"], "pending")
+                self.assertEqual(report["development_execution"]["provider_metering"], "not_established")
+
+                config["model"]["expected_resolved"] = "gpt-image-2-2026-01-15"
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_ALIAS_RESOLUTION_INVALID")
+
+                set_approved_model(
+                    image,
+                    "gpt-image-2-2026-04-21",
+                    resolved="gpt-image-2-2026-04-21",
+                )
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+
+    def test_capability_and_api_model_policies_reject_text_image_crossings(self):
+        for version in ("1.0", "1.1"):
+            with self.subTest(schema_version=version, case="image pin"):
+                profile = load_fixture()
+                image = make_live_observation(
+                    profile,
+                    "gpt_image",
+                    api_family="images",
+                    endpoint="https://api.openai.com/v1/images/generations",
+                    model="gpt-image-2-2026-04-21",
+                )
+                set_profile_version(profile, version)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+                self.assertEqual(image["configuration"]["model"]["requested"], "gpt-image-2-2026-04-21")
+
+            with self.subTest(schema_version=version, case="text alias"):
+                profile = load_fixture()
+                planner = make_live_observation(
+                    profile,
+                    "planner_reasoning",
+                    api_family="responses",
+                    endpoint="https://api.openai.com/v1/responses",
+                )
+                set_approved_model(
+                    planner,
+                    "gpt-4.1",
+                    resolved="gpt-4.1-2025-04-14",
+                    identity_kind="alias",
+                    expected_resolved="gpt-4.1-2025-04-14",
+                )
+                planner["live"].update(
+                    requested_model="gpt-4.1",
+                    resolved_model="gpt-4.1-2025-04-14",
+                )
+                set_profile_version(profile, version)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+
+            with self.subTest(schema_version=version, case="text on image endpoint"):
+                profile = load_fixture()
+                image = make_live_observation(
+                    profile,
+                    "gpt_image",
+                    api_family="images",
+                    endpoint="https://api.openai.com/v1/images/generations",
+                )
+                set_approved_model(
+                    image,
+                    "gpt-4.1",
+                    resolved="gpt-4.1-2025-04-14",
+                    identity_kind="alias",
+                    expected_resolved="gpt-4.1-2025-04-14",
+                )
+                image["live"].update(
+                    requested_model="gpt-4.1",
+                    resolved_model="gpt-4.1-2025-04-14",
+                )
+                set_profile_version(profile, version)
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_UNSUPPORTED_FOR_CAPABILITY")
+
+            with self.subTest(schema_version=version, case="image model on text endpoint"):
+                profile = load_fixture()
+                planner = make_live_observation(
+                    profile,
+                    "planner_reasoning",
+                    api_family="responses",
+                    endpoint="https://api.openai.com/v1/responses",
+                )
+                set_approved_model(
+                    planner,
+                    "gpt-image-2-2026-04-21",
+                    resolved="gpt-image-2-2026-04-21",
+                )
+                planner["live"].update(
+                    requested_model="gpt-image-2-2026-04-21",
+                    resolved_model="gpt-image-2-2026-04-21",
+                )
+                set_profile_version(profile, version)
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_UNSUPPORTED_FOR_CAPABILITY")
+
+            with self.subTest(schema_version=version, case="unknown model"):
+                profile = load_fixture()
+                image = make_live_observation(
+                    profile,
+                    "gpt_image",
+                    api_family="images",
+                    endpoint="https://api.openai.com/v1/images/generations",
+                )
+                set_approved_model(
+                    image,
+                    "o3-2025-04-16",
+                    resolved="o3-2025-04-16",
+                )
+                image["live"].update(
+                    requested_model="o3-2025-04-16",
+                    resolved_model="o3-2025-04-16",
+                )
+                set_profile_version(profile, version)
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_UNSUPPORTED")
+                self.assertNotIn("o3-2025-04-16", issue["message"])
+
+    def test_generative_baseline_uses_its_separate_text_api_model_policy(self):
+        for version in ("1.0", "1.1"):
+            with self.subTest(schema_version=version, case="supported baseline text pin"):
+                profile = load_fixture()
+                baseline = make_live_observation(
+                    profile,
+                    "generative_baseline",
+                    api_family="chat_completions",
+                    endpoint="https://api.openai.com/v1/chat/completions",
+                    model="gpt-4.1-2025-04-14",
+                )
+                set_profile_version(profile, version)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+                self.assertEqual(baseline["configuration"]["model"]["requested"], "gpt-4.1-2025-04-14")
+
+            with self.subTest(schema_version=version, case="image model rejected for baseline"):
+                profile = load_fixture()
+                baseline = make_live_observation(
+                    profile,
+                    "generative_baseline",
+                    api_family="responses",
+                    endpoint="https://api.openai.com/v1/responses",
+                )
+                set_approved_model(
+                    baseline,
+                    "gpt-image-2",
+                    resolved="gpt-image-2-2026-04-21",
+                    identity_kind="alias",
+                    expected_resolved="gpt-image-2-2026-04-21",
+                )
+                baseline["live"].update(
+                    requested_model="gpt-image-2",
+                    resolved_model="gpt-image-2-2026-04-21",
+                )
+                set_profile_version(profile, version)
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_UNSUPPORTED_FOR_CAPABILITY")
+
+    def test_observed_model_identity_is_required_only_on_documented_response_surfaces(self):
+        for version in ("1.0", "1.1"):
+            with self.subTest(schema_version=version, case="jev pin"):
+                profile = load_fixture()
+                jev = make_live_observation(
+                    profile,
+                    "jev",
+                    api_family="systemone_v1",
+                    endpoint="https://api.typesafe.ai/v1/systemone",
+                    model="jev-1.13.0",
+                )
+                set_profile_version(profile, version)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+                jev["live"]["resolved_model"] = None
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "LIVE_RESPONSE_MODEL_MISSING")
+
+            with self.subTest(schema_version=version, case="jev alias"):
+                profile = load_fixture()
+                jev = make_live_observation(
+                    profile,
+                    "jev",
+                    api_family="systemone_v1",
+                    endpoint="https://api.typesafe.ai/v1/systemone",
+                )
+                set_approved_model(
+                    jev,
+                    "jev-latest",
+                    resolved="jev-1.13.0",
+                    identity_kind="alias",
+                    expected_resolved="jev-1.13.0",
+                )
+                jev["live"].update(requested_model="jev-latest", resolved_model="jev-1.13.0")
+                set_profile_version(profile, version)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+                jev["live"]["resolved_model"] = None
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "LIVE_RESPONSE_MODEL_MISSING")
+
+            with self.subTest(schema_version=version, case="jev mismatched response"):
+                profile = load_fixture()
+                jev = make_live_observation(
+                    profile,
+                    "jev",
+                    api_family="systemone_v1",
+                    endpoint="https://api.typesafe.ai/v1/systemone",
+                    model="jev-1.13.0",
+                )
+                set_profile_version(profile, version)
+                jev["live"]["resolved_model"] = "jev-1.12.0"
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "MODEL_RESOLUTION_MISMATCH")
+
+            with self.subTest(schema_version=version, case="openai responses missing model"):
+                profile = load_fixture()
+                planner = make_live_observation(
+                    profile,
+                    "planner_reasoning",
+                    api_family="responses",
+                    endpoint="https://api.openai.com/v1/responses",
+                    model="gpt-4.1-2025-04-14",
+                )
+                set_profile_version(profile, version)
+                planner["live"]["resolved_model"] = None
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "LIVE_RESPONSE_MODEL_MISSING")
+
+            with self.subTest(schema_version=version, case="images API has no response model field"):
+                profile = load_fixture()
+                image = make_live_observation(
+                    profile,
+                    "gpt_image",
+                    api_family="images",
+                    endpoint="https://api.openai.com/v1/images/generations",
+                    model="gpt-image-2-2026-04-21",
+                )
+                set_profile_version(profile, version)
+                image["live"]["resolved_model"] = None
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+
+    def test_denied_jev_and_metadata_only_records_do_not_invent_response_identity(self):
+        profile = load_fixture()
+        jev = make_live_observation(
+            profile,
+            "jev",
+            api_family="systemone_v1",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+            model="jev-1.13.0",
+        )
+        jev["live"].update(status="denied", resolved_model=None)
+        errors, _ = self.validate(profile)
+        self.assertEqual(errors, [])
+
+        profile = load_fixture()
+        jev = add_jev_admin_record(profile)
+        add_jev_model_list_record(jev)
+        errors, _ = self.validate(profile)
+        self.assertEqual(errors, [])
+        jev["metadata"]["resolved_model"] = "jev-1.13.0"
         issue = self.first_issue(profile)
-        self.assertEqual(issue["code"], "MODEL_RESOLUTION_MISMATCH")
-        self.assertIsNotNone(validated)
+        self.assertEqual(issue["code"], "METADATA_RESOLUTION_UNSUPPORTED")
 
     def test_model_policy_requires_a_current_revalidation_date(self):
         profile = load_fixture()
@@ -914,6 +1345,48 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertEqual(jev["eligibility"]["status"], "pending")
         self.assertEqual(jev["live_capability"], "pending")
 
+    def test_real_cli_reports_safe_depth_errors_for_arrays_and_objects_in_all_modes(self):
+        marker = b"SYNTHETIC_DEEP_JSON_MARKER"
+        deep_inputs = {
+            "array": b'{"nested":' + b"[" * 1500 + b'"' + marker + b'"' + b"]" * 1500 + b"}",
+            "object": b'{"nested":' + b'{"nested":' * 1500 + b'"' + marker + b'"' + b"}" * 1500 + b"}",
+        }
+        for shape, raw in deep_inputs.items():
+            with self.subTest(shape=shape):
+                self.assertLess(len(raw), 1_048_576)
+                for mode in ("offline", "metadata", "live"):
+                    with self.subTest(mode=mode):
+                        result = run_cli(raw, mode)
+                        self.assertEqual(result.returncode, 1)
+                        self.assertEqual(result.stderr, "")
+                        self.assertNotIn("Traceback", result.stdout)
+                        self.assertNotIn(marker.decode("ascii"), result.stdout)
+                        report = json.loads(result.stdout)
+                        self.assertEqual(report["status"], "invalid")
+                        self.assertEqual(report["mode_result"], "profile_rejected")
+                        self.assertFalse(report["network_accessed"])
+                        self.assertEqual(report["diagnostics"][0]["code"], "PROFILE_JSON_DEPTH_LIMIT")
+
+    def test_real_cli_pending_fixture_and_unsupported_modes_remain_non_networked(self):
+        raw = json.dumps(load_fixture()).encode("utf-8")
+        controls = (
+            ("offline", 2, "pending", "offline_profile_check"),
+            ("metadata", 3, "unsupported", "unsupported_no_network"),
+            ("live", 3, "unsupported", "refused_without_authorization"),
+        )
+        for mode, expected_exit, expected_status, expected_result in controls:
+            with self.subTest(mode=mode):
+                result = run_cli(raw, mode)
+                self.assertEqual(result.returncode, expected_exit)
+                self.assertEqual(result.stderr, "")
+                report = json.loads(result.stdout)
+                self.assertEqual(report["status"], expected_status)
+                self.assertEqual(report["mode_result"], expected_result)
+                self.assertFalse(report["network_accessed"])
+                if mode == "offline":
+                    self.assertEqual(report["development_execution"]["engine_api_integration"], "pending")
+                    self.assertEqual(report["development_execution"]["provider_metering"], "not_established")
+
     def test_profile_parser_rejects_duplicate_keys_without_echoing_input(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             profile_path = Path(temp_dir) / "duplicate.json"
@@ -963,6 +1436,9 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertIn("pattern", sdk_schema["version"])
         self.assertIn("pattern", sdk_schema["source_revision"])
         self.assertEqual(len(configuration_schema["allOf"]), 3)
+        self.assertIn("bounded by", model_schema["description"])
+        self.assertIn("documented pinned target", model_schema["properties"]["expected_resolved"]["description"])
+        self.assertIn("API surface", model_schema["properties"]["requested"]["description"])
         for cell in profile["capabilities"]:
             self.assertTrue(set(capability_schema["required"]).issubset(cell))
             self.assertTrue(set(configuration_schema["required"]).issubset(cell["configuration"]))
@@ -982,6 +1458,12 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertIn("`direct_http`", runbook)
         self.assertIn("exact semantic version", runbook)
         self.assertIn("`api_metered`", runbook)
+        self.assertIn("Bounded model identity policy", runbook)
+        self.assertIn("gpt-image-2-2026-04-21", runbook)
+        self.assertIn("gpt-4.1-2025-04-14", runbook)
+        self.assertIn("PROFILE_JSON_DEPTH_LIMIT", runbook)
+        self.assertIn("Codex subscription access does not establish API eligibility", runbook)
+        self.assertIn("successful observed inference", runbook)
         for family in {key[2] for key in readiness.API_SURFACES}:
             self.assertIn(f"`{family}`", runbook)
 

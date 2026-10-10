@@ -163,15 +163,25 @@
     },
     "model": {
       "type": "object",
+      "description": "Local requested/resolved provider model identity. Accepted pins, documented aliases, exact alias targets, and capability/API mappings are bounded by docs/runbooks/provider-access.md; profile records still require owner approval and do not prove account access.",
       "additionalProperties": false,
       "required": ["requested", "resolved", "identity_kind", "policy_status", "approved_model", "expected_resolved", "approval_ref", "approved_by_role", "approved_at", "revalidate_by"],
       "properties": {
-        "requested": { "$ref": "#/$defs/nullableString" },
-        "resolved": { "$ref": "#/$defs/nullableString" },
+        "requested": {
+          "$ref": "#/$defs/nullableString",
+          "description": "Exact supported model pin or documented alias for this capability and API surface. Unknown model identifiers remain unsupported."
+        },
+        "resolved": {
+          "$ref": "#/$defs/nullableString",
+          "description": "Recorded resolved identity when known. For successful observed responses, presence follows the documented response surface."
+        },
         "identity_kind": { "enum": ["unselected", "pinned", "alias"] },
         "policy_status": { "enum": ["pending", "approved"] },
         "approved_model": { "$ref": "#/$defs/nullableString" },
-        "expected_resolved": { "$ref": "#/$defs/nullableString" },
+        "expected_resolved": {
+          "$ref": "#/$defs/nullableString",
+          "description": "Required exact documented pinned target for an approved alias; must be absent for a pinned request."
+        },
         "approval_ref": { "$ref": "#/$defs/nullableRef" },
         "approved_by_role": { "$ref": "#/$defs/nullableString" },
         "approved_at": { "$ref": "#/$defs/dateOrNull" },
