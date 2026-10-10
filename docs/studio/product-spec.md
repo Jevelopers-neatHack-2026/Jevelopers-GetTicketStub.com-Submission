@@ -1,6 +1,8 @@
 # Product spec
 
-Status: design phase (neatHack 2026). Every decision below was confirmed with the team in the design Q&A on 2026-10-09.
+Status: design phase (neatHack 2026). Every decision below was confirmed with the team in the design Q&A on 2026-10-09 and 2026-10-10.
+
+> **For the 48-hour hackathon build, [`alignment.md`](alignment.md) takes precedence.** The input is an event URL first (screenshot drop is a stretch goal), a ChatKit side chat drives the agent, and only art changes create a new `DesignVersion`.
 
 **The principle that overrides the rest: almost no form fields.** The only typed input that's ever required is a search query, and only when ingestion fails. Everything else is tap, swipe, drag or confirm. Two places allow optional free text: the remix prompt (hidden behind "more") and the note on the back of the stub.
 
