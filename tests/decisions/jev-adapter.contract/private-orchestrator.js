@@ -5,6 +5,13 @@ import { JevTransportError } from '../../../src/adapters/jev/http-transport.js';
 const MODEL_ID = 'jev-1.13.0';
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const SAFE_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const SAFE_OBSERVATION_IDENTITY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u;
+
+function isSafeObservationIdentity(value) {
+  return typeof value === 'string'
+    && value.trim() === value
+    && SAFE_OBSERVATION_IDENTITY.test(value);
+}
 
 function ownDataFields(value, allowedKeys, requiredKeys = allowedKeys) {
   try {
@@ -101,8 +108,16 @@ function safeErrorCertainty(error) {
   }
 }
 
-function reference(value) {
-  return 'jev-observation:' + createHash('sha256').update(value).digest('hex');
+function reference({ workflowId, logicalOperationRef, attemptId, transportAttemptId }) {
+  const framedIdentity = JSON.stringify([
+    'agent-harness.jev.test-observation-source.v2',
+    workflowId,
+    logicalOperationRef,
+    attemptId,
+    transportAttemptId,
+    'provider-result'
+  ]);
+  return 'jev-observation:v2:' + createHash('sha256').update(framedIdentity, 'utf8').digest('hex');
 }
 
 function unknownReason(dispatchCertainty, hasResponse) {
@@ -131,7 +146,7 @@ function makeObservation({ workflowId, attemptId, logicalOperationRef, transport
     attemptId,
     logicalOperationRef,
     transportAttemptId,
-    sourceObservationRef: reference(attemptId + ':' + transportAttemptId + ':provider-result'),
+    sourceObservationRef: reference({ workflowId, logicalOperationRef, attemptId, transportAttemptId }),
     dispatchCertainty: certainty,
     requestedModel: MODEL_ID,
     resolvedModel: response?.resolvedModel ?? null,
@@ -162,6 +177,11 @@ export async function runPrivateJevTestAttempt({
   testOnlySend
 }) {
   if (typeof testOnlySend !== 'function') throw new TypeError('The offline test sender is required.');
+  for (const identity of [workflowId, logicalOperationRef, attemptId, transportAttemptId]) {
+    if (!isSafeObservationIdentity(identity)) {
+      throw new TypeError('The offline attempt identity is invalid.');
+    }
+  }
 
   const intent = store.recordDispatchIntent({
     workflowId,

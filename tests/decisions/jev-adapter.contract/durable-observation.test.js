@@ -217,16 +217,16 @@ function sqliteSnapshot(databasePath) {
         ? value.toString()
         : value;
     const objects = database.prepare(`
-      SELECT type, name, tbl_name, sql FROM sqlite_master
-      WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name
+      SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name
     `).all();
     const tableNames = database.prepare(`
-      SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-      ORDER BY name
+      SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name
     `).all().map(row => row.name);
     const tables = Object.create(null);
+    const columns = Object.create(null);
     for (const name of tableNames) {
       const quoted = '"' + name.replaceAll('"', '""') + '"';
+      columns[name] = database.prepare(`PRAGMA table_info(${quoted})`).all().map(row => row.name);
       const rows = database.prepare(`SELECT * FROM ${quoted}`).all().map(row => {
         const normalized = Object.fromEntries(Object.entries(row).map(([key, value]) => [key, normalize(value)]));
         return { encoded: JSON.stringify(normalized), row: normalized };
@@ -236,6 +236,7 @@ function sqliteSnapshot(databasePath) {
     return {
       userVersion: Number(database.prepare('PRAGMA user_version').get().user_version),
       objects,
+      columns,
       tables
     };
   } finally {
@@ -249,6 +250,84 @@ function removeV5Tables(database) {
     DROP TABLE jev_provider_observations;
     DROP TABLE jev_dispatch_markers;
   `);
+}
+
+function createMigrationSource(databasePath, version) {
+  if (version === 1) {
+    const database = new DatabaseSync(databasePath);
+    database.exec(`
+      CREATE TABLE workflows (
+        workflow_id TEXT PRIMARY KEY,
+        state TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        checkpoint_json TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL
+      );
+    `);
+    database.prepare('INSERT INTO workflows VALUES (?, ?, ?, ?, ?, ?)').run(
+      'migration-v1-legacy-workflow', 'running', 7, '{"step":"preserved-v1-checkpoint"}', 101, 202
+    );
+    database.exec('PRAGMA user_version = 1');
+    database.close();
+    return { workflowId: 'migration-v1-legacy-workflow', legacy: true };
+  }
+
+  const workflowId = `migration-v${version}-workflow`;
+  const attemptId = `migration-v${version}-attempt`;
+  const logicalOperationRef = `migration-v${version}-logical`;
+  const transportAttemptId = `migration-v${version}-transport`;
+  const store = openStore(databasePath, () => 1000);
+  const lease = createRunningWorkflow(store, workflowId);
+  const intent = store.recordDispatchIntent({
+    ...lease,
+    expectedRevision: lease.revision,
+    attemptId,
+    logicalOperationRef,
+    authorityHoldRef: `synthetic-local-bookkeeping:migration-v${version}-hold`,
+    transportAttemptId,
+    eventId: `migration-v${version}-intent`
+  });
+  store.recordResponseReceipt({
+    ...lease,
+    expectedRevision: intent.revision,
+    attemptId,
+    receiptId: `migration-v${version}-receipt`,
+    outcome: 'completed',
+    nextState: 'running',
+    responseBytes: Buffer.from(`synthetic-v${version}-response-bytes`),
+    nextCheckpoint: { step: `preserved-v${version}-pending-checkpoint` },
+    eventId: `migration-v${version}-response`
+  });
+  store.advanceTelemetryCursor({ expectedSequence: 0, nextSequence: 1 });
+  const expected = {
+    workflow: store.getWorkflow(workflowId),
+    checkpoint: store.getCheckpoint(workflowId),
+    attempt: store.getAttempt(attemptId),
+    receipt: store.getReceipt(attemptId),
+    events: store.listEvents({ workflowId }),
+    outbox: store.readOutbox()
+  };
+  store.close();
+
+  const legacy = new DatabaseSync(databasePath);
+  removeV5Tables(legacy);
+  if (version < 4) legacy.exec('DROP TABLE telemetry_cursors');
+  if (version === 2) legacy.exec('ALTER TABLE response_receipts DROP COLUMN next_checkpoint_sha256');
+  legacy.exec(`PRAGMA user_version = ${version}`);
+  legacy.close();
+  return { workflowId, attemptId, expected, legacy: false };
+}
+
+function assertSharedTableRowsPreserved(before, after) {
+  for (const table of Object.keys(before.tables)) {
+    assert.ok(Object.hasOwn(after.tables, table), `table ${table} remains present`);
+    const columns = before.columns[table].filter(name => after.columns[table].includes(name));
+    const project = snapshot => snapshot.tables[table]
+      .map(row => Object.fromEntries(columns.map(name => [name, row[name]])))
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    assert.deepEqual(project(after), project(before), `common rows in ${table} remain unchanged`);
+  }
 }
 
 test('durable_evidence: valid synthetic transport persists intent, marker, usage, event, and local outbox without decision promotion', async t => {
@@ -808,6 +887,234 @@ test('privacy_identity: identical payload observations under separate workflows 
   assert.equal(countRows(temporary.databasePath, 'jev_provider_observations'), 2);
   assert.notEqual(store.getJevProviderObservation('jev-identical-left-source').workflowId,
     store.getJevProviderObservation('jev-identical-right-source').workflowId);
+});
+
+test('durable_evidence: tuple framing keeps colon-colliding attempts distinct, replayable, and immutable', async t => {
+  const temporary = temporaryDatabase('jev-tuple-collision-');
+  t.after(() => temporary.cleanup());
+  const store = openStore(temporary.databasePath);
+  t.after(() => store.close());
+  let sends = 0;
+  const sender = async () => {
+    sends += 1;
+    return {
+      kind: 'response',
+      status: 200,
+      dispatchCertainty: 'response_received',
+      providerRequestId: `synthetic-request-${sends}`,
+      validation: {
+        kind: 'invalid',
+        code: 'synthetic-invalid-decision',
+        requestedModel: 'jev-1.13.0',
+        resolvedModel: 'jev-1.13.0',
+        usage: { kind: 'known', inputTokens: 13, outputTokens: 5 }
+      }
+    };
+  };
+  const cases = [
+    {
+      workflowId: 'jev-colon-left-workflow',
+      logicalOperationRef: 'jev-colon-left-logical',
+      attemptId: 'a:b',
+      transportAttemptId: 'c'
+    },
+    {
+      workflowId: 'jev-colon-right-workflow',
+      logicalOperationRef: 'jev-colon-right-logical',
+      attemptId: 'a',
+      transportAttemptId: 'b:c'
+    }
+  ];
+  const results = [];
+  for (const identity of cases) {
+    const lease = createRunningWorkflow(store, identity.workflowId);
+    results.push(await runPrivateJevTestAttempt({
+      store,
+      ...lease,
+      expectedRevision: lease.revision,
+      ...identity,
+      authorityHoldRef: `synthetic-local-bookkeeping:${identity.workflowId}-hold`,
+      request: {},
+      apiKey: API_KEY_FIXTURE,
+      testOnlySend: sender
+    }));
+  }
+
+  assert.equal(sends, 2);
+  assert.notEqual(results[0].observation.sourceObservationRef, results[1].observation.sourceObservationRef);
+  assert.notEqual(results[0].persistedObservation.eventId, results[1].persistedObservation.eventId);
+  assert.equal(countRows(temporary.databasePath, 'jev_provider_observations'), 2);
+  for (const result of results) {
+    assert.deepEqual(result.observation.usage, { kind: 'known', inputTokens: 13, outputTokens: 5 });
+    assert.equal(store.getJevProviderObservation(result.observation.sourceObservationRef).usage.kind, 'known');
+    assert.equal(store.recordJevProviderObservation(result.observation).duplicate, true);
+  }
+  assert.throws(() => store.recordJevProviderObservation({
+    ...results[0].observation,
+    usage: { ...results[0].observation.usage, inputTokens: 14 }
+  }), error => error instanceof RuntimeError && error.code === 'OBSERVATION_IDENTITY_CONFLICT');
+  assert.equal(store.readJevObservationDeliveryPage({ limit: 10 }).items.length, 2);
+});
+
+test('privacy_identity: maximum-length tuples remain domain-bound across workflows and NUL or Unicode IDs stop before send', async t => {
+  const firstDatabase = temporaryDatabase('jev-max-id-first-');
+  const secondDatabase = temporaryDatabase('jev-max-id-second-');
+  const invalidDatabase = temporaryDatabase('jev-invalid-id-');
+  t.after(() => firstDatabase.cleanup());
+  t.after(() => secondDatabase.cleanup());
+  t.after(() => invalidDatabase.cleanup());
+  const firstStore = openStore(firstDatabase.databasePath);
+  const secondStore = openStore(secondDatabase.databasePath);
+  const invalidStore = openStore(invalidDatabase.databasePath);
+  t.after(() => firstStore.close());
+  t.after(() => secondStore.close());
+  t.after(() => invalidStore.close());
+
+  const longAttemptId = `i${'a'.repeat(255)}`;
+  const longLogicalOperationRef = `l${'b'.repeat(255)}`;
+  const longTransportAttemptId = `t${'c'.repeat(255)}`;
+  const senderCalls = { count: 0 };
+  const sender = async () => {
+    senderCalls.count += 1;
+    return {
+      kind: 'response',
+      status: 200,
+      dispatchCertainty: 'response_received',
+      providerRequestId: `synthetic-boundary-request-${senderCalls.count}`,
+      validation: {
+        kind: 'invalid',
+        code: 'synthetic-invalid-decision',
+        requestedModel: 'jev-1.13.0',
+        resolvedModel: 'jev-1.13.0',
+        usage: { kind: 'known', inputTokens: 17, outputTokens: 9 }
+      }
+    };
+  };
+
+  async function persistInStore(store, workflowId) {
+    const lease = createRunningWorkflow(store, workflowId);
+    return runPrivateJevTestAttempt({
+      store,
+      ...lease,
+      expectedRevision: lease.revision,
+      attemptId: longAttemptId,
+      logicalOperationRef: longLogicalOperationRef,
+      transportAttemptId: longTransportAttemptId,
+      authorityHoldRef: `synthetic-local-bookkeeping:${workflowId}-hold`,
+      request: {},
+      apiKey: API_KEY_FIXTURE,
+      testOnlySend: sender
+    });
+  }
+
+  const first = await persistInStore(firstStore, 'jev-max-domain-a');
+  const second = await persistInStore(secondStore, 'jev-max-domain-b');
+  assert.equal(longAttemptId.length, 256);
+  assert.equal(longLogicalOperationRef.length, 256);
+  assert.equal(longTransportAttemptId.length, 256);
+  assert.notEqual(first.observation.sourceObservationRef, second.observation.sourceObservationRef);
+  assert.notEqual(first.persistedObservation.eventId, second.persistedObservation.eventId);
+  assert.equal(firstStore.getJevProviderObservation(first.observation.sourceObservationRef).usage.kind, 'known');
+  assert.equal(secondStore.getJevProviderObservation(second.observation.sourceObservationRef).usage.kind, 'known');
+  assert.equal(firstStore.recordJevProviderObservation(first.observation).duplicate, true);
+  assert.equal(secondStore.recordJevProviderObservation(second.observation).duplicate, true);
+  assert.equal(senderCalls.count, 2);
+
+  for (const [index, unsafeIdentity] of [
+    { attemptId: 'attempt\u0000suffix', transportAttemptId: 'valid-transport' },
+    { attemptId: 'valid-attempt', transportAttemptId: 'transport-雪' },
+    { attemptId: 'valid-attempt\n', transportAttemptId: 'valid-transport' },
+    { attemptId: 'valid-attempt', transportAttemptId: 'valid-transport', logicalOperationRef: 'logical-💠' }
+  ].entries()) {
+    const workflowId = `jev-invalid-source-id-${index}`;
+    const lease = createRunningWorkflow(invalidStore, workflowId);
+    await assert.rejects(runPrivateJevTestAttempt({
+      store: invalidStore,
+      ...lease,
+      expectedRevision: lease.revision,
+      attemptId: unsafeIdentity.attemptId,
+      logicalOperationRef: unsafeIdentity.logicalOperationRef ?? 'valid-logical-operation',
+      transportAttemptId: unsafeIdentity.transportAttemptId,
+      authorityHoldRef: `synthetic-local-bookkeeping:${workflowId}-hold`,
+      request: {},
+      apiKey: API_KEY_FIXTURE,
+      testOnlySend: sender
+    }), error => error instanceof TypeError && error.message === 'The offline attempt identity is invalid.');
+    assert.equal(invalidStore.getWorkflow(workflowId).state, 'running');
+  }
+  assert.equal(senderCalls.count, 2);
+  assert.equal(countRows(invalidDatabase.databasePath, 'operation_attempts'), 0);
+  assert.equal(countRows(invalidDatabase.databasePath, 'jev_provider_observations'), 0);
+});
+
+test('migration: v1 through v4 upgrades commit as one transaction and v5 failures restore complete source snapshots', t => {
+  for (const version of [1, 2, 3, 4]) {
+    const rollback = temporaryDatabase(`jev-v${version}-atomic-rollback-`);
+    t.after(() => rollback.cleanup());
+    createMigrationSource(rollback.databasePath, version);
+    const conflict = new DatabaseSync(rollback.databasePath);
+    conflict.exec(`
+      CREATE TABLE jev_provider_observations (marker TEXT NOT NULL);
+      INSERT INTO jev_provider_observations VALUES ('synthetic-v${version}-v5-ddl-conflict');
+    `);
+    conflict.close();
+
+    const before = sqliteSnapshot(rollback.databasePath);
+    assert.equal(before.userVersion, version);
+    assert.equal(Object.hasOwn(before.tables, 'jev_dispatch_markers'), false);
+    assert.throws(() => openStore(rollback.databasePath), error => {
+      assert.ok(error instanceof RuntimeError);
+      assert.equal(error.code, 'STORE_WRITE_FAILED');
+      return true;
+    }, `v${version} v5 extension failure is mapped safely`);
+    assert.deepEqual(sqliteSnapshot(rollback.databasePath), before,
+      `v${version} rollback restores all sqlite_master objects, rows, sequences, and user_version`);
+
+    const success = temporaryDatabase(`jev-v${version}-atomic-success-`);
+    t.after(() => success.cleanup());
+    const source = createMigrationSource(success.databasePath, version);
+    const sourceSnapshot = sqliteSnapshot(success.databasePath);
+    const migrated = openStore(success.databasePath, () => 1000);
+    try {
+      const migratedSnapshot = sqliteSnapshot(success.databasePath);
+      assert.equal(migratedSnapshot.userVersion, 5);
+      assert.ok(Object.hasOwn(migratedSnapshot.tables, 'jev_dispatch_markers'));
+      assert.ok(Object.hasOwn(migratedSnapshot.tables, 'jev_provider_observations'));
+      assert.ok(Object.hasOwn(migratedSnapshot.tables, 'jev_local_observation_outbox'));
+      assertSharedTableRowsPreserved(sourceSnapshot, migratedSnapshot);
+
+      if (version === 1) {
+        assert.equal(migrated.getWorkflow(source.workflowId).state, 'running');
+        assert.equal(migrated.getWorkflow(source.workflowId).revision, 7);
+        assert.deepEqual(migrated.getCheckpoint(source.workflowId).data, {
+          step: 'preserved-v1-checkpoint'
+        });
+        assert.deepEqual(migrated.listEvents({ workflowId: source.workflowId }).map(event => event.eventId), [
+          `migration:v1:${source.workflowId}`
+        ]);
+        assert.equal(migrated.getTelemetryCursor(), 0);
+      } else {
+        assert.deepEqual({
+          workflow: migrated.getWorkflow(source.workflowId),
+          checkpoint: migrated.getCheckpoint(source.workflowId),
+          attempt: migrated.getAttempt(source.attemptId),
+          receipt: migrated.getReceipt(source.attemptId),
+          events: migrated.listEvents({ workflowId: source.workflowId }),
+          outbox: migrated.readOutbox()
+        }, source.expected);
+        assert.equal(migrated.getTelemetryCursor(), version === 4 ? 1 : 0);
+        if (version === 2) {
+          const raw = new DatabaseSync(success.databasePath, { readOnly: true });
+          assert.equal(raw.prepare(`
+            SELECT next_checkpoint_sha256 FROM response_receipts WHERE receipt_id = ?
+          `).get(`migration-v${version}-receipt`).next_checkpoint_sha256, null);
+          raw.close();
+        }
+      }
+    } finally {
+      migrated.close();
+    }
+  }
 });
 
 test('migration: v4 to v5 preserves workflows, receipts, events, outbox, and telemetry cursor; rollback keeps v4 untouched', t => {

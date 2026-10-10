@@ -172,7 +172,7 @@ const manifest = {
       afterResponseBeforeObservation: metricCounts.crashAfterResponseBeforeObservation,
       afterObservationCommit: metricCounts.crashAfterObservationCommit
     },
-    schemaMigration: 'atomic v4-to-v5 success and rollback tests in this fixture; v1/v2/v3 compatibility runs in the cumulative runtime suite',
+    schemaMigration: 'atomic v1/v2/v3/v4-to-v5 success and v5-failure rollback snapshots run in this fixture',
     localDeliveryOnly: true,
     financialSettlementOrHoldRelease: false,
     workflowSuccessPromotion: false

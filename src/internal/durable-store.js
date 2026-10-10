@@ -681,85 +681,77 @@ function appendMigrationEvent(db, workflowId, state, revision, occurredAtMs) {
 }
 
 function migrateV1ToV4(db) {
-  inTransaction(db, 'migrateV1ToV4', () => {
-    db.exec('ALTER TABLE workflows RENAME TO workflows_v1');
-    createSchemaV3(db);
-    const oldRows = db.prepare('SELECT * FROM workflows_v1 ORDER BY workflow_id').all();
-    const insertWorkflow = db.prepare(`
-      INSERT INTO workflows (
-        workflow_id, state, revision, fence_token, lease_owner, lease_expires_ms,
-        checkpoint_sequence, cancellation_requested, created_at_ms, updated_at_ms
-      ) VALUES (?, ?, ?, 0, NULL, NULL, 1, 0, ?, ?)
-    `);
-    const insertCheckpoint = db.prepare(`
-      INSERT INTO workflow_checkpoints (
-        workflow_id, sequence, schema_version, payload_json, sha256, revision, created_at_ms
-      ) VALUES (?, 1, ?, ?, ?, ?, ?)
-    `);
-    for (const row of oldRows) {
-      const workflowId = String(row.workflow_id);
-      const state = String(row.state);
-      const revision = Number(row.revision);
-      const createdAtMs = Number(row.created_at_ms);
-      const updatedAtMs = Number(row.updated_at_ms);
-      if (!STATES.has(state) || !Number.isSafeInteger(revision) || revision < 0) {
-        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
-      }
-      if (
-        typeof row.checkpoint_json !== 'string'
-        || Buffer.byteLength(row.checkpoint_json, 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES
-      ) {
-        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
-      }
-      let parsed;
-      try {
-        parsed = JSON.parse(row.checkpoint_json);
-      } catch {
-        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
-      }
-      if (!isRecord(parsed)) {
-        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
-      }
-      let checkpointPayload;
-      try {
-        checkpointPayload = serializeCheckpoint(parsed, 'migrateV1ToV3');
-      } catch {
-        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
-      }
-      const created = Number.isSafeInteger(createdAtMs) ? createdAtMs : updatedAtMs;
-      const updated = Number.isSafeInteger(updatedAtMs) ? updatedAtMs : created;
-      insertWorkflow.run(workflowId, state, revision, created, updated);
-      insertCheckpoint.run(workflowId, CHECKPOINT_SCHEMA_VERSION, checkpointPayload, digest(checkpointPayload), revision, updated);
-      appendMigrationEvent(db, workflowId, state, revision, updated);
+  db.exec('ALTER TABLE workflows RENAME TO workflows_v1');
+  createSchemaV3(db);
+  const oldRows = db.prepare('SELECT * FROM workflows_v1 ORDER BY workflow_id').all();
+  const insertWorkflow = db.prepare(`
+    INSERT INTO workflows (
+      workflow_id, state, revision, fence_token, lease_owner, lease_expires_ms,
+      checkpoint_sequence, cancellation_requested, created_at_ms, updated_at_ms
+    ) VALUES (?, ?, ?, 0, NULL, NULL, 1, 0, ?, ?)
+  `);
+  const insertCheckpoint = db.prepare(`
+    INSERT INTO workflow_checkpoints (
+      workflow_id, sequence, schema_version, payload_json, sha256, revision, created_at_ms
+    ) VALUES (?, 1, ?, ?, ?, ?, ?)
+  `);
+  for (const row of oldRows) {
+    const workflowId = String(row.workflow_id);
+    const state = String(row.state);
+    const revision = Number(row.revision);
+    const createdAtMs = Number(row.created_at_ms);
+    const updatedAtMs = Number(row.updated_at_ms);
+    if (!STATES.has(state) || !Number.isSafeInteger(revision) || revision < 0) {
+      fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
     }
-    db.exec('DROP TABLE workflows_v1');
-    createTelemetryCursorSchema(db);
-    db.exec('PRAGMA user_version = 4');
-  });
+    if (
+      typeof row.checkpoint_json !== 'string'
+      || Buffer.byteLength(row.checkpoint_json, 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES
+    ) {
+      fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(row.checkpoint_json);
+    } catch {
+      fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+    }
+    if (!isRecord(parsed)) {
+      fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+    }
+    let checkpointPayload;
+    try {
+      checkpointPayload = serializeCheckpoint(parsed, 'migrateV1ToV3');
+    } catch {
+      fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+    }
+    const created = Number.isSafeInteger(createdAtMs) ? createdAtMs : updatedAtMs;
+    const updated = Number.isSafeInteger(updatedAtMs) ? updatedAtMs : created;
+    insertWorkflow.run(workflowId, state, revision, created, updated);
+    insertCheckpoint.run(workflowId, CHECKPOINT_SCHEMA_VERSION, checkpointPayload, digest(checkpointPayload), revision, updated);
+    appendMigrationEvent(db, workflowId, state, revision, updated);
+  }
+  db.exec('DROP TABLE workflows_v1');
+  createTelemetryCursorSchema(db);
+  db.exec('PRAGMA user_version = 4');
 }
 
 function migrateV2ToV4(db) {
-  inTransaction(db, 'migrateV2ToV4', () => {
-    // Existing receipts have no proof binding their proposed checkpoint bytes.
-    // Leave them NULL: they remain readable, but reconciliation fails closed.
-    db.exec('ALTER TABLE response_receipts ADD COLUMN next_checkpoint_sha256 TEXT');
-    createTelemetryCursorSchema(db);
-    db.exec('PRAGMA user_version = 4');
-  });
+  // Existing receipts have no proof binding their proposed checkpoint bytes.
+  // Leave them NULL: they remain readable, but reconciliation fails closed.
+  db.exec('ALTER TABLE response_receipts ADD COLUMN next_checkpoint_sha256 TEXT');
+  createTelemetryCursorSchema(db);
+  db.exec('PRAGMA user_version = 4');
 }
 
 function migrateV3ToV4(db) {
-  inTransaction(db, 'migrateV3ToV4', () => {
-    createTelemetryCursorSchema(db);
-    db.exec('PRAGMA user_version = 4');
-  });
+  createTelemetryCursorSchema(db);
+  db.exec('PRAGMA user_version = 4');
 }
 
 function migrateV4ToV5(db) {
-  inTransaction(db, 'migrateV4ToV5', () => {
-    createJevObservationSchema(db);
-    db.exec('PRAGMA user_version = 5');
-  });
+  createJevObservationSchema(db);
+  db.exec('PRAGMA user_version = 5');
 }
 
 function initializeDatabase(db) {
@@ -784,13 +776,18 @@ function initializeDatabase(db) {
       "SELECT name FROM sqlite_master WHERE type='table' AND name='workflows'"
     ).get();
     if (!table) fail('initializeDatabase', 'CHECKPOINT_CORRUPT', 'The legacy workflow table is missing.');
-    migrateV1ToV4(db);
-  } else if (version === 2) {
-    migrateV2ToV4(db);
-  } else if (version === 3) {
-    migrateV3ToV4(db);
   }
-  if (readUserVersion(db) === 4) migrateV4ToV5(db);
+  if (version >= 1 && version <= 4) {
+    inTransaction(db, 'initializeDatabase', () => {
+      if (version === 1) migrateV1ToV4(db);
+      else if (version === 2) migrateV2ToV4(db);
+      else if (version === 3) migrateV3ToV4(db);
+      if (readUserVersion(db) === 4) migrateV4ToV5(db);
+      if (readUserVersion(db) !== INTERNAL_SCHEMA_VERSION) {
+        fail('initializeDatabase', 'UNSUPPORTED_SCHEMA_VERSION', 'The durable store schema could not be upgraded safely.');
+      }
+    });
+  }
 }
 
 function mapWorkflow(row) {
