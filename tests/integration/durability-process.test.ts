@@ -498,3 +498,73 @@ test("recovers healthy same-scope work after killing a denied worker", async () 
 		healthy: jobs.job(scope, healthy.id),
 	});
 });
+
+for (const mode of ["job-gc-stage", "job-gc-fail", "job-gc-cancel"] as const) {
+	test(`preserves shared bytes and collects abandoned output after SIGKILL at ${mode}`, async () => {
+		using f = fixture();
+		const input = Buffer.from("opaque");
+		const published = f.store.bind(
+			scope,
+			"export",
+			"gc-published",
+			input,
+			hash(input),
+		);
+		const pubStage = f.store.stage(scope, published.id);
+		f.store.write(scope, pubStage, file());
+		const publication = f.store.publish(scope, pubStage, [file()]);
+		const pending = f.store.bind(
+			scope,
+			"export",
+			"gc-pending",
+			input,
+			hash(input),
+		);
+		const liveStage = f.store.stage(scope, pending.id);
+		const live = file("live.bin", "shared-live");
+		f.store.write(scope, liveStage, live);
+		const running = child(f.path, mode);
+		const checkpoint = parse(
+			z.object({
+				value: z.object({
+					job: idSchema,
+					claim: z.object({ stage: idSchema }),
+				}),
+			}),
+			await running.message,
+		).value;
+		await kill(running.process, running.exited);
+		using restart = new DurabilityDatabase(
+			f.path,
+			undefined,
+			() => 1000 + defaultLimits.leaseMs,
+		);
+		const jobs = new DurableBatchEngine(restart);
+		jobs.claim(scope);
+		const store = new LocalArtifactStore(restart);
+		store.abandon(scope, checkpoint.claim.stage);
+		store.abandon(scope, checkpoint.claim.stage);
+		assert.equal(
+			restart.sql
+				.prepare("SELECT 1 FROM blobs WHERE digest=?")
+				.get(hash("unique-process-gc")),
+			undefined,
+		);
+		assert.equal(store.retrieve(scope, publication.id).files.length, 1);
+		assert.equal(
+			store.retrieve(scope, store.publish(scope, liveStage, [live]).id).files
+				.length,
+			1,
+		);
+		assert.equal(
+			restart.sql.prepare("SELECT COUNT(*) AS n FROM blobs").get()?.["n"],
+			2,
+		);
+		evidence(mode, {
+			killedSignal: "SIGKILL",
+			checkpoint,
+			rows: jobs.inventory(scope, checkpoint.job),
+			retainedBlobs: 2,
+		});
+	});
+}

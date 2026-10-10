@@ -396,19 +396,27 @@ export class LocalArtifactStore {
 		});
 	}
 	abandon(scope: Scope, stage: Id): void {
-		this.db.transaction(() => {
-			const row = this.db.sql
-				.prepare("SELECT operation FROM stages WHERE id=? AND state='open'")
-				.get(stage);
-			check(row !== undefined, "WRITE_ONCE");
-			this.operation(scope, parse(idSchema, row["operation"]));
-			this.db.sql.prepare("DELETE FROM staged_files WHERE stage=?").run(stage);
-			this.db.sql
-				.prepare("UPDATE stages SET state='abandoned' WHERE id=?")
-				.run(stage);
-			this.db.sql.exec(
-				"DELETE FROM blobs WHERE digest NOT IN(SELECT digest FROM staged_files) AND digest NOT IN(SELECT digest FROM files)",
-			);
-		});
+		this.db.transaction(() => this.abandonInTransaction(scope, stage));
+	}
+	abandonInTransaction(scope: Scope, stage: Id): void {
+		this.db.requireTransaction();
+		const row = this.db.sql
+			.prepare("SELECT operation,state FROM stages WHERE id=?")
+			.get(stage);
+		check(
+			row !== undefined &&
+				(row["state"] === "open" || row["state"] === "abandoned"),
+			"WRITE_ONCE",
+		);
+		this.operation(scope, parse(idSchema, row["operation"]));
+		this.db.sql.prepare("DELETE FROM staged_files WHERE stage=?").run(stage);
+		this.db.sql
+			.prepare("UPDATE stages SET state='abandoned' WHERE id=?")
+			.run(stage);
+		this.db.sql
+			.prepare(
+				"DELETE FROM blobs WHERE digest IN (SELECT b.digest FROM blobs b WHERE NOT EXISTS(SELECT 1 FROM staged_files s WHERE s.digest=b.digest) AND NOT EXISTS(SELECT 1 FROM files f WHERE f.digest=b.digest) LIMIT ?)",
+			)
+			.run(this.db.limits.maxFiles);
 	}
 }

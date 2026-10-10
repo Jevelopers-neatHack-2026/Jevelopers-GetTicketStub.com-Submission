@@ -316,14 +316,7 @@ export class DurableBatchEngine {
 			} else {
 				this.endAttempt(row, "interrupted", "INTERRUPTED", false);
 				if (row.stage) {
-					this.db.sql
-						.prepare("DELETE FROM staged_files WHERE stage=?")
-						.run(row.stage);
-					this.db.sql
-						.prepare(
-							"UPDATE stages SET state='abandoned' WHERE id=? AND state='open'",
-						)
-						.run(row.stage);
+					this.store.abandonInTransaction(scope, row.stage);
 				}
 				const exhausted = row.attempts >= this.db.limits.maxAttempts;
 				this.db.sql
@@ -536,12 +529,7 @@ export class DurableBatchEngine {
 					row.job,
 					row.ordinal,
 				);
-			this.db.sql
-				.prepare("DELETE FROM staged_files WHERE stage=?")
-				.run(claim.stage);
-			this.db.sql
-				.prepare("UPDATE stages SET state='abandoned' WHERE id=?")
-				.run(claim.stage);
+			this.store.abandonInTransaction(scope, claim.stage);
 			if (!retry)
 				this.db.sql
 					.prepare("UPDATE operations SET status='failed' WHERE id=?")
@@ -617,14 +605,7 @@ export class DurableBatchEngine {
 				.prepare("UPDATE operations SET status='cancelled' WHERE id=?")
 				.run(row.operation);
 			if (row.stage) {
-				this.db.sql
-					.prepare("DELETE FROM staged_files WHERE stage=?")
-					.run(row.stage);
-				this.db.sql
-					.prepare(
-						"UPDATE stages SET state='abandoned' WHERE id=? AND state='open'",
-					)
-					.run(row.stage);
+				this.store.abandonInTransaction(scope, row.stage);
 			}
 		}
 		const remaining = this.db.sql

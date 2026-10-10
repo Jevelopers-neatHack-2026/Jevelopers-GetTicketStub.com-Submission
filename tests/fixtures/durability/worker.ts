@@ -110,6 +110,22 @@ const main = () => {
 			store.deny(scope, claim.operation);
 			return park({ job: job.id, claim });
 		}
+		case "job-gc-stage":
+		case "job-gc-fail":
+		case "job-gc-cancel": {
+			const job = jobs.create(scope, plan("gc-process", 1));
+			const claim = jobs.claim(scope);
+			if (!claim) throw new Error("fixture claim absent");
+			for (const output of [
+				file(),
+				file("live.bin", "shared-live"),
+				file("unique.bin", "unique-process-gc"),
+			])
+				store.write(scope, claim.stage, output);
+			if (mode === "job-gc-fail") jobs.fail(scope, claim, false);
+			if (mode === "job-gc-cancel") jobs.cancel(scope, job.id);
+			return park({ job: job.id, claim });
+		}
 		case "job-cancel-budget": {
 			const job = jobs.create(scope, plan("cancel-budget-process", 10));
 			const claim = jobs.claim(scope);
