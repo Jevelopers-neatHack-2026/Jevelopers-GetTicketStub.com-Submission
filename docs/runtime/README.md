@@ -68,6 +68,12 @@ evidence. See [the auditable policy and probes](../../scripts/security/README.md
 macOS receipts record sandbox-enabled launch configuration without claiming the
 Linux namespace/seccomp observations.
 
+Sandbox launch failures expose only fixed diagnostic categories. Linux CI also
+records bounded namespace and temporary-filesystem diagnostic probes without
+printing raw Chrome/utility errors. Diagnostics do not replace effective sandbox
+checks or authorize policy relaxation. The first revised Linux candidate failed
+both CI runs; its underlying launch cause requires the new remote observations.
+
 The unmodified Latin normal 400 WOFF2 comes from `@fontsource/noto-sans@5.3.0`
 (upstream Google Fonts metadata v42, last modified 2025-09-11). npm locks tarball
 integrity. Original copyright and full SIL OFL 1.1 are preserved in

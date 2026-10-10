@@ -64,3 +64,36 @@ Run the revised workflow on the exact candidate before claiming Linux success.
 If the host's AppArmor/kernel policy or pinned profile denies namespace creation,
 retain the failed job evidence and diagnose it. Do not replace a control with
 unconfined policy, host IPC, capabilities, privileged mode or a kernel change.
+
+## Bounded launch diagnosis
+
+The candidate `336e14b` failed on Linux runs `38093120634` and `38093124265`.
+Docker inspect confirmed its required container settings; build/typecheck/format
+passed, but the first sandboxed browser launch failed and the integration before
+hook caused 19 failures. The original sanitized error omitted Chrome's reason.
+These failures do not establish a namespace, AppArmor, seccomp or filesystem cause.
+
+Launch failures now preserve only a closed list of cause categories from bounded
+Playwright Chrome stderr lines. Command lines, paths, URLs, raw stderr, stack
+traces, arbitrary error properties and unknown messages are never copied into
+the runtime failure receipt. `UNKNOWN_LAUNCH_FAILURE` remains an explicit result.
+Several recognized signatures may be reported together; none certifies the
+enforcing policy layer. In particular `SANDBOX_UNAVAILABLE` does not prove
+AppArmor denied user namespaces, and `THREAD_CREATE_DENIED` does not prove seccomp.
+
+Before the unchanged mandatory test suites, `launch-diagnostic.mjs` logs actual
+container observations plus two bounded unprivileged namespace probes (user and
+user/PID/network), a run-specific temporary-file create/read/lock probe, numeric
+UID's passwd-entry presence and two read-only kernel policy indicators. Each
+subprocess has a three-second timeout and 16 KiB output limit. Outputs are fixed
+status/reason enums; raw child output and identity data are discarded. The probes
+do not create Chrome configuration directories or modify host/kernel policies.
+Their success is not renderer sandbox attestation, and an EPERM reports its
+enforcing layer as unknown. The renderer still requires its original effective
+sandbox probes, and every existing suite remains required.
+
+No policy repair is justified until the revised remote execution observes a
+specific cause. Chromium's [AppArmor guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md)
+describes kernel/unconfined workarounds that are prohibited in this task. If
+observed host policy blocks the permitted configuration, retain the cause
+evidence and stop that path; do not silently adopt those workarounds.

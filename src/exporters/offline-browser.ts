@@ -1,6 +1,10 @@
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import { readFile } from "node:fs/promises";
-import { requireCheck, VerificationFailure } from "../runtime/errors.js";
+import {
+	classifySandboxLaunchFailure,
+	requireCheck,
+	VerificationFailure,
+} from "../runtime/errors.js";
 import type { RuntimePins } from "../runtime/environment.js";
 import { sha256 } from "../runtime/resources.js";
 import { z } from "zod";
@@ -178,7 +182,7 @@ export async function openOfflineBrowser(pins: RuntimePins): Promise<{
 		if (error instanceof Error)
 			throw new VerificationFailure(
 				"SANDBOX_POLICY_FAILURE",
-				"Sandboxed Chromium launch failed; no unsandboxed fallback is permitted.",
+				`Sandboxed Chromium launch failed [${classifySandboxLaunchFailure(error).join(",")}]; no unsandboxed fallback is permitted.`,
 			);
 		throw error;
 	}
