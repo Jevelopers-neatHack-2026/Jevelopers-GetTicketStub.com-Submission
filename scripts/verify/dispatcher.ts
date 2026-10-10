@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+import { hash } from "../../src/internal/durability.js";
 import { verifyRuntime } from "../../src/runtime/calibration.js";
 import {
 	failureReceipt,
@@ -52,8 +56,9 @@ export const suiteRegistry = {
 		dependency: "External approval contract and immutable asset implementation",
 	},
 	"artifact-storage": {
-		state: "unimplemented",
-		dependency: "Production artifact storage implementation",
+		state: "external-blocked",
+		dependency:
+			"PP-10A private adapter tested; accepted canonical request/hash/scope adapter and app access fixtures absent",
 	},
 	preflight: {
 		state: "unimplemented",
@@ -80,12 +85,14 @@ export const suiteRegistry = {
 		dependency: "Production manifests implementation",
 	},
 	"restart-recovery": {
-		state: "unimplemented",
-		dependency: "Durable job recovery implementation",
+		state: "external-blocked",
+		dependency:
+			"PP-10B private recovery tested; canonical job/row semantics, structured personalization and ProductionBundle ports absent",
 	},
 	"metering-traces": {
-		state: "unimplemented",
-		dependency: "Production metering and trace implementation",
+		state: "external-blocked",
+		dependency:
+			"PP-11 private staged observations tested; accepted UsageEvent/EvaluationEvidence, real finance intake and Neatlogs ports absent",
 	},
 	"integration-production": {
 		state: "unimplemented",
@@ -99,7 +106,11 @@ export const suiteRegistry = {
 } as const satisfies Record<
 	SuiteName,
 	{
-		readonly state: "implemented" | "unimplemented" | "aggregate";
+		readonly state:
+			| "implemented"
+			| "unimplemented"
+			| "aggregate"
+			| "external-blocked";
 		readonly dependency: string;
 	}
 >;
@@ -149,6 +160,56 @@ async function runLeaf(
 	suite: Exclude<SuiteName, "release">,
 	evidenceDir: string,
 ) {
+	if (suiteRegistry[suite].state === "external-blocked") {
+		const files =
+			suite === "artifact-storage"
+				? ["unit/durability-storage.test.js"]
+				: suite === "restart-recovery"
+					? ["unit/durability-jobs.test.js"]
+					: ["unit/durability-telemetry.test.js"];
+		const evidence = join(evidenceDir, suite, "local");
+		await mkdir(evidence, { recursive: true });
+		const paths = [...files, "integration/durability-process.test.js"].map(
+			(file) => fileURLToPath(new URL(`../../tests/${file}`, import.meta.url)),
+		);
+		try {
+			const result = await promisify(execFile)(
+				process.execPath,
+				["--test", ...paths],
+				{
+					env: { ...process.env, PP_DURABILITY_EVIDENCE_DIR: evidence },
+					timeout: 60000,
+					maxBuffer: 1024 * 1024,
+				},
+			);
+			await writeFile(
+				join(evidenceDir, `${suite}-local.json`),
+				JSON.stringify(
+					{
+						state: "passed-private-mechanisms",
+						command: [process.execPath, "--test", ...paths],
+						exitCode: 0,
+						stdoutDigest: hash(result.stdout),
+						stderrDigest: hash(result.stderr),
+						externalState: "external-blocked",
+					},
+					null,
+					2,
+				),
+			);
+		} catch (error) {
+			if (error instanceof Error)
+				throw new VerificationFailure(
+					"RUNTIME_FAILURE",
+					"Private durability checks failed; external integration remains blocked.",
+				);
+			throw error;
+		}
+		throw new VerificationFailure(
+			"SUITE_UNIMPLEMENTED",
+			suiteRegistry[suite].dependency,
+		);
+	}
 	if (suite !== "runtime")
 		throw new VerificationFailure(
 			"SUITE_UNIMPLEMENTED",
@@ -177,6 +238,10 @@ export async function dispatchVerification(
 					results.push({
 						suite: leaf,
 						status: "failed",
+						externalState:
+							suiteRegistry[leaf].state === "external-blocked"
+								? "external-blocked"
+								: null,
 						failure: failureReceipt(error),
 					});
 				}
@@ -216,6 +281,10 @@ export async function dispatchVerification(
 			suite: args.suite,
 			mode: args.mode,
 			status: "failed",
+			externalState:
+				suiteRegistry[args.suite].state === "external-blocked"
+					? "external-blocked"
+					: null,
 			failure: failureReceipt(error),
 		};
 		exitCode = 1;
