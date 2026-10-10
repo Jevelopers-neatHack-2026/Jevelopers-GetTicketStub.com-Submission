@@ -150,8 +150,11 @@ async function inspectDatabase(root, tenantId = 'tenant-a') {
       versionSealedLengths: database.prepare('SELECT length(sealed) AS length FROM versions WHERE sealed IS NOT NULL ORDER BY event_key, revision').all()
         .map((row) => row.length),
       idempotencyCount: database.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count,
+      idempotencyRows: database.prepare('SELECT * FROM idempotency ORDER BY event_key, key_hash').all(),
       references: database.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count,
+      referenceRows: database.prepare('SELECT * FROM downstream_references ORDER BY event_key, reference_hash').all(),
       invalidations: database.prepare('SELECT COUNT(*) AS count FROM invalidations').get().count,
+      invalidationRows: database.prepare('SELECT * FROM invalidations ORDER BY event_key, reference_hash, prior_version_id, prior_content_hash').all(),
       sealedBytes: database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS count FROM versions WHERE sealed IS NOT NULL").get().count
         + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS count FROM downstream_references').get().count,
     };
@@ -687,12 +690,29 @@ test('malformed arrays and hostile error codes become fixed typed failures witho
     'history.sqlite')));
 });
 
-test('abort inputs use the intrinsic brand-checked state and never leak hostile getter errors', async (t) => {
+test('abort inputs reject proxies, use captured intrinsic state, and never leak hostile getter errors', async (t) => {
   for (const operation of ['create', 'correction', 'refresh']) {
-    for (const kind of ['aborted', 'throwing_getter_aborted', 'prototype_forgery', 'proxy', 'revoked_proxy']) {
+    for (const kind of ['aborted', 'throwing_getter_aborted', 'prototype_forgery', 'proxy', 'revoked_proxy',
+      'transparent_proxy', 'forwarding_proxy', 'state_masking_proxy']) {
       await t.test(`${operation} rejects ${kind} with a fixed typed error and no mutation`, async (subtest) => {
         const harness = await createHarness(subtest);
-        const first = (await createSeed(harness)).snapshot;
+        const seeded = (await createSeed(harness)).snapshot;
+        await harness.store.registerDownstreamReference(harness.scope, {
+          eventId: EVENT_ID,
+          versionId: seeded.versionId,
+          contentHash: seeded.contentHash,
+          referenceId: `abort-prior-${operation}-${kind}`,
+          kind: 'approval_reference',
+        }, harness.request);
+        const first = (await correction(harness, seeded, 'event_date', { precision: 'date', value: '2027-06-19' },
+          `abort-setup-${operation}-${kind}`)).snapshot;
+        await harness.store.registerDownstreamReference(harness.scope, {
+          eventId: EVENT_ID,
+          versionId: first.versionId,
+          contentHash: first.contentHash,
+          referenceId: `abort-current-${operation}-${kind}`,
+          kind: 'handoff_reference',
+        }, harness.request);
         const before = await inspectDatabase(harness.root);
         let getterCalls = 0;
         let signal;
@@ -716,10 +736,30 @@ test('abort inputs use the intrinsic brand-checked state and never leak hostile 
           signal = new Proxy(new AbortController().signal, {
             get() { throw new Error('SYNTHETIC_ABORT_SECRET'); },
           });
-        } else {
+        } else if (kind === 'revoked_proxy') {
           const revoked = Proxy.revocable(new AbortController().signal, {});
           revoked.revoke();
           signal = revoked.proxy;
+        } else {
+          const controller = new AbortController();
+          controller.abort();
+          const abortedSymbol = Object.getOwnPropertySymbols(controller.signal)
+            .find((symbol) => symbol.description === 'kAborted');
+          if (kind === 'transparent_proxy') {
+            signal = new Proxy(controller.signal, {});
+          } else if (kind === 'forwarding_proxy') {
+            signal = new Proxy(controller.signal, {
+              get(target, key, receiver) { return Reflect.get(target, key, receiver); },
+            });
+          } else {
+            assert.ok(abortedSymbol);
+            signal = new Proxy(controller.signal, {
+              get(target, key, receiver) {
+                if (key === abortedSymbol) return false;
+                return Reflect.get(target, key, receiver);
+              },
+            });
+          }
         }
 
         let operationPromise;

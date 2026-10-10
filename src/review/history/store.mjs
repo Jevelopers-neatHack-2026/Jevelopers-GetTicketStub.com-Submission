@@ -9,6 +9,7 @@ import {
 import { DatabaseSync } from 'node:sqlite';
 import { chmod, lstat, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { types as utilTypes } from 'node:util';
 
 const FIELD_TYPES = Object.freeze({
   event_name: 'text',
@@ -44,6 +45,7 @@ const TYPED_ARRAY_LENGTH_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PR
 const TYPED_ARRAY_SET = Uint8Array.prototype.set;
 const TYPED_ARRAY_FILL = Uint8Array.prototype.fill;
 const REFLECT_APPLY = Reflect.apply;
+const UTIL_TYPES_IS_PROXY = utilTypes.isProxy;
 const MAX_VERSION_PLAINTEXT_BYTES = 512 * 1024;
 const MAX_VERSION_SEALED_BYTES = 512 * 1024;
 const TENANT_DATABASE_QUEUES = new Map();
@@ -461,6 +463,9 @@ async function withTenantDatabaseQueue(directory, operation) {
 function readAborted(signal) {
   if (typeof ABORT_SIGNAL_ABORTED_GETTER !== 'function') fail();
   try {
+    // Node 22's native getter reads AbortSignal state through reflectable symbols.
+    // Reject proxies first because their get traps can hide an actual abort.
+    if (UTIL_TYPES_IS_PROXY(signal)) fail();
     return REFLECT_APPLY(ABORT_SIGNAL_ABORTED_GETTER, signal, []);
   } catch {
     fail();

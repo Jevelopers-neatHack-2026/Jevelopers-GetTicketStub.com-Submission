@@ -236,6 +236,7 @@ export interface CorrectionHistoryStoreOptions<Request = unknown, RetentionHandl
 }
 
 export interface HistoryWriteOptions {
+  /** Pass a genuine, non-proxy signal directly from trusted in-process code. The runtime getter is not an authenticity check for symbol-copied objects. */
   readonly signal?: AbortSignal;
 }
 export interface HistoryWriteResult {
