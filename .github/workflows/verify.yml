@@ -19,5 +19,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: make verify CASE=safe-retrieval MODE=mock
+      - run: make verify CASE=content-privacy MODE=mock
       - run: npm run test:runner
       - run: npm run typecheck

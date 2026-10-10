@@ -10,5 +10,5 @@
     "skipLibCheck": false,
     "noErrorTruncation": true
   },
-  "files": ["types/consumer-fixture.mts"]
+  "files": ["types/consumer-fixture.mts", "tests/privacy/types-consumer.mts"]
 }
