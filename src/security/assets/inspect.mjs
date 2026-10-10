@@ -26,9 +26,14 @@ const XMLNS_NS = 'http://www.w3.org/2000/xmlns/';
 const MIME_SVG = 'image/svg+xml';
 const HARD_SOURCE_LIMIT = SAFE_ASSET_LIMITS.maxSourceBytes;
 const NUMBER_SOURCE = '[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?';
-const NUMBER_RE = new RegExp(`^${NUMBER_SOURCE}$`);
-const NUMBER_LIST_RE = new RegExp(`^\\s*${NUMBER_SOURCE}(?:(?:\\s*,\\s*|\\s+)${NUMBER_SOURCE})*\\s*$`);
+const END_OF_INPUT = '(?![\\s\\S])';
+const NUMBER_RE = new RegExp(`^${NUMBER_SOURCE}${END_OF_INPUT}`);
+const XML_S_SOURCE = '[\\x20\\x09\\x0a\\x0d]';
+const NUMBER_LIST_SEPARATOR_SOURCE = `(?:${XML_S_SOURCE}*,${XML_S_SOURCE}*|${XML_S_SOURCE}+)`;
+const NUMBER_LIST_RE = new RegExp(`^${XML_S_SOURCE}*${NUMBER_SOURCE}(?:${NUMBER_LIST_SEPARATOR_SOURCE}${NUMBER_SOURCE})*${XML_S_SOURCE}*${END_OF_INPUT}`);
 const POINT_NUMBER_RE = new RegExp(NUMBER_SOURCE, 'g');
+const SHORT_HEX_COLOR_RE = /^#[0-9a-f]{3}(?![\s\S])/;
+const LONG_HEX_COLOR_RE = /^#[0-9a-f]{6}(?![\s\S])/;
 const PAINT_NUMERIC_ATTRIBUTES = new Set([
   'stroke-width', 'opacity', 'fill-opacity', 'stroke-opacity', 'stroke-miterlimit',
 ]);
@@ -190,6 +195,32 @@ function isWellFormedUnicode(value) {
   return true;
 }
 
+// XML 1.0 Fifth Edition production [2] Char, excluding surrogates and U+FFFE/U+FFFF.
+function isXml10Character(codePoint) {
+  return codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d
+    || (codePoint >= 0x20 && codePoint <= 0xd7ff)
+    || (codePoint >= 0xe000 && codePoint <= 0xfffd)
+    || (codePoint >= 0x10000 && codePoint <= 0x10ffff);
+}
+
+function hasXml10Characters(text, check) {
+  for (let index = 0; index < text.length; index += 1) {
+    if ((index & 0x3ff) === 0 && check() !== null) return null;
+    const first = text.charCodeAt(index);
+    if (first >= 0xd800 && first <= 0xdbff) {
+      const second = text.charCodeAt(index + 1);
+      if (!(second >= 0xdc00 && second <= 0xdfff)) return false;
+      const codePoint = 0x10000 + ((first - 0xd800) << 10) + (second - 0xdc00);
+      if (!isXml10Character(codePoint)) return false;
+      index += 1;
+      continue;
+    }
+    if (first >= 0xdc00 && first <= 0xdfff) return false;
+    if (!isXml10Character(first)) return false;
+  }
+  return check() === null;
+}
+
 function makeResult({ action, code, sourceBytes = null, sourceSize = null, sourceHash = undefined, transformedBytes = null }) {
   const internalTransformedBytes = transformedBytes === null ? null : cloneBytes(transformedBytes);
   const retainedSourceHash = sourceHash === undefined ? (sourceBytes === null ? null : sha256(sourceBytes)) : sourceHash;
@@ -258,7 +289,7 @@ function hasOversizedNumberToken(value) {
 function safeColor(value) {
   const normalized = value.toLowerCase();
   if (SAFE_COLORS.has(normalized)) return normalized;
-  if (/^#[0-9a-f]{3}$/.test(normalized) || /^#[0-9a-f]{6}$/.test(normalized)) return normalized;
+  if (SHORT_HEX_COLOR_RE.test(normalized) || LONG_HEX_COLOR_RE.test(normalized)) return normalized;
   return null;
 }
 
@@ -473,6 +504,9 @@ function parseSvg(text, options, deadlineAtMs) {
   };
   state.guard();
   if (state.action !== null) return { action: state.action, code: state.code };
+  const validXmlCharacters = hasXml10Characters(text, () => state.guard());
+  if (state.action !== null) return { action: state.action, code: state.code };
+  if (!validXmlCharacters) return { action: 'reject', code: 'SVG_MALFORMED' };
   if (text.includes('&')) return { action: 'reject', code: 'SVG_ENTITY_REFERENCE' };
   if (text.includes('<!')) return { action: 'reject', code: 'SVG_UNSUPPORTED_DECLARATION' };
   if (text.includes('<?')) return { action: 'reject', code: 'SVG_UNSUPPORTED_DECLARATION' };

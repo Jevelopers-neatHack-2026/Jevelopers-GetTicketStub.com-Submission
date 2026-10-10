@@ -90,6 +90,72 @@ test('rejects declarations, entity references, malformed XML, trailing markup, a
   }
 });
 
+test('rejects every tested XML 1.0 forbidden character before SVG normalization', () => {
+  const cases = [
+    ['vertical tab in viewBox separator', svg(`<rect width="1" height="1"/>`).replace('viewBox="0,0,120,80"', 'viewBox="0\u000b0 120 80"'), 'SVG_MALFORMED'],
+    ['form feed in viewBox separator', svg(`<rect width="1" height="1"/>`).replace('viewBox="0,0,120,80"', 'viewBox="0\u000c0 120 80"'), 'SVG_MALFORMED'],
+    ['vertical tab in polyline points', svg(`<polyline points="0\u000b0 1 1"/>`), 'SVG_MALFORMED'],
+    ['form feed in polygon points', svg(`<polygon points="0 0\u000c1 1 2 2"/>`), 'SVG_MALFORMED'],
+    ['NUL in a numeric attribute', svg(`<rect width="1\u0000" height="1"/>`), 'SVG_MALFORMED'],
+    ['C0 control in text content', svg(`<g>\u001f</g>`), 'SVG_MALFORMED'],
+    ['C0 control in unsupported attribute', svg(`<rect width="1" height="1" data-note="a\u000b"/>`), 'SVG_MALFORMED'],
+    ['U+FFFE in attribute', svg(`<rect width="1" height="1" data-note="\uFFFE"/>`), 'SVG_MALFORMED'],
+    ['U+FFFF in paint attribute', svg(`<rect width="1" height="1" fill="\uFFFF"/>`), 'SVG_MALFORMED'],
+    ['U+FFFE in text content', svg(`<g>\uFFFE</g>`), 'SVG_MALFORMED'],
+    ['U+FFFE in viewBox', svg(`<rect width="1" height="1"/>`).replace('viewBox="0,0,120,80"', 'viewBox="0\uFFFE0 120 80"'), 'SVG_MALFORMED'],
+    ['U+FFFF in points', svg(`<polyline points="0 0 1\uFFFF1"/>`), 'SVG_MALFORMED'],
+    ['U+FFFF in unsupported attribute', svg(`<rect width="1" height="1" data-note="\uFFFF"/>`), 'SVG_MALFORMED'],
+    ['U+FFFF in text content', svg(`<g>\uFFFF</g>`), 'SVG_MALFORMED'],
+  ];
+  const forbiddenC0 = Array.from({ length: 0x20 }, (_, codePoint) => codePoint)
+    .filter((codePoint) => ![0x09, 0x0a, 0x0d].includes(codePoint));
+  for (const codePoint of forbiddenC0) {
+    const character = String.fromCodePoint(codePoint);
+    const label = `U+${codePoint.toString(16).padStart(4, '0').toUpperCase()}`;
+    cases.push([`${label} in viewBox`, `<svg xmlns="${SVG_NS}" width="10" height="10" viewBox="0${character}0 10 10"/>`, 'SVG_MALFORMED']);
+    cases.push([`${label} in points`, `<svg xmlns="${SVG_NS}" width="10" height="10"><polyline points="0${character}0 1 1"/></svg>`, 'SVG_MALFORMED']);
+  }
+  for (const [name, source, code] of cases) {
+    const result = inspect(bytes(source));
+    assert.equal(result.action, 'reject', name);
+    assert.equal(result.diagnostics[0].code, code, name);
+    assert.equal(result.transformedHash, null, name);
+    assert.equal(result.copyTransformedBytes(), null, name);
+  }
+  const source = bytes(svg(`<rect width="1" height="1" data-note="\uE000\uFFFD\u{10000}\u{10FFFF}"/>`));
+  const result = inspect(source);
+  assert.equal(result.action, 'review');
+  assert.equal(result.diagnostics[0].code, 'SVG_UNSUPPORTED_FEATURE');
+  assert.equal(result.transformedHash, null);
+});
+
+test('accepts only XML S separators in number lists and preserves all six geometry shapes', () => {
+  const source = bytes(`<svg xmlns="${SVG_NS}" width="10" height="10" viewBox="0\t0\n10\r10"><rect width="1" height="1"/><circle cx="2" cy="2" r="1"/><ellipse cx="4" cy="4" rx="2" ry="1"/><line x1="0" y1="0" x2="1" y2="1"/><polyline points="0\t0,1\n1"/><polygon points="0\r0 1 0 1 1"/></svg>`);
+  const result = inspect(source);
+  assert.equal(result.action, 'transformed');
+  const transformed = Buffer.from(result.copyTransformedBytes()).toString('utf8');
+  assert.match(transformed, /viewBox="0 0 10 10"/);
+  for (const shape of ['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon']) {
+    assert.ok(transformed.includes(`<${shape}`), `expected ${shape} in transformed SVG`);
+  }
+  assert.ok(transformed.includes('points="0 0 1 1"'));
+  assert.ok(transformed.includes('points="0 0 1 0 1 1"'));
+
+  const nonXmlSpaces = [
+    ['no-break space separator', `<svg xmlns="${SVG_NS}" width="10" height="10" viewBox="0\u00a00 10 10"/>`],
+    ['Unicode line separator suffix', `<svg xmlns="${SVG_NS}" width="10" height="10" viewBox="0 0 10 10\u2028"/>`],
+    ['Unicode paragraph separator suffix', `<svg xmlns="${SVG_NS}" width="10" height="10"><polyline points="0 0 1 1\u2029"/></svg>`],
+    ['Unicode line separator after scalar number', `<svg xmlns="${SVG_NS}" width="10\u2028" height="10"/>`],
+    ['Unicode line separator after hex color', `<svg xmlns="${SVG_NS}" width="10" height="10"><rect width="1" height="1" fill="#abc\u2028"/></svg>`],
+  ];
+  for (const [name, source] of nonXmlSpaces) {
+    const review = inspect(bytes(source));
+    assert.equal(review.action, 'review', name);
+    assert.equal(review.diagnostics[0].code, 'SVG_UNSUPPORTED_FEATURE', name);
+    assert.equal(review.transformedHash, null, name);
+  }
+});
+
 test('requires an exact SVG media type and keeps unsupported raster bytes in review', () => {
   const source = bytes(svg());
   const mismatch = inspect(source, 'image/png');
