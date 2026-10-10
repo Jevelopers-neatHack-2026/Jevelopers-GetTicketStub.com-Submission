@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
 import {
   inspectSafeAssetBytes,
@@ -71,6 +72,9 @@ test('rejects declarations, entity references, malformed XML, trailing markup, a
     ['XML declaration', `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="${SVG_NS}" width="1" height="1"/>`, 'SVG_UNSUPPORTED_DECLARATION'],
     ['predefined entity', svg('<rect width="1" height="1" aria-label="a&amp;b"/>'), 'SVG_ENTITY_REFERENCE'],
     ['numeric entity', svg('<rect width="1" height="1" fill="&#x72;ed"/>'), 'SVG_ENTITY_REFERENCE'],
+    ['duplicate raw attribute names', svg('<rect width="1" width="2" height="1"/>'), 'SVG_MALFORMED'],
+    ['duplicate active attributes', svg('<rect width="1" height="1" onload="first()" onload="second()"/>'), 'SVG_ACTIVE_CONTENT'],
+    ['duplicate namespace declaration', `<svg xmlns="evil" xmlns="${SVG_NS}" width="1" height="1"/>`, 'SVG_MALFORMED'],
     ['mismatched close', bytes(`<svg xmlns="${SVG_NS}" width="1" height="1"><g></svg>`), 'SVG_MALFORMED'],
     ['trailing root', `${svg()}<html/>`, 'SVG_MALFORMED'],
     ['trailing non-whitespace text', `${svg()}trailing`, 'SVG_MALFORMED'],
@@ -112,6 +116,9 @@ test('rejects malformed UTF-8, non-finite and out-of-bound geometry', async (t) 
     ['attribute token limit', svg(`<polyline points="${Array(130).fill('1 1').join(' ')}"/>`), 'LIMIT_EXCEEDED'],
     ['attribute count limit', `<svg xmlns="${SVG_NS}" width="1" height="1" ${Array(22).fill(0).map((_, index) => `data-${index}="x"`).join(' ')}/>`, 'LIMIT_EXCEEDED'],
     ['attribute value token limit', svg(`<rect width="1" height="1" fill="${'x'.repeat(SAFE_ASSET_LIMITS.maxAttributeValueLength + 1)}"/>`), 'LIMIT_EXCEEDED'],
+    ['overwritten oversized first attribute', svg(`<rect width="1" height="1" fill="${'x'.repeat(SAFE_ASSET_LIMITS.maxAttributeValueLength + 1)}" fill="red"/>`), 'LIMIT_EXCEEDED'],
+    ['one thousand duplicate raw attributes', svg(`<rect ${Array(1000).fill('width="1"').join(' ')} height="1"/>`), 'SVG_MALFORMED'],
+    ['raw attribute count limit', svg(`<rect ${Array(32).fill(0).map((_, index) => `data-${index}="x"`).join(' ')} width="1" height="1"/>`), 'LIMIT_EXCEEDED'],
     ['attribute name limit', `<svg xmlns="${SVG_NS}" width="1" height="1" ${`x${'a'.repeat(SAFE_ASSET_LIMITS.maxNameLength)}="y"`}/>`, 'LIMIT_EXCEEDED'],
     ['numeric token limit', svg(`<circle cx="${'1'.repeat(SAFE_ASSET_LIMITS.maxNumericTokenLength + 1)}" cy="1" r="1"/>`), 'LIMIT_EXCEEDED'],
   ];
@@ -154,6 +161,56 @@ test('enforces byte, depth, element, abort, and deadline bounds', async (t) => {
     assert.equal(result.action, 'reject');
     assert.equal(result.diagnostics[0].code, 'DEADLINE_EXCEEDED');
   });
+
+  await t.test('deadline expiry after result construction prevents publishing transformed bytes', () => {
+    const originalNow = Object.getOwnPropertyDescriptor(performance, 'now');
+    const originalEncode = Object.getOwnPropertyDescriptor(TextEncoder.prototype, 'encode');
+    let fakeNow = 1000;
+    let afterEncoding = false;
+    let postEncodingChecks = 0;
+    Object.defineProperty(performance, 'now', {
+      configurable: true,
+      writable: true,
+      value() {
+        if (afterEncoding) {
+          postEncodingChecks += 1;
+          if (postEncodingChecks >= 3) return 2000;
+        }
+        return fakeNow;
+      },
+    });
+    Object.defineProperty(TextEncoder.prototype, 'encode', {
+      ...originalEncode,
+      value(value) {
+        const output = originalEncode.value.call(this, value);
+        afterEncoding = true;
+        fakeNow = 1000;
+        return output;
+      },
+    });
+    let result;
+    try {
+      result = inspect(bytes(svg()), SVG_TYPE, { deadlineAtMs: 1500 });
+    } finally {
+      if (originalNow === undefined) delete performance.now;
+      else Object.defineProperty(performance, 'now', originalNow);
+      Object.defineProperty(TextEncoder.prototype, 'encode', originalEncode);
+    }
+    assert.equal(postEncodingChecks, 3, 'the final publication guard runs after result copying and hashing');
+    assert.equal(result.action, 'reject');
+    assert.equal(result.diagnostics[0].code, 'DEADLINE_EXCEEDED');
+    assert.equal(result.transformedHash, null);
+    assert.equal(result.copyTransformedBytes(), null);
+  });
+});
+
+test('rejects a dangerous first duplicate value even when a later value is safe', () => {
+  const source = bytes(svg('<rect fill="url(https://evil.invalid/a.svg)" fill="red" width="1" height="1"/>'));
+  const result = inspect(source);
+  assert.equal(result.action, 'reject');
+  assert.equal(result.diagnostics[0].code, 'SVG_ACTIVE_CONTENT');
+  assert.equal(result.transformedHash, null);
+  assert.equal(result.copyTransformedBytes(), null);
 });
 
 test('copies source before inspection and keeps result bytes/hash stable across caller mutation', () => {

@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { isProxy } from 'node:util/types';
 import sax from 'sax';
 
 export const SAFE_ASSET_POLICY_VERSION = 'svg-static-geometry/1';
@@ -86,6 +87,7 @@ function cloneBytes(bytes) {
 
 function copyCandidateBytes(candidate, maxBytes = HARD_SOURCE_LIMIT) {
   try {
+    if (isProxy(candidate)) return null;
     if (!ArrayBuffer.isView(candidate)) return null;
     const prototype = Object.getPrototypeOf(candidate);
     if (prototype !== Uint8Array.prototype && prototype !== Buffer.prototype) return null;
@@ -107,6 +109,7 @@ function copyCandidateBytes(candidate, maxBytes = HARD_SOURCE_LIMIT) {
 
 function candidateByteLength(candidate) {
   try {
+    if (isProxy(candidate)) return null;
     if (!ArrayBuffer.isView(candidate)) return null;
     const prototype = Object.getPrototypeOf(candidate);
     if (prototype !== Uint8Array.prototype && prototype !== Buffer.prototype) return null;
@@ -125,7 +128,7 @@ function candidateByteLength(candidate) {
 function readOptions(options) {
   if (options === undefined) return { contentType: null, signal: null, deadlineAtMs: null, valid: true };
   try {
-    if (options === null || typeof options !== 'object') return { valid: false };
+    if (options === null || typeof options !== 'object' || isProxy(options)) return { valid: false };
     const prototype = Object.getPrototypeOf(options);
     if (prototype !== Object.prototype && prototype !== null) return { valid: false };
     const descriptors = Object.getOwnPropertyDescriptors(options);
@@ -187,16 +190,16 @@ function isWellFormedUnicode(value) {
   return true;
 }
 
-function makeResult({ action, code, sourceBytes = null, sourceSize = null, transformedBytes = null }) {
+function makeResult({ action, code, sourceBytes = null, sourceSize = null, sourceHash = undefined, transformedBytes = null }) {
   const internalTransformedBytes = transformedBytes === null ? null : cloneBytes(transformedBytes);
-  const sourceHash = sourceBytes === null ? null : sha256(sourceBytes);
+  const retainedSourceHash = sourceHash === undefined ? (sourceBytes === null ? null : sha256(sourceBytes)) : sourceHash;
   const transformedHash = internalTransformedBytes === null ? null : sha256(internalTransformedBytes);
   const diagnostics = Object.freeze([Object.freeze({ code })]);
   return Object.freeze({
     policyVersion: SAFE_ASSET_POLICY_VERSION,
     action,
     contentType: action === 'transformed' ? MIME_SVG : null,
-    sourceHash,
+    sourceHash: retainedSourceHash,
     transformedHash,
     sourceSize: sourceBytes === null ? sourceSize : sourceBytes.length,
     transformedSize: internalTransformedBytes === null ? null : internalTransformedBytes.length,
@@ -213,13 +216,14 @@ function makeResult({ action, code, sourceBytes = null, sourceSize = null, trans
   });
 }
 
-function fail(action, code, sourceBytes = null, sourceSize = null) {
-  return makeResult({ action, code, sourceBytes, sourceSize });
+function fail(action, code, sourceBytes = null, sourceSize = null, sourceHash = undefined) {
+  return makeResult({ action, code, sourceBytes, sourceSize, sourceHash });
 }
 
 function guardState(options, localDeadlineAtMs) {
   if (isAborted(options.signal)) return 'CANCELLED';
-  if (performance.now() > localDeadlineAtMs || (options.deadlineAtMs !== null && performance.now() > options.deadlineAtMs)) {
+  const now = performance.now();
+  if (now >= localDeadlineAtMs || (options.deadlineAtMs !== null && now >= options.deadlineAtMs)) {
     return 'DEADLINE_EXCEEDED';
   }
   return null;
@@ -425,10 +429,18 @@ function escapeAttribute(value) {
   return String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 }
 
-function serializeNode(node) {
+function serializeNode(node, state) {
+  state.guard();
+  if (state.action !== null) return null;
   const attributes = serializeAttributes(node.attributes);
   if (node.name !== 'svg' && node.name !== 'g') return `<${node.name}${attributes}/>`;
-  return `<${node.name}${attributes}>${node.children.map(serializeNode).join('')}</${node.name}>`;
+  const children = [];
+  for (const child of node.children) {
+    const serializedChild = serializeNode(child, state);
+    if (serializedChild === null) return null;
+    children.push(serializedChild);
+  }
+  return `<${node.name}${attributes}>${children.join('')}</${node.name}>`;
 }
 
 function looksLikeMarkup(bytes) {
@@ -440,9 +452,7 @@ function looksLikeMarkup(bytes) {
   }
 }
 
-function parseSvg(text, options) {
-  const start = performance.now();
-  const deadlineAtMs = start + SAFE_ASSET_LIMITS.maxProcessingMs;
+function parseSvg(text, options, deadlineAtMs) {
   const state = {
     action: null,
     code: null,
@@ -461,15 +471,51 @@ function parseSvg(text, options) {
       return code;
     },
   };
+  state.guard();
+  if (state.action !== null) return { action: state.action, code: state.code };
   if (text.includes('&')) return { action: 'reject', code: 'SVG_ENTITY_REFERENCE' };
   if (text.includes('<!')) return { action: 'reject', code: 'SVG_UNSUPPORTED_DECLARATION' };
   if (text.includes('<?')) return { action: 'reject', code: 'SVG_UNSUPPORTED_DECLARATION' };
-
   const parser = sax.parser(true, { xmlns: true, strictEntities: true, position: true });
   parser.onerror = () => state.fail('reject', 'SVG_MALFORMED');
   parser.ondoctype = () => state.fail('reject', 'SVG_UNSUPPORTED_DECLARATION');
   parser.onprocessinginstruction = () => state.fail('reject', 'SVG_UNSUPPORTED_DECLARATION');
   parser.oncomment = () => state.fail('reject', 'SVG_UNSUPPORTED_DECLARATION');
+  let rawAttributeNames = new Set();
+  let rawAttributeCount = 0;
+  parser.onopentagstart = () => {
+    state.guard();
+    rawAttributeNames = new Set();
+    rawAttributeCount = 0;
+  };
+  parser.onattribute = (attribute) => {
+    state.guard();
+    if (typeof attribute.name !== 'string' || typeof attribute.value !== 'string') {
+      state.fail('reject', 'SVG_MALFORMED');
+      return;
+    }
+    if (attribute.name.length > SAFE_ASSET_LIMITS.maxNameLength
+      || attribute.value.length > SAFE_ASSET_LIMITS.maxAttributeValueLength) {
+      state.fail('reject', 'LIMIT_EXCEEDED');
+      return;
+    }
+    rawAttributeCount += 1;
+    if (rawAttributeCount > SAFE_ASSET_LIMITS.maxAttributesPerElement) {
+      state.fail('reject', 'LIMIT_EXCEEDED');
+      return;
+    }
+    if (rawAttributeNames.has(attribute.name)) {
+      state.fail('reject', 'SVG_MALFORMED');
+      return;
+    }
+    rawAttributeNames.add(attribute.name);
+    const lowerName = attribute.name.toLowerCase();
+    if (lowerName.startsWith('on') || ACTIVE_ATTRIBUTES.has(lowerName) || lowerName === 'style'
+      || lowerName === 'href' || lowerName.endsWith(':href') || lowerName === 'src'
+      || dangerousValue(attribute.value)) {
+      state.fail('reject', 'SVG_ACTIVE_CONTENT');
+    }
+  };
   parser.ontext = (value) => {
     if (state.action !== null) return;
     state.guard();
@@ -553,15 +599,21 @@ function parseSvg(text, options) {
     }
     if (state.action === null) {
       state.guard();
-      if (state.action === null) parser.close();
+      if (state.action === null) {
+        parser.close();
+        state.guard();
+      }
     }
   } catch {
     state.fail('reject', 'SVG_MALFORMED');
   }
   if (state.action !== null) return { action: state.action, code: state.code };
   if (state.stack.length !== 0 || state.root === null) return { action: 'reject', code: 'SVG_MALFORMED' };
-  const serialized = serializeNode(state.root);
+  const serialized = serializeNode(state.root, state);
+  if (state.action !== null || serialized === null) return { action: state.action, code: state.code };
   const transformedBytes = new TextEncoder().encode(serialized);
+  state.guard();
+  if (state.action !== null) return { action: state.action, code: state.code };
   if (transformedBytes.length > SAFE_ASSET_LIMITS.maxTransformedBytes) return { action: 'reject', code: 'LIMIT_EXCEEDED' };
   return { action: 'transformed', code: 'SVG_SANITIZED', transformedBytes };
 }
@@ -571,9 +623,11 @@ function parseSvg(text, options) {
  * deterministic serialization of the closed static SVG geometry subset.
  */
 export function inspectSafeAssetBytes(candidateBytes, options) {
+  const operationStartedAtMs = performance.now();
+  const localDeadlineAtMs = operationStartedAtMs + SAFE_ASSET_LIMITS.maxProcessingMs;
   const parsedOptions = readOptions(options);
   if (!parsedOptions.valid) return fail('reject', 'INVALID_INPUT');
-  const initialGuard = guardState(parsedOptions, performance.now() + SAFE_ASSET_LIMITS.maxProcessingMs);
+  const initialGuard = guardState(parsedOptions, localDeadlineAtMs);
   if (initialGuard !== null) return fail('reject', initialGuard);
 
   const candidateSize = candidateByteLength(candidateBytes);
@@ -582,23 +636,40 @@ export function inspectSafeAssetBytes(candidateBytes, options) {
   const sourceBytes = copyCandidateBytes(candidateBytes);
   if (sourceBytes === null) return fail('reject', 'INVALID_INPUT');
   const sourceHash = sha256(sourceBytes);
-  if (sourceBytes.length > SAFE_ASSET_LIMITS.maxSourceBytes) return fail('reject', 'LIMIT_EXCEEDED', sourceBytes);
+  const postSnapshotGuard = guardState(parsedOptions, localDeadlineAtMs);
+  if (postSnapshotGuard !== null) return fail('reject', postSnapshotGuard, sourceBytes, null, sourceHash);
+  if (sourceBytes.length > SAFE_ASSET_LIMITS.maxSourceBytes) return fail('reject', 'LIMIT_EXCEEDED', sourceBytes, null, sourceHash);
 
   const contentType = parsedOptions.contentType?.trim().toLowerCase() ?? '';
   if (contentType !== MIME_SVG) {
-    if (contentType !== '' && looksLikeMarkup(sourceBytes)) return fail('reject', 'CONTENT_TYPE_MISMATCH', sourceBytes);
-    return fail('review', contentType.length === 0 ? 'CONTENT_TYPE_REQUIRED' : 'UNSUPPORTED_CONTENT_TYPE', sourceBytes);
+    const code = contentType !== '' && looksLikeMarkup(sourceBytes) ? 'CONTENT_TYPE_MISMATCH'
+      : contentType.length === 0 ? 'CONTENT_TYPE_REQUIRED' : 'UNSUPPORTED_CONTENT_TYPE';
+    const guardCode = guardState(parsedOptions, localDeadlineAtMs);
+    if (guardCode !== null) return fail('reject', guardCode, sourceBytes, null, sourceHash);
+    return fail(code === 'CONTENT_TYPE_MISMATCH' ? 'reject' : 'review', code, sourceBytes, null, sourceHash);
   }
 
   let text;
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(sourceBytes);
   } catch {
-    return fail('reject', 'INVALID_UTF8', sourceBytes);
+    const guardCode = guardState(parsedOptions, localDeadlineAtMs);
+    return fail('reject', guardCode ?? 'INVALID_UTF8', sourceBytes, null, sourceHash);
   }
-  const guardCode = guardState(parsedOptions, performance.now() + SAFE_ASSET_LIMITS.maxProcessingMs);
-  if (guardCode !== null) return fail('reject', guardCode, sourceBytes);
-  const parsed = parseSvg(text, parsedOptions);
-  if (parsed.action !== 'transformed') return fail(parsed.action, parsed.code, sourceBytes);
-  return makeResult({ action: 'transformed', code: parsed.code, sourceBytes, transformedBytes: parsed.transformedBytes });
+  const guardCode = guardState(parsedOptions, localDeadlineAtMs);
+  if (guardCode !== null) return fail('reject', guardCode, sourceBytes, null, sourceHash);
+  const parsed = parseSvg(text, parsedOptions, localDeadlineAtMs);
+  const postParseGuard = guardState(parsedOptions, localDeadlineAtMs);
+  if (postParseGuard !== null) return fail('reject', postParseGuard, sourceBytes, null, sourceHash);
+  if (parsed.action !== 'transformed') return fail(parsed.action, parsed.code, sourceBytes, null, sourceHash);
+  const transformedResult = makeResult({
+    action: 'transformed',
+    code: parsed.code,
+    sourceBytes,
+    sourceHash,
+    transformedBytes: parsed.transformedBytes,
+  });
+  const beforePublishGuard = guardState(parsedOptions, localDeadlineAtMs);
+  if (beforePublishGuard !== null) return fail('reject', beforePublishGuard, sourceBytes, null, sourceHash);
+  return transformedResult;
 }
