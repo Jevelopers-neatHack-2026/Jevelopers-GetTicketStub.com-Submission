@@ -283,7 +283,7 @@ function validateWorkerResult(message, job) {
     message.configVersion !== PDF_READER_CONFIG_VERSION ||
     message.networkAttemptCount !== 0 ||
     !Array.isArray(message.pages) ||
-    !["observation", "no-text"].includes(message.kind) ||
+    !["observation", "no-text"].includes(message.observationKind) ||
     message.completeness !== "incomplete-text-only" ||
     !message.limits ||
     message.limits.maxInputBytes !== PDF_LIMITS.maxInputBytes ||
@@ -352,10 +352,10 @@ function validateWorkerResult(message, job) {
       return rejected("PROTOCOL_ERROR", job.documentSha256);
     }
   }
-  if (message.kind === "no-text" && pages.some((page) => page.textBoxes.length > 0)) {
+  if (message.observationKind === "no-text" && pages.some((page) => page.textBoxes.length > 0)) {
     return rejected("PROTOCOL_ERROR", job.documentSha256);
   }
-  if (message.kind === "observation" && !pages.some((page) => page.textBoxes.length > 0)) {
+  if (message.observationKind === "observation" && !pages.some((page) => page.textBoxes.length > 0)) {
     return rejected("PROTOCOL_ERROR", job.documentSha256);
   }
   const common = {
@@ -365,7 +365,7 @@ function validateWorkerResult(message, job) {
     networkAttemptCount: 0,
   };
   return freeze(
-    message.kind === "no-text"
+    message.observationKind === "no-text"
       ? { kind: "no-text", code: "NO_EMBEDDED_TEXT", requiresInspection: true, ...common }
       : { kind: "observation", completeness: "incomplete-text-only", requiresInspection: true, ...common },
   );

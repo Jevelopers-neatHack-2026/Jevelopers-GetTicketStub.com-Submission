@@ -3,34 +3,28 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 int main(void) {
-  char line[256];
-  int address_limit_ok = 0;
-  int descriptor_limit_ok = 0;
-  int cpu_limit_ok = 0;
-  int core_limit_ok = 0;
-  FILE *limits = fopen("/proc/self/limits", "r");
-  if (limits == NULL) return 10;
-  while (fgets(line, sizeof(line), limits) != NULL) {
-    if (strncmp(line, "Max address space", 17) == 0 && strstr(line, "6442450944") != NULL) {
-      address_limit_ok = 1;
-    }
-    if (strncmp(line, "Max open files", 14) == 0 && strstr(line, "64 64") != NULL) {
-      descriptor_limit_ok = 1;
-    }
-    if (strncmp(line, "Max CPU time", 12) == 0 && strstr(line, "15 15") != NULL) {
-      cpu_limit_ok = 1;
-    }
-    if (strncmp(line, "Max core file size", 18) == 0 && strstr(line, "0 0") != NULL) {
-      core_limit_ok = 1;
-    }
+  struct rlimit address_limit;
+  struct rlimit descriptor_limit;
+  struct rlimit cpu_limit;
+  struct rlimit core_limit;
+  if (getrlimit(RLIMIT_AS, &address_limit) != 0 ||
+      getrlimit(RLIMIT_NOFILE, &descriptor_limit) != 0 ||
+      getrlimit(RLIMIT_CPU, &cpu_limit) != 0 ||
+      getrlimit(RLIMIT_CORE, &core_limit) != 0) {
+    return 10;
   }
-  fclose(limits);
+
+  const int address_limit_ok = address_limit.rlim_cur == 6442450944ULL &&
+                               address_limit.rlim_max == 6442450944ULL;
+  const int descriptor_limit_ok = descriptor_limit.rlim_cur == 64 &&
+                                  descriptor_limit.rlim_max == 64;
+  const int cpu_limit_ok = cpu_limit.rlim_cur == 15 && cpu_limit.rlim_max == 15;
+  const int core_limit_ok = core_limit.rlim_cur == 0 && core_limit.rlim_max == 0;
 
   const size_t allocation_size = (size_t)7 * 1024 * 1024 * 1024;
   void *region = mmap(NULL, allocation_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -44,9 +38,9 @@ int main(void) {
     opened += 1;
   }
   const int descriptors_blocked = errno == EMFILE && opened <= 64;
-  printf("as=6442450944 blocked=%d nofile=64 blocked=%d cpu=15 core=0\n",
-         address_limit_ok && address_space_blocked,
-         descriptor_limit_ok && descriptors_blocked);
+  printf("as=%d nofile=%d cpu=%d core=%d as_map_blocked=%d fd_blocked=%d\n",
+         address_limit_ok, descriptor_limit_ok, cpu_limit_ok, core_limit_ok,
+         address_space_blocked, descriptors_blocked);
   for (int descriptor = 3; descriptor < 3 + opened; descriptor += 1) close(descriptor);
   return address_limit_ok && descriptor_limit_ok && cpu_limit_ok && core_limit_ok &&
                  address_space_blocked && descriptors_blocked

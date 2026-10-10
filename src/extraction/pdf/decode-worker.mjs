@@ -115,6 +115,10 @@ async function run() {
       },
       networkAttemptCount: 0,
       ...decoded,
+      // Keep the transport envelope separate from the private observation kind.
+      // The outer `kind` is parsed by the parent as a protocol message.
+      kind: "result",
+      observationKind: decoded.kind,
     });
   } catch (error) {
     writeLine({

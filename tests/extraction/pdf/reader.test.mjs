@@ -26,6 +26,46 @@ function expectedHash(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function safeChildDiagnostic(child) {
+  const messages = [];
+  for (const line of child.stdout.split("\n")) {
+    if (line.length === 0) continue;
+    try {
+      const message = JSON.parse(line);
+      if (message?.kind === "progress" && Number.isInteger(message.pageIndex)) {
+        messages.push({ kind: "progress", pageIndex: message.pageIndex });
+      } else if (message?.kind === "result" && Array.isArray(message.pages)) {
+        messages.push({ kind: "result", pageCount: message.pages.length });
+      } else if (message?.kind === "error" && typeof message.code === "string" && /^[a-z_]{1,64}$/.test(message.code)) {
+        messages.push({ kind: "error", code: message.code });
+      } else {
+        messages.push({ kind: "unknown" });
+      }
+    } catch {
+      messages.push({ kind: "invalid-line" });
+    }
+  }
+
+  const stderr = child.stderr.toLowerCase();
+  let stderrClass = "empty";
+  if (stderr.length > 0) {
+    stderrClass = /failed to reserve|out of memory|allocation failed/.test(stderr)
+      ? "v8-memory"
+      : /dommatrix|path2d|canvas/.test(stderr)
+        ? "optional-canvas-warning"
+        : "redacted-nonempty";
+  }
+  const allowedSpawnCodes = new Set(["ETIMEDOUT", "ENOENT", "EACCES", "ENOMEM", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"]);
+  return {
+    status: child.status,
+    signal: child.signal,
+    spawnError: allowedSpawnCodes.has(child.error?.code) ? child.error.code : child.error ? "OTHER" : null,
+    stdoutBytes: Buffer.byteLength(child.stdout),
+    stderrClass,
+    messages,
+  };
+}
+
 async function expectReject(name, code, options) {
   const bytes = await fixture(name);
   const result = await readTextPdf(bytes, options);
@@ -236,6 +276,39 @@ test("preflight, active cancellation, deadline, output, and queue failures never
   assert.ok(completed.every((result) => result.kind === "observation"));
 });
 
+test("known synthetic fixture reaches the decoder through the production Linux limits", async (t) => {
+  if (process.platform !== "linux") return t.skip("Linux prlimit containment is required");
+  const bytes = await fixture("text-multipage.pdf");
+  const worker = fileURLToPath(new URL("../../../src/extraction/pdf/decode-worker.mjs", import.meta.url));
+  const child = spawnSync("/usr/bin/prlimit", [
+    `--as=${ADDRESS_SPACE_BYTES}:${ADDRESS_SPACE_BYTES}`,
+    "--cpu=15:15",
+    "--core=0:0",
+    "--nofile=64:64",
+    "--",
+    process.execPath,
+    "--max-old-space-size=512",
+    worker,
+    "100000",
+    String(PDF_TEXT_READER_LIMITS.maxOutputBytes),
+  ], {
+    cwd: path.dirname(worker),
+    input: bytes,
+    encoding: "utf8",
+    env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8", LC_ALL: "C.UTF-8" },
+    maxBuffer: PDF_TEXT_READER_LIMITS.maxOutputBytes + 1,
+    timeout: 20_000,
+  });
+  const diagnostic = safeChildDiagnostic(child);
+  assert.equal(child.status, 0, JSON.stringify(diagnostic));
+  assert.equal(diagnostic.signal, null, JSON.stringify(diagnostic));
+  assert.deepEqual(diagnostic.messages.map(({ kind, pageIndex }) => [kind, pageIndex]), [
+    ["progress", 0],
+    ["progress", 1],
+    ["result", undefined],
+  ], JSON.stringify(diagnostic));
+});
+
 test("Linux child receives real kernel resource limits; unsupported hosts fail closed", () => {
   if (process.platform !== "linux") {
     assert.equal(PDF_TEXT_READER_LIMITS.maxAddressSpaceBytes, ADDRESS_SPACE_BYTES);
@@ -266,10 +339,8 @@ test("Linux child receives real kernel resource limits; unsupported hosts fail c
       env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8", LC_ALL: "C.UTF-8" },
       maxBuffer: 10_000,
     });
-    assert.equal(probe.status, 0, probe.stderr);
-    assert.match(probe.stdout, /as=6442450944 blocked=1/);
-    assert.match(probe.stdout, /nofile=64 blocked=1/);
-    assert.match(probe.stdout, /cpu=15 core=0/);
+    assert.equal(probe.status, 0, `status=${probe.status} stdout=${probe.stdout}`);
+    assert.match(probe.stdout, /as=1 nofile=1 cpu=1 core=1 as_map_blocked=1 fd_blocked=1/);
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
