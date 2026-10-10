@@ -3,6 +3,7 @@ import { ALL_SHARED_SHAPES, AUXILIARY_SHAPES, CONTRACT_OWNERSHIP, INPUT_SHAPES, 
 import type {
   AdapterCallContext,
   AttemptEffectState,
+  AuthorizationClaimResult,
   AuthorizationCheck,
   BudgetRequest,
   CancelCommand,
@@ -20,6 +21,7 @@ import type {
   PreflightReport,
   PreSubmitContext,
   ProviderAdapter,
+  ProviderDescriptor,
   ProviderMode,
   ProviderResult,
   QuoteCommand,
@@ -48,8 +50,57 @@ interface ExecuteHooks<T> {
   readonly onFailure?: (sideEffectState: AttemptEffectState) => Promise<void>;
 }
 
+interface Decoded<T> {
+  readonly value: T;
+  readonly trustedScope: TrustedScope;
+}
+
+function snapshotJson(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) {
+    if (seen.has(value)) throw new TypeError("cyclic input");
+    seen.add(value);
+    const copy: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (descriptor === undefined || !("value" in descriptor)) throw new TypeError("sparse or accessor input");
+      copy.push(snapshotJson(descriptor.value, seen));
+    }
+    seen.delete(value);
+    return Object.freeze(copy);
+  }
+  if (typeof value !== "object") throw new TypeError("non-JSON input");
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new TypeError("non-JSON object");
+  if (seen.has(value)) throw new TypeError("cyclic input");
+  seen.add(value);
+  const copy: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") throw new TypeError("symbol input");
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor)) throw new TypeError("accessor input");
+    Object.defineProperty(copy, key, {
+      value: snapshotJson(descriptor.value, seen),
+      enumerable: descriptor.enumerable === true,
+      configurable: true,
+      writable: true
+    });
+  }
+  seen.delete(value);
+  return Object.freeze(copy);
+}
+
+function validAuthorizationClaim(value: AuthorizationClaimResult): value is Extract<AuthorizationClaimResult, { status: "claimed" }> {
+  return value !== null && typeof value === "object" && value.status === "claimed" &&
+    typeof value.authorizationId === "string" && value.authorizationId.trim() !== "" && value.authorizationId.length <= 512 &&
+    typeof value.actionId === "string" && value.actionId.trim() !== "" && value.actionId.length <= 512 &&
+    typeof value.claimReference === "string" && value.claimReference.trim() !== "" && value.claimReference.length <= 512;
+}
+
 export class FulfillmentConnectorRuntime {
   readonly mode: ProviderMode;
+  private readonly descriptor: ProviderDescriptor;
   private readonly sandboxEnabled: boolean;
   private diagnosticCounter = 0;
 
@@ -58,8 +109,11 @@ export class FulfillmentConnectorRuntime {
     private readonly dependencies: RuntimeDependencies,
     options: RuntimeOptions = {}
   ) {
-    this.mode = options.mode ?? "simulated";
-    this.sandboxEnabled = options.sandboxEnabled === true;
+    const rawOptions = options !== null && typeof options === "object" ? options as { mode?: unknown; sandboxEnabled?: unknown } : {};
+    this.mode = (rawOptions.mode === undefined ? "simulated" : rawOptions.mode) as ProviderMode;
+    this.descriptor = snapshotJson(adapter.descriptor) as ProviderDescriptor;
+    Object.defineProperty(this, "mode", { value: this.mode, writable: false, configurable: false, enumerable: true });
+    this.sandboxEnabled = rawOptions.sandboxEnabled === true;
   }
 
   audit(): RuntimeAudit {
@@ -67,7 +121,7 @@ export class FulfillmentConnectorRuntime {
     const sandboxReasons: string[] = [];
     if (!this.sandboxEnabled) sandboxReasons.push("sandbox mode was not explicitly enabled");
     if (!contractReadiness.ready) sandboxReasons.push("one or more accepted shared-contract pins are missing");
-    if (!this.adapter.descriptor.supportedModes.includes("sandbox")) sandboxReasons.push("provider adapter does not declare sandbox support");
+    if (!this.descriptor.supportedModes.includes("sandbox")) sandboxReasons.push("provider adapter does not declare sandbox support");
     if (this.dependencies.transport.mode !== "sandbox") sandboxReasons.push("injected transport is not bound to sandbox mode");
     return {
       runtimeVersion: RUNTIME_VERSION,
@@ -80,24 +134,24 @@ export class FulfillmentConnectorRuntime {
   }
 
   async discoverCapabilities(envelope: unknown, trustedScope: TrustedScope): Promise<ConnectorResponse<ConnectorCapabilities>> {
-    const command = await this.decode<CapabilityQuery>("discover_capabilities", envelope, trustedScope);
+    const { value: command, trustedScope: scope } = await this.decode<CapabilityQuery>("discover_capabilities", envelope, trustedScope);
     void command;
     const capabilities: ConnectorCapabilities = {
-      ...this.adapter.descriptor,
+      ...this.descriptor,
       mode: this.mode
     };
-    return this.execute("discover_capabilities", trustedScope, async () => ({
+    return this.execute("discover_capabilities", scope, async () => ({
       status: "supported",
       value: capabilities
     }));
   }
 
   async quote(envelope: unknown, trustedScope: TrustedScope): Promise<ConnectorResponse<QuoteResult>> {
-    const command = await this.decode<QuoteCommand>("quote", envelope, trustedScope);
+    const { value: command, trustedScope: scope } = await this.decode<QuoteCommand>("quote", envelope, trustedScope);
     if (!Number.isSafeInteger(command.quantity) || command.quantity <= 0) {
       throw this.failure("quote", "invalid_input", "not_dispatched");
     }
-    return this.execute("quote", trustedScope, async (context) => {
+    return this.execute("quote", scope, async (context) => {
       const result = await this.adapter.quote(command, context);
       if (result.status === "supported" && !this.validQuoteResult(result.value)) {
         throw this.failure("quote", "invalid_input", "not_dispatched");
@@ -107,22 +161,23 @@ export class FulfillmentConnectorRuntime {
   }
 
   async preflight(envelope: unknown, trustedScope: TrustedScope): Promise<ConnectorResponse<PreflightReport>> {
-    const command = await this.decode<PreflightCommand>("preflight", envelope, trustedScope);
-    return this.execute("preflight", trustedScope, (context) => this.adapter.preflight(command, context));
+    const { value: command, trustedScope: scope } = await this.decode<PreflightCommand>("preflight", envelope, trustedScope);
+    return this.execute("preflight", scope, (context) => this.adapter.preflight(command, context));
   }
 
   async submit(envelope: unknown, trustedScope: TrustedScope): Promise<ConnectorResponse<SubmitResult>> {
-    const command = await this.decode<SubmitCommand>("submit", envelope, trustedScope);
+    const { value: command, trustedScope: scope } = await this.decode<SubmitCommand>("submit", envelope, trustedScope);
     this.validateSubmissionCommand(command, "submit");
     this.assertProviderSupport("submit");
     this.validateSubmissionDeclaration();
+    const providerId = this.descriptor.providerId;
 
     let preSubmit: ProviderResult<PreflightReport>;
     try {
       preSubmit = await this.adapter.validateBeforeSubmit(command, {
         mode: this.mode,
         clock: this.dependencies.clock,
-        trustedScope
+        trustedScope: scope
       });
     } catch (error) {
       throw this.normalizeFailure(error, "submit", "not_dispatched", false);
@@ -152,53 +207,64 @@ export class FulfillmentConnectorRuntime {
       "submit",
       "budget_reservation",
       budgetRequest,
-      trustedScope
+      scope
     );
 
     let existing: SubmitAttemptRecord | undefined;
     try {
       existing = await this.dependencies.persistence.getSubmitAttempt(
-        this.adapter.descriptor.providerId,
-        trustedScope,
+        providerId,
+        scope,
         command.idempotencyKey
       );
     } catch {
       throw this.failure("submit", "persistence_unavailable", "not_dispatched");
     }
-    if (existing !== undefined) {
-      if (existing.requestFingerprint !== command.requestFingerprint) {
-        throw this.failure("submit", "idempotency_conflict", existing.sideEffectState);
-      }
-      if (existing.sideEffectState === "confirmed") {
-        throw this.failure("submit", "duplicate_submission", "confirmed");
-      }
-      if (existing.sideEffectState === "possible" || existing.sideEffectState === "unknown") {
-        throw this.failure("submit", "ambiguous_submission", existing.sideEffectState);
-      }
-    }
+    if (existing !== undefined) throw this.existingAttemptFailure(existing, command.requestFingerprint, true);
 
-    const authorization: AuthorizationCheck = {
-      authorizationEnvelope: command.authorizationEnvelope,
-      trustedScope,
-      operation: "submit",
-      requestFingerprint: command.requestFingerprint
-    };
+    const { authorizationEnvelope, idempotencyKey, requestFingerprint, ...authorizedCommand } = command;
+    void idempotencyKey;
+    void requestFingerprint;
+    let authorization: AuthorizationCheck;
     try {
-      const result = await this.dependencies.authorizationVerifier.verify(authorization);
-      if (!result.authorized) throw this.failure("submit", "stale_authorization", "not_dispatched");
-    } catch (error) {
-      if (error instanceof ConnectorError) throw error;
+      authorization = snapshotJson({
+        authorizationEnvelope,
+        facts: {
+          providerId,
+          mode: this.mode,
+          trustedScope: scope,
+          operation: "submit",
+          command: authorizedCommand
+        }
+      }) as AuthorizationCheck;
+    } catch {
+      throw this.failure("submit", "invalid_input", "not_dispatched");
+    }
+    let authorizationClaim: AuthorizationClaimResult;
+    try {
+      authorizationClaim = await this.dependencies.authorizationVerifier.verifyAndClaim(authorization);
+    } catch {
+      throw this.failure("submit", "authorization_unavailable", "not_dispatched");
+    }
+    if (authorizationClaim !== null && typeof authorizationClaim === "object" && authorizationClaim.status === "rejected") {
+      throw this.failure("submit", "stale_authorization", "not_dispatched");
+    }
+    if (!validAuthorizationClaim(authorizationClaim)) {
       throw this.failure("submit", "authorization_unavailable", "not_dispatched");
     }
 
     const claim: SubmitAttemptRecord = {
-      providerId: this.adapter.descriptor.providerId,
-      tenantId: trustedScope.tenantId,
-      projectId: trustedScope.projectId,
+      providerId,
+      tenantId: scope.tenantId,
+      projectId: scope.projectId,
       idempotencyKey: command.idempotencyKey,
       claimId: this.newReference(),
+      authorizationId: authorizationClaim.authorizationId,
+      actionId: authorizationClaim.actionId,
+      authorizationClaimReference: authorizationClaim.claimReference,
       requestFingerprint: command.requestFingerprint,
       sideEffectState: "unknown",
+      budgetReservationState: "not_requested",
       updatedAt: this.dependencies.clock.now()
     };
     let claimResult;
@@ -210,48 +276,78 @@ export class FulfillmentConnectorRuntime {
     if (!claimResult.claimed) {
       const occupied = claimResult.existing;
       if (occupied === undefined) throw this.failure("submit", "persistence_unavailable", "not_dispatched");
-      if (occupied.requestFingerprint !== command.requestFingerprint) {
-        throw this.failure("submit", "idempotency_conflict", occupied.sideEffectState);
-      }
-      if (occupied.sideEffectState === "confirmed") {
-        throw this.failure("submit", "duplicate_submission", "confirmed");
-      }
-      throw this.failure("submit", "ambiguous_submission", occupied.sideEffectState === "not_dispatched" ? "unknown" : occupied.sideEffectState);
+      throw this.existingAttemptFailure(occupied, command.requestFingerprint, occupied.idempotencyKey === command.idempotencyKey);
     }
 
-    let completed: SubmitResult | undefined;
+    let currentAttempt = claim;
     return this.execute(
       "submit",
-      trustedScope,
+      scope,
       async (context) => {
+        currentAttempt = await this.saveAttempt({
+          ...currentAttempt,
+          budgetReservationState: "pending",
+          updatedAt: this.dependencies.clock.now()
+        });
+        let result: { readonly authorized: boolean; readonly reference?: string };
         try {
-          const result = await this.dependencies.budgetClient.authorize({
+          result = await this.dependencies.budgetClient.authorize({
             contractPayload: canonicalBudgetPayload,
-            trustedScope,
+            trustedScope: scope,
             mode: this.mode
           });
-          if (!result.authorized) throw this.failure("submit", "budget_denied", "not_dispatched");
-        } catch (error) {
-          if (error instanceof ConnectorError) throw error;
+        } catch {
+          try {
+            currentAttempt = await this.saveAttempt({
+              ...currentAttempt,
+              budgetReservationState: "unknown",
+              updatedAt: this.dependencies.clock.now()
+            });
+          } catch {
+            // The previously stored pending state still prevents another reservation.
+          }
           throw this.failure("submit", "budget_unavailable", "not_dispatched");
         }
+        if (result === null || typeof result !== "object" || typeof result.authorized !== "boolean") {
+          currentAttempt = await this.saveAttempt({
+            ...currentAttempt,
+            budgetReservationState: "unknown",
+            updatedAt: this.dependencies.clock.now()
+          });
+          throw this.failure("submit", "budget_unavailable", "not_dispatched");
+        }
+        if (!result.authorized) {
+          currentAttempt = await this.saveAttempt({
+            ...currentAttempt,
+            budgetReservationState: "denied",
+            updatedAt: this.dependencies.clock.now()
+          });
+          throw this.failure("submit", "budget_denied", "not_dispatched");
+        }
+        currentAttempt = await this.saveAttempt({
+          ...currentAttempt,
+          budgetReservationState: "reserved",
+          ...(typeof result.reference === "string" && result.reference.trim() !== ""
+            ? { budgetReservationReference: result.reference }
+            : {}),
+          updatedAt: this.dependencies.clock.now()
+        });
+        this.assertRuntimeMode("submit");
         return this.adapter.submit(command, context);
       },
       {
         onSuccess: async (value) => {
-          completed = value;
-          await this.dependencies.persistence.saveSubmitAttempt({
-            ...claim,
+          currentAttempt = await this.saveAttempt({
+            ...currentAttempt,
             sideEffectState: "confirmed",
             providerRequestId: value.providerRequestId,
             updatedAt: this.dependencies.clock.now()
           });
         },
         onFailure: async (sideEffectState) => {
-          await this.dependencies.persistence.saveSubmitAttempt({
-            ...claim,
+          currentAttempt = await this.saveAttempt({
+            ...currentAttempt,
             sideEffectState,
-            ...(completed === undefined ? {} : { providerRequestId: completed.providerRequestId }),
             updatedAt: this.dependencies.clock.now()
           });
         }
@@ -260,74 +356,77 @@ export class FulfillmentConnectorRuntime {
   }
 
   async getStatus(envelope: unknown, trustedScope: TrustedScope): Promise<ConnectorResponse<StatusResult>> {
-    const command = await this.decode<StatusCommand>("status", envelope, trustedScope);
-    return this.execute("status", trustedScope, (context) => this.adapter.getStatus(command, context));
+    const { value: command, trustedScope: scope } = await this.decode<StatusCommand>("status", envelope, trustedScope);
+    return this.execute("status", scope, (context) => this.adapter.getStatus(command, context));
   }
 
   async observeShipment(envelope: unknown, trustedScope: TrustedScope): Promise<ConnectorResponse<ShipmentResult>> {
-    const command = await this.decode<ShipmentCommand>("shipment", envelope, trustedScope);
-    return this.execute("shipment", trustedScope, (context) => this.adapter.observeShipment(command, context));
+    const { value: command, trustedScope: scope } = await this.decode<ShipmentCommand>("shipment", envelope, trustedScope);
+    return this.execute("shipment", scope, (context) => this.adapter.observeShipment(command, context));
   }
 
   async cancel(envelope: unknown, trustedScope: TrustedScope): Promise<ConnectorResponse<CancelResult>> {
-    const command = await this.decode<CancelCommand>("cancel", envelope, trustedScope);
+    const { value: command, trustedScope: scope } = await this.decode<CancelCommand>("cancel", envelope, trustedScope);
     this.validateCancelCommand(command);
     this.assertProviderSupport("cancel");
-    const declaration = this.adapter.descriptor.operations.cancel;
-    if (declaration.sideEffect !== "external" || declaration.idempotency === "unknown" || declaration.idempotency === "not_applicable") {
+    const declaration = this.descriptor.operations.cancel;
+    if (
+      declaration.sideEffect !== "external" ||
+      declaration.idempotency !== "provider_key" ||
+      declaration.mayCharge
+    ) {
       throw this.failure("cancel", "unsupported", "not_dispatched");
     }
-    let canonicalBudgetPayload: unknown;
-    if (declaration.mayCharge) {
-      if (command.budgetRequest === undefined || !this.validBudgetRequest(command.budgetRequest)) {
-        throw this.failure("cancel", "invalid_input", "not_dispatched");
-      }
-      canonicalBudgetPayload = await this.encodeAuxiliaryPayload(
-        "cancel",
-        "budget_reservation",
-        command.budgetRequest,
-        trustedScope
-      );
-    }
-
+    const providerId = this.descriptor.providerId;
+    const { authorizationEnvelope, idempotencyKey, requestFingerprint, ...authorizedCommand } = command;
+    void idempotencyKey;
+    void requestFingerprint;
+    let authorization: AuthorizationCheck;
     try {
-      const result = await this.dependencies.authorizationVerifier.verify({
-        authorizationEnvelope: command.authorizationEnvelope,
-        trustedScope,
-        operation: "cancel",
-        requestFingerprint: command.requestFingerprint
-      });
-      if (!result.authorized) throw this.failure("cancel", "stale_authorization", "not_dispatched");
-    } catch (error) {
-      if (error instanceof ConnectorError) throw error;
+      authorization = snapshotJson({
+        authorizationEnvelope,
+        facts: {
+          providerId,
+          mode: this.mode,
+          trustedScope: scope,
+          operation: "cancel",
+          command: authorizedCommand
+        }
+      }) as AuthorizationCheck;
+    } catch {
+      throw this.failure("cancel", "invalid_input", "not_dispatched");
+    }
+    let authorizationClaim: AuthorizationClaimResult;
+    try {
+      authorizationClaim = await this.dependencies.authorizationVerifier.verifyAndClaim(authorization);
+    } catch {
+      throw this.failure("cancel", "authorization_unavailable", "not_dispatched");
+    }
+    if (authorizationClaim !== null && typeof authorizationClaim === "object" && authorizationClaim.status === "rejected") {
+      throw this.failure("cancel", "stale_authorization", "not_dispatched");
+    }
+    if (!validAuthorizationClaim(authorizationClaim)) {
       throw this.failure("cancel", "authorization_unavailable", "not_dispatched");
     }
 
-    return this.execute("cancel", trustedScope, async (context) => {
-      if (declaration.mayCharge) {
-        try {
-          const result = await this.dependencies.budgetClient.authorize({
-            contractPayload: canonicalBudgetPayload,
-            trustedScope,
-            mode: this.mode
-          });
-          if (!result.authorized) throw this.failure("cancel", "budget_denied", "not_dispatched");
-        } catch (error) {
-          if (error instanceof ConnectorError) throw error;
-          throw this.failure("cancel", "budget_unavailable", "not_dispatched");
-        }
-      }
-      return this.adapter.cancel(command, context);
-    });
+    return this.execute("cancel", scope, (context) => this.adapter.cancel(command, context));
   }
 
-  private async decode<T>(operation: Operation, envelope: unknown, trustedScope: TrustedScope): Promise<T> {
+  private async decode<T>(operation: Operation, envelope: unknown, trustedScope: TrustedScope): Promise<Decoded<T>> {
     this.assertRuntimeMode(operation);
     if (
       trustedScope === null || typeof trustedScope !== "object" ||
       typeof trustedScope.tenantId !== "string" || trustedScope.tenantId.trim() === "" ||
       typeof trustedScope.projectId !== "string" || trustedScope.projectId.trim() === ""
     ) throw this.failure(operation, "scope_mismatch", "not_dispatched");
+    let scopeSnapshot: TrustedScope;
+    let envelopeSnapshot: unknown;
+    try {
+      scopeSnapshot = snapshotJson(trustedScope) as TrustedScope;
+      envelopeSnapshot = snapshotJson(envelope);
+    } catch {
+      throw this.failure(operation, "invalid_input", "not_dispatched");
+    }
     const shapes = INPUT_SHAPES[operation];
     for (const shape of uniqueShapes([...shapes, ...OUTPUT_SHAPES[operation], ...AUXILIARY_SHAPES[operation]])) {
       this.assertBindingAvailable(operation, shape);
@@ -338,8 +437,8 @@ export class FulfillmentConnectorRuntime {
       validation = await this.dependencies.contracts.validateInbound<T>({
         operation,
         requiredShapes: shapes,
-        envelope,
-        trustedScope
+        envelope: envelopeSnapshot,
+        trustedScope: scopeSnapshot
       });
     } catch {
       throw this.failure(operation, "contract_rejected", "not_dispatched");
@@ -347,8 +446,15 @@ export class FulfillmentConnectorRuntime {
     if (!validation.ok) {
       throw this.failure(operation, validation.failure.code, "not_dispatched");
     }
-    this.assertReceipts(operation, validation.receipts, shapes, trustedScope);
-    return validation.value;
+    this.assertReceipts(operation, validation.receipts, shapes, scopeSnapshot);
+    try {
+      return {
+        value: snapshotJson(validation.value) as T,
+        trustedScope: scopeSnapshot
+      };
+    } catch {
+      throw this.failure(operation, "invalid_input", "not_dispatched");
+    }
   }
 
   private async execute<T>(
@@ -367,8 +473,15 @@ export class FulfillmentConnectorRuntime {
       transport: {
         mode: this.mode,
         request: <R>(request: ProviderTransportRequest): Promise<R> => {
-          transportCalled = true;
-          return this.dependencies.transport.request<R>(request);
+          this.assertRuntimeMode(operation);
+            let requestSnapshot: ProviderTransportRequest;
+            try {
+              requestSnapshot = snapshotJson(request) as ProviderTransportRequest;
+            } catch {
+              throw this.failure(operation, "invalid_input", transportCalled ? "possible" : "not_dispatched");
+            }
+            transportCalled = true;
+            return this.dependencies.transport.request<R>(requestSnapshot);
         }
       }
     };
@@ -391,7 +504,7 @@ export class FulfillmentConnectorRuntime {
       if (result.status === "unsupported") {
         throw this.failure(operation, "unsupported", transportCalled ? "possible" : "not_dispatched");
       }
-      successfulSideEffect = this.adapter.descriptor.operations[operation].sideEffect === "external";
+      successfulSideEffect = this.descriptor.operations[operation].sideEffect === "external";
       const sideEffectState = successfulSideEffect ? "confirmed" : "not_dispatched";
       await hooks.onSuccess?.(result.value, sideEffectState);
 
@@ -420,7 +533,7 @@ export class FulfillmentConnectorRuntime {
       return {
         operation,
         mode: this.mode,
-        providerId: this.adapter.descriptor.providerId,
+        providerId: this.descriptor.providerId,
         value: result.value,
         sharedPayload: outbound.value,
         emittedShapes: outputShapes
@@ -438,7 +551,11 @@ export class FulfillmentConnectorRuntime {
   }
 
   private assertRuntimeMode(operation: Operation): void {
-    if (!this.adapter.descriptor.supportedModes.includes(this.mode) || this.dependencies.transport.mode !== this.mode) {
+    const runtimeMode: unknown = this.mode;
+    if (runtimeMode !== "simulated" && runtimeMode !== "sandbox") {
+      throw this.failure(operation, "mode_mismatch", "not_dispatched");
+    }
+    if (!this.descriptor.supportedModes.includes(runtimeMode) || this.dependencies.transport.mode !== runtimeMode) {
       throw this.failure(operation, "mode_mismatch", "not_dispatched");
     }
     if (this.mode === "sandbox" && !this.audit().sandboxReady) {
@@ -447,7 +564,7 @@ export class FulfillmentConnectorRuntime {
   }
 
   private assertProviderSupport(operation: Operation): void {
-    if (this.adapter.descriptor.operations[operation].supported !== true) {
+    if (this.descriptor.operations[operation].supported !== true) {
       throw this.failure(operation, "unsupported", "not_dispatched");
     }
   }
@@ -604,7 +721,7 @@ export class FulfillmentConnectorRuntime {
   }
 
   private validateSubmissionDeclaration(): void {
-    const capability = this.adapter.descriptor.operations.submit;
+    const capability = this.descriptor.operations.submit;
     if (
       capability.sideEffect !== "external" ||
       !capability.mayCharge ||
@@ -676,15 +793,32 @@ export class FulfillmentConnectorRuntime {
     return `fc-${this.diagnosticCounter.toString().padStart(6, "0")}-${nonce}`;
   }
 
-  private async releaseSubmitClaim(claim: SubmitAttemptRecord): Promise<void> {
+  private existingAttemptFailure(
+    existing: SubmitAttemptRecord,
+    requestFingerprint: string,
+    sameIdempotencyKey: boolean
+  ): ConnectorError {
+    if (sameIdempotencyKey && existing.requestFingerprint !== requestFingerprint) {
+      return this.failure("submit", "idempotency_conflict", existing.sideEffectState);
+    }
+    if (existing.sideEffectState === "confirmed") {
+      return this.failure("submit", "duplicate_submission", "confirmed");
+    }
+    if (existing.sideEffectState === "possible" || existing.sideEffectState === "unknown") {
+      return this.failure("submit", "ambiguous_submission", existing.sideEffectState);
+    }
+    if (["pending", "reserved", "unknown"].includes(existing.budgetReservationState)) {
+      return this.failure("submit", "reservation_unresolved", existing.sideEffectState);
+    }
+    return this.failure("submit", "authorization_action_claimed", existing.sideEffectState);
+  }
+
+  private async saveAttempt(record: SubmitAttemptRecord): Promise<SubmitAttemptRecord> {
     try {
-      await this.dependencies.persistence.saveSubmitAttempt({
-        ...claim,
-        sideEffectState: "not_dispatched",
-        updatedAt: this.dependencies.clock.now()
-      });
+      await this.dependencies.persistence.saveSubmitAttempt({ ...record });
+      return record;
     } catch {
-      throw this.failure("submit", "persistence_unavailable", "not_dispatched");
+      throw this.failure("submit", "persistence_unavailable", record.sideEffectState);
     }
   }
 
@@ -699,7 +833,7 @@ export class FulfillmentConnectorRuntime {
       if (error.sideEffectState === "unknown") return "unknown";
     }
     if (successfulSideEffect) return "confirmed";
-    if (this.adapter.descriptor.operations[operation].sideEffect === "external" && transportCalled) return "possible";
+    if (this.descriptor.operations[operation].sideEffect === "external" && transportCalled) return "possible";
     return "not_dispatched";
   }
 
@@ -745,7 +879,11 @@ export class FulfillmentConnectorRuntime {
     }
     if (!result.ok) throw this.failure(operation, result.failure.code, "not_dispatched");
     this.assertReceipts(operation, result.receipts, [shape], trustedScope);
-    return result.value;
+    try {
+      return snapshotJson(result.value);
+    } catch {
+      throw this.failure(operation, "contract_rejected", "not_dispatched");
+    }
   }
 
   private async recordUsage(
@@ -757,7 +895,7 @@ export class FulfillmentConnectorRuntime {
       "fulfillment_usage",
       {
         ...event,
-        providerId: this.adapter.descriptor.providerId,
+        providerId: this.descriptor.providerId,
         mode: this.mode,
         recordedAt: this.dependencies.clock.now()
       },

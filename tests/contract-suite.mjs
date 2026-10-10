@@ -33,8 +33,10 @@ function createBindings(overrides = {}) {
 
 function createFixtureValidator(options = {}) {
   const bindings = createBindings(options.bindingOverrides);
+  let inboundCalls = 0;
   return {
     bindings,
+    get inboundCalls() { return inboundCalls; },
     binding(shape) {
       if (options.throwBindingFor === shape) throw new Error("private fixture binding lookup failed");
       const binding = bindings.get(shape);
@@ -42,6 +44,7 @@ function createFixtureValidator(options = {}) {
       return binding;
     },
     async validateInbound(request) {
+      inboundCalls += 1;
       const envelope = request.envelope;
       if (envelope === null || typeof envelope !== "object") {
         return { ok: false, failure: { code: "invalid_input" } };
@@ -118,7 +121,8 @@ function createHarness(options = {}) {
     authorizationCalls: [],
     budgetCalls: [],
     usagePayloads: [],
-    attempts: new Map(),
+    attempts: options.sharedAttempts ?? new Map(),
+    claimedAuthorizationActions: options.sharedAuthorizationActions ?? new Set(),
     validateBeforeSubmitCalls: 0,
     adapterCalls: []
   };
@@ -221,8 +225,14 @@ function createHarness(options = {}) {
       async claimSubmitAttempt(record) {
         const key = `${record.providerId}/${record.tenantId}/${record.projectId}/${record.idempotencyKey}`;
         const existing = state.attempts.get(key);
-        if (existing !== undefined && existing.sideEffectState !== "not_dispatched") {
-          return { claimed: false, existing };
+        const actionExisting = [...state.attempts.values()].find((attempt) =>
+          attempt.providerId === record.providerId &&
+          attempt.tenantId === record.tenantId &&
+          attempt.projectId === record.projectId &&
+          (attempt.actionId === record.actionId || attempt.authorizationId === record.authorizationId)
+        );
+        if (existing !== undefined || actionExisting !== undefined) {
+          return { claimed: false, existing: existing ?? actionExisting };
         }
         state.attempts.set(key, record);
         return { claimed: true };
@@ -235,9 +245,30 @@ function createHarness(options = {}) {
       }
     },
     authorizationVerifier: {
-      async verify(check) {
+      async verifyAndClaim(check) {
         state.authorizationCalls.push(check);
-        return { authorized: options.authorizationAllowed !== false };
+        if (options.authorizationAllowed === false || options.authorizationFactsAllowed?.(check) === false) {
+          return { status: "rejected" };
+        }
+        const operation = check.facts.operation;
+        const actionId = options.authorizationActionId ?? `fixture-${operation}-action-1`;
+        const authorizationId = options.authorizationId ?? `fixture-${operation}-authorization-1`;
+        if (!options.authorizationAllowsReplay) {
+          const prefix = `${check.facts.providerId}/${check.facts.trustedScope.tenantId}/${check.facts.trustedScope.projectId}`;
+          const actionKey = `${prefix}/action/${actionId}`;
+          const authorizationKey = `${prefix}/authorization/${authorizationId}`;
+          if (state.claimedAuthorizationActions.has(actionKey) || state.claimedAuthorizationActions.has(authorizationKey)) {
+            return { status: "rejected" };
+          }
+          state.claimedAuthorizationActions.add(actionKey);
+          state.claimedAuthorizationActions.add(authorizationKey);
+        }
+        return {
+          status: "claimed",
+          authorizationId,
+          actionId,
+          claimReference: `fixture-${operation}-claim-1`
+        };
       }
     },
     budgetClient: {
@@ -253,7 +284,7 @@ function createHarness(options = {}) {
     }
   };
   const runtime = new FulfillmentConnectorRuntime(adapter, dependencies, options.runtimeOptions);
-  return { runtime, state, contractValidator };
+  return { runtime, state, contractValidator, adapter, dependencies };
 }
 
 function envelope(command, extra = {}) {
@@ -279,6 +310,20 @@ function submitCommand(overrides = {}) {
     requestFingerprint: "sha256:fixture-request",
     ...overrides
   };
+}
+
+function authorizationCommand(command) {
+  const { authorizationEnvelope, idempotencyKey, requestFingerprint, ...facts } = command;
+  void authorizationEnvelope;
+  void idempotencyKey;
+  void requestFingerprint;
+  return facts;
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
 }
 
 async function expectError(promise, code, sideEffectState) {
@@ -441,6 +486,139 @@ cases.push(["stale authorization rejects before budget or provider transport", a
   assert.equal(state.transportCalls.length, 0);
 }]);
 
+cases.push(["legacy boolean authorization verification fails closed without an atomic action claim", async () => {
+  const { runtime, state, dependencies } = createHarness();
+  dependencies.authorizationVerifier.verify = async () => ({ authorized: true });
+  dependencies.authorizationVerifier.verifyAndClaim = undefined;
+  await expectError(
+    runtime.submit(envelope(submitCommand()), scope),
+    "authorization_unavailable",
+    "not_dispatched"
+  );
+  assert.equal(state.attempts.size, 0);
+  assert.equal(state.budgetCalls.length, 0);
+  assert.equal(state.transportCalls.length, 0);
+}]);
+
+cases.push(["authorization rejects independent changes to price, currency, artifact, quote, terms, and destination", async () => {
+  const original = submitCommand({
+    productionBundle: { fixture: "bundle", destination: { country: "US" } }
+  });
+  const expectedFacts = JSON.stringify(authorizationCommand(original));
+  const variants = [
+    submitCommand({ amountMinor: 1300, quote: { ...original.quote, totalMinor: 1300 }, productionBundle: original.productionBundle }),
+    submitCommand({ currency: "EUR", quote: { ...original.quote, currency: "EUR" }, productionBundle: original.productionBundle }),
+    submitCommand({
+      productionBundle: { fixture: "different-bytes", destination: { country: "US" } },
+      productionBundleDigest: "sha256:different-bundle",
+      quote: { ...original.quote, productionBundleDigest: "sha256:different-bundle" }
+    }),
+    submitCommand({ quote: { ...original.quote, quoteId: "quote-other" }, productionBundle: original.productionBundle }),
+    submitCommand({ quote: { ...original.quote, expiresAt: "2026-10-10T16:00:00.000Z" }, productionBundle: original.productionBundle }),
+    submitCommand({ quote: { ...original.quote, termsFingerprint: "sha256:other-terms" }, productionBundle: original.productionBundle }),
+    submitCommand({ productionBundle: { fixture: "bundle", destination: { country: "CA" } } })
+  ];
+  for (const altered of variants) {
+    const { runtime, state } = createHarness({
+      authorizationAllowsReplay: true,
+      authorizationFactsAllowed: (check) => JSON.stringify(check.facts.command) === expectedFacts
+    });
+    await expectError(runtime.submit(envelope(altered), scope), "stale_authorization", "not_dispatched");
+    assert.equal(state.authorizationCalls.length, 1);
+    assert.equal(state.budgetCalls.length, 0);
+    assert.equal(state.transportCalls.length, 0);
+  }
+}]);
+
+cases.push(["authorization facts include provider identity and cancellation target", async () => {
+  const providerHarness = createHarness({
+    authorizationAllowsReplay: true,
+    authorizationFactsAllowed: (check) =>
+      check.facts.providerId === "fixture-provider" &&
+      check.facts.mode === "simulated" &&
+      check.facts.trustedScope.tenantId === scope.tenantId &&
+      check.facts.operation === "submit"
+  });
+  providerHarness.adapter.descriptor.providerId = "other-provider";
+  const providerRuntime = new FulfillmentConnectorRuntime(providerHarness.adapter, providerHarness.dependencies);
+  await expectError(
+    providerRuntime.submit(envelope(submitCommand()), scope),
+    "stale_authorization",
+    "not_dispatched"
+  );
+  assert.equal(providerHarness.state.budgetCalls.length, 0);
+  assert.equal(providerHarness.state.transportCalls.length, 0);
+
+  const cancelHarness = createHarness({
+    authorizationAllowsReplay: true,
+    authorizationFactsAllowed: (check) =>
+      check.facts.operation === "cancel" && check.facts.command.providerRequestId === "request-fixture-1"
+  });
+  await expectError(cancelHarness.runtime.cancel(envelope({
+    providerRequestId: "request-other",
+    authorizationEnvelope: { fixture: "authorization" },
+    idempotencyKey: "cancel-key",
+    requestFingerprint: "same-caller-fingerprint"
+  }), scope), "stale_authorization", "not_dispatched");
+  assert.equal(cancelHarness.state.budgetCalls.length, 0);
+  assert.equal(cancelHarness.state.transportCalls.length, 0);
+}]);
+
+cases.push(["caller mutation while boundary, pre-submit, and authorization ports await cannot change dispatched facts", async () => {
+  const { runtime, state, contractValidator, adapter, dependencies } = createHarness({ authorizationAllowsReplay: true });
+  const originalValidateInbound = contractValidator.validateInbound.bind(contractValidator);
+  const originalVerifyAndClaim = dependencies.authorizationVerifier.verifyAndClaim.bind(dependencies.authorizationVerifier);
+  const boundaryGate = deferred();
+  const preSubmitGate = deferred();
+  const authorizationGate = deferred();
+  const preSubmitEntered = deferred();
+  const authorizationEntered = deferred();
+  contractValidator.validateInbound = async (request) => {
+    if (request.operation === "submit") await boundaryGate.promise;
+    return originalValidateInbound(request);
+  };
+  adapter.validateBeforeSubmit = async (command) => {
+    state.validateBeforeSubmitCalls += 1;
+    preSubmitEntered.resolve();
+    await preSubmitGate.promise;
+    assert.equal(command.amountMinor, 1250);
+    assert.equal(command.productionBundle.destination.country, "US");
+    assert.equal(Reflect.set(command, "amountMinor", 999999), false);
+    return { status: "supported", value: { valid: true, issues: [] } };
+  };
+  dependencies.authorizationVerifier.verifyAndClaim = async (check) => {
+    authorizationEntered.resolve();
+    await authorizationGate.promise;
+    assert.equal(check.facts.command.amountMinor, 1250);
+    assert.equal(check.facts.command.productionBundle.destination.country, "US");
+    assert.equal(Reflect.set(check.facts.command, "amountMinor", 999999), false);
+    return originalVerifyAndClaim(check);
+  };
+
+  const command = submitCommand({
+    productionBundle: { fixture: "bundle", destination: { country: "US" } }
+  });
+  const mutableScope = { ...scope };
+  const pending = runtime.submit(envelope(command), mutableScope);
+  command.amountMinor = 999999;
+  command.productionBundle.destination.country = "CA";
+  mutableScope.tenantId = "mutated-tenant";
+  boundaryGate.resolve();
+  await preSubmitEntered.promise;
+  command.quote.quoteId = "quote-mutated";
+  mutableScope.projectId = "mutated-project";
+  preSubmitGate.resolve();
+  await authorizationEntered.promise;
+  command.currency = "EUR";
+  authorizationGate.resolve();
+  await pending;
+  assert.equal(state.transportCalls.length, 1);
+  assert.equal(state.transportCalls[0].body.amountMinor, 1250);
+  assert.equal(state.transportCalls[0].body.productionBundle.destination.country, "US");
+  assert.equal(state.budgetCalls.length, 1);
+  assert.equal(state.authorizationCalls[0].facts.trustedScope.tenantId, scope.tenantId);
+}]);
+
 cases.push(["budget denial rejects before provider transport", async () => {
   const { runtime, state } = createHarness({ budgetAllowed: false });
   await expectError(runtime.submit(envelope(submitCommand()), scope), "budget_denied", "not_dispatched");
@@ -487,6 +665,28 @@ cases.push(["ambiguous submit is persisted and never automatically retried or re
   assert.equal(state.authorizationCalls.length, 1);
 }]);
 
+cases.push(["connector-attempt-store cancellation fails closed before authorization, budget, usage, or transport", async () => {
+  const { runtime, state, adapter, dependencies } = createHarness();
+  adapter.descriptor.operations.cancel = {
+    supported: true,
+    sideEffect: "external",
+    mayCharge: true,
+    idempotency: "connector_attempt_store"
+  };
+  const connectorStoreRuntime = new FulfillmentConnectorRuntime(adapter, dependencies);
+  await expectError(connectorStoreRuntime.cancel(envelope({
+    providerRequestId: "request-fixture-1",
+    authorizationEnvelope: { fixture: "authorization" },
+    budgetRequest: { amountMinor: 25, currency: "USD", purpose: "fulfillment_cancel" },
+    idempotencyKey: "cancel-key",
+    requestFingerprint: "cancel-fingerprint"
+  }), scope), "unsupported", "not_dispatched");
+  assert.equal(state.authorizationCalls.length, 0);
+  assert.equal(state.budgetCalls.length, 0);
+  assert.equal(state.usagePayloads.length, 0);
+  assert.equal(state.transportCalls.length, 0);
+}]);
+
 cases.push(["provider error details never appear in public connector errors", async () => {
   const { runtime } = createHarness({
     transportFailure: () => new Error("token=super-secret user@example.com")
@@ -526,6 +726,104 @@ cases.push(["atomic submission claim permits only one concurrent dispatch per sc
   assert.equal(state.budgetCalls.length, 1);
 }]);
 
+cases.push(["atomic authorization-action claim blocks concurrent submissions with distinct provider keys", async () => {
+  const { runtime, state } = createHarness({ authorizationAllowsReplay: true });
+  const results = await Promise.allSettled([
+    runtime.submit(envelope(submitCommand({ idempotencyKey: "key-a" })), scope),
+    runtime.submit(envelope(submitCommand({ idempotencyKey: "key-b" })), scope)
+  ]);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(results.filter((result) => result.status === "rejected").length, 1);
+  assert.equal(state.transportCalls.filter((call) => call.operation === "submit").length, 1);
+  assert.equal(state.budgetCalls.length, 1);
+  assert.equal(state.attempts.size, 1);
+}]);
+
+cases.push(["sequential distinct provider keys cannot reuse a claimed authorization action", async () => {
+  const { runtime, state } = createHarness({ authorizationAllowsReplay: true });
+  await runtime.submit(envelope(submitCommand({ idempotencyKey: "key-a" })), scope);
+  await expectError(
+    runtime.submit(envelope(submitCommand({ idempotencyKey: "key-b" })), scope),
+    "duplicate_submission",
+    "confirmed"
+  );
+  assert.equal(state.budgetCalls.length, 1);
+  assert.equal(state.transportCalls.filter((call) => call.operation === "submit").length, 1);
+}]);
+
+cases.push(["accepted-then-timeout remains blocked across a restarted runtime and a new provider key", async () => {
+  const first = createHarness({
+    authorizationAllowsReplay: true,
+    transportFailure: () => Object.assign(new Error("accepted then timed out"), { name: "TimeoutError" })
+  });
+  await expectError(
+    first.runtime.submit(envelope(submitCommand({ idempotencyKey: "key-a" })), scope),
+    "ambiguous_submission",
+    "possible"
+  );
+  const restarted = createHarness({
+    sharedAttempts: first.state.attempts,
+    authorizationAllowsReplay: true
+  });
+  await expectError(
+    restarted.runtime.submit(envelope(submitCommand({ idempotencyKey: "key-b" })), scope),
+    "ambiguous_submission",
+    "possible"
+  );
+  assert.equal(first.state.budgetCalls.length, 1);
+  assert.equal(first.state.transportCalls.length, 1);
+  assert.equal(restarted.state.budgetCalls.length, 0);
+  assert.equal(restarted.state.transportCalls.length, 0);
+}]);
+
+cases.push(["ambiguous budget reservation is durably blocked across restart and new keys", async () => {
+  const first = createHarness({ authorizationAllowsReplay: true });
+  first.dependencies.budgetClient.authorize = async (check) => {
+    first.state.budgetCalls.push(check);
+    throw Object.assign(new Error("reservation committed; response lost"), { name: "TimeoutError" });
+  };
+  await expectError(
+    first.runtime.submit(envelope(submitCommand({ idempotencyKey: "budget-key-a" })), scope),
+    "budget_unavailable",
+    "not_dispatched"
+  );
+  assert.equal(first.state.attempts.values().next().value.budgetReservationState, "unknown");
+
+  const restarted = createHarness({
+    sharedAttempts: first.state.attempts,
+    authorizationAllowsReplay: true
+  });
+  await expectError(
+    restarted.runtime.submit(envelope(submitCommand({ idempotencyKey: "budget-key-b" })), scope),
+    "reservation_unresolved",
+    "not_dispatched"
+  );
+  assert.equal(first.state.budgetCalls.length, 1);
+  assert.equal(first.state.transportCalls.length, 0);
+  assert.equal(restarted.state.budgetCalls.length, 0);
+  assert.equal(restarted.state.transportCalls.length, 0);
+}]);
+
+cases.push(["successful reservation is retained when provider code fails before dispatch", async () => {
+  const { runtime, state, adapter } = createHarness({ authorizationAllowsReplay: true });
+  adapter.submit = async () => { throw new Error("local provider mapping failure"); };
+  await expectError(
+    runtime.submit(envelope(submitCommand({ idempotencyKey: "reserved-key-a" })), scope),
+    "provider_failure",
+    "not_dispatched"
+  );
+  const attempt = state.attempts.values().next().value;
+  assert.equal(attempt.budgetReservationState, "reserved");
+  assert.equal(attempt.budgetReservationReference, "fixture-budget-reference");
+  await expectError(
+    runtime.submit(envelope(submitCommand({ idempotencyKey: "reserved-key-b" })), scope),
+    "reservation_unresolved",
+    "not_dispatched"
+  );
+  assert.equal(state.budgetCalls.length, 1);
+  assert.equal(state.transportCalls.length, 0);
+}]);
+
 cases.push(["retryable errors do not create spending authority", async () => {
   const { runtime, state } = createHarness({
     transportFailure: () => Object.assign(new Error("temporary"), { code: "ETIMEDOUT" })
@@ -555,6 +853,26 @@ cases.push(["sandbox mode fails before transport while accepted pins are absent"
     "not_dispatched"
   );
   assert.equal(state.transportCalls.length, 0);
+}]);
+
+cases.push(["JavaScript live, unknown, and non-string modes reject before every injected boundary", async () => {
+  for (const mode of ["live", "production", null, 7]) {
+    const { state, adapter, dependencies, contractValidator } = createHarness({ runtimeOptions: { mode } });
+    adapter.descriptor.supportedModes = [mode];
+    dependencies.transport.mode = mode;
+    const invalidRuntime = new FulfillmentConnectorRuntime(adapter, dependencies, { mode });
+    await expectError(
+      invalidRuntime.quote(envelope({ productionBundle: {}, quantity: 1, destination: {} }), scope),
+      "mode_mismatch",
+      "not_dispatched"
+    );
+    assert.equal(contractValidator.inboundCalls, 0);
+    assert.equal(state.usagePayloads.length, 0);
+    assert.equal(state.authorizationCalls.length, 0);
+    assert.equal(state.budgetCalls.length, 0);
+    assert.equal(state.adapterCalls.length, 0);
+    assert.equal(state.transportCalls.length, 0);
+  }
 }]);
 
 cases.push(["minor-unit amount must be an explicit positive safe integer", async () => {

@@ -233,15 +233,37 @@ export interface PreSubmitContext {
   readonly trustedScope: TrustedScope;
 }
 
-export interface AuthorizationCheck {
-  readonly authorizationEnvelope: unknown;
+export interface AuthorizationFacts {
+  /** Facts the issuer must bind; caller idempotency keys/fingerprints are excluded. */
+  readonly providerId: string;
+  readonly mode: ProviderMode;
   readonly trustedScope: TrustedScope;
   readonly operation: "submit" | "cancel";
-  readonly requestFingerprint: string;
+  readonly command: Readonly<Record<string, unknown>>;
 }
 
+export interface AuthorizationCheck {
+  readonly authorizationEnvelope: unknown;
+  readonly facts: AuthorizationFacts;
+}
+
+export type AuthorizationClaimResult =
+  | { readonly status: "rejected" }
+  | {
+      readonly status: "claimed";
+      /** Stable identity of the issuer authorization. */
+      readonly authorizationId: string;
+      /** Stable logical fulfillment-action identity across authorization renewals and delivery keys. */
+      readonly actionId: string;
+      readonly claimReference: string;
+    };
+
 export interface AuthorizationVerifier {
-  verify(check: AuthorizationCheck): Promise<{ readonly authorized: boolean }>;
+  /**
+   * The external authorization authority must verify these exact facts and
+   * atomically claim the permitted action. A local boolean check is insufficient.
+   */
+  verifyAndClaim(check: AuthorizationCheck): Promise<AuthorizationClaimResult>;
 }
 
 export interface BudgetRequest {
@@ -258,10 +280,12 @@ export interface BudgetCheck {
 }
 
 export interface BudgetClient {
+  /** A thrown or malformed response is an uncertain reservation, never a denial. */
   authorize(check: BudgetCheck): Promise<{ readonly authorized: boolean; readonly reference?: string }>;
 }
 
 export type AttemptEffectState = "not_dispatched" | "possible" | "confirmed" | "unknown";
+export type BudgetReservationState = "not_requested" | "pending" | "reserved" | "denied" | "unknown";
 
 export interface SubmitAttemptRecord {
   readonly providerId: string;
@@ -269,8 +293,13 @@ export interface SubmitAttemptRecord {
   readonly projectId: string;
   readonly idempotencyKey: string;
   readonly claimId: string;
+  readonly authorizationId: string;
+  readonly actionId: string;
+  readonly authorizationClaimReference: string;
   readonly requestFingerprint: string;
   readonly sideEffectState: AttemptEffectState;
+  readonly budgetReservationState: BudgetReservationState;
+  readonly budgetReservationReference?: string;
   readonly providerRequestId?: string;
   readonly updatedAt: number;
 }
@@ -278,8 +307,11 @@ export interface SubmitAttemptRecord {
 export interface AttemptPersistence {
   getSubmitAttempt(providerId: string, scope: TrustedScope, idempotencyKey: string): Promise<SubmitAttemptRecord | undefined>;
   /**
-   * Atomically creates a claim or reclaims an existing not_dispatched attempt.
-   * Existing possible, confirmed, or unknown attempts must not be claimed.
+   * Atomically creates a durable, non-reclaimable action claim. The backing
+   * store must enforce uniqueness by scoped logical actionId and authorizationId
+   * as well as provider idempotency key, across workers and process restarts.
+   * Budget reservations in pending, reserved, or unknown state are never
+   * released or retried here; only an external authority may reconcile them.
    */
   claimSubmitAttempt(record: SubmitAttemptRecord): Promise<{
     readonly claimed: boolean;

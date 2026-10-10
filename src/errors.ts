@@ -15,8 +15,10 @@ export type ConnectorErrorCode =
   | "contract_rejected"
   | "authorization_rejected"
   | "authorization_unavailable"
+  | "authorization_action_claimed"
   | "budget_denied"
   | "budget_unavailable"
+  | "reservation_unresolved"
   | "persistence_unavailable"
   | "usage_sink_unavailable"
   | "provider_failure"
@@ -41,8 +43,10 @@ const SAFE_MESSAGES: Readonly<Record<ConnectorErrorCode, string>> = {
   contract_rejected: "The shared contract boundary rejected this operation.",
   authorization_rejected: "The supplied authorization did not authorize this operation.",
   authorization_unavailable: "The configured authorization verifier is unavailable.",
+  authorization_action_claimed: "The authorized action was already claimed and cannot be replayed.",
   budget_denied: "The configured budget client denied this operation.",
   budget_unavailable: "The configured budget client is unavailable.",
+  reservation_unresolved: "A prior budget reservation needs external disposition before another attempt.",
   persistence_unavailable: "The configured persistence port is unavailable.",
   usage_sink_unavailable: "The configured usage sink is unavailable.",
   provider_failure: "The provider operation failed.",
