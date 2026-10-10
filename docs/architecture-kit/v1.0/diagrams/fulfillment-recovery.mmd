@@ -1,0 +1,9 @@
+flowchart TD
+    A["Approved artifact and current quote"] --> V{"Authorization valid"}
+    V -->|"No"| R["Request renewed authorization"]
+    V -->|"Yes"| S["Submit with stable external identity"]
+    S -->|"Confirmed"| O["Record supplier order"]
+    S -->|"Outcome unknown"| Q["Query or reconcile supplier status"]
+    Q -->|"Existing order found"| O
+    Q -->|"Absence established and retry allowed"| S
+    Q -->|"Still unknown"| H["Hold and escalate"]

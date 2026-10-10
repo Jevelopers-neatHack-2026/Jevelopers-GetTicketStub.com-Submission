@@ -1,0 +1,9 @@
+flowchart TD
+    CALLS["Metered billable attempts"] --> OBS["Validate and deduplicate observations"]
+    BILLS["Provider billing and payment records"] --> REC["Match and reconcile"]
+    OBS --> LEDGER[("Financial ledger")]
+    REC -->|"Confirmed charges and adjustments"| LEDGER
+    LEDGER -->|"Financial projection"| DASH["Team dashboard"]
+    LEDGER -->|"Financial projection"| CFO["CFO.ai summary export"]
+    LEDGER --> BUD["Atomic budget reservations"]
+    BUD -->|"Authorize bounded spend"| CALLS

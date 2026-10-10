@@ -1,0 +1,311 @@
+{
+  "archive_sha256": "075e051c022f24abb892e74db15e683242e7ec877d81373f50d6dc0d25037496",
+  "files": [
+    {
+      "source": "CHANGELOG.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/CHANGELOG.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "diagrams/financial-flow.mmd",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/diagrams/financial-flow.mmd",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "diagrams/financial-flow.png",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/diagrams/financial-flow.png",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "diagrams/financial-flow.svg",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/diagrams/financial-flow.svg",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "diagrams/fulfillment-recovery.mmd",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/diagrams/fulfillment-recovery.mmd",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "diagrams/runtime-topology.mmd",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/diagrams/runtime-topology.mmd",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "diagrams/runtime-topology.png",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/diagrams/runtime-topology.png",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "diagrams/runtime-topology.svg",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/diagrams/runtime-topology.svg",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "docs/architecture.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/docs/architecture.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "docs/Jevelopers_Repository_Architecture.docx",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/docs/Jevelopers_Repository_Architecture.docx",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "docs/Jevelopers_Repository_Architecture.pdf",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/docs/Jevelopers_Repository_Architecture.pdf",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "planning/acceptance-checklist.json",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/planning/acceptance-checklist.json",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "planning/acceptance-checklist.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/planning/acceptance-checklist.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "planning/contract-catalog.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/planning/contract-catalog.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "planning/implementation-plan.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/planning/implementation-plan.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "planning/repository-map.json",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/planning/repository-map.json",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "README.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/README.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/01-marketing-material.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/01-marketing-material.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/02-agent-harness.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/02-agent-harness.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/03-getticketstub.com.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/03-getticketstub.com.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/04-brand-kit.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/04-brand-kit.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/05-landing-page-repo.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/05-landing-page-repo.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/06-github-governance.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/06-github-governance.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/07-shared-contracts.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/07-shared-contracts.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/08-event-intelligence.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/08-event-intelligence.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/09-creative-engine.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/09-creative-engine.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/10-print-production.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/10-print-production.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/11-fulfillment-connectors.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/11-fulfillment-connectors.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/12-cost-intelligence.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/12-cost-intelligence.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/13-team-dashboard.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/13-team-dashboard.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/14-integration-evals.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/repository-briefs/14-integration-evals.md",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "SHA256SUMS.txt",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture-kit/v1.0/SHA256SUMS.txt",
+      "mode": "immutable_snapshot"
+    },
+    {
+      "source": "repository-briefs/04-brand-kit.md",
+      "repository": "brand-kit",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/14-integration-evals.md",
+      "repository": "integration-evals",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/13-team-dashboard.md",
+      "repository": "team-dashboard",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/12-cost-intelligence.md",
+      "repository": "cost-intelligence",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/11-fulfillment-connectors.md",
+      "repository": "fulfillment-connectors",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/10-print-production.md",
+      "repository": "print-production",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/09-creative-engine.md",
+      "repository": "creative-engine",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/08-event-intelligence.md",
+      "repository": "event-intelligence",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/07-shared-contracts.md",
+      "repository": "shared-contracts",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/01-marketing-material.md",
+      "repository": "marketing-material",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/02-agent-harness.md",
+      "repository": "agent-harness",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/03-getticketstub.com.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/05-landing-page-repo.md",
+      "repository": "landing-page-repo",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "repository-briefs/06-github-governance.md",
+      "repository": ".github",
+      "destination": "docs/architecture/OWNERSHIP.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "planning/contract-catalog.md",
+      "repository": "shared-contracts",
+      "destination": "docs/contract-catalog.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "planning/implementation-plan.md",
+      "repository": "getticketstub.com",
+      "destination": "docs/planning/implementation-plan.md",
+      "mode": "maintained_copy"
+    },
+    {
+      "source": "planning/repository-map.json",
+      "repository": "getticketstub.com",
+      "destination": "integration/repository-map.json",
+      "mode": "maintained_copy_with_verified_inventory"
+    },
+    {
+      "source": "planning/acceptance-checklist.json",
+      "repository": "integration-evals",
+      "destination": "planning/acceptance-checklist.json",
+      "mode": "maintained_tracker_state_migration"
+    },
+    {
+      "source": "planning/acceptance-checklist.md",
+      "repository": "integration-evals",
+      "destination": "planning/acceptance-checklist.md",
+      "mode": "maintained_copy"
+    }
+  ]
+}

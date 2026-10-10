@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820">
+<title>Financial Flow</title>
+<rect width="100%" height="100%" fill="white"/>
+<polyline points="275,140 275,226" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="275.00,226.00 270.65,217.00 279.35,217.00" fill="#768394"/>
+<polyline points="1125,140 1125,226" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="1125.00,226.00 1120.65,217.00 1129.35,217.00" fill="#768394"/>
+<polyline points="275,326 275,376 610,376 610,406" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="610.00,406.00 605.65,397.00 614.35,397.00" fill="#768394"/>
+<polyline points="1125,326 1125,376 790,376 790,406" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="790.00,406.00 785.65,397.00 794.35,397.00" fill="#768394"/>
+<polyline points="610,510 610,573 245,573 245,650" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="245.00,650.00 240.65,641.00 249.35,641.00" fill="#768394"/>
+<polyline points="700,510 700,650" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="700.00,650.00 695.65,641.00 704.35,641.00" fill="#768394"/>
+<polyline points="790,510 790,573 1155,573 1155,650" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="1155.00,650.00 1150.65,641.00 1159.35,641.00" fill="#768394"/>
+<polyline points="70,701 27,701 27,90 70,90" fill="none" stroke="#768394" stroke-width="3"/>
+<polygon points="70.00,90.00 61.00,94.35 61.00,85.65" fill="#768394"/>
+<rect x="70" y="40" width="410" height="100" rx="12" fill="#EDF2FA" stroke="#9BAABD" stroke-width="2"/>
+<text x="275.0" y="77.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Billable attempts</text>
+<text x="275.0" y="105.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Distinct charge identities</text>
+<rect x="920" y="40" width="410" height="100" rx="12" fill="#F4F1F8" stroke="#9BAABD" stroke-width="2"/>
+<text x="1125.0" y="77.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Provider records</text>
+<text x="1125.0" y="105.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Billing, sales, fees and refunds</text>
+<rect x="70" y="226" width="410" height="100" rx="12" fill="#EDF2FA" stroke="#9BAABD" stroke-width="2"/>
+<text x="275.0" y="263.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Usage observations</text>
+<text x="275.0" y="291.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Validate and deduplicate</text>
+<rect x="920" y="226" width="410" height="100" rx="12" fill="#EDF2FA" stroke="#9BAABD" stroke-width="2"/>
+<text x="1125.0" y="263.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Reconciliation</text>
+<text x="1125.0" y="291.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Match coverage and differences</text>
+<rect x="510" y="406" width="380" height="104" rx="12" fill="#EAF3F1" stroke="#9BAABD" stroke-width="2"/>
+<text x="700.0" y="445.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Financial ledger</text>
+<text x="700.0" y="473.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Effective costs and linked events</text>
+<rect x="70" y="650" width="350" height="102" rx="12" fill="#EAF3F1" stroke="#9BAABD" stroke-width="2"/>
+<text x="245.0" y="688.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Budget reservations</text>
+<text x="245.0" y="716.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Atomic spending control</text>
+<rect x="525" y="650" width="350" height="102" rx="12" fill="#EDF2FA" stroke="#9BAABD" stroke-width="2"/>
+<text x="700.0" y="688.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">Team dashboard</text>
+<text x="700.0" y="716.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Authorized views and drilldowns</text>
+<rect x="980" y="650" width="350" height="102" rx="12" fill="#F4F1F8" stroke="#9BAABD" stroke-width="2"/>
+<text x="1155.0" y="688.0" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="700" fill="#243247" text-anchor="middle" dominant-baseline="middle">CFO.ai export</text>
+<text x="1155.0" y="716.0" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#243247" text-anchor="middle" dominant-baseline="middle">Summaries and assumptions</text>
+</svg>
