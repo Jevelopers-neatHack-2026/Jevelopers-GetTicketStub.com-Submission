@@ -18,5 +18,7 @@ jobs:
           node-version: 22.23.3
           cache: npm
       - run: npm ci
+      - name: Install the locked host TypeScript compiler
+        run: node tools/install-typescript-host.mjs
       - run: make verify CASE=deterministic-extraction MODE=mock
       - run: npm run typecheck
