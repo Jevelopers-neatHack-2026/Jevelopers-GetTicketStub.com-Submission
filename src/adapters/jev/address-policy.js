@@ -52,6 +52,7 @@ function ipv6GloballyRoutable(address) {
   if (first === 0x2001 && groups[1] <= 0x01ff) return false; // IETF special-purpose block, including documentation.
   if (first === 0x2001 && groups[1] === 0x0db8) return false; // Documentation prefix.
   if (first === 0x2002) return false; // 6to4 embeds an IPv4 destination.
+  if ((groups[4] === 0x0000 || groups[4] === 0x0200) && groups[5] === 0x5efe) return false; // ISATAP embeds an IPv4 destination.
   if (first === 0x3fff && groups[1] <= 0x0fff) return false; // documentation range.
   return true;
 }

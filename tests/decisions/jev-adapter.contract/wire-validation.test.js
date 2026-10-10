@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import './network-guard.js';
 import {
   JEV_MAX_REQUEST_BYTES,
   serializeJevRequest,
   validateJevRequest
 } from '../../../src/adapters/jev/request-validation.js';
 import { validateJevResponseBytes } from '../../../src/adapters/jev/response-validation.js';
-import { JevWireError, parseStrictJsonBytes } from '../../../src/adapters/jev/safe-json.js';
+import {
+  JEV_MAX_RESPONSE_BYTES,
+  JevWireError,
+  parseStrictJsonBytes
+} from '../../../src/adapters/jev/safe-json.js';
+import { JevTransportError, sendJevOnce } from '../../../src/adapters/jev/http-transport.js';
 
 function fixture(name) {
   return JSON.parse(readFileSync(new URL(`../../fixtures/jev/${name}`, import.meta.url), 'utf8'));
@@ -159,6 +165,67 @@ test('wire_adversarial: strict parser rejects duplicate nested members, excess d
   assert.throws(() => parseStrictJsonBytes(Buffer.from('{"a":{"x":1,"x":2}}')), JevWireError);
   assert.throws(() => parseStrictJsonBytes(Buffer.from('['.repeat(60) + '0' + ']'.repeat(60))), JevWireError);
   assert.throws(() => parseStrictJsonBytes(Buffer.alloc(512 * 1024 + 1, 0x20)), JevWireError);
+});
+
+test('wire_adversarial: parser uses intrinsic Buffer byte length and rejects shadowed metadata before decoding', () => {
+  let getterCalls = 0;
+  const accessorLength = Buffer.from('{}');
+  Object.defineProperty(accessorLength, 'length', {
+    configurable: true,
+    get() { getterCalls += 1; throw new Error('SYNTHETIC_PRIVATE_BUFFER_LENGTH'); }
+  });
+  assert.throws(() => parseStrictJsonBytes(accessorLength), error => {
+    assert.ok(error instanceof JevWireError);
+    assert.equal(error.code, 'INVALID_RESPONSE');
+    assert.doesNotMatch(error.message, /SYNTHETIC_PRIVATE_BUFFER_LENGTH/u);
+    return true;
+  });
+  assert.equal(getterCalls, 0);
+
+  const oversizedShadow = Buffer.concat([Buffer.alloc(JEV_MAX_RESPONSE_BYTES + 1, 0x20)]);
+  Object.defineProperty(oversizedShadow, 'length', { configurable: true, value: 1 });
+  assert.throws(() => parseStrictJsonBytes(oversizedShadow), error => {
+    assert.ok(error instanceof JevWireError);
+    assert.equal(error.code, 'INVALID_RESPONSE');
+    return true;
+  });
+
+  const exactLimit = Buffer.concat([
+    Buffer.from('{}'),
+    Buffer.alloc(JEV_MAX_RESPONSE_BYTES - 2, 0x20)
+  ]);
+  assert.equal(JEV_MAX_RESPONSE_BYTES, exactLimit.length);
+  assert.deepEqual(parseStrictJsonBytes(exactLimit), Object.freeze(Object.create(null)));
+  assert.throws(() => parseStrictJsonBytes(Buffer.concat([exactLimit, Buffer.from(' ')])), JevWireError);
+
+  let prototypeGetterCalls = 0;
+  const customPrototypeBuffer = Buffer.from('{}');
+  const customPrototype = Object.create(Buffer.prototype);
+  Object.defineProperty(customPrototype, 'length', {
+    get() { prototypeGetterCalls += 1; throw new Error('SYNTHETIC_PRIVATE_BUFFER_PROTOTYPE'); }
+  });
+  Object.setPrototypeOf(customPrototypeBuffer, customPrototype);
+  assert.throws(() => parseStrictJsonBytes(customPrototypeBuffer), JevWireError);
+  assert.equal(prototypeGetterCalls, 0);
+
+  const revoked = Proxy.revocable(Buffer.from('{}'), {});
+  revoked.revoke();
+  assert.throws(() => parseStrictJsonBytes(revoked.proxy), error => {
+    assert.ok(error instanceof JevWireError);
+    assert.equal(error.code, 'INVALID_RESPONSE');
+    return true;
+  });
+});
+
+test('wire_adversarial: revoked request proxies fail as typed transport input errors', () => {
+  const revoked = Proxy.revocable({}, {});
+  revoked.revoke();
+  assert.throws(() => sendJevOnce(revoked.proxy), error => {
+    assert.ok(error instanceof JevTransportError);
+    assert.equal(error.code, 'INVALID_TRANSPORT_INPUT');
+    assert.doesNotMatch(error.message, /Cannot perform|revoked|SYNTHETIC/u);
+    return true;
+  });
 });
 
 test('wire_adversarial: request snapshots reject accessors, proxies, toJSON hooks, and unsupported models without invoking them', () => {

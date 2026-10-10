@@ -160,7 +160,12 @@ test('fixed_surface_ssrf: address vetting rejects private, special, mapped, and 
   for (const address of [
     '0.0.0.0', '10.1.2.3', '100.64.1.2', '127.0.0.1', '169.254.1.1',
     '172.16.0.1', '192.168.1.1', '198.18.0.1', '203.0.113.4',
-    '::1', '::ffff:127.0.0.1', 'fc00::1', 'fe80::1', 'ff02::1', '2001:db8::1', '64:ff9b::7f00:1'
+    '::1', '::ffff:127.0.0.1', 'fc00::1', 'fe80::1', 'ff02::1', '2001:db8::1', '64:ff9b::7f00:1',
+    '2001:4860:4860:0:0:5efe:7f00:1',
+    '2001:4860:4860::5efe:a00:1',
+    '2001:4860:4860::5efe:a9fe:1',
+    '2001:4860:4860:0:200:5efe:7f00:1',
+    '2001:4860:4860:0:200:5efe:a00:1'
   ]) assert.equal(isPublicJevAddress(address), false, address);
   assert.equal(isPublicJevAddress('93.184.216.34'), true);
   assert.equal(isPublicJevAddress('2606:4700:4700::1111'), true);
@@ -175,6 +180,40 @@ test('fixed_surface_ssrf: address vetting rejects private, special, mapped, and 
   });
   assert.equal(http.calls, 0);
   assert.equal(http.sends, 0);
+
+  for (const address of [
+    '2001:4860:4860:0:0:5efe:7f00:1',
+    '2001:4860:4860::5efe:a00:1',
+    '2001:4860:4860::5efe:a9fe:1',
+    '2001:4860:4860:0:200:5efe:7f00:1',
+    '2001:4860:4860:0:200:5efe:a00:1'
+  ]) {
+    t.mock.restoreAll();
+    installSyntheticDns(t, { ipv4: ['93.184.216.34'], ipv6: [address] });
+    const mixedFamilyHttp = installSyntheticHttps(t);
+    await assert.rejects(sendJevOnce(validInput()), error => {
+      assert.ok(error instanceof JevTransportError);
+      assert.equal(error.code, 'DESTINATION_REJECTED');
+      assert.equal(error.dispatchCertainty, 'not_dispatched');
+      return true;
+    }, address);
+    assert.equal(mixedFamilyHttp.calls, 0, address);
+    assert.equal(mixedFamilyHttp.sends, 0, address);
+  }
+
+  t.mock.restoreAll();
+  installSyntheticDns(t, { ipv4: [], ipv6: ['2606:4700:4700::1111'] });
+  const publicIpv6Http = installSyntheticHttps(t);
+  const publicIpv6Result = await sendJevOnce(validInput());
+  assert.equal(publicIpv6Result.kind, 'response');
+  assert.equal(publicIpv6Http.calls, 1);
+  const pinnedIpv6 = await new Promise((resolve, reject) => {
+    publicIpv6Http.options.lookup('api.typesafe.ai', {}, (error, address, family) => {
+      if (error) reject(error);
+      else resolve({ address, family });
+    });
+  });
+  assert.deepEqual(pinnedIpv6, { address: '2606:4700:4700::1111', family: 6 });
 });
 
 test('fixed_surface_ssrf: test-controlled endpoint, method, headers, proxy, and TLS overrides are not accepted', () => {

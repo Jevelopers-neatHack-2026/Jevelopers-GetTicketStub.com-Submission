@@ -76,11 +76,16 @@ export function planJevRetry(input) {
     throw new TypeError('The JEV retry planning input is outside its bounded policy.');
   }
 
-  if (fields.status === null) {
-    return fields.failureKind === 'cancelled_before_dispatch'
-      ? decision('stop', 'cancelled_before_dispatch', 0)
-      : decision('review', 'outcome_may_be_ambiguous', 0);
+  if (fields.failureKind === 'cancelled_before_dispatch') {
+    return decision('stop', 'cancelled_before_dispatch', 0);
   }
+  if (fields.failureKind === 'cancelled_after_possible_dispatch') {
+    return decision('review', 'outcome_may_be_ambiguous', 0);
+  }
+  if (fields.failureKind !== undefined) {
+    return decision('review', 'outcome_may_be_ambiguous', 0);
+  }
+  if (fields.status === null) return decision('review', 'outcome_may_be_ambiguous', 0);
   if (fields.status === 401) return decision('stop', 'authentication_rejected', 0);
   if (fields.status === 422) return decision('stop', 'request_rejected', 0);
   if (fields.status !== 429 && fields.status !== 529) {

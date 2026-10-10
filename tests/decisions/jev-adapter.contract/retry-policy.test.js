@@ -89,8 +89,40 @@ test('retry_faults: 408, other 5xx, timeout, connection loss, interruption, and 
   assert.equal(predispatchCancel.reason, 'cancelled_before_dispatch');
 });
 
+test('retry_faults: cancellation, timeout, and interrupted-body evidence overrides retryable HTTP status', () => {
+  for (const status of [429, 529]) {
+    const predispatch = plan({ status, failureKind: 'cancelled_before_dispatch' });
+    assert.equal(predispatch.action, 'stop', `${status}: pre-dispatch cancellation`);
+    assert.equal(predispatch.reason, 'cancelled_before_dispatch');
+    assert.equal(predispatch.attemptsRemaining, 0);
+
+    const possibleWrite = plan({ status, failureKind: 'cancelled_after_possible_dispatch' });
+    assert.equal(possibleWrite.action, 'review', `${status}: possible-write cancellation`);
+    assert.equal(possibleWrite.attemptsRemaining, 0);
+
+    for (const failureKind of ['timeout', 'connection_reset', 'body_interrupted']) {
+      const ambiguous = plan({ status, failureKind });
+      assert.equal(ambiguous.action, 'review', `${status}: ${failureKind}`);
+      assert.equal(ambiguous.attemptsRemaining, 0);
+      assert.equal(ambiguous.dispatchAuthorized, false);
+    }
+
+    const ordinary = plan({ status });
+    assert.equal(ordinary.action, 'retry_candidate');
+    assert.equal(ordinary.attemptsRemaining, 1);
+    assert.equal(ordinary.dispatchAuthorized, false);
+  }
+});
+
 test('retry_faults: input bounds fail closed and caller objects cannot supply retry callbacks', () => {
   assert.throws(() => plan({ remainingMs: 60_001 }), TypeError);
   assert.throws(() => plan({ retry: () => {} }), TypeError);
   assert.throws(() => plan({ attemptNumber: 0 }), TypeError);
+  const revoked = Proxy.revocable({}, {});
+  revoked.revoke();
+  assert.throws(() => plan(revoked.proxy), error => {
+    assert.ok(error instanceof TypeError);
+    assert.doesNotMatch(error.message, /private|secret|SYNTHETIC/u);
+    return true;
+  });
 });

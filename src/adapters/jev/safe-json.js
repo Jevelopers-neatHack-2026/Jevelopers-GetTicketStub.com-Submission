@@ -1,4 +1,4 @@
-import { types as utilTypes } from 'node:util';
+import { TextDecoder, types as utilTypes } from 'node:util';
 
 export const JEV_MAX_DEPTH = 48;
 export const JEV_MAX_NODES = 12_000;
@@ -6,6 +6,9 @@ export const JEV_MAX_KEYS = 4_096;
 export const JEV_MAX_STRING_UNITS = 262_144;
 export const JEV_MAX_ARRAY_ITEMS = 4_096;
 export const JEV_MAX_RESPONSE_BYTES = 512 * 1024;
+const TYPED_ARRAY_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype);
+const TYPED_ARRAY_BYTE_LENGTH = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTOTYPE, 'byteLength')?.get;
+const BUFFER_METADATA_KEYS = ['length', 'byteLength', 'byteOffset', 'buffer'];
 
 export class JevWireError extends Error {
   constructor(code, message = 'The JEV wire value is invalid.') {
@@ -28,7 +31,7 @@ function invalid(code = 'INVALID_REQUEST') {
 }
 
 function plainRecord(value) {
-  if (value === null || typeof value !== 'object' || Array.isArray(value) || isProxy(value)) {
+  if (value === null || typeof value !== 'object' || isProxy(value) || Array.isArray(value)) {
     return false;
   }
   const prototype = Object.getPrototypeOf(value);
@@ -252,21 +255,40 @@ function makeParser(text) {
   };
 }
 
-export function parseStrictJsonBytes(bytes, maximumBytes = JEV_MAX_RESPONSE_BYTES) {
-  if (isProxy(bytes) || !Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > maximumBytes) {
+function actualBufferByteLength(bytes, maximumBytes) {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || maximumBytes > JEV_MAX_RESPONSE_BYTES
+      || isProxy(bytes) || !Buffer.isBuffer(bytes)) {
     invalid('INVALID_RESPONSE');
   }
-  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    invalid('INVALID_RESPONSE');
-  }
-  let text;
+  let byteLength;
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    if (typeof TYPED_ARRAY_BYTE_LENGTH !== 'function') invalid('INVALID_RESPONSE');
+    byteLength = TYPED_ARRAY_BYTE_LENGTH.call(bytes);
+    if (!Number.isSafeInteger(byteLength) || byteLength < 1 || byteLength > maximumBytes) {
+      invalid('INVALID_RESPONSE');
+    }
+    if (Object.getPrototypeOf(bytes) !== Buffer.prototype) invalid('INVALID_RESPONSE');
+    if (BUFFER_METADATA_KEYS.some(key => Object.getOwnPropertyDescriptor(bytes, key) !== undefined)) {
+      invalid('INVALID_RESPONSE');
+    }
   } catch {
     invalid('INVALID_RESPONSE');
   }
-  if (text.charCodeAt(0) === 0xfeff) invalid('INVALID_RESPONSE');
-  return makeParser(text)();
+  return byteLength;
+}
+
+export function parseStrictJsonBytes(bytes, maximumBytes = JEV_MAX_RESPONSE_BYTES) {
+  const byteLength = actualBufferByteLength(bytes, maximumBytes);
+  try {
+    if (byteLength >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+      invalid('INVALID_RESPONSE');
+    }
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    if (text.charCodeAt(0) === 0xfeff) invalid('INVALID_RESPONSE');
+    return makeParser(text)();
+  } catch {
+    invalid('INVALID_RESPONSE');
+  }
 }
 
 export function isPlainDataRecord(value) {

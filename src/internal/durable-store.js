@@ -166,11 +166,11 @@ function serializeCheckpoint(data, operation) {
 }
 
 function readOwnDataRecord(value, allowedKeys, operation, requiredKeys = allowedKeys) {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (value === null || typeof value !== 'object') {
     fail(operation, 'INVALID_INPUT', 'The provider observation is invalid or exceeds its safety bounds.');
   }
   try {
-    if (utilTypes.isProxy(value)) {
+    if (utilTypes.isProxy(value) || Array.isArray(value)) {
       fail(operation, 'INVALID_INPUT', 'The provider observation is invalid or exceeds its safety bounds.');
     }
     const prototype = Object.getPrototypeOf(value);

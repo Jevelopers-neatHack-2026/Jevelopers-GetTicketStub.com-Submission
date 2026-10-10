@@ -725,6 +725,19 @@ test('privacy_identity: bounded identity snapshots reject accessors, proxies, an
     ownKeys() { getterCalls += 1; throw new Error(PRIVATE_MARKER); }
   });
   assert.throws(() => store.recordJevProviderObservation(proxy), error => error.code === 'INVALID_INPUT');
+  const revokedObservation = Proxy.revocable(observation(identity), {});
+  revokedObservation.revoke();
+  assert.throws(() => store.recordJevProviderObservation(revokedObservation.proxy), error => {
+    assert.ok(error instanceof RuntimeError);
+    assert.equal(error.code, 'INVALID_INPUT');
+    assert.doesNotMatch(error.message, /Cannot perform|revoked|SYNTHETIC/u);
+    return true;
+  });
+  const revokedUsage = Proxy.revocable({ kind: 'known', inputTokens: 1, outputTokens: 1 }, {});
+  revokedUsage.revoke();
+  assert.throws(() => store.recordJevProviderObservation({
+    ...observation(identity), sourceObservationRef: 'jev-revoked-usage', usage: revokedUsage.proxy
+  }), error => error.code === 'INVALID_INPUT');
   assert.equal(getterCalls, 0);
   assert.throws(() => store.recordJevProviderObservation({
     ...observation(identity), workflowId: 'jev-other-workflow', sourceObservationRef: 'jev-cross-workflow'
