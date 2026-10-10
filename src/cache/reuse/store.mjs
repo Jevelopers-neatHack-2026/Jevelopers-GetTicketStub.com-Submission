@@ -330,7 +330,7 @@ async function withLocalQueue(key, operation) {
 
 export function createScopedReuseStore(options) {
   const config = record(options, new Set([
-    'directory', 'resolveTenant', 'resolveActor', 'authorizeAction', 'resolveKey', 'resolveRetention',
+    'directory', 'resolveTenant', 'resolveActor', 'authorizeAction', 'authorizeCurrentRequest', 'resolveKey', 'resolveRetention',
     'verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage',
     'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement',
     'now', 'maxEntryBytes', 'maxEntries', 'maxFlights', 'maxPrivateLinks', 'maxObservationsPerEntry', 'maxOutboxEntries',
@@ -338,6 +338,7 @@ export function createScopedReuseStore(options) {
   ]));
   if (!config || !string(config.directory, 4096) || typeof config.resolveTenant !== 'function'
     || typeof config.resolveActor !== 'function' || typeof config.authorizeAction !== 'function'
+    || typeof config.authorizeCurrentRequest !== 'function'
     || typeof config.resolveKey !== 'function' || typeof config.resolveRetention !== 'function') fail('REUSE_INVALID');
   for (const name of ['verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage', 'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement']) {
     if (config[name] !== undefined && typeof config[name] !== 'function') fail('REUSE_INVALID');
@@ -415,6 +416,20 @@ export function createScopedReuseStore(options) {
     if (!allowed) fail('REUSE_DENIED');
     const after = await resolvePrincipal(request);
     if (after.tenantId !== info.tenantId || after.actorId !== info.actorId) fail('REUSE_DENIED');
+  }
+
+  async function authorizeCurrentRequest(info, request, action, details = {}) {
+    let allowed = false;
+    try {
+      allowed = (await config.authorizeCurrentRequest(Object.freeze({
+        expectedTenantId: info.tenantId,
+        expectedActorId: info.actorId,
+        action,
+        request,
+        details: Object.freeze({ ...details }),
+      }))) === true;
+    } catch { fail('REUSE_DENIED'); }
+    if (!allowed) fail('REUSE_DENIED');
   }
 
   function authorizationGuard(info, request, action, signal) {
@@ -1415,7 +1430,8 @@ export function createScopedReuseStore(options) {
     const observation = unseal(observationKey.key, row.partition_hash, 'observation', first.observation.observation_id,
       first.observation.payload, first.observation.payload_key_id);
 
-    // Finish all asynchronous filesystem, key and permission work before the final action check.
+    // Finish asynchronous filesystem, key, permission and legacy authorization work before
+    // the combined current-principal/exact-action host decision.
     // The connection is open but has no transaction while trusted host callbacks run.
     const database = await prepareStoreDatabase();
     let transactionOpen = false;
@@ -1424,6 +1440,7 @@ export function createScopedReuseStore(options) {
     try {
       if (permissionCheck) finalPermissionState = await permissionCheck();
       await authorize(info, request, action, { profileRef: row.entry_id });
+      await authorizeCurrentRequest(info, request, action, { profileRef: row.entry_id });
       database.exec('BEGIN IMMEDIATE');
       transactionOpen = true;
       const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();

@@ -34,6 +34,9 @@ const store = createScopedReuseStore({
   resolveTenant: (request) => request.principal.tenantId,
   resolveActor: (request) => request.principal.actorId,
   authorizeAction: () => true,
+  authorizeCurrentRequest: ({ expectedTenantId, expectedActorId, action, request }) =>
+    ['freshness.observe', 'cache.invalidate'].includes(action)
+      && request.principal.tenantId === expectedTenantId && request.principal.actorId === expectedActorId,
   resolveKey: async ({ tenantId: keyTenant, purpose, keyId }) => {
     if (mode === 'invalidate' && purpose === 'payload' && keyId) await barrier();
     return { keyId: `tenant_private:${purpose}:${keyTenant ?? 'global'}`, key: keyTenant ? indexKey : Buffer.alloc(32, 91) };

@@ -11,6 +11,15 @@ declare const identity: CacheIdentity;
 declare const pins: ReusePins;
 
 const store = createScopedReuseStore(options);
+const finalAuthorization: NonNullable<import('../../../src/cache/reuse/store.mjs').ScopedReuseOptions<AuthenticatedRequest>['authorizeCurrentRequest']> = async ({
+  expectedTenantId,
+  expectedActorId,
+  action,
+  request: currentRequest,
+}) => currentRequest.principal.tenantId === expectedTenantId
+  && currentRequest.principal.actorId === expectedActorId
+  && action.length > 0;
+void finalAuthorization;
 const privateResult = await store.getPrivateProfile(scope, request, {
   identity,
   pins,

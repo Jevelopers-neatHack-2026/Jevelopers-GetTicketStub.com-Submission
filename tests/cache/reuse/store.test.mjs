@@ -67,7 +67,7 @@ async function fixture(t, overrides = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'ei-scoped-reuse-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const clock = { value: 1_800_000_000_000 };
-  const state = { observation: null, permission: 'valid', permissionValidUntilMs: 8_640_000_000_000_000, delivered: null, acknowledge: false, replayAck: false, previousAck: null, retentionMs: 7 * 24 * 60 * 60 * 1000, publicOnlyRequested: false, authorizationActions: [], advanceAtAuthorizationCall: null, advanceClockTo: null, advanceOnPermissionTo: null };
+  const state = { observation: null, permission: 'valid', permissionValidUntilMs: 8_640_000_000_000_000, delivered: null, acknowledge: false, replayAck: false, previousAck: null, retentionMs: 7 * 24 * 60 * 60 * 1000, publicOnlyRequested: false, authorizationActions: [], currentAuthorizationActions: [], advanceAtAuthorizationCall: null, advanceClockTo: null, advanceOnPermissionTo: null };
   const options = {
     directory,
     now: () => clock.value,
@@ -77,6 +77,15 @@ async function fixture(t, overrides = {}) {
       state.authorizationActions.push(action);
       if (state.authorizationActions.length === state.advanceAtAuthorizationCall) clock.value = state.advanceClockTo;
       return true;
+    },
+    authorizeCurrentRequest: async ({ expectedTenantId, expectedActorId, action, request: authRequest, details }) => {
+      state.currentAuthorizationActions.push(action);
+      const tenantId = await options.resolveTenant(authRequest);
+      const actorId = await options.resolveActor(authRequest);
+      if (tenantId !== expectedTenantId || actorId !== expectedActorId) return false;
+      const allowed = (await options.authorizeAction({ tenantId, actorId, action, request: authRequest, details })) === true;
+      const principal = authRequest?.principal;
+      return allowed && principal?.tenantId === expectedTenantId && principal?.actorId === expectedActorId;
     },
     resolveKey: ({ tenantId, scope, purpose }) => ({
       keyId: `${scope}:${purpose}:${tenantId ?? 'global'}`,
@@ -1336,6 +1345,225 @@ test('final authorization follows queued database preparation for private and pu
   }
 });
 
+test('final combined host decision catches same-principal ACL revocation across either asynchronous resolver tail', async (t) => {
+  for (const pathKind of ['private_facts', 'public_facts', 'private_finance', 'public_finance']) {
+    for (const resolverKind of ['tenant', 'actor']) {
+      let armed = false;
+      let permissionChecks = 0;
+      let waitForResolverTail = false;
+      let resolverTailObserved = false;
+      let scheduledRevocation = false;
+      let revoked = false;
+      let handoffs = 0;
+      let postThirdAuthorizations = 0;
+      const currentActionCalls = [];
+      let authRequest;
+      const targetAction = pathKind.endsWith('facts')
+        ? (pathKind === 'private_facts' ? 'private_profile.read' : 'public_profile.read')
+        : 'finance.read_original_lineage';
+      const waitOnTail = async (value, kind) => {
+        if (armed && waitForResolverTail && resolverKind === kind) {
+          waitForResolverTail = false;
+          await new Promise((resolve) => setImmediate(resolve));
+          resolverTailObserved = true;
+        }
+        return value;
+      };
+      const env = await fixture(t, {
+        ...(pathKind.startsWith('public') ? {
+          authorizePublicPublication: ({ identity, contentHash }) => ({
+            status: 'approved', identity, contentHash,
+            publicPermissions: [{ reference: 'PUBLIC_PERMISSION', contentHash, version: 1, use: 'fact_read' }],
+          }),
+        } : {}),
+        resolveTenant: async (value) => waitOnTail(value?.principal?.tenantId, 'tenant'),
+        resolveActor: async (value) => waitOnTail(value?.principal?.actorId, 'actor'),
+        verifyPermission: ({ reference, contentHash, version, use }) => {
+          if (armed) permissionChecks += 1;
+          return { status: 'valid', reference, contentHash, version, use, validUntilMs: 8_640_000_000_000_000 };
+        },
+        authorizeAction: ({ action }) => {
+          if (armed && permissionChecks === 3 && action === targetAction) {
+            postThirdAuthorizations += 1;
+            if (postThirdAuthorizations === 2 && !scheduledRevocation) {
+              scheduledRevocation = true;
+              waitForResolverTail = true;
+              setImmediate(() => { revoked = true; });
+            }
+          }
+          return !revoked;
+        },
+        authorizeCurrentRequest: async ({ expectedTenantId, expectedActorId, action, request: value, details }) => {
+          currentActionCalls.push(action);
+          const tenantId = await env.options.resolveTenant(value);
+          const actorId = await env.options.resolveActor(value);
+          if (tenantId !== expectedTenantId || actorId !== expectedActorId) return false;
+          const allowed = await env.options.authorizeAction({ tenantId, actorId, action, request: value, details });
+          const principal = value?.principal;
+          return allowed === true && !revoked && action === targetAction
+            && principal?.tenantId === expectedTenantId && principal?.actorId === expectedActorId;
+        },
+        consumeOriginalLineage: () => {
+          handoffs += 1;
+          return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+        },
+      });
+      authRequest = { principal: { tenantId: 'tenant-a', actorId: 'actor-tenant-a' } };
+      const created = pathKind.startsWith('public')
+        ? await putPublic(env.store, authRequest, await approvedBoundary(authRequest))
+        : await putPrivate(env.store, authRequest);
+      permissionChecks = 0;
+      armed = true;
+      if (pathKind === 'private_facts' || pathKind === 'public_facts') {
+        const read = pathKind === 'private_facts'
+          ? env.store.getPrivateProfile(created.scope, authRequest, created.lookup)
+          : env.store.getPublicProfile(created.scope, authRequest, created.lookup);
+        await assert.rejects(read, (error) => error.code === 'REUSE_DENIED');
+      } else {
+        await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+          (error) => error.code === 'REUSE_DENIED');
+      }
+      assert.equal(scheduledRevocation, true, `${pathKind}/${resolverKind} must revoke after action approval`);
+      assert.equal(resolverTailObserved, true, `${pathKind}/${resolverKind} must exercise its post-action async resolver`);
+      assert.equal(revoked, true);
+      assert.deepEqual(authRequest.principal, { tenantId: 'tenant-a', actorId: 'actor-tenant-a' }, 'the ACL revocation must leave the principal unchanged');
+      assert.ok(currentActionCalls.includes(targetAction), 'the final joint host decision must run');
+      assert.equal(handoffs, 0, `${pathKind}/${resolverKind} must not disclose Finance lineage`);
+    }
+  }
+});
+
+test('combined final adapter rejects tenant or actor changes during its resolver and authorizer phases', async (t) => {
+  for (const pathKind of ['private_facts', 'public_facts', 'private_finance', 'public_finance']) {
+    for (const mutation of ['tenant', 'actor']) {
+      for (const phase of ['resolver', 'authorizer']) {
+        let env;
+        let armed = false;
+        let combinedDecisionEntered = false;
+        let mutated = false;
+        let handoffs = 0;
+        let authRequest;
+        const targetAction = pathKind.endsWith('facts')
+          ? (pathKind === 'private_facts' ? 'private_profile.read' : 'public_profile.read')
+          : 'finance.read_original_lineage';
+        const mutateAfterTurn = async () => {
+          await new Promise((resolve) => setImmediate(resolve));
+          if (mutation === 'tenant') authRequest.principal.tenantId = 'tenant-b';
+          else authRequest.principal.actorId = 'actor-revoked';
+          mutated = true;
+        };
+        const envHolder = { env: null };
+        env = await fixture(t, {
+          ...(pathKind.startsWith('public') ? {
+            authorizePublicPublication: ({ identity, contentHash }) => ({
+              status: 'approved', identity, contentHash,
+              publicPermissions: [{ reference: 'PUBLIC_PERMISSION', contentHash, version: 1, use: 'fact_read' }],
+            }),
+          } : {}),
+          resolveTenant: async (value) => {
+            if (armed && combinedDecisionEntered && phase === 'resolver' && mutation === 'tenant' && !mutated) await mutateAfterTurn();
+            return value?.principal?.tenantId;
+          },
+          resolveActor: async (value) => {
+            if (armed && combinedDecisionEntered && phase === 'resolver' && mutation === 'actor' && !mutated) await mutateAfterTurn();
+            return value?.principal?.actorId;
+          },
+          authorizeAction: async ({ action }) => {
+            if (armed && combinedDecisionEntered && phase === 'authorizer' && action === targetAction && !mutated) {
+              await mutateAfterTurn();
+            }
+            return true;
+          },
+          authorizeCurrentRequest: async ({ expectedTenantId, expectedActorId, action, request: value, details }) => {
+            combinedDecisionEntered = true;
+            const tenantId = await envHolder.env.options.resolveTenant(value);
+            const actorId = await envHolder.env.options.resolveActor(value);
+            if (tenantId !== expectedTenantId || actorId !== expectedActorId) return false;
+            const allowed = await envHolder.env.options.authorizeAction({ tenantId, actorId, action, request: value, details });
+            const principal = value?.principal;
+            return allowed === true && action === targetAction
+              && principal?.tenantId === expectedTenantId && principal?.actorId === expectedActorId;
+          },
+          consumeOriginalLineage: () => {
+            handoffs += 1;
+            return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+          },
+        });
+        envHolder.env = env;
+        authRequest = { principal: { tenantId: 'tenant-a', actorId: 'actor-tenant-a' } };
+        const created = pathKind.startsWith('public')
+          ? await putPublic(env.store, authRequest, await approvedBoundary(authRequest))
+          : await putPrivate(env.store, authRequest);
+        armed = true;
+        if (pathKind === 'private_facts' || pathKind === 'public_facts') {
+          const read = pathKind === 'private_facts'
+            ? env.store.getPrivateProfile(created.scope, authRequest, created.lookup)
+            : env.store.getPublicProfile(created.scope, authRequest, created.lookup);
+          await assert.rejects(read, (error) => error.code === 'REUSE_DENIED');
+        } else {
+          await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+            (error) => error.code === 'REUSE_DENIED');
+        }
+        assert.equal(combinedDecisionEntered, true, `${pathKind}/${mutation}/${phase} reaches the combined decision`);
+        assert.equal(mutated, true, `${pathKind}/${mutation}/${phase} mutates the principal during the chosen phase`);
+        assert.equal(handoffs, 0, `${pathKind}/${mutation}/${phase} must not disclose Finance lineage`);
+      }
+    }
+  }
+});
+
+test('the final host adapter is mandatory and denial, throw, or rejection never falls back to separate callbacks', async (t) => {
+  const invalidConfig = await fixture(t);
+  assert.throws(() => createScopedReuseStore({ ...invalidConfig.options, authorizeCurrentRequest: undefined }),
+    (error) => error.code === 'REUSE_INVALID');
+  assert.throws(() => createScopedReuseStore({ ...invalidConfig.options, authorizeCurrentRequest: true }),
+    (error) => error.code === 'REUSE_INVALID');
+
+  for (const failure of ['deny', 'throw', 'reject']) {
+    let env;
+    let mode = 'allow';
+    let handoffs = 0;
+    let finalCalls = 0;
+    env = await fixture(t, {
+      authorizePublicPublication: ({ identity, contentHash }) => ({
+        status: 'approved', identity, contentHash,
+        publicPermissions: [{ reference: 'PUBLIC_PERMISSION', contentHash, version: 1, use: 'fact_read' }],
+      }),
+      authorizeCurrentRequest: async ({ expectedTenantId, expectedActorId, action, request: authRequest, details }) => {
+        finalCalls += 1;
+        if (mode === 'deny') return false;
+        if (mode === 'throw') throw new Error('private adapter failure');
+        if (mode === 'reject') return Promise.reject(new Error('private adapter rejection'));
+        const tenantId = await env.options.resolveTenant(authRequest);
+        const actorId = await env.options.resolveActor(authRequest);
+        if (tenantId !== expectedTenantId || actorId !== expectedActorId) return false;
+        const allowed = await env.options.authorizeAction({ tenantId, actorId, action, request: authRequest, details });
+        const principal = authRequest?.principal;
+        return allowed === true && principal?.tenantId === expectedTenantId && principal?.actorId === expectedActorId;
+      },
+      consumeOriginalLineage: () => {
+        handoffs += 1;
+        return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+      },
+    });
+    const authRequest = request();
+    const privateCreated = await putPrivate(env.store, authRequest);
+    const publicCreated = await putPublic(env.store, authRequest, await approvedBoundary(authRequest));
+    mode = failure;
+    const before = finalCalls;
+    await assert.rejects(env.store.getPrivateProfile(privateCreated.scope, authRequest, privateCreated.lookup),
+      (error) => error.code === 'REUSE_DENIED');
+    await assert.rejects(env.store.getPublicProfile(publicCreated.scope, authRequest, publicCreated.lookup),
+      (error) => error.code === 'REUSE_DENIED');
+    await assert.rejects(env.store.withPrivateLineage(privateCreated.scope, authRequest, privateCreated.profile.profileRef),
+      (error) => error.code === 'REUSE_DENIED');
+    await assert.rejects(env.store.withPrivateLineage(publicCreated.scope, authRequest, publicCreated.profile.profileRef),
+      (error) => error.code === 'REUSE_DENIED');
+    assert.equal(finalCalls - before, 4, `${failure} must be reached for all four disclosure paths`);
+    assert.equal(handoffs, 0, `${failure} must not disclose private Finance lineage`);
+  }
+});
+
 test('final host permission callbacks can re-enter freshness writes without locking the prepared reader', async (t) => {
   for (const pathKind of ['private_facts', 'public_facts', 'private_finance', 'public_finance']) {
     let env;
@@ -1385,6 +1613,61 @@ test('final host permission callbacks can re-enter freshness writes without lock
         (error) => error.code === 'REUSE_DENIED');
     }
     assert.equal(reentered, true, `${pathKind} must allow the host callback's independent observation write`);
+    assert.equal(handoffs, 0);
+  }
+});
+
+test('the combined final authorization adapter can re-enter SQLite and changed freshness still blocks disclosure', async (t) => {
+  for (const pathKind of ['private_facts', 'public_facts', 'private_finance', 'public_finance']) {
+    let env;
+    let created;
+    let reentered = false;
+    let handoffs = 0;
+    env = await fixture(t, {
+      ...(pathKind.startsWith('public') ? {
+        authorizePublicPublication: ({ identity, contentHash }) => ({
+          status: 'approved', identity, contentHash,
+          publicPermissions: [{ reference: 'PUBLIC_PERMISSION', contentHash, version: 1, use: 'fact_read' }],
+        }),
+      } : {}),
+      authorizeCurrentRequest: async ({ expectedTenantId, expectedActorId, action, request: authRequest, details }) => {
+        const tenantId = await env.options.resolveTenant(authRequest);
+        const actorId = await env.options.resolveActor(authRequest);
+        if (tenantId !== expectedTenantId || actorId !== expectedActorId) return false;
+        const allowed = await env.options.authorizeAction({ tenantId, actorId, action, request: authRequest, details });
+        if (created && !reentered) {
+          env.clock.value += 1;
+          env.state.observation = () => ({ status: 'outage', validatedAt: new Date(env.clock.value).toISOString() });
+          await env.store.observe(created.scope, created.authRequest, {
+            profileRef: created.profile.profileRef,
+            scopeKind: pathKind.startsWith('private') ? 'tenant_private' : 'public_profile',
+            observation: { source: 'reentrant-final-authorizer-callback' },
+          });
+          reentered = true;
+        }
+        const principal = authRequest?.principal;
+        return allowed === true && principal?.tenantId === expectedTenantId && principal?.actorId === expectedActorId;
+      },
+      consumeOriginalLineage: () => {
+        handoffs += 1;
+        return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+      },
+    });
+    const authRequest = request();
+    created = pathKind.startsWith('public')
+      ? await putPublic(env.store, authRequest, await approvedBoundary(authRequest))
+      : await putPrivate(env.store, authRequest);
+    if (pathKind === 'private_facts' || pathKind === 'public_facts') {
+      const result = pathKind === 'private_facts'
+        ? await env.store.getPrivateProfile(created.scope, authRequest, created.lookup)
+        : await env.store.getPublicProfile(created.scope, authRequest, created.lookup);
+      assert.deepEqual({ status: result.status, reason: result.reason }, { status: 'unavailable', reason: 'observation_changed' });
+      assert.equal('facts' in result, false);
+    } else {
+      await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+        (error) => error.code === 'REUSE_DENIED');
+    }
+    assert.equal(reentered, true, `${pathKind} must finish the reentrant freshness write`);
     assert.equal(handoffs, 0);
   }
 });

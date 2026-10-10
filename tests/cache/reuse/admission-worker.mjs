@@ -9,6 +9,8 @@ const store = createScopedReuseStore({
   resolveTenant: (value) => value.principal.tenantId,
   resolveActor: (value) => value.principal.actorId,
   authorizeAction: () => true,
+  authorizeCurrentRequest: ({ expectedTenantId, expectedActorId, action, request: value }) =>
+    action === 'operation.admit' && value.principal.tenantId === expectedTenantId && value.principal.actorId === expectedActorId,
   resolveKey: ({ tenantId: keyTenant, purpose }) => ({ keyId: sharedKey ? `shared:${purpose}` : `index:${keyTenant}`, key }),
   resolveRetention: ({ nowMs }) => ({ expiresAtMs: nowMs + 60_000, policyId: 'worker', policyVersion: '1' }),
   now: () => Number(process.env.REUSE_WORKER_NOW ?? 1_800_000_000_000),
