@@ -89,6 +89,7 @@ function privateData({
   version = 2,
   lastAdmissionKind = 'step',
   lastAdmissionStepId,
+  baseCheckpointData = {},
   kind = PRIVATE_CHECKPOINT_KIND,
   limitsJson,
   limitsHash,
@@ -120,7 +121,7 @@ function privateData({
     pendingStepId,
     lastAdmissionKind,
     lastAdmissionStepId: inferredLastStep,
-    baseCheckpointData: {}
+    baseCheckpointData
   };
 }
 
@@ -222,6 +223,48 @@ test('recovery reports ready work and committed results as evidence without prom
   });
 });
 
+test('recovery preserves finite numbers only inside the opaque original checkpoint', () => {
+  const values = [
+    42,
+    Number.MAX_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER + 1,
+    1e20,
+    1e21,
+    -1e20,
+    -1.5,
+    1.5,
+    1e100
+  ];
+
+  for (const value of values) {
+    const snapshot = checkpointWithData(privateData({
+      baseCheckpointData: { value, nested: [{ value }] }
+    }));
+    const result = classifyRecovery(snapshot);
+    assert.equal(result.kind, 'local-ready-candidate', String(value));
+  }
+
+  assert.equal(
+    classifyRecovery(recoverySnapshot({ revision: 1e20 })).reason,
+    'RECOVERY_INPUT_INVALID',
+    'workflow integer fields retain their strict numeric domain'
+  );
+  assert.equal(
+    classifyRecovery(recoverySnapshot({ observedAtMs: 1e20 })).reason,
+    'RECOVERY_INPUT_INVALID',
+    'trusted observation time retains its strict numeric domain'
+  );
+  const unsafeBudget = {
+    ...createBudgetSnapshot(createLimitSet(), 1_000, 31_000),
+    lastWallMs: 1e20
+  };
+  assert.equal(
+    classifyRecovery(checkpointWithData(privateData({ budget: unsafeBudget }))).reason,
+    'RECOVERY_INPUT_INVALID',
+    'controller-owned checkpoint counters retain their strict numeric domain'
+  );
+});
+
 test('recovery rejects self-rehashed outputs and inconsistent persisted result-byte counts', () => {
   const plan = readyRunIdentity();
   const first = savedResult(plan, 'first', { left: 1, right: 2 }, 900);
@@ -292,13 +335,32 @@ test('recovery enforces plausible admission, retry, replan, and pending relation
     lastAdmissionKind: 'replay',
     budget: {
       ...createBudgetSnapshot(createLimitSet(), 1_000, 31_000),
+      stepsAdmitted: 1,
       stepAttempts: 1,
-      localRetries: 1,
+      localRetries: 0,
       iterations: 1
     }
   })));
   assert.equal(orphanReplay.kind, 'stop');
   assert.equal(orphanReplay.reason, 'BUDGET_CHECKPOINT_INCONSISTENT');
+
+  const firstPlan = readyRunIdentity();
+  const first = executeLocalStep(firstPlan, 'first');
+  const completedWithoutRetry = classifyRecovery(checkpointWithData(privateData({
+    completedResultsJson: JSON.stringify({ first }),
+    lastAdmissionKind: 'replay',
+    lastAdmissionStepId: 'first',
+    budget: {
+      ...createBudgetSnapshot(createLimitSet(), 1_000, 31_000),
+      stepsAdmitted: 1,
+      stepAttempts: 1,
+      localRetries: 0,
+      iterations: 1,
+      totalResultBytes: Buffer.byteLength(JSON.stringify(first.output), 'utf8')
+    }
+  })));
+  assert.equal(completedWithoutRetry.kind, 'stop');
+  assert.equal(completedWithoutRetry.reason, 'BUDGET_CHECKPOINT_INCONSISTENT');
 
   const limits = createLimitSet();
   let budget = createBudgetSnapshot(limits, 1_000, 31_000);

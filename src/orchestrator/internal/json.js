@@ -24,7 +24,8 @@ export function parseBoundedJson(source, {
   maxDepth,
   maxNodes = 8_192,
   integerNumbersOnly = false,
-  allowUnsafeFiniteNumbers = false
+  allowUnsafeFiniteNumbers = false,
+  allowUnsafeFiniteNumberPaths = []
 } = {}) {
   if (
     typeof source !== 'string'
@@ -34,6 +35,13 @@ export function parseBoundedJson(source, {
     || maxDepth < 0
     || !Number.isSafeInteger(maxNodes)
     || maxNodes < 1
+    || !Array.isArray(allowUnsafeFiniteNumberPaths)
+    || allowUnsafeFiniteNumberPaths.some(path => (
+      !Array.isArray(path)
+      || path.length === 0
+      || path.length > maxDepth
+      || path.some(segment => typeof segment !== 'string')
+    ))
   ) fail('JSON_INVALID');
   if (Buffer.byteLength(source, 'utf8') > maxBytes) fail('JSON_TOO_LARGE');
 
@@ -82,7 +90,14 @@ export function parseBoundedJson(source, {
     fail('JSON_INVALID');
   }
 
-  function numberToken() {
+  function unsafeFiniteNumbersAllowedAt(path) {
+    return allowUnsafeFiniteNumberPaths.some(prefix => (
+      prefix.length <= path.length
+      && prefix.every((segment, index) => path[index] === segment)
+    ));
+  }
+
+  function numberToken(path) {
     const start = index;
     if (source[index] === '-') index += 1;
     if (source[index] === '0') {
@@ -112,7 +127,11 @@ export function parseBoundedJson(source, {
     const value = Number(token);
     if (!Number.isFinite(value)) fail('JSON_NUMBER_INVALID');
     if (integerNumbersOnly && !Number.isSafeInteger(value)) fail('JSON_NUMBER_INVALID');
-    if (!integerNumbersOnly && !allowUnsafeFiniteNumbers) {
+    if (
+      !integerNumbersOnly
+      && !allowUnsafeFiniteNumbers
+      && !unsafeFiniteNumbersAllowedAt(path)
+    ) {
       if (INTEGER_TOKEN.test(token) && !Number.isSafeInteger(value)) {
         fail('JSON_NUMBER_INVALID');
       }
@@ -122,7 +141,7 @@ export function parseBoundedJson(source, {
     }
   }
 
-  function value(depth) {
+  function value(depth, path) {
     whitespace();
     countNode();
     const current = source[index];
@@ -151,9 +170,9 @@ export function parseBoundedJson(source, {
           whitespace();
           if (source[index] !== ':') fail('JSON_INVALID');
           index += 1;
-          value(containerDepth);
+          value(containerDepth, [...path, key]);
         } else {
-          value(containerDepth);
+          value(containerDepth, path);
         }
         whitespace();
         if (source[index] === (isObject ? '}' : ']')) {
@@ -179,13 +198,13 @@ export function parseBoundedJson(source, {
       return;
     }
     if (current === '-' || /[0-9]/u.test(current ?? '')) {
-      numberToken();
+      numberToken(path);
       return;
     }
     fail('JSON_INVALID');
   }
 
-  value(0);
+  value(0, []);
   whitespace();
   if (index !== source.length) fail('JSON_INVALID');
   try {

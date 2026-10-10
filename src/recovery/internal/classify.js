@@ -93,7 +93,8 @@ function parseSnapshot(snapshotJson) {
     return parseBoundedJson(snapshotJson, {
       maxBytes: SNAPSHOT_MAX_BYTES,
       maxDepth: SNAPSHOT_MAX_DEPTH,
-      maxNodes: 32_768
+      maxNodes: 32_768,
+      allowUnsafeFiniteNumberPaths: [['checkpoint', 'data', 'baseCheckpointData']]
     });
   } catch (error) {
     if (error?.code === 'JSON_TOO_DEEP') throw new Error('SNAPSHOT_TOO_DEEP');
@@ -409,6 +410,7 @@ export function classifyRecovery(snapshotJson) {
     || budget.stepsAdmitted !== completed.resultCount + (data.pendingStepId === null ? 0 : 1)
     || budget.totalResultBytes !== completed.totalResultBytes
     || budget.stepAttempts < budget.stepsAdmitted
+    || (data.lastAdmissionKind === 'replay' && budget.localRetries < 1)
     || (data.pendingStepId !== null
       && (data.lastAdmissionStepId !== data.pendingStepId || budget.stepAttempts < 1))
     || (data.pendingStepId === null && completed.resultCount > 0

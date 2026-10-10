@@ -62,10 +62,16 @@ function openStore(databasePath, clock = Date.now) {
   return DurableWorkflowStore.open({ databasePath, clock, idFactory: () => 'local-controller-' + (++id) });
 }
 
-function createRunningWorkflow(store, workflowId, ownerId = 'worker-local', ttlMs = 60_000) {
+function createRunningWorkflow(
+  store,
+  workflowId,
+  ownerId = 'worker-local',
+  ttlMs = 60_000,
+  checkpoint = { preserved: 'synthetic-original-checkpoint' }
+) {
   store.createWorkflow({
     workflowId,
-    checkpoint: { preserved: 'synthetic-original-checkpoint' },
+    checkpoint,
     eventId: workflowId + ':created'
   });
   const lease = store.acquireLease({ workflowId, ownerId, ttlMs, eventId: workflowId + ':lease' });
@@ -598,7 +604,15 @@ test('the four process-kill boundaries retain counters and never rerun a committ
     const markerPath = join(temporary.directory, 'worker.ready');
     writeFileSync(planPath, SINGLE_PLAN);
     const setupStore = openStore(temporary.databasePath);
-    const lease = createRunningWorkflow(setupStore, 'crash-' + stage);
+    const lease = createRunningWorkflow(
+      setupStore,
+      'crash-' + stage,
+      'worker-local',
+      60_000,
+      stage === 'after-completion'
+        ? { preserved: 'synthetic-original-checkpoint', number: 1e20 }
+        : { preserved: 'synthetic-original-checkpoint' }
+    );
     setupStore.close();
 
     const worker = spawnWithSignal(fixturePath('local-controller-crash.mjs'), [
@@ -630,6 +644,12 @@ test('the four process-kill boundaries retain counters and never rerun a committ
     assert.equal(state.budget.stepAttempts, expectedAttempts, stage);
     assert.equal(state.budget.localRetries, expectedRetries, stage);
     assert.equal(state.budget.replans, 0, stage);
+    if (stage === 'after-completion') {
+      assert.ok(Object.is(state.baseCheckpointData.number, 1e20));
+      const inspection = inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId });
+      assert.equal(inspection.kind, 'durable-evidence-present');
+      assert.equal(inspection.incomplete, false);
+    }
     assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0, stage);
     assert.equal(countRows(temporary.databasePath, 'transport_attempts'), 0, stage);
 
@@ -647,6 +667,142 @@ test('the four process-kill boundaries retain counters and never rerun a committ
     assert.equal(recovered.listEvents({ workflowId: lease.workflowId }).length, eventsAtCompletion, stage);
     recovered.close();
   }
+});
+
+test('finite original checkpoint numbers survive admission and computation SIGKILL recovery', async t => {
+  const values = [
+    42,
+    Number.MAX_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER + 1,
+    1e20,
+    1e21,
+    -1e20,
+    -1.5,
+    1.5,
+    1e100
+  ];
+
+  for (const value of values) {
+    for (const stage of ['after-admission', 'after-compute']) {
+      const temporary = temporaryDatabase('bounded-base-number-' + stage + '-');
+      t.after(() => temporary.cleanup());
+      const planPath = join(temporary.directory, 'plan.json');
+      const markerPath = join(temporary.directory, 'worker.ready');
+      writeFileSync(planPath, SINGLE_PLAN);
+      const setupStore = openStore(temporary.databasePath);
+      const lease = createRunningWorkflow(
+        setupStore,
+        `base-number-${stage}-${values.indexOf(value)}`,
+        'worker-local',
+        60_000,
+        { number: value, nested: [{ preserved: value }] }
+      );
+      setupStore.close();
+
+      const worker = spawnWithSignal(fixturePath('local-controller-crash.mjs'), [
+        temporary.databasePath,
+        lease.workflowId,
+        lease.ownerId,
+        String(lease.fence),
+        planPath,
+        markerPath,
+        stage
+      ]);
+      const { marker } = await killAtMarker(worker, markerPath);
+      assert.equal(marker.stage, stage);
+
+      const recovered = openStore(temporary.databasePath);
+      const before = recovered.getCheckpoint(lease.workflowId);
+      assert.ok(Object.is(before.data.baseCheckpointData.number, value), `${stage} base number ${value}`);
+      assert.ok(Object.is(before.data.baseCheckpointData.nested[0].preserved, value));
+      const inspection = inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId });
+      assert.equal(inspection.kind, 'local-replay-candidate', `${stage} inspection ${value}`);
+      assert.equal(inspection.incomplete, false);
+
+      const eventsBeforeResume = recovered.listEvents({ workflowId: lease.workflowId }).length;
+      const result = await runBoundedLocalPlan({
+        store: recovered,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence
+      });
+      assert.equal(result.status, 'completed', `${stage} result ${value}`);
+      assert.equal(result.results[0].output, 9, `${stage} output ${value}`);
+      const completed = recovered.getCheckpoint(lease.workflowId);
+      assert.ok(Object.is(completed.data.baseCheckpointData.number, value));
+      const eventsAtCompletion = recovered.listEvents({ workflowId: lease.workflowId }).length;
+      assert.equal(eventsAtCompletion, eventsBeforeResume + 2);
+      assert.equal(completed.data.budget.localRetries, 1);
+      assert.equal(completed.data.budget.stepAttempts, 2);
+      assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId }).kind,
+        'durable-evidence-present');
+
+      const repeated = await runBoundedLocalPlan({
+        store: recovered,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence
+      });
+      assert.equal(repeated.resultHash, result.resultHash);
+      assert.equal(recovered.getCheckpoint(lease.workflowId).sequence, completed.sequence);
+      assert.equal(recovered.listEvents({ workflowId: lease.workflowId }).length, eventsAtCompletion);
+      assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0);
+      recovered.close();
+    }
+  }
+});
+
+test('a replayed step can be followed by a later ordinary step admission', async t => {
+  const temporary = temporaryDatabase('bounded-replay-followed-by-step-');
+  t.after(() => temporary.cleanup());
+  const planPath = join(temporary.directory, 'plan.json');
+  const markerPath = join(temporary.directory, 'worker.ready');
+  writeFileSync(planPath, DEPENDENT_PLAN);
+  const setup = openStore(temporary.databasePath);
+  const lease = createRunningWorkflow(setup, 'replay-followed-by-step-run');
+  setup.close();
+
+  const worker = spawnWithSignal(fixturePath('local-controller-crash.mjs'), [
+    temporary.databasePath,
+    lease.workflowId,
+    lease.ownerId,
+    String(lease.fence),
+    planPath,
+    markerPath,
+    'after-admission'
+  ]);
+  const { marker } = await killAtMarker(worker, markerPath);
+  assert.equal(marker.stage, 'after-admission');
+
+  const recovered = openStore(temporary.databasePath);
+  assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId }).kind,
+    'local-replay-candidate');
+  const result = await runBoundedLocalPlan({
+    store: recovered,
+    workflowId: lease.workflowId,
+    ownerId: lease.ownerId,
+    fence: lease.fence
+  });
+  assert.equal(result.status, 'completed');
+  assert.deepEqual(result.results.map(record => record.output), [5, 9]);
+  const checkpoint = recovered.getCheckpoint(lease.workflowId);
+  assert.equal(checkpoint.data.lastAdmissionKind, 'step');
+  assert.equal(checkpoint.data.pendingStepId, null);
+  assert.equal(checkpoint.data.budget.stepsAdmitted, 2);
+  assert.equal(checkpoint.data.budget.stepAttempts, 3);
+  assert.equal(checkpoint.data.budget.localRetries, 1);
+  assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId }).kind,
+    'durable-evidence-present');
+  const eventsAtCompletion = recovered.listEvents({ workflowId: lease.workflowId }).length;
+  const repeated = await runBoundedLocalPlan({
+    store: recovered,
+    workflowId: lease.workflowId,
+    ownerId: lease.ownerId,
+    fence: lease.fence
+  });
+  assert.equal(repeated.resultHash, result.resultHash);
+  assert.equal(recovered.listEvents({ workflowId: lease.workflowId }).length, eventsAtCompletion);
+  recovered.close();
 });
 
 test('admission and cancellation races use one durable CAS winner; a stale lease cannot commit', async t => {
@@ -706,6 +862,188 @@ test('admission and cancellation races use one durable CAS winner; a stale lease
   assert.equal(after.getWorkflow(lease.workflowId).checkpointSequence, 2);
   assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0);
   after.close();
+});
+
+test('separate processes race local admission against current-fence cancellation', async t => {
+  for (const order of ['concurrent', 'admit-first', 'cancel-first']) {
+    const temporary = temporaryDatabase('bounded-admission-cancel-' + order + '-');
+    t.after(() => temporary.cleanup());
+    const setup = openStore(temporary.databasePath);
+    const lease = createRunningWorkflow(setup, 'admission-cancel-' + order);
+    const snapshot = setup._localControllerSnapshot(LOCAL_CONTROLLER_STORAGE_CAPABILITY, lease.workflowId);
+    const { limitSet, plan } = storeTestPlan({ workflowId: lease.workflowId });
+    const now = setup._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
+    const initial = createBudgetSnapshot(limitSet, now, now + getLimitValues(limitSet).maxElapsedMs);
+    const stepId = getNextReadyStep(plan, '{}');
+    const budget = advanceBudget(initial, 'step', now, 0, limitSet).state;
+    const controllerState = buildInitialPrivateCheckpoint({
+      workflowId: lease.workflowId,
+      planJson: SINGLE_PLAN,
+      plan,
+      limitSet,
+      baseCheckpointData: snapshot.checkpoint.data,
+      budget,
+      stepId
+    });
+    const admitPath = join(temporary.directory, 'admit.json');
+    const cancelPath = join(temporary.directory, 'cancel.json');
+    writeFileSync(admitPath, JSON.stringify({
+      expectedRevision: snapshot.workflow.revision,
+      expectedCheckpointSequence: snapshot.checkpoint.sequence,
+      stepId,
+      admissionKind: 'step',
+      eventId: 'admission-cancel:' + order + ':admit',
+      controllerState
+    }));
+    writeFileSync(cancelPath, JSON.stringify({
+      expectedRevision: snapshot.workflow.revision,
+      eventId: 'admission-cancel:' + order + ':cancel'
+    }));
+    setup.close();
+
+    const admitGate = join(temporary.directory, 'release-admit');
+    const cancelGate = join(temporary.directory, 'release-cancel');
+    const workers = [
+      startRaceWorker({
+        mode: 'admit',
+        databasePath: temporary.databasePath,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence,
+        payloadPath: admitPath,
+        gatePath: admitGate,
+        workerId: 'admit',
+        resultPath: join(temporary.directory, 'admit-result.json')
+      }),
+      startRaceWorker({
+        mode: 'cancel',
+        databasePath: temporary.databasePath,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence,
+        payloadPath: cancelPath,
+        gatePath: cancelGate,
+        workerId: 'cancel',
+        resultPath: join(temporary.directory, 'cancel-result.json')
+      })
+    ];
+    await waitForFiles([admitGate + '.admit.ready', cancelGate + '.cancel.ready']);
+    if (order === 'concurrent') {
+      writeFileSync(admitGate, 'go');
+      writeFileSync(cancelGate, 'go');
+    } else {
+      const first = order === 'admit-first' ? workers[0] : workers[1];
+      const second = order === 'admit-first' ? workers[1] : workers[0];
+      writeFileSync(order === 'admit-first' ? admitGate : cancelGate, 'go');
+      await first.done;
+      writeFileSync(order === 'admit-first' ? cancelGate : admitGate, 'go');
+      await second.done;
+    }
+    const exits = await Promise.all(workers.map(worker => worker.done));
+    const records = ['admit', 'cancel'].map(name => ({
+      name,
+      ...JSON.parse(readFileSync(join(temporary.directory, name + '-result.json'), 'utf8'))
+    }));
+    assert.ok(exits.every(result => result.code === 0 || result.code === 2), JSON.stringify(exits));
+    assert.equal(records.filter(record => record.accepted).length, 1, `${order}: ${JSON.stringify(records)}`);
+    if (order === 'admit-first') assert.equal(records.find(record => record.accepted).name, 'admit');
+    if (order === 'cancel-first') assert.equal(records.find(record => record.accepted).name, 'cancel');
+
+    const after = openStore(temporary.databasePath);
+    const workflow = after.getWorkflow(lease.workflowId);
+    const checkpoint = after.getCheckpoint(lease.workflowId);
+    const winner = records.find(record => record.accepted).name;
+    assert.equal(workflow.cancellationRequested, winner === 'cancel', order);
+    assert.equal(workflow.state, winner === 'cancel' ? 'cancelled' : 'running', order);
+    assert.equal(checkpoint.sequence, winner === 'admit' ? 2 : 1, order);
+    const winnerEventId = 'admission-cancel:' + order + ':' + winner;
+    const eventRows = after.listEvents({ workflowId: lease.workflowId })
+      .filter(event => event.eventId.startsWith('admission-cancel:' + order + ':'));
+    assert.deepEqual(eventRows.map(event => event.eventId), [winnerEventId], order);
+    const db = new DatabaseSync(temporary.databasePath);
+    try {
+      const outboxRows = db.prepare(
+        'SELECT event_id, event_sequence FROM outbox WHERE event_id LIKE ? ORDER BY event_id'
+      ).all('admission-cancel:' + order + ':%');
+      assert.deepEqual(outboxRows.map(row => row.event_id), [winnerEventId], order);
+      assert.equal(outboxRows[0].event_sequence, eventRows[0].sequence, order);
+    } finally {
+      db.close();
+    }
+    assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0, order);
+    after.close();
+  }
+});
+
+test('durable store restore validation rejects replay history without a consumed retry', async t => {
+  for (const snapshotKind of ['pending', 'completed']) {
+    const temporary = temporaryDatabase('bounded-orphan-replay-' + snapshotKind + '-');
+    t.after(() => temporary.cleanup());
+    const setup = openStore(temporary.databasePath);
+    const lease = createRunningWorkflow(setup, 'orphan-replay-' + snapshotKind);
+    const admission = makeAdmission(
+      setup,
+      lease,
+      SINGLE_PLAN,
+      '{}',
+      'orphan-replay:' + snapshotKind + ':admit'
+    );
+    let savedState = admission.state;
+    if (snapshotKind === 'completed') {
+      const completion = makeCompletion(
+        setup,
+        lease,
+        admission,
+        'orphan-replay:' + snapshotKind + ':complete'
+      );
+      setup._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, completion.input);
+      savedState = completion.controllerState;
+    }
+    const storedCheckpoint = setup.getCheckpoint(lease.workflowId);
+    setup.close();
+
+    // This file-backed fixture models corrupt restored bytes. Dropping the
+    // immutable trigger here is test setup only, not an external attack claim.
+    rewriteLatestPrivateCheckpoint(temporary.databasePath, lease.workflowId, {
+      ...storedCheckpoint.data,
+      lastAdmissionKind: 'replay'
+    });
+    const restored = openStore(temporary.databasePath);
+    const before = snapshotDatabase(temporary.databasePath);
+    const workflow = restored.getWorkflow(lease.workflowId);
+    const checkpoint = restored.getCheckpoint(lease.workflowId);
+    assert.equal(checkpoint.data.budget.localRetries, 0, snapshotKind);
+    const candidate = { ...savedState, lastAdmissionKind: 'step' };
+    const attempt = () => {
+      if (snapshotKind === 'pending') {
+        restored._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+          workflowId: lease.workflowId,
+          ownerId: lease.ownerId,
+          fence: lease.fence,
+          expectedRevision: workflow.revision,
+          expectedCheckpointSequence: checkpoint.sequence,
+          stepId: admission.stepId,
+          admissionKind: 'replay',
+          eventId: 'orphan-replay:' + snapshotKind + ':retry',
+          controllerState: candidate
+        });
+      } else {
+        restored._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+          workflowId: lease.workflowId,
+          ownerId: lease.ownerId,
+          fence: lease.fence,
+          expectedRevision: workflow.revision,
+          expectedCheckpointSequence: checkpoint.sequence,
+          stepId: admission.stepId,
+          eventId: 'orphan-replay:' + snapshotKind + ':repeat',
+          controllerState: candidate
+        });
+      }
+    };
+    assert.throws(attempt, error => error?.code === 'CHECKPOINT_CORRUPT', snapshotKind);
+    assert.equal(snapshotDatabase(temporary.databasePath), before, snapshotKind);
+    restored.close();
+  }
 });
 
 test('completion racing cancellation and lease takeover cannot resurrect stale work', async t => {

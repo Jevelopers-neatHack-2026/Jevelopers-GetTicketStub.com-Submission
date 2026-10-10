@@ -235,6 +235,7 @@ function readLocalControllerState(value, operation) {
     || budget.stepAttempts < budget.stepsAdmitted
     || budget.iterations < budget.stepAttempts
     || budget.localRetries > budget.stepAttempts
+    || (fields.lastAdmissionKind === 'replay' && budget.localRetries < 1)
     || budget.replans > budget.iterations
   ) {
     fail(operation, 'CHECKPOINT_CORRUPT', 'The private local checkpoint is invalid.');
