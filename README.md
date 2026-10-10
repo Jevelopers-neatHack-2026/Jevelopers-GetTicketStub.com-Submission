@@ -42,3 +42,13 @@ python tools/build_logos.py
 This kit covers the **master brand** (app UI, logo, marketing, packaging). The stub **editions** (Classic, Letterpress, Risograph, Minimal, Researched) are the user's artwork and have their own palettes, defined in [ticket-studio](https://github.com/Jevelopers-neatHack-2026/ticket-studio) under `docs/stub-system.md`.
 
 Built with the brandkit skill workflow. Skill curated by Collective Brain (collectivebrain.de) and WhiteFox Automations (whitefox-automations.com).
+
+## Architecture and delivery
+
+- [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
+- [Relevant acceptance criteria](docs/architecture/ACCEPTANCE.md)
+- [Architecture and diagrams](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md)
+- [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
+- [Contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md)
+
+Architecture integration documents the intended boundaries. It does not establish completed product functionality, passing implementation tests, connected sponsor tools, or live financial activity.
