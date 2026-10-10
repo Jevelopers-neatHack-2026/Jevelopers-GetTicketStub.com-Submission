@@ -12,6 +12,7 @@ const CASES = Object.freeze({
   "safe-retrieval": ["tests/security"],
   "content-privacy": ["tests/privacy", "tests/security/injection"],
   "evidence-facts": ["tests/evidence"],
+  "deterministic-extraction": ["tests/extraction"],
   evals: ["tests/evals"],
   "research-api": ["tests/api"],
   "verify-runner": ["tests/runner"],
