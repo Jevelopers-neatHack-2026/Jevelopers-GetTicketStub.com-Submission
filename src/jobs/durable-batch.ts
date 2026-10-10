@@ -17,6 +17,7 @@ import {
 } from "../internal/durability.js";
 import { LocalArtifactStore, type OutputFile } from "../storage/local-store.js";
 import { observe } from "../telemetry/observations.js";
+import { publishBatchInventory } from "../internal/batch-finalization.js";
 
 const policySchema = z.enum(["atomic", "allow_partial"]);
 export type BatchPolicy = z.infer<typeof policySchema>;
@@ -638,29 +639,7 @@ export class DurableBatchEngine {
 					: "failed";
 		let publication: Id | null = null;
 		if (status !== "failed") {
-			const bytes = Buffer.from(
-				JSON.stringify(
-					rows.map((row) => ({
-						ordinal: row.ordinal,
-						row: row.row_key,
-						status: row.status,
-						publication: row.publication,
-						code: row.code,
-					})),
-				),
-			);
-			const file = {
-				name: "local-inventory.json",
-				bytes,
-				digest: hash(bytes),
-				length: bytes.length,
-			};
-			const stage = newId();
-			this.db.sql
-				.prepare("INSERT INTO stages(id,operation) VALUES(?,?)")
-				.run(stage, job.operation);
-			this.store.writeInTransaction(scope, stage, file);
-			publication = this.store.publishInTransaction(scope, stage, [file]).id;
+			publication = publishBatchInventory(this.store, scope, job).id;
 		} else
 			this.db.sql
 				.prepare("UPDATE operations SET status='failed' WHERE id=?")
