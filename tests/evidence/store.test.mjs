@@ -14,8 +14,7 @@ function request(tenantId, allowPrivate = true) {
   return Object.freeze({ principal: Object.freeze({ tenantId }), allowPrivate });
 }
 
-function createHarness(t, overrides = {}) {
-  const clock = { value: EPOCH };
+function createHarness(t, overrides = {}, clock = { value: EPOCH }) {
   const permits = new WeakMap();
   const sourceText = 'Event: Moon Night\nDate: 2027-06-20\nVenue: Civic Hall';
   const createPermit = (tenantId, durationMs = 10_000) => {
@@ -66,11 +65,83 @@ function createHarness(t, overrides = {}) {
       maxRetentionMs: 60_000,
       ...overrides,
     };
-    const store = createEvidenceStore(options);
-    const store2 = createEvidenceStore(options);
-    return { directory, store, store2, clock, createPermit, sourceText };
+    const openStore = () => createEvidenceStore(options);
+    const store = openStore();
+    const store2 = openStore();
+    return { directory, store, store2, openStore, clock, createPermit, sourceText };
   });
   return ready;
+}
+
+function createKeyGate() {
+  let activeGate = null;
+  return {
+    arm(purpose, invocation = 1) {
+      let signalReached;
+      let signalRelease;
+      const reached = new Promise((resolve) => { signalReached = resolve; });
+      const blocked = new Promise((resolve) => { signalRelease = resolve; });
+      activeGate = { purpose, invocation, seen: 0, reached, blocked, signalReached, signalRelease };
+      return { reached, release: () => signalRelease() };
+    },
+    async resolve({ tenantId, purpose, keyId }) {
+      const gate = activeGate;
+      if (gate && gate.purpose === purpose) {
+        gate.seen += 1;
+        if (gate.seen === gate.invocation) {
+          activeGate = null;
+          gate.signalReached();
+          await gate.blocked;
+        }
+      }
+      const selectedId = `${purpose}-v1`;
+      if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+      return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+    },
+  };
+}
+
+function inspectTenantDatabase(directory, tenantId = 'tenant-a') {
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+  const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'));
+  try {
+    const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(tenantHash);
+    const bundleCount = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles').get().count;
+    return { bundleCount, manifest: row ? JSON.parse(row.document) : null };
+  } finally {
+    database.close();
+  }
+}
+
+function assertOnlyTombstoneFields(records) {
+  for (const record of Object.values(records)) {
+    if (record.state === 'expired') assert.deepEqual(Object.keys(record).sort(), ['id', 'state']);
+  }
+}
+
+function assertExpiredDiskState(state, expectedEvidence = 1, expectedFacts = 1) {
+  assert.ok(state.manifest);
+  const evidence = Object.values(state.manifest.records);
+  const facts = Object.values(state.manifest.facts);
+  assert.equal(evidence.filter((record) => record.state === 'expired').length, expectedEvidence);
+  assert.equal(facts.filter((fact) => fact.state === 'expired').length, expectedFacts);
+  assertOnlyTombstoneFields(state.manifest.records);
+  assertOnlyTombstoneFields(state.manifest.facts);
+  assert.equal(state.bundleCount, 0);
+}
+
+async function assertTombstonesAfterReopen(harness, evidenceId, factId) {
+  const reopened = harness.openStore();
+  const scope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await reopened.lookupEvidence(scope, evidenceId);
+  const metadata = await reopened.getEvidenceMetadata(scope, evidence);
+  assert.deepEqual(Object.keys(metadata).sort(), ['evidenceId', 'positionCount', 'state']);
+  assert.equal(metadata.state, 'expired');
+  const fact = await reopened.lookupFact(scope, factId);
+  await assert.rejects(reopened.readFact(scope, fact, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  const afterReopen = inspectTenantDatabase(harness.directory);
+  assertExpiredDiskState(afterReopen);
 }
 
 function sourceInput(source, {
@@ -453,6 +524,270 @@ test('expiry removes encrypted snapshots and fact values, retains a sanitized to
   assert.equal(databaseText.includes('Moon Night'), false);
   assert.equal(databaseText.includes('Event: '), false);
   assert.equal((await store.purgeExpired(scope)) >= 0, true);
+});
+
+test('withPrivatePayload expiry rejection commits cleanup before returning the typed error', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Moon Night', normalizedValue: 'Moon Night', supports: [supportFor(evidence)],
+  }, request('tenant-a'));
+  const fact = await harness.store.readFact(scope, factHandle, request('tenant-a'));
+
+  harness.clock.value = EPOCH + 1_001;
+  await assert.rejects(harness.store.withPrivatePayload(scope, evidence.evidence, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory));
+  await assertTombstonesAfterReopen(harness, evidence.metadata.evidenceId, fact.factId);
+});
+
+test('listEvidencePositions expiry rejection commits cleanup before returning the typed error', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+
+  harness.clock.value = EPOCH + 1_001;
+  await assert.rejects(harness.store.listEvidencePositions(scope, evidence.evidence, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  const state = inspectTenantDatabase(harness.directory);
+  assertExpiredDiskState(state, 1, 0);
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const reopenedEvidence = await reopened.lookupEvidence(reopenedScope, evidence.metadata.evidenceId);
+  assert.equal((await reopened.getEvidenceMetadata(reopenedScope, reopenedEvidence)).state, 'expired');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory), 1, 0);
+});
+
+test('readFact expiry rejection commits cleanup before returning the typed error', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Moon Night', normalizedValue: 'Moon Night', supports: [supportFor(evidence)],
+  }, request('tenant-a'));
+  const fact = await harness.store.readFact(scope, factHandle, request('tenant-a'));
+
+  harness.clock.value = EPOCH + 1_001;
+  await assert.rejects(harness.store.readFact(scope, factHandle, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory));
+  await assertTombstonesAfterReopen(harness, evidence.metadata.evidenceId, fact.factId);
+});
+
+test('appendFact expiry rejection commits cleanup without retaining an attempted fact', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Moon Night', normalizedValue: 'Moon Night', supports: [supportFor(evidence)],
+  }, request('tenant-a'));
+  const fact = await harness.store.readFact(scope, factHandle, request('tenant-a'));
+
+  harness.clock.value = EPOCH + 1_001;
+  await assert.rejects(harness.store.appendFact(scope, {
+    field: 'another_event_field', status: 'sourced', rawValue: 'Attempted value', normalizedValue: 'Attempted value', supports: [supportFor(evidence)],
+  }, request('tenant-a')), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory));
+  await assertTombstonesAfterReopen(harness, evidence.metadata.evidenceId, fact.factId);
+});
+
+test('failed fact mutation rolls back while a separate expiry sweep commits unrelated cleanup', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const expiredEvidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+  const expiredFactHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Moon Night', normalizedValue: 'Moon Night', supports: [supportFor(expiredEvidence)],
+  }, request('tenant-a'));
+  const expiredFact = await harness.store.readFact(scope, expiredFactHandle, request('tenant-a'));
+  const liveEvidence = await ingest(harness.store, scope, 'Event: Still Available\nDate: 2027-06-21', harness.createPermit, {
+    durationMs: 5_000,
+    sourceUrl: 'https://other.example.test/event',
+    canonicalUrl: 'https://other.example.test/event',
+  });
+  const tenantHash = createHash('sha256').update('event-intelligence:tenant:v1:tenant-a').digest('hex');
+  const database = new DatabaseSync(path.join(harness.directory, tenantHash, 'evidence.sqlite'));
+  try {
+    database.exec(`CREATE TRIGGER fail_available_fact_manifest_update
+      BEFORE UPDATE OF document ON evidence_manifest
+      WHEN instr(NEW.document, '"status":"sourced"') > 0
+      BEGIN SELECT RAISE(ABORT, 'synthetic metadata-write failure'); END`);
+  } finally {
+    database.close();
+  }
+
+  harness.clock.value = EPOCH + 1_001;
+  await assert.rejects(harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Attempted write', normalizedValue: 'Attempted write',
+    supports: [supportFor(liveEvidence)],
+  }, request('tenant-a')), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_STORAGE');
+  const state = inspectTenantDatabase(harness.directory);
+  const expiredRecord = state.manifest.records[expiredEvidence.metadata.evidenceId];
+  const liveRecord = state.manifest.records[liveEvidence.metadata.evidenceId];
+  assert.equal(expiredRecord.state, 'expired');
+  assert.deepEqual(Object.keys(expiredRecord).sort(), ['id', 'state']);
+  assert.equal(liveRecord.state, 'available');
+  assert.equal(Object.keys(state.manifest.facts).length, 1, 'the failed attempted fact metadata was rolled back');
+  assert.equal(state.manifest.facts[expiredFact.factId].state, 'expired');
+  assert.deepEqual(Object.keys(state.manifest.facts[expiredFact.factId]).sort(), ['id', 'state']);
+  assert.equal(state.bundleCount, 1, 'the staged fact ciphertext rolled back; only live evidence remains');
+});
+
+test('fact reads recheck expiry after an asynchronous key resolution and commit cleanup', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+  const factHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Moon Night', normalizedValue: 'Moon Night', supports: [supportFor(evidence)],
+  }, request('tenant-a'));
+  const fact = await harness.store.readFact(scope, factHandle, request('tenant-a'));
+
+  const gate = keyGate.arm('fact');
+  const pendingRead = harness.store.readFact(scope, factHandle, request('tenant-a'));
+  await gate.reached;
+  clock.value = EPOCH + 1_000;
+  gate.release();
+  await assert.rejects(pendingRead,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory));
+  await assertTombstonesAfterReopen(harness, evidence.metadata.evidenceId, fact.factId);
+});
+
+test('listFacts rejects its snapshot if a later decrypt expires an earlier fact', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const firstEvidence = await ingest(harness.store, scope, 'Event: First\nDate: 2027-06-20', harness.createPermit, {
+    durationMs: 1_000,
+    sourceUrl: 'https://first.example.test/event',
+    canonicalUrl: 'https://first.example.test/event',
+  });
+  const firstFactHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'First', normalizedValue: 'First', supports: [supportFor(firstEvidence)],
+  }, request('tenant-a'));
+  const firstFact = await harness.store.readFact(scope, firstFactHandle, request('tenant-a'));
+  const secondEvidence = await ingest(harness.store, scope, 'Event: Second\nDate: 2027-06-21', harness.createPermit, {
+    durationMs: 5_000,
+    sourceUrl: 'https://second.example.test/event',
+    canonicalUrl: 'https://second.example.test/event',
+  });
+  const secondFactHandle = await harness.store.appendFact(scope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Second', normalizedValue: 'Second', supports: [supportFor(secondEvidence)],
+  }, request('tenant-a'));
+  const secondFact = await harness.store.readFact(scope, secondFactHandle, request('tenant-a'));
+
+  const gate = keyGate.arm('fact', 2);
+  const pendingList = harness.store.listFacts(scope, request('tenant-a'));
+  await gate.reached;
+  clock.value = EPOCH + 1_001;
+  gate.release();
+  await assert.rejects(pendingList,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  const state = inspectTenantDatabase(harness.directory);
+  assert.equal(state.manifest.records[firstEvidence.metadata.evidenceId].state, 'expired');
+  assert.deepEqual(Object.keys(state.manifest.records[firstEvidence.metadata.evidenceId]).sort(), ['id', 'state']);
+  assert.equal(state.manifest.records[secondEvidence.metadata.evidenceId].state, 'available');
+  assert.equal(state.manifest.facts[firstFact.factId].state, 'expired');
+  assert.equal(state.manifest.facts[secondFact.factId].state, 'available');
+  assert.equal(state.bundleCount, 2);
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const remaining = await reopened.listFacts(reopenedScope, request('tenant-a'));
+  assert.deepEqual(remaining.map((fact) => fact.factId), [secondFact.factId]);
+});
+
+test('position reads recheck expiry after asynchronous key resolution and commit cleanup', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, { durationMs: 1_000 });
+
+  const gate = keyGate.arm('payload');
+  const pendingPositions = harness.store.listEvidencePositions(scope, evidence.evidence, request('tenant-a'));
+  await gate.reached;
+  clock.value = EPOCH + 1_000;
+  gate.release();
+  await assert.rejects(pendingPositions,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory), 1, 0);
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const reopenedEvidence = await reopened.lookupEvidence(reopenedScope, evidence.metadata.evidenceId);
+  assert.equal((await reopened.getEvidenceMetadata(reopenedScope, reopenedEvidence)).state, 'expired');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory), 1, 0);
+});
+
+test('ingestion does not report an idempotent record after key resolution crosses its expiry', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const permit = harness.createPermit('tenant-a', 1_000);
+  const input = sourceInput(harness.sourceText, { retentionHandle: permit });
+  const evidence = await harness.store.ingestEvidence(scope, input);
+
+  const gate = keyGate.arm('payload');
+  const pendingIngest = harness.store.ingestEvidence(scope, input);
+  await gate.reached;
+  clock.value = EPOCH + 1_000;
+  gate.release();
+  await assert.rejects(pendingIngest,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(harness.directory), 1, 0);
+  assert.equal(evidence.created, true);
+});
+
+test('new evidence and fact writes roll back if key resolution crosses retention expiry', async (t) => {
+  const clock = { value: EPOCH };
+  const keyGate = createKeyGate();
+  const harness = await createHarness(t, { resolveKey: (args) => keyGate.resolve(args) }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const permit = harness.createPermit('tenant-a', 1_000);
+  const input = sourceInput(harness.sourceText, { retentionHandle: permit });
+
+  const evidenceGate = keyGate.arm('payload');
+  const pendingEvidence = harness.store.ingestEvidence(scope, input);
+  await evidenceGate.reached;
+  clock.value = EPOCH + 1_000;
+  evidenceGate.release();
+  await assert.rejects(pendingEvidence,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  const emptyState = inspectTenantDatabase(harness.directory);
+  assert.equal(emptyState.bundleCount, 0);
+  assert.equal(emptyState.manifest, null, 'the uncommitted evidence manifest was rolled back');
+
+  const freshClock = { value: EPOCH };
+  const factKeyGate = createKeyGate();
+  const factHarness = await createHarness(t, { resolveKey: (args) => factKeyGate.resolve(args) }, freshClock);
+  const factScope = await factHarness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const supportEvidence = await ingest(factHarness.store, factScope, factHarness.sourceText, factHarness.createPermit, { durationMs: 1_000 });
+  const factGate = factKeyGate.arm('fact');
+  const pendingFact = factHarness.store.appendFact(factScope, {
+    field: 'event_name', status: 'sourced', rawValue: 'Moon Night', normalizedValue: 'Moon Night', supports: [supportFor(supportEvidence)],
+  }, request('tenant-a'));
+  await factGate.reached;
+  freshClock.value = EPOCH + 1_000;
+  factGate.release();
+  await assert.rejects(pendingFact,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED');
+  assertExpiredDiskState(inspectTenantDatabase(factHarness.directory), 1, 0);
+});
+
+test('metadata serializes a cleared predecessor link as null after predecessor expiry', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const first = await ingest(harness.store, scope, 'Event: First Version', harness.createPermit, { durationMs: 1_000 });
+  const second = await ingest(harness.store, scope, 'Event: Second Version', harness.createPermit, { durationMs: 5_000 });
+  assert.equal(second.metadata.previousEvidenceId, first.metadata.evidenceId);
+
+  harness.clock.value = EPOCH + 1_001;
+  const metadata = await harness.store.getEvidenceMetadata(scope, second.evidence);
+  assert.equal(metadata.previousEvidenceId, null);
+  assert.equal(JSON.parse(JSON.stringify(metadata)).previousEvidenceId, null);
 });
 
 test('source positions are verified against text ranges and JSON pointers before persistence', async (t) => {

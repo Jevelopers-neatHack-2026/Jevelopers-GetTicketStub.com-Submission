@@ -437,7 +437,7 @@ function frozenMetadata(record) {
   return Object.freeze({
     evidenceId: record.id,
     version: record.version,
-    previousEvidenceId: record.previousId,
+    previousEvidenceId: record.previousId ?? null,
     contentHash: record.contentHash,
     duplicateGroupId: record.duplicateGroupId,
     retrievedAt: record.retrievedAt,
@@ -717,6 +717,24 @@ export function createEvidenceStore(options) {
     return changed;
   }
 
+  async function withExpiryAwareTenantLock(info, directory, operation) {
+    try {
+      return await withTenantLock(directory, limits.lockTimeoutMs, operation);
+    } catch (operationError) {
+      // The operation transaction has already rolled back. Persist only a fresh
+      // expiry sweep in its own transaction, so a failed mutation never commits.
+      try {
+        await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+          const manifest = await readManifest(database, info.tenantHash);
+          await expireRecords(database, manifest, currentTime());
+        });
+      } catch (cleanupError) {
+        throw safePublicError(cleanupError);
+      }
+      throw operationError;
+    }
+  }
+
   async function commitNewBundle(database, kind, id, sealedBytes) {
     try {
       database.prepare('INSERT INTO sealed_bundles (kind, id, sealed) VALUES (?, ?, ?)').run(kind, id, sealedBytes);
@@ -785,9 +803,11 @@ export function createEvidenceStore(options) {
       activeIndexKey = await resolveKey(info, 'source-index');
       const sourceIdentity = `${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`;
       const directory = await tenantDirectory(info);
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
-        await expireRecords(database, manifest, currentTime());
+        const transactionTime = currentTime();
+        await expireRecords(database, manifest, transactionTime);
+        if (retention.expiresAtMs <= transactionTime) fail('EVIDENCE_EXPIRED');
         const matchingFamily = Object.values(manifest.families).find((family) =>
           family.sourceKeyId === activeIndexKey.keyId
             ? family.sourceKeyHmac === stableHmac(activeIndexKey.key, sourceIdentity)
@@ -812,6 +832,7 @@ export function createEvidenceStore(options) {
         const latest = latestId ? manifest.records[latestId] : null;
         if (latest?.state === 'available' && latest.contentHash === sourceContentHash) {
           const existing = await decryptBundle(info, latest.id, 'evidence', database, latest.encryptionKeyId);
+          if (currentTime() >= latest.expiresAtMs) fail('EVIDENCE_EXPIRED');
           const evidence = newEvidenceHandle(info, latest.id);
           const positionHandles = existing.positions.map((position) => newPositionHandle(info, latest.id, position.id, sourceKind));
           sourceBytes.fill(0);
@@ -843,6 +864,7 @@ export function createEvidenceStore(options) {
           })),
         };
         const sealed = await encryptBundle(info, evidenceId, 'evidence', bundle);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         const nowIso = new Date(nowMs).toISOString();
         const duplicateGroupId = digest(Buffer.from(`event-intelligence:duplicate:v1:${info.tenantHash}:${sourceContentHash}`, 'utf8'));
         const record = {
@@ -864,6 +886,7 @@ export function createEvidenceStore(options) {
           positionHashes,
         };
         await commitNewBundle(database, 'evidence', evidenceId, sealed.bytes);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         manifest.records[evidenceId] = record;
         if (!family) {
           family = {
@@ -878,6 +901,7 @@ export function createEvidenceStore(options) {
         family.recordIds.push(evidenceId);
         family.versionCount = version;
         await writeManifest(database, manifest);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         const evidence = newEvidenceHandle(info, evidenceId);
         const positionHandles = positions.map((position) => newPositionHandle(info, evidenceId, position.id, sourceKind));
         return Object.freeze({ evidence, positions: Object.freeze(positionHandles), created: true, metadata: frozenMetadata(record) });
@@ -896,7 +920,7 @@ export function createEvidenceStore(options) {
     if (!validUuid(evidenceId)) fail('EVIDENCE_NOT_FOUND');
     const directory = await tenantDirectory(info);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         if (!manifest.records[evidenceId]) fail('EVIDENCE_NOT_FOUND');
@@ -911,7 +935,7 @@ export function createEvidenceStore(options) {
     const info = evidenceInfo(scope, handle);
     const directory = await tenantDirectory(info);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const record = manifest.records[info.evidenceId];
@@ -928,13 +952,14 @@ export function createEvidenceStore(options) {
     await authorize(info, request, 'list_evidence_positions', [info.evidenceId]);
     const directory = await tenantDirectory(info);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const record = manifest.records[info.evidenceId];
         if (!record) fail('EVIDENCE_NOT_FOUND');
         if (record.state !== 'available') fail('EVIDENCE_EXPIRED');
         const bundle = await decryptBundle(info, record.id, 'evidence', database, record.encryptionKeyId);
+        if (currentTime() >= record.expiresAtMs) fail('EVIDENCE_EXPIRED');
         return Object.freeze(bundle.positions.map((position) => Object.freeze({
           handle: newPositionHandle(info, record.id, position.id, bundle.source.sourceKind),
           locator: deepFreeze(cloneJsonValue(position.locator)),
@@ -953,13 +978,14 @@ export function createEvidenceStore(options) {
     const directory = await tenantDirectory(info);
     let privateBundle;
     try {
-      privateBundle = await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      privateBundle = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const record = manifest.records[info.evidenceId];
         if (!record) fail('EVIDENCE_NOT_FOUND');
         if (record.state !== 'available') fail('EVIDENCE_EXPIRED');
         const bundle = await decryptBundle(info, record.id, 'evidence', database, record.encryptionKeyId);
+        if (currentTime() >= record.expiresAtMs) fail('EVIDENCE_EXPIRED');
         const publicMeta = frozenMetadata(record);
         return { bundle, publicMeta, expiresAtMs: record.expiresAtMs };
       });
@@ -975,8 +1001,10 @@ export function createEvidenceStore(options) {
       contentHash: position.contentHash,
       content: Buffer.from(position.content, 'base64'),
     }));
+    let consumed;
+    let consumerFailed = false;
     try {
-      return await config.consumePrivatePayload(Object.freeze({
+      consumed = await config.consumePrivatePayload(Object.freeze({
         tenantId: info.tenantId,
         evidenceId: info.evidenceId,
         metadata: privateBundle.publicMeta,
@@ -985,10 +1013,16 @@ export function createEvidenceStore(options) {
         request,
       }));
     } catch {
-      fail('EVIDENCE_DENIED');
+      consumerFailed = true;
     } finally {
       for (const position of positions) position.content.fill(0);
     }
+    if (currentTime() >= privateBundle.expiresAtMs) {
+      await purgeExpired(scope);
+      fail('EVIDENCE_EXPIRED');
+    }
+    if (consumerFailed) fail('EVIDENCE_DENIED');
+    return consumed;
   }
 
   async function parseFactInput(inputValue) {
@@ -1041,7 +1075,7 @@ export function createEvidenceStore(options) {
     await authorize(info, request, 'validate_fact_support', evidenceIds);
     const directory = await tenantDirectory(info);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         const nowMs = currentTime();
         await expireRecords(database, manifest, nowMs);
@@ -1052,6 +1086,7 @@ export function createEvidenceStore(options) {
           if (reference.support.contentHash !== record.contentHash) fail('EVIDENCE_INVALID');
           if (!record.positionIds.includes(reference.positionId)) fail('EVIDENCE_INVALID');
           const bundle = await decryptBundle(info, record.id, 'evidence', database, record.encryptionKeyId);
+          if (currentTime() >= record.expiresAtMs) fail('EVIDENCE_EXPIRED');
           const position = bundle.positions.find((candidate) => candidate.id === reference.positionId);
           if (!position || !record.positionHashes[reference.positionId]
             || position.contentHash !== record.positionHashes[reference.positionId]
@@ -1075,9 +1110,15 @@ export function createEvidenceStore(options) {
         const supportingRecords = [...new Set(evidenceIds)].map((id) => manifest.records[id]);
         const supportExpiry = supportingRecords.length ? Math.min(...supportingRecords.map((record) => record.expiresAtMs)) : undefined;
         const factRetention = await resolveRetention(info, 'fact', nowMs, parsed.status, supportExpiry);
+        const retentionCheck = currentTime();
+        if (factRetention.expiresAtMs <= retentionCheck
+          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= retentionCheck)) fail('EVIDENCE_EXPIRED');
         const factId = randomUUID();
         const normalized = serializeFactForStorage(parsed, supportRefs);
         const sealed = await encryptBundle(info, factId, 'fact', normalized);
+        const beforeInsert = currentTime();
+        if (factRetention.expiresAtMs <= beforeInsert
+          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= beforeInsert)) fail('EVIDENCE_EXPIRED');
         const factMetadata = {
           id: factId,
           status: parsed.status,
@@ -1092,8 +1133,14 @@ export function createEvidenceStore(options) {
           supportContentHashes: [...new Set(supportRefs.map((reference) => reference.support.contentHash))],
         };
         await commitNewBundle(database, 'fact', factId, sealed.bytes);
+        const beforeManifest = currentTime();
+        if (factRetention.expiresAtMs <= beforeManifest
+          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= beforeManifest)) fail('EVIDENCE_EXPIRED');
         manifest.facts[factId] = factMetadata;
         await writeManifest(database, manifest);
+        const beforeReturn = currentTime();
+        if (factRetention.expiresAtMs <= beforeReturn
+          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= beforeReturn)) fail('EVIDENCE_EXPIRED');
         return newFactHandle(info, factId);
       });
     } catch (error) {
@@ -1162,7 +1209,7 @@ export function createEvidenceStore(options) {
     if (!validUuid(factId)) fail('EVIDENCE_NOT_FOUND');
     const directory = await tenantDirectory(info);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         if (!manifest.facts[factId]) fail('EVIDENCE_NOT_FOUND');
@@ -1180,7 +1227,7 @@ export function createEvidenceStore(options) {
     const directory = await tenantDirectory(info);
     let factMetadata;
     try {
-      factMetadata = await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      factMetadata = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const fact = manifest.facts[reference.factId];
@@ -1193,12 +1240,13 @@ export function createEvidenceStore(options) {
     }
     await authorize(info, request, 'read_fact', factMetadata.supportEvidenceIds, [reference.factId]);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const current = manifest.facts[reference.factId];
         if (!current || current.state !== 'available') fail('EVIDENCE_EXPIRED');
         const stored = await decryptBundle(info, current.id, 'fact', database, current.encryptionKeyId);
+        if (currentTime() >= current.expiresAtMs) fail('EVIDENCE_EXPIRED');
         return publicFact(info, current.id, stored);
       });
     } catch (error) {
@@ -1212,7 +1260,7 @@ export function createEvidenceStore(options) {
     let factIds;
     let evidenceIds;
     try {
-      ({ factIds, evidenceIds } = await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      ({ factIds, evidenceIds } = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const active = Object.values(manifest.facts).filter((fact) => fact.state === 'available');
@@ -1227,15 +1275,20 @@ export function createEvidenceStore(options) {
     }
     await authorize(info, request, 'list_facts', evidenceIds, factIds);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const result = [];
+        const resultExpiries = [];
         for (const factId of factIds) {
           const fact = manifest.facts[factId];
-          if (fact?.state !== 'available') continue;
-          result.push(publicFact(info, factId, await decryptBundle(info, factId, 'fact', database, fact.encryptionKeyId)));
+          if (!fact || fact.state !== 'available') fail('EVIDENCE_EXPIRED');
+          const stored = await decryptBundle(info, factId, 'fact', database, fact.encryptionKeyId);
+          result.push(publicFact(info, factId, stored));
+          resultExpiries.push(fact.expiresAtMs);
         }
+        const publicationTime = currentTime();
+        if (resultExpiries.some((expiresAtMs) => expiresAtMs <= publicationTime)) fail('EVIDENCE_EXPIRED');
         return Object.freeze(result);
       });
     } catch (error) {
@@ -1247,7 +1300,7 @@ export function createEvidenceStore(options) {
     const info = scopeInfo(scope);
     const directory = await tenantDirectory(info);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         const beforeEvidence = Object.values(manifest.records).filter((record) => record.state === 'available' && record.expiresAtMs <= currentTime()).length;
         const beforeFacts = Object.values(manifest.facts).filter((fact) => fact.state === 'available' && fact.expiresAtMs <= currentTime()).length;
@@ -1263,7 +1316,7 @@ export function createEvidenceStore(options) {
     const info = scopeInfo(scope);
     const directory = await tenantDirectory(info);
     try {
-      return await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
+      return await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const row = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles').get();
