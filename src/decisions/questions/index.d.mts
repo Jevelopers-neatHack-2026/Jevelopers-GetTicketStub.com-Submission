@@ -52,12 +52,14 @@ export interface QuestionDefinition {
   readonly question: TypeSafeQuestion;
   readonly outputLabels: readonly string[];
   readonly eligibleInputKinds: readonly ObservationKind[];
+  readonly targetUnit: string;
   readonly eligibleCondition: string;
   readonly registryVersion: string;
   readonly schemaVersion: string;
   readonly rubricVersion: string;
   readonly policyId: string;
   readonly policyVersion: string;
+  readonly policyDocumentHash: string;
   readonly policyStatus: 'proposed_unapproved';
   readonly ownerRole: 'Agent and research';
   readonly modelCandidate: 'jev-1.13.0';
@@ -214,6 +216,55 @@ export interface PreparedQuestionState {
   }> | null;
 }
 
+export interface QuestionTargetBindingInput {
+  readonly questionId: QuestionId;
+  readonly targetRef: string;
+  readonly observationRefs: readonly string[];
+  readonly contextObservationRefs?: readonly string[];
+  readonly fieldRef?: string;
+  readonly candidateRefs?: readonly string[];
+}
+
+export interface PreparedQuestionTargetBinding {
+  readonly questionId: QuestionId;
+  readonly targetRef: string;
+  readonly observationRefs: readonly string[];
+  readonly contextObservationRefs: readonly string[];
+  readonly fieldRef: string | null;
+  readonly candidateRefs: readonly string[];
+  readonly evidenceRecordHashes: readonly string[];
+  readonly contextRecordHashes: readonly string[];
+}
+
+export interface PreparedQuestionTargetState {
+  readonly schema: 'ei-jev-question-target-state-internal/v1';
+  readonly questionId: QuestionId;
+  readonly targetRef: string;
+  readonly evidence: readonly Readonly<{
+    observationRef: string;
+    sourceRef: string | null;
+    candidateRef: string | null;
+    fieldRef: string | null;
+    kind: ObservationKind;
+    language: string;
+    textHash: string;
+    claimTextHash: string | null;
+    recordHash: string;
+  }>[];
+  readonly context: readonly Readonly<{
+    observationRef: string;
+    sourceRef: string | null;
+    candidateRef: string | null;
+    fieldRef: string | null;
+    kind: ObservationKind;
+    language: string;
+    textHash: string;
+    claimTextHash: string | null;
+    recordHash: string;
+  }>[];
+  readonly predecessor: PreparedQuestionState['predecessor'];
+}
+
 export interface PlannedQuestion {
   readonly questionId: QuestionId;
   readonly stage: QuestionStage;
@@ -223,11 +274,16 @@ export interface PlannedQuestion {
   readonly reviewRequired: boolean;
   readonly reviewReasons: readonly string[];
   readonly definitionHash: string;
+  readonly targetBinding: PreparedQuestionTargetBinding | null;
+  readonly targetBindingHash: string | null;
+  readonly targetState: PreparedQuestionTargetState | null;
+  readonly targetStateHash: string | null;
+  readonly questionInstanceHash: string;
   readonly question?: TypeSafeQuestion;
 }
 
 export interface QuestionPlan {
-  readonly schema: 'ei-jev-question-plan-internal/v1';
+  readonly schema: 'ei-jev-question-plan-internal/v2';
   readonly registryVersion: string;
   readonly registrySchemaVersion: string;
   readonly registryHash: string;
@@ -269,6 +325,9 @@ export interface QuestionPlan {
   }>;
   readonly limits: Readonly<{
     readonly maxObservations: number;
+    readonly maxTargetBindingsPerQuestion: 1;
+    readonly maxTargetReferences: number;
+    readonly maxTargetBindings: number;
     readonly maxTextBytesPerField: number;
     readonly maxTotalTextBytes: number;
     readonly maxStateUtf8Bytes: number;
@@ -281,7 +340,14 @@ export interface QuestionPlan {
 }
 
 export declare class QuestionPreparationError extends Error {
-  readonly code: 'INVALID_INPUT' | 'RESOURCE_LIMIT_EXCEEDED' | 'SENSITIVE_CONTENT';
+  readonly code:
+    | 'INVALID_INPUT'
+    | 'INVALID_TARGET_BINDING'
+    | 'DUPLICATE_TARGET_BINDING'
+    | 'UNKNOWN_TARGET_REFERENCE'
+    | 'MISMATCHED_TARGET_REFERENCE'
+    | 'RESOURCE_LIMIT_EXCEEDED'
+    | 'SENSITIVE_CONTENT';
 }
 
 export declare const QUESTION_IDS: readonly QuestionId[];
@@ -294,9 +360,18 @@ export declare const QUESTION_REGISTRY_SCHEMA_VERSION: string;
 export declare const QUESTION_REGISTRY_VERSION: string;
 
 export declare function getQuestionDefinition(questionId: string): QuestionDefinition | null;
-export declare function prepareIndependentQuestions(observations: readonly QuestionObservation[]): QuestionPlan;
+export declare function deriveQuestionTargetRef(
+  questionId: QuestionId,
+  observationRefs: readonly string[],
+  options?: Readonly<{ fieldRef?: string; candidateRefs?: readonly string[] }>
+): string;
+export declare function prepareIndependentQuestions(
+  observations: readonly QuestionObservation[],
+  targetBindings?: readonly QuestionTargetBindingInput[]
+): QuestionPlan;
 /** Prepare a new fact-support/conflict state after the caller says the identity stage has completed. */
 export declare function prepareDependentQuestions(
   observations: readonly QuestionObservation[],
-  predecessorPlan: QuestionPlan | null | undefined
+  predecessorPlan: QuestionPlan | null | undefined,
+  targetBindings?: readonly QuestionTargetBindingInput[]
 ): QuestionPlan;

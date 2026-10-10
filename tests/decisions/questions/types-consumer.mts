@@ -1,9 +1,11 @@
 import {
   QUESTION_REGISTRY,
+  deriveQuestionTargetRef,
   prepareDependentQuestions,
   prepareIndependentQuestions,
   type QuestionObservation,
-  type QuestionPlan
+  type QuestionPlan,
+  type QuestionTargetBindingInput
 } from '../../../src/decisions/questions/index.mjs';
 
 const observation: QuestionObservation = {
@@ -16,9 +18,21 @@ const observation: QuestionObservation = {
   text: 'The event takes place on November 12.'
 };
 
-const independent: QuestionPlan = prepareIndependentQuestions([observation]);
-const dependent = prepareDependentQuestions([observation], independent);
+const factTargetRef = deriveQuestionTargetRef('Q-EI-FACT-SUPPORT:v1', ['obs-1'], {
+  fieldRef: 'event.date',
+  candidateRefs: ['candidate-1']
+});
+const targetBinding: QuestionTargetBindingInput = {
+  questionId: 'Q-EI-FACT-SUPPORT:v1',
+  targetRef: factTargetRef,
+  observationRefs: ['obs-1'],
+  fieldRef: 'event.date',
+  candidateRefs: ['candidate-1']
+};
+const independent: QuestionPlan = prepareIndependentQuestions([observation], []);
+const dependent = prepareDependentQuestions([observation], independent, [targetBinding]);
 const readonlyQuestionId: string = QUESTION_REGISTRY[0].questionId;
+const readonlyPolicyDocumentHash: string = QUESTION_REGISTRY[0].policyDocumentHash;
 const notExecutable: 'not_dispatched' = dependent.executionStatus;
 
 // @ts-expect-error claim evidence requires a field reference and claim text
@@ -31,5 +45,6 @@ const malformed: QuestionObservation = {
 };
 
 void readonlyQuestionId;
+void readonlyPolicyDocumentHash;
 void notExecutable;
 void malformed;

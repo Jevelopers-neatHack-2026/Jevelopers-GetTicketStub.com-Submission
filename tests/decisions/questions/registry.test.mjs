@@ -33,8 +33,8 @@ const mandatedIds = [
 test('registry contains the seven versioned questions and exact TypeSafe primitive rubrics', () => {
   assert.deepEqual(QUESTION_IDS, mandatedIds);
   assert.equal(new Set(QUESTION_IDS).size, 7);
-  assert.equal(QUESTION_REGISTRY_VERSION, '2.0.0-draft.1');
-  assert.equal(QUESTION_REGISTRY_SCHEMA_VERSION, '1.0.0');
+  assert.equal(QUESTION_REGISTRY_VERSION, '2.1.0-draft.1');
+  assert.equal(QUESTION_REGISTRY_SCHEMA_VERSION, '2.0.0');
   assert.equal(QUESTION_REGISTRY.length, 7);
 
   const expected = new Map([
@@ -55,6 +55,11 @@ test('registry contains the seven versioned questions and exact TypeSafe primiti
     assert.ok(question.question.instructions.length > 30);
     assert.ok(question.question.criteria);
     assert.equal(question.ownerRole, 'Agent and research');
+    assert.equal(question.registryVersion, QUESTION_REGISTRY_VERSION);
+    assert.equal(question.schemaVersion, '2.0.0');
+    assert.equal(question.rubricVersion, '2.0.0');
+    assert.equal(question.policyVersion, '1.0.0');
+    assert.match(question.targetUnit, /exactly one|one sourceRef|two distinct|all comparable/i);
     assert.equal(question.modelCandidate, 'jev-1.13.0');
     assert.equal(question.modelCandidateStatus, 'candidate_only_not_accepted_runtime_pin');
     assert.equal(question.modelInputMode, 'text_only_structured_observations_no_raw_images');

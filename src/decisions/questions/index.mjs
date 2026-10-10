@@ -11,6 +11,7 @@ export {
 } from './registry.mjs';
 export {
   QuestionPreparationError,
+  deriveQuestionTargetRef,
   prepareDependentQuestions,
   prepareIndependentQuestions
 } from './prepare.mjs';
