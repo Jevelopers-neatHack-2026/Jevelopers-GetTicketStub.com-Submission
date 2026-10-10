@@ -291,6 +291,27 @@ test("preflight, active cancellation, deadline, output, and queue failures never
   assert.ok(completed.every((result) => result.kind === "observation"));
 });
 
+test("synthetic fragmented stdout after terminal events is ignored and queue resumes after close", () => {
+  const probePath = fileURLToPath(new URL("./fragmented-stream-probe.mjs", import.meta.url));
+  const probe = spawnSync(process.execPath, ["--experimental-vm-modules", probePath, REPO_ROOT], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, LANG: "C.UTF-8", LC_ALL: "C.UTF-8" },
+    maxBuffer: 20_000,
+    timeout: 10_000,
+  });
+  assert.equal(probe.status, 0, `${probe.stdout}\n${probe.stderr}`);
+  const summary = JSON.parse(probe.stdout.trim().split("\n").at(-1));
+  assert.equal(summary.mode, "synthetic-fragmented-stream-lifecycle");
+  assert.deepEqual(summary.cancellation, {
+    cancelledCode: "CANCELLED",
+    queuedKind: "observation",
+    progress: [0],
+  });
+  assert.deepEqual(summary.callbackFailure, { code: "CALLBACK_FAILED", progress: [0] });
+  assert.equal(summary.childCount, 3);
+  assert.ok(summary.killAttemptCount >= 2);
+});
+
 test("known synthetic fixture reaches the decoder through the production Linux limits", async (t) => {
   if (process.platform !== "linux") return t.skip("Linux prlimit containment is required");
   const bytes = await fixture("text-multipage.pdf");

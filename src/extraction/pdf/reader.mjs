@@ -406,11 +406,15 @@ function runIsolated(job) {
       terminate(job, "ISOLATION_UNAVAILABLE");
     });
     child.stdout.on("data", (chunk) => {
-      job.outputBytes += chunk.byteLength;
-      if (job.outputBytes > job.options.maxOutputBytes) {
+      if (chunk.byteLength > job.options.maxOutputBytes - job.outputBytes) {
+        job.outputBytes = job.options.maxOutputBytes + 1;
         terminate(job, "OUTPUT_LIMIT");
         return;
       }
+      job.outputBytes += chunk.byteLength;
+      // Count buffered pipe data, but never parse or deliver progress after
+      // the first terminal decision. Saturating above keeps accounting bounded.
+      if (job.terminationCode) return;
       job.pendingOutput = Buffer.concat([job.pendingOutput, chunk]);
       while (true) {
         const newline = job.pendingOutput.indexOf(0x0a);
