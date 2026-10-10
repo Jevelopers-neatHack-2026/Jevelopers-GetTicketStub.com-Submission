@@ -68,9 +68,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .foilstamp img { width: 100%; height: 100%; display: block; }
 .foilstamp .holo, .foilstamp .glare { position: absolute; inset: 0; -webkit-mask: url(logo/ts-stamp-mono-ink.svg) center / 100% 100% no-repeat; mask: url(logo/ts-stamp-mono-ink.svg) center / 100% 100% no-repeat; pointer-events: none; }
 /* Brand foil sheen, not the rainbow: a narrow copper/cyan band that slides with the light.
-   Opacity comes from --glow, which JS eases (never steps). Caps: sheen .32, glare .18. */
-.foilstamp .holo { background: linear-gradient(115deg, transparent 32%, rgb(232 192 143 / .9) 44%, rgb(124 198 210 / .9) 54%, transparent 66%); background-size: 260% 260%; background-position: calc(50% - var(--lx, 0) * 60%) calc(50% - var(--ly, 0) * 30%); mix-blend-mode: soft-light; opacity: calc(var(--glow, .08) * .32); }
-.foilstamp .glare { background: radial-gradient(farthest-corner circle at var(--px, 50%) var(--py, 50%), rgb(255 255 255 / calc(var(--glow, .08) * .18)) 0%, rgb(255 255 255 / calc(var(--glow, .08) * .05)) 30%, transparent 60%); mix-blend-mode: overlay; }
+   Opacity comes from --glow, which JS eases (never steps). Caps: sheen .5, glare .3. */
+.foilstamp .holo { background: linear-gradient(115deg, transparent 28%, rgb(240 200 150) 42%, rgb(124 198 210) 56%, transparent 70%); background-size: 260% 260%; background-position: calc(50% - var(--lx, 0) * 90%) calc(50% - var(--ly, 0) * 40%); mix-blend-mode: overlay; opacity: calc(var(--glow, .1) * .5); }
+.foilstamp .glare { background: radial-gradient(farthest-corner circle at var(--px, 50%) var(--py, 50%), rgb(255 255 255 / calc(var(--glow, .1) * .3)) 0%, rgb(255 255 255 / calc(var(--glow, .1) * .08)) 30%, transparent 60%); mix-blend-mode: overlay; }
 
 /* sections */
 section { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 24px 48px; padding-block: 56px; border-top: 1px solid var(--line); }
@@ -247,7 +247,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   section { grid-template-columns: 1fr; padding-block: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .foilstamp { --glow: .5; }
+  .foilstamp { --glow: .45; }
   .chip-low, .track i { animation: none; }
 }
 </style>
@@ -470,8 +470,8 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Every visual input is eased toward a target, time-based, so nothing can step.
   // tau = time constant in ms (63% of the way there). Glow fades in slower than it tracks.
-  const TAU = { tilt: 110, light: 90, glowIn: 260, glowOut: 520 };
-  const REST_GLOW = 0.08, MAX_TILT = 11;
+  const TAU = { tilt: 110, light: 90, glowIn: 400, glowOut: 600 };
+  const REST_GLOW = 0.1, MAX_TILT = 11;
   const cur = { x: 0.5, y: 0.5, glow: REST_GLOW };
   const tgt = { x: 0.5, y: 0.5, glow: REST_GLOW };
   let raf = 0, last = 0;
