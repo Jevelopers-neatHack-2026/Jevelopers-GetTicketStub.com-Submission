@@ -1,5 +1,6 @@
 """Validate exact owner output claims and retain safe bytes before resource teardown."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from integration_evals.artifacts import confined_path, digest, read_bytes, reject_leaks
@@ -8,11 +9,29 @@ from integration_evals.execution import OwnerContext
 from integration_evals.models import Case, Evidence, Mode, Origin
 
 
+@dataclass(frozen=True, slots=True)
+class ClaimContext:
+    """Frozen case rules bind both execution and independent archive inspection."""
+
+    pins: dict[str, str]
+    run_id: str
+    mode: Mode
+
+
 def check_claim(
     case: Case, context: OwnerContext, evidence: tuple[Evidence, ...], origin: Origin
 ) -> None:
     """Require the case's own artifacts, expected producers and actual origin classes."""
     pins = {component.repository: component.revision for component in context.assembly.components}
+    validate_claim(
+        case, ClaimContext(pins, context.run_id, context.settings.mode), evidence, origin
+    )
+
+
+def validate_claim(
+    case: Case, context: ClaimContext, evidence: tuple[Evidence, ...], origin: Origin
+) -> None:
+    """Apply the same producer, kind and origin predicates to every evidence boundary."""
     allowed = set(case.artifact_producers or (case.component,))
     kinds = {item.kind for item in evidence}
     if not set(case.required_evidence_kinds).issubset(kinds):
@@ -24,12 +43,12 @@ def check_claim(
             or item.requirement not in case.requirements
         ):
             fail("cross_case_output_claim", case.id)
-        if item.component not in allowed or pins.get(item.component) != item.revision:
+        if item.component not in allowed or context.pins.get(item.component) != item.revision:
             fail("wrong_output_producer", case.id)
-        if item.mode != context.settings.mode:
+        if item.mode != context.mode:
             fail("output_mode_mismatch", case.id)
     real_origins = {Mode.LIVE: Origin.LIVE, Mode.SANDBOX: Origin.SANDBOX}
-    required_origin = real_origins.get(context.settings.mode)
+    required_origin = real_origins.get(context.mode)
     if required_origin is not None:
         if origin != required_origin:
             fail("synthetic_real_mode_claim", case.id)

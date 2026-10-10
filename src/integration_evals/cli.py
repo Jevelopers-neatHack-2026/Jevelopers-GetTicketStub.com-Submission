@@ -35,12 +35,11 @@ from integration_evals.models import (
 from integration_evals.numeric_rules import NumericRules
 from integration_evals.policy import Policy, Promotion, policy_blockers, promotion
 from integration_evals.release import audit, export_audit
+from integration_evals.report_validation import validate_evidence, validate_run
 from integration_evals.reporting import (
     OwnerResponse,
     Tracker,
     save_run,
-    validate_evidence,
-    validate_run,
 )
 from integration_evals.runner import execute
 from integration_evals.specifications import (
@@ -146,9 +145,9 @@ def run(
         authorize_paid=authorize_paid,
     )
     receipt = execute(suite, catalog, settings)
-    directory = save_run(receipt, Path(output), tracker, settings.artifacts)
+    directory = save_run(receipt, Path(output), tracker, suite, settings.artifacts)
     requirements = load_record(repository / "planning/requirements.json", Requirements)
-    export_audit(audit(receipt, tracker, requirements), directory / "release-audit.json")
+    export_audit(audit(receipt, tracker, requirements, suite), directory / "release-audit.json")
     typer.echo(str(directory))
     if not receipt.selected_case_ids or any(
         result.outcome.value != "passed"
@@ -160,10 +159,11 @@ def run(
 
 @app.command()
 @safe_command
-def inspect(receipt: Path) -> None:
+def inspect(receipt: Path, suite: Path | None = None) -> None:
     """Reject inconsistent or sensitive run receipts before public packaging."""
     record = load_record(receipt, Run)
-    validate_run(record)
+    trusted_suite = suite if suite is not None else Path("scenarios/suite.json")
+    validate_run(record, load_record(trusted_suite, Suite))
     validate_evidence(record.evidence, receipt.parent, record)
     typer.echo(f"Validated immutable receipt {record.id}")
 

@@ -3,6 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 from integration_evals.artifacts import confined_path, digest, load_record, read_bytes, reject_leaks
 from integration_evals.benchmarks import Corpus, Sample
@@ -13,7 +14,7 @@ from integration_evals.models import Digest, Mode, Origin, Record, Revision
 class CandidatePin(Record):
     """An immutable candidate/question/model/configuration approved before testing."""
 
-    candidate: str
+    candidate: Literal["rules", "generative", "jev"]
     question: str
     component: str
     revision: Revision
@@ -25,7 +26,7 @@ class BenchmarkReceipt(Record):
     """Owner-produced receipt bytes retain prediction, timing, cost and provenance."""
 
     row_id: str
-    candidate: str
+    candidate: Literal["rules", "generative", "jev"]
     trial: int
     component: str
     component_revision: Revision

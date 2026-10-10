@@ -19,7 +19,7 @@ def test_audit_retains_every_leaf_when_components_missing() -> None:
     catalog = load_record(REPOSITORY / "fixtures/catalog.json", Catalog)
     run = execute(suite, catalog, Settings(REPOSITORY, REPOSITORY.parent, None))
     # When auditing release scope.
-    receipt = audit(run, tracker, requirements)
+    receipt = audit(run, tracker, requirements, suite)
     # Then no local leaf or original non-v1 exclusion disappears from the report.
     assert {leaf.id for leaf in requirements.leaves}.issubset(
         {item.id for item in receipt.obligations}

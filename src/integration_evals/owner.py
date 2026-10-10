@@ -2,9 +2,7 @@
 
 import json
 import os
-import shutil
 import subprocess
-import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic
@@ -19,48 +17,6 @@ from integration_evals.models import Case, CaseResult, Mode, Origin, Outcome, St
 from integration_evals.output_evidence import check_claim, retain
 from integration_evals.processes import ProcessSettings, invoke
 from integration_evals.reporting import OwnerResponse
-
-
-def isolated_command(command: tuple[str, ...], isolated: str, mode: Mode) -> tuple[str, ...] | None:
-    """Require operating-system network denial for offline owner execution."""
-    if mode in {Mode.SANDBOX, Mode.LIVE}:
-        return command
-    canonical_isolated = str(Path(isolated).resolve())
-    if sys.platform == "darwin":
-        sandbox = shutil.which("sandbox-exec")
-        if sandbox:
-            profile = "\n".join(
-                (
-                    "(version 1)",
-                    "(allow default)",
-                    "(deny network*)",
-                    "(deny file-write*)",
-                    f'(allow file-write* (subpath "{canonical_isolated}"))',
-                )
-            )
-            return (sandbox, "-p", profile, *command)
-    else:
-        bubblewrap = shutil.which("bwrap")
-        if bubblewrap:
-            return (
-                bubblewrap,
-                "--unshare-net",
-                "--unshare-pid",
-                "--die-with-parent",
-                "--ro-bind",
-                "/",
-                "/",
-                "--bind",
-                canonical_isolated,
-                isolated,
-                "--dev",
-                "/dev",
-                "--proc",
-                "/proc",
-                "--",
-                *command,
-            )
-    return None
 
 
 def compare_response(
@@ -107,17 +63,6 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
     cleanup_status: Literal["not-run", "passed", "failed", "unknown"] = "not-run"
     output_digest: str | None = None
     with TemporaryDirectory(prefix=f"integration-evals-{context.run_id}-") as isolated:
-        command = isolated_command(component.command, isolated, settings.mode)
-        cleanup_command = isolated_command(component.cleanup_command, isolated, settings.mode)
-        if command is None or cleanup_command is None:
-            return OwnerExecution(
-                blocked(
-                    case,
-                    settings.mode,
-                    case.component,
-                    "offline kernel network isolation unavailable",
-                )
-            )
         environment = {
             **{key: os.environ[key] for key in ("PATH", "SYSTEMROOT") if key in os.environ},
             "HOME": isolated,
@@ -161,13 +106,15 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
         try:
             with (Path(isolated) / "stdout").open("w+b") as stdout:
                 exit_code = invoke(
-                    command,
+                    component.command,
                     ProcessSettings(
                         checkout=settings.workspace / component.repository,
                         environment=environment,
                         payload=request.encode(),
                         stdout=stdout,
                         timeout=case.timeout_seconds,
+                        offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
+                        writable_directory=Path(isolated),
                     ),
                 )
             output = read_bytes(Path(isolated) / "stdout")
@@ -188,19 +135,21 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
         finally:
             try:
                 cleanup = invoke(
-                    cleanup_command,
+                    component.cleanup_command,
                     ProcessSettings(
                         checkout=settings.workspace / component.repository,
                         environment=environment,
                         payload=request.encode(),
                         stdout=subprocess.DEVNULL,
                         timeout=min(case.timeout_seconds, 30),
+                        offline=settings.mode in {Mode.MOCK, Mode.RECORDED},
+                        writable_directory=Path(isolated),
                     ),
                 )
                 if cleanup != 0:
                     outcome, reason = Outcome.ERROR, "owner cleanup failed"
                 cleanup_status = "passed" if cleanup == 0 else "failed"
-            except (subprocess.TimeoutExpired, OSError):
+            except (subprocess.TimeoutExpired, OSError, InvalidArtifactError):
                 outcome, reason = Outcome.ERROR, "owner cleanup timeout/runtime failure"
                 cleanup_status = "unknown"
     result = CaseResult(

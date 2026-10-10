@@ -8,6 +8,7 @@ from integration_evals.cli import app, owned_requirements
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.models import Catalog, Selection, Suite
 from integration_evals.validation import validate_suite
+from tests.test_reporting import absent_assembly
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
@@ -24,10 +25,16 @@ def test_suite_rejects_when_mandatory_case_omitted() -> None:
     # Then deleting required tests cannot produce a green run.
 
 
-def test_cli_rejects_when_receipt_has_no_results(tmp_path: Path) -> None:
-    # Given a malformed public receipt containing no executed cases.
+@pytest.mark.parametrize("field", ["results", "selected_case_ids"])
+def test_cli_rejects_when_receipt_has_no_results(tmp_path: Path, field: str) -> None:
+    # Given an otherwise valid receipt altered only to empty one required field.
     receipt = tmp_path / "empty.json"
-    _ = receipt.write_text('{"results":[]}', encoding="utf-8")
+    valid = absent_assembly()
+    _ = receipt.write_text(valid.model_dump_json(), encoding="utf-8")
+    positive = CliRunner().invoke(app, ["inspect", str(receipt)])
+    assert positive.exit_code == 0, positive.output
+    altered = valid.model_copy(update={field: ()})
+    _ = receipt.write_text(altered.model_dump_json(), encoding="utf-8")
     # When the real CLI inspects it.
     result = CliRunner().invoke(app, ["inspect", str(receipt)])
     # Then an empty run is rejected without echoing raw untrusted input.

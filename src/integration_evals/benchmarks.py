@@ -223,15 +223,24 @@ def paired_family_interval(
     if repeats < MIN_BOOTSTRAP_REPEATS:
         fail("insufficient_bootstrap_repeats", "benchmark")
     held_out = {row.id: row for row in rows if row.split == "held-out"}
-    pairs = {(sample.row_id, sample.candidate, sample.trial): sample for sample in samples}
+    paired_samples = tuple(s for s in samples if s.candidate in {"jev", "generative"})
+    pairs = {(sample.row_id, sample.candidate, sample.trial): sample for sample in paired_samples}
+    trials = sorted({sample.trial for sample in paired_samples})
+    expected = {
+        (row, candidate, trial)
+        for row in held_out
+        for candidate in ("jev", "generative")
+        for trial in trials
+    }
+    if not trials or set(pairs) != expected or len(pairs) != len(paired_samples):
+        fail("unpaired_baseline_samples", "benchmark")
     families: dict[str, list[float]] = {}
     for row in held_out.values():
-        jev = pairs.get((row.id, "jev", 0))
-        baseline = pairs.get((row.id, "generative", 0))
-        if jev is None or baseline is None:
-            fail("unpaired_baseline_samples", row.id)
-        delta = float(jev.prediction == row.label) - float(baseline.prediction == row.label)
-        families.setdefault(row.family, []).append(delta)
+        for trial in trials:
+            jev = pairs[row.id, "jev", trial]
+            baseline = pairs[row.id, "generative", trial]
+            delta = float(jev.prediction == row.label) - float(baseline.prediction == row.label)
+            families.setdefault(row.family, []).append(delta)
     if not families:
         fail("zero_executed_samples", "benchmark")
     random = Random(seed)  # noqa: S311 - reproducible statistical resampling, not credentials

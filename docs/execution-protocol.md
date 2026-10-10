@@ -68,9 +68,15 @@ The request supplies a writable artifact_directory and IE_ARTIFACT_DIR. Evidence
 are relative to this staging directory. Only exact-run/case/requirement/producer joins,
 required evidence kinds and compatible real-origin claims are accepted. Sanitized,
 hash-checked bytes are copied to a durable run/case namespace before owner cleanup.
-Reports include those bytes, and inspect validates their hashes and joins again.
-Invocation and cleanup each own a new process session; remaining descendants are
-terminated on success, timeout or cancellation. Linux additionally uses a PID namespace.
+Reports include those bytes and a suite snapshot. The inspect command requires the
+independently trusted suite (defaults to scenarios/suite.json, or pass --suite from the
+reviewed pinned checkout). Its digest must match the run. Producer, required-kind and
+real-origin predicates are identical to execution. A freely edited archive snapshot is
+not an independent trust anchor.
+Invocation and cleanup each own a new process session. Linux uses a PID namespace in
+every transport mode, so detached children are terminated when the namespace exits.
+macOS prohibits process creation inside every owner/cleanup invocation; owners requiring
+subprocesses must use the Linux execution environment. Unsupported containment fails closed.
 
 The cleanup command receives the same request and environment and is attempted in a
 finally path, with a bounded timeout. Failed or uncertain cleanup makes the case an
@@ -117,7 +123,8 @@ prediction/abstention, latency, cost and downstream-cost uncertainty.
 The benchmark computes per-question/stratum macro-F1, precision/recall, critical misses,
 abstention/coverage, p50/p95 latency and known costs. Cost per success is absent while
 any required cost is unknown. A deterministic paired family bootstrap reports an
-accuracy-difference 95% interval; it does not claim an F1 or cost interval.
+accuracy-difference 95% interval using every paired row/trial; family bootstrap samples
+retain all correlated trials and variants together. It does not claim an F1 or cost interval.
 
 The corpus validator rejects duplicate IDs, missing provenance and family/content
 leakage between calibration and held-out splits. Proposed EI minimums are 120 calibration,

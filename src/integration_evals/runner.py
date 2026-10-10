@@ -11,7 +11,7 @@ from integration_evals.execution import OwnerContext, OwnerExecution, Settings, 
 from integration_evals.models import Assembly, Case, CaseId, Catalog, Run, Suite
 from integration_evals.owner import execute_owner
 from integration_evals.preflight import PreflightContext, case_blocker
-from integration_evals.reporting import validate_evidence
+from integration_evals.report_validation import validate_evidence
 from integration_evals.validation import git_value, source_fingerprint, validate_assembly
 
 

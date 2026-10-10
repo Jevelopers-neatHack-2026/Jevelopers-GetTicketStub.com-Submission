@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Literal
 
 from integration_evals.artifacts import digest, read_bytes
-from integration_evals.models import Outcome, Record, Run, Status
-from integration_evals.reporting import Tracker, coverage, validate_run
+from integration_evals.models import Outcome, Record, Run, Status, Suite
+from integration_evals.report_validation import validate_run
+from integration_evals.reporting import Tracker, coverage
 from integration_evals.specifications import Requirements
 
 
@@ -34,9 +35,9 @@ class ReleaseAudit(Record):
     limitations: tuple[str, ...]
 
 
-def audit(run: Run, tracker: Tracker, requirements: Requirements) -> ReleaseAudit:
+def audit(run: Run, tracker: Tracker, requirements: Requirements, suite: Suite) -> ReleaseAudit:
     """List every launch leaf and original acceptance row without premature closure."""
-    validate_run(run)
+    validate_run(run, suite)
     obligations: list[Obligation] = []
     for leaf in requirements.leaves:
         results = tuple(result for result in run.results if leaf.id in result.requirements)

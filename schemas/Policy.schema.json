@@ -5,6 +5,11 @@
       "description": "An immutable candidate/question/model/configuration approved before testing.",
       "properties": {
         "candidate": {
+          "enum": [
+            "rules",
+            "generative",
+            "jev"
+          ],
           "title": "Candidate",
           "type": "string"
         },

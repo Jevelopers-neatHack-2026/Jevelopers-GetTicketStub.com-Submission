@@ -24,8 +24,10 @@ jobs:
       - name: Install platform isolation tooling
         run: sudo apt-get update && sudo apt-get install --yes bubblewrap
       - name: Verify real Linux isolation and retained owner output
-        run: sudo -n .venv/bin/python -m pytest tests/test_owner_output.py --junitxml=reports/linux-owner-junit.xml
-      - run: uv run pytest --ignore=tests/test_owner_output.py --junitxml=reports/tooling-junit.xml
+        run: |
+          mkdir -p reports
+          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py --junitxml=reports/linux-owner-junit.xml
+      - run: uv run pytest --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --junitxml=reports/tooling-junit.xml
       - name: Verify missing assembly is reported as blocked
         shell: bash
         run: |
