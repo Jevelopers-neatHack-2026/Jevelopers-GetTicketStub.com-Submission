@@ -1,0 +1,221 @@
+{
+  "format_version": "1.0",
+  "document_date": "2026-10-10",
+  "kind": "planning_inventory",
+  "organization": "Jevelopers-neatHack-2026",
+  "target_repository_count": 14,
+  "integration_root": "getticketstub.com",
+  "is_dependency_lockfile": false,
+  "notes": [
+    "Existing repository status and visibility come from the supplied inventory.",
+    "Dependency edges describe planned package imports, not every runtime interaction.",
+    "The composition root injects domain adapters into the harness.",
+    "Component commit pins are established only after actual implementation."
+  ],
+  "repositories": [
+    {
+      "id": "REPO-01",
+      "name": "marketing-material",
+      "status": "reported_existing",
+      "owner_role": "Product and frontend",
+      "delivery_form": "documentation",
+      "owns": "Approved launch material and demo narrative",
+      "planned_package_dependencies": [
+        "brand-kit"
+      ],
+      "reported_visibility": "private",
+      "supplied_url": "https://github.com/Jevelopers-neatHack-2026/marketing-material",
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-02",
+      "name": "agent-harness",
+      "status": "reported_existing",
+      "owner_role": "Agent and research",
+      "delivery_form": "worker-package",
+      "owns": "Durable workflow execution and recovery",
+      "planned_package_dependencies": [
+        "shared-contracts",
+        "cost-intelligence"
+      ],
+      "reported_visibility": "private",
+      "supplied_url": "https://github.com/Jevelopers-neatHack-2026/agent-harness",
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-03",
+      "name": "getticketstub.com",
+      "status": "reported_existing",
+      "owner_role": "Product and frontend",
+      "delivery_form": "web-and-composition-root",
+      "owns": "Customer identity, projects, orders and integration release",
+      "planned_package_dependencies": [
+        "shared-contracts",
+        "brand-kit",
+        "landing-page-repo",
+        "team-dashboard",
+        "agent-harness",
+        "event-intelligence",
+        "creative-engine",
+        "print-production",
+        "fulfillment-connectors",
+        "cost-intelligence"
+      ],
+      "reported_visibility": "public",
+      "supplied_url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-04",
+      "name": "brand-kit",
+      "status": "reported_existing",
+      "owner_role": "Product and frontend",
+      "delivery_form": "asset-package",
+      "owns": "Visual identity and licensed reusable assets",
+      "planned_package_dependencies": [],
+      "reported_visibility": "private",
+      "supplied_url": "https://github.com/Jevelopers-neatHack-2026/brand-kit",
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-05",
+      "name": "landing-page-repo",
+      "status": "reported_existing",
+      "owner_role": "Product and frontend",
+      "delivery_form": "static-web-package",
+      "owns": "Product landing page",
+      "planned_package_dependencies": [
+        "brand-kit"
+      ],
+      "reported_visibility": "private",
+      "supplied_url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo",
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-06",
+      "name": ".github",
+      "status": "reported_existing",
+      "owner_role": "Finance and reliability",
+      "delivery_form": "governance",
+      "owns": "Shared standards and workflow sources",
+      "planned_package_dependencies": [],
+      "reported_visibility": "private",
+      "supplied_url": "https://github.com/Jevelopers-neatHack-2026/.github",
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-07",
+      "name": "shared-contracts",
+      "status": "proposed",
+      "owner_role": "Agent and research",
+      "delivery_form": "shared-package",
+      "owns": "Public schemas, validation and compatibility fixtures",
+      "planned_package_dependencies": [],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-08",
+      "name": "event-intelligence",
+      "status": "proposed",
+      "owner_role": "Agent and research",
+      "delivery_form": "worker-package",
+      "owns": "Sourced event facts and research cache",
+      "planned_package_dependencies": [
+        "shared-contracts",
+        "cost-intelligence"
+      ],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-09",
+      "name": "creative-engine",
+      "status": "proposed",
+      "owner_role": "Creative and fulfillment",
+      "delivery_form": "worker-package",
+      "owns": "Artwork generation and immutable design versions",
+      "planned_package_dependencies": [
+        "shared-contracts",
+        "cost-intelligence"
+      ],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-10",
+      "name": "print-production",
+      "status": "proposed",
+      "owner_role": "Creative and fulfillment",
+      "delivery_form": "worker-package",
+      "owns": "Print composition and production manifests",
+      "planned_package_dependencies": [
+        "shared-contracts"
+      ],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-11",
+      "name": "fulfillment-connectors",
+      "status": "proposed",
+      "owner_role": "Creative and fulfillment",
+      "delivery_form": "worker-package",
+      "owns": "Supplier quotes, external attempts and status observations",
+      "planned_package_dependencies": [
+        "shared-contracts",
+        "cost-intelligence"
+      ],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-12",
+      "name": "cost-intelligence",
+      "status": "proposed",
+      "owner_role": "Finance and reliability",
+      "delivery_form": "worker-and-server-package",
+      "owns": "Financial postings, reservations, reporting and CFO export",
+      "planned_package_dependencies": [
+        "shared-contracts"
+      ],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-13",
+      "name": "team-dashboard",
+      "status": "proposed",
+      "owner_role": "Finance and reliability",
+      "delivery_form": "mounted-ui-package",
+      "owns": "Authorized finance and operations views",
+      "planned_package_dependencies": [
+        "shared-contracts",
+        "brand-kit"
+      ],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    },
+    {
+      "id": "REPO-14",
+      "name": "integration-evals",
+      "status": "proposed",
+      "owner_role": "Finance and reliability",
+      "delivery_form": "development-package",
+      "owns": "Cross-component verification and evidence",
+      "planned_package_dependencies": [
+        "shared-contracts"
+      ],
+      "reported_visibility": null,
+      "supplied_url": null,
+      "implementation_verified": false
+    }
+  ]
+}
