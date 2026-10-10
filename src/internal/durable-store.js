@@ -4,8 +4,13 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { RuntimeError, runtimeError } from './errors.js';
 
-export const INTERNAL_SCHEMA_VERSION = 2;
+export const INTERNAL_SCHEMA_VERSION = 3;
 const CHECKPOINT_SCHEMA_VERSION = 2;
+const MAX_CHECKPOINT_DEPTH = 128;
+const MAX_CHECKPOINT_NODES = 10_000;
+const MAX_CHECKPOINT_SOURCE_UNITS = 256 * 1024;
+const MAX_CHECKPOINT_SERIALIZED_BYTES = 1024 * 1024;
+const INVALID_CHECKPOINT_INPUT = Symbol('invalid checkpoint input');
 const STATES = new Set([
   'queued',
   'running',
@@ -53,38 +58,99 @@ function isRecord(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
-function canonicalValue(value, seen = new Set()) {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value !== 'object' || seen.has(value)) {
-    fail('serializeCheckpoint', 'INVALID_INPUT', 'Checkpoint data must contain finite JSON values.');
+function checkpointString(value, context) {
+  context.sourceUnits += value.length;
+  if (context.sourceUnits > MAX_CHECKPOINT_SOURCE_UNITS) throw INVALID_CHECKPOINT_INPUT;
+  return value;
+}
+
+function canonicalValue(value, context, depth = 0) {
+  context.nodes += 1;
+  if (context.nodes > MAX_CHECKPOINT_NODES || depth > MAX_CHECKPOINT_DEPTH) {
+    throw INVALID_CHECKPOINT_INPUT;
   }
-  seen.add(value);
-  let result;
-  if (Array.isArray(value)) {
-    result = value.map(item => canonicalValue(item, seen));
-  } else {
-    if (!isRecord(value)) {
-      fail('serializeCheckpoint', 'INVALID_INPUT', 'Checkpoint data must contain plain JSON objects.');
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return checkpointString(value, context);
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'object' || context.seen.has(value)) throw INVALID_CHECKPOINT_INPUT;
+
+  context.seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      const prototype = Object.getPrototypeOf(value);
+      if (prototype !== Array.prototype && prototype !== null) throw INVALID_CHECKPOINT_INPUT;
+      const keys = Reflect.ownKeys(value);
+      const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+      const length = lengthDescriptor?.value;
+      if (
+        !Number.isSafeInteger(length)
+        || length < 0
+        || length > MAX_CHECKPOINT_NODES
+        || keys.length !== length + 1
+        || context.nodes + length > MAX_CHECKPOINT_NODES
+      ) {
+        throw INVALID_CHECKPOINT_INPUT;
+      }
+
+      // Keep arrays as arrays for JSON encoding, then remove inherited hooks
+      // so serialization cannot invoke a caller-supplied toJSON accessor.
+      const result = [];
+      for (let index = 0; index < length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+          throw INVALID_CHECKPOINT_INPUT;
+        }
+        result.push(canonicalValue(descriptor.value, context, depth + 1));
+      }
+      Object.setPrototypeOf(result, null);
+      return result;
     }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw INVALID_CHECKPOINT_INPUT;
+    const keys = Reflect.ownKeys(value);
+    if (context.nodes + keys.length > MAX_CHECKPOINT_NODES) throw INVALID_CHECKPOINT_INPUT;
+    for (const key of keys) {
+      if (typeof key !== 'string') throw INVALID_CHECKPOINT_INPUT;
+      checkpointString(key, context);
+    }
+    keys.sort();
+
     // A regular object's `__proto__` setter would mutate the prototype and
     // silently drop an own JSON property. A null-prototype container keeps
     // every key as data while preserving deterministic JSON serialization.
-    result = Object.create(null);
-    for (const key of Object.keys(value).sort()) {
-      result[key] = canonicalValue(value[key], seen);
+    const result = Object.create(null);
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+        throw INVALID_CHECKPOINT_INPUT;
+      }
+      Object.defineProperty(result, key, {
+        value: canonicalValue(descriptor.value, context, depth + 1),
+        enumerable: true,
+        configurable: true,
+        writable: true
+      });
     }
+    return result;
+  } finally {
+    context.seen.delete(value);
   }
-  seen.delete(value);
-  return result;
 }
 
-function serializeCheckpoint(data) {
-  if (!isRecord(data)) {
-    fail('serializeCheckpoint', 'INVALID_INPUT', 'Checkpoint data must be a JSON object.');
+function serializeCheckpoint(data, operation) {
+  try {
+    if (!isRecord(data)) throw INVALID_CHECKPOINT_INPUT;
+    const normalized = canonicalValue(data, { nodes: 0, sourceUnits: 0, seen: new Set() });
+    const encoded = JSON.stringify(normalized);
+    const payload = '{"schemaVersion":' + CHECKPOINT_SCHEMA_VERSION + ',"data":' + encoded + '}';
+    if (Buffer.byteLength(payload, 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES) {
+      throw INVALID_CHECKPOINT_INPUT;
+    }
+    return payload;
+  } catch {
+    fail(operation, 'INVALID_INPUT', 'Checkpoint data is invalid or exceeds the supported size and structure limits.');
   }
-  const normalized = canonicalValue(data);
-  return '{"schemaVersion":' + CHECKPOINT_SCHEMA_VERSION + ',"data":' + JSON.stringify(normalized) + '}';
 }
 
 function digest(bytes) {
@@ -148,7 +214,7 @@ function openSqliteConstructor() {
   return DatabaseSync;
 }
 
-function createSchemaV2(db) {
+function createSchemaV3(db) {
   db.exec(`
     CREATE TABLE workflows (
       workflow_id TEXT PRIMARY KEY,
@@ -217,6 +283,7 @@ function createSchemaV2(db) {
       response_bytes BLOB NOT NULL,
       response_sha256 TEXT NOT NULL,
       next_checkpoint_json TEXT NOT NULL,
+      next_checkpoint_sha256 TEXT,
       created_at_ms INTEGER NOT NULL
     ) STRICT;
 
@@ -279,10 +346,10 @@ function appendMigrationEvent(db, workflowId, state, revision, occurredAtMs) {
   );
 }
 
-function migrateV1ToV2(db) {
-  inTransaction(db, 'migrateV1ToV2', () => {
+function migrateV1ToV3(db) {
+  inTransaction(db, 'migrateV1ToV3', () => {
     db.exec('ALTER TABLE workflows RENAME TO workflows_v1');
-    createSchemaV2(db);
+    createSchemaV3(db);
     const oldRows = db.prepare('SELECT * FROM workflows_v1 ORDER BY workflow_id').all();
     const insertWorkflow = db.prepare(`
       INSERT INTO workflows (
@@ -302,27 +369,46 @@ function migrateV1ToV2(db) {
       const createdAtMs = Number(row.created_at_ms);
       const updatedAtMs = Number(row.updated_at_ms);
       if (!STATES.has(state) || !Number.isSafeInteger(revision) || revision < 0) {
-        fail('migrateV1ToV2', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
       }
-      const oldPayload = typeof row.checkpoint_json === 'string' ? row.checkpoint_json : '{}';
+      if (
+        typeof row.checkpoint_json !== 'string'
+        || Buffer.byteLength(row.checkpoint_json, 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES
+      ) {
+        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+      }
       let parsed;
       try {
-        parsed = JSON.parse(oldPayload);
+        parsed = JSON.parse(row.checkpoint_json);
       } catch {
-        fail('migrateV1ToV2', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
       }
       if (!isRecord(parsed)) {
-        fail('migrateV1ToV2', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
       }
-      const envelope = '{"schemaVersion":2,"data":' + oldPayload + '}';
+      let checkpointPayload;
+      try {
+        checkpointPayload = serializeCheckpoint(parsed, 'migrateV1ToV3');
+      } catch {
+        fail('migrateV1ToV3', 'CHECKPOINT_CORRUPT', 'The legacy checkpoint cannot be migrated safely.');
+      }
       const created = Number.isSafeInteger(createdAtMs) ? createdAtMs : updatedAtMs;
       const updated = Number.isSafeInteger(updatedAtMs) ? updatedAtMs : created;
       insertWorkflow.run(workflowId, state, revision, created, updated);
-      insertCheckpoint.run(workflowId, CHECKPOINT_SCHEMA_VERSION, envelope, digest(envelope), revision, updated);
+      insertCheckpoint.run(workflowId, CHECKPOINT_SCHEMA_VERSION, checkpointPayload, digest(checkpointPayload), revision, updated);
       appendMigrationEvent(db, workflowId, state, revision, updated);
     }
     db.exec('DROP TABLE workflows_v1');
-    db.exec('PRAGMA user_version = 2');
+    db.exec('PRAGMA user_version = 3');
+  });
+}
+
+function migrateV2ToV3(db) {
+  inTransaction(db, 'migrateV2ToV3', () => {
+    // Existing receipts have no proof binding their proposed checkpoint bytes.
+    // Leave them NULL: they remain readable, but reconciliation fails closed.
+    db.exec('ALTER TABLE response_receipts ADD COLUMN next_checkpoint_sha256 TEXT');
+    db.exec('PRAGMA user_version = 3');
   });
 }
 
@@ -336,8 +422,8 @@ function initializeDatabase(db) {
       fail('initializeDatabase', 'UNVERSIONED_DATA', 'The durable store contains data without a supported schema version.');
     }
     inTransaction(db, 'initializeDatabase', () => {
-      createSchemaV2(db);
-      db.exec('PRAGMA user_version = 2');
+      createSchemaV3(db);
+      db.exec('PRAGMA user_version = 3');
     });
     return;
   }
@@ -346,7 +432,9 @@ function initializeDatabase(db) {
       "SELECT name FROM sqlite_master WHERE type='table' AND name='workflows'"
     ).get();
     if (!table) fail('initializeDatabase', 'CHECKPOINT_CORRUPT', 'The legacy workflow table is missing.');
-    migrateV1ToV2(db);
+    migrateV1ToV3(db);
+  } else if (version === 2) {
+    migrateV2ToV3(db);
   }
 }
 
@@ -576,7 +664,7 @@ export class DurableWorkflowStore {
   createWorkflow({ workflowId, checkpoint = {}, eventId } = {}) {
     const operation = 'createWorkflow';
     expectString(workflowId, 'workflowId', operation);
-    const payload = serializeCheckpoint(checkpoint);
+    const payload = serializeCheckpoint(checkpoint, operation);
     const createdAtMs = this.#now(operation);
     this.#assertOpen(operation);
     return inTransaction(this.#db, operation, () => {
@@ -634,12 +722,21 @@ export class DurableWorkflowStore {
       if (Number(row.schema_version) > CHECKPOINT_SCHEMA_VERSION) {
         fail(operation, 'UNSUPPORTED_SCHEMA_VERSION', 'The checkpoint schema is newer than this runtime supports.');
       }
-      const parsed = JSON.parse(row.payload_json);
-      if (parsed.schemaVersion !== CHECKPOINT_SCHEMA_VERSION || !isRecord(parsed.data)) {
+      if (
+        typeof row.payload_json !== 'string'
+        || Buffer.byteLength(row.payload_json, 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES
+        || digest(row.payload_json) !== row.sha256
+      ) {
+        fail(operation, 'CHECKPOINT_CORRUPT', 'The latest workflow checkpoint failed its integrity check.');
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(row.payload_json);
+      } catch {
         fail(operation, 'CHECKPOINT_CORRUPT', 'The latest workflow checkpoint is invalid.');
       }
-      if (digest(row.payload_json) !== row.sha256) {
-        fail(operation, 'CHECKPOINT_CORRUPT', 'The latest workflow checkpoint failed its integrity check.');
+      if (parsed.schemaVersion !== CHECKPOINT_SCHEMA_VERSION || !isRecord(parsed.data)) {
+        fail(operation, 'CHECKPOINT_CORRUPT', 'The latest workflow checkpoint is invalid.');
       }
       return {
         workflowId,
@@ -1023,8 +1120,9 @@ export class DurableWorkflowStore {
       fail(operation, 'INVALID_INPUT', 'The response and artifact content must be supplied as bytes.');
     }
     const bytes = Buffer.from(responseBytes);
-    const checkpointJson = serializeCheckpoint(nextCheckpoint);
+    const checkpointJson = serializeCheckpoint(nextCheckpoint, operation);
     const responseSha256 = digest(bytes);
+    const checkpointSha256 = digest(checkpointJson);
     this.#assertOpen(operation);
     return inTransaction(this.#db, operation, () => {
       const row = this.#workflow(workflowId, operation);
@@ -1050,9 +1148,9 @@ export class DurableWorkflowStore {
       this.#db.prepare(`
         INSERT INTO response_receipts (
           receipt_id, attempt_id, outcome, next_state, response_bytes, response_sha256,
-          next_checkpoint_json, created_at_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(receiptId, attemptId, outcome, nextState, bytes, responseSha256, checkpointJson, now);
+          next_checkpoint_json, next_checkpoint_sha256, created_at_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(receiptId, attemptId, outcome, nextState, bytes, responseSha256, checkpointJson, checkpointSha256, now);
       this.#db.prepare(`
         UPDATE operation_attempts SET state = 'response_received', updated_at_ms = ? WHERE attempt_id = ?
       `).run(now, attemptId);
@@ -1145,13 +1243,21 @@ export class DurableWorkflowStore {
         if (digest(Buffer.from(receipt.response_bytes)) !== receipt.response_sha256) {
           fail(operation, 'CHECKPOINT_CORRUPT', 'A durable response failed its integrity check.');
         }
+        if (
+          typeof receipt.next_checkpoint_json !== 'string'
+          || typeof receipt.next_checkpoint_sha256 !== 'string'
+          || Buffer.byteLength(receipt.next_checkpoint_json, 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES
+          || digest(receipt.next_checkpoint_json) !== receipt.next_checkpoint_sha256
+        ) {
+          fail(operation, 'CHECKPOINT_CORRUPT', 'A durable response checkpoint failed its integrity check.');
+        }
         let envelope;
         try {
           envelope = JSON.parse(receipt.next_checkpoint_json);
         } catch {
           fail(operation, 'CHECKPOINT_CORRUPT', 'A durable response checkpoint is invalid.');
         }
-        if (envelope.schemaVersion !== CHECKPOINT_SCHEMA_VERSION || !isRecord(envelope.data)) {
+        if (envelope?.schemaVersion !== CHECKPOINT_SCHEMA_VERSION || !isRecord(envelope?.data)) {
           fail(operation, 'UNSUPPORTED_SCHEMA_VERSION', 'A durable response checkpoint has an unsupported schema.');
         }
         const nextSequence = sequence + 1;
@@ -1169,7 +1275,7 @@ export class DurableWorkflowStore {
           INSERT INTO workflow_checkpoints (
             workflow_id, sequence, schema_version, payload_json, sha256, revision, created_at_ms
           ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(workflowId, nextSequence, CHECKPOINT_SCHEMA_VERSION, checkpointJson, digest(checkpointJson), nextRevision, now);
+        `).run(workflowId, nextSequence, CHECKPOINT_SCHEMA_VERSION, checkpointJson, receipt.next_checkpoint_sha256, nextRevision, now);
         this.#db.prepare(`
           UPDATE operation_attempts SET state = 'reconciled', updated_at_ms = ? WHERE attempt_id = ?
         `).run(now, receipt.attempt_id);

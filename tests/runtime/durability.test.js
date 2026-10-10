@@ -74,6 +74,55 @@ function assertRuntimeCode(action, expectedCode) {
   assert.throws(action, error => error instanceof RuntimeError && error.code === expectedCode);
 }
 
+function invalidCheckpointCases() {
+  const deep = {};
+  let cursor = deep;
+  for (let index = 0; index < 10_000; index += 1) {
+    cursor.next = {};
+    cursor = cursor.next;
+  }
+  const wide = Object.fromEntries(Array.from({ length: 10_001 }, (_, index) => ['field-' + index, index]));
+  const oversized = { payload: '\u0000'.repeat(200_000) };
+  const privateMarker = 'SYNTHETIC_PRIVATE_MARKER';
+  let accessorCalls = 0;
+  const accessor = Object.defineProperty({}, 'private_value', {
+    enumerable: true,
+    get() {
+      accessorCalls += 1;
+      throw new Error(privateMarker);
+    }
+  });
+  const unexpected = new Proxy({}, {
+    ownKeys() {
+      throw new Error(privateMarker);
+    }
+  });
+  return {
+    privateMarker,
+    accessorCalls: () => accessorCalls,
+    cases: [
+      ['deep', deep],
+      ['wide', wide],
+      ['serialized-size', oversized],
+      ['accessor', accessor],
+      ['unexpected', unexpected]
+    ]
+  };
+}
+
+function assertSafeCheckpointFailure(action, operation, privateMarker) {
+  assert.throws(action, error => {
+    assert.ok(error instanceof RuntimeError);
+    assert.equal(error.operation, operation);
+    assert.equal(error.code, 'INVALID_INPUT');
+    assert.match(error.safe_message, /supported size and structure limits/);
+    assert.equal(error.message, error.safe_message);
+    assert.ok(!error.safe_message.includes(privateMarker));
+    assert.ok(!JSON.stringify(error.toJSON()).includes(privateMarker));
+    return true;
+  });
+}
+
 test('response receipt survives process exit before checkpoint and reconciles after restart', async t => {
   const temporary = temporaryDatabase();
   t.after(() => temporary.cleanup());
@@ -210,6 +259,55 @@ test('checkpoint serialization preserves prototype-named JSON keys through recei
   assert.equal(Object.hasOwn({}, 'preserve'), false);
 });
 
+test('checkpoint normalization is bounded, accessor-safe, and typed on both write paths', t => {
+  const temporary = temporaryDatabase();
+  t.after(() => temporary.cleanup());
+  const store = openStore(temporary.databasePath, () => 1000);
+  t.after(() => store.close());
+  const invalid = invalidCheckpointCases();
+  store.createWorkflow({ workflowId: 'checkpoint-input-baseline', eventId: 'checkpoint-input-baseline-event' });
+  const baselineEvents = store.listEvents();
+  const baselineOutbox = store.readOutbox();
+
+  for (const [name, checkpoint] of invalid.cases) {
+    assertSafeCheckpointFailure(() => store.createWorkflow({
+      workflowId: 'invalid-initial-' + name,
+      checkpoint,
+      eventId: 'invalid-initial-event-' + name
+    }), 'createWorkflow', invalid.privateMarker);
+    assertRuntimeCode(() => store.getWorkflow('invalid-initial-' + name), 'WORKFLOW_NOT_FOUND');
+    assert.deepEqual(store.listEvents(), baselineEvents, name);
+    assert.deepEqual(store.readOutbox(), baselineOutbox, name);
+  }
+  assert.equal(invalid.accessorCalls(), 0);
+
+  const lease = createRunningWorkflow(store, 'checkpoint-receipt-input-run');
+  const intent = recordIntent(store, lease, { attemptId: 'checkpoint-receipt-input-attempt' });
+  const beforeReceiptEvents = store.listEvents({ workflowId: 'checkpoint-receipt-input-run' });
+  const beforeReceiptOutbox = store.readOutbox();
+  for (const [name, checkpoint] of invalid.cases) {
+    assertSafeCheckpointFailure(() => store.recordResponseReceipt({
+      ...lease,
+      expectedRevision: intent.revision,
+      attemptId: 'checkpoint-receipt-input-attempt',
+      receiptId: 'invalid-receipt-' + name,
+      outcome: 'completed',
+      nextState: 'running',
+      responseBytes: Buffer.from('safe-response-fixture'),
+      nextCheckpoint: checkpoint,
+      artifacts: [{ artifactId: 'invalid-artifact-' + name, bytes: Buffer.from('must-not-persist') }],
+      eventId: 'invalid-receipt-event-' + name
+    }), 'recordResponseReceipt', invalid.privateMarker);
+    assert.equal(store.getWorkflow('checkpoint-receipt-input-run').revision, intent.revision);
+    assert.equal(store.getAttempt('checkpoint-receipt-input-attempt').state, 'intent');
+    assert.deepEqual(store.listEvents({ workflowId: 'checkpoint-receipt-input-run' }), beforeReceiptEvents, name);
+    assert.deepEqual(store.readOutbox(), beforeReceiptOutbox, name);
+    assertRuntimeCode(() => store.getReceipt('checkpoint-receipt-input-attempt'), 'ATTEMPT_NOT_FOUND');
+    assertRuntimeCode(() => store.getArtifact('checkpoint-receipt-input-run', 'invalid-artifact-' + name), 'ARTIFACT_NOT_FOUND');
+  }
+  assert.equal(invalid.accessorCalls(), 0);
+});
+
 test('recovery rejects a corrupted receipt without advancing checkpoint or attempt state', t => {
   const temporary = temporaryDatabase();
   t.after(() => temporary.cleanup());
@@ -252,6 +350,67 @@ test('recovery rejects a corrupted receipt without advancing checkpoint or attem
   assert.equal(recoveredStore.getCheckpoint('corrupt-receipt-run').sequence, 1);
   assert.equal(recoveredStore.getAttempt('corrupt-receipt-attempt').state, 'response_received');
   assert.deepEqual(recoveredStore.listEvents({ workflowId: 'corrupt-receipt-run' }), events);
+});
+
+test('recovery rejects a valid-JSON receipt checkpoint changed after restart', t => {
+  const temporary = temporaryDatabase();
+  t.after(() => temporary.cleanup());
+  const store = openStore(temporary.databasePath, () => 1000);
+  const lease = createRunningWorkflow(store, 'receipt-checkpoint-corrupt-run', 10_000);
+  const intent = recordIntent(store, lease, {
+    attemptId: 'receipt-checkpoint-corrupt-attempt',
+    logicalOperationRef: 'receipt-checkpoint-corrupt-operation',
+    authorityHoldRef: 'opaque-receipt-checkpoint-hold'
+  });
+  const receipt = store.recordResponseReceipt({
+    ...lease,
+    expectedRevision: intent.revision,
+    attemptId: 'receipt-checkpoint-corrupt-attempt',
+    receiptId: 'receipt-checkpoint-corrupt-id',
+    outcome: 'completed',
+    nextState: 'running',
+    responseBytes: Buffer.from('unchanged-response-bytes'),
+    nextCheckpoint: { artifact_version_ref: 'original-v1', approval_binding_hash: 'original-hash' },
+    eventId: 'receipt-checkpoint-corrupt-event'
+  });
+  store.close();
+
+  const tamper = new DatabaseSync(temporary.databasePath);
+  tamper.exec('DROP TRIGGER response_receipts_no_update');
+  const persistedReceipt = tamper.prepare('SELECT next_checkpoint_json, next_checkpoint_sha256 FROM response_receipts WHERE receipt_id = ?')
+    .get('receipt-checkpoint-corrupt-id');
+  assert.equal(persistedReceipt.next_checkpoint_sha256, sha256(Buffer.from(persistedReceipt.next_checkpoint_json)));
+  tamper.prepare('UPDATE response_receipts SET next_checkpoint_json = ? WHERE receipt_id = ?')
+    .run(JSON.stringify({
+      schemaVersion: 2,
+      data: { artifact_version_ref: 'altered-v2', approval_binding_hash: 'altered-hash' }
+    }), 'receipt-checkpoint-corrupt-id');
+  tamper.close();
+
+  const recovered = openStore(temporary.databasePath, () => 1000);
+  t.after(() => recovered.close());
+  const before = {
+    workflow: recovered.getWorkflow('receipt-checkpoint-corrupt-run'),
+    checkpoint: recovered.getCheckpoint('receipt-checkpoint-corrupt-run'),
+    attempt: recovered.getAttempt('receipt-checkpoint-corrupt-attempt'),
+    events: recovered.listEvents({ workflowId: 'receipt-checkpoint-corrupt-run' }),
+    outbox: recovered.readOutbox()
+  };
+  assertRuntimeCode(() => recovered.reconcilePendingReceipts({
+    ...lease,
+    expectedRevision: receipt.revision,
+    eventIdPrefix: 'receipt-checkpoint-corrupt-reconcile'
+  }), 'CHECKPOINT_CORRUPT');
+  assert.deepEqual({
+    workflow: recovered.getWorkflow('receipt-checkpoint-corrupt-run'),
+    checkpoint: recovered.getCheckpoint('receipt-checkpoint-corrupt-run'),
+    attempt: recovered.getAttempt('receipt-checkpoint-corrupt-attempt'),
+    events: recovered.listEvents({ workflowId: 'receipt-checkpoint-corrupt-run' }),
+    outbox: recovered.readOutbox()
+  }, before);
+  assert.equal(before.workflow.revision, receipt.revision);
+  assert.equal(before.checkpoint.sequence, 1);
+  assert.equal(before.attempt.state, 'response_received');
 });
 
 test('expired lease fences stale writers and lease fencing retains holds', t => {
@@ -987,7 +1146,7 @@ test('v1 checkpoint migration preserves data and identifiers', t => {
     'SELECT created_at_ms, updated_at_ms FROM workflows WHERE workflow_id = ?'
   ).get('legacy-workflow-7');
   assert.deepEqual({ ...timestamps }, { created_at_ms: 111, updated_at_ms: 222 });
-  assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 2);
+  assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 3);
   migrated.close();
 });
 
@@ -1012,6 +1171,106 @@ test('invalid v1 checkpoint migration rolls back every schema and row change', t
     { workflow_id: 'z-invalid', checkpoint_json: '{broken-json' }
   ]);
   unchanged.close();
+});
+
+test('v1 migration rejects mixed BLOB and numeric checkpoints without changing rows or schema', t => {
+  const invalidValues = [
+    ['blob', Buffer.from('{"artifact_version_ref":"preserve-this-bytes"}')],
+    ['integer', 73]
+  ];
+  for (const [label, invalidCheckpoint] of invalidValues) {
+    const temporary = temporaryDatabase('legacy-checkpoint-' + label + '-');
+    t.after(() => temporary.cleanup());
+    const legacy = new DatabaseSync(temporary.databasePath);
+    legacy.exec('CREATE TABLE workflows (workflow_id TEXT PRIMARY KEY, state TEXT NOT NULL, revision INTEGER NOT NULL, checkpoint_json TEXT NOT NULL, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL);');
+    const insert = legacy.prepare('INSERT INTO workflows VALUES (?, ?, ?, ?, ?, ?)');
+    insert.run('a-valid', 'running', 1, '{"step":"valid-first-row"}', 100, 101);
+    insert.run('z-invalid', 'running', 2, invalidCheckpoint, 200, 201);
+    legacy.exec('PRAGMA user_version = 1');
+    const before = {
+      objects: legacy.prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name').all().map(row => ({ ...row })),
+      rows: legacy.prepare(`
+        SELECT workflow_id, typeof(checkpoint_json) AS storage_type,
+          quote(checkpoint_json) AS quoted_value,
+          hex(CAST(checkpoint_json AS BLOB)) AS bytes_hex
+        FROM workflows ORDER BY workflow_id
+      `).all().map(row => ({ ...row }))
+    };
+    legacy.close();
+
+    assertRuntimeCode(() => openStore(temporary.databasePath, () => 1000), 'CHECKPOINT_CORRUPT');
+    const unchanged = new DatabaseSync(temporary.databasePath, { readOnly: true });
+    assert.equal(unchanged.prepare('PRAGMA user_version').get().user_version, 1, label);
+    assert.deepEqual(unchanged.prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name').all().map(row => ({ ...row })), before.objects, label);
+    assert.deepEqual(unchanged.prepare(`
+      SELECT workflow_id, typeof(checkpoint_json) AS storage_type,
+        quote(checkpoint_json) AS quoted_value,
+        hex(CAST(checkpoint_json AS BLOB)) AS bytes_hex
+      FROM workflows ORDER BY workflow_id
+    `).all().map(row => ({ ...row })), before.rows, label);
+    assert.equal(unchanged.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='workflow_checkpoints'").get().count, 0, label);
+    assert.equal(unchanged.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='workflow_events'").get().count, 0, label);
+    unchanged.close();
+  }
+});
+
+test('v2 receipts without checkpoint integrity evidence migrate but cannot reconcile', t => {
+  const temporary = temporaryDatabase();
+  t.after(() => temporary.cleanup());
+  const first = openStore(temporary.databasePath, () => 1000);
+  const lease = createRunningWorkflow(first, 'legacy-receipt-run', 10_000);
+  const intent = recordIntent(first, lease, {
+    attemptId: 'legacy-receipt-attempt',
+    logicalOperationRef: 'legacy-receipt-operation',
+    authorityHoldRef: 'opaque-legacy-receipt-hold'
+  });
+  const receipt = first.recordResponseReceipt({
+    ...lease,
+    expectedRevision: intent.revision,
+    attemptId: 'legacy-receipt-attempt',
+    receiptId: 'legacy-receipt-id',
+    outcome: 'completed',
+    nextState: 'running',
+    responseBytes: Buffer.from('legacy-response-bytes'),
+    nextCheckpoint: { step: 'old-format-pending' },
+    eventId: 'legacy-receipt-event'
+  });
+  first.close();
+
+  const oldFormat = new DatabaseSync(temporary.databasePath);
+  oldFormat.exec('ALTER TABLE response_receipts DROP COLUMN next_checkpoint_sha256; PRAGMA user_version = 2;');
+  oldFormat.close();
+
+  const migrated = openStore(temporary.databasePath, () => 1000);
+  t.after(() => migrated.close());
+  const raw = new DatabaseSync(temporary.databasePath, { readOnly: true });
+  assert.equal(raw.prepare('PRAGMA user_version').get().user_version, 3);
+  const migratedReceipt = raw.prepare('SELECT next_checkpoint_json, next_checkpoint_sha256 FROM response_receipts WHERE receipt_id = ?').get('legacy-receipt-id');
+  assert.equal(migratedReceipt.next_checkpoint_json, '{"schemaVersion":2,"data":{"step":"old-format-pending"}}');
+  assert.equal(migratedReceipt.next_checkpoint_sha256, null);
+  raw.close();
+
+  const before = {
+    workflow: migrated.getWorkflow('legacy-receipt-run'),
+    checkpoint: migrated.getCheckpoint('legacy-receipt-run'),
+    attempt: migrated.getAttempt('legacy-receipt-attempt'),
+    events: migrated.listEvents({ workflowId: 'legacy-receipt-run' }),
+    outbox: migrated.readOutbox()
+  };
+  assertRuntimeCode(() => migrated.reconcilePendingReceipts({
+    ...lease,
+    expectedRevision: receipt.revision,
+    eventIdPrefix: 'legacy-receipt-reconcile'
+  }), 'CHECKPOINT_CORRUPT');
+  assert.deepEqual({
+    workflow: migrated.getWorkflow('legacy-receipt-run'),
+    checkpoint: migrated.getCheckpoint('legacy-receipt-run'),
+    attempt: migrated.getAttempt('legacy-receipt-attempt'),
+    events: migrated.listEvents({ workflowId: 'legacy-receipt-run' }),
+    outbox: migrated.readOutbox()
+  }, before);
+  assert.equal(before.checkpoint.sequence, 1);
+  assert.equal(before.attempt.state, 'response_received');
 });
 
 test('future schema is rejected without writes or memory fallback', t => {

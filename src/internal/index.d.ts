@@ -90,7 +90,7 @@ export interface RuntimeConfig {
 export function parseRuntimeConfig(env: Record<string, string | undefined>): RuntimeConfig;
 export function assertExecutionModeAvailable(config: RuntimeConfig): true;
 
-export const INTERNAL_SCHEMA_VERSION: 2;
+export const INTERNAL_SCHEMA_VERSION: 3;
 export interface StoreOptions {
   databasePath: string;
   clock?: () => number;
