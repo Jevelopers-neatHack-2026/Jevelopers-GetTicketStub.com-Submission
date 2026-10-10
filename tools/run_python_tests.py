@@ -40,7 +40,12 @@ def _base_summary(case_name: str, expected: int = 0) -> dict[str, object]:
         "failed_cases": 0,
         "error_cases": 0,
         "runner_errors": 0,
+        "runner_skips": 0,
         "skipped_cases": 0,
+        "skip_events": 0,
+        "subtest_skip_events": 0,
+        "subtest_failure_events": 0,
+        "subtest_error_events": 0,
         "incomplete_cases": 0,
         "expected_failure_cases": 0,
         "unexpected_success_cases": 0,
@@ -51,31 +56,36 @@ def _base_summary(case_name: str, expected: int = 0) -> dict[str, object]:
 
 
 class CountingTextTestResult(unittest.TextTestResult):
-    """Count each started unittest case once, including cases with subtests."""
+    """Track per-case outcomes and fixture/subtest result events."""
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
-        self.case_outcomes: list[str] = []
+        self.case_outcomes: list[set[str]] = []
         self._active_case_index: int | None = None
+        self._active_test: unittest.case.TestCase | None = None
         self.runner_errors = 0
+        self.runner_skips = 0
+        self.subtest_skip_events = 0
+        self.subtest_failure_events = 0
+        self.subtest_error_events = 0
 
     def startTest(self, test: unittest.case.TestCase) -> None:
         super().startTest(test)
-        self.case_outcomes.append("running")
+        self.case_outcomes.append(set())
         self._active_case_index = len(self.case_outcomes) - 1
+        self._active_test = test
 
     def stopTest(self, test: unittest.case.TestCase) -> None:
         try:
             super().stopTest(test)
         finally:
             self._active_case_index = None
+            self._active_test = None
 
     def _mark(self, outcome: str) -> None:
         if self._active_case_index is None:
             return
-        current = self.case_outcomes[self._active_case_index]
-        if current in {"running", "passed"}:
-            self.case_outcomes[self._active_case_index] = outcome
+        self.case_outcomes[self._active_case_index].add(outcome)
 
     def addSuccess(self, test: unittest.case.TestCase) -> None:
         self._mark("passed")
@@ -93,7 +103,13 @@ class CountingTextTestResult(unittest.TextTestResult):
         super().addError(test, err)
 
     def addSkip(self, test: unittest.case.TestCase, reason: str) -> None:
-        self._mark("skipped")
+        if self._active_case_index is None:
+            self.runner_skips += 1
+        elif test is self._active_test:
+            self._mark("case_skipped")
+        else:
+            self.subtest_skip_events += 1
+            self._mark("subtest_skipped")
         super().addSkip(test, reason)
 
     def addExpectedFailure(self, test: unittest.case.TestCase, err: object) -> None:
@@ -116,7 +132,12 @@ class CountingTextTestResult(unittest.TextTestResult):
                 is_failure = issubclass(error_type, test.failureException)
             except TypeError:
                 is_failure = False
-            self._mark("failure" if is_failure else "error")
+            if is_failure:
+                self.subtest_failure_events += 1
+                self._mark("failure")
+            else:
+                self.subtest_error_events += 1
+                self._mark("error")
         super().addSubTest(test, subtest, err)
 
 
@@ -126,14 +147,41 @@ def summarize_result(
     result: unittest.TestResult,
 ) -> dict[str, object]:
     outcomes = getattr(result, "case_outcomes", [])
-    skipped = outcomes.count("skipped")
-    failed = outcomes.count("failure") + outcomes.count("error")
-    expected_failures = outcomes.count("expected_failure")
-    unexpected_successes = outcomes.count("unexpected_success")
+    skipped = sum("case_skipped" in outcome for outcome in outcomes)
+    failed = sum(bool(outcome & {"failure", "error"}) for outcome in outcomes)
+    error_cases = sum("error" in outcome for outcome in outcomes)
+    expected_failures = sum("expected_failure" in outcome for outcome in outcomes)
+    unexpected_successes = sum("unexpected_success" in outcome for outcome in outcomes)
     executed = len(outcomes) - skipped
-    passed = outcomes.count("passed")
-    incomplete = outcomes.count("running")
+    passed = sum(
+        "passed" in outcome
+        and outcome.isdisjoint(
+            {
+                "failure",
+                "error",
+                "case_skipped",
+                "subtest_skipped",
+                "expected_failure",
+                "unexpected_success",
+            }
+        )
+        for outcome in outcomes
+    )
+    terminal_events = {
+        "passed",
+        "failure",
+        "error",
+        "case_skipped",
+        "expected_failure",
+        "unexpected_success",
+    }
+    incomplete = sum(outcome.isdisjoint(terminal_events) for outcome in outcomes)
     runner_errors = getattr(result, "runner_errors", 0)
+    runner_skips = getattr(result, "runner_skips", 0)
+    subtest_skip_events = getattr(result, "subtest_skip_events", 0)
+    subtest_failure_events = getattr(result, "subtest_failure_events", 0)
+    subtest_error_events = getattr(result, "subtest_error_events", 0)
+    skip_events = len(getattr(result, "skipped", ()))
 
     passed_all = (
         expected > 0
@@ -144,6 +192,9 @@ def summarize_result(
         and incomplete == 0
         and failed == 0
         and skipped == 0
+        and skip_events == 0
+        and runner_skips == 0
+        and subtest_skip_events == 0
         and expected_failures == 0
         and unexpected_successes == 0
         and runner_errors == 0
@@ -157,9 +208,14 @@ def summarize_result(
             "executed_cases": executed,
             "passed_cases": passed,
             "failed_cases": failed,
-            "error_cases": outcomes.count("error"),
+            "error_cases": error_cases,
             "runner_errors": runner_errors,
+            "runner_skips": runner_skips,
             "skipped_cases": skipped,
+            "skip_events": skip_events,
+            "subtest_skip_events": subtest_skip_events,
+            "subtest_failure_events": subtest_failure_events,
+            "subtest_error_events": subtest_error_events,
             "incomplete_cases": incomplete,
             "expected_failure_cases": expected_failures,
             "unexpected_success_cases": unexpected_successes,
@@ -167,12 +223,14 @@ def summarize_result(
     )
     if expected == 0:
         summary["reason"] = "no tests were collected"
-    elif executed == 0:
-        summary["reason"] = "no tests executed"
+    elif skip_events:
+        summary["reason"] = "tests or unittest setup/teardown hooks were skipped"
     elif runner_errors:
         summary["reason"] = "unittest setup or teardown failed outside a test case"
     elif incomplete:
         summary["reason"] = "some tests did not report a terminal result"
+    elif executed == 0:
+        summary["reason"] = "no tests executed"
     elif not passed_all:
         summary["reason"] = "tests failed, were skipped, or did not all execute"
     return summary
