@@ -102,8 +102,18 @@ def make_pdf_fixtures() -> None:
     mixed.drawString(48, 720, "Text layer is partial")
     with tempfile.TemporaryDirectory(prefix="ei-pdf-mixed-") as temp:
         image_path = Path(temp) / "raster.png"
-        Image.new("RGB", (160, 80), "white").save(image_path, format="PNG")
-        mixed.drawImage(str(image_path), 48, 590, width=160, height=80)
+        image = Image.new("RGB", (600, 240), "white")
+        draw = ImageDraw.Draw(image)
+        title_font = ImageFont.truetype(str(FONT_PATH), 28)
+        detail_font = ImageFont.truetype(str(FONT_PATH), 22)
+        draw.rectangle((8, 8, 592, 232), outline="#254c77", width=4)
+        draw.rectangle((14, 14, 586, 68), fill="#dceaf7")
+        draw.text((28, 25), "RASTER-ONLY EVENT POSTER", fill="#102a43", font=title_font)
+        draw.line((28, 88, 570, 88), fill="#39739e", width=3)
+        draw.text((28, 108), "Doors: 19:30 / River Hall", fill="#202124", font=detail_font)
+        draw.text((28, 158), "Entry B - Saturday 18 October", fill="#202124", font=detail_font)
+        image.save(image_path, format="PNG", optimize=False)
+        mixed.drawImage(str(image_path), 48, 520, width=500, height=200)
     mixed.save()
 
     encrypted_source = ROOT / "text-multipage.pdf"

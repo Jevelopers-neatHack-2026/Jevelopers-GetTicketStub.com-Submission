@@ -128,7 +128,13 @@ test("empty, scanned, and mixed pages stay explicitly incomplete and require ins
   assert.equal(mixed.completeness, "incomplete-text-only");
   assert.equal(mixed.pages[0].textPresence, "text-present");
   assert.equal(mixed.pages[0].requiresInspection, true);
-  assert.equal(mixed.pages[0].textBoxes[0].text, "Text layer is partial");
+  const mixedTexts = mixed.pages[0].textBoxes.map((box) => box.text);
+  assert.deepEqual(mixedTexts, ["Text layer is partial"]);
+  assert.equal(
+    mixedTexts.some((text) => text.includes("RASTER-ONLY EVENT POSTER")),
+    false,
+  );
+  assert.equal(mixedTexts.some((text) => text.includes("Doors: 19:30 / River Hall")), false);
 });
 
 test("compressed text expansion above the declared text ceiling is rejected atomically", async () => {
