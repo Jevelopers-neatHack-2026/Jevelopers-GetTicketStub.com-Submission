@@ -153,6 +153,123 @@ test("parses XHTML with XML self-closing, CDATA, entity, and UTF-8 source semant
   assertExactRanges(result, input.bytes);
 });
 
+test("tracks empty, adjacent, chunked, and flushed XHTML CDATA content with source semantics", async () => {
+  const emptyAtStart = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p><![CDATA[]]>Cancelled event</p></body></html>',
+  ), "application/xhtml+xml");
+  const emptyStartResult = await extractDeterministically(emptyAtStart);
+  assert.equal(emptyStartResult.statusMentions.length, 1);
+  assert.equal(emptyStartResult.statusMentions[0].normalizedValue, "Cancelled event");
+  assert.equal(emptyStartResult.statusMentions[0].rawValue, "Cancelled event");
+  assertExactRanges(emptyStartResult, emptyAtStart.bytes);
+
+  const emptyBeforeNotice = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Before <![CDATA[]]>Cancelled event</p></body></html>',
+  ), "application/xhtml+xml");
+  const emptyResult = await extractDeterministically(emptyBeforeNotice);
+  assert.equal(emptyResult.statusMentions.length, 1);
+  assert.equal(emptyResult.statusMentions[0].normalizedValue, "Before Cancelled event");
+  assert.equal(emptyResult.statusMentions[0].rawValue, "Before <![CDATA[]]>Cancelled event");
+  assertExactRanges(emptyResult, emptyBeforeNotice.bytes);
+
+  const emptyThenNonemptyCdata = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p><![CDATA[]]><![CDATA[Cancelled event]]></p></body></html>',
+  ), "application/xhtml+xml");
+  const emptyThenCdataResult = await extractDeterministically(emptyThenNonemptyCdata);
+  assert.equal(emptyThenCdataResult.statusMentions.length, 1);
+  assert.equal(emptyThenCdataResult.statusMentions[0].normalizedValue, "Cancelled event");
+  assert.equal(emptyThenCdataResult.statusMentions[0].rawValue, "Cancelled event");
+  assertExactRanges(emptyThenCdataResult, emptyThenNonemptyCdata.bytes);
+
+  const adjacent = document(Buffer.from(
+    '\uFEFF<?xml version="1.0" encoding="UTF-8"?>\r\n'
+    + '<html xmlns="http://www.w3.org/1999/xhtml"><body><p><![CDATA[Before 😊]]><![CDATA[]]><![CDATA[ Cancelled event]]></p></body></html>',
+  ), "application/xhtml+xml");
+  const adjacentResult = await extractDeterministically(adjacent, { limits: { htmlChunkCodeUnits: 257 } });
+  assert.equal(adjacentResult.statusMentions.length, 1);
+  assert.equal(adjacentResult.statusMentions[0].normalizedValue, "Before 😊 Cancelled event");
+  assert.equal(adjacentResult.statusMentions[0].rawValue, "Before 😊]]><![CDATA[]]><![CDATA[ Cancelled event");
+  assertExactRanges(adjacentResult, adjacent.bytes);
+
+  const chunkSize = 257;
+  const boundaryPrefix = '<html xmlns="http://www.w3.org/1999/xhtml"><body><p><![CDATA[';
+  const boundaryPayload = "x".repeat(chunkSize - boundaryPrefix.length - 1) + "😊" + "y".repeat(20_000) + " Cancelled event";
+  const boundaryInput = document(Buffer.from(`${boundaryPrefix}${boundaryPayload}]]></p></body></html>`), "application/xhtml+xml");
+  const boundaryResult = await extractDeterministically(boundaryInput, { limits: { htmlChunkCodeUnits: chunkSize } });
+  assert.equal(boundaryResult.statusMentions.length, 1);
+  assert.equal(boundaryResult.statusMentions[0].normalizedValue, boundaryPayload);
+  assert.equal(boundaryResult.statusMentions[0].rawValue, boundaryPayload);
+  assertExactRanges(boundaryResult, boundaryInput.bytes);
+
+  const longText = "x".repeat(100_000);
+  const longCdata = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p><![CDATA['
+    + longText + " Cancelled event]]></p></body></html>",
+  ), "application/xhtml+xml");
+  const longResult = await extractDeterministically(longCdata);
+  assert.equal(longResult.status, "PARTIAL");
+  assert.equal(longResult.statusMentions.length, 1);
+  assert.equal(longResult.statusMentions[0].normalizedValue, `${longText} Cancelled event`);
+  assert.equal(longResult.statusMentions[0].rawValue, `${longText} Cancelled event`);
+  assertExactRanges(longResult, longCdata.bytes);
+
+  const longDescription = "x".repeat(100_000);
+  const longJsonCdata = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head><script type="application/ld+json"><![CDATA['
+    + JSON.stringify({ "@type": "Event", name: "Long XHTML JSON", description: longDescription })
+    + ']]></script></head><body><p>Cancelled after long JSON.</p></body></html>',
+  ), "application/xhtml+xml");
+  const longJsonResult = await extractDeterministically(longJsonCdata);
+  assert.equal(longJsonResult.events.length, 1);
+  assert.equal(longJsonResult.events[0].candidates.find((candidate) => candidate.field === "description").normalizedValue, longDescription);
+  assert.deepEqual(longJsonResult.jsonLdBlocks.map((block) => block.status), ["parsed"]);
+  assert.ok(longJsonResult.statusMentions.some((candidate) => /Cancelled after long JSON/.test(candidate.normalizedValue)));
+  assertExactRanges(longJsonResult, longJsonCdata.bytes);
+});
+
+test("parses XML-decoded XHTML JSON-LD while mapping candidates to original source bytes", async () => {
+  const input = document(Buffer.from(
+    '\uFEFF<?xml version="1.0" encoding="UTF-8"?>\r\n'
+    + '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+    + '<script type="application/ld+json">\r\n'
+    + '{"@type":"Event","name":"Rock &amp; Roll","description":"Café &amp; tea &#x1F37A;"}'
+    + '</script>'
+    + '<script type="application/ld+json">{&quot;@type&quot;:&quot;Event&quot;,&quot;name&quot;:&quot;Entity Punctuation&quot;}</script>'
+    + '<script type="application/ld+json"><![CDATA[{"@type":"Event","name":"Split ]]><![CDATA[CDATA"}]]></script>'
+    + '<script type="application/ld+json">{"@type":"Event","name":"Rock &amp; <![CDATA[Roll]]>","description":"The \\&quot;Show\\&quot;"}</script>'
+    + '</head><body><p>Visible café copy.</p></body></html>',
+  ), "application/xhtml+xml");
+  const result = await extractDeterministically(input);
+  const names = result.events.map((event) => event.candidates.find((candidate) => candidate.field === "name"));
+  assert.deepEqual(names.map((candidate) => candidate.normalizedValue), [
+    "Rock & Roll",
+    "Entity Punctuation",
+    "Split CDATA",
+    "Rock & Roll",
+  ]);
+  assert.equal(names[0].rawValue, '"Rock &amp; Roll"');
+  assert.equal(names[1].rawValue, "&quot;Entity Punctuation&quot;");
+  assert.equal(names[2].rawValue, '"Split ]]><![CDATA[CDATA"');
+  assert.equal(names[3].rawValue, '"Rock &amp; <![CDATA[Roll]]>"');
+  const firstDescription = result.events[0].candidates.find((candidate) => candidate.field === "description");
+  assert.equal(firstDescription.normalizedValue, "Café & tea 🍺");
+  assert.equal(firstDescription.rawValue, '"Café &amp; tea &#x1F37A;"');
+  const quotedDescription = result.events[3].candidates.find((candidate) => candidate.field === "description");
+  assert.equal(quotedDescription.normalizedValue, 'The "Show"');
+  assert.equal(quotedDescription.rawValue, '"The \\&quot;Show\\&quot;"');
+  const rawEventSource = (event) => {
+    const { startByte, endByte } = event.source.locator;
+    return input.bytes.subarray(startByte, endByte).toString("utf8");
+  };
+  assert.equal(rawEventSource(result.events[1]), '{&quot;@type&quot;:&quot;Event&quot;,&quot;name&quot;:&quot;Entity Punctuation&quot;}');
+  assert.equal(rawEventSource(result.events[2]), '{"@type":"Event","name":"Split ]]><![CDATA[CDATA"}');
+  assert.equal(rawEventSource(result.events[3]), '{"@type":"Event","name":"Rock &amp; <![CDATA[Roll]]>","description":"The \\&quot;Show\\&quot;"}');
+  assert.equal(result.jsonLdBlocks.length, 4);
+  assert.ok(result.jsonLdBlocks.every((block) => block.status === "parsed"));
+  assert.equal(result.visibleText[0].normalizedValue, "Visible café copy.");
+  assertExactRanges(result, input.bytes);
+});
+
 test("rejects malformed XHTML and internal entity declarations without resolving them", async () => {
   const externalDtdOnly = document(Buffer.from(
     '<!DOCTYPE html SYSTEM "https://remote.invalid/xhtml.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><body>Cancelled event</body></html>',

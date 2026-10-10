@@ -300,7 +300,15 @@ export async function collectHtmlEvidence({
       const type = (attributeValue(node, "type") ?? "").split(";", 1)[0].trim().toLowerCase();
       if (!insideTemplate && !current.insideNoscript && type === "application/ld+json") {
         const span = scriptContentSpan(location);
-        if (span && scriptBlocks.length <= limits.maxJsonLdBlocks) scriptBlocks.push(Object.freeze(span));
+        if (span && scriptBlocks.length <= limits.maxJsonLdBlocks) {
+          scriptBlocks.push(Object.freeze({
+            ...span,
+            ...(typeof node.jsonLdText === "string" && Array.isArray(node.jsonLdSourceSegments)
+              ? { jsonText: node.jsonLdText, jsonSourceSegments: node.jsonLdSourceSegments }
+              : {}),
+            ...(node.jsonLdResourceLimited === true ? { jsonResourceLimited: true } : {}),
+          }));
+        }
         else if (!span) addDiagnostic(diagnostics, limits, "JSONLD_SCRIPT_POSITION_UNAVAILABLE", null);
       }
     }
@@ -470,8 +478,6 @@ function attributeValueRange(text, elementLocation, attributeName) {
 }
 
 function scriptContentSpan(location) {
-  if (Number.isInteger(location?.jsonContentSpan?.startOffset)
-    && Number.isInteger(location?.jsonContentSpan?.endOffset)) return location.jsonContentSpan;
   if (!location?.startTag || !Number.isInteger(location.startTag.endOffset)) return null;
   const startOffset = location.startTag.endOffset;
   const endOffset = Number.isInteger(location.endTag?.startOffset)

@@ -148,6 +148,7 @@ export function extractJsonLdEntities({
   byteOffsetMap,
   jsonText,
   jsonStartOffset,
+  jsonSourceSegments,
   blockIndex,
   limits,
 }) {
@@ -159,6 +160,12 @@ export function extractJsonLdEntities({
 
   const events = [];
   const organizations = [];
+  const sourceRange = (startOffset, endOffset) => sourceRangeForJsonOffsets(
+    startOffset,
+    endOffset,
+    jsonStartOffset,
+    jsonSourceSegments,
+  );
   let candidateTruncated = false;
   const stack = [{ value: indexed.value, parts: [] }];
 
@@ -182,8 +189,11 @@ export function extractJsonLdEntities({
       const ordinal = kind === "event" ? events.length : organizations.length;
       const entityId = kind + ":script-" + blockIndex + ":" + pointer;
       const sourcePosition = indexed.positions.get(pointer);
-      const exact = sourcePosition
-        ? exactRange(source, sourceBytes, byteOffsetMap, jsonStartOffset + sourcePosition.startOffset, jsonStartOffset + sourcePosition.endOffset)
+      const entitySourceRange = sourcePosition
+        ? sourceRange(sourcePosition.startOffset, sourcePosition.endOffset)
+        : null;
+      const exact = entitySourceRange
+        ? exactRange(source, sourceBytes, byteOffsetMap, entitySourceRange.startOffset, entitySourceRange.endOffset)
         : null;
       const candidateResult = collectScalarCandidates({
         value,
@@ -191,7 +201,7 @@ export function extractJsonLdEntities({
         source,
         sourceBytes,
         byteOffsetMap,
-        jsonStartOffset,
+        sourceRange,
         positions: indexed.positions,
         limits,
       });
@@ -232,7 +242,7 @@ function collectScalarCandidates({
   source,
   sourceBytes,
   byteOffsetMap,
-  jsonStartOffset,
+  sourceRange,
   positions,
   limits,
 }) {
@@ -249,6 +259,8 @@ function collectScalarCandidates({
       const pointer = pointerFor(current.pointerParts);
       const location = positions.get(pointer);
       if (!location) continue;
+      const mappedRange = sourceRange(location.startOffset, location.endOffset);
+      if (!mappedRange) continue;
       const field = fieldName(current.fieldParts);
       const leafName = current.fieldParts.at(-1).toLowerCase();
       const candidate = textCandidate({
@@ -257,8 +269,8 @@ function collectScalarCandidates({
         text: source,
         bytes: sourceBytes,
         byteOffsetMap,
-        startOffset: jsonStartOffset + location.startOffset,
-        endOffset: jsonStartOffset + location.endOffset,
+        startOffset: mappedRange.startOffset,
+        endOffset: mappedRange.endOffset,
         normalizedValue: item,
         jsonPointer: pointer,
         property: leafName,
@@ -296,6 +308,46 @@ function collectScalarCandidates({
   }
 
   return { candidates, truncated: stack.length > 0 };
+}
+
+function sourceRangeForJsonOffsets(startOffset, endOffset, jsonStartOffset, segments) {
+  if (!Array.isArray(segments)) {
+    return {
+      startOffset: jsonStartOffset + startOffset,
+      endOffset: jsonStartOffset + endOffset,
+    };
+  }
+  const mappedStart = mapLogicalOffset(segments, startOffset, "start");
+  const mappedEnd = mapLogicalOffset(segments, endOffset, "end");
+  if (!Number.isInteger(mappedStart) || !Number.isInteger(mappedEnd) || mappedEnd < mappedStart) return null;
+  return { startOffset: mappedStart, endOffset: mappedEnd };
+}
+
+function mapLogicalOffset(segments, offset, side) {
+  if (segments.length === 0) return null;
+  if (side === "end" && offset === 0) return segments[0].sourceStart;
+  let low = 0;
+  let high = segments.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >>> 1;
+    const segment = segments[middle];
+    if (side === "start") {
+      if (offset < segment.logicalStart) high = middle - 1;
+      else if (offset >= segment.logicalEnd) low = middle + 1;
+      else return segment.linear
+        ? segment.sourceStart + (offset - segment.logicalStart)
+        : segment.sourceStart;
+    } else {
+      if (offset <= segment.logicalStart) high = middle - 1;
+      else if (offset > segment.logicalEnd) low = middle + 1;
+      else return segment.linear
+        ? segment.sourceStart + (offset - segment.logicalStart)
+        : segment.sourceEnd;
+    }
+  }
+  if (side === "start" && offset === segments.at(-1).logicalEnd) return segments.at(-1).sourceEnd;
+  if (side === "end" && offset === segments.at(-1).logicalEnd) return segments.at(-1).sourceEnd;
+  return null;
 }
 
 function typeNames(value) {

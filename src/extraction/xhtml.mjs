@@ -36,6 +36,7 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
   let forbiddenDtd = false;
   let xmlEncoding = null;
   let sourceCursor = text.charCodeAt(0) === 0xfeff ? 1 : 0;
+  let cdataSection = null;
 
   const onParserError = (error) => {
     parseError = error;
@@ -67,7 +68,11 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
       attrs,
       childNodes: [],
       _selfClosing: tag.isSelfClosing === true,
-      _scriptParts: [],
+      ...(String(tag.local || tag.name).toLowerCase() === "script"
+        && attrs.some((attribute) => attribute.name === "type"
+          && attribute.value.split(";", 1)[0].trim().toLowerCase() === "application/ld+json")
+        ? { _jsonLdText: "", _jsonLdSourceSegments: [], _jsonLdResourceLimited: false }
+        : {}),
       sourceCodeLocation: {
         startOffset,
         endOffset,
@@ -97,43 +102,69 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
       node.sourceCodeLocation.endTag = { startOffset, endOffset };
     }
     node.sourceCodeLocation.endOffset = endOffset;
-    if (node.tagName === "script" && attributeValue(node, "type")?.split(";", 1)[0].trim().toLowerCase() === "application/ld+json") {
-      const meaningfulParts = node._scriptParts.filter((part) => part.value.trim() !== "");
-      if (meaningfulParts.length === 1 && meaningfulParts[0].kind === "cdata") {
-        node.sourceCodeLocation.jsonContentSpan = {
-          startOffset: meaningfulParts[0].startOffset,
-          endOffset: meaningfulParts[0].endOffset,
-        };
-      }
+    if (typeof node._jsonLdResourceLimited === "boolean") {
+      node.jsonLdText = typeof node._jsonLdText === "string" ? node._jsonLdText : null;
+      node.jsonLdSourceSegments = node._jsonLdSourceSegments;
+      node.jsonLdResourceLimited = node._jsonLdResourceLimited;
+      delete node._jsonLdText;
+      delete node._jsonLdSourceSegments;
+      delete node._jsonLdResourceLimited;
     }
     delete node._selfClosing;
-    delete node._scriptParts;
     sourceCursor = endOffset;
   };
 
   parser.ontext = function onText(value) {
     if (resourceLimited || parseError || value === "") return;
-    const endOffset = textEventEnd(text, sourceCursor, Math.min(text.length, this.position));
-    if (endOffset <= sourceCursor) return;
-    appendText(stack[stack.length - 1], value, sourceCursor, endOffset, "text");
-    sourceCursor = endOffset;
+    const mapped = mapTextEvent(text, sourceCursor, value);
+    if (!mapped) {
+      parseError = new Error("XML text source mapping unavailable");
+      return;
+    }
+    appendText(stack[stack.length - 1], value, mapped.startOffset, mapped.endOffset, mapped.segments, limits);
+    sourceCursor = mapped.endOffset;
+  };
+
+  parser.onopencdata = function onOpenCdata() {
+    if (cdataSection !== null) {
+      parseError = new Error("Nested CDATA section");
+      return;
+    }
+    cdataSection = { cursor: Math.min(text.length, this.position) };
+    sourceCursor = cdataSection.cursor;
   };
 
   parser.oncdata = function onCdata(value) {
     if (resourceLimited || parseError) return;
-    const open = text.indexOf("<![CDATA[", sourceCursor);
-    if (open < 0) {
-      parseError = new Error("CDATA source position unavailable");
+    if (!cdataSection || typeof value !== "string" || value.length === 0) {
+      parseError = new Error("CDATA lifecycle unavailable");
       return;
     }
-    const startOffset = open + 9;
-    const close = text.indexOf("]]>", startOffset);
-    if (close < 0) {
-      parseError = new Error("Unterminated CDATA section");
+    const startOffset = cdataSection.cursor;
+    const endOffset = startOffset + value.length;
+    if (endOffset > text.length || text.slice(startOffset, endOffset) !== value) {
+      parseError = new Error("CDATA source mapping unavailable");
       return;
     }
-    appendText(stack[stack.length - 1], value, startOffset, close, "cdata");
-    sourceCursor = close + 3;
+    appendText(stack[stack.length - 1], value, startOffset, endOffset, [Object.freeze({
+      logicalStart: 0,
+      logicalEnd: value.length,
+      sourceStart: startOffset,
+      sourceEnd: endOffset,
+      linear: true,
+    })], limits);
+    cdataSection.cursor = endOffset;
+    sourceCursor = endOffset;
+  };
+
+  parser.onclosecdata = function onCloseCdata() {
+    if (!cdataSection || this.position - cdataSection.cursor !== 3
+      || text.slice(cdataSection.cursor, this.position) !== "]]>") {
+      parseError = new Error("CDATA closing source mapping unavailable");
+      return;
+    }
+    sourceCursor = this.position;
+    cdataSection = null;
   };
 
   parser.oncomment = function onComment() {
@@ -191,7 +222,7 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
   return { ok: true, document, xmlEncoding };
 }
 
-function appendText(parent, value, startOffset, endOffset, kind) {
+function appendText(parent, value, startOffset, endOffset, segments, limits) {
   if (endOffset < startOffset) return;
   const node = {
     nodeName: "#text",
@@ -199,13 +230,92 @@ function appendText(parent, value, startOffset, endOffset, kind) {
     sourceCodeLocation: { startOffset, endOffset },
   };
   parent.childNodes.push(node);
-  if (parent.tagName === "script") parent._scriptParts?.push({ kind, value, startOffset, endOffset });
+  if (!Array.isArray(parent._jsonLdSourceSegments) || parent._jsonLdResourceLimited) return;
+  const logicalStart = parent._jsonLdText.length;
+  if (logicalStart + value.length > limits.maxJsonLdBytes
+    || parent._jsonLdSourceSegments.length + segments.length > limits.maxJsonLdBytes) {
+    parent._jsonLdText = null;
+    parent._jsonLdSourceSegments = null;
+    parent._jsonLdResourceLimited = true;
+    return;
+  }
+  parent._jsonLdText += value;
+  for (const segment of segments) {
+    parent._jsonLdSourceSegments.push({
+      ...segment,
+      logicalStart: logicalStart + segment.logicalStart,
+      logicalEnd: logicalStart + segment.logicalEnd,
+    });
+  }
 }
 
-function textEventEnd(text, startOffset, parserPosition) {
-  const boundedPosition = Math.max(startOffset, Math.min(text.length, parserPosition));
-  const markup = text.indexOf("<", startOffset);
-  return markup >= 0 && markup < boundedPosition ? markup : boundedPosition;
+function mapTextEvent(source, startOffset, value) {
+  const segments = [];
+  let sourceOffset = startOffset;
+  let logicalOffset = 0;
+  while (logicalOffset < value.length) {
+    const rawStart = sourceOffset;
+    let decoded;
+    let linear;
+    if (source[sourceOffset] === "&") {
+      const semicolon = source.indexOf(";", sourceOffset + 1);
+      if (semicolon < 0 || semicolon - sourceOffset > 16) return null;
+      decoded = decodeXmlReference(source.slice(sourceOffset, semicolon + 1));
+      if (decoded === null) return null;
+      sourceOffset = semicolon + 1;
+      linear = false;
+    } else {
+      if (sourceOffset >= source.length || source[sourceOffset] === "<") return null;
+      const codePoint = source.codePointAt(sourceOffset);
+      decoded = String.fromCodePoint(codePoint);
+      sourceOffset += decoded.length;
+      linear = true;
+    }
+    if (!value.startsWith(decoded, logicalOffset)) return null;
+    appendMappingSegment(segments, {
+      logicalStart: logicalOffset,
+      logicalEnd: logicalOffset + decoded.length,
+      sourceStart: rawStart,
+      sourceEnd: sourceOffset,
+      linear,
+    });
+    logicalOffset += decoded.length;
+  }
+  return { startOffset, endOffset: sourceOffset, segments };
+}
+
+function decodeXmlReference(reference) {
+  const entities = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&apos;": "'",
+  };
+  if (Object.hasOwn(entities, reference)) return entities[reference];
+  const numeric = /^&#(?:(x)([0-9a-f]+)|([0-9]+));$/i.exec(reference);
+  if (!numeric) return null;
+  const codePoint = numeric[1]
+    ? Number.parseInt(numeric[2], 16)
+    : Number.parseInt(numeric[3], 10);
+  const xmlCharacter = codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd
+    || (codePoint >= 0x20 && codePoint <= 0xd7ff)
+    || (codePoint >= 0xe000 && codePoint <= 0xfffd)
+    || (codePoint >= 0x10000 && codePoint <= 0x10ffff);
+  if (!xmlCharacter) return null;
+  return String.fromCodePoint(codePoint);
+}
+
+function appendMappingSegment(segments, next) {
+  const previous = segments.at(-1);
+  if (previous?.linear && next.linear
+    && previous.logicalEnd === next.logicalStart
+    && previous.sourceEnd === next.sourceStart) {
+    previous.logicalEnd = next.logicalEnd;
+    previous.sourceEnd = next.sourceEnd;
+    return;
+  }
+  segments.push(next);
 }
 
 function xmlAttributeRanges(text, startOffset, endOffset) {
@@ -234,10 +344,6 @@ function xmlAttributeRanges(text, startOffset, endOffset) {
     ranges[name] = { startOffset: nameStart, endOffset: cursor };
   }
   return ranges;
-}
-
-function attributeValue(node, name) {
-  return node.attrs?.find((attribute) => attribute.name === name)?.value;
 }
 
 function hasInternalSubset(doctype) {

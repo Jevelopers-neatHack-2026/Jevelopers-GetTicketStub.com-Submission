@@ -13,7 +13,7 @@ import {
   textCandidate,
 } from "./source.mjs";
 
-export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.1.0";
+export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.2.0";
 
 export const EXTRACTION_LIMITS = Object.freeze({
   maxDocumentBytes: 2 * 1024 * 1024,
@@ -339,6 +339,12 @@ async function collectHtml(state, signal, contentType) {
       state.jsonLdBlocks.push(Object.freeze({ blockIndex: index, status: "resource_limited", locator: exactBlock.locator }));
       continue;
     }
+    if (block.jsonResourceLimited === true) {
+      addDiagnostic(state, "JSONLD_SOURCE_MAP_LIMIT", { blockIndex: index, locator: exactBlock.locator });
+      state.termination = "RESOURCE_LIMIT";
+      state.jsonLdBlocks.push(Object.freeze({ blockIndex: index, status: "resource_limited", locator: exactBlock.locator }));
+      continue;
+    }
 
     const blockDigest = sha256(Buffer.from(exactBlock.rawValue, "utf8"));
     const duplicateOfBlockIndex = seenBlocks.get(blockDigest);
@@ -352,11 +358,13 @@ async function collectHtml(state, signal, contentType) {
       seenBlocks.set(blockDigest, index);
     }
 
-    let jsonText = exactBlock.rawValue;
-    let jsonStartOffset = block.startOffset;
+    let jsonText = typeof block.jsonText === "string" ? block.jsonText : exactBlock.rawValue;
+    let jsonStartOffset = typeof block.jsonText === "string" ? 0 : block.startOffset;
+    let jsonSourceSegments = block.jsonSourceSegments;
     if (jsonText.startsWith("\uFEFF")) {
       jsonText = jsonText.slice(1);
-      jsonStartOffset += 1;
+      if (Array.isArray(jsonSourceSegments)) jsonSourceSegments = trimJsonSourceSegments(jsonSourceSegments, 1);
+      else jsonStartOffset += 1;
     }
     const extracted = extractJsonLdEntities({
       source: state.text,
@@ -364,6 +372,7 @@ async function collectHtml(state, signal, contentType) {
       byteOffsetMap: state.byteOffsetMap,
       jsonText,
       jsonStartOffset,
+      jsonSourceSegments,
       blockIndex: index,
       limits: {
         ...state.limits,
@@ -402,6 +411,23 @@ async function collectHtml(state, signal, contentType) {
       ...(duplicateOfBlockIndex !== undefined ? { duplicateOfBlockIndex } : {}),
     }));
   }
+}
+
+function trimJsonSourceSegments(segments, removedCodeUnits) {
+  const trimmed = [];
+  for (const segment of segments) {
+    if (segment.logicalEnd <= removedCodeUnits) continue;
+    const removedFromSegment = Math.max(0, removedCodeUnits - segment.logicalStart);
+    if (removedFromSegment > 0 && !segment.linear) continue;
+    const logicalStart = Math.max(segment.logicalStart, removedCodeUnits) - removedCodeUnits;
+    trimmed.push({
+      ...segment,
+      logicalStart,
+      logicalEnd: segment.logicalEnd - removedCodeUnits,
+      sourceStart: segment.sourceStart + removedFromSegment,
+    });
+  }
+  return trimmed;
 }
 
 async function scanHtmlCharsetFromBytes(bytes, signal, limits) {
