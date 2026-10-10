@@ -1,6 +1,8 @@
 import { canonicalHash } from "../contracts/validation.mjs";
-import { copyBoundedPlainArray, InspectionError, isInspectionHandle, validateVisualObservation } from "./deterministic.mjs";
-import { INSPECTION_POLICY_VERSION } from "./questions.mjs";
+import { copyBoundedPlainArray, InspectionError, isInspectionHandle, canonicalInspectionSubjectHash,
+  validateVisualObservation } from "./deterministic.mjs";
+import { INSPECTION_POLICY_VERSION, INSPECTION_QUESTION_SCHEMA_VERSION, inspectionDecisionProvenance } from "./questions.mjs";
+import { PINNED_JEV_MODEL_ID } from "../contracts/decision-port/v1.mjs";
 
 const OUTCOMES = new Set(["acceptable_for_review", "bounded_repair_recommended", "needs_human_review", "refusal", "failure"]);
 const DECISION_REASONS = new Set([
@@ -21,6 +23,12 @@ function safeVersion(value, field) {
   return value;
 }
 
+function supportedVersion(value, expected, field) {
+  const normalized = safeVersion(value, field);
+  if (normalized !== expected) fail("unsupported_version", field, "Inspection report received an unsupported version or model reference.");
+  return normalized;
+}
+
 function fail(code, field, message) {
   throw new InspectionError(code, field, message);
 }
@@ -38,6 +46,36 @@ export function createInspectionReport(input) {
   }
   const providerStatus = input.provider_status ?? "not_requested";
   safeEnum(providerStatus, ["not_requested", "complete", "refused", "unavailable", "timeout", "cancelled"], "provider_status");
+  const observationsInput = copyBoundedPlainArray(input.observations ?? [], "observations", 16);
+  const observations = observationsInput.map((observation) => {
+    try { return validateVisualObservation(observation, deterministic); }
+    catch { fail("invalid_policy_input", "observations", "Report observations must be validated against this inspection handle."); }
+  });
+  const actualSubjectHash = canonicalInspectionSubjectHash(deterministic);
+  if (input.subject_hash !== undefined && input.subject_hash !== actualSubjectHash) {
+    fail("stale_observation", "subject_hash", "Report subject hash must match the exact inspected design and artifact.");
+  }
+  const policyVersion = supportedVersion(input.policy_version ?? INSPECTION_POLICY_VERSION, INSPECTION_POLICY_VERSION, "policy_version");
+  const evidenceMode = safeEnum(input.evidence_mode ?? "fixture", ["fixture", "recorded", "sandbox", "live"], "evidence_mode");
+  const suppliedQuestionSchema = input.question_schema_version === undefined || input.question_schema_version === null
+    ? undefined : supportedVersion(input.question_schema_version, INSPECTION_QUESTION_SCHEMA_VERSION, "question_schema_version");
+  const suppliedModelId = input.model_id === undefined || input.model_id === null
+    ? undefined : supportedVersion(input.model_id, PINNED_JEV_MODEL_ID, "model_id");
+  const suppliedDecisionPolicy = input.decision_policy_version === undefined || input.decision_policy_version === null
+    ? undefined : supportedVersion(input.decision_policy_version, INSPECTION_POLICY_VERSION, "decision_policy_version");
+  const decisionMetadata = inspectionDecisionProvenance(input.decision);
+  const decisionObservationRef = decisionMetadata?.observationRef;
+  const matchingObservation = decisionObservationRef !== undefined && observations.some((observation) =>
+    canonicalHash(observation) === decisionObservationRef);
+  const decisionBound = decisionMetadata !== undefined && decisionMetadata.subjectHash === actualSubjectHash &&
+    decisionMetadata.scope.tenant_id === deterministic.tenant_id && decisionMetadata.scope.project_id === deterministic.project_id &&
+    decisionMetadata.scope.design_version_id === deterministic.design_version_id && decisionMetadata.scope.artifact_id === deterministic.artifact_id &&
+    decisionMetadata.policyVersion === INSPECTION_POLICY_VERSION &&
+    decisionMetadata.questionSchemaVersion === INSPECTION_QUESTION_SCHEMA_VERSION &&
+    decisionMetadata.modelId === PINNED_JEV_MODEL_ID && matchingObservation &&
+    (suppliedQuestionSchema === undefined || suppliedQuestionSchema === decisionMetadata.questionSchemaVersion) &&
+    (suppliedModelId === undefined || suppliedModelId === decisionMetadata.modelId) &&
+    (suppliedDecisionPolicy === undefined || suppliedDecisionPolicy === decisionMetadata.policyVersion);
   let outcome;
   let reason;
   let recommendation = "human_review";
@@ -53,9 +91,9 @@ export function createInspectionReport(input) {
   } else if (["unavailable", "timeout", "cancelled", "not_requested"].includes(providerStatus)) {
     outcome = "needs_human_review";
     reason = providerStatus === "not_requested" ? "visual_observation_not_available" : `observer_${providerStatus}`;
-  } else if (!input.decision || !OUTCOMES.has(input.decision.outcome)) {
+  } else if (!decisionBound || !input.decision || !OUTCOMES.has(input.decision.outcome)) {
     outcome = "needs_human_review";
-    reason = "decision_unavailable";
+    reason = "decision_provenance_unverified";
   } else {
     outcome = input.decision.outcome;
     reason = DECISION_REASONS.has(input.decision.reason) ? input.decision.reason : "decision_unavailable";
@@ -74,11 +112,6 @@ export function createInspectionReport(input) {
   } else {
     recommendation = outcome === "acceptable_for_review" ? "no_repair_recommended" : "human_review";
   }
-  const observationsInput = copyBoundedPlainArray(input.observations ?? [], "observations", 16);
-  const observations = observationsInput.map((observation) => {
-    try { return validateVisualObservation(observation, deterministic); }
-    catch { fail("invalid_policy_input", "observations", "Report observations must be validated against this inspection handle."); }
-  });
   if (outcome === "acceptable_for_review" && observations.length === 0) {
     outcome = "needs_human_review";
     reason = "observation_not_available";
@@ -89,13 +122,9 @@ export function createInspectionReport(input) {
     reason = "observation_not_available";
     recommendation = "human_review";
   }
-  const policyVersion = safeVersion(input.policy_version ?? INSPECTION_POLICY_VERSION, "policy_version");
-  const evidenceMode = safeEnum(input.evidence_mode ?? "fixture", ["fixture", "recorded", "sandbox", "live"], "evidence_mode");
-  const questionSchemaVersion = input.question_schema_version === undefined || input.question_schema_version === null
-    ? null : safeVersion(input.question_schema_version, "question_schema_version");
-  const modelId = input.model_id === undefined || input.model_id === null ? null : safeVersion(input.model_id, "model_id");
-  const decisionPolicyVersion = input.decision_policy_version === undefined || input.decision_policy_version === null
-    ? null : safeVersion(input.decision_policy_version, "decision_policy_version");
+  const questionSchemaVersion = decisionBound ? decisionMetadata.questionSchemaVersion : suppliedQuestionSchema ?? null;
+  const modelId = decisionBound ? decisionMetadata.modelId : suppliedModelId ?? null;
+  const decisionPolicyVersion = decisionBound ? decisionMetadata.policyVersion : suppliedDecisionPolicy ?? null;
   const uncertainty = copyBoundedPlainArray(input.uncertainty ?? [], "uncertainty", 32);
   if (uncertainty.some((item) => !UNCERTAINTY_CODES.has(item))) {
     fail("invalid_policy_input", "uncertainty", "Uncertainty codes must use the bounded report vocabulary.");
@@ -111,10 +140,6 @@ export function createInspectionReport(input) {
     !["complete", "partial", "unknown"].includes(usageCompleteness)) {
     fail("invalid_policy_input", "limits", "Repair limits or usage completeness are invalid.");
   }
-  const subjectHash = input.subject_hash;
-  if (subjectHash !== undefined && (typeof subjectHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(subjectHash))) {
-    fail("invalid_policy_input", "subject_hash", "Inspection subject reference must be a content hash.");
-  }
   const report = {
     contract: "CreativeInspectionReport",
     schema_version: "1.0",
@@ -129,7 +154,12 @@ export function createInspectionReport(input) {
     design_hash: deterministic.design_hash,
     artifact_id: deterministic.artifact_id,
     artifact_hash: deterministic.artifact_hash,
-    ...(subjectHash !== undefined ? { subject_hash: subjectHash } : {}),
+    subject_hash: actualSubjectHash,
+    plan_ref: decisionBound ? decisionMetadata.planRef : null,
+    first_request_ref: decisionBound ? decisionMetadata.firstRequestRef : null,
+    route_request_ref: decisionBound ? decisionMetadata.routeRequestRef : null,
+    decision_ref: decisionBound ? decisionMetadata.decisionRef : null,
+    decision_context_ref: decisionBound ? decisionMetadata.decisionContextRef : null,
     deterministic: Object.freeze({ gate: deterministic.gate, checks: deterministic.checks }),
     observations: Object.freeze([...observations]),
     question_schema_version: questionSchemaVersion,
@@ -173,7 +203,10 @@ export function evaluateHeldOutFixtures(input) {
     fail("invalid_evaluation", "corpus_hash", "Held-out corpus must have a content hash.");
   }
   let defectFalseNegatives = 0;
+  let defectCount = 0;
   let validFalseRepairs = 0;
+  let validOutputCount = 0;
+  let unknownLabelCount = 0;
   let abstentions = 0;
   let knownCosts = 0;
   let totalKnownCost = 0;
@@ -185,8 +218,15 @@ export function evaluateHeldOutFixtures(input) {
     }
     const expected = safeEnum(entry.expected_defect, [true, false, null], "expected_defect");
     if (![true, false, null].includes(entry.predicted_defect)) fail("invalid_evaluation", "predicted_defect", "Predicted defect must be true, false, or unknown.");
-    if (expected === true && entry.predicted_defect === false) defectFalseNegatives += 1;
-    if (expected === false && entry.report.outcome === "bounded_repair_recommended") validFalseRepairs += 1;
+    if (expected === true) {
+      defectCount += 1;
+      if (entry.predicted_defect === false) defectFalseNegatives += 1;
+    } else if (expected === false) {
+      validOutputCount += 1;
+      if (entry.report.outcome === "bounded_repair_recommended") validFalseRepairs += 1;
+    } else {
+      unknownLabelCount += 1;
+    }
     if (["needs_human_review", "refusal", "failure"].includes(entry.report.outcome)) abstentions += 1;
     if (!Number.isFinite(entry.latency_ms) || entry.latency_ms < 0) fail("invalid_evaluation", "latency_ms", "Latency must be a finite non-negative measurement.");
     latencies.push(entry.latency_ms);
@@ -204,12 +244,19 @@ export function evaluateHeldOutFixtures(input) {
     contract: "CreativeInspectionFixtureMetrics",
     schema_version: "1.0",
     evidence_mode: "fixture",
-    policy_version: safeVersion(input.policy_version ?? INSPECTION_POLICY_VERSION, "policy_version"),
+    policy_version: supportedVersion(input.policy_version ?? INSPECTION_POLICY_VERSION, INSPECTION_POLICY_VERSION, "policy_version"),
     corpus_hash: corpusHash,
     sample_count: cases.length,
+    defect_count: defectCount,
     defect_false_negatives: defectFalseNegatives,
+    defect_false_negative_rate: defectCount === 0 ? null : defectFalseNegatives / defectCount,
+    valid_output_count: validOutputCount,
     valid_output_false_repairs: validFalseRepairs,
+    valid_output_false_repair_rate: validOutputCount === 0 ? null : validFalseRepairs / validOutputCount,
+    unknown_label_count: unknownLabelCount,
+    unknown_label_rate: unknownLabelCount / cases.length,
     human_review_or_failure_count: abstentions,
+    human_review_or_failure_rate: abstentions / cases.length,
     latency_ms: Object.freeze({ p50: percentile(0.5), p95: percentile(0.95), max: latencies.at(-1) }),
     downstream_cost: knownCosts === cases.length
       ? Object.freeze({ status: "known", total: totalKnownCost, currency: safeVersion(input.currency ?? "fixture-unit", "currency") })
@@ -217,7 +264,10 @@ export function evaluateHeldOutFixtures(input) {
     promotion_status: "not_promoted",
     note: "Fixture metrics do not establish classifier calibration, live provider execution, accepted Q01 thresholds, or customer approval.",
     metrics_hash: canonicalHash({ corpus_hash: corpusHash, sample_count: cases.length,
-      defect_false_negatives: defectFalseNegatives, valid_output_false_repairs: validFalseRepairs,
-      abstentions, latency_ms: latencies, knownCosts, totalKnownCost }),
+      defect_count: defectCount, defect_false_negatives: defectFalseNegatives,
+      valid_output_count: validOutputCount, valid_output_false_repairs: validFalseRepairs,
+      unknown_label_count: unknownLabelCount, unknown_label_rate: unknownLabelCount / cases.length,
+      abstentions, human_review_or_failure_rate: abstentions / cases.length,
+      latency_ms: latencies, knownCosts, totalKnownCost }),
   });
 }

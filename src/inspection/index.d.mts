@@ -66,6 +66,11 @@ export interface InspectCreativeArtifactInput {
 
 export declare const INSPECTION_QUESTION_SCHEMA_VERSION: "1.0";
 export declare const INSPECTION_POLICY_VERSION: "fixture-policy/1.0";
+export type InspectionTrustedScope = TrustedScope & Readonly<{
+  brief_id: string;
+  design_version_id: string;
+  artifact_id: string;
+}>;
 
 export interface CreativeVisualObservation {
   readonly contract: "CreativeVisualObservation";
@@ -121,6 +126,8 @@ export interface InspectionQuestionPlan {
   readonly policy_version: string;
   readonly question_schema_version: "1.0";
   readonly inspection_subject_hash: string;
+  readonly decision_context_ref: string;
+  readonly plan_ref: string;
   readonly questions: Readonly<Record<string, DecisionQuestion>>;
   readonly batches: readonly (readonly string[])[];
   readonly first_stage_question_ids: readonly string[];
@@ -148,29 +155,46 @@ export declare function createInspectionDecisionPlan(input: {
   provider_status?: "complete" | "refused" | "unavailable" | "timeout" | "cancelled";
   inspection_subject_hash?: string;
 }): InspectionQuestionPlanResult;
-export declare function createInspectionEvidenceBatch(plan: InspectionQuestionPlan, observation: CreativeVisualObservation): Readonly<{
-  execution_mode: "independent_batch";
-  state: Readonly<{ observations: readonly DecisionObservation[] }>;
-  questions: Readonly<Record<string, DecisionQuestion>>;
+export type InspectionRouteDecisionContext = InspectionDecisionContext & Readonly<{
+  linked_request_id: string;
+  linked_billable_attempt_id: string;
+  plan_ref: string;
+  inspection_subject_hash: string;
 }>;
+
+export declare function createInspectionEvidenceBatch(plan: InspectionQuestionPlan, observation: CreativeVisualObservation): DecisionPortRequest;
 export declare function createInspectionRouteBatch(
   plan: InspectionQuestionPlan,
   firstRequest: DecisionPortRequest,
   firstResult: DecisionPortResult,
-  trustedScope: TrustedScope,
-): Readonly<{ status: "ready"; execution_mode: "independent_batch"; state: Readonly<{ text: string }>;
-  questions: Readonly<Record<string, DecisionQuestion>>; prior: Readonly<{ defect_present: number; visual_quality: number }> }> |
+  trustedScope: InspectionTrustedScope,
+  routeDecisionContext: InspectionRouteDecisionContext,
+): DecisionPortRequest |
   Readonly<{ status: "review_required"; reason: string }>;
+export interface InspectionDecision {
+  readonly status: "complete" | "review_required";
+  readonly outcome: "acceptable_for_review" | "bounded_repair_recommended" | "needs_human_review";
+  readonly action?: InspectionRepairAction;
+  readonly reason: string;
+  readonly inspection_subject_hash: string;
+  readonly question_schema_version: "1.0";
+  readonly model_id: string;
+  readonly decision_policy_version: string;
+  readonly plan_ref: string;
+  readonly first_request_ref: string;
+  readonly route_request_ref: string;
+  readonly decision_context_ref: string;
+  readonly decision_ref: string;
+}
 export declare function evaluateInspectionDecision(
   plan: InspectionQuestionPlan,
   firstRequest: DecisionPortRequest,
   firstResult: DecisionPortResult,
   routeRequest: DecisionPortRequest,
   routeResult: DecisionPortResult,
-  trustedScope: TrustedScope,
-): Readonly<{ status: "complete" | "review_required"; outcome: "acceptable_for_review" | "bounded_repair_recommended" | "needs_human_review";
-  action?: InspectionRepairAction; reason: string }>;
-export declare function validateInspectionDecisionRequest(request: DecisionPortRequest | Record<string, unknown>, trustedScope: TrustedScope): DecisionPortRequest;
+  trustedScope: InspectionTrustedScope,
+): InspectionDecision;
+export declare function validateInspectionDecisionRequest(request: DecisionPortRequest | Record<string, unknown>, trustedScope: InspectionTrustedScope): DecisionPortRequest;
 
 export type InspectionOutcome = "acceptable_for_review" | "bounded_repair_recommended" | "needs_human_review" | "refusal" | "failure";
 export interface CreativeInspectionReport {
@@ -187,7 +211,12 @@ export interface CreativeInspectionReport {
   readonly design_hash: string;
   readonly artifact_id: string;
   readonly artifact_hash: string;
-  readonly subject_hash?: string;
+  readonly subject_hash: string;
+  readonly plan_ref: string | null;
+  readonly first_request_ref: string | null;
+  readonly route_request_ref: string | null;
+  readonly decision_ref: string | null;
+  readonly decision_context_ref: string | null;
   readonly deterministic: Readonly<{ gate: DeterministicInspection["gate"]; checks: readonly InspectionCheck[] }>;
   readonly observations: readonly CreativeVisualObservation[];
   readonly question_schema_version: string | null;
@@ -207,7 +236,7 @@ export interface CreativeInspectionReport {
 export declare function createInspectionReport(input: {
   deterministic: DeterministicInspection;
   provider_status?: "not_requested" | "complete" | "refused" | "unavailable" | "timeout" | "cancelled";
-  decision?: { outcome: InspectionOutcome; action?: InspectionRepairAction; reason?: string };
+  decision?: InspectionDecision;
   observations?: readonly CreativeVisualObservation[];
   policy_version?: string;
   evidence_mode?: "fixture" | "recorded" | "sandbox" | "live";
@@ -219,6 +248,30 @@ export declare function createInspectionReport(input: {
   limits?: Partial<CreativeInspectionReport["limits"]>;
 }): CreativeInspectionReport;
 
+export interface InspectionFixtureMetrics {
+  readonly contract: "CreativeInspectionFixtureMetrics";
+  readonly schema_version: "1.0";
+  readonly evidence_mode: "fixture";
+  readonly policy_version: string;
+  readonly corpus_hash: string;
+  readonly sample_count: number;
+  readonly defect_count: number;
+  readonly defect_false_negatives: number;
+  readonly defect_false_negative_rate: number | null;
+  readonly valid_output_count: number;
+  readonly valid_output_false_repairs: number;
+  readonly valid_output_false_repair_rate: number | null;
+  readonly unknown_label_count: number;
+  readonly unknown_label_rate: number;
+  readonly human_review_or_failure_count: number;
+  readonly human_review_or_failure_rate: number;
+  readonly latency_ms: Readonly<{ p50: number; p95: number; max: number }>;
+  readonly downstream_cost: Readonly<{ status: "known"; total: number; currency: string }> |
+    Readonly<{ status: "unknown"; known_case_count: number; total_known_only: number }>;
+  readonly promotion_status: "not_promoted";
+  readonly note: string;
+  readonly metrics_hash: string;
+}
 export declare function evaluateHeldOutFixtures(input: {
   schema_version: "1.0";
   corpus_hash: string;
@@ -231,7 +284,7 @@ export declare function evaluateHeldOutFixtures(input: {
     latency_ms: number;
     downstream_cost: { status: "known"; amount: number } | { status: "unknown" };
   }[];
-}): Readonly<Record<string, unknown>>;
+}): InspectionFixtureMetrics;
 
 export declare const REPAIR_LIMITS: Readonly<{ maxRepairs: 2; maxElapsedMs: 60_000; maxSimulatedUnits: 3 }>;
 export interface InspectionRepairController {

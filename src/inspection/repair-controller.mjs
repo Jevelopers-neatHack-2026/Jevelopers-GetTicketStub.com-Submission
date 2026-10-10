@@ -1,5 +1,5 @@
 import { canonicalHash } from "../contracts/validation.mjs";
-import { InspectionError } from "./deterministic.mjs";
+import { InspectionError, isSafePublicInspectionReference } from "./deterministic.mjs";
 
 export const REPAIR_LIMITS = Object.freeze({ maxRepairs: 2, maxElapsedMs: 60_000, maxSimulatedUnits: 3 });
 const ACTIONS = new Set(["image.edit", "composition.update", "correction.apply", "concept.generate"]);
@@ -9,14 +9,32 @@ function fail(code, field, message) {
 }
 
 function isHash(value) { return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value); }
+function isSafeStoredState(row) {
+  return row && isSafePublicInspectionReference(row.tenant_id) && isSafePublicInspectionReference(row.project_id) &&
+    isSafePublicInspectionReference(row.brief_id) && isSafePublicInspectionReference(row.design_version_id) &&
+    isSafePublicInspectionReference(row.inspection_id) && isHash(row.brief_hash) && isHash(row.design_hash) &&
+    Number.isSafeInteger(row.started_at_ms) && row.started_at_ms >= 0 &&
+    Number.isInteger(row.repairs_used) && row.repairs_used >= 0 && row.repairs_used <= REPAIR_LIMITS.maxRepairs &&
+    Number.isInteger(row.simulated_units_milli) && row.simulated_units_milli >= 0 &&
+    row.simulated_units_milli <= REPAIR_LIMITS.maxSimulatedUnits * 1000 &&
+    (row.status === "active" || row.status === "cancelled");
+}
+function isSafeStoredAction(action) {
+  return action && isSafePublicInspectionReference(action.tenant_id) && isSafePublicInspectionReference(action.project_id) &&
+    isSafePublicInspectionReference(action.brief_id) && isSafePublicInspectionReference(action.design_version_id) &&
+    isSafePublicInspectionReference(action.inspection_id) && isSafePublicInspectionReference(action.action_id) && isHash(action.request_hash) &&
+    ACTIONS.has(action.repair_action) && Number.isInteger(action.simulated_units_milli) &&
+    action.simulated_units_milli > 0 && action.simulated_units_milli <= REPAIR_LIMITS.maxSimulatedUnits * 1000 &&
+    isHash(action.claim_ref) && ["claimed", "recorded", "cancelled"].includes(action.status) &&
+    (action.result_hash === null || action.result_hash === undefined || isHash(action.result_hash)) &&
+    Number.isSafeInteger(action.created_at_ms) && action.created_at_ms >= 0 &&
+    Number.isSafeInteger(action.updated_at_ms) && action.updated_at_ms >= 0;
+}
 
 function validateScope(scope) {
-  const validRef = (value) => typeof value === "string" && value.length > 0 && value.length <= 200 &&
-    /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value) &&
-    !/(?:bearer|basic|(?:sk|rk|gh[pousr]|xox[baprs])[-_][A-Za-z0-9_-]{8,}|api[_-]?key|token|secret|@|https?:\/\/)/i.test(value);
   if (!scope || typeof scope !== "object" || Array.isArray(scope) ||
-    !validRef(scope.tenant_id) || !validRef(scope.project_id) ||
-    !validRef(scope.brief_id) || !validRef(scope.design_version_id)) {
+    !isSafePublicInspectionReference(scope.tenant_id) || !isSafePublicInspectionReference(scope.project_id) ||
+    !isSafePublicInspectionReference(scope.brief_id) || !isSafePublicInspectionReference(scope.design_version_id)) {
     fail("invalid_scope", "scope", "Trusted tenant, project, brief, and design identity are required.");
   }
   return Object.freeze({ tenant_id: scope.tenant_id, project_id: scope.project_id,
@@ -107,15 +125,22 @@ export function createSqliteInspectionRepairController(options) {
 
   function getState({ scope: rawScope, inspection_id }) {
     const scope = validateScope(rawScope);
-    if (typeof inspection_id !== "string" || !inspection_id) fail("invalid_request", "inspection_id", "Inspection identity is required.");
+    if (!isSafePublicInspectionReference(inspection_id)) fail("invalid_request", "inspection_id", "Inspection identity is invalid.");
     const row = stateRow(database, scope, inspection_id);
     if (!row) return null;
+    if (!isSafeStoredState(row) || row.inspection_id !== inspection_id) {
+      fail("invalid_request", "inspection_state", "Stored inspection state failed integrity validation.");
+    }
     const current = clockValue(now);
     const elapsed = Math.max(0, current - row.started_at_ms);
-    const actions = database.prepare(`SELECT action_id, request_hash, repair_action, simulated_units_milli,
+    const actions = database.prepare(`SELECT tenant_id, project_id, brief_id, design_version_id, inspection_id,
+      action_id, request_hash, repair_action, simulated_units_milli,
       claim_ref, status, result_hash, created_at_ms, updated_at_ms FROM creative_inspection_action_v2
       WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=? AND inspection_id=? ORDER BY created_at_ms, action_id`)
       .all(...scopedKey(scope, inspection_id));
+    if (actions.some((action) => !isSafeStoredAction(action))) {
+      fail("invalid_request", "actions", "Stored repair records failed integrity validation.");
+    }
     return Object.freeze({
       inspection_id,
       brief_hash: row.brief_hash,
@@ -142,24 +167,28 @@ export function createSqliteInspectionRepairController(options) {
 
   function startInspection({ scope: rawScope, inspection_id, brief_hash, design_hash }) {
     const scope = validateScope(rawScope);
-    if (typeof inspection_id !== "string" || inspection_id.length < 1 || inspection_id.length > 200 ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(inspection_id) ||
+    if (!isSafePublicInspectionReference(inspection_id) ||
       !isHash(brief_hash) || !isHash(design_hash)) {
       fail("invalid_request", "inspection_identity", "Inspection identity and exact brief/design hashes are required.");
     }
-    const startedAt = clockValue(now);
     return transaction(database, () => {
+      const startedAt = clockValue(now);
       const key = scopedKey(scope, inspection_id);
-      database.prepare(`INSERT OR IGNORE INTO creative_inspection_state_v1
+      const inserted = database.prepare(`INSERT OR IGNORE INTO creative_inspection_state_v1
         (tenant_id, project_id, brief_id, design_version_id, inspection_id, brief_hash, design_hash, started_at_ms, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`).run(...key, brief_hash, design_hash, startedAt);
       const row = stateRow(database, scope, inspection_id);
-      if (row.brief_hash !== brief_hash || row.design_hash !== design_hash || row.started_at_ms !== startedAt && row.started_at_ms > startedAt) {
+      if (!isSafeStoredState(row) || row.tenant_id !== scope.tenant_id || row.project_id !== scope.project_id ||
+        row.brief_id !== scope.brief_id || row.design_version_id !== scope.design_version_id ||
+        row.inspection_id !== inspection_id) {
+        fail("invalid_request", "inspection_state", "Stored inspection state failed integrity validation.");
+      }
+      if (row.brief_hash !== brief_hash || row.design_hash !== design_hash) {
         fail("conflict", "inspection_identity", "Inspection identity already exists with different bound state.");
       }
       const current = clockValue(now);
       return Object.freeze({ status: row.status, inspection_id, started_at_ms: row.started_at_ms,
-        elapsed_ms: Math.max(0, current - row.started_at_ms), replayed: row.started_at_ms !== startedAt });
+        elapsed_ms: Math.max(0, current - row.started_at_ms), replayed: inserted.changes !== 1 });
     });
   }
 
@@ -169,8 +198,7 @@ export function createSqliteInspectionRepairController(options) {
     const actionId = input?.action_id;
     const requestHash = input?.request_hash;
     const action = input?.repair_action;
-    if (typeof inspectionId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(inspectionId) ||
-      typeof actionId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(actionId) ||
+    if (!isSafePublicInspectionReference(inspectionId) || !isSafePublicInspectionReference(actionId) ||
       !isHash(requestHash) || !ACTIONS.has(action)) {
       fail("invalid_request", "repair_request", "Repair request identity or action is invalid.");
     }
@@ -183,7 +211,6 @@ export function createSqliteInspectionRepairController(options) {
       fail("invalid_request", "simulated_units", "Fixture repair units must be positive thousandth-unit values within the fixed bound.");
     }
     const unitsMilli = Math.round(units * 1000);
-    const current = clockValue(now);
     return transaction(database, () => {
       const row = stateRow(database, scope, inspectionId);
       if (!row) return Object.freeze({ status: "not_found" });
@@ -191,6 +218,7 @@ export function createSqliteInspectionRepairController(options) {
       const existing = database.prepare(`SELECT * FROM creative_inspection_action_v2
         WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=? AND inspection_id=? AND action_id=?`).get(...key);
       if (existing) {
+        if (!isSafeStoredAction(existing)) fail("invalid_request", "actions", "Stored repair record failed integrity validation.");
         if (existing.request_hash !== requestHash || existing.repair_action !== action || existing.simulated_units_milli !== unitsMilli) {
           return Object.freeze({ status: "conflict" });
         }
@@ -199,6 +227,7 @@ export function createSqliteInspectionRepairController(options) {
           simulated_units: existing.simulated_units_milli / 1000 });
       }
       if (row.status !== "active") return Object.freeze({ status: "cancelled" });
+      const current = clockValue(now);
       if (current < row.started_at_ms || current - row.started_at_ms > REPAIR_LIMITS.maxElapsedMs) {
         return Object.freeze({ status: "expired" });
       }
@@ -223,21 +252,24 @@ export function createSqliteInspectionRepairController(options) {
     const inspectionId = input?.inspection_id;
     const actionId = input?.action_id;
     const resultHash = input?.result_hash;
-    if (typeof inspectionId !== "string" || typeof actionId !== "string" || !isHash(resultHash)) {
+    if (!isSafePublicInspectionReference(inspectionId) || !isSafePublicInspectionReference(actionId) || !isHash(resultHash)) {
       fail("invalid_request", "repair_completion", "Repair completion requires exact inspection, action, and result identities.");
     }
-    const current = clockValue(now);
     return transaction(database, () => {
       const key = [...scopedKey(scope, inspectionId), actionId];
       const action = database.prepare(`SELECT * FROM creative_inspection_action_v2 WHERE tenant_id=? AND project_id=? AND brief_id=?
         AND design_version_id=? AND inspection_id=? AND action_id=?`).get(...key);
       const state = stateRow(database, scope, inspectionId);
       if (!action || !state) return Object.freeze({ status: "not_found" });
+      if (!isSafeStoredState(state) || !isSafeStoredAction(action)) {
+        fail("invalid_request", "repair_completion", "Stored repair state failed integrity validation.");
+      }
       if (action.result_hash) {
         if (action.result_hash !== resultHash) return Object.freeze({ status: "conflict" });
         return Object.freeze({ status: action.status === "recorded" && state.status === "active" ? "replayed" : "cancelled",
           result_hash: action.result_hash });
       }
+      const current = clockValue(now);
       if (action.status !== "claimed" || state.status !== "active" || current < state.started_at_ms ||
         current - state.started_at_ms > REPAIR_LIMITS.maxElapsedMs) {
         database.prepare(`UPDATE creative_inspection_action_v2 SET status='cancelled', result_hash=?, updated_at_ms=?
@@ -254,9 +286,9 @@ export function createSqliteInspectionRepairController(options) {
 
   function cancelInspection({ scope: rawScope, inspection_id }) {
     const scope = validateScope(rawScope);
-    if (typeof inspection_id !== "string" || !inspection_id) fail("invalid_request", "inspection_id", "Inspection identity is required.");
-    const current = clockValue(now);
+    if (!isSafePublicInspectionReference(inspection_id)) fail("invalid_request", "inspection_id", "Inspection identity is invalid.");
     return transaction(database, () => {
+      const current = clockValue(now);
       const key = scopedKey(scope, inspection_id);
       const row = stateRow(database, scope, inspection_id);
       if (!row) return Object.freeze({ status: "not_found" });

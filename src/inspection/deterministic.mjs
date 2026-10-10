@@ -27,10 +27,12 @@ export function isInspectionHandle(value) {
   return value !== null && typeof value === "object" && ARTIFACT_SNAPSHOTS.has(value);
 }
 
-function safePublicIdentifier(value) {
-  return typeof value === "string" && value.length <= 200 && /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value) &&
+export function isSafePublicInspectionReference(value) {
+  if (typeof value !== "string" || value.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value)) return false;
+  const normalized = value.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+  return !/(?:credential|token|secret|password|apikey|authorization|bearer|cookie)/.test(normalized) &&
     !/(?:sk|rk|gh[pousr]|xox[baprs])[-_][A-Za-z0-9_-]{8,}/i.test(value) &&
-    !/^(?:bearer|basic)(?:$|[-_])/i.test(value) &&
+    !/^(?:bearer|basic)(?:$|[-_:])/i.test(value) &&
     !/[A-Za-z][A-Za-z0-9+.-]*:\/\//i.test(value);
 }
 
@@ -184,6 +186,7 @@ function decodePng(bytes) {
   let offset = PNG_SIGNATURE.length;
   let header = null;
   let paletteSeen = false;
+  let paletteEntries = 0;
   let idatStarted = false;
   let idatEnded = false;
   let endSeen = false;
@@ -224,10 +227,13 @@ function decodePng(bytes) {
       }
       header = { width, height, bitDepth, colorType, channels };
     } else if (type === "PLTE") {
-      if (idatStarted || paletteSeen || length === 0 || length % 3 !== 0 || length > 768) {
+      const entryCount = length / 3;
+      const indexedMaximum = header?.colorType === 3 ? 2 ** header.bitDepth : 256;
+      if (idatStarted || paletteSeen || length === 0 || length % 3 !== 0 || length > 768 || entryCount > indexedMaximum) {
         fail("image_decode_failed", "artifact_bytes", "PNG palette placement or size is invalid.");
       }
       paletteSeen = true;
+      paletteEntries = entryCount;
     } else if (type === "IDAT") {
       if (idatEnded || (header.colorType === 3 && !paletteSeen)) {
         fail("image_decode_failed", "artifact_bytes", "PNG image data ordering is invalid.");
@@ -286,6 +292,15 @@ function decodePng(bytes) {
         filter === 3 ? Math.floor((left + up) / 2) : paeth(left, up, upLeft);
       row[x] = (row[x] + predictor) & 0xff;
     }
+    if (header.colorType === 3) {
+      for (let x = 0; x < header.width; x += 1) {
+        const sample = header.bitDepth === 8 ? row[x] :
+          (row[Math.floor(x * header.bitDepth / 8)] >> (8 - header.bitDepth - ((x * header.bitDepth) % 8))) & (2 ** header.bitDepth - 1);
+        if (sample >= paletteEntries) {
+          fail("image_decode_failed", "artifact_bytes", "Indexed PNG pixel refers to a palette entry that does not exist.");
+        }
+      }
+    }
     prior = row;
     sourceOffset += rowBytes;
   }
@@ -338,8 +353,11 @@ export function inspectCreativeArtifact(input) {
   let design;
   try {
     brief = validateCreativeBrief(briefInput, { trustedScope });
+    const designScope = trustedScope.design_version_id === undefined
+      ? { ...trustedScope, design_version_id: designInput.design_version_id }
+      : trustedScope;
     design = validateDesignVersion(designInput, {
-      trustedScope: { ...trustedScope, design_version_id: designInput.design_version_id },
+      trustedScope: designScope,
       brief_hash: canonicalHash(brief),
       known_source_refs: copyBoundedPlainArray(brief.source_identity, "brief.source_identity", 10_000).map((source) => source.source_id),
     });
@@ -473,7 +491,7 @@ export function validateVisualObservation(value, deterministic) {
   if ((value.parent_design_hash ?? null) !== (deterministic.parent_design_hash ?? null)) {
     fail("stale_observation", "observation.parent_design_hash", "Observation parent hash does not match the inspected design.");
   }
-  if (!safePublicIdentifier(value.observation_id)) {
+  if (!isSafePublicInspectionReference(value.observation_id)) {
     fail("invalid_observation", "observation.observation_id", "Observation identity is invalid.");
   }
   if (typeof value.observed_at !== "string" || !Number.isFinite(Date.parse(value.observed_at)) || !/^\d{4}-\d\d-\d\dT/.test(value.observed_at)) {
@@ -481,10 +499,14 @@ export function validateVisualObservation(value, deterministic) {
   }
   plainRecord(value.observer, "observation.observer");
   if (Object.keys(value.observer).some((key) => !["type", "id", "model_id", "config_ref"].includes(key)) ||
-    !["human", "model", "system"].includes(value.observer.type) || !safePublicIdentifier(value.observer.id)) {
+    !["human", "model", "system"].includes(value.observer.type) || !isSafePublicInspectionReference(value.observer.id)) {
     fail("invalid_observation", "observation.observer", "Observer identity is invalid.");
   }
-  if (value.observer.type === "model" && (!safePublicIdentifier(value.observer.model_id) || typeof value.observer.config_ref !== "string")) {
+  if ((value.observer.model_id !== undefined && !isSafePublicInspectionReference(value.observer.model_id)) ||
+    (value.observer.config_ref !== undefined && (typeof value.observer.config_ref !== "string" || !/^sha256:[a-f0-9]{64}$/.test(value.observer.config_ref)))) {
+    fail("invalid_observation", "observation.observer", "Optional observer metadata must be safe bounded public references.");
+  }
+  if (value.observer.type === "model" && (!isSafePublicInspectionReference(value.observer.model_id) || typeof value.observer.config_ref !== "string")) {
     fail("invalid_observation", "observation.observer", "Model observations require model and configuration provenance.");
   }
   if (value.observer.config_ref !== undefined && !/^sha256:[a-f0-9]{64}$/.test(value.observer.config_ref)) {
