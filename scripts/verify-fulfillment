@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+
+let allSharedShapes = [];
+let contractOwnership = {};
+let catalogAvailable = false;
+try {
+  const catalog = await import("../dist/index.js");
+  allSharedShapes = catalog.ALL_SHARED_SHAPES;
+  contractOwnership = catalog.CONTRACT_OWNERSHIP;
+  catalogAvailable = Array.isArray(allSharedShapes) && contractOwnership !== undefined;
+} catch {
+  // Keep argument and missing-build failures machine-readable even before a build.
+}
+
+function parseArgs(argv) {
+  const parsed = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const key = argv[index];
+    if (!["--suite", "--mode", "--evidence-dir"].includes(key)) {
+      parsed.argumentError = "unknown_argument";
+      continue;
+    }
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      parsed.argumentError = "missing_argument_value";
+      continue;
+    }
+    parsed[key.slice(2)] = value;
+    index += 1;
+  }
+  return parsed;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const allowedSuites = new Set(["contract", "sandbox", "release"]);
+const allowedModes = new Set(["simulated", "sandbox"]);
+const startedAt = new Date().toISOString();
+const missingAcceptedPins = allSharedShapes.map((shape) => ({
+  shape,
+  ownerRepository: contractOwnership[shape]?.ownerRepository ?? null,
+  upstreamIssue: contractOwnership[shape]?.upstreamIssue ?? null,
+  state: "missing",
+  schemaVersion: null,
+  sourceRevision: null,
+  fixtureDigest: null
+}));
+const blockers = [
+  "accepted upstream schema versions, source revisions, and fixture digests are missing",
+  "producer and consumer conformance reports are missing"
+];
+
+let checks = [];
+let failureReasons = [];
+let status = "failed";
+
+if (args.argumentError !== undefined) failureReasons.push(args.argumentError);
+if (args.suite === undefined) failureReasons.push("suite_required");
+else if (!allowedSuites.has(args.suite)) failureReasons.push("unknown_suite");
+if (args.mode === undefined) failureReasons.push("mode_required");
+else if (!allowedModes.has(args.mode)) failureReasons.push("invalid_mode");
+if (args["evidence-dir"] === undefined) failureReasons.push("evidence_dir_required");
+if (process.version !== "v24.15.0") failureReasons.push("runtime_version_mismatch");
+
+if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
+  if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runContractSuite } = await import("../tests/contract-suite.mjs");
+      checks = await runContractSuite();
+      if (checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_local_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("contract_suite_prerequisite_failed");
+  }
+} else if (failureReasons.length === 0 && args.suite === "contract") {
+  failureReasons.push("contract_fixture_suite_requires_simulated_mode");
+} else if (failureReasons.length === 0 && args.suite === "sandbox") {
+  failureReasons.push("sandbox_adapter_and_accepted_contract_pins_unavailable");
+} else if (failureReasons.length === 0 && args.suite === "release") {
+  failureReasons.push("release_evidence_and_cross_repository_conformance_unavailable");
+}
+
+const result = {
+  schemaVersion: "fulfillment-verification-result/1",
+  suite: args.suite ?? null,
+  mode: args.mode ?? null,
+  billing_mode: args.mode ?? null,
+  status,
+  startedAt,
+  completedAt: new Date().toISOString(),
+  runtime: {
+    node: process.version,
+    expectedNode: "24.15.0",
+    package: "@jevelopers/fulfillment-connectors@0.1.0",
+    liveModeSupported: false
+  },
+  scope: status === "passed" ? "local_private_fixture_contract_suite" : "argument_or_prerequisite_check",
+  checks,
+  failureReasons,
+  blockers: status === "passed" ? blockers : [...blockers, ...failureReasons],
+  contractPins: {
+    catalogAvailable,
+    releaseReady: false,
+    missingAcceptedPins
+  },
+  conformance: {
+    producerRepositoryRevision: null,
+    consumerRepositoryRevision: null,
+    expectedResultsMatch: false
+  },
+  externalProviderCalls: 0,
+  evidenceFile: null
+};
+
+if (args["evidence-dir"] !== undefined) {
+  const evidenceDir = path.resolve(args["evidence-dir"]);
+  const evidenceFile = path.join(evidenceDir, "result.json");
+  result.evidenceFile = evidenceFile;
+  result.completedAt = new Date().toISOString();
+  try {
+    await mkdir(evidenceDir, { recursive: true });
+    await writeFile(evidenceFile, `${JSON.stringify(result, null, 2)}\n`, { encoding: "utf8", flag: "w" });
+  } catch {
+    status = "failed";
+    result.status = status;
+    result.scope = "argument_or_prerequisite_check";
+    failureReasons.push("evidence_write_failed");
+    result.failureReasons = failureReasons;
+    result.blockers = [...blockers, ...failureReasons];
+  }
+}
+process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+if (status !== "passed") process.exitCode = 1;

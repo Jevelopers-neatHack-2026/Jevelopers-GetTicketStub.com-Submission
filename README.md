@@ -1,19 +1,19 @@
 # fulfillment-connectors
 
-Supplier quotes, external attempts and status observations.
+Supplier quote normalization, external submission attempts, and status observations.
 
 ## Implementation status
 
-Documentation baseline only. Implementation and acceptance verification remain planned. No application scaffolding, provider connection, workflow, or license is implied.
+This branch contains a local worker-runtime foundation candidate with deterministic private fixtures. It has no selected production provider adapter, accepted upstream schema pins, cross-repository conformance reports, or live mode. Sandbox and release verification therefore remain blocked; the candidate does not establish completion of FC-01.
 
-[Architecture reference](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
+See [runtime design, evidence scope, and exact verification commands](docs/runtime.md).
 
 ## Architecture and delivery
 
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
 - [Relevant acceptance criteria](docs/architecture/ACCEPTANCE.md)
-- [Architecture and diagrams](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md)
+- [Architecture reference](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md)
 - [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
 - [Contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md)
 
-Architecture integration documents the intended boundaries. It does not establish completed product functionality, passing implementation tests, connected sponsor tools, or live financial activity.
+The CI workflow builds and tests only the local foundation and records no provider activity. Architecture integration documents the intended boundaries; it does not establish connected sponsor tools or live financial activity.
