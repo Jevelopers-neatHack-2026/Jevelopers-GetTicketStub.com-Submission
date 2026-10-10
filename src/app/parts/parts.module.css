@@ -165,3 +165,19 @@
   font: var(--type-label);
   color: var(--desk-ink-soft);
 }
+
+.stubRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px 32px;
+  align-items: flex-end;
+  padding: 24px 0 8px;
+}
+.stubCell {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+}

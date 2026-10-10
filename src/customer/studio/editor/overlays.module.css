@@ -321,6 +321,8 @@
 .frame {
   position: relative;
   display: inline-block;
+  max-width: 100%;
+  --stub-max: calc(100vw - 32px);
   transition: padding var(--ts-dur-settle) var(--ts-ease-standard), background var(--ts-dur-settle) var(--ts-ease-standard);
 }
 .frameInner {
@@ -328,44 +330,31 @@
 }
 .frame_digital {
   padding: 0;
-  filter: drop-shadow(0 0 18px rgb(124 198 210 / 0.35));
 }
+/* card: the stub printed on heavy card, a slightly darker stock showing at the edge */
 .frame_card {
+  --stub-max: calc(100vw - 32px - 12px);
   padding: 6px;
-  border-radius: 6px;
-  background-color: #efe6d4;
-  background-image:
-    repeating-linear-gradient(90deg, rgb(23 20 15 / 0.035) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(0deg, rgb(23 20 15 / 0.03) 0 1px, transparent 1px 4px);
-  box-shadow: var(--ts-shadow-paper);
+  border-radius: 4px;
+  background: var(--desk-paper-sunk, #ebe1cf);
+  box-shadow: 0 1px 0 var(--desk-ledge, rgb(23 20 15 / 0.2)), 0 14px 26px -16px rgb(23 20 15 / 0.5);
 }
+/* print: the stub on a sheet of warm art paper, deckled by a soft inner edge */
 .frame_print {
-  padding: 14px;
-  background: #fbf8f2;
-  box-shadow: var(--ts-shadow-paper);
+  --stub-max: calc(100vw - 32px - 36px);
+  padding: 18px;
+  background: var(--desk-paper-raised, #fbf6ec);
+  box-shadow: inset 0 0 0 1px rgb(23 20 15 / 0.06), 0 1px 0 var(--desk-ledge, rgb(23 20 15 / 0.2)), 0 18px 32px -18px rgb(23 20 15 / 0.5);
 }
 .frame_framed {
+  --stub-max: calc(100vw - 32px - 80px);
   padding: 26px;
-  background: #fbf8f2;
+  background: var(--desk-paper-raised, #fbf6ec);
   border: 14px solid #2a221a;
   border-image: linear-gradient(135deg, #3a2e22, #17140f 60%, #3a2e22) 1;
   box-shadow: inset 0 0 0 1px rgb(23 20 15 / 0.15), inset 0 6px 14px -8px rgb(23 20 15 / 0.5), var(--ts-shadow-lifted);
 }
-.holoSheen {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--ts-holo-spectrum);
-  background-size: 300% 300%;
-  mix-blend-mode: color-dodge;
-  opacity: 0.18;
-  animation: holo 6s linear infinite;
-}
-@keyframes holo {
-  to {
-    background-position: 300% 0;
-  }
-}
+
 
 /* Tear stage */
 .tearStage {

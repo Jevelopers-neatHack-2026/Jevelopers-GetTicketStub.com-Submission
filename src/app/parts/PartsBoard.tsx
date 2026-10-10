@@ -24,7 +24,10 @@ import {
 } from "@/customer/desk/Desk";
 import { AskIcon, FlipIcon, FriendsIcon, RemixIcon } from "@/customer/desk/icons";
 import { play, stopPrint, type Cue, type Emphasis } from "@/customer/studio/feedback";
-import type { Material } from "@/customer/studio/types";
+import { PALE_HOURS, newStub } from "@/customer/studio/fixtures";
+import { MaterialFrame } from "@/customer/studio/editor/MaterialFrame";
+import { StubView } from "@/customer/studio/stub/StubView";
+import type { Edition, Finish, Material, Stub } from "@/customer/studio/types";
 import s from "./parts.module.css";
 
 const MATERIALS: { value: Material; label: string; sub: string }[] = [
@@ -158,6 +161,45 @@ const CUES: { cue: Cue; job: string }[] = [
   { cue: "print", job: "Printer runs (2 s)" },
 ];
 
+function specimenStub(id: string, edition: Edition, finish: Finish): Stub {
+  const st = newStub(PALE_HOURS, id);
+  return { ...st, finish, versions: st.versions.map((v) => ({ ...v, edition })) };
+}
+
+function StubDesk() {
+  const [edition, setEdition] = useState<Edition>("researched");
+  const [material, setMaterial] = useState<Material>("print");
+  return (
+    <section className={s.sheets}>
+      <p className="desk-label">The stub on the desk</p>
+      <p className={s.body}>Tilt the stubs (move the pointer over them, or tilt your phone). The cast shadow slides away from the light, and the window light turns with the tilt. Holo is a fine flake film: its colour only blooms where the light falls.</p>
+      <div className={s.row}>
+        <PunchTabs
+          label="Edition"
+          value={edition}
+          onChange={setEdition}
+          options={[
+            { value: "researched", label: "Researched" },
+            { value: "letterpress", label: "Letterpress" },
+            { value: "classic", label: "Classic" },
+          ]}
+        />
+        <PunchTabs label="Material" value={material} onChange={setMaterial} options={MATERIALS.map(({ value, label }) => ({ value, label }))} />
+      </div>
+      <div className={s.stubRow}>
+        {(["matte", "foil", "holo"] as Finish[]).map((f) => (
+          <figure key={f} className={s.stubCell}>
+            <MaterialFrame material={material} finish={f}>
+              <StubView stub={specimenStub(`parts-${f}`, edition, f)} size="md" tilt />
+            </MaterialFrame>
+            <figcaption className="desk-label">{f}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SoundBoard() {
   const [emphasis, setEmphasis] = useState<Emphasis>("normal");
   return (
@@ -228,6 +270,8 @@ export default function PartsBoard() {
           <span className="desk-label">Seat</span> Sec 104 · Row G · Seat 9 <span className="desk-label">Date</span> 12 Oct 2024 <span className="desk-label">Total</span> $104.00
         </p>
       </section>
+
+      <StubDesk />
 
       <SoundBoard />
 

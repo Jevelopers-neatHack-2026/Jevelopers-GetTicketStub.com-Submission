@@ -54,43 +54,66 @@
   opacity: calc(var(--glow, 0.1) * 0.16);
 }
 
-/* Holographic stock: halftone plate (white = foil) multiplied by the spectrum,
-   screened onto the stub at 0.42 + 0.52 * glow. */
+/* Holographic stock: a fixed flake plate (white = foil) multiplied by a soft spectrum that moves
+   with the light, screened onto the stub. Rest 0.18, full tilt 0.72: at rest it reads as a faint
+   sheen on the stock; the colour only blooms where the light is. Never a visible dot grid. */
 .holo {
   position: absolute;
   inset: 0;
   isolation: isolate;
   mix-blend-mode: screen;
-  opacity: calc(0.42 + 0.52 * var(--glow, 0.1));
+  opacity: calc(0.12 + 0.6 * var(--glow, 0.1));
   overflow: hidden;
 }
 .plate {
   position: absolute;
-  inset: -50%;
+  inset: 0;
   background-color: #000;
-  background-image: radial-gradient(circle, #fff 0 var(--dot), #000 calc(var(--dot) + 0.35px));
-  background-size: var(--cell) var(--cell);
-  background-position: var(--off) var(--off);
-  transform: rotate(var(--angle));
+  background-image: var(--plate);
+  background-size: 180px 180px;
+}
+/* the light: colour concentrates in a soft pool around the light position */
+.plate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--lx, 50%) var(--ly, 35%), transparent 0%, rgb(0 0 0 / 0.35) 45%, rgb(0 0 0 / 0.8) 80%);
 }
 .spectrum {
   position: absolute;
   inset: -40%;
-  background: var(
-    --ts-holo-spectrum,
-    repeating-linear-gradient(
-      118deg,
-      hsl(348 92% 58%) 0,
-      hsl(34 94% 60%) 26px,
-      hsl(58 90% 62%) 50px,
-      hsl(150 82% 58%) 76px,
-      hsl(200 92% 60%) 102px,
-      hsl(280 88% 62%) 128px,
-      hsl(348 92% 58%) 152px
-    )
-  );
+  background: var(--holo-spectrum);
   mix-blend-mode: multiply;
-  transform: translate(calc(var(--px, 0) * 14%), calc(var(--py, 0) * 10%));
+  transform: translate(calc(var(--px, 0) * 18%), calc(var(--py, 0) * 12%));
+}
+/* On light stock a screen blend shows nothing, so the same flakes are also printed into the paper
+   with multiply, only inside the pool of light. On dark art multiply is invisible; screen covers it. */
+.tint {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--holo-spectrum);
+  background-size: 160% 160%;
+  background-position: calc(50% + var(--px, 0) * 40%) calc(50% + var(--py, 0) * 30%);
+  mix-blend-mode: multiply;
+  opacity: calc(0.06 + 0.8 * var(--glow, 0.1));
+  -webkit-mask: var(--plate) 0 0 / 180px 180px, radial-gradient(circle at var(--lx, 50%) var(--ly, 35%), #000 0%, rgb(0 0 0 / 0.5) 40%, transparent 80%);
+  -webkit-mask-composite: source-in;
+  mask: var(--plate) 0 0 / 180px 180px luminance, radial-gradient(circle at var(--lx, 50%) var(--ly, 35%), #000 0%, rgb(0 0 0 / 0.5) 40%, transparent 80%) alpha;
+  mask-composite: intersect;
+}
+.layers {
+  --holo-spectrum: linear-gradient(
+    118deg,
+    hsl(18 85% 60%) 0%,
+    hsl(44 88% 62%) 16%,
+    hsl(150 60% 55%) 33%,
+    hsl(190 75% 58%) 50%,
+    hsl(255 60% 66%) 67%,
+    hsl(330 70% 62%) 84%,
+    hsl(18 85% 60%) 100%
+  );
 }
 
 /* Foil title text: the gradient is fixed ink, only its position follows the light. */
