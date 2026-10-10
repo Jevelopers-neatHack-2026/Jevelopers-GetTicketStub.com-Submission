@@ -25,6 +25,9 @@ TOOL_VERSION = "1.1"
 PROFILE_VERSION = "1.1"
 REPORT_VERSION = "1.1"
 SUPPORTED_PROFILE_VERSIONS = frozenset({"1.0", PROFILE_VERSION})
+MAX_PROFILE_JSON_BYTES = 1_048_576
+MAX_PROFILE_JSON_NESTING = 100
+MAX_PROFILE_JSON_INTEGER_DIGITS = 4096
 EXPECTED_CAPABILITIES = (
     "jev",
     "gpt_image",
@@ -207,6 +210,10 @@ class DuplicateKeyError(ValueError):
     pass
 
 
+class JsonIntegerLimitError(Exception):
+    """Raised before converting an oversized JSON integer token."""
+
+
 def _pairs_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -214,6 +221,42 @@ def _pairs_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise DuplicateKeyError("duplicate key")
         result[key] = value
     return result
+
+
+def _parse_bounded_json_integer(token: str) -> int:
+    digits = token[1:] if token.startswith("-") else token
+    if len(digits) > MAX_PROFILE_JSON_INTEGER_DIGITS:
+        raise JsonIntegerLimitError
+    try:
+        return int(token)
+    except ValueError:
+        # Keep the interpreter's integer-string safety limit enabled and
+        # translate any stricter runtime limit into the same typed rejection.
+        raise JsonIntegerLimitError from None
+
+
+def _json_nesting_exceeds_limit(text: str) -> bool:
+    depth = 0
+    in_string = False
+    escaped = False
+    for char in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_PROFILE_JSON_NESTING:
+                return True
+        elif char in "]}" and depth:
+            depth -= 1
+    return False
 
 
 def _fail(code: str, path: str, message: str) -> None:
@@ -886,6 +929,12 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
                     "This capability does not accept model identity fields in live records.",
                 )
             if live["status"] in {"observed", "denied"}:
+                if live["status"] == "observed" and cell_id != "entire" and api_surface is None:
+                    _fail(
+                        "LIVE_API_BINDING_REQUIRED",
+                        f"{path}.live",
+                        "Observed live evidence requires a supported provider, API family, and endpoint selection.",
+                    )
                 if live["status"] == "observed" and config["billing_mode"] == "unknown":
                     _fail("LIVE_BILLING_MODE_UNCONFIRMED", f"{config_path}.billing_mode", "Live provider outcomes require an explicitly recorded billing or non-applicability mode.")
                 if live["status"] == "observed" and config["billing_mode"] != "api_metered":
@@ -1276,19 +1325,33 @@ def _load_profile(path: Path) -> tuple[dict[str, Any] | None, str | None]:
         metadata = path.stat()
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o022:
             return None, "PROFILE_FILE_UNSAFE"
-        if metadata.st_size > 1_048_576:
+        if metadata.st_size > MAX_PROFILE_JSON_BYTES:
             return None, "PROFILE_FILE_TOO_LARGE"
         raw = path.read_bytes()
     except OSError:
         return None, "PROFILE_FILE_UNREADABLE"
     try:
-        profile = json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs_without_duplicates)
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None, "PROFILE_JSON_INVALID"
+    if _json_nesting_exceeds_limit(text):
+        return None, "PROFILE_JSON_DEPTH_LIMIT"
+    try:
+        profile = json.loads(
+            text,
+            object_pairs_hook=_pairs_without_duplicates,
+            parse_int=_parse_bounded_json_integer,
+        )
     except DuplicateKeyError:
         return None, "PROFILE_JSON_DUPLICATE_KEY"
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except JsonIntegerLimitError:
+        return None, "PROFILE_JSON_INTEGER_LIMIT"
+    except json.JSONDecodeError:
         return None, "PROFILE_JSON_INVALID"
     except RecursionError:
         return None, "PROFILE_JSON_DEPTH_LIMIT"
+    except ValueError:
+        return None, "PROFILE_JSON_INVALID"
     if not isinstance(profile, dict):
         return None, "PROFILE_ROOT_INVALID"
     return profile, None

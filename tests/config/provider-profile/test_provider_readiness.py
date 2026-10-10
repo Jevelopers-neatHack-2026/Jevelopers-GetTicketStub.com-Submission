@@ -25,14 +25,14 @@ def load_fixture():
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
-def run_cli(profile_bytes, mode):
+def run_cli(profile_bytes, mode, python_executable=None):
     with tempfile.TemporaryDirectory() as temp_dir:
         profile_path = Path(temp_dir) / "profile.json"
         profile_path.write_bytes(profile_bytes)
         profile_path.chmod(0o600)
         return subprocess.run(
             [
-                sys.executable,
+                python_executable or sys.executable,
                 "-B",
                 str(REPO_ROOT / "tools" / "verify_provider_readiness.py"),
                 "--profile",
@@ -941,26 +941,116 @@ class ProviderReadinessTests(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_denied_jev_and_metadata_only_records_do_not_invent_response_identity(self):
-        profile = load_fixture()
-        jev = make_live_observation(
-            profile,
-            "jev",
-            api_family="systemone_v1",
-            endpoint="https://api.typesafe.ai/v1/systemone",
-            model="jev-1.13.0",
-        )
-        jev["live"].update(status="denied", resolved_model=None)
-        errors, _ = self.validate(profile)
-        self.assertEqual(errors, [])
+        for version in ("1.0", "1.1"):
+            with self.subTest(schema_version=version, record="denied"):
+                profile = load_fixture()
+                jev = make_live_observation(
+                    profile,
+                    "jev",
+                    api_family="systemone_v1",
+                    endpoint="https://api.typesafe.ai/v1/systemone",
+                    model="jev-1.13.0",
+                )
+                set_profile_version(profile, version)
+                jev["live"].update(status="denied", resolved_model=None)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
 
-        profile = load_fixture()
-        jev = add_jev_admin_record(profile)
-        add_jev_model_list_record(jev)
-        errors, _ = self.validate(profile)
-        self.assertEqual(errors, [])
-        jev["metadata"]["resolved_model"] = "jev-1.13.0"
-        issue = self.first_issue(profile)
-        self.assertEqual(issue["code"], "METADATA_RESOLUTION_UNSUPPORTED")
+            with self.subTest(schema_version=version, record="metadata"):
+                profile = load_fixture()
+                jev = add_jev_admin_record(profile)
+                add_jev_model_list_record(jev)
+                set_profile_version(profile, version)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+                jev["metadata"]["resolved_model"] = "jev-1.13.0"
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "METADATA_RESOLUTION_UNSUPPORTED")
+
+    def test_observed_response_identity_requires_a_supported_api_binding_in_both_profile_versions(self):
+        surfaces = (
+            (
+                "jev",
+                "systemone_v1",
+                "https://api.typesafe.ai/v1/systemone",
+                "jev-1.13.0",
+                "https://api.typesafe.ai/v1/models",
+                "LIVE_RECORD_ENDPOINT_INVALID",
+            ),
+            (
+                "planner_reasoning",
+                "responses",
+                "https://api.openai.com/v1/responses",
+                "gpt-4.1-2025-04-14",
+                "https://api.openai.com/v1/chat/completions",
+                "LIVE_ENDPOINT_MISMATCH",
+            ),
+            (
+                "generative_baseline",
+                "chat_completions",
+                "https://api.openai.com/v1/chat/completions",
+                "gpt-4.1-2025-04-14",
+                "https://api.openai.com/v1/responses",
+                "LIVE_ENDPOINT_MISMATCH",
+            ),
+        )
+
+        def observed_profile(capability, api_family, endpoint, model, version):
+            profile = load_fixture()
+            cell = make_live_observation(
+                profile,
+                capability,
+                api_family=api_family,
+                endpoint=endpoint,
+                model=model,
+            )
+            set_profile_version(profile, version)
+            return profile, cell
+
+        def leave_client_unselected(config, version):
+            config["sdk"] = None
+            if version == "1.1":
+                config["client_selection"] = {
+                    "mode": "unselected",
+                    "api_version": None,
+                    "policy_ref": None,
+                }
+            else:
+                config.pop("client_selection", None)
+
+        for version in ("1.0", "1.1"):
+            for capability, api_family, endpoint, model, mismatched_endpoint, mismatch_code in surfaces:
+                with self.subTest(schema_version=version, capability=capability, case="matching response"):
+                    profile, cell = observed_profile(capability, api_family, endpoint, model, version)
+                    errors, _ = self.validate(profile)
+                    self.assertEqual(errors, [])
+                    cell["configuration"]["model"]["resolved"] = None
+                    cell["live"]["resolved_model"] = None
+                    issue = self.first_issue(profile)
+                    self.assertEqual(issue["code"], "LIVE_RESPONSE_MODEL_MISSING")
+
+                with self.subTest(schema_version=version, capability=capability, case="unselected client"):
+                    profile, cell = observed_profile(capability, api_family, endpoint, model, version)
+                    cell["configuration"]["model"]["resolved"] = None
+                    cell["live"]["resolved_model"] = None
+                    leave_client_unselected(cell["configuration"], version)
+                    issue = self.first_issue(profile)
+                    self.assertEqual(issue["code"], "LIVE_RESPONSE_MODEL_MISSING")
+
+                with self.subTest(schema_version=version, capability=capability, case="missing API family"):
+                    profile, cell = observed_profile(capability, api_family, endpoint, model, version)
+                    cell["configuration"]["api_family"] = None
+                    cell["configuration"]["model"]["resolved"] = None
+                    cell["live"]["resolved_model"] = None
+                    leave_client_unselected(cell["configuration"], version)
+                    issue = self.first_issue(profile)
+                    self.assertEqual(issue["code"], "LIVE_API_BINDING_REQUIRED")
+
+                with self.subTest(schema_version=version, capability=capability, case="mismatched endpoint"):
+                    profile, cell = observed_profile(capability, api_family, endpoint, model, version)
+                    cell["live"]["endpoint"] = mismatched_endpoint
+                    issue = self.first_issue(profile)
+                    self.assertEqual(issue["code"], mismatch_code)
 
     def test_model_policy_requires_a_current_revalidation_date(self):
         profile = load_fixture()
@@ -1347,6 +1437,7 @@ class ProviderReadinessTests(unittest.TestCase):
 
     def test_real_cli_reports_safe_depth_errors_for_arrays_and_objects_in_all_modes(self):
         marker = b"SYNTHETIC_DEEP_JSON_MARKER"
+        self.assertGreater(1500, readiness.MAX_PROFILE_JSON_NESTING)
         deep_inputs = {
             "array": b'{"nested":' + b"[" * 1500 + b'"' + marker + b'"' + b"]" * 1500 + b"}",
             "object": b'{"nested":' + b'{"nested":' * 1500 + b'"' + marker + b'"' + b"}" * 1500 + b"}",
@@ -1366,6 +1457,33 @@ class ProviderReadinessTests(unittest.TestCase):
                         self.assertEqual(report["mode_result"], "profile_rejected")
                         self.assertFalse(report["network_accessed"])
                         self.assertEqual(report["diagnostics"][0]["code"], "PROFILE_JSON_DEPTH_LIMIT")
+
+    def test_real_cli_rejects_positive_and_negative_5000_digit_integer_tokens_in_all_modes(self):
+        if hasattr(sys, "get_int_max_str_digits"):
+            self.assertGreater(sys.get_int_max_str_digits(), 0)
+        digits = b"7" * 5000
+        cases = {"positive": digits, "negative": b"-" + digits}
+        marker = b"SYNTHETIC_INTEGER_MARKER"
+        for sign, integer_token in cases.items():
+            raw = b'{"nested":' + integer_token + b',"marker":"' + marker + b'"}'
+            with self.subTest(sign=sign):
+                self.assertLess(len(raw), readiness.MAX_PROFILE_JSON_BYTES)
+                for mode in ("offline", "metadata", "live"):
+                    with self.subTest(mode=mode):
+                        result = run_cli(raw, mode)
+                        self.assertEqual(result.returncode, 1)
+                        self.assertEqual(result.stderr, "")
+                        self.assertNotIn("Traceback", result.stdout)
+                        self.assertNotIn(integer_token.decode("ascii"), result.stdout)
+                        self.assertNotIn(marker.decode("ascii"), result.stdout)
+                        report = json.loads(result.stdout)
+                        self.assertEqual(report["status"], "invalid")
+                        self.assertEqual(report["mode_result"], "profile_rejected")
+                        self.assertFalse(report["network_accessed"])
+                        self.assertEqual(
+                            report["diagnostics"][0]["code"],
+                            "PROFILE_JSON_INTEGER_LIMIT",
+                        )
 
     def test_real_cli_pending_fixture_and_unsupported_modes_remain_non_networked(self):
         raw = json.dumps(load_fixture()).encode("utf-8")
@@ -1462,6 +1580,9 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertIn("gpt-image-2-2026-04-21", runbook)
         self.assertIn("gpt-4.1-2025-04-14", runbook)
         self.assertIn("PROFILE_JSON_DEPTH_LIMIT", runbook)
+        self.assertIn("PROFILE_JSON_INTEGER_LIMIT", runbook)
+        self.assertIn("`jev-1.13.0`", runbook)
+        self.assertIn("unselected client stays pending", runbook)
         self.assertIn("Codex subscription access does not establish API eligibility", runbook)
         self.assertIn("successful observed inference", runbook)
         for family in {key[2] for key in readiness.API_SURFACES}:
