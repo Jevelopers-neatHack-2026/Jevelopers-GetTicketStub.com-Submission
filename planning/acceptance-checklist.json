@@ -1,0 +1,1028 @@
+{
+  "format_version": "1.0",
+  "document_date": "2026-10-10",
+  "kind": "implementation_acceptance_plan",
+  "allowed_statuses": [
+    "planned",
+    "in_progress",
+    "blocked",
+    "verified",
+    "deferred"
+  ],
+  "notes": [
+    "No implementation evidence is claimed by this package.",
+    "P0 is the demo-critical slice, P1 is the next expansion, and Production is a live-launch gate.",
+    "Official event requirements are summarized with primary sources in architecture section 11.",
+    "Original pending states migrate to planned; verified requires actual evidence and tested revisions. Failure results are evidence, not a completion state."
+  ],
+  "criteria": [
+    {
+      "id": "ARC-01",
+      "category": "Architecture",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Product and frontend",
+      "title": "Pinned clean assembly",
+      "verification": "Build the chosen revisions from a clean workspace using the documented bootstrap and dependency lockfile.",
+      "evidence_required": "Release manifest, runtime versions and successful command output.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1"
+      ]
+    },
+    {
+      "id": "ARC-02",
+      "category": "Architecture",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Product and frontend",
+      "title": "Single data ownership",
+      "verification": "Trace each core record and migration to one owner; consumers use documented interfaces.",
+      "evidence_required": "Data ownership map and integrated write-path review.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1"
+      ]
+    },
+    {
+      "id": "CON-01",
+      "category": "Contracts",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Contract compatibility",
+      "verification": "Run valid, invalid, older-version and unknown-field fixtures against producers and consumers.",
+      "evidence_required": "Versioned fixtures and compatibility results.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ]
+    },
+    {
+      "id": "CON-02",
+      "category": "Contracts",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Trusted scope and identity",
+      "verification": "Supply forged tenant and project IDs and confirm the server rejects unauthorized scope.",
+      "evidence_required": "Negative authorization cases across API, jobs and artifacts.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1"
+      ]
+    },
+    {
+      "id": "CON-03",
+      "category": "Contracts",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Typed bounded actions",
+      "verification": "Reject unknown dynamic controls, privileged actions and unsupported contract versions.",
+      "evidence_required": "Validation errors and allowlisted control fixtures.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ]
+    },
+    {
+      "id": "AGT-01",
+      "category": "Agent and research",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Sourced event facts",
+      "verification": "Research the selected URL and attach a source or explicit uncertainty to each material fact.",
+      "evidence_required": "Event package with field-level provenance and conflicts.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "AGT-02",
+      "category": "Agent and research",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Durable resume",
+      "verification": "Interrupt the worker after a completed step and resume from its saved checkpoint.",
+      "evidence_required": "Before and after checkpoints and correlated traces.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1"
+      ]
+    },
+    {
+      "id": "AGT-03",
+      "category": "Agent and research",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Bounded recovery",
+      "verification": "Trigger a recoverable failure and show attempts, elapsed time and cost limits terminate or resolve it.",
+      "evidence_required": "Run showing failure, next action and final outcome.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1"
+      ]
+    },
+    {
+      "id": "AGT-04",
+      "category": "Agent and research",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Untrusted content handling",
+      "verification": "Retrieve a page containing instructions to change budgets or tool permissions and confirm they are not acted upon.",
+      "evidence_required": "Adversarial source fixture and permission outcome.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "AGT-05",
+      "category": "Agent and research",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Safe URL retrieval",
+      "verification": "Reject private-network and unsupported destinations, including a redirected destination.",
+      "evidence_required": "URL validation and resource-limit results.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "ART-01",
+      "category": "Artwork and production",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Versioned design edits",
+      "verification": "Create a design and one revision with separate hashes, parent linkage and usage references.",
+      "evidence_required": "Two design records and a visible comparison.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/1"
+      ]
+    },
+    {
+      "id": "ART-02",
+      "category": "Artwork and production",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Product and frontend",
+      "title": "Approval binds exact output",
+      "verification": "Approve one version then change its artwork or event facts; require a new approval.",
+      "evidence_required": "Approval binding and stale-version rejection.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/1"
+      ]
+    },
+    {
+      "id": "ART-03",
+      "category": "Artwork and production",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Deterministic personalization",
+      "verification": "Render multiple names using the selected template and verify exact text and font availability.",
+      "evidence_required": "Output variants and content-integrity report.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1"
+      ]
+    },
+    {
+      "id": "ART-04",
+      "category": "Artwork and production",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Print preflight and hashes",
+      "verification": "Reject invalid dimensions, bleed or resolution; accept a matching bundle and verify all file hashes.",
+      "evidence_required": "Product specification, preflight report and manifest.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1"
+      ]
+    },
+    {
+      "id": "ART-05",
+      "category": "Artwork and production",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Approved asset inputs",
+      "verification": "Use only assets with the required approval record in the production bundle.",
+      "evidence_required": "Asset provenance and approval references.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/creative-engine/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1"
+      ]
+    },
+    {
+      "id": "FUL-01",
+      "category": "Fulfillment",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Quote separated from purchase",
+      "verification": "Obtain a sandbox quote and show it does not create an incurred expense or submitted order.",
+      "evidence_required": "Quote record, order state and ledger comparison.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1"
+      ]
+    },
+    {
+      "id": "FUL-02",
+      "category": "Fulfillment",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Purchase authorization integrity",
+      "verification": "Change quantity, destination, bundle hash, currency or authorized amount and reject the stale authorization.",
+      "evidence_required": "Authorization record and invalidation cases.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1"
+      ]
+    },
+    {
+      "id": "FUL-03",
+      "category": "Fulfillment",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Ambiguous submission recovery",
+      "verification": "Simulate supplier acceptance followed by timeout; resolve its existing identity before any resubmission.",
+      "evidence_required": "Attempt history showing one intended supplier order.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1"
+      ]
+    },
+    {
+      "id": "FUL-04",
+      "category": "Fulfillment",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Creative and fulfillment",
+      "title": "Duplicate supplier callback",
+      "verification": "Replay the same status notification and confirm no second commercial transition or charge.",
+      "evidence_required": "Inbox identity and unchanged effective records.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-01",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Attempt level metering",
+      "verification": "Join every billable attempt to provider, model, usage, budget scope and correlation ID, or explicit incomplete data.",
+      "evidence_required": "Usage-to-attempt report and missing-data coverage.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-02",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Duplicate observations",
+      "verification": "Import matching direct usage and trace observations twice; effective expense remains one charge.",
+      "evidence_required": "Source identity mapping and unchanged ledger totals.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-03",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Distinct billed retries",
+      "verification": "Execute two distinct billable attempts for one logical operation and retain both costs.",
+      "evidence_required": "Two attempt identities with attributed usage.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-04",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Unknown billing",
+      "verification": "Remove provider usage or time out after dispatch; retain unknown or estimated cost instead of an invented zero.",
+      "evidence_required": "Incomplete record, held budget and reconciliation status.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-05",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Estimate reconciliation",
+      "verification": "Reconcile a $1.00 estimate with a $1.10 confirmed cost; effective spend is $1.10 with traceable adjustment.",
+      "evidence_required": "Linked postings and reconciliation evidence.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-06",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Aggregate billing coverage",
+      "verification": "Import an invoice covering existing request costs without adding those costs again; retain unexplained differences.",
+      "evidence_required": "Coverage mapping and unallocated discrepancy record.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-07",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Subcent usage precision",
+      "verification": "Accumulate small per-call costs without rounding each call to zero.",
+      "evidence_required": "Exact intermediate amounts and documented final rounding.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "FIN-08",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Shared research allocation",
+      "verification": "Allocate one research expense across several orders without increasing project expense.",
+      "evidence_required": "Original posting and analytical allocation totals.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2"
+      ]
+    },
+    {
+      "id": "FIN-09",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Revenue and cash classification",
+      "verification": "Apply a sale, fee, refund, tax amount, credit, payout and reimbursement with their defined distinct effects.",
+      "evidence_required": "Deterministic ledger fixture and expected projections.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2"
+      ]
+    },
+    {
+      "id": "FIN-10",
+      "category": "Financial integrity",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Billing mode isolation",
+      "verification": "Mix live paid AI tests and simulated sales; actual costs include the paid call while real revenue excludes simulations.",
+      "evidence_required": "Filtered projections and source billing modes.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2"
+      ]
+    },
+    {
+      "id": "BUD-01",
+      "category": "Budget controls",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Concurrent project reservations",
+      "verification": "Compete for the remaining capacity from two workers and reject any reservation that exceeds the shared limit.",
+      "evidence_required": "Concurrent reservation result and conserved capacity.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "BUD-02",
+      "category": "Budget controls",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Reservation consumption",
+      "verification": "Settle a held amount into spend and release only its unused portion.",
+      "evidence_required": "Before and after budget projection and posting links.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "BUD-03",
+      "category": "Budget controls",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Uncertain in flight cost",
+      "verification": "Expire a worker lease during an unresolved provider call and retain the conservative financial hold.",
+      "evidence_required": "Lease state, hold state and reconciliation path.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ]
+    },
+    {
+      "id": "BUD-04",
+      "category": "Budget controls",
+      "classification": "team_requirement",
+      "priority": "P1",
+      "owner_role": "Finance and reliability",
+      "title": "Nested budget scopes",
+      "verification": "Check project, workstream, agent and task limits atomically before dispatch.",
+      "evidence_required": "Multi-scope contention and settlement results.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [],
+      "implementation_issue_refs": []
+    },
+    {
+      "id": "DASH-01",
+      "category": "Dashboard",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Reproducible aggregates",
+      "verification": "Open a displayed total and verify its records match the selected period, currency and billing mode.",
+      "evidence_required": "Dashboard drilldown and backend projection comparison.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1"
+      ]
+    },
+    {
+      "id": "DASH-02",
+      "category": "Dashboard",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Data quality visibility",
+      "verification": "Display absent cash data, estimated costs and unreconciled differences clearly.",
+      "evidence_required": "Screenshots showing unknown, estimated and confirmed cases.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1"
+      ]
+    },
+    {
+      "id": "DASH-03",
+      "category": "Dashboard",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Product and frontend",
+      "title": "Role enforced commands",
+      "verification": "Allow member reads while restricting budget and expense commands to authorized roles; record changes.",
+      "evidence_required": "Server authorization cases and actor audit history.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1"
+      ]
+    },
+    {
+      "id": "DASH-04",
+      "category": "Dashboard",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "CFO summary provenance",
+      "verification": "Export a versioned financial summary with definitions, period, assumptions, coverage and source references.",
+      "evidence_required": "Export artifact reconciled to the financial projection.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3"
+      ]
+    },
+    {
+      "id": "EVAL-01",
+      "category": "Evidence and release",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Complete customer journey",
+      "verification": "Run URL research through revision, approval, export, sandbox fulfillment and financial reporting.",
+      "evidence_required": "One correlated scenario with pinned component revisions.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ]
+    },
+    {
+      "id": "EVAL-02",
+      "category": "Evidence and release",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Comparable improvement",
+      "verification": "Evaluate the same representative inputs before and after one change with cost, latency and success criteria.",
+      "evidence_required": "Raw results, sample size and configuration differences.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ]
+    },
+    {
+      "id": "EVAL-03",
+      "category": "Evidence and release",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Product and frontend",
+      "title": "Evidence classification",
+      "verification": "Label simulated, sandbox, live, estimated and pending capabilities next to the related demo claims.",
+      "evidence_required": "Sanitized evidence index and reviewed narrative.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/1"
+      ]
+    },
+    {
+      "id": "EVAL-04",
+      "category": "Evidence and release",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Secrets and customer data",
+      "verification": "Review published evidence and repository history for credentials and unnecessary customer or account details.",
+      "evidence_required": "Sanitization review and applicable scanning results.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ]
+    },
+    {
+      "id": "SPN-01",
+      "category": "Sponsor evidence",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "Neatlogs use",
+      "verification": "Record an actual agent run in Neatlogs and provide inspectable traces or sanitized screenshots.",
+      "evidence_required": "Neatlogs artifact tied to an evaluated application run.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/1"
+      ]
+    },
+    {
+      "id": "SPN-02",
+      "category": "Sponsor evidence",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Agent and research",
+      "title": "Entire use",
+      "verification": "Capture actual Entire development provenance through checkpoints or repository graph output.",
+      "evidence_required": "Entire artifact linked to relevant component revisions.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/event-intelligence/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/print-production/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/1"
+      ]
+    },
+    {
+      "id": "SPN-03",
+      "category": "Sponsor evidence",
+      "classification": "team_requirement",
+      "priority": "P0",
+      "owner_role": "Finance and reliability",
+      "title": "CFO.ai use",
+      "verification": "Build the business plan in CFO.ai using the financial summary and documented assumptions.",
+      "evidence_required": "CFO.ai plan covering pricing, costs, revenue and runway; a generic data export alone is insufficient.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+        "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1"
+      ],
+      "implementation_issue_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/1",
+        "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3"
+      ]
+    },
+    {
+      "id": "LIVE-01",
+      "category": "Production launch",
+      "classification": "team_requirement",
+      "priority": "Production",
+      "owner_role": "Product and frontend",
+      "title": "Live payment event handling",
+      "verification": "Verify payment signatures, repeated and reordered events, refunds and refund allocation before live checkout.",
+      "evidence_required": "Payment sandbox suite, reconciliation and launch review.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [],
+      "implementation_issue_refs": []
+    },
+    {
+      "id": "LIVE-02",
+      "category": "Production launch",
+      "classification": "team_requirement",
+      "priority": "Production",
+      "owner_role": "Product and frontend",
+      "title": "Operational recovery",
+      "verification": "Restore database and artifacts, rehearse interrupted deployment recovery, and verify monitoring ownership.",
+      "evidence_required": "Restore record, recovery procedure and alert ownership.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [],
+      "implementation_issue_refs": []
+    },
+    {
+      "id": "LIVE-03",
+      "category": "Production launch",
+      "classification": "team_requirement",
+      "priority": "Production",
+      "owner_role": "Creative and fulfillment",
+      "title": "Live supplier validation",
+      "verification": "Validate the actual SKU and authorization process before enabling a live purchase.",
+      "evidence_required": "Approved sample, confirmed product specification and launch decision.",
+      "status": "planned",
+      "evidence_refs": [],
+      "tested_revision_refs": [],
+      "notes": "",
+      "dependencies": [],
+      "implementation_issue_refs": []
+    }
+  ]
+}
