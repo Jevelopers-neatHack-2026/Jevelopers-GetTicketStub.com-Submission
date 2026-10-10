@@ -64,12 +64,13 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .attr { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-weight: 500; font-size: var(--s-1); letter-spacing: .06em; text-transform: uppercase; }
 .stage { position: relative; display: grid; place-items: center; aspect-ratio: 1; max-width: 420px; width: 100%; justify-self: center; background: var(--ink); border-radius: 4px; perspective: 1400px; overflow: hidden; touch-action: pan-y; }
 .stage::after { content: "Move over the stamp"; position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: rgb(244 236 221 / .55); font-size: var(--s-1); letter-spacing: .06em; }
-.foilstamp { position: relative; width: 52%; aspect-ratio: 4 / 5; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 380ms var(--ease-flip); isolation: isolate; filter: drop-shadow(0 18px 24px rgb(0 0 0 / .5)); }
-.foilstamp.live { transition: transform 80ms linear; }
+.foilstamp { position: relative; width: 52%; aspect-ratio: 4 / 5; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); isolation: isolate; filter: drop-shadow(0 18px 24px rgb(0 0 0 / .5)); will-change: transform; }
 .foilstamp img { width: 100%; height: 100%; display: block; }
 .foilstamp .holo, .foilstamp .glare { position: absolute; inset: 0; -webkit-mask: url(logo/ts-stamp-mono-ink.svg) center / 100% 100% no-repeat; mask: url(logo/ts-stamp-mono-ink.svg) center / 100% 100% no-repeat; pointer-events: none; }
-.foilstamp .holo { background: var(--holo); background-size: 300% 300%; background-position: calc(50% + var(--fx, 0) * 1px) calc(50% + var(--fy, 0) * .4px); mix-blend-mode: color-dodge; opacity: calc(.08 + var(--glow, 0) * .32); }
-.foilstamp .glare { background: radial-gradient(farthest-corner circle at var(--px, 50%) var(--py, 50%), rgb(255 255 255 / calc(var(--glow, 0) * .55)) 4%, rgb(255 255 255 / calc(var(--glow, 0) * .12)) 24%, transparent 55%); mix-blend-mode: overlay; }
+/* Brand foil sheen, not the rainbow: a narrow copper/cyan band that slides with the light.
+   Opacity comes from --glow, which JS eases (never steps). Caps: sheen .32, glare .18. */
+.foilstamp .holo { background: linear-gradient(115deg, transparent 32%, rgb(232 192 143 / .9) 44%, rgb(124 198 210 / .9) 54%, transparent 66%); background-size: 260% 260%; background-position: calc(50% - var(--lx, 0) * 60%) calc(50% - var(--ly, 0) * 30%); mix-blend-mode: soft-light; opacity: calc(var(--glow, .08) * .32); }
+.foilstamp .glare { background: radial-gradient(farthest-corner circle at var(--px, 50%) var(--py, 50%), rgb(255 255 255 / calc(var(--glow, .08) * .18)) 0%, rgb(255 255 255 / calc(var(--glow, .08) * .05)) 30%, transparent 60%); mix-blend-mode: overlay; }
 
 /* sections */
 section { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 24px 48px; padding-block: 56px; border-top: 1px solid var(--line); }
@@ -246,8 +247,7 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   section { grid-template-columns: 1fr; padding-block: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .foilstamp, .foilstamp.live { transition: none; }
-  .foilstamp { --glow: .55; }
+  .foilstamp { --glow: .5; }
   .chip-low, .track i { animation: none; }
 }
 </style>
@@ -468,24 +468,45 @@ footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; fl
   const stage = document.getElementById('stage');
   const card = document.getElementById('foilstamp');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const set = (x, y, glow) => {
-    card.style.setProperty('--px', x + '%');
-    card.style.setProperty('--py', y + '%');
-    card.style.setProperty('--fx', ((x - 50) * 2.6).toFixed(1));
-    card.style.setProperty('--fy', ((y - 50) * 2.6).toFixed(1));
-    card.style.setProperty('--rx', ((0.5 - y / 100) * 22).toFixed(2) + 'deg');
-    card.style.setProperty('--ry', ((x / 100 - 0.5) * 22).toFixed(2) + 'deg');
-    card.style.setProperty('--glow', glow);
+  // Every visual input is eased toward a target, time-based, so nothing can step.
+  // tau = time constant in ms (63% of the way there). Glow fades in slower than it tracks.
+  const TAU = { tilt: 110, light: 90, glowIn: 260, glowOut: 520 };
+  const REST_GLOW = 0.08, MAX_TILT = 11;
+  const cur = { x: 0.5, y: 0.5, glow: REST_GLOW };
+  const tgt = { x: 0.5, y: 0.5, glow: REST_GLOW };
+  let raf = 0, last = 0;
+  const ease = (c, t, dt, tau) => c + (t - c) * (1 - Math.exp(-dt / tau));
+  const paint = () => {
+    const lx = cur.x - 0.5, ly = cur.y - 0.5;
+    card.style.setProperty('--px', (cur.x * 100).toFixed(2) + '%');
+    card.style.setProperty('--py', (cur.y * 100).toFixed(2) + '%');
+    card.style.setProperty('--lx', lx.toFixed(4));
+    card.style.setProperty('--ly', ly.toFixed(4));
+    card.style.setProperty('--rx', (-ly * 2 * MAX_TILT).toFixed(3) + 'deg');
+    card.style.setProperty('--ry', (lx * 2 * MAX_TILT).toFixed(3) + 'deg');
+    card.style.setProperty('--glow', cur.glow.toFixed(4));
   };
+  const tick = (now) => {
+    const dt = Math.min(50, now - (last || now)); last = now;
+    cur.x = ease(cur.x, tgt.x, dt, TAU.light);
+    cur.y = ease(cur.y, tgt.y, dt, TAU.light);
+    cur.glow = ease(cur.glow, tgt.glow, dt, tgt.glow > cur.glow ? TAU.glowIn : TAU.glowOut);
+    paint();
+    const settled = Math.abs(cur.x - tgt.x) < 1e-3 && Math.abs(cur.y - tgt.y) < 1e-3 && Math.abs(cur.glow - tgt.glow) < 1e-3;
+    raf = settled ? 0 : requestAnimationFrame(tick);
+  };
+  const kick = () => { if (!raf) { last = 0; raf = requestAnimationFrame(tick); } };
+  paint();
   if (!still) {
     stage.addEventListener('pointermove', (e) => {
       const r = card.getBoundingClientRect();
-      const x = Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100));
-      const y = Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100));
-      card.classList.add('live');
-      set(x, y, 1);
+      // Light position may roam a little past the stamp, clamped so the sheen never leaves it.
+      tgt.x = Math.min(1.1, Math.max(-0.1, (e.clientX - r.left) / r.width));
+      tgt.y = Math.min(1.1, Math.max(-0.1, (e.clientY - r.top) / r.height));
+      tgt.glow = 1;
+      kick();
     });
-    stage.addEventListener('pointerleave', () => { card.classList.remove('live'); set(50, 50, 0); });
+    stage.addEventListener('pointerleave', () => { tgt.x = 0.5; tgt.y = 0.5; tgt.glow = REST_GLOW; kick(); });
   }
   document.querySelectorAll('.copybtn').forEach((b) => b.addEventListener('click', () => {
     const hex = b.dataset.hex;

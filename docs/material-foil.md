@@ -23,3 +23,36 @@ Real stamped foil has a fixed shape and a colour that shifts as you move it. We 
 | **Emboss / deboss** | Height map from the text raster | Light and shadow driven by the same light position (new; not in coven-cave) |
 
 The full rainbow appears only on holographic stock and spot holo. Everything branded uses the brand foil.
+
+## Rules: foil must never pop
+
+The first board shipped with a foil effect that snapped on when the pointer entered and was far too strong. These rules exist because of that. All of them are required.
+
+### Smoothness
+
+1. **Never drive a visual from a stepped value.** Setting `--glow` from 0 to 1 in an event handler makes the sheen appear in one frame, because CSS can't transition an unregistered custom property. Ease every input (light position, tilt and glow) toward its target in a `requestAnimationFrame` loop, with time-based exponential smoothing:
+   `current += (target - current) * (1 - exp(-dt / tau))`
+2. **Keep one motion model.** Don't toggle CSS `transition` durations on enter and leave (for example 380 ms at rest and 80 ms while tracking). The switch itself causes a snap on the first move. Choose either rAF smoothing or a registered `@property` with a transition, and use it for every value.
+3. **Start from where it is.** On pointer enter, ease from the current values, never from the resting ones. On leave, ease back to rest.
+4. **Glow fades in slower than it fades out.** `tau`: tilt 110 ms, light position 90 ms, glow in 260 ms, glow out 520 ms.
+5. **There's no "off" state.** At rest the foil keeps a faint sheen (`glow` 0.08), so it never appears out of nothing.
+6. **Clamp dt to 50 ms** so a dropped frame or a returning tab can't jump.
+
+### Intensity
+
+| Layer | Blend | Max opacity at glow 1 |
+|---|---|---|
+| Brand foil sheen (narrow copper/cyan band, about 35% of the gradient length) | `soft-light` | 0.32 |
+| Glare (white radial) | `overlay` | 0.18 at the centre |
+| Rainbow spectrum (holo stock only) | `screen`, multiplied into a plate | 0.94 (coven-cave's 0.42 + 0.52) |
+
+- **Never use `color-dodge`** or full-coverage rainbow on the brand mark. Dodge blows out the orange.
+- **Tilt is at most ±11°.**
+
+### Acceptance check
+
+Before you ship a foil change:
+- At 60 Hz, sheen opacity may change by **at most 0.02 per frame** while entering, moving or leaving. Today's values give 0.018 at 60 Hz and 0.009 at 120 Hz.
+- Watch it at real speed on a dark and on a light background. If you notice the foil before you notice the stamp, it's too strong.
+
+Tokens: `material.foil` in `tokens/tokens.json`.
