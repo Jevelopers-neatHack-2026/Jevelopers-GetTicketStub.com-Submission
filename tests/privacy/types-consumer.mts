@@ -4,6 +4,8 @@ import {
   authorizeAction,
   createActionRequest,
   createTrustedActionPolicy,
+  createTrustedInjectionClassifier,
+  optionalInjectionSignal,
 } from '../../src/security/content-boundary/policy.mjs';
 
 type AuthenticatedRequest = {
@@ -34,3 +36,8 @@ flows.cache.put(scope, 'forged', { facts: { event_name: 'canary' } });
 
 const policy = createTrustedActionPolicy({ allowedCapabilities: ['search'], maxBillableUnits: 2 });
 authorizeAction(policy, createActionRequest('search', 1));
+const trustedClassifier = createTrustedInjectionClassifier((text) => text.includes('prompt injection'));
+optionalInjectionSignal('sample', trustedClassifier);
+
+// @ts-expect-error classifier execution requires an explicit trusted adapter
+optionalInjectionSignal('sample', (text: string) => text.includes('prompt injection'));

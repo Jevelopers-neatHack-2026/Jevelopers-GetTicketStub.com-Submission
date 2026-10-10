@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPrivacyBoundary } from '../../src/privacy/boundary.mjs';
+import { createPrivacyFlows } from '../../src/privacy/flows.mjs';
 
 function request(tenantId) {
   return Object.freeze({ principal: Object.freeze({ tenantId }) });
@@ -236,6 +237,93 @@ test('cancel during async review wins, aborts the read capability, and leaves no
   assert.equal(boundary.diagnostics(scopeA, result).state, 'cancelled');
   assert.throws(() => boundary.publish(scopeA, source.session), /private evidence unavailable/);
   assert.equal(boundary.cancel(scopeA, source.session), false);
+});
+
+test('candidate Proxy cancellation remains terminal and prevents reviewer invocation', async (t) => {
+  for (const withReviewer of [false, true]) {
+    await t.test(withReviewer ? 'configured reviewer' : 'no reviewer configured', async () => {
+      let reviewerCalls = 0;
+      const options = withReviewer ? {
+        reviewPublicFacts: async (input) => {
+          reviewerCalls += 1;
+          return { status: 'approved', tenantId: input.tenantId, sourceDigest: input.sourceDigest, facts: { event_name: 'Fixture' } };
+        },
+      } : {};
+      const { boundary, scopeA } = fixtureBoundary(options);
+      const flows = createPrivacyFlows(boundary);
+      const source = boundary.begin(scopeA, { modality: 'plain_text', content: 'Private fixture' });
+      const cancelResults = [];
+      const candidate = new Proxy({ event_name: 'Private fixture' }, {
+        ownKeys(target) {
+          cancelResults.push(boundary.cancel(scopeA, source.session));
+          return Reflect.ownKeys(target);
+        },
+      });
+
+      const result = await boundary.prepare(scopeA, source.session, candidate);
+      const diagnostic = boundary.diagnostics(scopeA, result);
+      assert.deepEqual(cancelResults, [true]);
+      assert.equal(reviewerCalls, 0);
+      assert.equal(diagnostic.state, 'cancelled');
+      assert.equal(diagnostic.reasonCode, 'cancelled');
+      assert.equal(boundary.sessionState(scopeA, source.session), 'cancelled');
+      assert.equal(boundary.retainedOriginalCount(), 0);
+      assert.throws(() => boundary.publish(scopeA, source.session), /private evidence unavailable/);
+
+      const telemetry = flows.diagnostic.record(scopeA, result);
+      const serialized = JSON.parse(flows.serialize(scopeA, { telemetryValues: [telemetry] }));
+      assert.equal(serialized.telemetry[0].state, 'cancelled');
+      assert.equal(serialized.telemetry[0].reasonCode, 'cancelled');
+    });
+  }
+});
+
+test('review decision and facts Proxy cancellation cannot overwrite terminal state or telemetry', async (t) => {
+  for (const trapTarget of ['decision', 'facts']) {
+    await t.test(`cancelling from ${trapTarget} validation`, async () => {
+      let fixture;
+      let reviewCalls = 0;
+      const cancellationResults = [];
+      fixture = fixtureBoundary({
+        reviewPublicFacts: async (input) => {
+          reviewCalls += 1;
+          const facts = new Proxy({ event_name: 'Fixture' }, {
+            ownKeys(target) {
+              if (trapTarget === 'facts') cancellationResults.push(fixture.boundary.cancel(fixture.scopeA, fixture.source.session));
+              return Reflect.ownKeys(target);
+            },
+          });
+          const decision = { status: 'approved', tenantId: input.tenantId, sourceDigest: input.sourceDigest, facts };
+          if (trapTarget === 'decision') {
+            return new Proxy(decision, {
+              ownKeys(target) {
+                cancellationResults.push(fixture.boundary.cancel(fixture.scopeA, fixture.source.session));
+                return Reflect.ownKeys(target);
+              },
+            });
+          }
+          return decision;
+        },
+      });
+      const flows = createPrivacyFlows(fixture.boundary);
+      fixture.source = fixture.boundary.begin(fixture.scopeA, { modality: 'plain_text', content: 'Fixture' });
+      const result = await fixture.boundary.prepare(fixture.scopeA, fixture.source.session, {});
+      const diagnostic = fixture.boundary.diagnostics(fixture.scopeA, result);
+
+      assert.equal(reviewCalls, 1);
+      assert.deepEqual(cancellationResults, [true]);
+      assert.equal(diagnostic.state, 'cancelled');
+      assert.equal(diagnostic.reasonCode, 'cancelled');
+      assert.equal(fixture.boundary.sessionState(fixture.scopeA, fixture.source.session), 'cancelled');
+      assert.equal(fixture.boundary.retainedOriginalCount(), 0);
+      assert.throws(() => fixture.boundary.publish(fixture.scopeA, fixture.source.session), /private evidence unavailable/);
+
+      const telemetry = flows.diagnostic.record(fixture.scopeA, result);
+      const serialized = JSON.parse(flows.serialize(fixture.scopeA, { telemetryValues: [telemetry] }));
+      assert.equal(serialized.telemetry[0].state, 'cancelled');
+      assert.equal(serialized.telemetry[0].reasonCode, 'cancelled');
+    });
+  }
 });
 
 test('concurrent prepare is single-flight and cancellation cannot be overwritten by a late result', async () => {

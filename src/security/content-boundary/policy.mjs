@@ -1,5 +1,24 @@
+import { isPromise } from 'node:util/types';
+
 const policies = new WeakMap();
 const requests = new WeakMap();
+const injectionClassifiers = new WeakMap();
+const nativePromisePrototype = Promise.prototype;
+const nativePromiseThen = Promise.prototype.then;
+
+function observeSupportedPromise(value) {
+  if (!isPromise(value)) return;
+  try {
+    // The opaque adapter contract accepts only ordinary native promises here.
+    // Intrinsic `then` ignores an own `then` getter; an own constructor or a
+    // subclass changes species semantics and must be handled by the trusted adapter.
+    if (Object.getPrototypeOf(value) !== nativePromisePrototype) return;
+    if (Object.getOwnPropertyDescriptor(value, 'constructor') !== undefined) return;
+    nativePromiseThen.call(value, undefined, () => undefined);
+  } catch {
+    // A malformed promise is outside the trusted adapter's return contract.
+  }
+}
 
 function deny() {
   return new Error('trusted action policy unavailable');
@@ -67,8 +86,20 @@ export function authorizeAction(policy, request) {
   return Object.freeze({ allowed: denialReason === null, denialReason });
 }
 
-export function optionalInjectionSignal(text, classifier) {
-  if (typeof text !== 'string' || typeof classifier !== 'function') return null;
+export function createTrustedInjectionClassifier(classifier) {
+  if (typeof classifier !== 'function') throw new TypeError('trusted injection classifier required');
+  // This brand records an explicit composition-root trust decision; it does not
+  // sandbox, inspect, or prove the callback safe for use in this process.
+  const adapter = opaque();
+  injectionClassifiers.set(adapter, classifier);
+  return adapter;
+}
+
+export function optionalInjectionSignal(text, classifierAdapter) {
+  if (typeof text !== 'string') return null;
+  // Raw functions and forged adapter-like objects are never invoked here.
+  const classifier = injectionClassifiers.get(classifierAdapter);
+  if (typeof classifier !== 'function') return null;
   let result;
   try {
     result = classifier(text);
@@ -76,14 +107,6 @@ export function optionalInjectionSignal(text, classifier) {
     return null;
   }
   if (typeof result === 'boolean') return result;
-
-  // This API is synchronous. Promise-like/malformed values are never signals, but
-  // assimilate and discard them so rejected async classifiers cannot become an
-  // unhandled rejection or leak their error text through Node's process handler.
-  try {
-    Promise.resolve(result).then(undefined, () => undefined);
-  } catch {
-    // Promise assimilation failures are optional-classifier failures too.
-  }
+  observeSupportedPromise(result);
   return null;
 }

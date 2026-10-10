@@ -253,6 +253,21 @@ export function createPrivacyBoundary(options = {}) {
     }
   }
 
+  function isCurrentAttempt(sessionInfo, generation) {
+    return sessionInfo.generation === generation && sessionInfo.state === 'preparing';
+  }
+
+  function refreshAttempt(info, sessionInfo, generation) {
+    if (!isCurrentAttempt(sessionInfo, generation)) return false;
+    try {
+      activeEntry(info, sessionInfo.token);
+    } catch {
+      if (isCurrentAttempt(sessionInfo, generation)) stateAfterMissingEntry(sessionInfo);
+      return false;
+    }
+    return isCurrentAttempt(sessionInfo, generation);
+  }
+
   function scopeForAuthenticatedRequest(request) {
     if (typeof resolveTenant !== 'function') throw deny();
     let tenantId;
@@ -306,39 +321,48 @@ export function createPrivacyBoundary(options = {}) {
     refreshSessionRetention(info, state);
     if (state.state === 'expired') return createResult(info, state);
     if (state.state !== 'accepting') throw deny();
+
+    // Claim the attempt before invoking any validation operation on caller-owned
+    // candidate or decision objects. Reentrant cancellation advances generation.
+    const generation = ++state.generation;
+    const controller = new AbortController();
+    state.abortController = controller;
+    state.state = 'preparing';
+    const finish = () => createResult(info, state);
+    const quarantine = (reasonCode) => {
+      if (!isCurrentAttempt(state, generation)) return finish();
+      controller.abort();
+      if (state.abortController === controller) state.abortController = null;
+      state.pendingFacts = null;
+      state.state = 'quarantined';
+      state.reasonCode = reasonCode;
+      return finish();
+    };
+
     let entry;
     try {
       entry = activeEntry(info, state.token);
     } catch {
-      stateAfterMissingEntry(state);
-      return createResult(info, state);
+      if (isCurrentAttempt(state, generation)) stateAfterMissingEntry(state);
+      return finish();
     }
+    if (!isCurrentAttempt(state, generation)) return finish();
     if (!TEXT_MODALITIES.has(entry.modality)) {
-      state.state = 'quarantined';
-      state.reasonCode = 'unsupported_modality';
-      return createResult(info, state);
+      return quarantine('unsupported_modality');
     }
     if (typeof entry.text !== 'string') {
-      state.state = 'quarantined';
-      state.reasonCode = 'invalid_text';
-      return createResult(info, state);
-    }
-    const candidate = validateCandidate(candidateValue);
-    if (!candidate) {
-      state.state = 'quarantined';
-      state.reasonCode = 'invalid_candidate';
-      return createResult(info, state);
-    }
-    if (typeof reviewPublicFacts !== 'function') {
-      state.state = 'quarantined';
-      state.reasonCode = 'unverified_public_facts';
-      return createResult(info, state);
+      return quarantine('invalid_text');
     }
 
-    state.state = 'preparing';
-    const generation = ++state.generation;
-    const controller = new AbortController();
-    state.abortController = controller;
+    const candidate = validateCandidate(candidateValue);
+    if (!refreshAttempt(info, state, generation)) return finish();
+    if (!candidate) {
+      return quarantine('invalid_candidate');
+    }
+    if (typeof reviewPublicFacts !== 'function') {
+      return quarantine('unverified_public_facts');
+    }
+    if (!refreshAttempt(info, state, generation)) return finish();
     const sourceToken = state.token;
     const reviewInput = Object.freeze({
       tenantId: info.tenantId,
@@ -362,30 +386,35 @@ export function createPrivacyBoundary(options = {}) {
       reviewFailed = true;
     }
 
-    if (state.generation !== generation || state.state !== 'preparing') return createResult(info, state);
-    state.abortController = null;
+    if (!refreshAttempt(info, state, generation)) return finish();
+    if (reviewFailed) return quarantine('review_unavailable');
+
+    // Normalizing a review decision can execute Proxy traps. Do not commit the
+    // result until generation and retention have been rechecked after each phase.
+    const reviewed = ownDataRecord(decision, new Set(['status', 'tenantId', 'sourceDigest', 'facts']));
+    if (!refreshAttempt(info, state, generation)) return finish();
+    const facts = reviewed && validateFacts(reviewed.facts);
+    if (!refreshAttempt(info, state, generation)) return finish();
+
     let current;
     try {
       current = activeEntry(info, state.token);
     } catch {
-      stateAfterMissingEntry(state);
-      return createResult(info, state);
+      if (isCurrentAttempt(state, generation)) stateAfterMissingEntry(state);
+      return finish();
     }
-    if (reviewFailed) {
-      state.state = 'quarantined';
-      state.reasonCode = 'review_unavailable';
-      return createResult(info, state);
-    }
-    const reviewed = ownDataRecord(decision, new Set(['status', 'tenantId', 'sourceDigest', 'facts']));
-    const facts = reviewed && validateFacts(reviewed.facts);
+    if (!isCurrentAttempt(state, generation)) return finish();
     if (!reviewed || reviewed.status !== 'approved' || reviewed.tenantId !== info.tenantId || reviewed.sourceDigest !== current.digest || !facts) {
-      state.state = 'quarantined';
-      state.reasonCode = 'invalid_review_decision';
-      return createResult(info, state);
+      return quarantine('invalid_review_decision');
     }
+
+    // This is the last check before the synchronous result commit.
+    if (!refreshAttempt(info, state, generation)) return finish();
+    state.abortController = null;
     state.pendingFacts = facts;
     state.state = 'ready_for_publish';
-    return createResult(info, state);
+    state.reasonCode = null;
+    return finish();
   }
 
   function publish(scope, session) {

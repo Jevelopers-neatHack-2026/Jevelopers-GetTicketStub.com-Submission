@@ -17,11 +17,24 @@ export interface AuthorizationDecision {
   readonly denialReason: DenialReason | null;
 }
 
+declare const classifierBrand: unique symbol;
+export type TrustedInjectionClassifier = { readonly [classifierBrand]: true };
+export type TrustedInjectionCallback = (text: string) => boolean | Promise<boolean>;
+
 export declare function createTrustedActionPolicy(input: TrustedActionPolicyInput): TrustedActionPolicy;
 export declare function createActionRequest(capability: string, billableUnits?: number): ActionRequest;
 export declare function authorizeAction(policy: TrustedActionPolicy, request: ActionRequest): AuthorizationDecision;
 /**
- * Synchronous annotation only. Non-boolean values, including async classifier results,
- * return null; promise-like settlements and rejections are observed and discarded.
+ * Build an explicit classifier adapter for use by trusted composition-root code. This
+ * records that trust decision; it does not inspect or sandbox the callback. The callback
+ * must return a boolean or an ordinary native Promise. A native Promise with an own
+ * `constructor`, a subclass, or a thenable must be rejection-handled by the adapter
+ * before it returns. The trusted callback must not mutate the runtime Promise intrinsics.
  */
-export declare function optionalInjectionSignal(text: string, classifier: unknown): boolean | null;
+export declare function createTrustedInjectionClassifier(callback: TrustedInjectionCallback): TrustedInjectionClassifier;
+/**
+ * Synchronous annotation only. Raw callbacks, async settlements, and malformed values
+ * return null. Rejections from ordinary native Promises are observed through the
+ * captured intrinsic Promise.prototype.then.
+ */
+export declare function optionalInjectionSignal(text: string, classifier: TrustedInjectionClassifier): boolean | null;
