@@ -3,6 +3,8 @@ import type {
   AvailableEvidenceMetadata,
   EvidenceFactHandle,
   EvidenceFactInput,
+  PdfDerivedEvidenceIngestInput,
+  PdfDerivedEvidenceIngestResult,
   EvidencePrivatePayloadInput,
   EvidencePrivatePayloadResult,
   EvidencePrivatePayloadValue,
@@ -43,6 +45,19 @@ const selectedPositionDigest: string = selectedMaterialization.evidence[0].posit
 void storedSourceUrl;
 void storedSourceTime;
 void selectedPositionDigest;
+declare const pdfInput: PdfDerivedEvidenceIngestInput;
+const pdfResult: PdfDerivedEvidenceIngestResult = await store.ingestDerivedPdfEvidence(scope, pdfInput, request);
+if (pdfResult.outcome === 'stored') {
+  const storedRepresentation: 'pdf-derived-text' | undefined = pdfResult.metadata.representation;
+  const storedDigest: string | undefined = pdfResult.metadata.derivationDigest;
+  const positions = await store.listEvidencePositions(scope, pdfResult.evidence, request);
+  if (positions[0]?.locator.kind === 'pdf-text-box') {
+    const pageIndex: number = positions[0].locator.pageIndex;
+    void pageIndex;
+  }
+  void storedRepresentation;
+  void storedDigest;
+}
 
 type CurrentPrivateAuthorizer = NonNullable<EvidenceStoreOptions<AuthenticatedRequest>['authorizePrivateAccessCurrent']>;
 const synchronousFinalAuthorizer: CurrentPrivateAuthorizer = ({ tenantId, action, evidenceIds, factIds }) =>
@@ -56,6 +71,7 @@ type PrivatePayloadConsumer = NonNullable<EvidenceStoreOptions<AuthenticatedRequ
 const synchronousPrivateConsumer: PrivatePayloadConsumer = (input: EvidencePrivatePayloadInput<AuthenticatedRequest>): EvidencePrivatePayloadResult => ({
   retrievedAt: input.source.retrievedAt,
   positions: input.positions.map((position) => position.contentHash),
+  derivedText: input.source.derivedPdf?.requiresInspection ?? false,
 });
 void synchronousPrivateConsumer;
 const readonlyArrayResult: EvidencePrivatePayloadResult = ['first', { nested: ['second'] }];

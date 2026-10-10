@@ -15,6 +15,8 @@ import {
 import { lstatSync } from 'node:fs';
 import path from 'node:path';
 import { types as utilTypes } from 'node:util';
+import { readTextPdf, PDF_TEXT_READER_LIMITS } from '../extraction/pdf/index.mjs';
+import { PDF_DECODER_VERSION, PDF_READER_CONFIG_VERSION } from '../extraction/pdf/constants.mjs';
 
 const SUPPORTED_SOURCE_KINDS = new Set(['external', 'customer_supplied']);
 const FACT_STATUSES = new Set(['sourced', 'inferred', 'customer_supplied', 'missing', 'conflicting']);
@@ -60,6 +62,12 @@ const SELECTED_BATCH_LIMITS = Object.freeze({
   factMetadataBytes: 512 * 1024,
   supportReferences: 4_096,
 });
+const PDF_DERIVED_REPRESENTATION = 'pdf-derived-text';
+const PDF_DERIVED_BUNDLE_VERSION = 2;
+const PDF_DERIVATION_BINDING_VERSION = 1;
+const PDF_DERIVED_DEFAULT_TIMEOUT_MS = 15_000;
+const PDF_DERIVED_CONTENT_TYPE = 'application/pdf';
+const PDF_DERIVED_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 
 export class EvidenceStoreError extends Error {
   constructor(code) {
@@ -288,6 +296,31 @@ function copyLocator(value) {
   fail('EVIDENCE_INVALID');
 }
 
+function copyStoredLocator(value, representation) {
+  if (representation === PDF_DERIVED_REPRESENTATION) {
+    const input = ownDataRecord(value, new Set([
+      'kind', 'pageIndex', 'textIndex', 'x', 'y', 'width', 'height', 'pageWidth', 'pageHeight',
+      'rotation', 'coordinateSystem', 'geometry',
+    ]));
+    if (!input || input.kind !== 'pdf-text-box'
+      || !Number.isSafeInteger(input.pageIndex) || input.pageIndex < 0
+      || !Number.isSafeInteger(input.textIndex) || input.textIndex < 0
+      || ![input.x, input.y, input.width, input.height, input.pageWidth, input.pageHeight].every(Number.isFinite)
+      || input.x < 0 || input.y < 0 || input.width < 0 || input.height < 0
+      || input.pageWidth <= 0 || input.pageHeight <= 0
+      || ![0, 90, 180, 270].includes(input.rotation)
+      || input.coordinateSystem !== 'viewport-points-top-left'
+      || input.geometry !== 'approximate-text-item') fail('EVIDENCE_INTEGRITY');
+    return Object.freeze({
+      kind: 'pdf-text-box', pageIndex: input.pageIndex, textIndex: input.textIndex,
+      x: input.x, y: input.y, width: input.width, height: input.height,
+      pageWidth: input.pageWidth, pageHeight: input.pageHeight, rotation: input.rotation,
+      coordinateSystem: input.coordinateSystem, geometry: input.geometry,
+    });
+  }
+  return copyLocator(value);
+}
+
 function resolveJsonPointer(root, pointer) {
   if (pointer === '') return root;
   const pieces = pointer.slice(1).split('/').map((part) => part.replace(/~1/g, '/').replace(/~0/g, '~'));
@@ -449,8 +482,20 @@ function emptyManifest(tenantHash) {
 }
 
 function validateManifest(value, tenantHash) {
-  if (!isRecord(value) || value.schemaVersion !== 1 || value.tenantHash !== tenantHash
+  if (!isRecord(value) || ![1, 2].includes(value.schemaVersion) || value.tenantHash !== tenantHash
     || !isRecord(value.records) || !isRecord(value.families) || !isRecord(value.facts)) fail('EVIDENCE_INTEGRITY');
+  for (const record of Object.values(value.records)) {
+    if (!isRecord(record)) continue;
+    if (value.schemaVersion === 1 && Object.hasOwn(record, 'representation')) fail('EVIDENCE_INTEGRITY');
+    if (record.representation !== undefined
+      && (value.schemaVersion !== 2 || record.representation !== PDF_DERIVED_REPRESENTATION
+        || !isDigest(record.derivationDigest))) fail('EVIDENCE_INTEGRITY');
+    if (record.representation === undefined && Object.hasOwn(record, 'derivationDigest')) fail('EVIDENCE_INTEGRITY');
+  }
+  for (const family of Object.values(value.families)) {
+    if (isRecord(family) && family.representation !== undefined
+      && family.representation !== PDF_DERIVED_REPRESENTATION) fail('EVIDENCE_INTEGRITY');
+  }
   return value;
 }
 
@@ -634,6 +679,10 @@ function frozenMetadata(record) {
     accessPolicy: 'tenant_private',
     state: record.state,
     positionCount: record.positionIds?.length ?? 0,
+    ...(record.representation === PDF_DERIVED_REPRESENTATION ? {
+      representation: PDF_DERIVED_REPRESENTATION,
+      derivationDigest: record.derivationDigest,
+    } : {}),
   });
 }
 
@@ -660,9 +709,9 @@ function newEvidenceHandle(info, evidenceId) {
   return handle;
 }
 
-function newPositionHandle(info, evidenceId, positionId, sourceKind) {
+function newPositionHandle(info, evidenceId, positionId, sourceKind, representation = 'raw') {
   const handle = makeOpaque();
-  POSITION_HANDLES.set(handle, Object.freeze({ tenantId: info.tenantId, tenantHash: info.tenantHash, evidenceId, positionId, sourceKind }));
+  POSITION_HANDLES.set(handle, Object.freeze({ tenantId: info.tenantId, tenantHash: info.tenantHash, evidenceId, positionId, sourceKind, representation }));
   return handle;
 }
 
@@ -919,7 +968,7 @@ export function createEvidenceStore(options) {
         for (const key of [
           'familyId', 'version', 'previousId', 'contentHash', 'duplicateGroupId', 'retrievedAt', 'createdAt', 'createdAtMs',
           'retrievedAtMs', 'expiresAtMs', 'policyId', 'policyVersion', 'sourceKeyId', 'sourceKeyHmac',
-          'encryptionKeyId', 'positionIds', 'positionHashes',
+          'encryptionKeyId', 'positionIds', 'positionHashes', 'representation', 'derivationDigest',
         ]) delete record[key];
         database.prepare('DELETE FROM sealed_bundles WHERE kind = ? AND id = ?').run('evidence', record.id);
         changed = true;
@@ -1054,7 +1103,7 @@ export function createEvidenceStore(options) {
             if (!sameValues(expected, current, [
               'id', 'state', 'version', 'contentHash', 'duplicateGroupId', 'retrievedAt',
               'createdAt', 'createdAtMs', 'retrievedAtMs', 'expiresAtMs', 'policyId', 'policyVersion',
-              'encryptionKeyId', 'positionIds', 'positionHashes',
+              'encryptionKeyId', 'positionIds', 'positionHashes', 'representation', 'derivationDigest',
             ])) fail('EVIDENCE_INTEGRITY');
             const expectedPreviousId = expected.previousId ?? null;
             const currentPreviousId = current.previousId ?? null;
@@ -1109,6 +1158,9 @@ export function createEvidenceStore(options) {
       || record.encryptionKeyId.length < 1 || record.encryptionKeyId.length > 128) {
       fail('EVIDENCE_INTEGRITY');
     }
+    if ((record.representation !== undefined
+      && (record.representation !== PDF_DERIVED_REPRESENTATION || !isDigest(record.derivationDigest)))
+      || (record.representation === undefined && Object.hasOwn(record, 'derivationDigest'))) fail('EVIDENCE_INTEGRITY');
     const effectivePositionLimit = Math.min(limits.maxPositionCount, positionLimit);
     if (!Array.isArray(record.positionIds)) fail('EVIDENCE_INTEGRITY');
     if (record.positionIds.length > limits.maxPositionCount) fail('EVIDENCE_INTEGRITY');
@@ -1149,6 +1201,10 @@ export function createEvidenceStore(options) {
       encryptionKeyId: record.encryptionKeyId,
       positionIds,
       positionHashes: cloneJsonValue(positionHashes),
+      ...(record.representation === PDF_DERIVED_REPRESENTATION ? {
+        representation: PDF_DERIVED_REPRESENTATION,
+        derivationDigest: record.derivationDigest,
+      } : {}),
     };
   }
 
@@ -1187,7 +1243,15 @@ export function createEvidenceStore(options) {
   }
 
   function materializeEvidenceBundle(info, record, bundle, budget) {
-    if (!isRecord(bundle) || bundle.schemaVersion !== 1) fail('EVIDENCE_INTEGRITY');
+    const representation = record.representation ?? 'raw';
+    if (representation !== 'raw' && representation !== PDF_DERIVED_REPRESENTATION) fail('EVIDENCE_INTEGRITY');
+    if (!isRecord(bundle)
+      || bundle.schemaVersion !== (representation === PDF_DERIVED_REPRESENTATION ? PDF_DERIVED_BUNDLE_VERSION : 1)
+      || (representation === PDF_DERIVED_REPRESENTATION
+        ? bundle.representation !== PDF_DERIVED_REPRESENTATION || record.derivationDigest !== bundle.derivationDigest
+        : Object.hasOwn(bundle, 'representation') || Object.hasOwn(bundle, 'derivedPdf') || Object.hasOwn(bundle, 'derivationDigest'))) {
+      fail('EVIDENCE_INTEGRITY');
+    }
     const storedSource = ownDataRecord(bundle.source, new Set([
       'sourceUrl', 'canonicalUrl', 'redirectChain', 'contentType', 'sourceKind', 'retrievedAt', 'retrievedAtMs', 'contentHash',
     ]));
@@ -1211,10 +1275,72 @@ export function createEvidenceStore(options) {
     ) + redirects.reduce((sum, url) => sum + Buffer.byteLength(url, 'utf8'), 0);
     addProvenanceBytes(budget, sourceDescriptorBytes);
 
+    let derivedPdf = null;
+    let pageMetadata = null;
+    if (representation === PDF_DERIVED_REPRESENTATION) {
+      if (storedSource.contentType.toLowerCase().split(';', 1)[0].trim() !== PDF_DERIVED_CONTENT_TYPE) fail('EVIDENCE_INTEGRITY');
+      const stored = ownDataRecord(bundle.derivedPdf, new Set([
+        'bindingVersion', 'decoder', 'completeness', 'requiresInspection', 'limits', 'pages', 'textBoxCount', 'derivationDigest',
+      ]));
+      const decoder = ownDataRecord(stored?.decoder, new Set(['name', 'version', 'configVersion']));
+      const rawLimits = ownDataRecord(stored?.limits, new Set([
+        'maxInputBytes', 'maxPages', 'maxPagePoints', 'maxTextCodeUnits', 'maxTextItemCodeUnits',
+        'maxTextItems', 'maxOutputBytes', 'addressSpaceBytes', 'maxCpuSeconds', 'maxWallMilliseconds',
+      ]));
+      const pageValues = safeArray(stored?.pages, PDF_TEXT_READER_LIMITS.maxPages);
+      if (!stored || stored.bindingVersion !== PDF_DERIVATION_BINDING_VERSION
+        || !decoder || decoder.name !== 'pdfjs-dist' || decoder.version !== PDF_DECODER_VERSION
+        || decoder.configVersion !== PDF_READER_CONFIG_VERSION
+        || stored.completeness !== 'incomplete-text-only' || stored.requiresInspection !== true
+        || !rawLimits || !pageValues || pageValues.length < 1
+        || !Number.isSafeInteger(stored.textBoxCount) || stored.textBoxCount < 1
+        || stored.textBoxCount > PDF_TEXT_READER_LIMITS.maxTextItems
+        || stored.derivationDigest !== record.derivationDigest || !isDigest(stored.derivationDigest)) fail('EVIDENCE_INTEGRITY');
+      const limitEntries = Object.entries(rawLimits);
+      if (limitEntries.length !== 10 || limitEntries.some(([key, value]) =>
+        !Number.isSafeInteger(value) || value <= 0 || value > PDF_TEXT_READER_LIMITS[key === 'addressSpaceBytes'
+          ? 'maxAddressSpaceBytes' : key === 'maxWallMilliseconds' ? 'maxTimeoutMs' : key])) fail('EVIDENCE_INTEGRITY');
+      const limitsCopy = Object.fromEntries(limitEntries);
+      pageMetadata = pageValues.map((value, index) => {
+        const page = ownDataRecord(value, new Set([
+          'pageIndex', 'width', 'height', 'rotation', 'coordinateSystem', 'textPresence', 'requiresInspection', 'textBoxCount',
+        ]));
+        if (!page || page.pageIndex !== index || ![page.width, page.height].every(Number.isFinite)
+          || page.width <= 0 || page.height <= 0
+          || page.width > PDF_TEXT_READER_LIMITS.maxPagePoints || page.height > PDF_TEXT_READER_LIMITS.maxPagePoints
+          || ![0, 90, 180, 270].includes(page.rotation)
+          || page.coordinateSystem !== 'viewport-points-top-left'
+          || !['text-present', 'no-embedded-text'].includes(page.textPresence)
+          || page.requiresInspection !== true
+          || !Number.isSafeInteger(page.textBoxCount) || page.textBoxCount < 0
+          || page.textBoxCount > PDF_TEXT_READER_LIMITS.maxTextItems
+          || (page.textBoxCount === 0) !== (page.textPresence === 'no-embedded-text')) fail('EVIDENCE_INTEGRITY');
+        return {
+          pageIndex: page.pageIndex, width: page.width, height: page.height, rotation: page.rotation,
+          coordinateSystem: page.coordinateSystem, textPresence: page.textPresence,
+          requiresInspection: true, textBoxCount: page.textBoxCount,
+        };
+      });
+      if (pageMetadata.reduce((sum, page) => sum + page.textBoxCount, 0) !== stored.textBoxCount
+        || stored.textBoxCount !== record.positionIds.length) fail('EVIDENCE_INTEGRITY');
+      derivedPdf = {
+        bindingVersion: stored.bindingVersion,
+        decoder: { name: decoder.name, version: decoder.version, configVersion: decoder.configVersion },
+        completeness: stored.completeness,
+        requiresInspection: true,
+        limits: limitsCopy,
+        pages: pageMetadata,
+        textBoxCount: stored.textBoxCount,
+        derivationDigest: stored.derivationDigest,
+      };
+      addProvenanceBytes(budget, Buffer.byteLength(JSON.stringify(derivedPdf), 'utf8'));
+    }
+
     const bundledPositions = safeArray(bundle.positions, Math.min(limits.maxPositionCount, SELECTED_BATCH_LIMITS.positionCount));
     if (!bundledPositions || bundledPositions.length !== record.positionIds.length) fail('EVIDENCE_INTEGRITY');
     const positionById = new Map();
     let recordPositionBytes = 0;
+    const seenPageText = new Set();
     for (const value of bundledPositions) {
       const stored = ownDataRecord(value, new Set(['id', 'locator', 'contentHash', 'content']));
       if (!stored || !validUuid(stored.id) || !isDigest(stored.contentHash) || typeof stored.content !== 'string'
@@ -1225,7 +1351,17 @@ export function createEvidenceStore(options) {
       if (!Number.isSafeInteger(recordPositionBytes)
         || recordPositionBytes > Math.min(limits.maxStoredPayloadBytes, SELECTED_BATCH_LIMITS.evidencePositionBytes)) fail('EVIDENCE_INVALID');
       chargeBudget(budget, 'positionBytes', positionBytes, SELECTED_BATCH_LIMITS.positionBytes);
-      const locator = copyLocator(stored.locator);
+      const locator = copyStoredLocator(stored.locator, representation);
+      if (representation === PDF_DERIVED_REPRESENTATION) {
+        const page = pageMetadata[locator.pageIndex];
+        if (!page || locator.textIndex >= page.textBoxCount || locator.pageWidth !== page.width
+          || locator.pageHeight !== page.height || locator.rotation !== page.rotation
+          || locator.coordinateSystem !== page.coordinateSystem
+          || locator.x + locator.width > page.width + 0.01 || locator.y + locator.height > page.height + 0.01) fail('EVIDENCE_INTEGRITY');
+        const key = `${locator.pageIndex}:${locator.textIndex}`;
+        if (seenPageText.has(key)) fail('EVIDENCE_INTEGRITY');
+        seenPageText.add(key);
+      }
       const locatorBytes = Buffer.byteLength(JSON.stringify(locator), 'utf8');
       addProvenanceBytes(budget, locatorBytes + 128);
       const bytes = Buffer.from(stored.content, 'base64');
@@ -1238,10 +1374,31 @@ export function createEvidenceStore(options) {
       positionById.set(stored.id, { locator, contentHash: stored.contentHash });
     }
     if (record.positionIds.some((id) => !positionById.has(id))) fail('EVIDENCE_INTEGRITY');
+    if (representation === PDF_DERIVED_REPRESENTATION) {
+      for (const page of pageMetadata) {
+        for (let textIndex = 0; textIndex < page.textBoxCount; textIndex += 1) {
+          if (!seenPageText.has(`${page.pageIndex}:${textIndex}`)) fail('EVIDENCE_INTEGRITY');
+        }
+      }
+      const derivationMaterial = {
+        bindingVersion: derivedPdf.bindingVersion,
+        sourceContentHash: storedSource.contentHash,
+        decoder: derivedPdf.decoder,
+        completeness: derivedPdf.completeness,
+        requiresInspection: derivedPdf.requiresInspection,
+        limits: derivedPdf.limits,
+        pages: pageMetadata,
+        positions: record.positionIds.map((id) => {
+          const position = positionById.get(id);
+          return { locator: position.locator, contentHash: position.contentHash };
+        }),
+      };
+      if (digest(Buffer.from(JSON.stringify(derivationMaterial), 'utf8')) !== record.derivationDigest) fail('EVIDENCE_INTEGRITY');
+    }
     const positions = record.positionIds.map((id) => {
       const position = positionById.get(id);
       return Object.freeze({
-        handle: newPositionHandle(info, record.id, id, storedSource.sourceKind),
+        handle: newPositionHandle(info, record.id, id, storedSource.sourceKind, representation),
         locator: deepFreeze(cloneJsonValue(position.locator)),
         contentHash: position.contentHash,
       });
@@ -1258,6 +1415,7 @@ export function createEvidenceStore(options) {
         retrievedAt: storedSource.retrievedAt,
         retrievedAtMs: storedSource.retrievedAtMs,
         contentHash: storedSource.contentHash,
+        ...(derivedPdf ? { derivedPdf: deepFreeze(cloneJsonValue(derivedPdf)) } : {}),
       }),
       positions: Object.freeze(positions),
     });
@@ -1318,10 +1476,12 @@ export function createEvidenceStore(options) {
         'evidenceId', 'positionId', 'contentHash', 'sourceKind', 'duplicateGroupId',
       ]));
       const evidence = evidenceById.get(support.evidenceId);
+      const supportedPosition = evidence?.positions.find((position) => POSITION_HANDLES.get(position.handle)?.positionId === support.positionId);
+      const supportedPositionInfo = supportedPosition ? POSITION_HANDLES.get(supportedPosition.handle) : null;
       if (!evidence || evidence.metadata.contentHash !== support.contentHash
         || evidence.metadata.duplicateGroupId !== support.duplicateGroupId
         || evidence.source.sourceKind !== support.sourceKind
-        || !evidence.positions.some((position) => POSITION_HANDLES.get(position.handle)?.positionId === support.positionId)) {
+        || !supportedPositionInfo || supportedPositionInfo.representation !== 'raw') {
         fail('EVIDENCE_INTEGRITY');
       }
     }
@@ -1647,6 +1807,402 @@ export function createEvidenceStore(options) {
     }
   }
 
+  async function ingestDerivedPdfEvidence(scope, inputValue, request, signal) {
+    const info = scopeInfo(scope);
+    const input = ownDataRecord(inputValue, new Set([
+      'sourceUrl', 'canonicalUrl', 'redirectChain', 'content', 'contentType', 'retrievedAt', 'sourceKind',
+      'retentionHandle', 'readerOptions',
+    ]));
+    if (!input || typeof input.sourceUrl !== 'string' || !SUPPORTED_SOURCE_KINDS.has(input.sourceKind)
+      || !validTimestamp(input.retrievedAt) || typeof input.contentType !== 'string'
+      || input.contentType.length < 1 || input.contentType.length > 160 || !/^[\x20-\x7e]+$/.test(input.contentType)
+      || input.contentType.toLowerCase().split(';', 1)[0].trim() !== PDF_DERIVED_CONTENT_TYPE
+      || !input.retentionHandle || typeof input.retentionHandle !== 'object') fail('EVIDENCE_INVALID');
+    validateUrl(input.sourceUrl);
+    const sourceUrl = input.sourceUrl;
+    const canonicalUrl = input.canonicalUrl === undefined ? normalizeSourceUrl(sourceUrl) : normalizeSourceUrl(input.canonicalUrl);
+    const redirectsInput = input.redirectChain === undefined ? [] : safeArray(input.redirectChain, 20);
+    if (!redirectsInput) fail('EVIDENCE_INVALID');
+    const redirectChain = redirectsInput.map((item) => validateUrl(item).href);
+    const readerInput = input.readerOptions === undefined
+      ? Object.create(null)
+      : ownDataRecord(input.readerOptions, new Set(['timeoutMs', 'maxTextCodeUnits', 'maxOutputBytes']));
+    if (!readerInput) fail('EVIDENCE_INVALID');
+    const sourceLimit = Math.min(limits.maxSourceBytes, PDF_DERIVED_MAX_SOURCE_BYTES, PDF_TEXT_READER_LIMITS.maxInputBytes);
+    // A PDF source is the exact fetched byte stream. Accepting text here would
+    // re-encode bytes and make the stored source digest describe a conversion,
+    // not the original document supplied by the fetch boundary.
+    if (!(input.content instanceof Uint8Array)) fail('EVIDENCE_INVALID');
+    const sourceBytes = copyBytes(input.content, sourceLimit);
+    const sourceContentHash = digest(sourceBytes);
+    const retrievedAtMs = Date.parse(input.retrievedAt);
+    const retentionStartMs = currentTime();
+    let retention;
+    let activeIndexKey;
+    let payloadKey;
+    let sealedBytes;
+    const historicalIndexKeys = [];
+    let positions = [];
+    let directoryForCleanup;
+    try {
+      checkCancellation(signal);
+      // Resolve the source's already-authorized retention deadline before starting
+      // the killable decoder. Decode time never resets or extends this deadline.
+      retention = await resolveRetention(info, 'evidence', retentionStartMs, input.sourceKind, undefined, input.retentionHandle);
+      if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+      const timeoutMs = readerInput.timeoutMs ?? PDF_DERIVED_DEFAULT_TIMEOUT_MS;
+      const effectiveTextLimit = Math.min(
+        PDF_TEXT_READER_LIMITS.maxTextCodeUnits,
+        limits.maxStoredPayloadBytes,
+        SELECTED_BATCH_LIMITS.evidenceDecryptedBytes,
+      );
+      const effectiveOutputLimit = Math.min(
+        PDF_TEXT_READER_LIMITS.maxOutputBytes,
+        SELECTED_BATCH_LIMITS.evidenceDecryptedBytes,
+        Math.max(4_096, limits.maxStoredPayloadBytes),
+      );
+      const maxTextCodeUnits = readerInput.maxTextCodeUnits ?? effectiveTextLimit;
+      const maxOutputBytes = readerInput.maxOutputBytes ?? effectiveOutputLimit;
+      if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > PDF_TEXT_READER_LIMITS.maxTimeoutMs
+        || !Number.isSafeInteger(maxTextCodeUnits) || maxTextCodeUnits < 1
+        || maxTextCodeUnits > effectiveTextLimit
+        || !Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 4_096
+        || maxOutputBytes > effectiveOutputLimit) fail('EVIDENCE_INVALID');
+
+      let readResult;
+      try {
+        readResult = await readTextPdf(sourceBytes, { signal, timeoutMs, maxTextCodeUnits, maxOutputBytes });
+      } catch {
+        checkCancellation(signal);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        return Object.freeze({ outcome: 'rejected', code: 'DECODER_FAILURE' });
+      }
+      checkCancellation(signal);
+      if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+      if (!readResult || readResult.kind === 'rejected') {
+        const code = readResult?.code;
+        return Object.freeze({ outcome: 'rejected', code: typeof code === 'string' ? code : 'DECODER_FAILURE' });
+      }
+      if (readResult.documentSha256 !== sourceContentHash || readResult.decoder?.name !== 'pdfjs-dist'
+        || readResult.decoder.version !== PDF_DECODER_VERSION || readResult.decoder.configVersion !== PDF_READER_CONFIG_VERSION
+        || readResult.networkAttemptCount !== 0 || readResult.completeness !== 'incomplete-text-only'
+        || readResult.requiresInspection !== true || !isRecord(readResult.limits)) fail('EVIDENCE_INTEGRITY');
+      if (readResult.kind === 'no-text') {
+        if (readResult.code !== 'NO_EMBEDDED_TEXT') fail('EVIDENCE_INTEGRITY');
+        return Object.freeze({ outcome: 'no-text', code: 'NO_EMBEDDED_TEXT', requiresInspection: true });
+      }
+      if (readResult.kind !== 'observation') fail('EVIDENCE_INTEGRITY');
+
+      const pageInputs = safeArray(readResult.pages, PDF_TEXT_READER_LIMITS.maxPages);
+      if (!pageInputs || pageInputs.length < 1) fail('EVIDENCE_INTEGRITY');
+      const pageMetadata = [];
+      positions = [];
+      let positionBytesTotal = 0;
+      const positionMaximum = Math.min(limits.maxPositionCount, SELECTED_BATCH_LIMITS.positionCount);
+      const positionByteMaximum = Math.min(limits.maxPositionBytes, SELECTED_BATCH_LIMITS.positionRecordBytes);
+      const totalByteMaximum = Math.min(limits.maxStoredPayloadBytes, SELECTED_BATCH_LIMITS.evidencePositionBytes);
+      for (let pageIndex = 0; pageIndex < pageInputs.length; pageIndex += 1) {
+        const page = ownDataRecord(pageInputs[pageIndex], new Set([
+          'pageIndex', 'width', 'height', 'rotation', 'coordinateSystem', 'textPresence', 'requiresInspection', 'textBoxes',
+        ]));
+        const boxes = safeArray(page?.textBoxes, PDF_TEXT_READER_LIMITS.maxTextItems);
+        if (!page || page.pageIndex !== pageIndex || ![page.width, page.height].every(Number.isFinite)
+          || page.width <= 0 || page.height <= 0 || page.width > PDF_TEXT_READER_LIMITS.maxPagePoints
+          || page.height > PDF_TEXT_READER_LIMITS.maxPagePoints || ![0, 90, 180, 270].includes(page.rotation)
+          || page.coordinateSystem !== 'viewport-points-top-left' || page.requiresInspection !== true
+          || !['text-present', 'no-embedded-text'].includes(page.textPresence) || !boxes
+          || (boxes.length > 0 && page.textPresence !== 'text-present')
+          || (boxes.length === 0 && page.textPresence !== 'no-embedded-text')) fail('EVIDENCE_INTEGRITY');
+        pageMetadata.push({
+          pageIndex, width: page.width, height: page.height, rotation: page.rotation,
+          coordinateSystem: page.coordinateSystem, textPresence: page.textPresence,
+          requiresInspection: true, textBoxCount: boxes.length,
+        });
+        for (let textIndex = 0; textIndex < boxes.length; textIndex += 1) {
+          const box = ownDataRecord(boxes[textIndex], new Set(['x', 'y', 'width', 'height', 'text', 'geometry']));
+          if (!box || typeof box.text !== 'string' || box.text.length === 0 || !isWellFormed(box.text)
+            || box.text.length > PDF_TEXT_READER_LIMITS.maxTextItemCodeUnits || box.geometry !== 'approximate-text-item'
+            || ![box.x, box.y, box.width, box.height].every(Number.isFinite)
+            || box.x < 0 || box.y < 0 || box.width < 0 || box.height < 0
+            || box.x + box.width > page.width + 0.01 || box.y + box.height > page.height + 0.01) fail('EVIDENCE_INTEGRITY');
+          if (positions.length >= positionMaximum) fail('EVIDENCE_INVALID');
+          const content = Buffer.from(box.text, 'utf8');
+          if (content.toString('utf8') !== box.text || content.byteLength > positionByteMaximum) {
+            content.fill(0);
+            fail('EVIDENCE_INVALID');
+          }
+          positionBytesTotal += content.byteLength;
+          if (!Number.isSafeInteger(positionBytesTotal) || positionBytesTotal > totalByteMaximum) {
+            content.fill(0);
+            fail('EVIDENCE_INVALID');
+          }
+          const locator = Object.freeze({
+            kind: 'pdf-text-box', pageIndex, textIndex,
+            x: box.x, y: box.y, width: box.width, height: box.height,
+            pageWidth: page.width, pageHeight: page.height, rotation: page.rotation,
+            coordinateSystem: page.coordinateSystem, geometry: box.geometry,
+          });
+          positions.push({ id: randomUUID(), locator, contentHash: digest(content), bytes: content });
+        }
+      }
+      if (positions.length === 0) fail('EVIDENCE_INTEGRITY');
+
+      const limitsCopy = {
+        maxInputBytes: readResult.limits.maxInputBytes,
+        maxPages: readResult.limits.maxPages,
+        maxPagePoints: readResult.limits.maxPagePoints,
+        maxTextCodeUnits: readResult.limits.maxTextCodeUnits,
+        maxTextItemCodeUnits: readResult.limits.maxTextItemCodeUnits,
+        maxTextItems: readResult.limits.maxTextItems,
+        maxOutputBytes: readResult.limits.maxOutputBytes,
+        addressSpaceBytes: readResult.limits.addressSpaceBytes,
+        maxCpuSeconds: readResult.limits.maxCpuSeconds,
+        maxWallMilliseconds: readResult.limits.maxWallMilliseconds,
+      };
+      if (Object.values(limitsCopy).some((value) => !Number.isSafeInteger(value) || value <= 0)) fail('EVIDENCE_INTEGRITY');
+      const derivedPdf = {
+        bindingVersion: PDF_DERIVATION_BINDING_VERSION,
+        decoder: { name: readResult.decoder.name, version: readResult.decoder.version, configVersion: readResult.decoder.configVersion },
+        completeness: readResult.completeness,
+        requiresInspection: true,
+        limits: limitsCopy,
+        pages: pageMetadata,
+        textBoxCount: positions.length,
+      };
+      const derivationMaterial = {
+        bindingVersion: derivedPdf.bindingVersion,
+        sourceContentHash,
+        decoder: derivedPdf.decoder,
+        completeness: derivedPdf.completeness,
+        requiresInspection: derivedPdf.requiresInspection,
+        limits: derivedPdf.limits,
+        pages: pageMetadata,
+        positions: positions.map((position) => ({ locator: position.locator, contentHash: position.contentHash })),
+      };
+      const derivationDigest = digest(Buffer.from(JSON.stringify(derivationMaterial), 'utf8'));
+      derivedPdf.derivationDigest = derivationDigest;
+      const sourceProvenance = {
+        sourceUrl, canonicalUrl, redirectChain, contentType: input.contentType,
+        sourceKind: input.sourceKind, retrievedAt: input.retrievedAt, retrievedAtMs, contentHash: sourceContentHash,
+      };
+      const provenanceBytes = Buffer.byteLength(JSON.stringify({ source: sourceProvenance, derivedPdf }), 'utf8')
+        + positions.reduce((sum, position) => sum + Buffer.byteLength(JSON.stringify(position.locator), 'utf8') + 128, 0);
+      if (!Number.isSafeInteger(provenanceBytes) || provenanceBytes > SELECTED_BATCH_LIMITS.provenanceBytes) fail('EVIDENCE_INVALID');
+      const positionIds = positions.map((position) => position.id);
+      const positionHashes = Object.fromEntries(positions.map((position) => [position.id, position.contentHash]));
+      const bundle = {
+        schemaVersion: PDF_DERIVED_BUNDLE_VERSION,
+        representation: PDF_DERIVED_REPRESENTATION,
+        derivationDigest,
+        source: sourceProvenance,
+        derivedPdf,
+        positions: positions.map((position) => ({
+          id: position.id, locator: position.locator, contentHash: position.contentHash, content: position.bytes.toString('base64'),
+        })),
+      };
+      const serialized = JSON.stringify(bundle);
+      if (Buffer.byteLength(serialized, 'utf8') > SELECTED_BATCH_LIMITS.evidenceDecryptedBytes) fail('EVIDENCE_INVALID');
+
+      const action = 'ingest_derived_pdf_evidence';
+      activeIndexKey = await resolveKey(info, 'source-index');
+      const derivedIdentity = `event-intelligence:source-family:pdf-derived:v1\u0000${input.sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`;
+      const currentFamilyHmac = stableHmac(activeIndexKey.key, derivedIdentity);
+      const directory = await tenantDirectory(info);
+      directoryForCleanup = directory;
+      const snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
+        const manifest = await readManifest(database, info.tenantHash);
+        await expireRecords(database, manifest, currentTime());
+        const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        return { document: row?.document ?? null };
+      });
+      let manifest = snapshot.document === null ? emptyManifest(info.tenantHash) : validateManifest(JSON.parse(snapshot.document), info.tenantHash);
+      const derivedFamilies = Object.values(manifest.families).filter((family) => family.representation === PDF_DERIVED_REPRESENTATION);
+      if (derivedFamilies.length > 256) fail('EVIDENCE_BUSY');
+      let family = derivedFamilies.find((candidate) => candidate.sourceKeyId === activeIndexKey.keyId
+        && candidate.sourceKeyHmac === currentFamilyHmac);
+      if (!family) {
+        for (const candidate of derivedFamilies) {
+          if (candidate.sourceKeyId === activeIndexKey.keyId) continue;
+          const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId);
+          historicalIndexKeys.push(oldIndexKey.key);
+          if (candidate.sourceKeyHmac === stableHmac(oldIndexKey.key, derivedIdentity)) {
+            family = candidate;
+            break;
+          }
+        }
+      }
+      const familyRecordIds = family ? safeArray(family.recordIds, 100_000) : [];
+      if (!familyRecordIds) fail('EVIDENCE_INTEGRITY');
+      const existingRecord = familyRecordIds.map((id) => manifest.records[id]).find((candidate) =>
+        candidate?.state === 'available' && candidate.representation === PDF_DERIVED_REPRESENTATION
+          && candidate.contentHash === sourceContentHash && candidate.derivationDigest === derivationDigest);
+      if (existingRecord) {
+        const existingSnapshot = copyEvidenceRecord(existingRecord, limits.maxPositionCount);
+        await authorize(info, request, action, [existingRecord.id]);
+        checkCancellation(signal);
+        authorizeCurrent(info, request, action, [existingRecord.id]);
+        checkCancellation(signal);
+        const finalNow = currentTime();
+        if (existingRecord.expiresAtMs <= finalNow) fail('EVIDENCE_EXPIRED');
+        if (existingRecord.expiresAtMs > retention.expiresAtMs) fail('EVIDENCE_DENIED');
+        const databasePath = path.join(directory, 'evidence.sqlite');
+        let database;
+        let transactionOpen = false;
+        try {
+          const before = lstatSync(databasePath);
+          if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
+          database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
+          const after = lstatSync(databasePath);
+          if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
+          database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
+          transactionOpen = true;
+          // DatabaseSync may block while another process owns the write lock.
+          // Re-evaluate the privacy deadline only after acquiring that lock.
+          checkCancellation(signal);
+          if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+          const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+          if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
+          const bundleCount = Number(database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ? AND id = ?').get('evidence', existingRecord.id).count);
+          if (bundleCount !== 1) fail('EVIDENCE_EXPIRED');
+          checkCancellation(signal);
+          if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+          database.exec('COMMIT');
+          transactionOpen = false;
+        } catch (error) {
+          if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
+          if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
+          throw error;
+        } finally {
+          database?.close();
+        }
+        checkCancellation(signal);
+        if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        return Object.freeze({
+          outcome: 'stored', evidence: newEvidenceHandle(info, existingRecord.id),
+          positions: Object.freeze(existingSnapshot.positionIds.map((id) => newPositionHandle(info, existingRecord.id, id, input.sourceKind, PDF_DERIVED_REPRESENTATION))),
+          created: false, metadata: frozenMetadata(existingSnapshot),
+        });
+      }
+
+      const activeFamily = family;
+      const latestId = activeFamily?.recordIds.at(-1);
+      const latest = latestId ? manifest.records[latestId] : null;
+      const evidenceId = randomUUID();
+      payloadKey = await resolveKey(info, 'payload');
+      sealedBytes = encodeSealedPayload(info.tenantHash, evidenceId, 'evidence', serialized, payloadKey.keyId, payloadKey.key);
+      await authorize(info, request, action, [evidenceId]);
+      checkCancellation(signal);
+      authorizeCurrent(info, request, action, [evidenceId]);
+      checkCancellation(signal);
+      const finalNow = currentTime();
+      if (retention.expiresAtMs <= finalNow) fail('EVIDENCE_EXPIRED');
+      const nowIso = new Date(finalNow).toISOString();
+      const version = activeFamily ? (activeFamily.versionCount ?? activeFamily.recordIds.length) + 1 : 1;
+      const familyId = activeFamily?.id ?? randomUUID();
+      const record = {
+        id: evidenceId,
+        version,
+        previousId: latest?.id ?? null,
+        contentHash: sourceContentHash,
+        duplicateGroupId: digest(Buffer.from(`event-intelligence:duplicate:v1:${info.tenantHash}:${sourceContentHash}`, 'utf8')),
+        retrievedAt: input.retrievedAt,
+        createdAt: nowIso,
+        createdAtMs: finalNow,
+        retrievedAtMs,
+        expiresAtMs: retention.expiresAtMs,
+        policyId: retention.policyId,
+        policyVersion: retention.policyVersion,
+        state: 'available',
+        encryptionKeyId: payloadKey.keyId,
+        positionIds,
+        positionHashes,
+        representation: PDF_DERIVED_REPRESENTATION,
+        derivationDigest,
+      };
+
+      const databasePath = path.join(directory, 'evidence.sqlite');
+      let database;
+      let transactionOpen = false;
+      try {
+        const before = lstatSync(databasePath);
+        if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
+        database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
+        const after = lstatSync(databasePath);
+        if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
+        database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
+        transactionOpen = true;
+        // A busy timeout can consume most or all of the remaining retention
+        // period. The earlier authorization/preparation timestamp is not a
+        // valid basis for a write after this synchronous lock acquisition.
+        checkCancellation(signal);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
+        const currentManifest = snapshot.document === null
+          ? emptyManifest(info.tenantHash)
+          : validateManifest(JSON.parse(currentRow.document), info.tenantHash);
+        if (currentManifest.records[evidenceId]) fail('EVIDENCE_BUSY');
+        currentManifest.schemaVersion = PDF_DERIVED_BUNDLE_VERSION;
+        currentManifest.records[evidenceId] = record;
+        let currentFamily = activeFamily ? currentManifest.families[activeFamily.id] : null;
+        if (activeFamily && !currentFamily) fail('EVIDENCE_BUSY');
+        if (!currentFamily) {
+          currentFamily = {
+            id: familyId,
+            representation: PDF_DERIVED_REPRESENTATION,
+            sourceKeyId: activeIndexKey.keyId,
+            sourceKeyHmac: currentFamilyHmac,
+            versionCount: 0,
+            recordIds: [],
+          };
+          currentManifest.families[familyId] = currentFamily;
+        }
+        if (currentFamily.representation !== PDF_DERIVED_REPRESENTATION) fail('EVIDENCE_INTEGRITY');
+        currentFamily.recordIds.push(evidenceId);
+        currentFamily.versionCount = version;
+        const document = JSON.stringify(currentManifest);
+        if (Buffer.byteLength(document, 'utf8') > 16 * 1024 * 1024) fail('EVIDENCE_STORAGE');
+        database.prepare('INSERT INTO sealed_bundles (kind, id, sealed) VALUES (?, ?, ?)').run('evidence', evidenceId, sealedBytes);
+        database.prepare(`INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)
+          ON CONFLICT (tenant_hash) DO UPDATE SET document = excluded.document`).run(info.tenantHash, document);
+        // The same synchronous store clock is checked after payload and
+        // manifest work, immediately before commit, so an expiring wait or
+        // write cannot publish a record past its already-authorized deadline.
+        checkCancellation(signal);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        database.exec('COMMIT');
+        transactionOpen = false;
+      } catch (error) {
+        if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
+        if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
+        throw error;
+      } finally {
+        database?.close();
+      }
+      checkCancellation(signal);
+      if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+      return Object.freeze({
+        outcome: 'stored', evidence: newEvidenceHandle(info, evidenceId),
+        positions: Object.freeze(positions.map((position) => newPositionHandle(info, evidenceId, position.id, input.sourceKind, PDF_DERIVED_REPRESENTATION))),
+        created: true, metadata: frozenMetadata(record),
+      });
+    } catch (error) {
+      if (error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED') {
+        if (directoryForCleanup) {
+          try { await persistExpirySweep(info, directoryForCleanup); } catch (cleanupError) { throw safePublicError(cleanupError); }
+        }
+      }
+      throw safePublicError(error);
+    } finally {
+      sourceBytes.fill(0);
+      for (const position of positions) position.bytes.fill(0);
+      sealedBytes?.fill(0);
+      activeIndexKey?.key.fill(0);
+      payloadKey?.key.fill(0);
+      for (const key of historicalIndexKeys) key.fill(0);
+    }
+  }
+
   async function lookupEvidence(scope, evidenceId) {
     const info = scopeInfo(scope);
     if (!validUuid(evidenceId)) fail('EVIDENCE_NOT_FOUND');
@@ -1818,7 +2374,8 @@ export function createEvidenceStore(options) {
       const evidence = EVIDENCE_HANDLES.get(support.evidence);
       const position = POSITION_HANDLES.get(support.position);
       if (!evidence || !position || evidence.tenantHash !== info.tenantHash || position.tenantHash !== info.tenantHash
-        || evidence.evidenceId !== position.evidenceId || !isDigest(support.contentHash)) fail('EVIDENCE_INVALID');
+        || evidence.evidenceId !== position.evidenceId || position.representation !== 'raw'
+        || !isDigest(support.contentHash)) fail('EVIDENCE_INVALID');
       return { support, evidenceId: evidence.evidenceId, positionId: position.positionId, sourceKind: position.sourceKind };
     });
     const evidenceIds = supportRefs.map((reference) => reference.evidenceId);
@@ -1833,6 +2390,7 @@ export function createEvidenceStore(options) {
           const record = manifest.records[reference.evidenceId];
           if (!record) fail('EVIDENCE_INVALID');
           if (record.state !== 'available' || record.expiresAtMs <= nowMs) fail('EVIDENCE_EXPIRED');
+          if (record.representation !== undefined) fail('EVIDENCE_INVALID');
           if (reference.support.contentHash !== record.contentHash) fail('EVIDENCE_INVALID');
           if (!record.positionIds.includes(reference.positionId)) fail('EVIDENCE_INVALID');
           const bundle = await decryptBundle(info, record.id, 'evidence', database, record.encryptionKeyId);
@@ -2092,6 +2650,7 @@ export function createEvidenceStore(options) {
   return Object.freeze({
     scopeForAuthenticatedRequest: createScope,
     ingestEvidence,
+    ingestDerivedPdfEvidence,
     lookupEvidence,
     getEvidenceMetadata,
     listEvidencePositions,
