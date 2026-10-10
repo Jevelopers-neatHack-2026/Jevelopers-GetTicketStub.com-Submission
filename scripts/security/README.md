@@ -97,3 +97,36 @@ specific cause. Chromium's [AppArmor guidance](https://chromium.googlesource.com
 describes kernel/unconfined workarounds that are prohibited in this task. If
 observed host policy blocks the permitted configuration, retain the cause
 evidence and stop that path; do not silently adopt those workarounds.
+
+### Actual Chromium startup probe
+
+Full logs of `b6de184` runs `38094541342` and `38094543656` report
+`ZYGOTE_START_FAILURE`, with both namespace probes successful. This is a downstream
+startup symptom, not an identified syscall or enforcing layer. Playwright can
+rewrite sandbox startup logs before returning an exception, so classifying that
+exception alone can lose information.
+
+`browser-launch-probe.mjs` runs a fixed subprocess that calls the unchanged
+`openOfflineBrowser(loadPins())` adapter. Only that subprocess enables
+`DEBUG=pw:browser`, with colors and debug timestamps disabled. Its stdout is
+discarded, stderr is drained while retaining at most 64 KiB in memory, and the
+probe has a 40-second limit. On timeout it kills its own launched browser process
+group (identified by Playwright's launch event) and subprocess. Cleanup errors
+are reported as a fixed boolean. The probe adds no browser flags or input surface.
+
+The parser accepts only Playwright-framed browser stderr lines, bounds lines and
+their lengths, and maps a static list of Chromium source names to finite source
+enums. Known operation names and errno text become finite enums; unknown source
+names, messages, paths, URLs, command lines, stdout, environment and exception
+strings never escape. Browser process signals and launch/exit event presence are
+also finite observations. An unknown cause stays unknown. Raw streams are never
+saved or uploaded. Source recognition alone does not identify the enforcing layer.
+
+The parser/lifecycle tests run before the diagnostic and existing mandatory
+suites. Their synthetic credential/zygote examples verify sanitization; they are
+not evidence that this Linux failure is caused by chroot, capabilities or seccomp.
+The real adapter lifecycle test also verifies the installed Playwright debug
+format and confined subprocess capture; success on macOS does not prove Linux.
+After this diagnostic commit, the supervisor must execute fresh Linux CI and
+inspect `launchDiagnostic.browserLaunch` before selecting a repair. Every original
+render/security test remains mandatory; no probe success resolves ROOT-R1.

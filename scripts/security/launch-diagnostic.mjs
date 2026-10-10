@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { observeLinuxContainerSecurity } from "../../dist/src/runtime/environment.js";
 import { failureReceipt } from "../../dist/src/runtime/errors.js";
+import { probeBrowserLaunch } from "./browser-launch-probe.mjs";
 
 function namespaceProbe(args) {
 	const result = spawnSync("/usr/bin/unshare", [...args, "/usr/bin/true"], {
@@ -113,7 +114,7 @@ async function main() {
 	console.log(
 		JSON.stringify({
 			launchDiagnostic: {
-				schemaVersion: 1,
+				schemaVersion: 2,
 				container,
 				passwdIdentity: identity.error
 					? "PROBE_UNAVAILABLE"
@@ -125,6 +126,7 @@ async function main() {
 				temporaryFilesystem: filesystem,
 				userNamespace,
 				userPidNetworkNamespaces,
+				browserLaunch: await probeBrowserLaunch(),
 				kernelIndicators: {
 					apparmorRestrictedUserns: await policyIndicator(
 						"/proc/sys/kernel/apparmor_restrict_unprivileged_userns",

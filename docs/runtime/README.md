@@ -71,8 +71,13 @@ Linux namespace/seccomp observations.
 Sandbox launch failures expose only fixed diagnostic categories. Linux CI also
 records bounded namespace and temporary-filesystem diagnostic probes without
 printing raw Chrome/utility errors. Diagnostics do not replace effective sandbox
-checks or authorize policy relaxation. The first revised Linux candidate failed
-both CI runs; its underlying launch cause requires the new remote observations.
+checks or authorize policy relaxation. Both secure candidates failed in Linux CI.
+The second candidate reported `ZYGOTE_START_FAILURE`; generic namespace probes
+passed. The underlying zygote cause remains unknown. A bounded subprocess now
+observes the same adapter launch through Playwright's browser debug stream,
+retaining only finite Chrome source, operation, errno and signal categories.
+Raw subprocess streams stay private in memory and are discarded. No launch flags,
+container policy, browser pins or effective sandbox requirements change.
 
 The unmodified Latin normal 400 WOFF2 comes from `@fontsource/noto-sans@5.3.0`
 (upstream Google Fonts metadata v42, last modified 2025-09-11). npm locks tarball
