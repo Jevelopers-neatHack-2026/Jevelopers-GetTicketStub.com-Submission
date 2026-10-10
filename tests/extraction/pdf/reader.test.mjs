@@ -131,6 +131,17 @@ test("empty, scanned, and mixed pages stay explicitly incomplete and require ins
   assert.equal(mixed.pages[0].textBoxes[0].text, "Text layer is partial");
 });
 
+test("compressed text expansion above the declared text ceiling is rejected atomically", async () => {
+  const expandedTextCodeUnits = 1_500 * 74;
+  assert.ok(expandedTextCodeUnits > PDF_TEXT_READER_LIMITS.maxTextCodeUnits);
+  const bytes = await fixture("compressed-expansion.pdf");
+  assert.ok(bytes.byteLength < 20_000, "the checked-in Flate fixture stays small");
+  await assert.rejects(
+    () => decodePdfBytesForWorker(bytes),
+    (error) => error.code === "text_limit",
+  );
+});
+
 test("bounded name preflight decodes PDF escape spellings and rejects object streams", async () => {
   const base = await fixture("text-multipage.pdf");
   const escapedOpenAction = Buffer.concat([base, Buffer.from("\n/Open#41ction\n")]);
@@ -217,11 +228,9 @@ test("compressed expansion and output overflow never become partial text observa
   if (process.platform !== "linux") {
     assert.equal(expansionResult.code, "ISOLATION_UNAVAILABLE");
   } else {
-    assert.notEqual(expansionResult.kind, "observation");
-    assert.ok(["rejected", "no-text"].includes(expansionResult.kind));
-    if (expansionResult.kind === "rejected") {
-      assert.ok(["RESOURCE_LIMIT", "MALFORMED_PDF", "DECODER_FAILURE", "TIMEOUT"].includes(expansionResult.code));
-    }
+    assert.equal(expansionResult.kind, "rejected");
+    assert.equal(expansionResult.code, "TEXT_LIMIT");
+    assert.equal("pages" in expansionResult, false);
   }
 
   await expectReject("text-overflow.pdf", "OUTPUT_LIMIT", { maxOutputBytes: 4_096 });

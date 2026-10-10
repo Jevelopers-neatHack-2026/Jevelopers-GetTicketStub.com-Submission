@@ -214,18 +214,17 @@ def make_pdf_fixtures() -> None:
         over_pages.showPage()
     over_pages.save()
 
-    # A 1 MiB zlib stream expands to 128 MiB. It is only passed through the
-    # reader's OS-isolated child; never decode it directly in this generator.
+    # A small Flate stream expands to 111,000 extracted text code units,
+    # beyond the reader's all-or-nothing 100,000-unit ceiling.
     def expansion_stream(writer: PdfWriter) -> None:
-        compressor = zlib.compressobj(level=9)
-        parts = []
-        chunk = b"\x00" * (1024 * 1024)
-        for _ in range(128):
-            parts.append(compressor.compress(chunk))
-        parts.append(compressor.flush())
+        text = b"A" * 74
+        expanded = b"".join(
+            b"BT /F1 12 Tf 24 720 Td (" + text + b") Tj ET\n"
+            for _ in range(1_500)
+        )
         content = EncodedStreamObject()
         content.update({NameObject("/Filter"): NameObject("/FlateDecode")})
-        content._data = b"".join(parts)
+        content._data = zlib.compress(expanded, level=9)
         writer.pages[0][NameObject("/Contents")] = writer._add_object(content)
 
     rewrite(encrypted_source, ROOT / "compressed-expansion.pdf", expansion_stream)

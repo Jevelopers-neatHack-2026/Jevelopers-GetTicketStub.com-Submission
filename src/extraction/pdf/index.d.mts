@@ -81,6 +81,7 @@ export interface PdfTextObservation extends PdfTextReadBase {
 export interface PdfTextNoText extends PdfTextReadBase {
   readonly kind: "no-text";
   readonly code: "NO_EMBEDDED_TEXT";
+  readonly completeness: "incomplete-text-only";
   readonly requiresInspection: true;
   readonly limits: Readonly<Record<string, number>>;
   readonly pages: readonly PdfPageTextObservation[];

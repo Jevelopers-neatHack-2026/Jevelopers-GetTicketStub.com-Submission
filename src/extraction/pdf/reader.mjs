@@ -198,27 +198,24 @@ function pump() {
     }
     activeWorkers += 1;
     job.state = "running";
-    runIsolated(job)
-      .then((result) => {
-        job.state = "finished";
-        clearTimeout(job.deadlineTimer);
-        job.options.signal?.removeEventListener("abort", job.abortListener);
-        job.resolve(
-          job.terminationCode
-            ? rejected(job.terminationCode, job.documentSha256)
-            : result,
-        );
-      }, () => {
-        job.state = "finished";
-        clearTimeout(job.deadlineTimer);
-        job.options.signal?.removeEventListener("abort", job.abortListener);
-        job.resolve(rejected("DECODER_FAILURE", job.documentSha256));
-      })
-      .finally(() => {
-        activeWorkers -= 1;
-        pump();
-      });
+    runIsolated(job).then(
+      (result) => finishWorker(job, result),
+      () => finishWorker(job, rejected("DECODER_FAILURE", job.documentSha256)),
+    );
   }
+}
+
+function finishWorker(job, result) {
+  job.state = "finished";
+  clearTimeout(job.deadlineTimer);
+  job.options.signal?.removeEventListener("abort", job.abortListener);
+  activeWorkers -= 1;
+  pump();
+  job.resolve(
+    job.terminationCode
+      ? rejected(job.terminationCode, job.documentSha256)
+      : result,
+  );
 }
 
 function killProcessGroup(child) {
@@ -360,6 +357,7 @@ function validateWorkerResult(message, job) {
   }
   const common = {
     ...baseResult(job.documentSha256),
+    completeness: "incomplete-text-only",
     limits: message.limits,
     pages,
     networkAttemptCount: 0,
