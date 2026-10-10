@@ -140,7 +140,7 @@ function systemNameservers() {
     return [...new Set(servers)];
   }).catch((error) => {
     if (error instanceof RetrievalError) throw error;
-    throw new RetrievalError("DNS_FAILURE", { cause: error });
+    throw new RetrievalError("DNS_FAILURE");
   });
 }
 
@@ -161,9 +161,27 @@ export class DnsWireResolver {
       if (!isPublicAddress(host)) throw new RetrievalError("POLICY_DENIED");
       return Object.freeze({ addresses: Object.freeze([host]), aliases: Object.freeze([]) });
     }
-    const results = await Promise.all([TYPE_A, TYPE_AAAA].map((type) =>
-      this.#resolveType(host, type, { signal, deadline, visited: new Set() })));
-    ensureActive(signal, deadline);
+    const childController = new AbortController();
+    const propagateAbort = () => childController.abort();
+    signal?.addEventListener("abort", propagateAbort, { once: true });
+    if (signal?.aborted) propagateAbort();
+    const childSignal = childController.signal;
+    const lookups = [TYPE_A, TYPE_AAAA].map((type) =>
+      this.#resolveType(host, type, { signal: childSignal, deadline, visited: new Set() }));
+    let results;
+    try {
+      results = await Promise.all(lookups);
+      ensureActive(signal, deadline);
+    } catch (error) {
+      childController.abort();
+      await Promise.allSettled(lookups);
+      if (signal?.aborted) throw new RetrievalError("CANCELED");
+      if (performance.now() >= deadline) throw new RetrievalError("DEADLINE_EXCEEDED");
+      throw error;
+    } finally {
+      signal?.removeEventListener("abort", propagateAbort);
+      if (!childSignal.aborted) childController.abort();
+    }
     const addresses = [...new Set(results.flatMap((result) => result.addresses))];
     const aliases = [...new Set(results.flatMap((result) => result.aliases))];
     if (addresses.length === 0) throw new RetrievalError("DNS_FAILURE");
@@ -179,7 +197,6 @@ export class DnsWireResolver {
     const id = randomBytes(2).readUInt16BE(0);
     const request = queryPacket(hostname, type, id);
     let response;
-    let lastError;
     for (const nameserver of this.nameservers) {
       try {
         response = await this.#udp(nameserver, request, { id, hostname, type, signal, deadline });
@@ -192,10 +209,9 @@ export class DnsWireResolver {
         break;
       } catch (error) {
         if (error instanceof RetrievalError && ["CANCELED", "DEADLINE_EXCEEDED", "POLICY_DENIED"].includes(error.code)) throw error;
-        lastError = error;
       }
     }
-    if (!response) throw new RetrievalError("DNS_FAILURE", { cause: lastError });
+    if (!response) throw new RetrievalError("DNS_FAILURE");
     const linked = response.records.filter((record) => record.owner === hostname && record.type === TYPE_CNAME);
     const direct = response.records.filter((record) => record.owner === hostname && record.type === type);
     if (linked.length > 1 && new Set(linked.map((record) => record.data)).size > 1) throw new RetrievalError("DNS_FAILURE");
@@ -224,9 +240,13 @@ export class DnsWireResolver {
         settled = true;
         clearTimeout(timer);
         context.signal?.removeEventListener("abort", onAbort);
-        if (started) socket.close();
-        if (error) reject(error);
-        else resolve(response);
+        const settle = () => {
+          if (error) reject(error);
+          else resolve(response);
+        };
+        if (!started) return settle();
+        try { socket.close(settle); }
+        catch { settle(); }
       };
       const onAbort = () => finish(new RetrievalError("CANCELED"));
       const onMessage = (packet) => {
@@ -236,7 +256,7 @@ export class DnsWireResolver {
           finish(error);
         }
       };
-      socket.once("error", (error) => finish(new RetrievalError("DNS_FAILURE", { cause: error })));
+      socket.once("error", () => finish(new RetrievalError("DNS_FAILURE")));
       socket.once("message", onMessage);
       context.signal?.addEventListener("abort", onAbort, { once: true });
       timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")), remaining(context.deadline));
@@ -244,7 +264,7 @@ export class DnsWireResolver {
       started = true;
       socket.connect(this.port, nameserver, () => {
         socket.send(request, (error) => {
-          if (error) finish(new RetrievalError("DNS_FAILURE", { cause: error }));
+          if (error) finish(new RetrievalError("DNS_FAILURE"));
         });
       });
     });
@@ -264,12 +284,16 @@ export class DnsWireResolver {
         settled = true;
         clearTimeout(timer);
         context.signal?.removeEventListener("abort", onAbort);
+        const settle = () => {
+          if (error) reject(error);
+          else resolve(packet);
+        };
+        if (socket.closed) return settle();
+        socket.once("close", settle);
         socket.destroy();
-        if (error) reject(error);
-        else resolve(packet);
       };
       const onAbort = () => finish(new RetrievalError("CANCELED"));
-      socket.once("error", (error) => finish(new RetrievalError("DNS_FAILURE", { cause: error })));
+      socket.once("error", () => finish(new RetrievalError("DNS_FAILURE")));
       socket.on("data", (chunk) => {
         data = Buffer.concat([data, chunk]);
         if (data.length > MAX_PACKET + 2) return finish(new RetrievalError("DNS_FAILURE"));

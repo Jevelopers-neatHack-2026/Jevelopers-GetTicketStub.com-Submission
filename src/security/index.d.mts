@@ -19,7 +19,7 @@ export declare const DEFAULT_RUN_LIMITS: Readonly<{
   concurrentFetches: 4;
   connectMilliseconds: 10000;
   totalMilliseconds: 30000;
-  compressedBytesPerRequest: 10485760;
+  wireBytesPerRequest: 10485760;
   decodedTextBytesPerRequest: 20971520;
   decodedMediaBytesPerRequest: 10485760;
   decodedBytesPerRun: 104857600;

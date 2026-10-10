@@ -52,7 +52,7 @@ export function fixtureUrl(port, pathname = "/", hostname = "fixture.example.tes
   return `${protocol}//${hostname}:${port}${pathname}`;
 }
 
-export function localTestSeam({ port, certificate, onDial, hostnames = ["fixture.example.test"], addresses = ["127.0.0.1"], aliases = [] }) {
+export function localTestSeam({ port, certificate, onDial, resolveOverride, hostnames = ["fixture.example.test"], addresses = ["127.0.0.1"], aliases = [] }) {
   const allowedHosts = new Set(hostnames);
   return createTestSeam({
     validateHostname(hostname) {
@@ -62,14 +62,15 @@ export function localTestSeam({ port, certificate, onDial, hostnames = ["fixture
     validateUrl(input) {
       let url;
       try { url = new URL(input); }
-      catch (cause) { throw new RetrievalError("POLICY_DENIED", { cause }); }
+      catch { throw new RetrievalError("POLICY_DENIED"); }
       if (allowedHosts.has(url.hostname) && url.protocol === (certificate ? "https:" : "http:")
         && url.port === String(port) && !url.username && !url.password && !url.hash) {
         return Object.freeze({ url, hostname: url.hostname, port });
       }
       return parseAndValidateUrl(input);
     },
-    resolve(hostname) {
+    resolve(hostname, options) {
+      if (resolveOverride) return resolveOverride(hostname, options);
       if (!allowedHosts.has(hostname)) throw new RetrievalError("DNS_FAILURE");
       return Object.freeze({ addresses: Object.freeze([...addresses]), aliases: Object.freeze([...aliases]) });
     },

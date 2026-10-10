@@ -11,13 +11,15 @@ import { resolveSystemHost } from "./dns-resolver.mjs";
 import { RetrievalError } from "./errors.mjs";
 import { getTestSeam } from "./internal/test-seams.mjs";
 
+export { RetrievalError };
+
 export const DEFAULT_RUN_LIMITS = Object.freeze({
   requests: 30,
   redirectsPerFetch: 5,
   concurrentFetches: 4,
   connectMilliseconds: 10_000,
   totalMilliseconds: 30_000,
-  compressedBytesPerRequest: 10 * 1024 * 1024,
+  wireBytesPerRequest: 10 * 1024 * 1024,
   decodedTextBytesPerRequest: 20 * 1024 * 1024,
   decodedMediaBytesPerRequest: 10 * 1024 * 1024,
   decodedBytesPerRun: 100 * 1024 * 1024,
@@ -31,11 +33,50 @@ const ACCEPT = [
 ].join(", ");
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 const SUPPORTED_MIME = new Set(ACCEPT.split(", "));
+const ABORTED_GETTER = Object.getOwnPropertyDescriptor(AbortSignal.prototype, "aborted")?.get;
+const ADD_EVENT_LISTENER = EventTarget.prototype.addEventListener;
+const REMOVE_EVENT_LISTENER = EventTarget.prototype.removeEventListener;
+
+function signalIsAborted(signal) {
+  return Reflect.apply(ABORTED_GETTER, signal, []);
+}
+
+function addSignalListener(signal, listener) {
+  Reflect.apply(ADD_EVENT_LISTENER, signal, ["abort", listener, { once: true }]);
+}
+
+function removeSignalListener(signal, listener) {
+  try { Reflect.apply(REMOVE_EVENT_LISTENER, signal, ["abort", listener]); }
+  catch { /* Caller-owned signal cleanup must never replace the retrieval result. */ }
+}
 
 function throwIfStopped(context) {
   if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
-  if (context.signal.aborted) throw new RetrievalError("CANCELED");
+  if (signalIsAborted(context.signal)) throw new RetrievalError("CANCELED");
   if (performance.now() >= context.deadline) throw new RetrievalError("DEADLINE_EXCEEDED");
+}
+
+function validateFetchOptions(options) {
+  try {
+    if (options === null || typeof options !== "object" || Array.isArray(options)) {
+      throw new RetrievalError("POLICY_DENIED");
+    }
+    const prototype = Object.getPrototypeOf(options);
+    if (prototype !== Object.prototype && prototype !== null) throw new RetrievalError("POLICY_DENIED");
+    const keys = Reflect.ownKeys(options);
+    if (keys.some((key) => key !== "signal")) throw new RetrievalError("POLICY_DENIED");
+    const descriptor = Object.getOwnPropertyDescriptor(options, "signal");
+    if (descriptor && !("value" in descriptor)) throw new RetrievalError("POLICY_DENIED");
+    const signal = descriptor?.value;
+    if (signal !== undefined && (typeof ABORTED_GETTER !== "function"
+      || typeof ADD_EVENT_LISTENER !== "function" || typeof REMOVE_EVENT_LISTENER !== "function"
+      || typeof signalIsAborted(signal) !== "boolean")) {
+      throw new RetrievalError("POLICY_DENIED");
+    }
+    return signal;
+  } catch {
+    throw new RetrievalError("POLICY_DENIED");
+  }
 }
 
 function assertAllowedAddress(address, seam) {
@@ -60,7 +101,7 @@ class FetchSemaphore {
         const index = this.#queue.indexOf(entry);
         if (index >= 0) this.#queue.splice(index, 1);
         clearTimeout(entry.timer);
-        context.signal.removeEventListener("abort", entry.abort);
+        removeSignalListener(context.signal, entry.abort);
       };
       entry.abort = () => {
         remove();
@@ -70,7 +111,7 @@ class FetchSemaphore {
         remove();
         reject(new RetrievalError("DEADLINE_EXCEEDED"));
       }, Math.max(1, context.deadline - performance.now()));
-      context.signal.addEventListener("abort", entry.abort, { once: true });
+      addSignalListener(context.signal, entry.abort);
       this.#queue.push(entry);
       try {
         throwIfStopped(context);
@@ -85,7 +126,7 @@ class FetchSemaphore {
     while (this.#queue.length > 0) {
       const entry = this.#queue.shift();
       clearTimeout(entry.timer);
-      entry.context.signal.removeEventListener("abort", entry.abort);
+      removeSignalListener(entry.context.signal, entry.abort);
       try {
         throwIfStopped(entry.context);
         entry.resolve(() => this.#release());
@@ -118,7 +159,7 @@ class PinnedAgentBase {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
-      this.signal.removeEventListener("abort", onAbort);
+      removeSignalListener(this.signal, onAbort);
       if (error) {
         raw.destroy();
         callback(error);
@@ -133,9 +174,9 @@ class PinnedAgentBase {
       if (record) this.onDial?.(Object.freeze({ peer, address: this.address, port: this.port }));
     };
     timer = setTimeout(() => finish(new RetrievalError("DEADLINE_EXCEEDED")), DEFAULT_RUN_LIMITS.connectMilliseconds);
-    this.signal.addEventListener("abort", onAbort, { once: true });
-    if (this.signal.aborted) return onAbort();
-    raw.once("error", (error) => finish(new RetrievalError("TRANSPORT_FAILURE", { cause: error })));
+    addSignalListener(this.signal, onAbort);
+    if (signalIsAborted(this.signal)) return onAbort();
+    raw.once("error", () => finish(new RetrievalError("TRANSPORT_FAILURE")));
     raw.once("connect", () => {
       try {
         checkPeer(raw, true);
@@ -149,18 +190,18 @@ class PinnedAgentBase {
           minVersion: "TLSv1.2",
           checkServerIdentity: (_serverName, certificate) => tls.checkServerIdentity(this.hostname, certificate),
         });
-        tlsSocket.once("error", (error) => finish(new RetrievalError("TRANSPORT_FAILURE", { cause: error })));
+        tlsSocket.once("error", () => finish(new RetrievalError("TRANSPORT_FAILURE")));
         tlsSocket.once("secureConnect", () => {
           try {
             checkPeer(tlsSocket);
             if (!tlsSocket.authorized) throw new RetrievalError("TRANSPORT_FAILURE");
             finish(null, tlsSocket);
           } catch (error) {
-            finish(error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE", { cause: error }));
+            finish(error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE"));
           }
         });
       } catch (error) {
-        finish(error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE", { cause: error }));
+        finish(error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE"));
       }
     });
     return undefined;
@@ -191,8 +232,8 @@ function createContext(signal) {
     deadlineReached: false,
   };
   const onAbort = () => controller.abort();
-  if (signal?.aborted) onAbort();
-  else signal?.addEventListener("abort", onAbort, { once: true });
+  if (signal && signalIsAborted(signal)) onAbort();
+  else if (signal) addSignalListener(signal, onAbort);
   const timer = setTimeout(() => {
     context.deadlineReached = true;
     controller.abort();
@@ -201,7 +242,8 @@ function createContext(signal) {
     context,
     close() {
       clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
+      if (signal) removeSignalListener(signal, onAbort);
+      controller.abort();
     },
   };
 }
@@ -247,15 +289,15 @@ function requestOnce(validated, address, context, seam) {
   return new Promise((resolve, reject) => {
     let request;
     const onAbort = () => request.destroy(new RetrievalError(context.deadlineReached ? "DEADLINE_EXCEEDED" : "CANCELED"));
-    const cleanup = () => context.signal.removeEventListener("abort", onAbort);
+    const cleanup = () => removeSignalListener(context.signal, onAbort);
     request = requester(options, (response) => resolve({ response, agent, request, cleanup }));
-    context.signal.addEventListener("abort", onAbort, { once: true });
-    if (context.signal.aborted) onAbort();
+    addSignalListener(context.signal, onAbort);
+    if (signalIsAborted(context.signal)) onAbort();
     request.once("error", (error) => {
       cleanup();
       agent.destroy();
       if (error instanceof RetrievalError) reject(error);
-      else reject(new RetrievalError("TRANSPORT_FAILURE", { cause: error }));
+      else reject(new RetrievalError("TRANSPORT_FAILURE"));
     });
     request.end();
   });
@@ -286,8 +328,8 @@ async function consumeBody(response, mime, context, fetcherState) {
   const encoding = String(response.headers["content-encoding"] ?? "identity").toLowerCase().trim();
   if (encoding !== "identity" && encoding !== "gzip") throw new RetrievalError("UNSUPPORTED_MEDIA");
   const maximum = bodyLimit(mime);
-  const declaredMaximum = encoding === "gzip" ? DEFAULT_RUN_LIMITS.compressedBytesPerRequest : maximum;
-  readContentLength(response.headers["content-length"], declaredMaximum);
+  const wireMaximum = DEFAULT_RUN_LIMITS.wireBytesPerRequest;
+  readContentLength(response.headers["content-length"], wireMaximum);
   let encoded = 0;
   let decoded = 0;
   let source = response;
@@ -296,7 +338,7 @@ async function consumeBody(response, mime, context, fetcherState) {
     const counter = new Transform({
       transform(chunk, _encoding, callback) {
         encoded += chunk.length;
-        if (encoded > DEFAULT_RUN_LIMITS.compressedBytesPerRequest) callback(new RetrievalError("RESOURCE_LIMIT"));
+        if (encoded > wireMaximum) callback(new RetrievalError("RESOURCE_LIMIT"));
         else callback(null, chunk);
       },
     });
@@ -310,6 +352,10 @@ async function consumeBody(response, mime, context, fetcherState) {
   try {
     for await (const chunk of source) {
       throwIfStopped(context);
+      if (encoding === "identity") {
+        encoded += chunk.length;
+        if (encoded > wireMaximum) throw new RetrievalError("RESOURCE_LIMIT");
+      }
       decoded += chunk.length;
       if (decoded > maximum || fetcherState.decodedBytes + chunk.length > DEFAULT_RUN_LIMITS.decodedBytesPerRun) {
         throw new RetrievalError("RESOURCE_LIMIT");
@@ -322,8 +368,8 @@ async function consumeBody(response, mime, context, fetcherState) {
     response.destroy(error instanceof Error ? error : undefined);
     source.destroy?.(error instanceof Error ? error : undefined);
     if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
-    if (context.signal.aborted && !(error instanceof RetrievalError)) throw new RetrievalError("CANCELED");
-    throw error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE", { cause: error });
+    if (signalIsAborted(context.signal) && !(error instanceof RetrievalError)) throw new RetrievalError("CANCELED");
+    throw error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE");
   }
   return Buffer.concat(chunks, decoded);
 }
@@ -418,12 +464,15 @@ export class SafeFetcher {
   }
 
   async fetch(input, options = {}) {
-    const unknownOptions = Object.keys(options).filter((key) => key !== "signal");
-    if (unknownOptions.length > 0) throw new RetrievalError("POLICY_DENIED");
-    const externalSignal = options.signal;
-    const { context, close: closeContext } = createContext(externalSignal);
+    let externalSignal;
+    let context;
+    let closeContext = () => {};
     let release;
     try {
+      externalSignal = validateFetchOptions(options);
+      const createdContext = createContext(externalSignal);
+      context = createdContext.context;
+      closeContext = createdContext.close;
       release = await this.#semaphore.acquire(context);
       let current = input;
       let redirects = 0;
@@ -492,13 +541,13 @@ export class SafeFetcher {
         }
       }
     } catch (error) {
-      if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
-      if (externalSignal?.aborted) throw new RetrievalError("CANCELED");
+      if (context?.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
+      if (externalSignal && signalIsAborted(externalSignal)) throw new RetrievalError("CANCELED");
       if (error instanceof RetrievalError) throw error;
-      throw new RetrievalError("TRANSPORT_FAILURE", { cause: error });
+      throw new RetrievalError("TRANSPORT_FAILURE");
     } finally {
-      release?.();
       closeContext();
+      release?.();
     }
   }
 }

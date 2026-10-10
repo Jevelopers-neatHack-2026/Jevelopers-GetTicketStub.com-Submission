@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { gzipSync } from "node:zlib";
+import { createSocket } from "node:dgram";
+import net from "node:net";
 import test from "node:test";
+import { performance } from "node:perf_hooks";
 import { SafeFetcher } from "../../src/security/controlled-fetch.mjs";
 import { RetrievalError } from "../../src/security/errors.mjs";
+import { DnsWireResolver } from "../../src/security/internal/dns-wire.mjs";
 import {
   createCertificate,
   fixtureUrl,
@@ -23,6 +27,7 @@ async function fixtureFetcher(t, handler, options = {}) {
     hostnames: options.hostnames,
     addresses: options.addresses,
     aliases: options.aliases,
+    resolveOverride: options.resolveOverride,
     onDial: (record) => dials.push(record),
   });
   return { server, dials, fetcher: new SafeFetcher(seam), url: (path, host) => fixtureUrl(server.port, path, host, options.certificate ? "https:" : "http:") };
@@ -34,6 +39,60 @@ async function waitFor(predicate, milliseconds = 2_000) {
     if (Date.now() - started > milliseconds) throw new Error("timed out waiting for fixture event");
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+async function stalledDnsFixture(t) {
+  const udp = createSocket("udp4");
+  await new Promise((resolve, reject) => {
+    udp.once("error", reject);
+    udp.bind(0, "127.0.0.1", resolve);
+  });
+  const { port } = udp.address();
+  let activeTcp = 0;
+  let maximumTcp = 0;
+  let totalTcp = 0;
+  const tcpSockets = new Set();
+  const tcp = net.createServer((socket) => {
+    activeTcp += 1;
+    totalTcp += 1;
+    maximumTcp = Math.max(maximumTcp, activeTcp);
+    tcpSockets.add(socket);
+    socket.on("data", () => {});
+    socket.once("close", () => {
+      activeTcp -= 1;
+      tcpSockets.delete(socket);
+    });
+  });
+  await new Promise((resolve, reject) => {
+    tcp.once("error", reject);
+    tcp.listen(port, "127.0.0.1", resolve);
+  });
+  udp.on("message", (query, peer) => {
+    let cursor = 12;
+    while (query[cursor] !== 0) cursor += query[cursor] + 1;
+    const type = query.readUInt16BE(cursor + 1);
+    const response = Buffer.from(query);
+    response.writeUInt16BE(type === 1 ? 0x8183 : 0x8380, 2); // A: NXDOMAIN; AAAA: truncated.
+    response.writeUInt16BE(1, 4);
+    response.writeUInt16BE(0, 6);
+    response.writeUInt16BE(0, 8);
+    response.writeUInt16BE(0, 10);
+    const send = () => udp.send(response, peer.port, peer.address);
+    if (type === 1) setTimeout(send, 30);
+    else send();
+  });
+  const fixture = {
+    port,
+    get activeTcp() { return activeTcp; },
+    get maximumTcp() { return maximumTcp; },
+    get totalTcp() { return totalTcp; },
+  };
+  t.after(async () => {
+    for (const socket of tcpSockets) socket.destroy();
+    await new Promise((resolve) => tcp.close(() => resolve()));
+    await new Promise((resolve) => udp.close(() => resolve()));
+  });
+  return fixture;
 }
 
 test("fetches over a direct pinned socket and sends no ambient credentials or proxy headers", async (t) => {
@@ -64,6 +123,59 @@ test("rejects caller header injection without opening a socket", async (t) => {
   const fixture = await fixtureFetcher(t, (_request, response) => respond(response, 200, { "content-type": "text/plain" }, "hello"));
   await assert.rejects(fixture.fetcher.fetch(fixture.url("/"), { headers: { cookie: "session=secret" } }), { code: "POLICY_DENIED" });
   assert.equal(fixture.dials.length, 0);
+});
+
+test("malformed options and signals fail as sanitized typed policy errors before resolution", async (t) => {
+  let resolverCalls = 0;
+  const fixture = await fixtureFetcher(t, (_request, response) => respond(response, 200, { "content-type": "text/plain" }, "unused"), {
+    resolveOverride() {
+      resolverCalls += 1;
+      return { addresses: ["127.0.0.1"], aliases: [] };
+    },
+  });
+  const canary = "private-canary-https://secret.example/token";
+  const hostile = new Proxy({}, { ownKeys() { throw new Error(canary); } });
+  const accessor = {};
+  Object.defineProperty(accessor, "signal", { get() { throw new Error(canary); } });
+  for (const options of [null, { signal: {} }, { signal: 1 }, hostile, accessor]) {
+    await assert.rejects(fixture.fetcher.fetch(fixture.url("/invalid"), options), (error) => {
+      assert.ok(error instanceof RetrievalError);
+      assert.equal(error.code, "POLICY_DENIED");
+      assert.equal(error.cause, undefined);
+      assert.equal(error.message.includes(canary), false);
+      assert.equal(error.stack.includes(canary), false);
+      return true;
+    });
+  }
+  assert.equal(resolverCalls, 0);
+  assert.equal(fixture.dials.length, 0);
+});
+
+test("uses trusted AbortSignal intrinsics and never lets caller cleanup methods replace the result", async (t) => {
+  const fixture = await fixtureFetcher(t, (_request, response) => respond(response, 200, { "content-type": "text/plain" }, "ok"));
+  const controller = new AbortController();
+  controller.signal.addEventListener = () => { throw new Error("hostile add"); };
+  controller.signal.removeEventListener = () => { throw new Error("hostile remove"); };
+  const result = await fixture.fetcher.fetch(fixture.url("/intrinsics"), { signal: controller.signal });
+  assert.equal(Buffer.from(result.bytes).toString(), "ok");
+  assert.equal(fixture.dials.length, 1);
+});
+
+test("transport failures do not retain raw errors or private URL details as causes", async (t) => {
+  const canary = "private-canary-https://secret.example/token";
+  const fixture = await fixtureFetcher(t, (_request, response) => respond(response, 200, { "content-type": "text/plain" }, "unused"), {
+    resolveOverride() { throw new Error(canary); },
+  });
+  await assert.rejects(fixture.fetcher.fetch(fixture.url("/transport")), (error) => {
+    assert.ok(error instanceof RetrievalError);
+    assert.equal(error.code, "TRANSPORT_FAILURE");
+    assert.equal(error.cause, undefined);
+    assert.equal(error.message.includes(canary), false);
+    assert.equal(error.stack.includes(canary), false);
+    return true;
+  });
+  const direct = new RetrievalError("TRANSPORT_FAILURE", { cause: new Error(canary) });
+  assert.equal(direct.cause, undefined);
 });
 
 test("rejects private DNS answers before a transport dial", async (t) => {
@@ -126,8 +238,8 @@ test("rejects a gzip expansion over the decoded text cap", async (t) => {
   await assert.rejects(fixture.fetcher.fetch(fixture.url("/bomb")), { code: "RESOURCE_LIMIT" });
 });
 
-test("rejects an oversized chunked text response while consuming it", async (t) => {
-  const expanded = Buffer.alloc(20 * 1024 * 1024 + 1, 0x62);
+test("rejects chunked identity text above the independent 10 MiB wire cap", async (t) => {
+  const expanded = Buffer.alloc(10 * 1024 * 1024 + 1, 0x62);
   const fixture = await fixtureFetcher(t, (_request, response) => {
     response.writeHead(200, { "content-type": "text/plain", "transfer-encoding": "chunked" });
     response.end(expanded);
@@ -135,9 +247,9 @@ test("rejects an oversized chunked text response while consuming it", async (t) 
   await assert.rejects(fixture.fetcher.fetch(fixture.url("/large")), { code: "RESOURCE_LIMIT" });
 });
 
-test("rejects an oversized declared body before consuming it", async (t) => {
+test("rejects declared identity text above the independent 10 MiB wire cap", async (t) => {
   const fixture = await fixtureFetcher(t, (_request, response) => {
-    response.writeHead(200, { "content-type": "text/plain", "content-length": String(20 * 1024 * 1024 + 1) });
+    response.writeHead(200, { "content-type": "text/plain", "content-length": String(10 * 1024 * 1024 + 1) });
     response.flushHeaders();
   });
   await assert.rejects(fixture.fetcher.fetch(fixture.url("/large")), { code: "RESOURCE_LIMIT" });
@@ -188,6 +300,31 @@ test("cancellation prevents queued work from opening a socket", async (t) => {
   for (const response of activeResponses) response.end("done");
   const results = await Promise.all(active);
   assert.equal(results.length, 4);
+});
+
+test("failed A lookup cancels and settles the stalled AAAA TCP sibling before fetch slots are reused", async (t) => {
+  const dns = await stalledDnsFixture(t);
+  const resolver = new DnsWireResolver({ nameservers: ["127.0.0.1"], port: dns.port });
+  const fixture = await fixtureFetcher(t, (_request, response) => respond(response, 200, { "content-type": "text/plain" }, "unreachable"), {
+    hostnames: ["example.org"],
+    resolveOverride(hostname, { signal }) {
+      return resolver.resolve(hostname, { signal, deadline: performance.now() + 2_000 });
+    },
+  });
+  const controllers = Array.from({ length: 8 }, () => new AbortController());
+  const outcomes = await Promise.all(controllers.map((controller) =>
+    fixture.fetcher.fetch(fixture.url("/dns-failure", "example.org"), { signal: controller.signal }).then(
+      () => ({ status: "fulfilled" }),
+      (error) => ({ status: "rejected", error }),
+    )));
+  assert.deepEqual(outcomes.map((outcome) => outcome.status === "rejected" ? outcome.error.code : "FULFILLED"), Array(8).fill("DNS_FAILURE"));
+  assert.ok(dns.totalTcp >= 1, "AAAA TCP fallback should be exercised");
+  await waitFor(() => dns.activeTcp === 0, 500);
+  assert.ok(dns.maximumTcp <= 4, `sibling sockets must remain within fetch slots (observed ${dns.maximumTcp})`);
+  assert.equal(fixture.dials.length, 0);
+  for (const controller of controllers) controller.abort();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(dns.activeTcp, 0, "later caller cancellation must not reveal a lingering resolver child");
 });
 
 test("keeps concurrent local requests within the run limit", async (t) => {

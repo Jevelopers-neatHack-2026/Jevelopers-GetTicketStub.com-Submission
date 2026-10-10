@@ -11,8 +11,10 @@ const MESSAGES = Object.freeze({
 });
 
 export class RetrievalError extends Error {
-  constructor(code, options = {}) {
-    super(MESSAGES[code] ?? "The retrieval request failed.", options);
+  constructor(code) {
+    // Public failures intentionally carry no underlying error: transport errors
+    // can contain request URLs, DNS names, or other caller-private data.
+    super(MESSAGES[code] ?? "The retrieval request failed.");
     this.name = "RetrievalError";
     this.code = code;
   }
