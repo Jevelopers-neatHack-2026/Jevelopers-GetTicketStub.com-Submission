@@ -11,6 +11,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 function runVerifier(args, env = {}) {
   const childEnv = { ...process.env, ...env };
+  // The standalone verifier starts its own node:test run; do not inherit this runner's child marker.
   delete childEnv.NODE_TEST_CONTEXT;
   return spawnSync(process.execPath, [path.join(ROOT, "tools/verify.mjs"), ...args], {
     cwd: ROOT,
@@ -67,6 +68,24 @@ test("evidence remains a compatibility alias for the canonical evidence-facts ca
   assert.equal(alias.case, "evidence-facts");
   assert.equal(alias.expected_cases, canonical.expected_cases);
   assert.equal(alias.test_files, canonical.test_files);
+});
+
+test("deterministic extraction mock route runs only local fixtures with complete counts", () => {
+  const result = runVerifier(["--case=deterministic-extraction", "--mode=mock"]);
+  const summary = summaryFrom(result.stdout);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summary.case, "deterministic-extraction");
+  assert.equal(summary.mode, "mock");
+  assert.equal(summary.status, "passed");
+  assert.equal(summary.test_files, 1);
+  assert.ok(summary.expected_cases > 0);
+  assert.equal(summary.expected_cases, summary.terminal_cases);
+  assert.equal(summary.passed_cases, summary.expected_cases);
+  assert.equal(summary.failed_cases, 0);
+  assert.equal(summary.skipped_cases, 0);
+  assert.equal(summary.fixture_scope, "local controlled fixtures only");
+  assert.equal(summary.external_egress, "not measured");
+  assert.equal(summary.provider_activity, "none");
 });
 
 test("Python policy checks have a separate unit-only route with faithful unittest counts", () => {
