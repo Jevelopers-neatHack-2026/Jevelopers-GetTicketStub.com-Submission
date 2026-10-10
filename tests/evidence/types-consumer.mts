@@ -5,6 +5,7 @@ import type {
   EvidenceFactInput,
   EvidencePrivatePayloadInput,
   EvidencePrivatePayloadResult,
+  EvidencePrivatePayloadValue,
   EvidenceHandle,
   EvidenceIngestInput,
   EvidenceSelectedMaterialization,
@@ -57,6 +58,22 @@ const synchronousPrivateConsumer: PrivatePayloadConsumer = (input: EvidencePriva
   positions: input.positions.map((position) => position.contentHash),
 });
 void synchronousPrivateConsumer;
+const readonlyArrayResult: EvidencePrivatePayloadResult = ['first', { nested: ['second'] }];
+if (Array.isArray(readonlyArrayResult)) {
+  const mapped: EvidencePrivatePayloadValue[] = readonlyArrayResult.map((value) => value);
+  const spread: readonly EvidencePrivatePayloadValue[] = [...readonlyArrayResult];
+  for (const value of readonlyArrayResult) void value;
+  void mapped;
+  void spread;
+}
+function consumeReadonlyPrivateArray(values: readonly EvidencePrivatePayloadValue[]): void {
+  const mapped = values.map((value) => value);
+  const spread: readonly EvidencePrivatePayloadValue[] = [...values];
+  for (const value of values) void value;
+  void mapped;
+  void spread;
+}
+consumeReadonlyPrivateArray(['first', { nested: ['second'] }]);
 // @ts-expect-error private-payload consumers cannot return Promises or thenables
 const asynchronousPrivateConsumer: PrivatePayloadConsumer = async () => ({ privateResult: 'not released' });
 void asynchronousPrivateConsumer;

@@ -214,10 +214,18 @@ function wipePrivateTree(value) {
 function copySynchronousConsumerResult(value) {
   if (value === undefined) return value;
   const copied = cloneJsonValue(value);
-  // Promise resolution reads `then` from the top-level return value. Nulling an
-  // array's prototype and cloning records to null-prototype objects prevents a
-  // trusted consumer's thenable from being assimilated after the final gate.
-  if (Array.isArray(copied)) Object.setPrototypeOf(copied, null);
+  // Preserve normal array iteration and methods while preventing Promise
+  // resolution from reading an inherited Array.prototype.then after the final
+  // authorization gate. JSON arrays cannot carry own properties, so this inert
+  // non-enumerable property is part of the trusted copy only.
+  if (Array.isArray(copied)) {
+    Object.defineProperty(copied, 'then', {
+      value: undefined,
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
+  }
   return deepFreeze(copied);
 }
 
@@ -982,7 +990,11 @@ export function createEvidenceStore(options) {
         fail('EVIDENCE_STORAGE');
       }
       database.exec('PRAGMA trusted_schema = OFF');
+      const manifestLengthStatement = database.prepare(
+        'SELECT length(CAST(document AS BLOB)) AS bytes FROM evidence_manifest WHERE tenant_hash = ?',
+      );
       const manifestStatement = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?');
+      const totalBundleCountStatement = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles');
       const prepareCountStatements = (kind, ids) => {
         const batches = [];
         for (let offset = 0; offset < ids.length; offset += 500) {
@@ -1002,19 +1014,36 @@ export function createEvidenceStore(options) {
           let row;
           let evidenceBundleCount;
           let factBundleCount;
+          let totalBundleCount;
           try {
+            database.exec('BEGIN');
+            const length = manifestLengthStatement.get(info.tenantHash);
+            if (length && (!Number.isSafeInteger(length.bytes) || length.bytes <= 0 || length.bytes > 16 * 1024 * 1024)) {
+              fail('EVIDENCE_INTEGRITY');
+            }
             row = manifestStatement.get(info.tenantHash);
+            if (length && (!row || Buffer.byteLength(row.document, 'utf8') !== length.bytes)) fail('EVIDENCE_INTEGRITY');
+            if (!length && row) fail('EVIDENCE_INTEGRITY');
             evidenceBundleCount = countRows(evidenceCountStatements);
             factBundleCount = countRows(factCountStatements);
+            totalBundleCount = Number(totalBundleCountStatement.get().count);
+            database.exec('COMMIT');
           } catch (error) {
+            try { database.exec('ROLLBACK'); } catch { /* rollback may follow a failed BEGIN or COMMIT */ }
+            if (error instanceof EvidenceStoreError) throw error;
             if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
             fail('EVIDENCE_STORAGE');
           }
-          if (!row) fail('EVIDENCE_INTEGRITY');
+          if (!row) {
+            if (snapshot.manifestPresentAtSnapshot !== false
+              || snapshot.evidence.length !== 0 || snapshot.facts.length !== 0 || totalBundleCount !== 0) {
+              fail('EVIDENCE_INTEGRITY');
+            }
+            return;
+          }
           if (evidenceBundleCount !== uniqueEvidenceIds.length || factBundleCount !== uniqueFactIds.length) {
             fail('EVIDENCE_EXPIRED');
           }
-          if (Buffer.byteLength(row.document, 'utf8') > 16 * 1024 * 1024) fail('EVIDENCE_INTEGRITY');
           let parsed;
           try { parsed = JSON.parse(row.document); } catch { fail('EVIDENCE_INTEGRITY'); }
           const manifest = validateManifest(parsed, info.tenantHash);
@@ -1023,10 +1052,20 @@ export function createEvidenceStore(options) {
             const current = manifest.records[expected.id];
             if (!current || current.state !== 'available') fail('EVIDENCE_EXPIRED');
             if (!sameValues(expected, current, [
-              'id', 'state', 'version', 'previousId', 'contentHash', 'duplicateGroupId', 'retrievedAt',
+              'id', 'state', 'version', 'contentHash', 'duplicateGroupId', 'retrievedAt',
               'createdAt', 'createdAtMs', 'retrievedAtMs', 'expiresAtMs', 'policyId', 'policyVersion',
               'encryptionKeyId', 'positionIds', 'positionHashes',
             ])) fail('EVIDENCE_INTEGRITY');
+            const expectedPreviousId = expected.previousId ?? null;
+            const currentPreviousId = current.previousId ?? null;
+            const samePreviousId = expectedPreviousId === currentPreviousId;
+            const expiredPredecessorWasUnlinked = expectedPreviousId !== null
+              && currentPreviousId === null
+              && manifest.records[expectedPreviousId]?.state === 'expired';
+            if (!samePreviousId && !expiredPredecessorWasUnlinked) fail('EVIDENCE_INTEGRITY');
+            // The public metadata must reflect the persisted, expiry-cleaned
+            // linkage that passed this final check.
+            expected.previousId = currentPreviousId;
           }
           for (const expected of snapshot.facts) {
             const current = manifest.facts[expected.id];
@@ -1224,11 +1263,13 @@ export function createEvidenceStore(options) {
     });
   }
 
-  function validateMaterializedFact(record, stored, evidenceById, budget) {
+  function collectFactSupports(record, stored, budget) {
     if (!isRecord(stored) || stored.status !== record.status) fail('EVIDENCE_INTEGRITY');
     const supports = [];
     const takeSupports = (value, maximum) => {
       if (!Array.isArray(value) || value.length > maximum) fail('EVIDENCE_INTEGRITY');
+      // Charge before copying or constructing public support handles. Repeated
+      // references count each time because each one occupies returned memory.
       chargeBudget(budget, 'supportReferences', value.length, SELECTED_BATCH_LIMITS.supportReferences);
       return safeArray(value, maximum);
     };
@@ -1262,6 +1303,20 @@ export function createEvidenceStore(options) {
         support.evidenceId + support.positionId + support.contentHash + support.sourceKind + support.duplicateGroupId,
         'utf8',
       ));
+      evidenceIds.add(support.evidenceId);
+      hashes.add(support.contentHash);
+    }
+    if (JSON.stringify([...evidenceIds].sort()) !== JSON.stringify([...record.supportEvidenceIds].sort())
+      || JSON.stringify([...hashes].sort()) !== JSON.stringify([...record.supportContentHashes].sort())) fail('EVIDENCE_INTEGRITY');
+    return supports;
+  }
+
+  function validateMaterializedFact(record, stored, evidenceById, budget) {
+    const supports = collectFactSupports(record, stored, budget);
+    for (const supportValue of supports) {
+      const support = ownDataRecord(supportValue, new Set([
+        'evidenceId', 'positionId', 'contentHash', 'sourceKind', 'duplicateGroupId',
+      ]));
       const evidence = evidenceById.get(support.evidenceId);
       if (!evidence || evidence.metadata.contentHash !== support.contentHash
         || evidence.metadata.duplicateGroupId !== support.duplicateGroupId
@@ -1269,11 +1324,7 @@ export function createEvidenceStore(options) {
         || !evidence.positions.some((position) => POSITION_HANDLES.get(position.handle)?.positionId === support.positionId)) {
         fail('EVIDENCE_INTEGRITY');
       }
-      evidenceIds.add(support.evidenceId);
-      hashes.add(support.contentHash);
     }
-    if (JSON.stringify([...evidenceIds].sort()) !== JSON.stringify([...record.supportEvidenceIds].sort())
-      || JSON.stringify([...hashes].sort()) !== JSON.stringify([...record.supportContentHashes].sort())) fail('EVIDENCE_INTEGRITY');
   }
 
   async function materializeSelectedInternal(scope, selectionValue, request, signal, action, returnMode = 'selected', evidenceLimit = 8) {
@@ -1401,7 +1452,12 @@ export function createEvidenceStore(options) {
       // record's retention deadline, cancellation, then immutable result release.
       finalVerifier.check(snapshot);
       checkCancellation(signal);
-      const materialized = deepFreeze({ evidence: evidenceViews, facts: factViews });
+      const refreshedEvidenceViews = evidenceViews.map((view) => {
+        const record = snapshot.evidence.find((candidate) => candidate.id === view.metadata.evidenceId);
+        if (!record) fail('EVIDENCE_INTEGRITY');
+        return Object.freeze({ ...view, metadata: frozenMetadata(record) });
+      });
+      const materialized = deepFreeze({ evidence: refreshedEvidenceViews, facts: factViews });
       if (returnMode === 'fact') return materialized.facts[0];
       if (returnMode === 'positions') return materialized.evidence[0].positions;
       return materialized;
@@ -1679,7 +1735,7 @@ export function createEvidenceStore(options) {
         consumed = config.consumePrivatePayload(Object.freeze({
           tenantId: info.tenantId,
           evidenceId: info.evidenceId,
-          metadata: view.metadata,
+          metadata: frozenMetadata(snapshot),
           source: view.source,
           positions: Object.freeze(positions),
           request,
@@ -1881,7 +1937,7 @@ export function createEvidenceStore(options) {
           rawValue: cloneJsonValue(candidate.rawValue),
           normalizedValue: cloneJsonValue(candidate.normalizedValue),
           ...(candidate.precision ? { precision: candidate.precision } : {}),
-          ...(candidate.method ? { method: candidate.method } : {}),
+          ...(candidate.method ? { method: cloneJsonValue(candidate.method) } : {}),
           supports: candidate.supports.map(reviveSupport),
         })),
       });
@@ -1893,7 +1949,7 @@ export function createEvidenceStore(options) {
       rawValue: cloneJsonValue(stored.rawValue),
       normalizedValue: cloneJsonValue(stored.normalizedValue),
       ...(stored.precision ? { precision: stored.precision } : {}),
-      ...(stored.method ? { method: stored.method } : {}),
+      ...(stored.method ? { method: cloneJsonValue(stored.method) } : {}),
       supports: stored.supports.map(reviveSupport),
     });
   }
@@ -1939,6 +1995,9 @@ export function createEvidenceStore(options) {
         const facts = [];
         let transferred = false;
         try {
+          const manifestPresentAtSnapshot = Boolean(database.prepare(
+            'SELECT 1 AS present FROM evidence_manifest WHERE tenant_hash = ?',
+          ).get(info.tenantHash));
           const manifest = await readManifest(database, info.tenantHash);
           await expireRecords(database, manifest, currentTime());
           const active = Object.values(manifest.facts).filter((fact) => fact.state === 'available');
@@ -1953,6 +2012,7 @@ export function createEvidenceStore(options) {
             facts,
             evidenceIds: [...new Set(facts.flatMap((fact) => fact.supportEvidenceIds))],
             budget,
+            manifestPresentAtSnapshot,
           };
         } finally {
           if (!transferred) for (const fact of facts) fact.sealed?.fill(0);
@@ -1969,6 +2029,7 @@ export function createEvidenceStore(options) {
       for (const fact of snapshot.facts) {
         const stored = await decryptSealedBundle(info, fact.id, 'fact', fact.sealed, fact.encryptionKeyId, resolveKey, snapshot.budget);
         try {
+          collectFactSupports(fact, stored, snapshot.budget);
           result.push(publicFact(info, fact.id, stored));
         } finally {
           wipePrivateTree(stored);
@@ -1976,7 +2037,11 @@ export function createEvidenceStore(options) {
       }
       finalVerifier = makeFinalStateVerifier(info, directory, evidenceIds, factIds);
       authorizeCurrent(info, request, 'list_facts', evidenceIds, factIds);
-      finalVerifier.check({ evidence: [], facts: snapshot.facts });
+      finalVerifier.check({
+        evidence: [],
+        facts: snapshot.facts,
+        manifestPresentAtSnapshot: snapshot.manifestPresentAtSnapshot,
+      });
       return deepFreeze(result);
     } catch (error) {
       try { await persistExpirySweep(info, directory); } catch (cleanupError) { throw safePublicError(cleanupError); }
