@@ -37,6 +37,7 @@
   "dependencies": {
     "parse5": "8.0.1",
     "parse5-parser-stream": "8.0.0",
+    "pdfjs-dist": "6.4.299",
     "sax": "1.6.1"
   }
 }

@@ -18,6 +18,8 @@ jobs:
           node-version: 22.23.3
           cache: npm
       - run: npm ci
+      - name: Install the locked host TypeScript compiler
+        run: node tools/install-typescript-host.mjs
       - name: Test occurrence and entity identity
         run: node --test tests/discovery/identity/*.test.mjs
       - name: Type-check identity consumer fixture

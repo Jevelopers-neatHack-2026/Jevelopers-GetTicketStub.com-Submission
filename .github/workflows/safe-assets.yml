@@ -18,6 +18,8 @@ jobs:
           node-version: 22.23.3
           cache: npm
       - run: npm ci
+      - name: Install the locked host TypeScript compiler
+        run: node tools/install-typescript-host.mjs
       - name: Test bounded safe-asset inspection and SVG transformation
         run: node --test tests/assets/safety/*.test.mjs
       - name: Type-check safe-asset consumer declarations
