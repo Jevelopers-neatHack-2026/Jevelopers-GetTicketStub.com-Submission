@@ -8,6 +8,8 @@ This branch contains a local worker-runtime foundation candidate with determinis
 
 See [runtime design, evidence scope, and exact verification commands](docs/runtime.md).
 
+The [FC-02 provider and environment matrix](docs/provider-matrix.md) records official Prodigi v4 documentation observations separately from local fixtures, account access, selected-product decisions, and implemented support. The simulator remains offline; sandbox and release checks remain blocked until owner evidence and an adapter exist.
+
 ## Architecture and delivery
 
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
