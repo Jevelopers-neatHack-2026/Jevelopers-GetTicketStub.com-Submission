@@ -1,11 +1,13 @@
-const TEST_SEAM = Symbol("event-intelligence-private-test-seam");
+const TEST_SEAMS = new WeakMap();
 
 export function createTestSeam(overrides) {
   if (!overrides || typeof overrides !== "object") throw new TypeError("Test seam must be an object");
-  return Object.freeze({ [TEST_SEAM]: Object.freeze({ ...overrides }) });
+  const options = Object.freeze({});
+  TEST_SEAMS.set(options, Object.freeze({ ...overrides }));
+  return options;
 }
 
 export function getTestSeam(options) {
-  const seam = options?.[TEST_SEAM];
-  return seam && typeof seam === "object" ? seam : undefined;
+  if (options === null || typeof options !== "object") return undefined;
+  return TEST_SEAMS.get(options);
 }

@@ -30,7 +30,7 @@ async function fixtureFetcher(t, handler, options = {}) {
     resolveOverride: options.resolveOverride,
     onDial: (record) => dials.push(record),
   });
-  return { server, dials, fetcher: new SafeFetcher(seam), url: (path, host) => fixtureUrl(server.port, path, host, options.certificate ? "https:" : "http:") };
+  return { server, dials, seam, fetcher: new SafeFetcher(seam), url: (path, host) => fixtureUrl(server.port, path, host, options.certificate ? "https:" : "http:") };
 }
 
 async function waitFor(predicate, milliseconds = 2_000) {
@@ -117,6 +117,16 @@ test("fetches over a direct pinned socket and sends no ambient credentials or pr
   assert.equal(captured.host, `fixture.example.test:${fixture.server.port}`);
   assert.equal(fixture.dials.length, 1);
   assert.deepEqual(fixture.dials[0], { peer: "127.0.0.1", address: "127.0.0.1", port: fixture.server.port });
+});
+
+test("only the exact factory-minted test options identity activates the local fixture seam", async (t) => {
+  const fixture = await fixtureFetcher(t, (_request, response) => respond(response, 200, { "content-type": "text/plain" }, "fixture"));
+  const result = await fixture.fetcher.fetch(fixture.url("/original"));
+  assert.equal(Buffer.from(result.bytes).toString(), "fixture");
+
+  const copiedFetcher = new SafeFetcher({ ...fixture.seam });
+  await assert.rejects(copiedFetcher.fetch(fixture.url("/copy")), { code: "POLICY_DENIED" });
+  assert.equal(fixture.dials.length, 1);
 });
 
 test("rejects caller header injection without opening a socket", async (t) => {
