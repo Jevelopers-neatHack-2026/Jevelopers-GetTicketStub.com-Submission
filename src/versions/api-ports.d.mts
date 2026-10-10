@@ -2,6 +2,12 @@ import type {
   CreativeContextFence,
   CreativeInvalidationResult,
   CreativeOperation,
+  PrivateProviderRequestAttribution,
+  PrivateProviderRequestAttributionResult,
+  PrivateProviderUsageAttribution,
+  PrivateProviderUsageAttributionResult,
+  PrivateProviderAttributionPending,
+  PrivateProviderAttributionPendingResult,
   CreativePublicationTransaction,
   CreativeRuntimePorts,
   CreativeVersionCreationEvidence,
@@ -51,8 +57,17 @@ export interface CreativeVersionRuntimeJobs extends BaseJobs {
   recordAttemptEvidence(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;
     action_id: string; request_hash: string; creation: CreativeVersionCreationEvidence }):
     Promise<{ status: "recorded" | "replayed" }>;
+  recordPrivateProviderAttribution(input: PrivateProviderRequestAttribution):
+    Promise<PrivateProviderRequestAttributionResult>;
+  recordPrivateProviderUsageAttribution(input: PrivateProviderUsageAttribution):
+    Promise<PrivateProviderUsageAttributionResult>;
+  stagePrivateProviderAttribution(input: PrivateProviderAttributionPending):
+    Promise<PrivateProviderAttributionPendingResult>;
+  reconcilePrivateProviderAttributions(input: { scope: TrustedScope; limit?: number }):
+    Promise<Readonly<{ reconciled: number; remaining: number }>>;
   authorizeDispatch(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;
-    action_id: string; operation: CreativeOperation; billable_attempt_id?: string; transport_attempt_id: string;
+    action_id: string; operation: CreativeOperation; billable_attempt_id?: string; reservation_ref?: string;
+    provider_name?: string; provider_model?: string; transport_attempt_id: string;
     context_fence: CreativeContextFence }): Promise<{ status: "authorized"; dispatch_intent_ref: string } |
       { status: "cancelled" | "lease_lost" | "stale_context" }>;
   completeIfActive(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { spawnSync } from "node:child_process";
-import { readFile, unlink } from "node:fs/promises";
+import { cp, readFile, unlink } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -177,6 +178,82 @@ test("real API invocation commits job, exact artifact bytes, version and selecti
   assert.equal(conflict.ok, false);
   assert.equal(conflict.error.code, "conflict");
   assert.equal(counters.provider, 1, "conflicting action replay must not dispatch again");
+});
+
+test("populated BASE4e v4 database migrates to v6 and replays historical generation, edit, and inspection after restart", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-base4e-v4-migration-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const fixtureRoot = new URL("../../fixtures/versions/base4-populated-v4/", import.meta.url);
+  const manifest = JSON.parse(await readFile(new URL("manifest.json", fixtureRoot), "utf8"));
+  const databaseBytes = await readFile(new URL("creative.sqlite", fixtureRoot));
+  const requests = JSON.parse(await readFile(new URL("requests.json", fixtureRoot), "utf8"));
+  const sha256 = (bytes) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+  assert.equal(manifest.base_commit, "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe");
+  assert.equal(manifest.storage_user_version, 4);
+  assert.equal(sha256(databaseBytes), manifest.database_sha256);
+  assert.equal(sha256(Buffer.from(JSON.stringify(requests, null, 2) + "\n")), manifest.requests_sha256);
+  assert.equal(requests.artifact_sha256, manifest.artifact_sha256);
+  assert.equal(sha256(Buffer.from("durable exact artwork bytes")), manifest.artifact_sha256);
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  await cp(new URL("creative.sqlite", fixtureRoot), databasePath);
+  await cp(new URL("objects", fixtureRoot), objectRoot, { recursive: true });
+
+  const baseline = new DatabaseSync(databasePath);
+  assert.equal(baseline.prepare("PRAGMA user_version").get().user_version, 4);
+  assert.deepEqual(baseline.prepare("SELECT action_id,operation,status FROM creative_jobs ORDER BY operation").all()
+    .map((row) => ({ ...row })), [
+    { action_id: "base4-edit-action", operation: "edit", status: "completed" },
+    { action_id: "base4-generate-action", operation: "generate", status: "completed" },
+    { action_id: "base4-inspect-action", operation: "inspect", status: "completed" },
+  ]);
+  const v4DispatchColumns = baseline.prepare("PRAGMA table_info(creative_dispatch_intents)").all().map((column) => column.name);
+  for (const column of ["reservation_ref", "provider_name", "provider_model"]) assert.equal(v4DispatchColumns.includes(column), false);
+  assert.equal(baseline.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='private_provider_attributions'").get(), undefined);
+  baseline.close();
+
+  let migrated = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 6);
+  const v6DispatchColumns = migrated.db.prepare("PRAGMA table_info(creative_dispatch_intents)").all().map((column) => column.name);
+  for (const column of ["reservation_ref", "provider_name", "provider_model"]) assert.equal(v6DispatchColumns.includes(column), true);
+  assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='private_provider_attributions'").get());
+  for (const designVersionId of [requests.expected_generate_design_version_id, requests.expected_edit_design_version_id]) {
+    const design = migrated.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id, design_version_id: designVersionId });
+    assert.ok(design, designVersionId);
+    assert.deepEqual(Buffer.from(await migrated.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: designVersionId })), Buffer.from("durable exact artwork bytes"));
+  }
+  assert.equal(migrated.db.prepare("SELECT COUNT(*) AS count FROM creative_jobs WHERE status='completed'").get().count, 3);
+  migrated.close();
+
+  migrated = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => migrated.close());
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 6);
+  const counters = { provider: 0, reserved: 0, inspection: 0 };
+  let id = 0;
+  const ports = portsFor(migrated, counters, () => `base4-replay-port-${++id}`);
+  ports.inspection = {
+    resolveRoute: () => ({ retry_mapping_ref: "retry:fixture/1", provider: { name: "fixture-provider", model: "fixture-model",
+      endpoint: "test:/vision", sdk: { name: "fixture-sdk", version: "1.0" } } }),
+    async inspect() { counters.inspection += 1; throw new Error("historical inspection replay must not dispatch"); },
+  };
+  const api = createCreativeApi({ ports,
+    now: () => NOW, idFactory: () => `base4-replay-api-${++id}` });
+  const generatedReplay = await api.invoke(actor(), requests.generate_request);
+  assert.equal(generatedReplay.ok, true, JSON.stringify(generatedReplay));
+  assert.equal(generatedReplay.replayed, true);
+  assert.equal(generatedReplay.result.design_version.design_version_id, requests.expected_generate_design_version_id);
+  const editedReplay = await api.invoke(actor(), requests.edit_request);
+  assert.equal(editedReplay.ok, true, JSON.stringify(editedReplay));
+  assert.equal(editedReplay.replayed, true);
+  assert.equal(editedReplay.result.design_version.design_version_id, requests.expected_edit_design_version_id);
+  const inspectedReplay = await api.invoke(actor(), requests.inspect_request);
+  assert.equal(inspectedReplay.ok, true, JSON.stringify(inspectedReplay));
+  assert.equal(inspectedReplay.replayed, true);
+  assert.equal(inspectedReplay.result.design_version_id, requests.expected_inspection_design_version_id);
+  assert.equal(counters.provider, 0, "historical replay after migration must not redispatch generation or edit");
+  assert.equal(counters.inspection, 0, "historical inspection replay after migration must not inspect again");
+  assert.equal(counters.reserved, 0, "historical replay after migration must not create reservations");
 });
 
 test("outcome append failure is durably staged and replayed as pending without another provider attempt", async (t) => {
@@ -1148,6 +1225,72 @@ test("actual paired API cancellation after dispatch fences publication and retai
     .get(job.job_id).count, 0);
   assert.equal(store.db.prepare("SELECT count(*) AS count FROM creation_actions WHERE job_id=?")
     .get(job.job_id).count, 0, "late provider completion cannot create visible version intent after cancellation");
+});
+
+test("private provider attribution can be durably staged and reconciled after restart without redispatch", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-provider-attribution-reconcile-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  const brief = await fixture("brief");
+  let store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => store?.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief });
+  const basePorts = () => createCreativeVersionApiPorts({ store, idFactory: () => "attribution-dispatch-id" }).ports;
+  let ports = basePorts();
+  const action_id = "action-private-pending-01";
+  const request_hash = canonicalHash({ action_id, operation: "generate" });
+  const started = await ports.jobs.begin({ scope: SCOPE, actor_id: "actor-api-1", action_id,
+    request_hash, operation: "generate" });
+  assert.equal(started.kind, "started");
+  const transport_attempt_id = "transport-private-pending-01";
+  const billable_attempt_id = "billable-private-pending-01";
+  const reservation_ref = "reservation-private-pending-01";
+  const authorized = await ports.jobs.authorizeDispatch({ scope: SCOPE, actor_id: "actor-api-1",
+    job_id: started.job_id, lease_token: started.lease_token, action_id, operation: "generate",
+    billable_attempt_id, reservation_ref, provider_name: "openai", provider_model: "gpt-image-2.5-sunburst-2026-09-08",
+    transport_attempt_id, context_fence: { brief_id: SCOPE.brief_id, brief_hash: canonicalHash(brief),
+      expected_current_design_version_id: null, expected_current_design_hash: null } });
+  assert.equal(authorized.status, "authorized");
+  const provider_request_id = "req-private-reconcile-fixture-01";
+  const provider_request_ref = `provider-request-${createHash("sha256").update(provider_request_id).digest("hex")}`;
+  const usage = { completeness: "unknown", missing_fields: ["usage.profile_mapping_pending"],
+    transport_attempt_id, provider_request_id: provider_request_ref, input_tokens: 12,
+    output_tokens: 8, total_tokens: 20 };
+  const pending = await ports.jobs.stagePrivateProviderAttribution({ scope: SCOPE, actor_id: "actor-api-1",
+    job_id: started.job_id, action_id, request_hash, operation: "generate", provider: "openai",
+    model: "gpt-image-2.5-sunburst-2026-09-08", reservation_ref, billable_attempt_id,
+    transport_attempt_id, dispatch_intent_ref: authorized.dispatch_intent_ref,
+    target_binding_sha256: `sha256:${"c".repeat(64)}`, provider_request_id, provider_request_ref, usage });
+  assert.equal(pending.status, "staged");
+  assert.equal(pending.transport_attempt_id, transport_attempt_id);
+  assert.match(pending.payload_sha256, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(store.db.prepare("SELECT COUNT(*) AS count FROM private_provider_attributions").get().count, 0);
+  assert.equal(store.db.prepare("SELECT COUNT(*) AS count FROM private_provider_usage_attributions").get().count, 0);
+  const pendingRow = store.db.prepare("SELECT payload_json FROM private_provider_attribution_pending WHERE pending_ref=?")
+    .get(pending.pending_ref);
+  assert.ok(pendingRow);
+  assert.match(pendingRow.payload_json, /req-private-reconcile-fixture-01/,
+    "raw response identity remains in restricted durable storage");
+
+  store.close();
+  store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  ports = basePorts();
+  const reconciled = await ports.jobs.reconcilePrivateProviderAttributions({ scope: SCOPE, limit: 10 });
+  assert.deepEqual(reconciled, { reconciled: 1, remaining: 0 });
+  const rawRequest = store.db.prepare(`SELECT provider_request_id,provider_request_ref,transport_attempt_id
+    FROM private_provider_attributions WHERE job_id=?`).get(started.job_id);
+  assert.equal(rawRequest.provider_request_id, provider_request_id);
+  assert.equal(rawRequest.provider_request_ref, provider_request_ref);
+  assert.equal(rawRequest.transport_attempt_id, transport_attempt_id);
+  const rawUsage = store.db.prepare(`SELECT usage_sha256,usage_json FROM private_provider_usage_attributions
+    WHERE job_id=?`).get(started.job_id);
+  assert.ok(rawUsage);
+  assert.equal(canonicalHash(JSON.parse(rawUsage.usage_json)), rawUsage.usage_sha256);
+  assert.equal(JSON.parse(rawUsage.usage_json).input_tokens, 12);
+  assert.equal(store.db.prepare("SELECT COUNT(*) AS count FROM private_provider_attribution_reconciliations").get().count, 1);
+  assert.deepEqual(await ports.jobs.reconcilePrivateProviderAttributions({ scope: SCOPE, limit: 10 }),
+    { reconciled: 0, remaining: 0 }, "replay does not create duplicates or call any provider");
 });
 
 test("artifact corruption inside paired publication rolls back the caller-owned SQLite transaction", async (t) => {
