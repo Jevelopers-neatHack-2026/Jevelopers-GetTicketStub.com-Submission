@@ -17,7 +17,11 @@ jobs:
         with:
           node-version: 22.23.3
           cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.17'
       - run: npm ci
+      - run: make verify CASE=eval-policy-unit MODE=unit
       - run: make verify CASE=safe-retrieval MODE=mock
       - run: make verify CASE=content-privacy MODE=mock
       - run: npm run test:runner
