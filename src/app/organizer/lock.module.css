@@ -1,0 +1,81 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.text {
+  display: grid;
+  gap: 2px;
+}
+.hint {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.plate {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong), 0 2px 0 var(--desk-ledge);
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    box-shadow var(--desk-release) var(--desk-spring);
+}
+.row:active .plate {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong), 0 0 0 var(--desk-ledge);
+  transition-duration: var(--desk-press);
+}
+.padlock {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: var(--desk-ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+.shackle {
+  transform-origin: 21.5px 14px;
+  transition: transform 360ms var(--desk-spring);
+}
+.padlock[data-locked="false"] .shackle {
+  transform: translateY(-4px) rotate(-26deg);
+}
+.body {
+  fill: var(--desk-paper-sunk);
+}
+.keyhole {
+  stroke: var(--desk-ink);
+  fill: var(--desk-ink);
+  transition: opacity 220ms ease;
+}
+.padlock[data-locked="true"] .keyhole {
+  fill: var(--desk-stamp);
+  stroke: var(--desk-stamp);
+}
+.padlock[data-locked="false"] .keyhole {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plate,
+  .shackle,
+  .keyhole {
+    transition: none;
+  }
+}

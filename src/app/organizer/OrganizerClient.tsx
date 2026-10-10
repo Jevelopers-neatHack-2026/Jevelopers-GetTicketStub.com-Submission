@@ -1,12 +1,13 @@
 "use client";
-import Link from "next/link";
 import { useId, useMemo, useState } from "react";
+import { Field, PaperButton, PunchTabs, Rule, SandboxStrip, Stamp, Stamped, Tag, Tags, TearLink, Tool, Tools } from "@/customer/desk/Desk";
+import d from "@/customer/desk/Desk.module.css";
+import { FlipIcon } from "@/customer/desk/icons";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { FitBox } from "@/customer/pages/FitBox";
-import { play, haptic } from "@/customer/studio/feedback";
+import { haptic, play } from "@/customer/studio/feedback";
 import { EDITIONS, formatMoney, type Edition } from "@/customer/studio/types";
-import { PageShell, CopyField, SandboxBadge, ui } from "@/customer/pages/ui";
-import { addOrder } from "@/customer/pages/commerce";
+import { PageShell, CopyField, OnDesk, PaperLink, TearAnchor, ui } from "@/customer/pages/ui";
+import { SANDBOX_LABEL, addOrder } from "@/customer/pages/commerce";
 import {
   SAMPLE_CSV,
   autoMatch,
@@ -19,11 +20,14 @@ import {
   type OrganizerDesign,
 } from "@/customer/pages/organizer";
 import { useMounted } from "@/customer/pages/useMounted";
-import { LockIcon } from "./LockIcon";
+import { LockSwitch, Padlock } from "./LockSwitch";
+import { PrintRun } from "./PrintRun";
 import s from "./organizer.module.css";
 
 const STEPS = ["Design", "Guest list", "Check", "Publish"] as const;
 const PER_STUB_MINOR = 800;
+const SAMPLE_GUEST = { name: "Priya Raman", seat: "A12" };
+const PAGE = 12;
 const EDITION_LABEL: Record<Edition, string> = {
   researched: "Researched",
   letterpress: "Letterpress",
@@ -32,20 +36,48 @@ const EDITION_LABEL: Record<Edition, string> = {
   classic: "Classic",
 };
 
+type Guest = { name: string; seat?: string; extra?: string };
+
+/** Pick which CSV column fills a part of the stub: the columns are paper tags, the chosen one is dark. */
+function ColumnTags({ label, headers, value, onChange, optional }: { label: string; headers: string[]; value: number; onChange: (v: number) => void; optional?: boolean }) {
+  return (
+    <div className={s.colRow}>
+      <span className="desk-label">{label}</span>
+      <Tags label={`${label} column`}>
+        {optional ? (
+          <Tag pressed={value === -1} onClick={() => onChange(-1)}>
+            None
+          </Tag>
+        ) : null}
+        {headers.map((h, i) => (
+          <Tag key={i} pressed={value === i} onClick={() => onChange(i)}>
+            {h || `Column ${i + 1}`}
+          </Tag>
+        ))}
+      </Tags>
+    </div>
+  );
+}
+
 export default function OrganizerClient() {
   const mounted = useMounted();
-  const ids = { org: useId(), file: useId(), title: useId(), name: useId(), seat: useId(), extra: useId() };
+  const fileId = useId();
   const [step, setStep] = useState(0);
   const [design, setDesign] = useState<OrganizerDesign>(() => defaultDesign());
   const [list, setList] = useState<GuestList | null>(null);
   const [fileName, setFileName] = useState("");
   const [map, setMap] = useState<ColumnMap>({ name: 0, seat: -1, extra: -1 });
   const [page, setPage] = useState(0);
-  const [publish, setPublish] = useState<"print" | "claim" | null>(null);
+  const [shown, setShown] = useState(PAGE);
+  const [publish, setPublish] = useState<"print" | "claim">("print");
   const [ordered, setOrdered] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [published, setPublished] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [over, setOver] = useState(false);
+  const [flipped, setFlipped] = useState(false);
 
-  const guests = useMemo(
+  const guests = useMemo<Guest[]>(
     () =>
       (list?.rows ?? [])
         .map((r) => ({ name: r[map.name] ?? "", seat: map.seat >= 0 ? r[map.seat] : undefined, extra: map.extra >= 0 ? r[map.extra] : undefined }))
@@ -53,15 +85,21 @@ export default function OrganizerClient() {
     [list, map],
   );
   const n = guests.length;
-  const current = guests[Math.min(page, Math.max(0, n - 1))];
+  const seatLabel = (g: Guest) => (g.seat ? `Seat ${g.seat}` : undefined);
 
-  const preview = useMemo(() => {
-    if (step === 2 && current) return designStub(design, { id: "org-preview", name: current.name, seat: current.seat ? `Seat ${current.seat}` : undefined });
-    return designStub(design, { id: "org-preview" });
-  }, [design, step, current]);
+  // One stub per guest: the contact sheet, the preview and the print run all draw from these.
+  const guestStubs = useMemo(() => guests.map((g, i) => designStub(design, { id: `${design.setId}-${i}`, name: g.name, seat: seatLabel(g) })), [guests, design]);
+
+  const sampleGuest = guests[0] ?? SAMPLE_GUEST;
+  const inspect = step === 2 && guestStubs.length ? Math.min(page, guestStubs.length - 1) : -1;
+  const preview = useMemo(
+    () => (inspect >= 0 ? guestStubs[inspect] : designStub(design, { id: "org-preview", name: sampleGuest.name, seat: seatLabel(sampleGuest) })),
+    [inspect, guestStubs, design, sampleGuest],
+  );
+  const previewCaption = inspect >= 0 ? `${guests[inspect].name}, guest ${inspect + 1} of ${n}` : guests.length ? `Shown with ${sampleGuest.name}, your first guest.` : `Shown with a sample guest, ${sampleGuest.name}.`;
 
   function patch(p: Partial<OrganizerDesign>) {
-    setDesign((d) => ({ ...d, ...p }));
+    setDesign((x) => ({ ...x, ...p }));
   }
 
   function loadText(text: string, name: string) {
@@ -75,7 +113,11 @@ export default function OrganizerClient() {
     setFileName(name);
     setMap(autoMatch(parsed.headers));
     setPage(0);
+    setShown(PAGE);
+    setOrdered(null);
+    setPublished(false);
     play("drop");
+    haptic(10);
   }
 
   async function onFile(file: File | undefined) {
@@ -89,284 +131,342 @@ export default function OrganizerClient() {
 
   function go(i: number) {
     setStep(i);
-    play("tick");
+    play("select", { direction: i > step ? "forward" : "back" });
   }
 
   const canNext = step === 0 || (step === 1 && n > 0) || step === 2;
   const claimPath = `/organizer/claim?d=${encodeDesign(design)}`;
+  const total = PER_STUB_MINOR * n;
 
-  const colSelect = (id: string, label: string, value: number, onChange: (v: number) => void, optional = false) => (
-    <div className={ui.field}>
-      <label htmlFor={id} className={ui.fieldLabel}>
-        {label}
-      </label>
-      <select id={id} className={ui.input} value={value} onChange={(e) => onChange(Number(e.target.value))}>
-        {optional ? <option value={-1}>None</option> : null}
-        {list?.headers.map((h, i) => (
-          <option key={i} value={i}>
-            {h || `Column ${i + 1}`}
-          </option>
-        ))}
-      </select>
-    </div>
+  function startRun() {
+    if (!ordered) {
+      const o = addOrder({
+        stubIds: guests.map((_, i) => `${design.setId}-${i}`),
+        lines: [{ title: `${design.title} · ${n} guest stubs`, material: "print", finish: "matte", size: "classic", totalMinor: total }],
+        totalMinor: total,
+        method: "organizer-print",
+      });
+      setOrdered(o.id);
+    }
+    setRunning(true);
+  }
+
+  const stepNav = (
+    <nav aria-label="Steps" className={s.steps}>
+      <ol>
+        {STEPS.map((label, i) => {
+          const locked = i > 1 && n === 0;
+          return (
+            <li key={label} data-state={i < step ? "done" : i === step ? "now" : "next"}>
+              <button type="button" className={s.stepBtn} aria-current={step === i ? "step" : undefined} disabled={locked} onClick={() => i !== step && go(i)}>
+                <span className={s.stepNo}>{i < step ? <Tick /> : i + 1}</span>
+                <span className={s.stepLabel}>{label}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 
   return (
-    <PageShell title="Organizer" right={<SandboxBadge text="Sandbox · no real charge" />}>
-      <div className={s.intro}>
-        <h1 className={ui.h1}>Upload your guest list. Every guest gets their own stub.</h1>
-      </div>
+    <PageShell title="Organizer">
+      <header className={s.intro}>
+        <h1 className={s.title}>
+          <span className={s.line}>Upload your guest list.</span> <span className={s.line}>Every guest gets their own stub.</span>
+        </h1>
+        <p className={ui.lede}>Design one stub, drop in the guest list, then print every guest&apos;s or share a link they claim from.</p>
+      </header>
 
-      <nav aria-label="Steps" className={s.steps}>
-        <ol>
-          {STEPS.map((label, i) => (
-            <li key={label}>
-              <button
-                type="button"
-                className={s.stepBtn}
-                aria-current={step === i ? "step" : undefined}
-                disabled={i > 1 && n === 0}
-                onClick={() => go(i)}
-              >
-                <span className={`${s.stepNo} num`}>{i + 1}</span> {label}
-              </button>
-            </li>
-          ))}
-        </ol>
-      </nav>
+      {stepNav}
 
-      <div className={s.layout}>
+      <div className={s.layout} data-step={step}>
         <section className={s.panel} aria-labelledby="step-h">
-          <h2 id="step-h" className={ui.h2}>
-            {step + 1}. {STEPS[step]}
+          <h2 id="step-h" className={s.stepTitle}>
+            <span className={s.stepTitleNo}>{step + 1}</span>
+            {STEPS[step]}
           </h2>
 
           {step === 0 ? (
-            <div className={ui.stack}>
-              <div className={ui.field}>
-                <label htmlFor={ids.org} className={ui.fieldLabel}>
-                  Organizer name
-                </label>
-                <input id={ids.org} className={ui.input} value={design.organizer} maxLength={40} onChange={(e) => patch({ organizer: e.target.value })} placeholder="Your organization" />
-              </div>
-              <div className={ui.field}>
-                <label htmlFor={ids.title} className={ui.fieldLabel}>
-                  Event title
-                </label>
-                <input id={ids.title} className={ui.input} value={design.title} maxLength={48} onChange={(e) => patch({ title: e.target.value })} />
-              </div>
-              <div className={ui.field}>
-                <span className={ui.fieldLabel} id="ed-l">
+            <div className={s.body}>
+              <Field id="org-name" label="Organizer name" value={design.organizer} maxLength={40} onChange={(e) => patch({ organizer: e.target.value })} placeholder="Your organization" />
+              <Field id="org-title" label="Event title" value={design.title} maxLength={48} onChange={(e) => patch({ title: e.target.value })} />
+
+              <div className={s.group}>
+                <span className="desk-label" id="ed-l">
                   Style
                 </span>
-                <div className={ui.row} role="group" aria-labelledby="ed-l">
+                <Tags label="Style">
                   {EDITIONS.map((ed) => (
-                    <button
+                    <Tag
                       key={ed}
-                      type="button"
-                      className={`chip ${s.tall}`}
-                      aria-pressed={design.edition === ed}
+                      pressed={design.edition === ed}
                       onClick={() => {
                         const second = design.allowed[1] === ed ? design.allowed[0] : design.allowed[1];
                         patch({ edition: ed, allowed: [ed, second === ed ? (ed === "minimal" ? "classic" : "minimal") : second] });
-                        play("flick");
                       }}
                     >
                       {EDITION_LABEL[ed]}
-                    </button>
+                    </Tag>
                   ))}
-                </div>
+                </Tags>
               </div>
-              <div className={ui.field}>
-                <span className={ui.fieldLabel} id="ed2-l">
-                  Guests can also pick
-                </span>
-                <div className={ui.row} role="group" aria-labelledby="ed2-l">
+
+              <div className={s.group}>
+                <span className="desk-label">Guests can also pick</span>
+                <Tags label="Second style guests can pick">
                   {EDITIONS.filter((e) => e !== design.edition).map((ed) => (
-                    <button key={ed} type="button" className={`chip ${s.tall}`} aria-pressed={design.allowed[1] === ed} onClick={() => patch({ allowed: [design.edition, ed] })}>
+                    <Tag key={ed} pressed={design.allowed[1] === ed} onClick={() => patch({ allowed: [design.edition, ed] })}>
                       {EDITION_LABEL[ed]}
-                    </button>
+                    </Tag>
                   ))}
-                </div>
+                </Tags>
               </div>
-              <fieldset className={s.locks}>
-                <legend className={ui.fieldLabel}>Lock for guests</legend>
-                {(["logo", "title"] as const).map((k) => (
-                  <label key={k} className={s.lockRow}>
-                    <input type="checkbox" checked={design.locks[k]} onChange={(e) => patch({ locks: { ...design.locks, [k]: e.target.checked } })} />
-                    <LockIcon open={!design.locks[k]} />
-                    <span>{k === "logo" ? "Logo" : "Title"}</span>
-                    <span className={ui.muted}>{design.locks[k] ? "Locked" : "Guests can change it"}</span>
-                  </label>
-                ))}
-              </fieldset>
+
+              <Rule kind="perf" />
+
+              <div className={s.locks}>
+                <LockSwitch locked={design.locks.logo} onChange={(v) => patch({ locks: { ...design.locks, logo: v } })} hint={design.locks.logo ? "Guests can't change it" : "Guests can change it"}>
+                  Lock the logo
+                </LockSwitch>
+                <LockSwitch locked={design.locks.title} onChange={(v) => patch({ locks: { ...design.locks, title: v } })} hint={design.locks.title ? "Guests can't change it" : "Guests can change it"}>
+                  Lock the title
+                </LockSwitch>
+              </div>
             </div>
           ) : null}
 
           {step === 1 ? (
-            <div className={ui.stack}>
-              <div className={s.drop}>
-                <label htmlFor={ids.file} className="btn btn-primary">
-                  Choose a CSV file
-                </label>
-                <input id={ids.file} type="file" accept=".csv,text/csv" className="visually-hidden" onChange={(e) => onFile(e.currentTarget.files?.[0])} />
-                <button type="button" className="btn btn-quiet" onClick={() => loadText(SAMPLE_CSV, "sample-guests.csv")}>
-                  Use a sample list
-                </button>
-                <p className={ui.muted}>A header row and one guest per line. We read it on this device; nothing is uploaded.</p>
+            <div className={s.body}>
+              <div
+                className={s.tray}
+                data-over={over ? "" : undefined}
+                data-filled={list ? "" : undefined}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setOver(true);
+                }}
+                onDragLeave={() => setOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setOver(false);
+                  void onFile(e.dataTransfer.files?.[0]);
+                }}
+              >
+                <div className={s.trayBack} aria-hidden>
+                  <span className={s.trayPaper}>
+                    <span className={s.trayLines} />
+                    <span className={s.trayTag}>CSV</span>
+                  </span>
+                </div>
+                <div className={s.trayLip}>
+                  {list ? (
+                    <p className={s.trayName} role="status">
+                      <Stamped key={fileName}>Loaded</Stamped>
+                      <span>
+                        {fileName} · <span className={ui.num}>{n}</span> {n === 1 ? "guest" : "guests"}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className={s.trayHint}>{over ? "Let go to drop it in the tray." : "Drop your guest list here."}</p>
+                  )}
+                </div>
               </div>
+              <div className={s.trayActions}>
+                <label className={`${d.paper} ${s.filePick}`}>
+                  Choose a CSV file
+                  <input id={fileId} type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.currentTarget.files?.[0])} />
+                </label>
+                <TearLink type="button" onClick={() => loadText(SAMPLE_CSV, "sample-guests.csv")}>
+                  Use a sample list
+                </TearLink>
+              </div>
+              <p className={ui.status}>A header row, then one guest per line. We read it on this device; nothing is uploaded.</p>
               {fileError ? (
-                <p className={s.err} role="alert">
+                <p className={ui.err} role="alert">
                   {fileError}
                 </p>
               ) : null}
+
               {list ? (
                 <>
-                  <p>
-                    <strong>{fileName}</strong> · <span className="num">{n}</span> {n === 1 ? "guest" : "guests"}
-                  </p>
-                  <div className={s.mapGrid}>
-                    {colSelect(ids.name, "Name chip", map.name, (v) => setMap((m) => ({ ...m, name: v })))}
-                    {colSelect(ids.seat, "Seat chip", map.seat, (v) => setMap((m) => ({ ...m, seat: v })), true)}
-                    {colSelect(ids.extra, "Extra chip", map.extra, (v) => setMap((m) => ({ ...m, extra: v })), true)}
+                  <Rule kind="perf" />
+                  <div className={s.match}>
+                    <p className={ui.muted}>Match your columns to the stub. The dark tag is the one in use.</p>
+                    <ColumnTags label="Name" headers={list.headers} value={map.name} onChange={(v) => setMap((m) => ({ ...m, name: v }))} />
+                    <ColumnTags label="Seat" headers={list.headers} value={map.seat} onChange={(v) => setMap((m) => ({ ...m, seat: v }))} optional />
+                    <ColumnTags label="Extra" headers={list.headers} value={map.extra} onChange={(v) => setMap((m) => ({ ...m, extra: v }))} optional />
                   </div>
-                  <div className={s.tableWrap}>
-                    <table className={s.table}>
-                      <caption className="visually-hidden">First guests in the list</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">Name</th>
-                          <th scope="col">Seat</th>
-                          <th scope="col">Extra</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {guests.slice(0, 5).map((g, i) => (
-                          <tr key={i}>
-                            <td>{g.name}</td>
-                            <td>{g.seat ?? "—"}</td>
-                            <td>{g.extra ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div>
+                    <p className="desk-label">First guests</p>
+                    <ul className={s.firstGuests}>
+                      {guests.slice(0, 3).map((g, i) => (
+                        <li key={i}>
+                          <span className={s.gName}>{g.name}</span>
+                          <span className={s.gMeta}>{[g.seat, g.extra].filter(Boolean).join(" · ") || "No seat"}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {n > 3 ? <p className={ui.status}>And {n - 3} more.</p> : null}
                   </div>
-                  {n > 5 ? <p className={ui.muted}>And {n - 5} more.</p> : null}
                 </>
               ) : null}
             </div>
           ) : null}
 
-          {step === 2 && current ? (
-            <div className={ui.stack}>
-              <p>Check each guest&apos;s stub before you publish.</p>
-              <div className={s.pager}>
-                <button type="button" className="btn" aria-label="Previous guest" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                  ‹
-                </button>
-                <p className="num" aria-live="polite">
-                  {current.seat ? `Seat ${current.seat} — ` : ""}
-                  {current.name}, {page + 1} / {n}
+          {step === 2 && n > 0 ? (
+            <div className={s.body}>
+              <p className={ui.muted}>Every guest&apos;s stub, laid out. Tap one to look closer before you publish.</p>
+              <div className={s.contact} role="group" aria-label="Contact sheet of every guest's stub">
+                <p className={`desk-label ${s.contactHead}`}>
+                  <span>Contact sheet</span>
+                  <span className={ui.num}>
+                    {n} {n === 1 ? "stub" : "stubs"}
+                  </span>
                 </p>
-                <button type="button" className="btn" aria-label="Next guest" disabled={page >= n - 1} onClick={() => setPage((p) => Math.min(n - 1, p + 1))}>
-                  ›
-                </button>
+                <ul className={s.grid}>
+                  {guestStubs.slice(0, shown).map((st, i) => (
+                    <li key={st.id} style={{ ["--i" as string]: Math.min(i, 12) }}>
+                      <button type="button" className={s.cell} aria-pressed={i === inspect} onClick={() => (setPage(i), play("select", { emphasis: "subtle" }))}>
+                        <StubView stub={st} size="sm" />
+                        <span className={s.gName}>{guests[i].name}</span>
+                        {guests[i].seat ? <span className={s.gMeta}>Seat {guests[i].seat}</span> : null}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {shown < n ? (
+                  <PaperButton type="button" onClick={() => setShown((v) => v + PAGE * 2)}>
+                    Show {Math.min(PAGE * 2, n - shown)} more
+                  </PaperButton>
+                ) : null}
               </div>
-              {current.extra ? <span className="chip">{current.extra}</span> : null}
             </div>
           ) : null}
 
           {step === 3 ? (
-            <div className={ui.stack}>
-              <button type="button" className={s.choice} aria-pressed={publish === "print"} onClick={() => setPublish("print")}>
-                <strong>
-                  Print all {n} · {formatMoney(PER_STUB_MINOR)} each
-                </strong>
-                <span>We print every guest&apos;s stub with their name and seat.</span>
-              </button>
-              <button type="button" className={s.choice} aria-pressed={publish === "claim"} onClick={() => setPublish("claim")}>
-                <strong>Share a claim link</strong>
-                <span>Each guest claims their stub and personalizes it within your locks.</span>
-              </button>
+            <div className={s.body}>
+              <SandboxStrip>{SANDBOX_LABEL}</SandboxStrip>
+              <PunchTabs
+                label="How to publish"
+                options={[
+                  { value: "print" as const, label: `Print all ${n}`, sub: `${formatMoney(PER_STUB_MINOR)} each` },
+                  { value: "claim" as const, label: "Claim link", sub: "Free" },
+                ]}
+                value={publish}
+                onChange={setPublish}
+              />
 
               {publish === "print" ? (
-                <div className={ui.card}>
-                  <p className={s.totalLine}>
+                <div className={s.publish}>
+                  <p className={ui.muted}>We print every guest&apos;s stub with their name and seat, one after another.</p>
+                  <p className={s.runLine}>
                     <span>
                       {n} × {formatMoney(PER_STUB_MINOR)}
                     </span>
-                    <strong className="num">{formatMoney(PER_STUB_MINOR * n)}</strong>
+                    <strong>{formatMoney(total)}</strong>
                   </p>
-                  <SandboxBadge />
                   {ordered ? (
-                    <p role="status">
-                      Sandbox order {ordered} created. No real charge and nothing was sent to a printer.
-                    </p>
+                    <div className={s.done} role="status">
+                      <Stamped>Published</Stamped>
+                      <p className={ui.muted}>
+                        Sandbox order <span className={ui.num}>{ordered}</span>. No real charge, and nothing went to a printer.
+                      </p>
+                      <TearLink type="button" onClick={() => setRunning(true)}>
+                        Watch the run again
+                      </TearLink>
+                    </div>
                   ) : (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-block"
-                      onClick={() => {
-                        const o = addOrder({
-                          stubIds: guests.map((_, i) => `${design.setId}-${i}`),
-                          lines: [{ title: `${design.title} · ${n} guest stubs`, material: "print", finish: "matte", size: "classic", totalMinor: PER_STUB_MINOR * n }],
-                          totalMinor: PER_STUB_MINOR * n,
-                          method: "organizer-print",
-                        });
-                        setOrdered(o.id);
-                        play("stamp");
-                        haptic([18, 40, 28]);
-                      }}
-                    >
-                      Print all {n} for {formatMoney(PER_STUB_MINOR * n)}
-                    </button>
+                    <Stamp block price={formatMoney(total)} onClick={startRun}>
+                      Print all {n}
+                    </Stamp>
                   )}
                 </div>
-              ) : null}
-              {publish === "claim" ? (
-                <div className={ui.card}>
-                  <CopyField path={claimPath} label="Guest claim link" />
-                  <Link className="btn" href={claimPath}>
-                    Preview the guest page
-                  </Link>
+              ) : (
+                <div className={s.publish}>
+                  <p className={ui.muted}>Each guest claims their own stub and personalizes it within your locks.</p>
+                  {published ? (
+                    <div className={s.done}>
+                      <Stamped>Published</Stamped>
+                      <CopyField path={claimPath} label="Guest claim link" />
+                      <PaperLink href={claimPath}>Preview the guest page</PaperLink>
+                    </div>
+                  ) : (
+                    <Stamp block onClick={() => setPublished(true)}>
+                      Publish the claim link
+                    </Stamp>
+                  )}
                 </div>
-              ) : null}
+              )}
             </div>
           ) : null}
 
           <div className={s.nav}>
             {step > 0 ? (
-              <button type="button" className="btn btn-quiet" onClick={() => go(step - 1)}>
+              <TearLink type="button" onClick={() => go(step - 1)}>
                 Back
-              </button>
+              </TearLink>
             ) : (
-              <span />
+              <TearAnchor href="/">Leave the organizer</TearAnchor>
             )}
             {step < 3 ? (
-              <button type="button" className="btn btn-primary" disabled={!canNext} onClick={() => go(step + 1)}>
+              <Stamp disabled={!canNext} onClick={() => go(step + 1)}>
                 {step === 0 ? "Add your guest list" : step === 1 ? "Check the stubs" : "Publish"}
-              </button>
+              </Stamp>
             ) : null}
           </div>
         </section>
 
         <aside className={s.previewCol} aria-label="Stub preview">
           {mounted ? (
-            <FitBox>
-              <StubView stub={preview} size="lg" tilt />
-            </FitBox>
+            <OnDesk>
+              <StubView stub={preview} size="lg" tilt flipped={flipped} />
+            </OnDesk>
           ) : null}
+          <div className={s.flipTool}>
+            <Tools label="Preview">
+              <Tool icon={<FlipIcon />} active={flipped} onClick={() => setFlipped((f) => !f)}>
+                {flipped ? "Front" : "Guest name"}
+              </Tool>
+            </Tools>
+          </div>
+          <p className={s.caption}>{previewCaption}</p>
           <ul className={s.lockList}>
             <li>
-              <LockIcon open={!design.locks.logo} /> Logo {design.locks.logo ? "locked" : "open"}
+              <Padlock locked={design.locks.logo} />
+              Logo {design.locks.logo ? "locked" : "open"}
             </li>
             <li>
-              <LockIcon open={!design.locks.title} /> Title {design.locks.title ? "locked" : "open"}
+              <Padlock locked={design.locks.title} />
+              Title {design.locks.title ? "locked" : "open"}
             </li>
-            <li>Styles: {design.allowed.map((e) => EDITION_LABEL[e]).join(" or ")}</li>
           </ul>
+          <p className={s.styles}>
+            Styles: {design.allowed.map((e) => EDITION_LABEL[e]).join(" or ")}
+          </p>
         </aside>
       </div>
+
+      {running && ordered ? (
+        <PrintRun
+          stubs={guestStubs}
+          names={guests.map((g) => g.name)}
+          orderId={ordered}
+          onClose={() => setRunning(false)}
+          onClaim={() => {
+            setRunning(false);
+            setPublish("claim");
+          }}
+        />
+      ) : null}
     </PageShell>
+  );
+}
+
+function Tick() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m3.5 8.5 3 3 6-7" />
+    </svg>
   );
 }

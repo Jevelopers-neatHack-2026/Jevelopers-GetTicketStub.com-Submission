@@ -1,39 +1,46 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Field, MarkLegend, PaperButton, Rule, FinishSwatches, PunchTabs, SandboxStrip, SourceMark, Stamp, Stamped, TearLink, type FinishValue } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { FitBox } from "@/customer/pages/FitBox";
-import { play, haptic } from "@/customer/studio/feedback";
+import { MaterialFrame } from "@/customer/studio/editor/MaterialFrame";
+import { holoAllowed, setFinish as applyFinish, setMaterial as applyMaterial } from "@/customer/studio/editor/ops";
+import { haptic } from "@/customer/studio/feedback";
 import { getStub, upsertStub } from "@/customer/studio/store";
-import { MATERIALS, formatMoney, type Finish, type Material, type Stub } from "@/customer/studio/types";
-import { PageShell, SandboxBadge, ui } from "@/customer/pages/ui";
-import { FINISHES, SIZE_LABEL, addOrder, addToCart, cartItemFromStub, quote, sizesFor, type PrintSize } from "@/customer/pages/commerce";
+import { MATERIALS, formatMoney, type Material, type Stub } from "@/customer/studio/types";
+import { PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
+import { formatDate } from "@/customer/pages/share";
+import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, addOrder, addToCart, cartItemFromStub, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
 import { useMounted, nowMs } from "@/customer/pages/useMounted";
 import s from "./checkout.module.css";
+
+const MATERIAL_OPTIONS = MATERIALS.map((m) => ({ value: m.id, label: m.label, sub: formatMoney(m.priceMinor) }));
+
+/** "Classic stub · 2 × 5.5 in" becomes a tab ("Classic stub") with its dimensions beneath. */
+const sizeOption = (sz: PrintSize) => {
+  const [label, sub] = SIZE_LABEL[sz].split(" · ");
+  return { value: sz, label, sub };
+};
 
 export default function CheckoutClient({ id }: { id: string }) {
   const router = useRouter();
   const mounted = useMounted();
-  const emailId = useId();
   const [stub, setStub] = useState<Stub | null | undefined>(undefined);
-  const [material, setMaterial] = useState<Material>("print");
-  const [finish, setFinish] = useState<Finish>("foil");
   const [size, setSize] = useState<PrintSize>("classic");
-  const [byCard, setByCard] = useState(false);
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
-  const [paying, setPaying] = useState(false);
+  const [paid, setPaid] = useState(false);
   const [quoteAt, setQuoteAt] = useState(nowMs);
   const [now, setNow] = useState(nowMs);
+  // The stub being priced: material and finish live on it, exactly as in the editor.
+  const [draft, setDraft] = useState<Stub | null>(null);
 
   if (mounted && stub === undefined) {
     const st = getStub(id) ?? null;
     setStub(st);
     if (st) {
-      setMaterial(st.material);
-      setFinish(st.finish);
-      setSize(sizesFor(st.material)[0]);
+      setDraft(st);
+      setSize(defaultSize(st));
     }
   }
 
@@ -42,231 +49,210 @@ export default function CheckoutClient({ id }: { id: string }) {
     return () => clearInterval(t);
   }, []);
 
+  const material = draft?.material ?? "print";
+  const finish = draft?.finish ?? "foil";
   const q = useMemo(() => quote(material, finish, size), [material, finish, size]);
   const physical = material !== "digital";
   const expiresAt = quoteAt + 15 * 60_000;
   const minsLeft = Math.max(0, Math.ceil((expiresAt - now) / 60_000));
   const expired = minsLeft === 0;
+  const sizes = sizesFor(material);
+  const finishLabel = FINISHES.find((f) => f.id === finish)?.label ?? finish;
+  const materialLabel = MATERIALS.find((m) => m.id === material)?.label ?? material;
 
-  function pickMaterial(m: Material) {
-    setMaterial(m);
-    setSize(sizesFor(m)[0]);
+  const prices = Object.fromEntries(FINISHES.map((f) => [f.id, !physical || f.upchargeMinor === 0 ? "Included" : `+${formatMoney(f.upchargeMinor)}`])) as Record<FinishValue, string>;
+
+  function update(next: Stub) {
+    setDraft(next);
+    setSize((cur) => (sizesFor(next.material).includes(cur) ? cur : defaultSize(next)));
     setQuoteAt(nowMs());
-    play("tick");
+    setError("");
   }
 
   if (!mounted || stub === undefined) return <PageShell back={{ href: "/wall", label: "Wall" }}>{null}</PageShell>;
-  if (stub === null) {
+  if (stub === null || !draft) {
     return (
       <PageShell back={{ href: "/wall", label: "Wall" }}>
-        <div className={ui.error}>
-          <h1 className={ui.h2}>We couldn&apos;t find this stub on this device.</h1>
-          <p className={ui.muted}>Open your wall and pick the stub you want to print.</p>
-          <Link className="btn btn-primary" href="/wall">
-            Open your wall
-          </Link>
-        </div>
+        <EmptyState kind="stub" title="This stub isn't on this device." body="Stubs live on the device that made them. Open your wall and pick the one you want to print.">
+          <StampLink href="/wall">Open your wall</StampLink>
+        </EmptyState>
       </PageShell>
     );
   }
 
-  function pay(method: "apple-pay" | "google-pay" | "card") {
-    if (!stub) return;
+  function pay() {
+    if (!stub || !draft || paid) return;
     if (expired) {
-      setError("This quote expired. Refresh the quote to see the current price.");
+      setError("This quote has run out. Refresh it to see the current price.");
       return;
     }
-    if (method === "card" && !/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError("Add the email for your receipt and wall link.");
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setError("That email doesn't look right. Check it, or leave it empty.");
       return;
     }
-    setPaying(true);
+    setPaid(true);
     addOrder({
       stubIds: [stub.id],
       lines: [{ title: stub.event.title, material, finish, size, totalMinor: q.totalMinor }],
       totalMinor: q.totalMinor,
-      method,
-      email: method === "card" ? email.trim() : undefined,
+      method: "card",
+      email: email.trim() || undefined,
     });
     upsertStub({ ...stub, material, finish, torn: true });
-    play("stamp");
     haptic([18, 40, 28]);
-    router.push("/wall?email=sent");
+    setTimeout(() => router.push("/wall?email=sent"), 900);
   }
 
   function toCart() {
-    if (!stub) return;
-    addToCart(cartItemFromStub(stub, material, finish, size));
-    play("pin");
+    if (!stub || !draft) return;
+    addToCart(cartItemFromStub(draft, material, finish, size));
     router.push("/cart");
   }
 
-  const preview: Stub = { ...stub, material, finish };
-  const materialLabel = MATERIALS.find((m) => m.id === material)?.label ?? material;
+  const e = stub.event;
+  const when = [formatDate(e.dateISO), e.venue].filter(Boolean).join(" · ");
 
   return (
-    <PageShell back={{ href: `/studio/${stub.id}`, label: "Back to your stub" }} right={<SandboxBadge />}>
+    <PageShell back={{ href: `/studio/${stub.id}`, label: "Back to your stub" }}>
+      <SandboxStrip>{SANDBOX_LABEL}</SandboxStrip>
       <div className={s.layout}>
-        <div className={s.thumb}>
-          <FitBox>
-            <StubView stub={preview} size="md" tilt />
-          </FitBox>
-          <p className={`${ui.muted} ${s.thumbCap}`}>{stub.event.title}</p>
+        <div className={s.desk}>
+          <OnDesk>
+            <MaterialFrame material={material} finish={finish}>
+              <StubView stub={draft} size="md" tilt />
+            </MaterialFrame>
+          </OnDesk>
+          <p className={s.cap}>
+            <span className={s.capTitle}>{e.title}</span>
+            {when ? <span className={s.capMeta}>{when}</span> : null}
+          </p>
         </div>
 
-        <section className={`sheet ${s.sheet}`} aria-labelledby="co-h">
-          <div className={s.sheetHead}>
-            <h1 id="co-h" className={ui.h2}>
-              {physical ? `Print it for ${formatMoney(q.itemMinor)}` : `Keep it for ${formatMoney(q.itemMinor)}`}
+        <section className={s.sheet} aria-labelledby="co-h">
+          <header className={s.head}>
+            <p className="desk-label">Checkout</p>
+            <h1 id="co-h" className={s.title}>
+              {physical ? "Put it on paper." : "Keep it forever."}
             </h1>
-            <SandboxBadge />
+          </header>
+
+          <div className={s.group}>
+            <span className="desk-label">Material</span>
+            <PunchTabs label="Material" options={MATERIAL_OPTIONS} value={material} onChange={(m: Material) => update(applyMaterial(draft, m))} />
           </div>
 
-          <fieldset className={s.fieldset}>
-            <legend className="label">Material</legend>
-            <div className={s.options}>
-              {MATERIALS.map((m) => (
-                <label key={m.id} className={s.option}>
-                  <input type="radio" name="material" value={m.id} checked={material === m.id} onChange={() => pickMaterial(m.id)} />
-                  <span className={s.optLabel}>{m.label}</span>
-                  <span className={`${s.optPrice} num`}>{formatMoney(m.priceMinor)}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className={s.fieldset}>
-            <legend className="label">Finish</legend>
-            <div className={s.options}>
-              {FINISHES.map((f) => (
-                <label key={f.id} className={s.option}>
-                  <input
-                    type="radio"
-                    name="finish"
-                    value={f.id}
-                    checked={finish === f.id}
-                    onChange={() => {
-                      setFinish(f.id);
-                      setQuoteAt(nowMs());
-                      play("tick");
-                    }}
-                  />
-                  <span className={s.optLabel}>{f.label}</span>
-                  <span className={`${s.optPrice} num`}>{physical && f.upchargeMinor ? `+${formatMoney(f.upchargeMinor)}` : "Included"}</span>
-                </label>
-              ))}
-            </div>
-            {!physical ? <p className={ui.muted}>Digital finishes show on screen and on your wallet pass.</p> : null}
-          </fieldset>
-
-          {sizesFor(material).length > 1 ? (
-            <fieldset className={s.fieldset}>
-              <legend className="label">Size</legend>
-              <div className={s.options}>
-                {sizesFor(material).map((sz) => (
-                  <label key={sz} className={s.option}>
-                    <input type="radio" name="size" value={sz} checked={size === sz} onChange={() => setSize(sz)} />
-                    <span className={s.optLabel}>{SIZE_LABEL[sz]}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          ) : (
-            <p className={s.sizeLine}>
-              <span className="label">Size</span> {SIZE_LABEL[size]}
+          <div className={s.group}>
+            <span className="desk-label">Finish</span>
+            <FinishSwatches
+              value={finish}
+              prices={prices}
+              onChange={(f) => {
+                // Holo only exists on Print and Framed, so choosing it moves the stock up and the price shows it.
+                if (f === "holo" && !holoAllowed(material)) update(applyFinish(applyMaterial(draft, "print"), "holo"));
+                else update(applyFinish(draft, f));
+              }}
+            />
+            <p className={ui.status} aria-live="polite">
+              {!physical ? "On screen and on your wallet pass, every finish is included." : holoAllowed(material) ? "Holo is on Print and Framed." : "Holo comes on Print and Framed. Choosing it moves you to Print."}
             </p>
-          )}
+          </div>
 
-          <dl className={s.summary}>
-            <div>
-              <dt>
-                {materialLabel} · {SIZE_LABEL[size]}
-              </dt>
-              <dd className="num">{formatMoney(q.itemMinor)}</dd>
+          <div className={s.group}>
+            <span className="desk-label">Size</span>
+            {sizes.length > 1 ? (
+              <PunchTabs label="Size" options={sizes.map(sizeOption)} value={size} onChange={(v) => setSize(v)} />
+            ) : (
+              <p className={s.sizeLine}>
+                <span>{sizeOption(size).label}</span>
+                <span className={s.sizeSub}>{sizeOption(size).sub}</span>
+              </p>
+            )}
+          </div>
+
+          <Rule kind="perf" />
+
+          <dl className={s.receipt}>
+            <div className={s.line}>
+              <dt>{materialLabel}</dt>
+              <dd>{formatMoney(q.itemMinor)}</dd>
             </div>
             {q.finishMinor ? (
-              <div>
-                <dt>{FINISHES.find((f) => f.id === finish)?.label} finish</dt>
-                <dd className="num">{formatMoney(q.finishMinor)}</dd>
+              <div className={s.line}>
+                <dt>{finishLabel} finish</dt>
+                <dd>{formatMoney(q.finishMinor)}</dd>
               </div>
             ) : null}
             {physical ? (
-              <div>
-                <dt>
-                  Shipping <span className="provenance">estimated</span>
-                </dt>
-                <dd className="num">{formatMoney(q.shippingMinor)}</dd>
+              <div className={s.line}>
+                <dt>Shipping</dt>
+                <dd>
+                  {formatMoney(q.shippingMinor)}
+                  <SourceMark p="estimated" />
+                </dd>
               </div>
             ) : null}
-            <div className={s.total}>
+            <div className={`${s.line} ${s.total}`}>
               <dt>Total</dt>
-              <dd className="num">{formatMoney(q.totalMinor)}</dd>
+              <dd>{formatMoney(q.totalMinor)}</dd>
             </div>
           </dl>
-          <p className={s.quoteLine}>
+          <div className={s.quote} aria-live="polite">
             {expired ? (
               <>
-                Quote expired.{" "}
-                <button type="button" className={s.linkBtn} onClick={() => setQuoteAt(nowMs())}>
+                <span>This quote has run out.</span>
+                <TearLink
+                  type="button"
+                  onClick={() => {
+                    setQuoteAt(nowMs());
+                    setError("");
+                  }}
+                >
                   Refresh the quote
-                </button>
+                </TearLink>
               </>
             ) : (
-              <>Quote expires in {minsLeft} min. A quote is not a charge.</>
+              <span>
+                Quote holds for {minsLeft} min
+                <SourceMark p="estimated" />. A quote is not a charge.
+              </span>
             )}
-          </p>
+          </div>
 
-          <div className={ui.stack}>
-            <button type="button" className={`btn btn-block ${s.pay}`} onClick={() => pay("apple-pay")} disabled={paying}>
-              Pay with Apple Pay
-            </button>
-            <button type="button" className={`btn btn-block ${s.pay}`} onClick={() => pay("google-pay")} disabled={paying}>
-              Pay with Google Pay
-            </button>
-            <p className={s.sandboxNote}>Sandbox · no real charge. We&apos;ll email a link to your wall.</p>
+          <Field
+            id="co-email"
+            type="email"
+            label="Email for your receipt"
+            hint="We'll send the receipt and a link to your wall. You can leave it empty in the sandbox."
+            value={email}
+            autoComplete="email"
+            onChange={(ev) => {
+              setEmail(ev.target.value);
+              setError("");
+            }}
+          />
 
-            {byCard ? (
-              <form
-                className={ui.stack}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  pay("card");
-                }}
-              >
-                <div className={ui.field}>
-                  <label htmlFor={emailId} className={ui.fieldLabel}>
-                    Email for your receipt and wall link
-                  </label>
-                  <input
-                    id={emailId}
-                    type="email"
-                    className={ui.input}
-                    value={email}
-                    autoComplete="email"
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setError("");
-                    }}
-                  />
-                </div>
-                <button type="submit" className="btn btn-primary btn-block" disabled={paying}>
-                  Pay {formatMoney(q.totalMinor)} by card (sandbox)
-                </button>
-              </form>
+          <div className={s.actions}>
+            {paid ? (
+              <div className={s.done}>
+                <Stamped>Ordered</Stamped>
+                <p className={ui.muted}>Taking you to your wall.</p>
+              </div>
             ) : (
-              <button type="button" className="btn btn-quiet btn-block" onClick={() => setByCard(true)}>
-                Pay by card instead
-              </button>
+              <Stamp block onClick={pay}>
+                Pay {formatMoney(q.totalMinor)}
+              </Stamp>
             )}
             {error ? (
-              <p className={s.err} role="alert">
+              <p className={ui.err} role="alert">
                 {error}
               </p>
             ) : null}
-            <button type="button" className="btn btn-block" onClick={toCart}>
+            <PaperButton type="button" block onClick={toCart} disabled={paid}>
               Add to cart instead
-            </button>
+            </PaperButton>
           </div>
+
+          <MarkLegend marks={["estimated"]} />
         </section>
       </div>
     </PageShell>

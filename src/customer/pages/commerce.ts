@@ -1,7 +1,8 @@
 "use client";
 // Sandbox commerce for the hackathon build. Nothing here calls a payment, print or shipping API.
 // A quote is not a purchase: quotes expire, and an "order" is a local sandbox record only.
-import { MATERIALS, type Finish, type Material, type Stub } from "@/customer/studio/types";
+import { EDITION_META } from "@/customer/studio/stub/editions";
+import { MATERIALS, currentVersion, type Finish, type Material, type Stub } from "@/customer/studio/types";
 
 export const ORDERS_KEY = "ticketstub.orders.v1";
 export const CART_KEY = "ticketstub.cart.v1";
@@ -21,6 +22,13 @@ export function sizesFor(material: Material): PrintSize[] {
   if (material === "digital") return ["file"];
   if (material === "framed") return ["framed"];
   return ["classic", "stamp"];
+}
+
+/** The size a stub prints at by default: a portrait edition is a 2 x 3 stamp, a landscape one a classic stub. */
+export function defaultSize(stub: Stub, material: Material = stub.material): PrintSize {
+  const sizes = sizesFor(material);
+  const portrait = EDITION_META[currentVersion(stub).edition]?.orientation === "portrait";
+  return portrait && sizes.includes("stamp") ? "stamp" : sizes[0];
 }
 
 export const FINISHES: { id: Finish; label: string; upchargeMinor: number }[] = [
