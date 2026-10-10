@@ -1,0 +1,17 @@
+{
+  "policy_version": "1.0.0",
+  "classifications": ["public", "internal", "restricted", "secret"],
+  "classification_keyword": "x-classification",
+  "default": "deny_unclassified",
+  "public_projection": "EvidenceProjection",
+  "public_fields": ["contract", "schema_version", "policy_version", "evidence_id", "environment", "billing_mode", "outcome", "component.name", "component.source_revision"],
+  "always_exclude": ["credentials", "auth_headers", "signed_urls", "query_tokens", "private_locators", "source_urls", "source_text", "prompts", "customer_content", "approval_actors", "provider_request_ids", "destinations", "diagnostics", "unknown_metadata"],
+  "canonicalization": "jevelopers-json-v1",
+  "hash": "sha256",
+  "number_policy": "finite_IEEE754_fractions_and_safe_integers; ECMAScript_JSON_number_serialization; exact_money_decimals_are_strings",
+  "unicode_policy": "well_formed_unicode_preserved_no_normalization",
+  "key_order": "utf16_lexicographic",
+  "byte_hash": "exact_raw_bytes",
+  "manifest_hash": "utf8_canonical_json",
+  "sensitive_hashes": "never_public; low_entropy_correlation_requires_downstream_tenant_scoped_keyed_pseudonyms"
+}

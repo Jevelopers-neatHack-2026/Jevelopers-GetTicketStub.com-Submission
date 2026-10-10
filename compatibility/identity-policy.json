@@ -1,0 +1,197 @@
+{
+  "policy_version": "1.0.0",
+  "accepted_aliases": [],
+  "status": "pending_owner_review",
+  "ids": [
+    {
+      "field": "tenant_id",
+      "assigning_authority": "application identity authority",
+      "scope": "tenant",
+      "uniqueness_domain": "membership identity",
+      "assignment": "authenticated adapter only",
+      "retry_behavior": "stable across all work",
+      "immutable": true,
+      "omission": "never in CommonEnvelope"
+    },
+    {
+      "field": "project_id",
+      "assigning_authority": "getticketstub.com",
+      "scope": "tenant",
+      "uniqueness_domain": "project",
+      "assignment": "authenticated adapter only",
+      "retry_behavior": "stable across journey",
+      "immutable": true,
+      "omission": "never in CommonEnvelope"
+    },
+    {
+      "field": "workflow_id",
+      "assigning_authority": "agent-harness",
+      "scope": "tenant/project",
+      "uniqueness_domain": "workflow",
+      "assignment": "server assigned",
+      "retry_behavior": "stable across resume",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "run_id",
+      "assigning_authority": "agent-harness",
+      "scope": "workflow",
+      "uniqueness_domain": "run",
+      "assignment": "server assigned",
+      "retry_behavior": "new for new run; stable during resume",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "job_id",
+      "assigning_authority": "agent-harness",
+      "scope": "workflow/run",
+      "uniqueness_domain": "job",
+      "assignment": "server assigned",
+      "retry_behavior": "stable on job redelivery",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "artifact_id",
+      "assigning_authority": "creative-engine/print-production",
+      "scope": "tenant/project",
+      "uniqueness_domain": "immutable artifact",
+      "assignment": "server assigned",
+      "retry_behavior": "new artifact for changed content",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "design_id",
+      "assigning_authority": "creative-engine",
+      "scope": "tenant/project",
+      "uniqueness_domain": "design lineage",
+      "assignment": "server assigned",
+      "retry_behavior": "stable across edits",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "design_version_id",
+      "assigning_authority": "creative-engine",
+      "scope": "design",
+      "uniqueness_domain": "immutable version",
+      "assignment": "server assigned",
+      "retry_behavior": "new on edit; no latest aliases",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "order_id",
+      "assigning_authority": "getticketstub.com",
+      "scope": "tenant/project",
+      "uniqueness_domain": "order",
+      "assignment": "server assigned",
+      "retry_behavior": "stable for supplier idempotency mapping",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "provider_request_id",
+      "assigning_authority": "provider through adapter",
+      "scope": "provider account/execution",
+      "uniqueness_domain": "provider-issued request",
+      "assignment": "provider observation only",
+      "retry_behavior": "adapter declares reuse; omit or null when unavailable",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "trace_id",
+      "assigning_authority": "authenticated ingress/agent-harness",
+      "scope": "run",
+      "uniqueness_domain": "trace",
+      "assignment": "server assigned",
+      "retry_behavior": "propagated; never authority",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "correlation_id",
+      "assigning_authority": "getticketstub.com/agent-harness",
+      "scope": "customer journey",
+      "uniqueness_domain": "journey correlation",
+      "assignment": "server assigned",
+      "retry_behavior": "propagated; never authority",
+      "immutable": true,
+      "omission": "never in CommonEnvelope"
+    },
+    {
+      "field": "evidence_id",
+      "assigning_authority": "integration-evals",
+      "scope": "evaluation run",
+      "uniqueness_domain": "evidence record",
+      "assignment": "server assigned",
+      "retry_behavior": "stable for one record; public projection uses separate opaque synthetic/pseudonym ID",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "event_id",
+      "assigning_authority": "emitting domain owner",
+      "scope": "producer/tenant",
+      "uniqueness_domain": "emission",
+      "assignment": "server assigned",
+      "retry_behavior": "stable on exact redelivery; new for superseding observation",
+      "immutable": true,
+      "omission": "never in CommonEnvelope"
+    },
+    {
+      "field": "usage_event_id",
+      "assigning_authority": "metered module",
+      "scope": "tenant/provider execution",
+      "uniqueness_domain": "usage observation",
+      "assignment": "server assigned",
+      "retry_behavior": "stable on duplicate observation; correction links new observation",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "logical_operation_id",
+      "assigning_authority": "getticketstub.com/agent-harness",
+      "scope": "tenant/project",
+      "uniqueness_domain": "requested operation",
+      "assignment": "server assigned",
+      "retry_behavior": "stable across attempts",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "provider_attempt_id",
+      "assigning_authority": "provider adapter",
+      "scope": "logical operation",
+      "uniqueness_domain": "provider execution",
+      "assignment": "server assigned",
+      "retry_behavior": "transport retries may reuse only under declared adapter mapping",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "billable_attempt_id",
+      "assigning_authority": "metered module under finance policy",
+      "scope": "logical operation",
+      "uniqueness_domain": "potentially billed execution",
+      "assignment": "server assigned",
+      "retry_behavior": "new for separately billable execution",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    },
+    {
+      "field": "transport_attempt_id",
+      "assigning_authority": "agent-harness/provider adapter",
+      "scope": "provider execution",
+      "uniqueness_domain": "transport transmission",
+      "assignment": "server assigned",
+      "retry_behavior": "new per transmission; no automatic new billable attempt",
+      "immutable": true,
+      "omission": "when not applicable; provider_request_id also permits explicit null"
+    }
+  ]
+}

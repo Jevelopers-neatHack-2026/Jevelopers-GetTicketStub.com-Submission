@@ -1,0 +1,25 @@
+import type { CommonEnvelope } from './CommonEnvelope_1_0_0.js';
+export type { CommonEnvelope } from './CommonEnvelope_1_0_0.js';
+import type { EvidenceProjection } from './EvidenceProjection_1_0_0.js';
+export type { EvidenceProjection } from './EvidenceProjection_1_0_0.js';
+export type { Brand } from './brands.js';
+export type * from './primitives.js';
+import type * as Primitives from './primitives.js';
+export type PrimitiveName = keyof PrimitiveMap;
+export type PrimitiveMap = { readonly TenantId: Primitives.TenantId; readonly ProjectId: Primitives.ProjectId; readonly EventId: Primitives.EventId; readonly WorkflowId: Primitives.WorkflowId; readonly RunId: Primitives.RunId; readonly JobId: Primitives.JobId; readonly ArtifactId: Primitives.ArtifactId; readonly DesignId: Primitives.DesignId; readonly DesignVersionId: Primitives.DesignVersionId; readonly OrderId: Primitives.OrderId; readonly TraceId: Primitives.TraceId; readonly CorrelationId: Primitives.CorrelationId; readonly EvidenceId: Primitives.EvidenceId; readonly UsageEventId: Primitives.UsageEventId; readonly LogicalOperationId: Primitives.LogicalOperationId; readonly ProviderAttemptId: Primitives.ProviderAttemptId; readonly BillableAttemptId: Primitives.BillableAttemptId; readonly TransportAttemptId: Primitives.TransportAttemptId; readonly ProviderRequestId: Primitives.ProviderRequestId; readonly SourceRevision: Primitives.SourceRevision; readonly UtcTime: Primitives.UtcTime; readonly Sha256: Primitives.Sha256; readonly ExactDecimal: Primitives.ExactDecimal };
+export type ContractMap = { readonly CommonEnvelope: CommonEnvelope; readonly EvidenceProjection: EvidenceProjection };
+export type ContractName = keyof ContractMap;
+export type ValidationCode = 'UNKNOWN_CONTRACT' | 'INVALID_PAYLOAD' | 'UNSUPPORTED_VERSION' | 'MALFORMED_JSON' | 'INVALID_TRUST_CONTEXT' | 'SCOPE_MISMATCH' | 'NON_CANONICAL_NUMBER' | 'INVALID_UNICODE' | 'NON_JSON_VALUE' | 'CYCLIC_VALUE' | 'INVALID_BYTES';
+export type Issue = { readonly code: ValidationCode; readonly path: string; readonly keyword?: string };
+export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly errors: readonly Issue[] };
+export type TrustedContext = Pick<CommonEnvelope, 'tenant_id' | 'project_id'> & Partial<Pick<CommonEnvelope, 'design_id' | 'design_version_id' | 'artifact_id' | 'order_id'>>;
+export declare function validateContract<K extends ContractName>(contract: K, value: unknown): Result<ContractMap[K]>;
+export declare function parseContract<K extends ContractName>(contract: K, json: string): Result<ContractMap[K]>;
+export declare function validatePrimitive<K extends keyof PrimitiveMap>(name: K, value: unknown): Result<PrimitiveMap[K]>;
+export declare function checkTrustedContext<T extends CommonEnvelope>(value: T, expected: TrustedContext): Result<T>;
+export declare function projectEvidence(value: unknown): Result<EvidenceProjection>;
+export declare function canonicalJson(value: unknown): string;
+export declare function hashManifest(value: unknown): string;
+export declare function hashBytes(bytes: Uint8Array): string;
+export declare const versions: Readonly<Record<ContractName, Readonly<Record<string, string>>>>;
+export declare class ContractError extends Error { readonly code: ValidationCode; readonly path: string; constructor(code: ValidationCode, path?: string); }

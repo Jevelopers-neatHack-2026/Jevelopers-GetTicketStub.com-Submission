@@ -1,0 +1,172 @@
+{
+  "contract": "EvidenceProjection",
+  "policy_version": "1.0.0",
+  "status": "synthetic_foundation_candidate",
+  "valid": {
+    "contract": "EvidenceProjection",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "outcome": "passed",
+    "component": {
+      "name": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde"
+    }
+  },
+  "cases": [
+    {
+      "id": "valid-minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "valid-full",
+      "category": "full",
+      "set": {},
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing-required",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "wrong-type",
+      "category": "type",
+      "set": {
+        "environment": 42
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/environment"
+      }
+    },
+    {
+      "id": "unknown-enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-major",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unsupported-minor",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "1.1.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-additive-field",
+      "category": "unknown_field",
+      "set": {
+        "metadata": {
+          "auth_header": "SYNTHETIC-SECRET"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "null-required",
+      "category": "type",
+      "set": {
+        "environment": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/environment"
+      }
+    },
+    {
+      "id": "wrong-discriminator",
+      "category": "enum",
+      "set": {
+        "contract": "Fake"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/contract"
+      }
+    },
+    {
+      "id": "missing-version",
+      "category": "missing",
+      "remove": [
+        "schema_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "nested-sensitive-locator",
+      "category": "unknown_field",
+      "set": {
+        "component": {
+          "name": "shared-contracts",
+          "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+          "private_locator": "https://example.invalid/?token=SYNTHETIC"
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/component"
+      }
+    }
+  ]
+}

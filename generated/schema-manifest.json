@@ -1,0 +1,28 @@
+{
+  "package_version": "0.1.0",
+  "source_revision": null,
+  "status": "unreleased_foundation",
+  "toolchain": {
+    "ajv": "8.17.1",
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3",
+    "json_schema_to_typescript": "15.0.4",
+    "node": "22.23.3"
+  },
+  "schemas": [
+    {
+      "contract": "CommonEnvelope",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0",
+      "path": "schemas/CommonEnvelope/1.0.0.json",
+      "sha256": "8b805d89efd8104bb2b88f6ba441f0ce42cc5b4df1ffcb1c8bd7f5126d102bb2"
+    },
+    {
+      "contract": "EvidenceProjection",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/EvidenceProjection/1.0.0",
+      "path": "schemas/EvidenceProjection/1.0.0.json",
+      "sha256": "d1b9b0b5cea8a167996c5d0a37964d61c79580b3c8624c35c0fb589100d852cc"
+    }
+  ]
+}

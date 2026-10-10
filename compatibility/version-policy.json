@@ -1,0 +1,26 @@
+{
+  "policy_version": "1.0.0",
+  "status": "foundation_candidate_pending_owner_review",
+  "schema_version": "exact_semver",
+  "package_version": "independent_semver",
+  "mapping": "generated/schema-manifest.json",
+  "unknown_fields": "reject",
+  "unknown_enums": "reject",
+  "optional": "absent_only_unless_null_is_explicit",
+  "null": "unknown_only_where_explicitly_permitted",
+  "breaking_changes": ["required_addition", "field_removal", "type_change", "semantic_or_unit_change", "constraint_narrowing", "unsafe_enum_addition", "canonical_hash_change", "unknown_field_policy_change"],
+  "compatible_changes": ["documentation_only", "new_separate_export_with_no_existing_binding_change"],
+  "optional_field_addition": "new_exact_schema_version; old-version encoding retained; compatibility fixtures required",
+  "review": ["producer", "consumer", "impact_record"],
+  "deprecation": {
+    "minimum_days": 90,
+    "supported_majors": "current_and_previous_accepted_major",
+    "removal_conditions": ["notice_with_replacement", "all_named_consumer_acknowledgements", "all_migration_fixtures_pass", "exact_revision_review"],
+    "records": []
+  },
+  "pinning": "exact_source_sha_or_integrity_locked_package_plus_schema_hash_and_consumer_sha",
+  "rollback": "retain_previous_exact_pin_and_encoding; failed_consumer_blocks_upgrade",
+  "accepted_schema_versions": [],
+  "candidate_schema_versions": { "CommonEnvelope": ["1.0.0"], "EvidenceProjection": ["1.0.0"] },
+  "previous_accepted_major": null
+}

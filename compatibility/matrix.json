@@ -1,0 +1,46 @@
+{
+  "status": "foundation_candidate_only",
+  "previous_accepted_major": null,
+  "limitations": [
+    "No previous accepted major exists; no historical consumer acceptance is invented.",
+    "Domain leaves and exact consumer integrations remain blocked."
+  ],
+  "cases": [
+    {
+      "contract": "CommonEnvelope",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "CommonEnvelope",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "CommonEnvelope",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvidenceProjection",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "EvidenceProjection",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvidenceProjection",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "status": "candidate_immutability_guard_not_owner_acceptance",
+  "schemas": [
+    {
+      "contract": "CommonEnvelope",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0",
+      "path": "schemas/CommonEnvelope/1.0.0.json",
+      "sha256": "8b805d89efd8104bb2b88f6ba441f0ce42cc5b4df1ffcb1c8bd7f5126d102bb2",
+      "accepted": false
+    },
+    {
+      "contract": "EvidenceProjection",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/EvidenceProjection/1.0.0",
+      "path": "schemas/EvidenceProjection/1.0.0.json",
+      "sha256": "d1b9b0b5cea8a167996c5d0a37964d61c79580b3c8624c35c0fb589100d852cc",
+      "accepted": false
+    }
+  ]
+}

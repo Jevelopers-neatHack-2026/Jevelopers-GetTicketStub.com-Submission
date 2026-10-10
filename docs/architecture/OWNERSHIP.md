@@ -1,6 +1,6 @@
 # `shared-contracts`
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
+**Repository status:** Verified existing on GitHub, public, October 10, 2026. Repository visibility is unchanged by this foundation.
 **Proposed owner:** Agent and research.
 **Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
 

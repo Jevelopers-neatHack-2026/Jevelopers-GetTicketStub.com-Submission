@@ -1,0 +1,8 @@
+{
+  "files": {
+    "fixtures/CommonEnvelope.json": "sha256:e67c1cb4abdbad4dfeccca3870bf414227b2540fa45f494b959def2395248dac",
+    "fixtures/EvidenceProjection.json": "sha256:801584ea9641e4bf5ed24bc11a1c5b9d12011136e3854fec7e24caab223a0ba4"
+  },
+  "digest": "sha256:d8b963a9a8f6d67a8aab13f9aee27011cd5bc2bc519956171e5666dbf6a6227e",
+  "status": "synthetic_foundation_only"
+}
