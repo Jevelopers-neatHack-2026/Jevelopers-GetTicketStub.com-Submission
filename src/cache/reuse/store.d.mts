@@ -115,6 +115,15 @@ export interface ReusePermission {
   readonly use: string;
 }
 
+export interface PermissionVerification {
+  readonly status: 'valid';
+  readonly reference: string;
+  readonly contentHash: string;
+  readonly version: number;
+  readonly use: string;
+  readonly validUntilMs: number;
+}
+
 export interface PrivateProfileReferences {
   readonly permissions?: readonly ReusePermission[];
   readonly sourceRefs?: readonly string[];
@@ -166,7 +175,7 @@ export interface ScopedReuseOptions<Request = unknown> {
   readonly verifySourceObservation?: (input: { readonly tenantId: string | null; readonly actorId: string | null; readonly request: Request; readonly purpose: 'initial' | 'revalidate'; readonly expectedContentHash: string; readonly observation: unknown }) => SourceObservation | Promise<SourceObservation>;
   readonly authorizePublicPublication?: (input: { readonly tenantId: string; readonly actorId: string; readonly request: Request; readonly boundaryTrust: 'untrusted_external'; readonly facts: Readonly<{ event_name?: string; event_date?: string; venue?: string }>; readonly identity: CacheIdentity; readonly contentHash: string; readonly boundaryScope: TenantScope; readonly sourceRecordId: string }) => PublicPublicationAttestation | Promise<PublicPublicationAttestation>;
   readonly resolvePrivateProfileReferences?: (input: { readonly tenantId: string; readonly actorId: string; readonly request: Request; readonly kind: 'tenant_private' | 'public_profile'; readonly identity: CacheIdentity; readonly contentHash: string; readonly projection: Readonly<Record<string, PrivateFact | string>> }) => PrivateProfileReferences | Promise<PrivateProfileReferences>;
-  readonly verifyPermission?: (input: { readonly tenantId: string | null; readonly actorId: string | null; readonly request: Request; readonly reference: string; readonly contentHash: string; readonly version: number; readonly use: string; readonly nowMs: number }) => 'valid' | 'expired' | 'revoked' | 'unverified' | Promise<'valid' | 'expired' | 'revoked' | 'unverified'>;
+  readonly verifyPermission?: (input: { readonly tenantId: string | null; readonly actorId: string | null; readonly request: Request; readonly reference: string; readonly contentHash: string; readonly version: number; readonly use: string; readonly nowMs: number }) => PermissionVerification | 'expired' | 'revoked' | 'unverified' | Promise<PermissionVerification | 'expired' | 'revoked' | 'unverified'>;
   readonly resolveLineage?: (input: { readonly tenantId: string | null; readonly actorId: string | null; readonly request: Request; readonly descriptor: Readonly<Record<string, unknown>> }) => CacheLineage | Promise<CacheLineage>;
   readonly consumeOriginalLineage?: (input: { readonly tenantId: string; readonly actorId: string; readonly request: Request; readonly profileRef: string; readonly scope: 'tenant_private'; readonly contentHash: string; readonly version: number; readonly lineage: CacheLineage; readonly sourceRefs: readonly string[]; readonly correctionRefs: readonly string[]; readonly permissions: readonly ReusePermission[] }) => { readonly status: 'linked' | 'incomplete' | 'unavailable'; readonly logicalOperationBound: boolean; readonly billedAttemptCount: number; readonly usageObservationCount: number } | Promise<{ readonly status: 'linked' | 'incomplete' | 'unavailable'; readonly logicalOperationBound: boolean; readonly billedAttemptCount: number; readonly usageObservationCount: number }>;
   readonly resolveInvalidationConsumers?: (input: { readonly tenantId: string | null; readonly actorId: string | null; readonly request: Request; readonly descriptor: Readonly<Record<string, unknown>> & { readonly publicSafeOnly?: true } }) => readonly string[] | Promise<readonly string[]>;
@@ -202,7 +211,7 @@ export interface ReuseStore<Request = unknown> {
   dispatchPendingInvalidations(scope: ScopedReuseScope, request: Request, maximum?: number, scopeKind?: 'tenant_private' | 'public_profile', signal?: AbortSignal): Promise<Readonly<{ attempted: number; delivered: number; pending: boolean; unresolvedCount?: number; reason?: string; deliveryKind?: string }>>;
   outboxSnapshot(scope: ScopedReuseScope, request: Request, scopeKind?: 'tenant_private' | 'public_profile'): Promise<Readonly<{ pending: number; delivering: number; failed: number; delivered: number; unresolved: number; readiness: 'blocked_pending_external_ack' | 'external_consumer_unverified' }>>;
   integritySnapshot(scope: ScopedReuseScope, request: Request): Promise<Readonly<Record<string, unknown>>>;
-  purgeExpired(scope: ScopedReuseScope, request: Request): Promise<Readonly<{ purged: number; retainedOutboxPending: number }>>;
+  purgeExpired(scope: ScopedReuseScope, request: Request, scopeKind?: 'tenant_private' | 'public_profile'): Promise<Readonly<{ purged: number; retainedOutboxPending: number }>>;
 }
 
 export declare function createScopedReuseStore<Request = unknown>(options: ScopedReuseOptions<Request>): ReuseStore<Request>;

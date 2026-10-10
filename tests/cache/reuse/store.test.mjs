@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, lstat, mkdir, symlink } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
 import { createScopedReuseStore, ScopedReuseError } from '../../../src/cache/reuse/store.mjs';
@@ -20,6 +21,27 @@ const IDENTITY = Object.freeze({ occurrenceId: 'occurrence-1', entityId: 'entity
 
 function request(tenantId = 'tenant-a') {
   return Object.freeze({ principal: Object.freeze({ tenantId, actorId: `actor-${tenantId}` }) });
+}
+
+function lineReader(child) {
+  let buffer = '';
+  const queued = [];
+  const waiters = [];
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    for (;;) {
+      const newline = buffer.indexOf('\n');
+      if (newline < 0) break;
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      const waiter = waiters.shift();
+      if (waiter) waiter(line);
+      else queued.push(line);
+    }
+  });
+  child.stderr.on('data', () => {});
+  return () => queued.length ? Promise.resolve(queued.shift()) : new Promise((resolve) => waiters.push(resolve));
 }
 
 function facts() {
@@ -45,7 +67,7 @@ async function fixture(t, overrides = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'ei-scoped-reuse-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const clock = { value: 1_800_000_000_000 };
-  const state = { observation: null, permission: 'valid', delivered: null, acknowledge: false, replayAck: false, previousAck: null, retentionMs: 7 * 24 * 60 * 60 * 1000, publicOnlyRequested: false, authorizationActions: [], advanceAtAuthorizationCall: null, advanceClockTo: null, advanceOnPermissionTo: null };
+  const state = { observation: null, permission: 'valid', permissionValidUntilMs: 8_640_000_000_000_000, delivered: null, acknowledge: false, replayAck: false, previousAck: null, retentionMs: 7 * 24 * 60 * 60 * 1000, publicOnlyRequested: false, authorizationActions: [], advanceAtAuthorizationCall: null, advanceClockTo: null, advanceOnPermissionTo: null };
   const options = {
     directory,
     now: () => clock.value,
@@ -80,12 +102,13 @@ async function fixture(t, overrides = {}) {
       sourceRefs: ['PRIVATE_SOURCE_CANARY'],
       correctionRefs: ['PRIVATE_CORRECTION_CANARY'],
     }),
-    verifyPermission: () => {
+    verifyPermission: ({ reference, contentHash, version, use }) => {
       if (state.advanceOnPermissionTo !== null) {
         clock.value = state.advanceOnPermissionTo;
         state.advanceOnPermissionTo = null;
       }
-      return state.permission;
+      if (state.permission !== 'valid') return state.permission;
+      return { status: 'valid', reference, contentHash, version, use, validUntilMs: state.permissionValidUntilMs };
     },
     resolveLineage: () => lineageComplete(),
     consumeOriginalLineage: ({ sourceRefs, correctionRefs, lineage }) => {
@@ -150,6 +173,7 @@ async function putPublic(store, authRequest, boundaryData, input = {}) {
     contentHash: input.contentHash ?? HASH_A,
     pins: input.pins ?? PINS,
     observation: input.observation ?? Object.freeze({ source: 'opaque-host-observation' }),
+    ...(input.freshnessTtlMs ? { freshnessTtlMs: input.freshnessTtlMs } : {}),
   });
   return { scope, authRequest, profile, lookup: { identity: input.identity ?? IDENTITY, contentHash: input.contentHash ?? HASH_A, pins: input.pins ?? PINS } };
 }
@@ -393,6 +417,63 @@ test('public lineage stays tenant-private and rechecks the original permission b
   const after = await env.store.getPublicProfile(created.scope, authRequest, created.lookup);
   assert.equal(after.status, 'unavailable');
   assert.equal(after.reason, 'invalidated');
+});
+
+test('Finance lineage handoff revalidates permission version and the earliest deadline after authorization', async (t) => {
+  for (const publicLink of [false, true]) {
+    let permissionChecks = 0;
+    let handoffs = 0;
+    let env;
+    const base = 1_800_000_000_000;
+    env = await fixture(t, {
+      resolvePrivateProfileReferences: ({ contentHash }) => ({
+        permissions: [
+          { reference: 'permission-long', contentHash, version: 2, use: 'finance.read_original_lineage' },
+          { reference: 'permission-short', contentHash, version: 3, use: 'finance.read_original_lineage' },
+        ],
+        sourceRefs: ['PRIVATE_SOURCE_CANARY'],
+        correctionRefs: ['PRIVATE_CORRECTION_CANARY'],
+      }),
+      verifyPermission: ({ reference, contentHash, version, use }) => {
+        permissionChecks += 1;
+        return {
+          status: 'valid', reference, contentHash, version, use,
+          validUntilMs: base + (reference === 'permission-short' ? 1_000 : 10_000),
+        };
+      },
+      authorizeAction: ({ action }) => {
+        if (action === 'finance.read_original_lineage' && permissionChecks >= 2) env.clock.value = base + 1_500;
+        return true;
+      },
+      consumeOriginalLineage: () => {
+        handoffs += 1;
+        return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+      },
+      ...(publicLink ? {
+        authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }),
+      } : {}),
+    });
+    const authRequest = request();
+    let created;
+    if (publicLink) {
+      const boundary = await approvedBoundary(authRequest);
+      created = await putPublic(env.store, authRequest, boundary);
+    } else {
+      created = await putPrivate(env.store, authRequest);
+    }
+    permissionChecks = 0;
+    env.clock.value = base;
+    await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+      (error) => error.code === 'REUSE_DENIED');
+    assert.equal(permissionChecks, 2);
+    assert.equal(handoffs, 0);
+  }
+
+  const bareValid = await fixture(t, { verifyPermission: () => 'valid' });
+  const created = await putPrivate(bareValid.store);
+  const denied = await bareValid.store.getPrivateProfile(created.scope, created.authRequest, created.lookup);
+  assert.equal(denied.status, 'ineligible');
+  assert.equal(denied.reason, 'permission_unverified');
 });
 
 test('public invalidation emits only an opaque content reference and host-approved consumer reference', async (t) => {
@@ -658,6 +739,540 @@ test('SQLite admission is single-flight across two live Node processes', async (
   assert.equal(JSON.parse(secondLine).status, 'in_flight');
   first.stdin.end('done\n');
   second.stdin.end('done\n');
+});
+
+test('shared index-key bytes never share flights across tenant partitions, including expired leases and restart', async (t) => {
+  const env = await fixture(t);
+  const worker = path.resolve('tests/cache/reuse/admission-worker.mjs');
+  const run = (tenantId, now, leaseMs = 30_000) => spawn(process.execPath, [worker], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      REUSE_WORKER_CONFIG: JSON.stringify({ directory: env.directory, tenantId }),
+      REUSE_WORKER_SHARED_KEY: '1',
+      REUSE_WORKER_NOW: String(now),
+      REUSE_WORKER_LEASE_MS: String(leaseMs),
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const readOutcome = (child) => new Promise((resolve, reject) => {
+    let output = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      output += chunk;
+      const newline = output.indexOf('\n');
+      if (newline >= 0) resolve(JSON.parse(output.slice(0, newline)));
+    });
+    child.once('error', reject);
+    child.stderr.on('data', () => {});
+  });
+  const baseNow = 1_800_000_000_000;
+  const first = run('tenant-a', baseNow, 100);
+  t.after(() => first.kill('SIGKILL'));
+  const a = await readOutcome(first);
+  assert.equal(a.status, 'admitted');
+  first.stdin.end('done\n');
+
+  const second = run('tenant-b', baseNow + 200);
+  t.after(() => second.kill('SIGKILL'));
+  const b = await readOutcome(second);
+  assert.equal(b.status, 'admitted');
+  assert.notEqual(b.admissionRef, a.admissionRef);
+  second.stdin.end('done\n');
+
+  const restartedB = run('tenant-b', baseNow + 201);
+  t.after(() => restartedB.kill('SIGKILL'));
+  const bDuplicate = await readOutcome(restartedB);
+  assert.equal(bDuplicate.status, 'in_flight');
+  assert.equal(bDuplicate.admissionRef, b.admissionRef);
+  restartedB.stdin.end('done\n');
+
+  const restartedA = run('tenant-a', baseNow + 201);
+  t.after(() => restartedA.kill('SIGKILL'));
+  const aExpired = await readOutcome(restartedA);
+  assert.equal(aExpired.status, 'needs_reconciliation');
+  assert.equal(aExpired.admissionRef, a.admissionRef);
+  restartedA.stdin.end('done\n');
+});
+
+test('flight keys include the active key identifier so a key rotation cannot expose an old admission reference', async (t) => {
+  let keyVersion = 'one';
+  const env = await fixture(t, {
+    resolveKey: ({ scope, purpose }) => ({ keyId: `shared-${scope}-${purpose}-${keyVersion}`, key: Buffer.alloc(32, 79) }),
+  });
+  const authRequest = request();
+  const scope = await env.store.scopeForAuthenticatedRequest(authRequest);
+  const first = await env.store.admitOperation(scope, authRequest, { identity: IDENTITY, pins: PINS, mode: 'reuse' });
+  keyVersion = 'two';
+  const afterRotation = await env.store.admitOperation(scope, authRequest, { identity: IDENTITY, pins: PINS, mode: 'reuse' });
+  assert.equal(afterRotation.status, 'admitted');
+  assert.notEqual(afterRotation.admissionRef, first.admissionRef);
+});
+
+test('scope authorization binds every request to its current tenant and actor and to the issuing store', async (t) => {
+  const env = await fixture(t);
+  const mutableRequest = { principal: { tenantId: 'tenant-a', actorId: 'actor-tenant-a' } };
+  const created = await putPrivate(env.store, mutableRequest);
+  const swapped = request('tenant-b');
+  await assert.rejects(env.store.getPrivateProfile(created.scope, swapped, created.lookup), (error) => error.code === 'REUSE_DENIED');
+  const foreignStore = createScopedReuseStore(env.options);
+  await assert.rejects(foreignStore.getPrivateProfile(created.scope, mutableRequest, created.lookup), (error) => error.code === 'REUSE_DENIED');
+
+  mutableRequest.principal.actorId = 'actor-revoked';
+  await assert.rejects(env.store.getPrivateProfile(created.scope, mutableRequest, created.lookup), (error) => error.code === 'REUSE_DENIED');
+});
+
+test('principal changes during key resolution, permission verification, or authorization deny before facts escape', async (t) => {
+  let mutableRequest;
+  let mutateOn = 'key';
+  const env = await fixture(t, {
+    resolveKey: ({ tenantId, scope, purpose }) => {
+      if (mutateOn === 'key' && mutableRequest) mutableRequest.principal.actorId = 'actor-revoked';
+      return { keyId: `${scope}:${purpose}:${tenantId ?? 'global'}`, key: Buffer.alloc(32, tenantId ? tenantId.charCodeAt(0) : 91) };
+    },
+    authorizeAction: ({ request: authRequest }) => {
+      if (mutateOn === 'authorization' && authRequest === mutableRequest) mutableRequest.principal.actorId = 'actor-revoked';
+      return true;
+    },
+  });
+  mutableRequest = { principal: { tenantId: 'tenant-a', actorId: 'actor-tenant-a' } };
+  const keyScope = await env.store.scopeForAuthenticatedRequest(mutableRequest);
+  await assert.rejects(env.store.putPrivateProfile(keyScope, mutableRequest, {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_DENIED');
+  assert.equal((await env.store.integritySnapshot(keyScope, request())).entryCount, 0);
+
+  mutateOn = 'none';
+  mutableRequest.principal.actorId = 'actor-tenant-a';
+  const created = await putPrivate(env.store, mutableRequest);
+  mutateOn = 'authorization';
+  await assert.rejects(env.store.getPrivateProfile(created.scope, mutableRequest, created.lookup), (error) => error.code === 'REUSE_DENIED');
+  assert.equal((await env.store.integritySnapshot(created.scope, request())).eligibleEntryCount, 1);
+
+  mutateOn = 'none';
+  mutableRequest.principal.actorId = 'actor-tenant-a';
+  const permissionEnv = await fixture(t, {
+    verifyPermission: ({ reference, contentHash, version, use }) => {
+      mutableRequest.principal.actorId = 'actor-revoked';
+      return { status: 'valid', reference, contentHash, version, use, validUntilMs: 8_640_000_000_000_000 };
+    },
+  });
+  const permissionCreated = await putPrivate(permissionEnv.store, mutableRequest);
+  await assert.rejects(permissionEnv.store.getPrivateProfile(permissionCreated.scope, mutableRequest, permissionCreated.lookup), (error) => error.code === 'REUSE_DENIED');
+});
+
+test('final reads observe an outage or TTL crossing that occurs while permission verification is awaited', async (t) => {
+  let created;
+  let env;
+  env = await fixture(t, {
+    verifyPermission: async ({ reference, contentHash, version, use }) => {
+      if (created && env.state.nextPermissionObservation === 'outage') {
+        env.state.nextPermissionObservation = null;
+        env.state.observation = () => ({ status: 'outage', validatedAt: new Date(env.clock.value).toISOString() });
+        await env.store.observe(created.scope, created.authRequest, {
+          profileRef: created.profile.profileRef, scopeKind: 'tenant_private', observation: { source: 'permission-callback' },
+        });
+      }
+      if (created && env.state.advanceOnPermissionTo !== null) {
+        env.clock.value = env.state.advanceOnPermissionTo;
+        env.state.advanceOnPermissionTo = null;
+      }
+      return { status: 'valid', reference, contentHash, version, use, validUntilMs: 8_640_000_000_000_000 };
+    },
+  });
+  created = await putPrivate(env.store, request(), { freshnessTtlMs: 1_000 });
+  env.state.nextPermissionObservation = 'outage';
+  const outage = await env.store.getPrivateProfile(created.scope, created.authRequest, created.lookup);
+  assert.deepEqual({ status: outage.status, reason: outage.reason }, { status: 'unavailable', reason: 'source_outage' });
+  assert.equal('facts' in outage, false);
+
+  const ttlEnv = await fixture(t, { maxRetentionMs: 60_000 });
+  ttlEnv.state.retentionMs = 60_000;
+  const ttlCreated = await putPrivate(ttlEnv.store, request(), { freshnessTtlMs: 1_000 });
+  ttlEnv.state.advanceOnPermissionTo = ttlEnv.clock.value + 1_000;
+  const stale = await ttlEnv.store.getPrivateProfile(ttlCreated.scope, ttlCreated.authRequest, ttlCreated.lookup);
+  assert.deepEqual({ status: stale.status, reason: stale.reason }, { status: 'stale', reason: 'ttl_expired' });
+});
+
+test('storage writes conserve bytes and event-count reservations until invalidation converts them', async (t) => {
+  const env = await fixture(t, { maxStoreBytes: 6_000, maxOutboxEntries: 32, maxFlights: 64 });
+  const created = await putPrivate(env.store);
+  let acceptedFlights = 0;
+  let refused = false;
+  for (let index = 0; index < 64; index += 1) {
+    try {
+      const admitted = await env.store.admitOperation(created.scope, created.authRequest, {
+        identity: { ...IDENTITY, editionId: `fresh-${index}` }, pins: PINS, mode: 'fresh',
+      });
+      assert.equal(admitted.usage, 'unknown');
+      acceptedFlights += 1;
+    } catch (error) {
+      assert.equal(error.code, 'REUSE_CAPACITY');
+      refused = true;
+      break;
+    }
+  }
+  assert.ok(acceptedFlights > 0);
+  assert.equal(refused, true);
+  const invalidation = await env.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'rights_revocation',
+  });
+  assert.equal(invalidation.invalidated, true);
+  const retry = await env.store.dispatchPendingInvalidations(created.scope, created.authRequest, 1);
+  assert.equal(retry.attempted, 1);
+  assert.equal(retry.delivered, 0);
+  assert.equal((await env.store.outboxSnapshot(created.scope, created.authRequest)).pending, 1);
+  assert.equal((await env.store.getPrivateProfile(created.scope, created.authRequest, created.lookup)).reason, 'invalidated');
+});
+
+test('multiple consumer reservations convert atomically and block overcommitted eligible entries', async (t) => {
+  const env = await fixture(t, {
+    maxOutboxEntries: 3,
+    maxStoreBytes: 32_000,
+    resolveInvalidationConsumers: () => ['CONSUMER_A', 'CONSUMER_B', 'CONSUMER_C'],
+  });
+  const created = await putPrivate(env.store);
+  await assert.rejects(putPrivate(env.store, request(), { identity: { ...IDENTITY, editionId: 'blocked-by-reservation' } }),
+    (error) => error.code === 'REUSE_CAPACITY');
+  assert.equal((await env.store.integritySnapshot(created.scope, created.authRequest)).entryCount, 1);
+  const changed = await env.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'rights_revocation',
+  });
+  assert.equal(changed.invalidated, true);
+  const snapshot = await env.store.outboxSnapshot(created.scope, created.authRequest);
+  assert.equal(snapshot.pending, 3);
+  assert.equal(snapshot.unresolved, 3);
+});
+
+test('final sealed size bounds reject oversized profiles, lineage reconciliation, and unrevocable Unicode consumers atomically', async (t) => {
+  const profileEnv = await fixture(t, { maxEntryBytes: 2_060 });
+  const profileScope = await profileEnv.store.scopeForAuthenticatedRequest(request());
+  await assert.rejects(profileEnv.store.putPrivateProfile(profileScope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {}, freshnessTtlMs: 1_000,
+  }), (error) => error.code === 'REUSE_CAPACITY');
+  assert.equal((await profileEnv.store.integritySnapshot(profileScope, request())).entryCount, 0);
+
+  const consumerEnv = await fixture(t, {
+    resolveInvalidationConsumers: () => ['漢'.repeat(512)],
+  });
+  const consumerScope = await consumerEnv.store.scopeForAuthenticatedRequest(request());
+  await assert.rejects(consumerEnv.store.putPrivateProfile(consumerScope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_CAPACITY');
+  assert.equal((await consumerEnv.store.integritySnapshot(consumerScope, request())).entryCount, 0);
+
+  let oversizedLineage = true;
+  const smallEnv = await fixture(t, {
+    maxEntryBytes: 2_048,
+    verifyAdmissionOutcome: ({ requestedOutcome }) => ({ outcome: requestedOutcome, attemptLineage: oversizedLineage ? lineage : { status: 'unknown' } }),
+  });
+  const authRequest = request();
+  const scope = await smallEnv.store.scopeForAuthenticatedRequest(authRequest);
+  const admission = await smallEnv.store.admitOperation(scope, authRequest, { identity: IDENTITY, pins: PINS, mode: 'fresh' });
+  const largeRefs = Array(128).fill('L'.repeat(512));
+  const lineage = {
+    logicalOperationId: 'logical', billableAttemptId: 'billable', transportAttemptId: 'transport',
+    observationIds: largeRefs, usageEventIds: largeRefs, status: 'complete',
+  };
+  await assert.rejects(smallEnv.store.reconcileAdmission(scope, authRequest, { admissionRef: admission.admissionRef, outcome: 'completed' }),
+    (error) => error.code === 'REUSE_CAPACITY');
+  const snapshot = await smallEnv.store.integritySnapshot(scope, authRequest);
+  assert.equal(snapshot.flights.active, 1);
+  oversizedLineage = false;
+  const resolved = await smallEnv.store.reconcileAdmission(scope, authRequest, { admissionRef: admission.admissionRef, outcome: 'unknown' });
+  assert.equal(resolved.status, 'unknown');
+  assert.equal(resolved.usage, 'unknown');
+});
+
+test('event-envelope attempt metadata fits exactly at the reservation cap and rejects cap plus one', async (t) => {
+  const keyId = 'tenant_private:payload:tenant-a';
+  const envelopeBytes = (consumerRef) => {
+    const attempt = {
+      eventId: 'f'.repeat(36), reason: 'policy_version_change', entryRef: 'e'.repeat(36), contentHash: 'f'.repeat(64),
+      version: Number.MAX_SAFE_INTEGER, consumerRef, createdAtMs: 8_640_000_000_000_000,
+      deliveryAttemptId: 'd'.repeat(36), deliveryAttemptNumber: Number.MAX_SAFE_INTEGER,
+    };
+    const plaintextBytes = Buffer.byteLength(JSON.stringify(attempt), 'utf8');
+    return Buffer.byteLength(JSON.stringify({ version: 1, keyId, iv: 'i'.repeat(16), tag: 't'.repeat(24), ciphertext: 'c'.repeat(4 * Math.ceil(plaintextBytes / 3)) }), 'utf8');
+  };
+  assert.equal(envelopeBytes('漢'.repeat(350)), 2_048);
+  assert.equal(envelopeBytes('漢'.repeat(351)), 2_052);
+
+  const exact = await fixture(t, { resolveInvalidationConsumers: () => ['漢'.repeat(350)] });
+  const created = await putPrivate(exact.store);
+  await exact.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'rights_revocation',
+  });
+  const attempt = await exact.store.dispatchPendingInvalidations(created.scope, created.authRequest, 1);
+  assert.equal(attempt.attempted, 1);
+  const database = new DatabaseSync(path.join(exact.directory, 'scoped-reuse.sqlite'));
+  try { assert.ok(database.prepare('SELECT MAX(payload_bytes) AS bytes FROM reuse_outbox').get().bytes <= 2_048); }
+  finally { database.close(); }
+
+  const over = await fixture(t, { resolveInvalidationConsumers: () => ['漢'.repeat(351)] });
+  const overScope = await over.store.scopeForAuthenticatedRequest(request());
+  await assert.rejects(over.store.putPrivateProfile(overScope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_CAPACITY');
+  assert.equal((await over.store.integritySnapshot(overScope, request())).entryCount, 0);
+
+  const escaped = await fixture(t, { resolveInvalidationConsumers: () => ['\u0001'.repeat(512)] });
+  const escapedScope = await escaped.store.scopeForAuthenticatedRequest(request());
+  await assert.rejects(escaped.store.putPrivateProfile(escapedScope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_CAPACITY');
+  assert.equal((await escaped.store.integritySnapshot(escapedScope, request())).entryCount, 0);
+
+  const longKeyId = await fixture(t, {
+    resolveKey: ({ scope, purpose }) => ({ keyId: 'K'.repeat(128), key: Buffer.alloc(32, 61) }),
+    resolveInvalidationConsumers: () => ['漢'.repeat(350)],
+  });
+  const longKeyScope = await longKeyId.store.scopeForAuthenticatedRequest(request());
+  await assert.rejects(longKeyId.store.putPrivateProfile(longKeyScope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_CAPACITY');
+  assert.equal((await longKeyId.store.integritySnapshot(longKeyScope, request())).entryCount, 0);
+});
+
+test('outstanding invalidation cleanup purges expired private bytes while retaining unresolved events', async (t) => {
+  const env = await fixture(t);
+  const created = await putPrivate(env.store);
+  await env.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'rights_revocation',
+  });
+  env.clock.value += 8 * 24 * 60 * 60 * 1000;
+  const result = await env.store.purgeExpired(created.scope, created.authRequest);
+  assert.equal(result.purged, 1);
+  assert.equal(result.retainedOutboxPending, 1);
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    const entry = database.prepare('SELECT payload_bytes, length(payload) AS actual_bytes, payload_purged FROM reuse_entries WHERE entry_id = ?').get(created.profile.profileRef);
+    assert.deepEqual({ ...entry }, { payload_bytes: 0, actual_bytes: 0, payload_purged: 1 });
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_observations WHERE entry_id = ?').get(created.profile.profileRef).count, 0);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_consumer_refs WHERE entry_id = ?').get(created.profile.profileRef).count, 0);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_outbox WHERE entry_id = ? AND status != \'delivered\'').get(created.profile.profileRef).count, 1);
+  } finally { database.close(); }
+  assert.equal((await env.store.purgeExpired(created.scope, created.authRequest)).purged, 0);
+});
+
+test('a failed read of an already-invalidated expired entry still commits payload cleanup', async (t) => {
+  const env = await fixture(t);
+  const created = await putPrivate(env.store);
+  await env.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'evidence_lost',
+  });
+  env.clock.value += 8 * 24 * 60 * 60 * 1000;
+  const denied = await env.store.getPrivateProfile(created.scope, created.authRequest, created.lookup);
+  assert.equal(denied.status, 'unavailable');
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    const row = database.prepare('SELECT payload_bytes, payload_purged FROM reuse_entries WHERE entry_id = ?').get(created.profile.profileRef);
+    assert.equal(row.payload_bytes, 0);
+    assert.equal(row.payload_purged, 1);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_observations WHERE entry_id = ?').get(created.profile.profileRef).count, 0);
+  } finally { database.close(); }
+});
+
+test('retention cleanup migrates and purges legacy invalidated rows after restart', async (t) => {
+  const env = await fixture(t);
+  const created = await putPrivate(env.store);
+  await env.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'rights_revocation',
+  });
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    database.exec('ALTER TABLE reuse_entries DROP COLUMN payload_purged; ALTER TABLE reuse_outbox DROP COLUMN has_consumer;');
+  } finally { database.close(); }
+
+  env.clock.value += 8 * 24 * 60 * 60 * 1000;
+  const restarted = createScopedReuseStore(env.options);
+  const scope = await restarted.scopeForAuthenticatedRequest(created.authRequest);
+  const result = await restarted.purgeExpired(scope, created.authRequest);
+  assert.equal(result.purged, 1);
+  assert.equal(result.retainedOutboxPending, 1);
+  const inspect = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    const row = inspect.prepare('SELECT payload_bytes, payload_purged FROM reuse_entries WHERE entry_id = ?').get(created.profile.profileRef);
+    assert.equal(row.payload_bytes, 0);
+    assert.equal(row.payload_purged, 1);
+  } finally { inspect.close(); }
+});
+
+test('authorized public retention sweep purges cold public payloads and linked private evidence', async (t) => {
+  const env = await fixture(t, {
+    authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }),
+  });
+  env.state.retentionMs = 60_000;
+  const authRequest = request();
+  const boundary = await approvedBoundary(authRequest);
+  const created = await putPublic(env.store, authRequest, boundary, { freshnessTtlMs: 10_000 });
+  env.clock.value += 61_000;
+  const purged = await env.store.purgeExpired(created.scope, authRequest, 'public_profile');
+  assert.equal(purged.purged, 1);
+  assert.equal(purged.retainedOutboxPending, 1);
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    const entry = database.prepare('SELECT payload_bytes, payload_purged FROM reuse_entries WHERE entry_id = ?').get(created.profile.profileRef);
+    assert.deepEqual({ ...entry }, { payload_bytes: 0, payload_purged: 1 });
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_private_links WHERE public_entry_id = ?').get(created.profile.profileRef).count, 0);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_observations WHERE entry_id = ?').get(created.profile.profileRef).count, 0);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_consumer_refs WHERE entry_id = ?').get(created.profile.profileRef).count, 0);
+  } finally { database.close(); }
+});
+
+test('concurrent invalidation is an idempotent CAS with exactly one durable event', async (t) => {
+  const env = await fixture(t);
+  const created = await putPrivate(env.store);
+  const restarted = createScopedReuseStore(env.options);
+  const [first, second] = await Promise.all([
+    env.store.invalidate(created.scope, created.authRequest, { profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change' }),
+    restarted.invalidate(await restarted.scopeForAuthenticatedRequest(created.authRequest), created.authRequest,
+      { profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change' }),
+  ]);
+  assert.deepEqual([first.invalidated, second.invalidated].sort(), [false, true]);
+  const snapshot = await env.store.outboxSnapshot(created.scope, created.authRequest);
+  assert.equal(snapshot.pending, 1);
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try { assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_outbox WHERE entry_id = ?').get(created.profile.profileRef).count, 1); }
+  finally { database.close(); }
+});
+
+test('competing processes serialize invalidation CAS and observation ordering', async (t) => {
+  const env = await fixture(t);
+  const worker = path.resolve('tests/cache/reuse/race-worker.mjs');
+  const runPair = async (mode, profileRef) => {
+    const children = [0, 1].map(() => spawn(process.execPath, [worker], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        REUSE_RACE_CONFIG: JSON.stringify({ directory: env.directory, tenantId: 'tenant-a', mode, profileRef, now: env.clock.value }),
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }));
+    for (const child of children) t.after(() => child.kill('SIGKILL'));
+    const readers = children.map(lineReader);
+    assert.deepEqual(await Promise.all(readers.map((read) => read())), ['ready', 'ready']);
+    for (const child of children) child.stdin.write('continue\n');
+    const lines = await Promise.all(readers.map((read) => read()));
+    for (const child of children) child.stdin.end();
+    return lines.map((line) => JSON.parse(line));
+  };
+
+  const invalidated = await putPrivate(env.store);
+  const invalidationResults = await runPair('invalidate', invalidated.profile.profileRef);
+  assert.deepEqual(invalidationResults.map((result) => result.outcome.invalidated).sort(), [false, true]);
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try { assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_outbox WHERE entry_id = ?').get(invalidated.profile.profileRef).count, 1); }
+  finally { database.close(); }
+
+  const observed = await putPrivate(env.store, request(), { identity: { ...IDENTITY, editionId: 'observe-race' } });
+  const observeResults = await runPair('observe', observed.profile.profileRef);
+  assert.equal(observeResults.filter((result) => result.outcome?.status === 'not_modified').length, 1);
+  assert.equal(observeResults.filter((result) => result.errorCode === 'REUSE_BUSY').length, 1);
+  const verifyDatabase = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try { assert.equal(verifyDatabase.prepare('SELECT COUNT(*) AS count FROM reuse_observations WHERE entry_id = ?').get(observed.profile.profileRef).count, 2); }
+  finally { verifyDatabase.close(); }
+});
+
+test('outbox dispatch skips exhausted and unroutable first rows without dropping them', async (t) => {
+  let healthy = false;
+  const env = await fixture(t, {
+    maxOutboxAttempts: 1,
+    resolveInvalidationConsumers: ({ descriptor }) => descriptor.identity.editionId === 'orphan'
+      ? [] : [healthy ? 'HEALTHY_CONSUMER' : 'BAD_CONSUMER'],
+  });
+  const orphan = await putPrivate(env.store, request(), { identity: { ...IDENTITY, editionId: 'orphan' } });
+  await env.store.invalidate(orphan.scope, orphan.authRequest, { profileRef: orphan.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change' });
+  env.state.acknowledge = false;
+  const bad = await putPrivate(env.store, request(), { identity: { ...IDENTITY, editionId: 'bad' } });
+  await env.store.invalidate(bad.scope, bad.authRequest, { profileRef: bad.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change' });
+  const failed = await env.store.dispatchPendingInvalidations(bad.scope, bad.authRequest, 1);
+  assert.equal(failed.attempted, 1);
+  assert.equal((await env.store.outboxSnapshot(bad.scope, bad.authRequest)).failed, 1);
+
+  healthy = true;
+  const good = await putPrivate(env.store, request(), { identity: { ...IDENTITY, editionId: 'good' } });
+  await env.store.invalidate(good.scope, good.authRequest, { profileRef: good.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change' });
+  env.state.acknowledge = true;
+  const next = await env.store.dispatchPendingInvalidations(good.scope, good.authRequest, 2);
+  assert.equal(next.delivered, 1);
+  assert.equal(env.state.delivered.consumerRef, 'HEALTHY_CONSUMER');
+  assert.equal((await env.store.outboxSnapshot(good.scope, good.authRequest)).failed, 1);
+  assert.equal((await env.store.outboxSnapshot(good.scope, good.authRequest)).unresolved, 2);
+});
+
+test('hostile array proxies, revoked proxies, accessors, and nonprimitive hashes return fixed errors before host work', async (t) => {
+  let authorizationCalls = 0;
+  const env = await fixture(t, { authorizeAction: () => { authorizationCalls += 1; return true; } });
+  const scope = await env.store.scopeForAuthenticatedRequest(request());
+  authorizationCalls = 0;
+  const hostile = new Proxy([], { ownKeys() { throw new Error('SECRET_ARRAY_KEYS'); } });
+  const badFacts = { ...facts(), event_name: { status: 'sourced', value: 'Event', supportRefs: hostile } };
+  await assert.rejects(env.store.putPrivateProfile(scope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: badFacts, observation: {},
+  }), (error) => error.code === 'REUSE_INVALID' && !error.message.includes('SECRET_ARRAY'));
+  assert.equal(authorizationCalls, 0);
+
+  const candidateProxy = new Proxy([
+    { status: 'sourced', value: 'A', supportRefs: [] },
+    { status: 'inferred', value: 'B', supportRefs: [] },
+  ], { getOwnPropertyDescriptor() { throw new Error('SECRET_CANDIDATE_DESCRIPTOR'); } });
+  await assert.rejects(env.store.putPrivateProfile(scope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS,
+    facts: { event_name: { status: 'conflicting', candidates: candidateProxy } }, observation: {},
+  }), (error) => error.code === 'REUSE_INVALID' && !error.message.includes('SECRET_CANDIDATE'));
+  assert.equal(authorizationCalls, 0);
+
+  const revoked = Proxy.revocable([], {});
+  revoked.revoke();
+  await assert.rejects(env.store.putPrivateProfile(scope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS,
+    facts: { event_name: { status: 'sourced', value: 'Event', supportRefs: revoked.proxy } }, observation: {},
+  }), (error) => error.code === 'REUSE_INVALID');
+  assert.equal(authorizationCalls, 0);
+
+  const accessor = [];
+  Object.defineProperty(accessor, '0', { get() { throw new Error('SECRET_ARRAY_ACCESSOR'); }, configurable: true });
+  accessor.length = 1;
+  await assert.rejects(env.store.putPrivateProfile(scope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS,
+    facts: { event_name: { status: 'sourced', value: 'Event', supportRefs: accessor } }, observation: {},
+  }), (error) => error.code === 'REUSE_INVALID' && !error.message.includes('SECRET_ARRAY'));
+  assert.equal(authorizationCalls, 0);
+
+  await assert.rejects(env.store.putPrivateProfile(scope, request(), {
+    identity: IDENTITY, contentHash: { toString() { throw new Error('SECRET_HASH_COERCION'); } }, pins: PINS,
+    facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_INVALID' && !error.message.includes('SECRET_HASH'));
+  assert.equal(authorizationCalls, 0);
+  assert.equal((await env.store.integritySnapshot(scope, request())).entryCount, 0);
+
+  let downstreamCallbacks = 0;
+  const badPermissions = new Proxy([], { ownKeys() { throw new Error('SECRET_PERMISSION_ARRAY'); } });
+  const permissionEnv = await fixture(t, {
+    resolvePrivateProfileReferences: () => ({ permissions: badPermissions, sourceRefs: [], correctionRefs: [] }),
+    resolveLineage: () => { downstreamCallbacks += 1; return { status: 'unknown' }; },
+    resolveInvalidationConsumers: () => { downstreamCallbacks += 1; return ['CONSUMER']; },
+  });
+  const permissionScope = await permissionEnv.store.scopeForAuthenticatedRequest(request());
+  await assert.rejects(permissionEnv.store.putPrivateProfile(permissionScope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_INVALID' && !error.message.includes('SECRET_PERMISSION'));
+  assert.equal(downstreamCallbacks, 0);
+  assert.equal((await permissionEnv.store.integritySnapshot(permissionScope, request())).entryCount, 0);
+
+  const hostHash = { toString() { throw new Error('SECRET_SOURCE_HASH_COERCION'); } };
+  const observationEnv = await fixture(t, {
+    verifySourceObservation: ({ expectedContentHash }) => ({
+      status: 'body_changed', contentHash: hostHash,
+      retrievedAt: new Date(1_799_999_999_000).toISOString(), validatedAt: new Date(1_800_000_000_000).toISOString(),
+    }),
+  });
+  const observationScope = await observationEnv.store.scopeForAuthenticatedRequest(request());
+  await assert.rejects(observationEnv.store.putPrivateProfile(observationScope, request(), {
+    identity: IDENTITY, contentHash: HASH_A, pins: PINS, facts: facts(), observation: {},
+  }), (error) => error.code === 'REUSE_POLICY_UNAVAILABLE' && !error.message.includes('SECRET_SOURCE_HASH'));
+  assert.equal((await observationEnv.store.integritySnapshot(observationScope, request())).entryCount, 0);
 });
 
 test('the exported store surface is intentionally narrow', async (t) => {
