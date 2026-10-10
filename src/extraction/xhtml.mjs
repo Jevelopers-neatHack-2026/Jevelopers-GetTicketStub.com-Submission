@@ -116,7 +116,12 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
 
   parser.ontext = function onText(value) {
     if (resourceLimited || parseError || value === "") return;
-    const mapped = mapTextEvent(text, sourceCursor, value);
+    const textCursor = skipXmlComments(text, sourceCursor);
+    if (textCursor === null) {
+      parseError = new Error("XML comment source mapping unavailable");
+      return;
+    }
+    const mapped = mapTextEvent(text, textCursor, value);
     if (!mapped) {
       parseError = new Error("XML text source mapping unavailable");
       return;
@@ -168,7 +173,18 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
   };
 
   parser.oncomment = function onComment() {
-    sourceCursor = Math.min(text.length, this.position);
+    // sax 1.6.1 emits this after the two closing hyphens, before consuming `>`.
+    // Empty comments do not emit the callback at all, so locate the complete
+    // syntax in the immutable source and also let ontext skip callback-free
+    // comments between text nodes.
+    const closingStart = this.position - 2;
+    const openingStart = text.lastIndexOf("<!--", closingStart);
+    const closing = openingStart < 0 ? -1 : text.indexOf("-->", openingStart + 4);
+    if (openingStart < 0 || closing !== closingStart || text[closing + 2] !== ">") {
+      parseError = new Error("XML comment source mapping unavailable");
+      return;
+    }
+    sourceCursor = closing + 3;
   };
   parser.onprocessinginstruction = function onProcessingInstruction(instruction) {
     if (instruction?.name === "xml") {
@@ -254,15 +270,17 @@ function mapTextEvent(source, startOffset, value) {
   let sourceOffset = startOffset;
   let logicalOffset = 0;
   while (logicalOffset < value.length) {
+    const afterComments = skipXmlComments(source, sourceOffset);
+    if (afterComments === null) return null;
+    sourceOffset = afterComments;
     const rawStart = sourceOffset;
     let decoded;
     let linear;
     if (source[sourceOffset] === "&") {
-      const semicolon = source.indexOf(";", sourceOffset + 1);
-      if (semicolon < 0 || semicolon - sourceOffset > 16) return null;
-      decoded = decodeXmlReference(source.slice(sourceOffset, semicolon + 1));
-      if (decoded === null) return null;
-      sourceOffset = semicolon + 1;
+      const reference = decodeXmlReferenceAt(source, sourceOffset);
+      if (!reference) return null;
+      decoded = reference.value;
+      sourceOffset = reference.endOffset;
       linear = false;
     } else {
       if (sourceOffset >= source.length || source[sourceOffset] === "<") return null;
@@ -284,26 +302,58 @@ function mapTextEvent(source, startOffset, value) {
   return { startOffset, endOffset: sourceOffset, segments };
 }
 
-function decodeXmlReference(reference) {
-  const entities = {
-    "&amp;": "&",
-    "&lt;": "<",
-    "&gt;": ">",
-    "&quot;": '"',
-    "&apos;": "'",
-  };
-  if (Object.hasOwn(entities, reference)) return entities[reference];
-  const numeric = /^&#(?:(x)([0-9a-f]+)|([0-9]+));$/i.exec(reference);
-  if (!numeric) return null;
-  const codePoint = numeric[1]
-    ? Number.parseInt(numeric[2], 16)
-    : Number.parseInt(numeric[3], 10);
+function decodeXmlReferenceAt(source, startOffset) {
+  const entities = [
+    ["&amp;", "&"],
+    ["&lt;", "<"],
+    ["&gt;", ">"],
+    ["&quot;", '"'],
+    ["&apos;", "'"],
+  ];
+  for (const [reference, value] of entities) {
+    if (source.startsWith(reference, startOffset)) return { value, endOffset: startOffset + reference.length };
+  }
+  if (source[startOffset + 1] !== "#") return null;
+  let cursor = startOffset + 2;
+  let radix = 10;
+  if (source[cursor] === "x" || source[cursor] === "X") {
+    radix = 16;
+    cursor += 1;
+  }
+  const digitsStart = cursor;
+  let codePoint = 0;
+  while (cursor < source.length) {
+    const digit = numericDigit(source.charCodeAt(cursor), radix);
+    if (digit < 0) break;
+    codePoint = codePoint * radix + digit;
+    if (codePoint > 0x10ffff) return null;
+    cursor += 1;
+  }
+  if (cursor === digitsStart || source[cursor] !== ";") return null;
   const xmlCharacter = codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd
     || (codePoint >= 0x20 && codePoint <= 0xd7ff)
     || (codePoint >= 0xe000 && codePoint <= 0xfffd)
     || (codePoint >= 0x10000 && codePoint <= 0x10ffff);
   if (!xmlCharacter) return null;
-  return String.fromCodePoint(codePoint);
+  return { value: String.fromCodePoint(codePoint), endOffset: cursor + 1 };
+}
+
+function numericDigit(code, radix) {
+  let digit = -1;
+  if (code >= 0x30 && code <= 0x39) digit = code - 0x30;
+  else if (code >= 0x41 && code <= 0x46) digit = code - 0x41 + 10;
+  else if (code >= 0x61 && code <= 0x66) digit = code - 0x61 + 10;
+  return digit >= 0 && digit < radix ? digit : -1;
+}
+
+function skipXmlComments(source, startOffset) {
+  let cursor = startOffset;
+  while (source.startsWith("<!--", cursor)) {
+    const close = source.indexOf("-->", cursor + 4);
+    if (close < 0) return null;
+    cursor = close + 3;
+  }
+  return cursor;
 }
 
 function appendMappingSegment(segments, next) {

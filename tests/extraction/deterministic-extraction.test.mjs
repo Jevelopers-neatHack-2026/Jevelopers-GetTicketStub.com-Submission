@@ -270,6 +270,72 @@ test("parses XML-decoded XHTML JSON-LD while mapping candidates to original sour
   assertExactRanges(result, input.bytes);
 });
 
+test("maps XHTML comments and long numeric references without losing visible or JSON-LD evidence", async () => {
+  const chunkSizes = [undefined, 1];
+  const makeXhtml = (body) => document(Buffer.from(
+    `<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>${body}</body></html>`,
+  ), "application/xhtml+xml");
+
+  for (const htmlChunkCodeUnits of chunkSizes) {
+    const options = htmlChunkCodeUnits === undefined ? undefined : { limits: { htmlChunkCodeUnits } };
+    const inlineComments = makeXhtml(
+      "<p>Before<!-- ignored --><!-- adjacent --><!----> Cancelled event</p>",
+    );
+    const inlineResult = await extractDeterministically(inlineComments, options);
+    assert.equal(inlineResult.status, "PARTIAL");
+    assert.equal(inlineResult.statusMentions.length, 1);
+    assert.equal(inlineResult.statusMentions[0].normalizedValue, "Before Cancelled event");
+    assert.equal(
+      inlineResult.statusMentions[0].rawValue,
+      "Before<!-- ignored --><!-- adjacent --><!----> Cancelled event",
+    );
+    assertExactRanges(inlineResult, inlineComments.bytes);
+
+    const leadingEmptyComment = makeXhtml("<p><!---->Cancelled event</p>");
+    const leadingResult = await extractDeterministically(leadingEmptyComment, options);
+    assert.equal(leadingResult.statusMentions.length, 1);
+    assert.equal(leadingResult.statusMentions[0].normalizedValue, "Cancelled event");
+    assert.equal(leadingResult.statusMentions[0].rawValue, "Cancelled event");
+    assertExactRanges(leadingResult, leadingEmptyComment.bytes);
+
+    const commentAndFormatting = makeXhtml("<!-- ignored -->\n<p>Cancelled event</p>");
+    const formattingResult = await extractDeterministically(commentAndFormatting, options);
+    assert.equal(formattingResult.statusMentions.length, 1);
+    assert.equal(formattingResult.statusMentions[0].normalizedValue, "Cancelled event");
+    assert.equal(formattingResult.statusMentions[0].rawValue, "Cancelled event");
+    assertExactRanges(formattingResult, commentAndFormatting.bytes);
+
+    const jsonWithComments = makeXhtml(
+      '<script type="application/ld+json">{"@type":"Event",<!-- property boundary --><!---->"name":"Café 😊<!-- value boundary --> &amp; Roll"}</script>',
+    );
+    const jsonResult = await extractDeterministically(jsonWithComments, options);
+    assert.equal(jsonResult.events.length, 1);
+    const name = jsonResult.events[0].candidates.find((candidate) => candidate.field === "name");
+    assert.equal(name.normalizedValue, "Café 😊 & Roll");
+    assert.equal(name.rawValue, '"Café 😊<!-- value boundary --> &amp; Roll"');
+    const { startByte, endByte } = jsonResult.events[0].source.locator;
+    assert.equal(
+      jsonWithComments.bytes.subarray(startByte, endByte).toString("utf8"),
+      '{"@type":"Event",<!-- property boundary --><!---->"name":"Café 😊<!-- value boundary --> &amp; Roll"}',
+    );
+    assertExactRanges(jsonResult, jsonWithComments.bytes);
+
+    const cdataLiteralComment = makeXhtml("<p><![CDATA[Cancelled event <!-- literal -->]]></p>");
+    const cdataResult = await extractDeterministically(cdataLiteralComment, options);
+    assert.equal(cdataResult.statusMentions.length, 1);
+    assert.equal(cdataResult.statusMentions[0].normalizedValue, "Cancelled event <!-- literal -->");
+    assert.equal(cdataResult.statusMentions[0].rawValue, "Cancelled event <!-- literal -->");
+    assertExactRanges(cdataResult, cdataLiteralComment.bytes);
+
+    const longNumericReference = makeXhtml("<p>&#000000000000000000067;ancelled event</p>");
+    const numericResult = await extractDeterministically(longNumericReference, options);
+    assert.equal(numericResult.statusMentions.length, 1);
+    assert.equal(numericResult.statusMentions[0].normalizedValue, "Cancelled event");
+    assert.equal(numericResult.statusMentions[0].rawValue, "&#000000000000000000067;ancelled event");
+    assertExactRanges(numericResult, longNumericReference.bytes);
+  }
+});
+
 test("rejects malformed XHTML and internal entity declarations without resolving them", async () => {
   const externalDtdOnly = document(Buffer.from(
     '<!DOCTYPE html SYSTEM "https://remote.invalid/xhtml.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><body>Cancelled event</body></html>',
