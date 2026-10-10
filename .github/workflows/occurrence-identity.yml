@@ -1,0 +1,24 @@
+name: occurrence identity
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  occurrence-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - run: npm ci
+      - name: Test occurrence and entity identity
+        run: node --test tests/discovery/identity/*.test.mjs
+      - name: Type-check identity consumer fixture
+        run: ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --types node --typeRoots node_modules/@types tests/discovery/identity/types-consumer.mts
