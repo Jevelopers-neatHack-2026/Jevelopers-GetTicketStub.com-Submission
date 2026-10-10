@@ -1,0 +1,1047 @@
+{
+	"schemaVersion": 1,
+	"browserVersion": "156.0.8078.4",
+	"chromiumCommit": "f842f52ef39fd97b449eb27cff414bf05a98ddce",
+	"sources": [
+		{
+			"path": "base/check.cc",
+			"blob": "a91851e30eee21d9e63fbc7ebd9057acd2218764",
+			"lines": 473
+		},
+		{
+			"path": "base/logging.cc",
+			"blob": "7686a1e1e1f8e0e27414da74546bbec01228835e",
+			"lines": 1295
+		},
+		{
+			"path": "base/posix/can_lower_nice_to.cc",
+			"blob": "d9117138b4427619e8aabf80ee9fd84b76d20513",
+			"lines": 60
+		},
+		{
+			"path": "base/posix/file_descriptor_shuffle.cc",
+			"blob": "cf5c3e3c50aad72e7aa98ee907a40db6f55982df",
+			"lines": 91
+		},
+		{
+			"path": "base/posix/global_descriptors.cc",
+			"blob": "dfe51ff9ac64810ab185167c16fb1e913f94d273",
+			"lines": 100
+		},
+		{
+			"path": "base/posix/safe_strerror.cc",
+			"blob": "e716e819fa2f6f345aceefdc32e2944305be750d",
+			"lines": 116
+		},
+		{
+			"path": "base/posix/sysctl.cc",
+			"blob": "02c65fb6ea91a34d7b044aaba9901eeeabe8171f",
+			"lines": 59
+		},
+		{
+			"path": "base/posix/unix_domain_socket.cc",
+			"blob": "0490c594038392c711bdee14c2d02f50dd74828b",
+			"lines": 270
+		},
+		{
+			"path": "base/process/current_process.cc",
+			"blob": "9b2ab05118e815f013dc48f7f5e36f8cd07a7902",
+			"lines": 199
+		},
+		{
+			"path": "base/process/environment_internal.cc",
+			"blob": "e005884f563c3471f065e5b6d6f79ff14654aa4a",
+			"lines": 215
+		},
+		{
+			"path": "base/process/internal_aix.cc",
+			"blob": "71809ddfe7b227aca9f17ed3166f5c1697bad013",
+			"lines": 155
+		},
+		{
+			"path": "base/process/internal_linux.cc",
+			"blob": "9f79de5ad07affd4abbf5d827981c4df468d830c",
+			"lines": 303
+		},
+		{
+			"path": "base/process/kill.cc",
+			"blob": "fe04ef4563c48855409b913fdbb38dc172597a39",
+			"lines": 64
+		},
+		{
+			"path": "base/process/kill_fuchsia.cc",
+			"blob": "da7241b692992dcf5b92c9c177700a82b21566d3",
+			"lines": 54
+		},
+		{
+			"path": "base/process/kill_ios.cc",
+			"blob": "0a4d1e7a1b0e21c552d5e28643091b4c73fec8bb",
+			"lines": 45
+		},
+		{
+			"path": "base/process/kill_mac.cc",
+			"blob": "6e2ca0df42ca9d2e0b83bbb4ef8187feb86febc1",
+			"lines": 173
+		},
+		{
+			"path": "base/process/kill_posix.cc",
+			"blob": "846605f5028cdca65e5988c31aa177c238b88066",
+			"lines": 188
+		},
+		{
+			"path": "base/process/kill_win.cc",
+			"blob": "7816a51ff6223e274fcdccfa77c180204ded1ec7",
+			"lines": 133
+		},
+		{
+			"path": "base/process/launch.cc",
+			"blob": "4d2282203a6496878566f3c596e076e9896cba0c",
+			"lines": 32
+		},
+		{
+			"path": "base/process/launch_fuchsia.cc",
+			"blob": "3fd19ce52b4425436fab71ea1ab80a1d8d5fe537",
+			"lines": 323
+		},
+		{
+			"path": "base/process/launch_ios.cc",
+			"blob": "43910f8183fe57f3915a7e14de4deed6d9446a23",
+			"lines": 31
+		},
+		{
+			"path": "base/process/launch_mac.cc",
+			"blob": "7e09a9d4a676c7a91b3a68ef6e173c590c384b5a",
+			"lines": 505
+		},
+		{
+			"path": "base/process/launch_posix.cc",
+			"blob": "99427d5301729da12518f672ee2e420bfa6a1ce5",
+			"lines": 815
+		},
+		{
+			"path": "base/process/launch_win.cc",
+			"blob": "5b09feb40e7079b996f68e57f22fc37742313702",
+			"lines": 532
+		},
+		{
+			"path": "base/process/memory.cc",
+			"blob": "a6d0efcdd29a4d2fb457af769b1022b434a5790a",
+			"lines": 38
+		},
+		{
+			"path": "base/process/memory_fuchsia.cc",
+			"blob": "f8e12bf7017ab5093cc9829cc67907bd7124e9a8",
+			"lines": 51
+		},
+		{
+			"path": "base/process/memory_linux.cc",
+			"blob": "9994f606b277d449c6c09f997929480aba0ef612",
+			"lines": 148
+		},
+		{
+			"path": "base/process/memory_stubs.cc",
+			"blob": "71a51d71045771c4c7e2bf46ebd8c5b83e6fd6ce",
+			"lines": 42
+		},
+		{
+			"path": "base/process/memory_win.cc",
+			"blob": "06ad566d4e60d4034091ad0d51c21aac767813cb",
+			"lines": 95
+		},
+		{
+			"path": "base/process/port_provider_mac.cc",
+			"blob": "11e76bbc8cd13183df2a6b770b8589068808ef0e",
+			"lines": 34
+		},
+		{
+			"path": "base/process/process.cc",
+			"blob": "4ae7a042b4b995671e98351722eb14b12c0a7323",
+			"lines": 29
+		},
+		{
+			"path": "base/process/process_android.cc",
+			"blob": "a7b7363edd873aebdbde1bb1dd2276874496b4ed",
+			"lines": 53
+		},
+		{
+			"path": "base/process/process_apple.cc",
+			"blob": "58693d7a7c05b0c21d6f4cd188b2ae9ac4c16686",
+			"lines": 34
+		},
+		{
+			"path": "base/process/process_fuchsia.cc",
+			"blob": "534de8012f525fefc05cdbc0a2593c27aa231ab7",
+			"lines": 299
+		},
+		{
+			"path": "base/process/process_handle.cc",
+			"blob": "f2702ad1304e5344d687cde99168f0be174547dd",
+			"lines": 42
+		},
+		{
+			"path": "base/process/process_handle_freebsd.cc",
+			"blob": "bd3aa0dd4dbe95c8e16dfc033ba7ea6546d2dade",
+			"lines": 40
+		},
+		{
+			"path": "base/process/process_handle_fuchsia.cc",
+			"blob": "88242a2a50674ea827e68662b69d5fb001357d12",
+			"lines": 29
+		},
+		{
+			"path": "base/process/process_handle_linux.cc",
+			"blob": "f49a3bb19bff33ab3440099f774c4744e1e7978b",
+			"lines": 43
+		},
+		{
+			"path": "base/process/process_handle_mac.cc",
+			"blob": "41fe8373f73cf300a7ae66c2eec3568a01e9716b",
+			"lines": 46
+		},
+		{
+			"path": "base/process/process_handle_openbsd.cc",
+			"blob": "88c9aec081232f522b60b54dbe24723224c011d5",
+			"lines": 58
+		},
+		{
+			"path": "base/process/process_handle_posix.cc",
+			"blob": "e5f816a9ba6424375e35b5b2fd2a8189e3e84576",
+			"lines": 23
+		},
+		{
+			"path": "base/process/process_handle_win.cc",
+			"blob": "9327fae74e4c20365b2791f8d7786edf898ba380",
+			"lines": 60
+		},
+		{
+			"path": "base/process/process_info_win.cc",
+			"blob": "ec13c338a291a59179cb66f995dccd850379324b",
+			"lines": 83
+		},
+		{
+			"path": "base/process/process_ios.cc",
+			"blob": "f3d9c3ac9b65593bba09cb84a592d72e3f3dfdd0",
+			"lines": 73
+		},
+		{
+			"path": "base/process/process_iterator.cc",
+			"blob": "8eddd80a9183d522b4a02da16ed03fe94f352a65",
+			"lines": 72
+		},
+		{
+			"path": "base/process/process_iterator_freebsd.cc",
+			"blob": "3f97df2c9eb9ea5d5669653919d3297bbfe6d5fd",
+			"lines": 129
+		},
+		{
+			"path": "base/process/process_iterator_fuchsia.cc",
+			"blob": "2395233451ddf1646b94bfb30da46726313e2725",
+			"lines": 26
+		},
+		{
+			"path": "base/process/process_iterator_linux.cc",
+			"blob": "58dc6fec8b524ac61c4bc8b7ac21c97491a64e68",
+			"lines": 131
+		},
+		{
+			"path": "base/process/process_iterator_mac.cc",
+			"blob": "f1d23bb7f8380bcd3321ea4bb5941d5d0f7258b7",
+			"lines": 139
+		},
+		{
+			"path": "base/process/process_iterator_openbsd.cc",
+			"blob": "74fdfd8df7c4d699ed0efcb692338c8654df88ac",
+			"lines": 131
+		},
+		{
+			"path": "base/process/process_iterator_win.cc",
+			"blob": "b2211d6ebe8f5a945444a9f6ba4aa7f17fb07bf2",
+			"lines": 37
+		},
+		{
+			"path": "base/process/process_linux.cc",
+			"blob": "2618b503db87d8d0b7749eb969943d39995cb463",
+			"lines": 292
+		},
+		{
+			"path": "base/process/process_mac.cc",
+			"blob": "929ecab0ef1e1bb571991b163d91aab8b71b6cf4",
+			"lines": 218
+		},
+		{
+			"path": "base/process/process_metrics.cc",
+			"blob": "85105fb9fb4cd9b2a1041a9b092d948b62d03415",
+			"lines": 142
+		},
+		{
+			"path": "base/process/process_metrics_freebsd.cc",
+			"blob": "d65c510bbaa791e1ee4b735953d814af2ed174c5",
+			"lines": 69
+		},
+		{
+			"path": "base/process/process_metrics_fuchsia.cc",
+			"blob": "7b098eb20923c6893992677b2673c4d95874d0e8",
+			"lines": 85
+		},
+		{
+			"path": "base/process/process_metrics_ios.cc",
+			"blob": "3f8e0ca275678f6aad0fb72d020f9be7d3e260d9",
+			"lines": 22
+		},
+		{
+			"path": "base/process/process_metrics_linux.cc",
+			"blob": "69adf1bef55a3d58a8b51c11e34a44f2263d582d",
+			"lines": 1057
+		},
+		{
+			"path": "base/process/process_metrics_mac.cc",
+			"blob": "231778ee4bc7c706addabbbc42b0f6e93d24ee2e",
+			"lines": 27
+		},
+		{
+			"path": "base/process/process_metrics_openbsd.cc",
+			"blob": "cd7af7a60942e56cb33ab530e261352ff2c7872c",
+			"lines": 93
+		},
+		{
+			"path": "base/process/process_metrics_posix.cc",
+			"blob": "205200021c674a6cc943c30d73d36963ab4052b4",
+			"lines": 145
+		},
+		{
+			"path": "base/process/process_metrics_win.cc",
+			"blob": "3a0400b75aeee5ebcfb28cac0d6265654e4f2712",
+			"lines": 324
+		},
+		{
+			"path": "base/process/process_posix.cc",
+			"blob": "79638efa0621efba6ed39b37db68c765b3576235",
+			"lines": 406
+		},
+		{
+			"path": "base/process/process_stubs.cc",
+			"blob": "1400a5f1cd7d02660ff2051323917d510f45faca",
+			"lines": 111
+		},
+		{
+			"path": "base/process/process_tvos.cc",
+			"blob": "7504033f97d764e1f8cc929b3c3d30106fd2fce5",
+			"lines": 18
+		},
+		{
+			"path": "base/process/process_win.cc",
+			"blob": "6c683cfd9d70fd27cca351f352b5956908c6125b",
+			"lines": 351
+		},
+		{
+			"path": "base/process/set_process_title.cc",
+			"blob": "aacd4a841f3940c27c5c73c03fa9bcc6e56448cc",
+			"lines": 116
+		},
+		{
+			"path": "base/process/set_process_title_linux.cc",
+			"blob": "dd43006dbeab5a0004bd391e22bb82ecc3ab185d",
+			"lines": 194
+		},
+		{
+			"path": "base/threading/hang_watcher.cc",
+			"blob": "8d87190fadd41d99995bbbfc39695ebbccb0b207",
+			"lines": 1426
+		},
+		{
+			"path": "base/threading/platform_thread.cc",
+			"blob": "6c7b1bf2662ece9b4d5e012f1dd35dc000fefeb7",
+			"lines": 183
+		},
+		{
+			"path": "base/threading/platform_thread_android.cc",
+			"blob": "5999b2a54a65b717a37fc697d3c3f222ea570400",
+			"lines": 364
+		},
+		{
+			"path": "base/threading/platform_thread_cros.cc",
+			"blob": "0e28445b8eba846fca8579b2dd943e0ef06c0f78",
+			"lines": 324
+		},
+		{
+			"path": "base/threading/platform_thread_fuchsia.cc",
+			"blob": "c46dc3f8adc60eae644b47d83f496cc2dba16151",
+			"lines": 171
+		},
+		{
+			"path": "base/threading/platform_thread_internal_posix.cc",
+			"blob": "7f2de1b49606826adc77cd8108621de29aa027cd",
+			"lines": 69
+		},
+		{
+			"path": "base/threading/platform_thread_linux.cc",
+			"blob": "b0dab76f9ea57ad4cf49f174c97710c806a0c02d",
+			"lines": 306
+		},
+		{
+			"path": "base/threading/platform_thread_linux_base.cc",
+			"blob": "649cb66c17cdc26a30c6c5cfc42424ce5cb9f5bd",
+			"lines": 31
+		},
+		{
+			"path": "base/threading/platform_thread_metrics.cc",
+			"blob": "1e1ead4d24c4779948682f36f487a28638006d91",
+			"lines": 172
+		},
+		{
+			"path": "base/threading/platform_thread_metrics_fuchsia.cc",
+			"blob": "429d4e62b3b2b2dac4ecf5bb060cc8eecccada8e",
+			"lines": 40
+		},
+		{
+			"path": "base/threading/platform_thread_metrics_linux.cc",
+			"blob": "13f0eb30a8925ce04149633b2e87d7ddc41b4160",
+			"lines": 63
+		},
+		{
+			"path": "base/threading/platform_thread_metrics_win.cc",
+			"blob": "e3ba14cfac4080e747ca1a8cec909288cfa11a38",
+			"lines": 104
+		},
+		{
+			"path": "base/threading/platform_thread_posix.cc",
+			"blob": "2c34251a848d3b1c84eb6f9b03027effad92e1e2",
+			"lines": 400
+		},
+		{
+			"path": "base/threading/platform_thread_ref.cc",
+			"blob": "2771d595b2a92431bd97ec20ef5b3d35d5b5f16d",
+			"lines": 16
+		},
+		{
+			"path": "base/threading/platform_thread_win.cc",
+			"blob": "6f9a4d2c753d024fd25aacfe573d239a78d1b7c1",
+			"lines": 551
+		},
+		{
+			"path": "base/threading/post_task_and_reply_impl.cc",
+			"blob": "f27e5fffe24d71254cdd2f1347753d39be4a1153",
+			"lines": 92
+		},
+		{
+			"path": "base/threading/scoped_blocking_call.cc",
+			"blob": "b9901ca3b141a800eb6eae0dbb03578c0a62a8ee",
+			"lines": 85
+		},
+		{
+			"path": "base/threading/scoped_blocking_call_internal.cc",
+			"blob": "6d401bc7fe6b4791b8df65becacaeb39e524b8fc",
+			"lines": 406
+		},
+		{
+			"path": "base/threading/scoped_thread_priority.cc",
+			"blob": "1805f57377d0983ab070e5f24fffb1dafb5e81ad",
+			"lines": 196
+		},
+		{
+			"path": "base/threading/sequence_local_storage_map.cc",
+			"blob": "1c6f8322ca0068c4896740443e19ddef225ed2fd",
+			"lines": 132
+		},
+		{
+			"path": "base/threading/sequence_local_storage_slot.cc",
+			"blob": "c6109fed13f61ffe0718346d1557b7758a62f001",
+			"lines": 24
+		},
+		{
+			"path": "base/threading/simple_thread.cc",
+			"blob": "6fd827f5f02c94c34fc34f1f136823ebf03f5d74",
+			"lines": 187
+		},
+		{
+			"path": "base/threading/thread.cc",
+			"blob": "34e1e023677c913528c3e6c0b02700840d7afc6a",
+			"lines": 449
+		},
+		{
+			"path": "base/threading/thread_checker.cc",
+			"blob": "eb3bd1fbe2f110aeebb86c5765d2f170a91f9d92",
+			"lines": 40
+		},
+		{
+			"path": "base/threading/thread_checker_impl.cc",
+			"blob": "5b2ed5ebbb4c1dcca78f0145aac32f0628769e43",
+			"lines": 146
+		},
+		{
+			"path": "base/threading/thread_collision_warner.cc",
+			"blob": "c99661e2b943c6ba0d43476431920dce2348a184",
+			"lines": 56
+		},
+		{
+			"path": "base/threading/thread_id_name_manager.cc",
+			"blob": "c5e504481dc3be47c3b9d6a1ea7a0f530d1792d6",
+			"lines": 158
+		},
+		{
+			"path": "base/threading/thread_local_storage.cc",
+			"blob": "650035de59b1862e1bc1ede42683b407348a3306",
+			"lines": 583
+		},
+		{
+			"path": "base/threading/thread_local_storage_posix.cc",
+			"blob": "441e2e244bbe17e164e6abd1071b99a6a935380f",
+			"lines": 26
+		},
+		{
+			"path": "base/threading/thread_local_storage_win.cc",
+			"blob": "54583fde4a7c84ea8281d83cc502fb0f8d9b8538",
+			"lines": 108
+		},
+		{
+			"path": "base/threading/thread_restrictions.cc",
+			"blob": "67c0af3f041836d15b36f158c5e2dbfc168ae91a",
+			"lines": 284
+		},
+		{
+			"path": "base/threading/thread_type_delegate.cc",
+			"blob": "abef61a57a1016a6ac84c66e2d1c55c971573ff8",
+			"lines": 13
+		},
+		{
+			"path": "base/threading/watchdog.cc",
+			"blob": "9db62803a733d3ddf10115c8f77d04e66789b314",
+			"lines": 199
+		},
+		{
+			"path": "content/app/android/content_child_process_service_delegate.cc",
+			"blob": "fdb8d48d1371b172be8c3445ff6543d73d461e9e",
+			"lines": 166
+		},
+		{
+			"path": "content/app/android/content_jni_onload.cc",
+			"blob": "a840c826a28840881c19f3fd7dd8d0a28cbb6374",
+			"lines": 24
+		},
+		{
+			"path": "content/app/android/content_main_android.cc",
+			"blob": "3eff544a24949633507935fa268af439c540ffff",
+			"lines": 88
+		},
+		{
+			"path": "content/app/android/javaless_child_process_service.cc",
+			"blob": "a89586a5eb8107edf5e666b5f949bf5d75ede7dc",
+			"lines": 355
+		},
+		{
+			"path": "content/app/android/library_loader_hooks.cc",
+			"blob": "b095299b6f9be4a55251e8deb84be2da335aeb7e",
+			"lines": 65
+		},
+		{
+			"path": "content/app/aperitif_mac.cc",
+			"blob": "a876c7381f65ec71d97ef3f61fdb9c7b2fda8392",
+			"lines": 108
+		},
+		{
+			"path": "content/app/content_main.cc",
+			"blob": "0fd60fa820805069ff01a2442f14de2b5e984e5a",
+			"lines": 353
+		},
+		{
+			"path": "content/app/content_main_runner_impl.cc",
+			"blob": "92ab96d48ce1419d2af33390b0a5b5e2ef745ea2",
+			"lines": 1491
+		},
+		{
+			"path": "content/app/initialize_mojo_core.cc",
+			"blob": "d0e2163a0639057bbd5da17833571767e50a4800",
+			"lines": 104
+		},
+		{
+			"path": "content/app/mojo/mojo_init.cc",
+			"blob": "6c00d24153defe6084558f405eb820df72857563",
+			"lines": 35
+		},
+		{
+			"path": "content/app/mojo_ipc_support.cc",
+			"blob": "446bc24a8e4b9bc78f6a8c7b3b1e20cbf3f600a5",
+			"lines": 43
+		},
+		{
+			"path": "content/app/sandbox_helper_win.cc",
+			"blob": "2c80b9fe1c96810c72b5ff7286ec0c16a2e8b690",
+			"lines": 49
+		},
+		{
+			"path": "content/browser/browser_main.cc",
+			"blob": "c76d23b19c3e836499c33e605e818e862ddf222d",
+			"lines": 57
+		},
+		{
+			"path": "content/browser/browser_main_loop.cc",
+			"blob": "0559ec1a959fd57d16442c0999b6995429227c46",
+			"lines": 1689
+		},
+		{
+			"path": "content/browser/browser_main_runner_impl.cc",
+			"blob": "485e4cb4f764f3bbfa235f8c2edee1a95f311354",
+			"lines": 208
+		},
+		{
+			"path": "content/browser/zygote_host/zygote_host_impl_linux.cc",
+			"blob": "b5ac7b3681af378cd9fdf9b54b149d45e386a32a",
+			"lines": 354
+		},
+		{
+			"path": "content/common/zygote/sandbox_support_linux.cc",
+			"blob": "4b0b1ccadc66455ac6a0457adba1d837fe476c3a",
+			"lines": 16
+		},
+		{
+			"path": "content/common/zygote/send_zygote_child_ping_linux.cc",
+			"blob": "3c2bafda0434e8a6b6502bd99bd26465a9b9a9f3",
+			"lines": 19
+		},
+		{
+			"path": "content/common/zygote/zygote_communication_linux.cc",
+			"blob": "004426cb212ce5c18e41b190b305b4aedf85306d",
+			"lines": 360
+		},
+		{
+			"path": "content/common/zygote/zygote_handle_linux.cc",
+			"blob": "2c832c3352ac375f045e12a4caee64cf557c1c38",
+			"lines": 52
+		},
+		{
+			"path": "content/zygote/zygote_linux.cc",
+			"blob": "da555a1907755d4a85810747d693a49a4a5d4ca5",
+			"lines": 709
+		},
+		{
+			"path": "content/zygote/zygote_main_linux.cc",
+			"blob": "7565fb0641dc44c78f583c5e759af67ba15c2eff",
+			"lines": 230
+		},
+		{
+			"blob": "06ce79c788f786880eeddce3cca53c2564f3eb82",
+			"path": "dbus/bus.cc",
+			"lines": 1266
+		},
+		{
+			"blob": "20e41f3050ff3ad8dc5b245b7a5cd71a8829d947",
+			"path": "dbus/dbus_result.cc",
+			"lines": 211
+		},
+		{
+			"blob": "7137f92c14eab618dab0c8b9873e58c359edff56",
+			"path": "dbus/dbus_statistics.cc",
+			"lines": 269
+		},
+		{
+			"blob": "f180997b661e3f349f65347957a06385f2c1bacd",
+			"path": "dbus/error.cc",
+			"lines": 22
+		},
+		{
+			"blob": "423e3a435fd18f2d6e07af5785780f7b4b68ad7a",
+			"path": "dbus/exported_object.cc",
+			"lines": 394
+		},
+		{
+			"blob": "2a5c6342b02086b482bfd4c421b30380b14bcffe",
+			"path": "dbus/message.cc",
+			"lines": 1103
+		},
+		{
+			"blob": "0d3ebfbe65242d9b783207ed68d5b801eec077a2",
+			"path": "dbus/object_manager.cc",
+			"lines": 557
+		},
+		{
+			"blob": "e0c3219f1762389e4dc5604b2241e527e17892fe",
+			"path": "dbus/object_path.cc",
+			"lines": 33
+		},
+		{
+			"blob": "a29cccd304cde400d7f926a36cc3b36dab944f71",
+			"path": "dbus/object_proxy.cc",
+			"lines": 719
+		},
+		{
+			"blob": "060f2e86d7ea5cdc1afd8137f5ecee139cb83fee",
+			"path": "dbus/property.cc",
+			"lines": 812
+		},
+		{
+			"blob": "e4736024eedbab50a126c65724c91359452a5d2b",
+			"path": "dbus/scoped_dbus_error.cc",
+			"lines": 21
+		},
+		{
+			"blob": "4c3024b99be3eed666a54d93a3cb87a759971c9c",
+			"path": "dbus/string_util.cc",
+			"lines": 48
+		},
+		{
+			"blob": "68fd880dd0c75f24bb9a45451db4dd966845d92f",
+			"path": "dbus/util.cc",
+			"lines": 14
+		},
+		{
+			"blob": "2ad90f1ef605bddfe85ff35c0562ca15f6255232",
+			"path": "dbus/values_util.cc",
+			"lines": 323
+		},
+		{
+			"path": "sandbox/linux/bpf_dsl/bpf_dsl.cc",
+			"blob": "4708f7a005717cc8d2ad7a2010ede1f3215c57c6",
+			"lines": 358
+		},
+		{
+			"path": "sandbox/linux/bpf_dsl/codegen.cc",
+			"blob": "610e08e96a718a3335c52efa618e68b9df5ce8d2",
+			"lines": 148
+		},
+		{
+			"path": "sandbox/linux/bpf_dsl/dump_bpf.cc",
+			"blob": "d9fe72c30c14a10ab4fb50c29f979a4a01a0f761",
+			"lines": 162
+		},
+		{
+			"path": "sandbox/linux/bpf_dsl/policy.cc",
+			"blob": "1dc68542f93dda3af62e7eef3bf9ae95d568749c",
+			"lines": 19
+		},
+		{
+			"path": "sandbox/linux/bpf_dsl/policy_compiler.cc",
+			"blob": "d31f8c243eef5b6357a35577bd0da7222bee0716",
+			"lines": 461
+		},
+		{
+			"path": "sandbox/linux/bpf_dsl/syscall_set.cc",
+			"blob": "5a46ae9c927aacc4871cfceaeb1512bfe29a0fb9",
+			"lines": 149
+		},
+		{
+			"path": "sandbox/linux/bpf_dsl/verifier.cc",
+			"blob": "10db27cd051566edd21e2c81fe173dc1cd453bee",
+			"lines": 230
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc",
+			"blob": "85f14c9023df8802ada52b84079d61430110c6f0",
+			"lines": 427
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf-helpers/baseline_policy_android.cc",
+			"blob": "53074a00dc192791c31492aff7ab7b2b23645c66",
+			"lines": 336
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf-helpers/seccomp_starter_android.cc",
+			"blob": "dc032e4cd3d79ee5e1cbaeea004bd757b3905012",
+			"lines": 70
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc",
+			"blob": "3882967d4b98d993258056a48bc756d2d6c1cf6b",
+			"lines": 598
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc",
+			"blob": "88e6b30e29c9a01c093198a7c076b2507345736f",
+			"lines": 599
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc",
+			"blob": "77b1169a1a3070d3c2e999033bd6622ffbd59d23",
+			"lines": 1242
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf/die.cc",
+			"blob": "644233927013b654fedd6bd052dcab1fce11b82a",
+			"lines": 95
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf/sandbox_bpf.cc",
+			"blob": "8ad0ed3192ec5fb7893d85b2f465a2c4f8f0ba25",
+			"lines": 307
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf/syscall.cc",
+			"blob": "b0cdc71b8f9721c2ba944e53f7bfa4b9370ddb77",
+			"lines": 480
+		},
+		{
+			"path": "sandbox/linux/seccomp-bpf/trap.cc",
+			"blob": "212e80eeccf0e528b27e9bdbe581ed737c87e9ce",
+			"lines": 375
+		},
+		{
+			"path": "sandbox/linux/services/credentials.cc",
+			"blob": "baeb313a6d958d5a9aa005423198b317dfa68354",
+			"lines": 369
+		},
+		{
+			"path": "sandbox/linux/services/init_process_reaper.cc",
+			"blob": "bad591b7443fc132e5881184bb3bb97ea81d78f9",
+			"lines": 102
+		},
+		{
+			"path": "sandbox/linux/services/libc_interceptor.cc",
+			"blob": "5809b5493d417d066f57dbe109b8064484ca53d4",
+			"lines": 437
+		},
+		{
+			"path": "sandbox/linux/services/namespace_sandbox.cc",
+			"blob": "6c6c204f6c42b82caf6279ac7974f79325df7b3b",
+			"lines": 296
+		},
+		{
+			"path": "sandbox/linux/services/namespace_utils.cc",
+			"blob": "3e11d43b9103e2e86a264fdc0f09888412389c13",
+			"lines": 107
+		},
+		{
+			"path": "sandbox/linux/services/proc_util.cc",
+			"blob": "7cebb06360287bba1285e8032e7825df516444d3",
+			"lines": 136
+		},
+		{
+			"path": "sandbox/linux/services/resource_limits.cc",
+			"blob": "62f0914bb39a43fe62c6e7fc15ee6e6b5a120f71",
+			"lines": 49
+		},
+		{
+			"path": "sandbox/linux/services/scoped_process.cc",
+			"blob": "f5cda6493c30b331ac9044bb2db9b7bfb499841d",
+			"lines": 122
+		},
+		{
+			"path": "sandbox/linux/services/syscall_wrappers.cc",
+			"blob": "b7f4349b5c16444b85ceec2ad1d54c9336c936ee",
+			"lines": 227
+		},
+		{
+			"path": "sandbox/linux/services/thread_helpers.cc",
+			"blob": "4e701ebd8b7b01e6ceb62a9a8cc1dcbd17b7be8e",
+			"lines": 202
+		},
+		{
+			"path": "sandbox/linux/services/yama.cc",
+			"blob": "ed9940a114e42b28fc06e639b591b30d40030481",
+			"lines": 109
+		},
+		{
+			"path": "sandbox/linux/suid/client/setuid_sandbox_client.cc",
+			"blob": "ae17279141b19687dfa782818155de9f9351b178",
+			"lines": 157
+		},
+		{
+			"path": "sandbox/linux/suid/client/setuid_sandbox_host.cc",
+			"blob": "baec9e404905d1ff058443689bf2b1e8fa308abf",
+			"lines": 207
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_channel.cc",
+			"blob": "fccacd9a7421b66ea0fcff2332411005fb7a3a30",
+			"lines": 35
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_client.cc",
+			"blob": "1e33e314073b4e819902d80670d5c8a34d6b6fbf",
+			"lines": 433
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_command.cc",
+			"blob": "4d169b2f2b757233aa72abc0c77f83462fdd1b07",
+			"lines": 144
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_file_permission.cc",
+			"blob": "64a22893b7b595f12a23354fa72f40fe310f0eae",
+			"lines": 399
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_host.cc",
+			"blob": "cc3a07275df7100ff14cf37f7680daee3f2f0c74",
+			"lines": 649
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_permission_list.cc",
+			"blob": "4fa930625e739551eddc1cafb4f7fa4e2eba3be9",
+			"lines": 115
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_process.cc",
+			"blob": "90796976616ffb01ee4f2d6330c0956e9df87961",
+			"lines": 209
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_sandbox_config.cc",
+			"blob": "fb8d94352ee3cc99b3b1dc745456ae2291c7b6ba",
+			"lines": 29
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/broker_simple_message.cc",
+			"blob": "c8d90e1f8adec213b8bf3e9655512f579f394a6b",
+			"lines": 397
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/remote_syscall_arg_handler.cc",
+			"blob": "babf76e3578961e17ddc95eb795fec414c9a285d",
+			"lines": 151
+		},
+		{
+			"path": "sandbox/linux/syscall_broker/syscall_dispatcher.cc",
+			"blob": "4b28b3e1397391cb6205f62b82402d4a2998793e",
+			"lines": 285
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_audio_policy_linux.cc",
+			"blob": "e1716b97e8f2148837dfee0badbc52ef5714fe5a",
+			"lines": 142
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_base_policy_linux.cc",
+			"blob": "4f68a389a101a02f249bd4ef7279d23ffb147751",
+			"lines": 66
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_broker_policy_linux.cc",
+			"blob": "61e5f95f65e150f36abeb5bde62cd472c845b428",
+			"lines": 181
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_cdm_policy_linux.cc",
+			"blob": "433720fa9dd0f94fd6b7f322d591c7e0749378d7",
+			"lines": 57
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_cros_amd_gpu_policy_linux.cc",
+			"blob": "1ea2f0f6bee5634dea808c4130c259749b01a6fc",
+			"lines": 73
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_cros_arm_gpu_policy_linux.cc",
+			"blob": "4704ff73fa5fcb89cbbe47d65255ad3e67b35f70",
+			"lines": 73
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_cros_intel_gpu_policy_linux.cc",
+			"blob": "27ac4c0495527d476363dde9eaf69231f75f0e09",
+			"lines": 39
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_cros_nvidia_gpu_policy_linux.cc",
+			"blob": "c4e4614eb8f2fdc7e93c1e553b2586e9c762c23b",
+			"lines": 38
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_cros_virtio_gpu_policy_linux.cc",
+			"blob": "b91c5558450f5079b87193efe0c637a662cf5be6",
+			"lines": 38
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_gpu_policy_linux.cc",
+			"blob": "74333b96d129fad0153e5b6c4427a8929fe2db58",
+			"lines": 133
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_hardware_video_decoding_policy_linux.cc",
+			"blob": "c44b331c1fb0f047d1fee6dfb3b57146920c8c1f",
+			"lines": 197
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_ime_policy_linux.cc",
+			"blob": "6a522eab507f15a5217372efbd6241648a920c59",
+			"lines": 59
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_nearby_policy_linux.cc",
+			"blob": "7d1a2670e1e3e45070a12a9ad8e9da09447a05ca",
+			"lines": 86
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_network_policy_linux.cc",
+			"blob": "88100791ccbcf10445ceed7432248411062024ce",
+			"lines": 305
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_on_device_translation_policy_linux.cc",
+			"blob": "f8c8f988a1afc75daa266432243af3f6383570c3",
+			"lines": 45
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_print_backend_policy_linux.cc",
+			"blob": "b856933220f5379e83de5256168d7fb29dc97ecb",
+			"lines": 26
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_print_compositor_policy_linux.cc",
+			"blob": "bff338a903e5876152cff7e89b0a3bafc9d1f395",
+			"lines": 55
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_renderer_policy_linux.cc",
+			"blob": "8709f5e70a90a94c25924ee471240df7f35da482",
+			"lines": 143
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_screen_ai_policy_linux.cc",
+			"blob": "03b9aadeff36d630f118e5b41c5b87e442becccd",
+			"lines": 101
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_service_policy_linux.cc",
+			"blob": "32754e67be3d69bbb302bfa9c9eae9fc493223c6",
+			"lines": 46
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_speech_recognition_policy_linux.cc",
+			"blob": "39624b506d02023b904c610a784608c4d387fcd6",
+			"lines": 71
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_tts_policy_linux.cc",
+			"blob": "675a27c8ccbd3837afb2da0d63d6a92cac88476b",
+			"lines": 44
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_utility_policy_linux.cc",
+			"blob": "e299ce998b9bddc822dcd9b7ff40dc52359c30cd",
+			"lines": 56
+		},
+		{
+			"path": "sandbox/policy/linux/bpf_xr_policy_linux.cc",
+			"blob": "435e13d39615099ace9dba1e956f7ea4db3b27e1",
+			"lines": 102
+		},
+		{
+			"path": "sandbox/policy/linux/landlock_gpu_policy_android.cc",
+			"blob": "8d2c9ae0136291f8379a1d14a957f068332b92d5",
+			"lines": 148
+		},
+		{
+			"path": "sandbox/policy/linux/landlock_util.cc",
+			"blob": "f286ca35f93d71d4bbda74e87e9071044aa77cd0",
+			"lines": 60
+		},
+		{
+			"path": "sandbox/policy/linux/sandbox_debug_handling_linux.cc",
+			"blob": "33a838886810328f980d533c612079d90e67d3f8",
+			"lines": 84
+		},
+		{
+			"path": "sandbox/policy/linux/sandbox_linux.cc",
+			"blob": "7e1dfcd1732a7fa15450f9a17de17ebcbc256e3e",
+			"lines": 657
+		},
+		{
+			"path": "sandbox/policy/linux/sandbox_seccomp_bpf_linux.cc",
+			"blob": "50b2478e6ca5ab605d61ec0ec87c76dbf2846948",
+			"lines": 362
+		},
+		{
+			"blob": "32138082de4081a5e3cc2768a43d4d0effd2a34e",
+			"path": "third_party/crashpad/crashpad/client/crashpad_client_linux.cc",
+			"lines": 792
+		}
+	]
+}

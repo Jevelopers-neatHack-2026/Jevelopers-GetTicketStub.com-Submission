@@ -7,6 +7,8 @@ import {
 	probeBrowserLaunch,
 	summarizeBrowserDebug,
 } from "./browser-launch-probe.mjs";
+import catalog from "./chromium-launch-sources.json" with { type: "json" };
+import { loadPins } from "../../dist/src/runtime/environment.js";
 
 test("observes the pinned Playwright launch lifecycle without exposing its command", () => {
 	const log =
@@ -106,5 +108,115 @@ test("captures the real adapter launch lifecycle with debug output confined to t
 		if (originalFile === undefined) delete process.env.DEBUG_FILE;
 		else process.env.DEBUG_FILE = originalFile;
 		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("emits an upstream-validated previously unmapped source and line without its message", () => {
+	const result = summarizeBrowserDebug(
+		"pw:browser [pid=42][err] [42:42:1010/000000.000:ERROR:dbus/bus.cc:408] secret=token /private/customer https://private.invalid",
+	);
+	assert.equal(result.unclassifiedSevereLine, true);
+	assert.equal(result.unvalidatedSevereLine, false);
+	assert.deepEqual(result.sourceSites, [
+		{
+			basename: "bus.cc",
+			line: 408,
+			severity: "ERROR",
+			cause: "UNKNOWN_CAUSE",
+		},
+	]);
+	for (const value of ["secret", "token", "/private", "https://", "dbus/"])
+		assert.ok(!JSON.stringify(result).includes(value));
+});
+
+test("rejects arbitrary source names paths line bounds and unframed locations", () => {
+	for (const location of [
+		"customer_secret.cc:42",
+		"private/credentials.cc:56",
+		"/private/credentials.cc:56",
+		"https://private.invalid/credentials.cc:56",
+		"credentials.cc:0",
+		"credentials.cc:-1",
+		"credentials.cc:100000",
+		"credentials.cc:99999",
+		"credentials.cc:1secret",
+		"credentials.cc:00056",
+	]) {
+		const result = summarizeBrowserDebug(
+			`pw:browser [pid=42][err] [42:42:1010/000000.000:FATAL:${location}] secret=token`,
+		);
+		assert.deepEqual(result.sourceSites, []);
+		assert.equal(result.unvalidatedSevereLine, true);
+		assert.ok(!JSON.stringify(result).includes("secret"));
+	}
+	assert.deepEqual(
+		summarizeBrowserDebug(
+			"[42:42:1010/000000.000:FATAL:credentials.cc:56] secret=token",
+		).sourceSites,
+		[],
+	);
+});
+
+test("accepts pinned build-relative source paths and deduplicates validated sites", () => {
+	const line =
+		"pw:browser [pid=42][err] [42:42:1010/000000.000:FATAL:../../content/zygote/zygote_linux.cc:588] secret=token";
+	assert.deepEqual(summarizeBrowserDebug(`${line}\n${line}`).sourceSites, [
+		{
+			basename: "zygote_linux.cc",
+			line: 588,
+			severity: "FATAL",
+			cause: "UNKNOWN_CAUSE",
+		},
+	]);
+});
+
+test("reports only source-backed raw-check categories without inventing a source location", () => {
+	const result = summarizeBrowserDebug(
+		[
+			'pw:browser [pid=42][err] Check failed: NamespaceUtils::WriteToIdMapFile("/proc/self/uid_map", uid_)',
+			"pw:browser [pid=42][err] LaunchProcess: failed to execvp:",
+			"pw:browser [pid=42][err] /private/executable secret=token",
+			"pw:browser [pid=42][out] Check failed: NamespaceUtils::DenySetgroups()",
+			'pw:browser [pid=42][err] Check failed: NamespaceUtils::WriteToIdMapFile("/private/customer", uid_)',
+		].join("\n"),
+	);
+	assert.deepEqual(result.startupCauses, [
+		"NAMESPACE_UID_MAP_FAILURE",
+		"PREEXEC_EXECVP_FAILURE",
+	]);
+	assert.deepEqual(result.sourceSites, []);
+	assert.ok(!JSON.stringify(result).includes("/"));
+	assert.ok(!JSON.stringify(result).includes("token"));
+});
+
+test("distinguishes reported zygote child exit classes from the parent browser signal", () => {
+	for (const [code, cause] of [
+		["-1", "ZYGOTE_CHILD_TERMINATED_BY_SIGNAL"],
+		["1", "ZYGOTE_CHILD_EXIT_1"],
+		["127", "ZYGOTE_CHILD_EXIT_127"],
+		["42", "ZYGOTE_CHILD_EXIT_OTHER"],
+	]) {
+		const result = summarizeBrowserDebug(
+			`pw:browser [pid=42][err] [42:42:1010/000000.000:FATAL:content/browser/zygote_host/zygote_host_impl_linux.cc:228] Zygote process exited prematurely with exit code ${code}\npw:browser [pid=42] <process did exit: exitCode=null, signal=SIGABRT>`,
+		);
+		assert.equal(result.sourceSites[0].cause, cause);
+		assert.deepEqual(result.processSignals, ["SIGABRT"]);
+	}
+});
+
+test("keeps the source catalog tied to the accepted browser with bounded canonical names", async () => {
+	assert.equal(catalog.browserVersion, (await loadPins()).browser.version);
+	assert.equal(
+		catalog.chromiumCommit,
+		"f842f52ef39fd97b449eb27cff414bf05a98ddce",
+	);
+	for (const source of catalog.sources) {
+		assert.match(source.path, /^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)+\.cc$/);
+		assert.match(source.blob, /^[a-f0-9]{40}$/);
+		assert.ok(
+			Number.isInteger(source.lines) &&
+				source.lines > 0 &&
+				source.lines < 100000,
+		);
 	}
 });

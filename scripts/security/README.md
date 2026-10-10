@@ -130,3 +130,50 @@ format and confined subprocess capture; success on macOS does not prove Linux.
 After this diagnostic commit, the supervisor must execute fresh Linux CI and
 inspect `launchDiagnostic.browserLaunch` before selecting a repair. Every original
 render/security test remains mandatory; no probe success resolves ROOT-R1.
+
+### Validated source locations and raw startup categories
+
+Runs `38095530640` and `38095533118` on `7c5e93e` observed a fatal zygote-host
+premature exit, browser `SIGABRT` and an unmapped severe line. Capture completed
+without truncation or cleanup failure. The lower cause remains unknown; that
+unmapped line could be an ancillary error rather than the cause.
+
+Schema 3 adds `browserLaunch.sourceSites`, `startupCauses` and
+`unvalidatedSevereLine`. A source location is emitted only when its canonical
+relative path or unambiguous basename belongs to `chromium-launch-sources.json`,
+and its positive decimal line is within the verified file's line count (also
+bounded to five digits). Bounded build-relative `../` prefixes are removed before
+catalog lookup. Arbitrary/absolute paths, URIs, unknown filenames, out-of-range
+lines and raw messages are discarded. Only the upstream basename, numeric line,
+severity and a fixed cause category reach the receipt. `UNKNOWN_CAUSE` is explicit.
+The original capture limits and privacy boundary remain unchanged.
+
+The 208-source catalog is derived from Chromium commit
+`f842f52ef39fd97b449eb27cff414bf05a98ddce` (tag `156.0.8078.4`). Each source's bytes
+were fetched and matched to its upstream Git blob hash before counting lines.
+Coverage includes base process/posix/threading, content zygote/app/browser-main,
+Linux sandbox/policy, D-Bus, check/logging and Linux Crashpad client sources;
+tests/fuzzers/benchmarks are excluded. It is a finite diagnostic catalog, not
+complete Chromium coverage. Unknown sources remain undisclosed and flagged.
+The test binds its browser version to the existing renderer pin.
+
+`startupCauses` recognizes exact upstream `RAW_LOG`/`RAW_CHECK` strings, which
+can lack a source header. Their implementation references are:
+
+- [pre-exec failures](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/base/process/launch_posix.cc#L401)
+- [UID/GID/setgroups checks](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/sandbox/linux/services/namespace_sandbox.cc#L57)
+- [chroot check](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/sandbox/linux/services/credentials.cc#L56)
+- [raw-check formatting](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/base/check.h#L338)
+
+No inferred source/line is attached to a raw signature. Zygote-host premature-exit
+logs additionally classify the child exit as `-1`, `1`, `127` or other using fixed
+categories. [The pinned wait implementation](https://github.com/chromium/chromium/blob/f842f52ef39fd97b449eb27cff414bf05a98ddce/base/process/process_posix.cc#L385)
+returns `-1` for a signaled child; browser `SIGABRT` alone does not identify the
+child signal. Exit `127` has several possible pre-exec causes, so it does not
+certify an exec or filesystem diagnosis.
+
+The next parent CI run must capture these new fields, then compare an observed
+location against its catalogued blob at the pinned commit. A raw category can
+select a specific syscall/map/exec probe; an unknown cause cannot justify a flag,
+policy, capability or host change. Synthetic test locations/categories exercise
+the parser and do not assert that any is the actual Linux failure.

@@ -114,7 +114,7 @@ async function main() {
 	console.log(
 		JSON.stringify({
 			launchDiagnostic: {
-				schemaVersion: 2,
+				schemaVersion: 3,
 				container,
 				passwdIdentity: identity.error
 					? "PROBE_UNAVAILABLE"

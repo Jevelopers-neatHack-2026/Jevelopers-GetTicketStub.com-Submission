@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { classifySandboxLaunchFailure } from "../../dist/src/runtime/errors.js";
+import { summarizeChromiumSources } from "./chromium-source-diagnostic.mjs";
 
 const sourceNames = {
 	"zygote_host_impl_linux.cc": "ZYGOTE_HOST",
@@ -115,6 +116,7 @@ export function summarizeBrowserDebug(stderr) {
 			new Error(chrome.map((line) => `[pid=1][err] ${line}`).join("\n")),
 		),
 		observations,
+		...summarizeChromiumSources(chrome),
 		zygoteStages: zygoteStages
 			.filter(([, pattern]) => chrome.some((line) => pattern.test(line)))
 			.map(([name]) => name),
