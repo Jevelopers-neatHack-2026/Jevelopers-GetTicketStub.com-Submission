@@ -7,8 +7,10 @@
 **Worktree:** /Users/completetech/agent-harness-worktrees/acv1-neatlogs-sdk-local
 **Inspected base:** bb280f2bfcf390b5d228148fb961ed0b2af326c9
 **Base tree:** 50d9c05c0311f443961f40a0e39d9a56c6b0e52e
+**Implementation/evidence commit:** 3a4372b0efaa716efade02b6d586140fb072fee5 (parent: the inspected base)
+**Implementation tree:** 97520c70ddbf75fd01ed10dc2643b1526899a24e
 **Advisory:** triage/agent-creative-v1/execution/neatlogs-sdk-next-wave-advisory.json, SHA-256 3b984b57ed6cca9aaf8e4763cc4ec949b09554bf82222248faaf05effe8724f3 (read in full from the source repository).
-**Issue:** [ACV1-AH10 / issue #10](https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10), P0, still open in the local full snapshot. No issue or external application was changed.
+**Issue:** [ACV1-AH10 / issue #10](https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10), P0, owner role Agent and research, no named assignee/reviewer, still open in the local full snapshot. No issue or external application was changed.
 
 The requested execution profile was a fresh gpt-6-luna/max, strict, Fast, non-UI author run. This interface did not expose a control to verify the active model/effort/Fast setting, so this handoff does not attest those settings. Work was non-UI; no nested author or subagent was used.
 
@@ -108,6 +110,8 @@ Global checklist dependencies remain with their original owners and meanings:
 
 AH-10 remains blocked by its recorded ACV1-AH01 and ACV1-ACCESS prerequisites (#7 and #4). Its existing relationship to AH11-OPS (#20) and AH12 (#23) is unchanged. Local package mapping is only a prerequisite contribution. The issue, owner roles, acceptance checklist, contract catalog, and external handoffs were not changed.
 
+The issue's narrow external producer handoffs remain pending: EI-12R (#22) and CE-12 (#12) each require actual correlated Neatlogs and applicable Entire provenance plus owner acceptance. No producer schema was copied and no external repository was edited. The issue's proposed live AH-10 route (make verify CASE=AH-10 MODE=live FIXTURE=neatlogs-correlated-run) and recorded SPN-02 route (make verify CASE=SPN-02 MODE=recorded FIXTURE=entire-development-provenance) remain unavailable. Its closure gate still requires merged implementation/tests, successful checks on pinned release revisions, satisfied dependencies, accessible sanitized evidence, and no required behavior hidden behind stubs. This branch has not merged and does not meet that gate.
+
 ## Full sink gate still disconnected
 
 Do not connect the local collector to the telemetry cursor or financial outbox. A future approved sink still needs all of the following before service delivery can be considered:
@@ -132,20 +136,24 @@ All commands use /Users/completetech/.cache/acv1-toolchains/node-v22.23.3-darwin
 | make test | 0 | 105 passed, 0 failed, 0 skipped; TAP at .runtime-artifacts/runtime-full.tap. |
 | make verify CASE=AH-10 MODE=mock FIXTURE=neatlogs-sdk-local | 0 | 9 passed, 0 failed, 0 skipped; actual Neatlogs subprocess and source-pin regression included. |
 | python3 -m unittest discover -s tests/config/provider-profile -p 'test*.py' | 0 | 48 provider-readiness tests passed; no live provider calls. |
+| make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline | 0 | 59 passed, 0 failed, 0 skipped; 520 static assertion call sites (not an executed assertion count); all nine named JEV acceptance groups covered. Controlled fixtures recorded 52 DNS resolutions, 19 HTTPS requests, 18 writes, 0 blocked external attempts, 0 provider API calls, and 0 live network calls. Evidence binds implementation commit 3a4372b0efaa716efade02b6d586140fb072fee5 to the inspected base with a clean worktree. |
 | git diff --check | 0 | No whitespace errors. |
 
 The first offline bootstrap attempt occurred before the default npm cache contained undici-types@8.9.0 and returned ENOTCACHED. The registry fetch above was authorized, scripts were disabled, and the subsequent offline bootstrap succeeded. This initial cache miss did not alter source files or the lockfile.
 
-The named ACV1-AH05/JEV offline evidence target is also required by the user's handoff checklist and is to be recorded with its exact exit and test counts before this handoff is finalized. No JEV source ownership was assumed by this change.
+The named ACV1-AH05/JEV offline target is an existing synthetic fixture. Its controlled DNS and HTTPS calls are in-process test fixtures, not calls to an external provider or service. No JEV source ownership was assumed by this change.
 
 ## Local artifact hashes
 
 | Artifact | SHA-256 | Contents |
 | --- | --- | --- |
-| .runtime-artifacts/neatlogs-sdk-local-capture.json | 105a2420abb3a4c8227c1ab60eff22897213fbfd768e02f929a687a1f0ad582b | Sanitized real SDK capture; 3 source records, 3 root spans, 3 completion markers; all 24 source hashes; full 57-package version/integrity/license graph; darwin-sandbox-exec-deny-network; no remote ingestion, sponsor acceptance, Entire, cursor advance, Finance acknowledgement, or live service access. |
-| .runtime-artifacts/runtime-full.tap | To be recorded from final committed-source rerun. | Full repository TAP, 105 passing at last run. |
+| .runtime-artifacts/neatlogs-sdk-local-capture.json | 980805d708f57aa9d866f9c4983db653719f02890857ffa9793ffdfcf3e7ab85 | Sanitized real SDK capture; 3 source records, 3 root spans, 3 completion markers; all 24 source hashes; full 57-package version/integrity/license graph; darwin-sandbox-exec-deny-network; no remote ingestion, sponsor acceptance, Entire, cursor advance, Finance acknowledgement, or live service access. |
+| .runtime-artifacts/neatlogs-sdk-local.tap | 6ee013f363df49157ac7efb529113d675292e860fd7657dc8afbe38729c185d4 | Named AH-10 route TAP; 9 passed, 0 failed, 0 skipped. |
+| .runtime-artifacts/runtime-full.tap | c88b94b534f020ea8781aa72801917f8c77f83ef95d53e7e420c21d33af98106 | Full repository TAP; 105 passed, 0 failed, 0 skipped. |
+| .runtime-artifacts/ACV1-AH05-jev-phase-b-offline.tap | aff1ec1f898f2b59b8ab28012ba7a8571bf72449e46d0900ccc2a24047e60716 | Sanitized JEV named-route TAP; 59 passed, 0 failed, 0 skipped. |
+| .runtime-artifacts/ACV1-AH05-jev-phase-b-offline.json | 6bc4e381ea72ba06924005fed56c388e6f5a6c8ecdeaf432264d44bea582db52 | Revision-bound JEV manifest; base bb280f2bfcf390b5d228148fb961ed0b2af326c9, commit 3a4372b0efaa716efade02b6d586140fb072fee5, tree 97520c70ddbf75fd01ed10dc2643b1526899a24e. Manifest records all nine groups, no skips, controlled-network counters, and no provider/live calls. |
 
-Generated .runtime-artifacts files are ignored by Git and remain local evidence. CI is configured to emit neatlogs-sdk-local.tap and upload the sanitized capture artifact. CI has not run on a published branch in this task.
+The JEV manifest's captured raw runner output SHA-256 is 0e467017a75d4b9527636d813feab6a58bb6a984ffc913a0a685be0167cd7699; its adjacent manifest checksum file records 6bc4e381ea72ba06924005fed56c388e6f5a6c8ecdeaf432264d44bea582db52. Generated .runtime-artifacts files are ignored by Git and remain local evidence. CI is configured to emit neatlogs-sdk-local.tap and upload the sanitized capture artifact. CI has not run on a published branch in this task.
 
 ## Review and handoff boundary
 
