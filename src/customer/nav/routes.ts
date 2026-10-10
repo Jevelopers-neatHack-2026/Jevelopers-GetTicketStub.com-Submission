@@ -20,6 +20,8 @@ export interface RouteNode {
   children?: RouteNode[];
   /** The cart count, shown on the row. */
   count?: number;
+  /** A small dot on the row's icon in the rail: something here wants a look (unsaved stubs on the Account row). */
+  dot?: boolean;
   /** Never marked as the current page (an anchor inside a page, or a link that only looks like a destination). */
   anchor?: boolean;
 }
@@ -70,6 +72,9 @@ export function locate(path: string, stubs: StubRow[], shareStubId?: string): st
       return seg[1] === "claim" ? ["organizer", "guests"] : ["organizer"];
     case "account":
       return ["account"];
+    case "privacy":
+    case "terms":
+      return ["account", seg[0]];
     default:
       void stubs;
       return [];
@@ -82,10 +87,12 @@ export interface TreeInput {
   cartCount: number;
   /** The current path: places that exist only while you're there link to themselves. */
   path: string;
+  /** Signed out with stubs that live only on this device: the Account row carries a dot. */
+  unsaved?: boolean;
 }
 
 /** The whole tree for this moment. Places that exist only while you're there (a claim, the printing stage) appear only then. */
-export function buildTree({ keys, stubs, cartCount, path }: TreeInput): RouteNode[] {
+export function buildTree({ keys, stubs, cartCount, path, unsaved }: TreeInput): RouteNode[] {
   const has = (k: string) => keys.includes(k);
   const currentStub = keys.find((k) => k.startsWith("stub:"))?.slice(5);
 
@@ -116,7 +123,11 @@ export function buildTree({ keys, stubs, cartCount, path }: TreeInput): RouteNod
 
   const cartKids: RouteNode[] = has("unclaimed") ? [{ key: "unclaimed", label: "Unclaimed seat", href: path }] : [];
   const orgKids: RouteNode[] = [{ key: "guests", label: "Guest claims", href: "/organizer/claim" }];
-  const acctKids: RouteNode[] = has("account") ? [{ key: "orders", label: "Orders", href: "/account#acct-orders", anchor: true }] : [];
+  const acctKids: RouteNode[] = [
+    ...(has("account") ? [{ key: "orders", label: "Orders", href: "/account#acct-orders", anchor: true }] : []),
+    { key: "privacy", label: "Privacy", href: "/privacy" },
+    { key: "terms", label: "Terms", href: "/terms" },
+  ];
 
   return [
     { key: "make", label: "Make", href: "/", icon: "make", children: makeKids },
@@ -124,7 +135,7 @@ export function buildTree({ keys, stubs, cartCount, path }: TreeInput): RouteNod
     { key: "cart", label: "Cart", href: "/cart", icon: "cart", count: cartCount, children: cartKids },
     { key: "map", label: "Desk map", href: "/map", icon: "map" },
     { key: "organizer", label: "Organizer", href: "/organizer", icon: "organizer", children: orgKids },
-    { key: "account", label: "Account", href: "/account", icon: "account", children: acctKids },
+    { key: "account", label: "Account", href: "/account", icon: "account", dot: unsaved, children: acctKids },
   ];
 }
 

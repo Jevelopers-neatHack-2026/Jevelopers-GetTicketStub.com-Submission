@@ -52,14 +52,52 @@ export async function searchEvents(query: string): Promise<EventData[]> {
   return Array.isArray(data.results) ? data.results.map(pickEvent) : [];
 }
 
+/** Shown when the daily art cap is reached. The art that comes back with it is procedural, so nothing breaks. */
+export const ART_LIMIT_NOTE = "You've made a lot of art today. Procedural art still works, and new art comes back tomorrow.";
+
+export interface RemixResult {
+  art: ArtLayer;
+  /** Set when the daily cap was reached and `art` is the procedural fallback. */
+  limitNote?: string;
+  /** Epoch ms when new art is available again. */
+  retryAt?: number;
+}
+
+/** Remix the art layer for a stub, and say so when the daily cap turned it into procedural art. */
+export async function remixArtNoted(stub: Stub, vibe?: string): Promise<RemixResult> {
+  const v = currentVersion(stub);
+  const seed = Math.floor(Math.random() * 2_147_483_647);
+  let res: Response;
+  try {
+    res = await fetch("/api/art", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event: stub.event, vibe, seed, edition: v?.edition, first: false }),
+    });
+  } catch {
+    throw new Error("You look offline. Check your connection and try again.");
+  }
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error("We couldn't remix the art. Try again in a moment.");
+  }
+  if (res.status === 429 && (data as { error?: { code?: string } })?.error?.code === "art_limit") {
+    const d = data as { art?: ArtLayer; retryAt?: number };
+    const art: ArtLayer = d.art?.kind === "procedural" ? d.art : { kind: "procedural", seed, vibe, provenance: "simulated" };
+    return { art, limitNote: ART_LIMIT_NOTE, retryAt: d.retryAt };
+  }
+  if (!res.ok || (data && typeof data === "object" && "error" in data)) {
+    const msg = (data as { error?: unknown })?.error;
+    throw new Error(typeof msg === "string" && msg ? msg : "We couldn't remix the art. Try again in a moment.");
+  }
+  return { art: data as ArtLayer };
+}
+
 /** Remix the art layer for a stub. The caller pushes it as a new DesignVersion. */
 export async function remixArt(stub: Stub, vibe?: string): Promise<ArtLayer> {
-  const v = currentVersion(stub);
-  return postJson<ArtLayer>(
-    "/api/art",
-    { event: stub.event, vibe, seed: Math.floor(Math.random() * 2_147_483_647), edition: v?.edition, first: false },
-    "We couldn't remix the art. Try again in a moment.",
-  );
+  return (await remixArtNoted(stub, vibe)).art;
 }
 
 /** Optional server agent reply. Returns undefined when no model is configured (caller falls back to rules). */

@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import type { Stub } from "../types";
 import { currentVersion } from "../types";
-import { remixArt } from "@/customer/studio/research/client";
+import { remixArtNoted } from "@/customer/studio/research/client";
 import { play, haptic } from "@/customer/studio/feedback";
 import { PaperButton, PaperSheet, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import { addArtVersion, readImageFile } from "./ops";
@@ -52,8 +52,15 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone }: PanelProps) {
     setError(null);
     play("print");
     try {
-      const art = await remixArt(stub, vibe ?? undefined);
-      finish(addArtVersion(stub, art));
+      const { art, limitNote } = await remixArtNoted(stub, vibe ?? undefined);
+      if (limitNote) {
+        // Procedural art is applied, and the sheet stays open so the note is read.
+        onChange(addArtVersion(stub, art));
+        play("success", { emphasis: "subtle" });
+        setError(limitNote);
+      } else {
+        finish(addArtVersion(stub, art));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "We couldn't remix the art. Try again.");
     } finally {

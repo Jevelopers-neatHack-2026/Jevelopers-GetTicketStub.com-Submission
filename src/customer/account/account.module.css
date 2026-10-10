@@ -59,11 +59,12 @@
   position: fixed;
   z-index: 60;
   top: calc(12px + env(safe-area-inset-top, 0px));
-  left: 16px;
+  /* starts at the sidebar's right edge (--nav-w), so it never sits under it */
+  left: calc(var(--nav-w, 0px) + 16px);
   right: 16px;
   margin-inline: auto;
   width: fit-content;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100vw - var(--nav-w, 0px) - 32px);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -152,23 +153,19 @@
   cursor: pointer;
 }
 .navLink:focus-visible,
-.navEmail:focus-visible,
-.navIcon:focus-visible {
+.navEmail:focus-visible {
   outline: 2px solid var(--desk-ink);
   outline-offset: 2px;
 }
-.navIcon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  margin: 0 auto;
-  border: 0;
-  background: none;
+.small a {
   color: var(--desk-ink);
-  cursor: pointer;
 }
-.navIcon svg {
-  width: 22px;
-  height: 22px;
+.plain {
+  color: var(--desk-ink);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.plain:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
 }

@@ -88,6 +88,15 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE login_links ADD COLUMN share_token TEXT;
   `,
+  `
+  -- Daily art generations per key ("acc:<id>", "dev:<id>", "ip:<ip>"); day is the UTC date.
+  CREATE TABLE art_usage (
+    key TEXT NOT NULL,
+    day TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    PRIMARY KEY (key, day)
+  );
+  `,
 ];
 
 export function migrate(db: DatabaseSync): void {

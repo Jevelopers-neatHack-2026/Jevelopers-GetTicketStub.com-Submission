@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Field, MarkLegend, PaperButton, PaperSheet, Rule, SourceMark, Stamp, Stamped, TearLink } from "@/customer/desk/Desk";
@@ -53,6 +54,15 @@ export default function AccountClient() {
           <Stamp type="button" onClick={() => openSignIn({ reason: "save", returnTo: "/account" })}>
             Email me a link
           </Stamp>
+          <p className={s.muted}>
+            <Link className={s.plain} href="/privacy">
+              Privacy
+            </Link>{" "}
+            ·{" "}
+            <Link className={s.plain} href="/terms">
+              Terms
+            </Link>
+          </p>
         </div>
       </PageShell>
     );
@@ -129,6 +139,16 @@ export default function AccountClient() {
 
         <Rule kind="perf" />
 
+        <p className={s.muted}>
+          <Link className={s.plain} href="/privacy">
+            Privacy
+          </Link>{" "}
+          ·{" "}
+          <Link className={s.plain} href="/terms">
+            Terms
+          </Link>
+        </p>
+
         <div className={s.foot}>
           <TearLink
             type="button"
@@ -169,7 +189,14 @@ function ChangeEmail() {
       const r = await api.changeEmail(to);
       setSent({ email: to, devLink: r.devLink });
     } catch (e) {
-      setError((e as ApiError).status === 409 ? "That email already has an account." : "We couldn't send the link. Try again in a moment.");
+      const err = e as ApiError;
+      setError(
+        err.status === 409
+          ? "That email already has an account."
+          : err.code === "disposable_email"
+            ? "That looks like a throwaway address. Use an email you keep."
+            : "We couldn't send the link. Try again in a moment.",
+      );
     } finally {
       setBusy(false);
     }

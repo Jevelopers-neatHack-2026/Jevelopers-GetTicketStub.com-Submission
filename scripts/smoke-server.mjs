@@ -48,7 +48,7 @@ function client(label) {
     const token = new URL(r.json.devLink).searchParams.get("token");
     return { link: r, cb: await api("POST", "/api/auth/confirm", { token }) };
   };
-  return { api, signIn, jar, label };
+  return { api, signIn, jar, label, ip };
 }
 
 const tokenOf = (devLink) => new URL(devLink).searchParams.get("token");
@@ -372,6 +372,54 @@ async function main() {
   await art.api("DELETE", "/api/account", { confirm: artMe });
   check("deleting the account removes art nothing else uses", (await fetch(BASE + soloUrl)).status === 404);
   check("art still referenced by another account stays", (await fetch(BASE + artUrl)).status === 200);
+
+  // Disposable email domains
+  const dis = client("disposable");
+  const disBad = await dis.api("POST", "/api/auth/link", { email: `smoke-${run}@mailinator.com`, reason: "save" });
+  check("a disposable domain is refused at sign-in with 400 disposable_email", disBad.status === 400 && disBad.json?.error?.code === "disposable_email", `${disBad.status} ${disBad.text}`);
+  const disSub = await dis.api("POST", "/api/auth/link", { email: `smoke-${run}@a.b.YOPMAIL.com`, reason: "save" });
+  check("a subdomain and upper case of a disposable domain are refused too", disSub.status === 400 && disSub.json?.error?.code === "disposable_email", String(disSub.status));
+  check("a normal domain still signs in", (await dis.api("POST", "/api/auth/link", { email: `smoke-ok-${run}@example.org`, reason: "save" })).status === 200);
+  const disAcc = client("disposable-acct");
+  await disAcc.signIn(`smoke-dis-${run}@example.com`);
+  const disChange = await disAcc.api("POST", "/api/account/email", { email: `smoke-${run}@guerrillamail.com` });
+  check("an email change to a disposable domain is 400 disposable_email", disChange.status === 400 && disChange.json?.error?.code === "disposable_email", String(disChange.status));
+
+  // Art caps: 10 per account and per device per day, 30 per IP. The caps are read on every call, so rows seeded
+  // into art_usage prove the 429 without spending a generation. (A server with an OpenAI key would spend one on the first call.)
+  const today = new Date().toISOString().slice(0, 10);
+  const sha = (v) => createHash("sha256").update(v).digest("hex");
+  const seedUsage = (key, count) => {
+    const db = new DatabaseSync(DB);
+    try {
+      db.prepare("INSERT INTO art_usage (key, day, count) VALUES (?, ?, ?) ON CONFLICT (key, day) DO UPDATE SET count = excluded.count").run(key, today, count);
+    } finally {
+      db.close();
+    }
+  };
+  const artBody = { event: { type: "concert", title: "Smoke night", facts: [] }, vibe: "Neon", seed: 7 };
+  const dev = client("art-device");
+  const art1 = await dev.api("POST", "/api/art", artBody);
+  check("art works under the cap", art1.status === 200 && typeof art1.json?.kind === "string", String(art1.status));
+  const devCookie = art1.headers.getSetCookie().find((c) => c.startsWith("ts_device="));
+  check("the first art call sets an httpOnly device cookie", !!devCookie && /httponly/i.test(devCookie) && dev.jar.has("ts_device"));
+  const art2 = await dev.api("POST", "/api/art", artBody);
+  check("the device cookie is not reissued", art2.status === 200 && !art2.headers.getSetCookie().some((c) => c.startsWith("ts_device=")));
+  seedUsage(`dev:${sha(dev.jar.get("ts_device"))}`, 10);
+  const art3 = await dev.api("POST", "/api/art", artBody);
+  check("a device at its cap gets 429 art_limit with retryAt", art3.status === 429 && art3.json?.error?.code === "art_limit" && art3.json.retryAt > Date.now(), `${art3.status} ${art3.text}`);
+  check("the 429 carries procedural art as the fallback", art3.json?.art?.kind === "procedural");
+  const fresh = client("art-fresh-device");
+  seedUsage(`ip:${sha(fresh.ip)}`, 30);
+  check("an IP at its cap gets 429 whatever the device", (await fresh.api("POST", "/api/art", artBody)).status === 429);
+  const accArt = client("art-account");
+  await accArt.signIn(`smoke-artcap-${run}@example.com`);
+  const accId = (await accArt.api("GET", "/api/auth/me")).json.account.id;
+  seedUsage(`acc:${accId}`, 10);
+  const accCapped = await accArt.api("POST", "/api/art", artBody);
+  check("an account at its cap gets 429 on any device", accCapped.status === 429 && accCapped.json?.error?.code === "art_limit", String(accCapped.status));
+  const accOther = await accArt.api("DELETE", "/api/account", { confirm: `smoke-artcap-${run}@example.com` });
+  check("the capped account can still be deleted", accOther.status === 200);
 
   // Sign out
   const so2 = await b.api("POST", "/api/auth/signout");

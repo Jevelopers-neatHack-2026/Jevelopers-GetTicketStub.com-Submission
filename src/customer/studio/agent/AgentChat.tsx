@@ -6,7 +6,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ArtLayer, DesignVersion, Fact, Provenance, Stub } from "../types";
 import { currentVersion } from "../types";
-import { askAgent, remixArt } from "../research/client";
+import { ART_LIMIT_NOTE, askAgent, remixArtNoted } from "../research/client";
 import { MarkLegend, PaperButton, SourceMark, Tag, Tags } from "@/customer/desk/Desk";
 import { haptic, play } from "@/customer/studio/feedback";
 import styles from "./AgentChat.module.css";
@@ -102,7 +102,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
   const remix = async (vibe: string) => {
     setBusy("Remixing the art…");
     try {
-      const art: ArtLayer = await remixArt(stubRef.current, vibe);
+      const { art, limitNote }: { art: ArtLayer; limitNote?: string } = await remixArtNoted(stubRef.current, vibe);
       const s = stubRef.current;
       const cur = currentVersion(s);
       const v: DesignVersion = {
@@ -114,7 +114,11 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
       };
       commit({ ...s, versions: [...s.versions, v], currentVersionId: v.id });
       say(
-        art.provenance === "live" ? "Remixed the art. Your text and edits are kept." : "Remixed the art. Your text and edits are kept. This art is a simulated preview.",
+        limitNote
+          ? `${ART_LIMIT_NOTE} Your text and edits are kept.`
+          : art.provenance === "live"
+            ? "Remixed the art. Your text and edits are kept."
+            : "Remixed the art. Your text and edits are kept. This art is a simulated preview.",
         "simulated",
         art.provenance,
       );

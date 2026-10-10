@@ -1,6 +1,7 @@
 import "server-only";
 import type { Stub } from "@/customer/studio/types";
 import { externalizeArt } from "./files";
+import { isDisposableEmail } from "./disposable";
 import { HttpError, isObject } from "./http";
 
 const bad = (message: string) => new HttpError(400, "bad_request", message);
@@ -14,6 +15,13 @@ const EMAIL = /^[^\s@<>()"',;:\\]+@[^\s@<>()"',;:\\]+\.[^\s@<>()"',;:\\]+$/;
 export function parseEmail(v: unknown): string {
   const email = typeof v === "string" ? v.trim().toLowerCase() : "";
   if (email.length < 5 || email.length > 254 || !EMAIL.test(email)) throw bad("That email doesn't look right. Check it and try again.");
+  return email;
+}
+
+/** For sign-in and email change: a valid address that isn't a throwaway one. */
+export function parseAccountEmail(v: unknown): string {
+  const email = parseEmail(v);
+  if (isDisposableEmail(email)) throw new HttpError(400, "disposable_email", "That looks like a throwaway address. Use an email you keep, so we can find your wall again.");
   return email;
 }
 

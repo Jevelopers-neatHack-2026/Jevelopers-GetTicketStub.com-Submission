@@ -4,7 +4,7 @@ import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, rea
 import { getStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
 import { emailChangeMail, stubImageUrl } from "@/server/templates";
-import { parseEmail } from "@/server/validate";
+import { parseAccountEmail } from "@/server/validate";
 
 const WINDOW = 15 * 60_000;
 
@@ -16,7 +16,7 @@ export const POST = route(async (req: Request) => {
   limit(`email:acct:${account.id}`, 5, WINDOW);
   const body = await readJson(req, 4 * 1024);
   if (!isObject(body)) throw new HttpError(400, "bad_request", "Send { email }.");
-  const email = parseEmail(body.email);
+  const email = parseAccountEmail(body.email);
   if (email === account.email) throw new HttpError(400, "same_email", "That's already your email.");
 
   const now = Date.now();

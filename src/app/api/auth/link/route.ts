@@ -4,7 +4,7 @@ import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, rea
 import { getStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
 import { magicLinkMail, stubImageUrl } from "@/server/templates";
-import { parseEmail, safeReturnTo } from "@/server/validate";
+import { parseAccountEmail, safeReturnTo } from "@/server/validate";
 
 const WINDOW = 15 * 60_000;
 const REASONS = ["save", "checkout", "claim"] as const;
@@ -14,7 +14,7 @@ export const POST = route(async (req: Request) => {
   limit(`link:ip:${clientIp(req)}`, 20, WINDOW);
   const body = await readJson(req, 4 * 1024);
   if (!isObject(body)) throw new HttpError(400, "bad_request", "Send an email address.");
-  const email = parseEmail(body.email);
+  const email = parseAccountEmail(body.email);
   const reason = REASONS.find((r) => r === body.reason);
   if (!reason) throw new HttpError(400, "bad_request", "Say why you're signing in: save, checkout or claim.");
   const returnTo = safeReturnTo(body.returnTo);

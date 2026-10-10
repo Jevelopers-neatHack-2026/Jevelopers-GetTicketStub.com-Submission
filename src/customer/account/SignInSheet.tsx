@@ -1,6 +1,7 @@
 "use client";
 // The one way in: an email, a link. The sheet is a PaperSheet with a Field and a Stamp; once the link is
 // sent it shows the address, and (only when the server says it is sandboxed) a clearly labelled link to open.
+import Link from "next/link";
 import { useState } from "react";
 import { Field, MarkLegend, PaperSheet, Rule, SourceMark, Stamp, TearLink } from "@/customer/desk/Desk";
 import d from "@/customer/desk/Desk.module.css";
@@ -46,7 +47,9 @@ function Body({ request }: { request: SignInRequest }) {
     } catch (e) {
       const err = e as ApiError;
       setError(
-        err.code === "mail_unavailable"
+        err.code === "disposable_email"
+          ? "That looks like a throwaway address. Use an email you keep, so we can find your wall again."
+          : err.code === "mail_unavailable"
           ? "We can't send email right now. Your stubs are safe on this device. Try again later."
           : err.status === 429
           ? "That's a lot of links. Give it a few minutes, then try again."
@@ -135,6 +138,17 @@ function Body({ request }: { request: SignInRequest }) {
       <TearLink type="button" onClick={closeSignIn}>
         Not now
       </TearLink>
+      <p className={s.small}>
+        We keep your email to sign you in. Read the{" "}
+        <Link href="/privacy" className={s.plain} onClick={closeSignIn}>
+          privacy note
+        </Link>{" "}
+        and the{" "}
+        <Link href="/terms" className={s.plain} onClick={closeSignIn}>
+          terms
+        </Link>
+        .
+      </p>
     </form>
   );
 }

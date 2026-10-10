@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
 import { migrate } from "./migrations";
-import type { Account, ClaimResult, ClaimView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
+import type { Account, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
 
 type Row = Record<string, unknown>;
 
@@ -47,6 +47,26 @@ export class SqliteStorage implements Storage {
   }
   private run(sql: string, ...args: (string | number | null)[]) {
     return this.db.prepare(sql).run(...args);
+  }
+
+  async useArtQuota(quotas: ArtQuota[], now: number, consume: boolean): Promise<ArtQuotaResult> {
+    const day = new Date(now).toISOString().slice(0, 10);
+    return this.tx(() => {
+      this.run("DELETE FROM art_usage WHERE day < ?", day);
+      for (const q of quotas) {
+        const row = this.get("SELECT count FROM art_usage WHERE key = ? AND day = ?", q.key, day);
+        if (((row?.count as number | undefined) ?? 0) >= q.max) {
+          const d = new Date(now);
+          return { ok: false as const, retryAt: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) };
+        }
+      }
+      if (consume) {
+        for (const q of quotas) {
+          this.run("INSERT INTO art_usage (key, day, count) VALUES (?, ?, 1) ON CONFLICT (key, day) DO UPDATE SET count = count + 1", q.key, day);
+        }
+      }
+      return { ok: true as const };
+    });
   }
 
   async findOrCreateAccount(email: string, now: number): Promise<Account> {

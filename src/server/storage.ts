@@ -58,6 +58,13 @@ export type ClaimResult =
   | { status: "expired" }
   | { status: "missing" };
 
+export interface ArtQuota {
+  key: string;
+  max: number;
+}
+
+export type ArtQuotaResult = { ok: true } | { ok: false; retryAt: number };
+
 export interface Storage {
   // accounts
   findOrCreateAccount(email: string, now: number): Promise<Account>;
@@ -101,6 +108,13 @@ export interface Storage {
   /** The same owner and stub id always get the same token; the snapshot is replaced each time. */
   upsertShare(ownerKey: string, stub: Stub, newToken: string, now: number): Promise<string>;
   getShare(token: string): Promise<Stub | null>;
+
+  // art generation caps
+  /**
+   * Checks every quota for today (UTC). When all have room and `consume` is true, counts one use on each, atomically.
+   * When any is full, nothing is counted and `retryAt` is the next UTC midnight (epoch ms).
+   */
+  useArtQuota(quotas: ArtQuota[], now: number, consume: boolean): Promise<ArtQuotaResult>;
 
   // organizer events and claims
   createEvent(

@@ -37,7 +37,19 @@ interface Paper {
   small: string;
 }
 
+function legalOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "https://getticketstub.com";
+  }
+}
+
+/** One plain line at the foot of every email: where the privacy note and terms live. */
+const legalText = (url: string) => `Privacy: ${legalOrigin(url)}/privacy\nTerms: ${legalOrigin(url)}/terms`;
+
 function paper(p: Paper): string {
+  const origin = legalOrigin(p.button.url);
   const copy = p.lines
     .map((l) => `<tr><td style="padding:0 0 10px 0;font-family:${SERIF};font-size:18px;line-height:26px;color:${INK}">${esc(l)}</td></tr>`)
     .join("");
@@ -65,6 +77,8 @@ function paper(p: Paper): string {
     // fine print
     `<tr><td style="padding:18px 6px 0 6px;font-family:${SANS};font-size:12px;line-height:18px;color:${MUTED}">${esc(p.small)}<br>` +
     `Button not working? Paste this into your browser:<br><a href="${esc(p.button.url)}" style="color:${MUTED};word-break:break-all">${esc(p.button.url)}</a></td></tr>` +
+    `<tr><td style="padding:12px 6px 0 6px;font-family:${SANS};font-size:12px;line-height:18px;color:${MUTED}">` +
+    `<a href="${esc(origin)}/privacy" style="color:${MUTED}">Privacy</a> &middot; <a href="${esc(origin)}/terms" style="color:${MUTED}">Terms</a></td></tr>` +
     `</table></td></tr></table></body></html>`
   );
 }
@@ -83,7 +97,7 @@ export function magicLinkMail(reason: LinkReason, url: string, imageUrl: string)
   const c = LINK_COPY[reason];
   return {
     subject: c.subject,
-    text: `${c.lines.join(" ")}\n\n${c.button}: ${url}\n\n${IGNORE}\n\nTicketStub`,
+    text: `${c.lines.join(" ")}\n\n${c.button}: ${url}\n\n${IGNORE}\n\nTicketStub\n${legalText(url)}`,
     html: paper({ preheader: c.lines[0], lines: c.lines, imageUrl, imageAlt: "Your TicketStub", button: { label: c.button, url }, small: IGNORE }),
   };
 }
@@ -92,7 +106,7 @@ export function emailChangeMail(url: string, imageUrl: string): Mail {
   const lines = ["Open this link to make this your TicketStub email.", "It works once and expires in 15 minutes."];
   return {
     subject: "Confirm your new TicketStub email",
-    text: `${lines.join(" ")}\n\nConfirm your email: ${url}\n\n${IGNORE}\n\nTicketStub`,
+    text: `${lines.join(" ")}\n\nConfirm your email: ${url}\n\n${IGNORE}\n\nTicketStub\n${legalText(url)}`,
     html: paper({ preheader: lines[0], lines, imageUrl, imageAlt: "Your TicketStub", button: { label: "Confirm your email", url }, small: IGNORE }),
   };
 }
@@ -120,7 +134,7 @@ export function receiptMail(order: Order, wallUrl: string, imageUrl: string): Ma
     text:
       `${copy[0]}\n\n` +
       lines.map((l) => `${l.label}: ${l.price}`).join("\n") +
-      `\n\nTotal: ${total}\n${sandbox}\nOrder ${order.id}\n\nOpen your wall: ${wallUrl}\n\nTicketStub`,
+      `\n\nTotal: ${total}\n${sandbox}\nOrder ${order.id}\n\nOpen your wall: ${wallUrl}\n\nTicketStub\n${legalText(wallUrl)}`,
     html: paper({ preheader: `${copy[0]} ${total}.`, lines: copy, imageUrl, imageAlt: "Your stub", button: { label: "Open your wall", url: wallUrl }, middle, small: `Order ${order.id}` }),
   };
 }

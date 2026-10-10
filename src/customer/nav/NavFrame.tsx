@@ -8,6 +8,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, t
 import { SoundIcon } from "@/customer/desk/icons";
 import { AccountLine } from "@/customer/account/AccountLine";
 import { AccountRoot } from "@/customer/account/AccountRoot";
+import { useAccount } from "@/customer/account/useAccount";
 import { sharePath } from "@/customer/account/share";
 import { loadCart } from "@/customer/pages/commerce";
 import { memoryPath } from "@/customer/pages/share";
@@ -107,7 +108,9 @@ export function NavFrame({ children }: { children: ReactNode }) {
     document.documentElement.style.setProperty("--nav-w", `${w}px`);
   }, [show, desktop, open]);
 
-  const tree = useMemo(() => buildTree({ keys, stubs, cartCount: count, path }), [keys, stubs, count, path]);
+  const { status: accountStatus } = useAccount();
+  const unsaved = accountStatus === "out" && stubs.length > 0;
+  const tree = useMemo(() => buildTree({ keys, stubs, cartCount: count, path, unsaved }), [keys, stubs, count, path, unsaved]);
   const chain = useMemo(() => chainOf(tree, keys), [tree, keys]);
   const current = chain[chain.length - 1];
   const trail = new Set(chain.slice(0, -1));
@@ -167,7 +170,7 @@ export function NavFrame({ children }: { children: ReactNode }) {
         data-row-link
         data-trail={trail.has(n) ? "true" : undefined}
         aria-current={here ? "page" : undefined}
-        title={full ? undefined : n.label}
+        title={full ? undefined : n.dot ? `${n.label}: save your wall` : n.label}
         onClick={(e) => {
           select(n);
           if (n.key.startsWith("share:") && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
@@ -184,7 +187,7 @@ export function NavFrame({ children }: { children: ReactNode }) {
         {withIcon && Icon ? (
           <span className={f.icon}>
             <Icon />
-            {n.count ? <span className={f.dot} aria-hidden /> : null}
+            {n.count || n.dot ? <span className={f.dot} aria-hidden /> : null}
           </span>
         ) : null}
         <span className={f.label}>{n.label}</span>
@@ -333,7 +336,7 @@ export function NavFrame({ children }: { children: ReactNode }) {
               </ul>
             </nav>
             <div className={f.foot}>
-              <AccountLine compact={!full} />
+              {full ? <AccountLine /> : null}
               <button
                 type="button"
                 className={f.item}
