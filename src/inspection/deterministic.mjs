@@ -13,6 +13,7 @@ export const INSPECTION_LIMITS = Object.freeze({
 
 const PNG_SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
 const CONTRACT = "CreativeDeterministicInspection";
+const SAFE_MEDIA_TYPE = /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$/;
 const TYPED_ARRAY_PROTO = Object.getPrototypeOf(Uint8Array.prototype);
 const TYPED_ARRAY_BUFFER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTO, "buffer").get;
 const TYPED_ARRAY_BYTE_OFFSET = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTO, "byteOffset").get;
@@ -34,6 +35,10 @@ export function isSafePublicInspectionReference(value) {
     !/(?:sk|rk|gh[pousr]|xox[baprs])[-_][A-Za-z0-9_-]{8,}/i.test(value) &&
     !/^(?:bearer|basic)(?:$|[-_:])/i.test(value) &&
     !/[A-Za-z][A-Za-z0-9+.-]*:\/\//i.test(value);
+}
+
+function isSafePublicInspectionMediaType(value) {
+  return typeof value === "string" && SAFE_MEDIA_TYPE.test(value) && isSafePublicInspectionReference(value);
 }
 
 export class InspectionError extends Error {
@@ -393,6 +398,13 @@ export function inspectCreativeArtifact(input) {
   if (publicSubjectReferences.some((reference) => !isSafePublicInspectionReference(reference))) {
     fail("invalid_references", "subject.identity", "A subject identity is not safe for public inspection output.");
   }
+  // Keep the exact C01 media_type for hash/subject identity, but only emit it
+  // when it is a bounded MIME token and safe public reference. Safe, unknown
+  // media types remain visible as review-only; private values fail closed.
+  const publicMediaType = design.artifact.media_type;
+  if (!isSafePublicInspectionMediaType(publicMediaType)) {
+    fail("invalid_references", "subject.media_type", "Artifact media type is not safe for public inspection output.");
+  }
 
   let parentDesignHash = null;
   if (design.parent_version_id !== null) {
@@ -425,7 +437,7 @@ export function inspectCreativeArtifact(input) {
   let dimensions = null;
   let decodeError = null;
   let decodeStatus = "fail";
-  if (design.artifact.media_type !== "image/png") {
+  if (publicMediaType !== "image/png") {
     decodeError = "unsupported_media_type";
     decodeStatus = "unknown";
   } else {
@@ -471,7 +483,7 @@ export function inspectCreativeArtifact(input) {
     artifact_id: design.artifact.artifact_id,
     artifact_hash: design.artifact.content_hash,
     actual_artifact_hash: actualHash,
-    media_type: design.artifact.media_type,
+    media_type: publicMediaType,
     dimensions,
     checks: Object.freeze(checks),
     gate,

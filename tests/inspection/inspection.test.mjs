@@ -449,6 +449,36 @@ test("corrupt bytes, mismatched hashes, unsupported decoder, and denied permissi
   assert.equal(structurallyCorrupt.gate, "failure");
 });
 
+test("public inspection handles preserve safe MIME types and reject private media-type values", () => {
+  for (const mediaType of [
+    "Bearer synthetic-private-media-token",
+    "owner@example.test",
+    "https://private.invalid/artifact?signature=synthetic",
+    "image/x-sk-syntheticSecret0123456789",
+  ]) {
+    const subject = createSubject({ mediaType });
+    assert.throws(() => deterministic(subject), (error) => error.code === "invalid_references" &&
+      error.field === "subject.media_type" && !error.field.includes(mediaType) && !error.message.includes(mediaType),
+    `unsafe media type must be rejected without echoing ${mediaType}`);
+  }
+
+  const pngSubject = createSubject({ mediaType: "image/png" });
+  const pngResult = deterministic(pngSubject);
+  assert.equal(pngResult.media_type, pngSubject.design_version.artifact.media_type);
+  assert.equal(pngResult.gate, "eligible");
+
+  const jpegSubject = createSubject({ mediaType: "image/jpeg" });
+  const jpegResult = deterministic(jpegSubject);
+  assert.equal(jpegResult.media_type, jpegSubject.design_version.artifact.media_type);
+  assert.equal(jpegResult.gate, "needs_human_review");
+  assert.equal(jpegResult.checks.find((check) => check.id === "artifact_decode")?.reason, "unsupported_media_type");
+
+  const safeUnknownSubject = createSubject({ mediaType: "application/vnd.fixture+json" });
+  const safeUnknownResult = deterministic(safeUnknownSubject);
+  assert.equal(safeUnknownResult.media_type, "application/vnd.fixture+json");
+  assert.equal(safeUnknownResult.gate, "needs_human_review");
+});
+
 test("parent identity and source references remain exact across immutable inspection lineage", () => {
   const parent = createSubject();
   const child = createSubject({ parent });
