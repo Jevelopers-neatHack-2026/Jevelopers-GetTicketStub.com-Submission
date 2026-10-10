@@ -252,4 +252,3 @@ function hasInternalSubset(doctype) {
   }
   return false;
 }
-
