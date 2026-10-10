@@ -664,6 +664,95 @@ test("reports JSON and plain-text quota exhaustion with resource outcomes and re
   assertExactRanges(plainPartial, Buffer.from("Introduction then cancellation notice"));
 });
 
+test("cuts plain-text byte quotas only at valid UTF-8 boundaries", async () => {
+  const cases = [
+    { text: "😊abcdefghijk", limit: 10, expected: "😊abcdef", truncated: true },
+    { text: "A😊BC", limit: 4, expected: "A", truncated: true },
+    { text: "A😊BC", limit: 5, expected: "A😊", truncated: true },
+    { text: "A😊BC", limit: 7, expected: "A😊BC", truncated: false },
+    { text: "😊😊ABC", limit: 9, expected: "😊😊A", truncated: true },
+    { text: "\uFEFFFirst\r\n😊 second", limit: 10, expected: "\uFEFFFirst\r\n", truncated: true },
+    { text: "A".repeat(20), limit: 10, expected: "A".repeat(10), truncated: true },
+  ];
+
+  for (const { text, limit, expected, truncated } of cases) {
+    const input = document(Buffer.from(text), "text/plain");
+    const result = await extractDeterministically(input, { limits: { maxVisibleTextBytes: limit } });
+    assert.equal(result.visibleText.length, 1, `${JSON.stringify(text)} at ${limit} bytes`);
+    assert.equal(result.visibleText[0].rawValue, expected, `${JSON.stringify(text)} at ${limit} bytes`);
+    assert.ok(Buffer.byteLength(result.visibleText[0].rawValue) <= limit);
+    assert.equal(result.visibleText[0].source.locator.startByte, 0);
+    assert.equal(result.visibleText[0].source.locator.endByte, Buffer.byteLength(expected));
+    assert.equal(result.termination, truncated ? "RESOURCE_LIMIT" : null);
+    assert.equal(result.status, "PARTIAL");
+    assert.equal(result.diagnostics.some((item) => item.code === "VISIBLE_TEXT_LIMIT"), truncated);
+    assertExactRanges(result, input.bytes);
+  }
+});
+
+test("retains early plain-text event copy with the default byte quota after supplementary characters", async () => {
+  const cases = [
+    `😊 The festival starts October 15 at Green Hall.\n${"x".repeat(530_000)}`,
+    `Introduction. 😊 The festival starts October 15 at Green Hall.\n${"x".repeat(530_000)}`,
+  ];
+
+  for (const text of cases) {
+    const input = document(Buffer.from(text), "text/plain");
+    const result = await extractDeterministically(input);
+    assert.equal(result.status, "PARTIAL");
+    assert.equal(result.termination, "RESOURCE_LIMIT");
+    assert.equal(result.visibleText.length, 1);
+    assert.ok(result.visibleText[0].normalizedValue.startsWith(text.slice(0, text.indexOf("\n"))));
+    assert.match(result.visibleText[0].normalizedValue, /October 15 at Green Hall/);
+    assert.equal(Buffer.byteLength(result.visibleText[0].rawValue), 512 * 1024);
+    assert.equal(result.visibleText[0].source.locator.endByte, 512 * 1024);
+    assertExactRanges(result, input.bytes);
+  }
+});
+
+test("applies signal count and document-byte ceilings consistently across plain text and XML/HTML", async () => {
+  const cases = [
+    ["text/plain", "Cancelled event: access denied"],
+    ["text/html", "<p>Cancelled event: access denied</p>"],
+    ["application/xhtml+xml", '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Cancelled event: access denied</p></body></html>'],
+  ];
+
+  for (const [contentType, source] of cases) {
+    const input = document(Buffer.from(source), contentType);
+    const noSignals = await extractDeterministically(input, { limits: { maxStatusSignalCandidates: 0 } });
+    assert.equal(noSignals.statusMentions.length, 0, contentType);
+    assert.equal(noSignals.accessSignals.length, 0, contentType);
+    assert.equal(noSignals.termination, "RESOURCE_LIMIT", contentType);
+    assert.ok(noSignals.diagnostics.some((item) => item.code === "STATUS_SIGNAL_LIMIT"), contentType);
+    assert.ok(noSignals.diagnostics.some((item) => item.code === "ACCESS_SIGNAL_LIMIT"), contentType);
+    assertExactRanges(noSignals, input.bytes);
+
+    const oneOfEach = await extractDeterministically(input, { limits: { maxStatusSignalCandidates: 1 } });
+    assert.equal(oneOfEach.statusMentions.length, 1, contentType);
+    assert.equal(oneOfEach.accessSignals.length, 1, contentType);
+    assert.equal(oneOfEach.status, "ACCESS_RESTRICTED", contentType);
+    assert.equal(oneOfEach.termination, null, contentType);
+    assertExactRanges(oneOfEach, input.bytes);
+
+    const signalAfterVisibleQuota = await extractDeterministically(input, {
+      limits: { maxVisibleTextBytes: 1, maxStatusSignalCandidates: 1 },
+    });
+    assert.equal(signalAfterVisibleQuota.statusMentions.length, 1, contentType);
+    assert.equal(signalAfterVisibleQuota.accessSignals.length, 1, contentType);
+    assert.equal(signalAfterVisibleQuota.status, "ACCESS_RESTRICTED", contentType);
+    assert.equal(signalAfterVisibleQuota.termination, "RESOURCE_LIMIT", contentType);
+    assert.ok(signalAfterVisibleQuota.diagnostics.some((item) => item.code === "VISIBLE_TEXT_LIMIT"), contentType);
+    assertExactRanges(signalAfterVisibleQuota, input.bytes);
+
+    const documentQuota = await extractDeterministically(input, { limits: { maxDocumentBytes: 1 } });
+    assert.equal(documentQuota.status, "RESOURCE_LIMIT", contentType);
+    assert.equal(documentQuota.termination, "RESOURCE_LIMIT", contentType);
+    assert.equal(documentQuota.statusMentions.length, 0, contentType);
+    assert.equal(documentQuota.accessSignals.length, 0, contentType);
+    assert.ok(documentQuota.diagnostics.some((item) => item.code === "DOCUMENT_BYTE_LIMIT"), contentType);
+  }
+});
+
 test("honors cancellation and does not access the network for canonical or remote IDs", async () => {
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;

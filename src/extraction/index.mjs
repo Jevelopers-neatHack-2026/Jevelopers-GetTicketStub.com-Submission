@@ -508,8 +508,9 @@ function collectPlainText(state) {
     endOffset = 0;
     for (let index = 0; index < state.byteOffsetMap.length; index += 1) {
       const byteOffset = state.byteOffsetMap[index];
-      if (byteOffset !== 0xffff_ffff && byteOffset <= state.limits.maxVisibleTextBytes) endOffset = index;
+      if (byteOffset === 0xffff_ffff) continue;
       if (byteOffset > state.limits.maxVisibleTextBytes) break;
+      endOffset = index;
     }
   }
   const candidate = endOffset > 0 && state.limits.maxVisibleTextSegments > 0
@@ -543,11 +544,29 @@ function collectPlainText(state) {
     normalizedValue: state.text.replace(/^\uFEFF/, ""),
   });
   if (!wholeDocumentCandidate) return;
-  if (/\b(cancel(?:led|ed|lation)?|postpon(?:ed|ement)?|reschedul(?:ed|e|ing)|new date|date changed|moved to)\b/i.test(wholeDocumentCandidate.normalizedValue)) {
-    state.statusMentions.push(wholeDocumentCandidate);
-  }
-  if (/\b(access denied|request blocked|you (?:have been|are) blocked|verify (?:that )?you are human|security challenge|unusual traffic|captcha)\b/i.test(wholeDocumentCandidate.normalizedValue)) {
-    state.accessSignals.push(wholeDocumentCandidate);
+  appendPlainTextSignal(
+    state,
+    wholeDocumentCandidate,
+    state.statusMentions,
+    /\b(cancel(?:led|ed|lation)?|postpon(?:ed|ement)?|reschedul(?:ed|e|ing)|new date|date changed|moved to)\b/i,
+    "STATUS_SIGNAL_LIMIT",
+  );
+  appendPlainTextSignal(
+    state,
+    wholeDocumentCandidate,
+    state.accessSignals,
+    /\b(access denied|request blocked|you (?:have been|are) blocked|verify (?:that )?you are human|security challenge|unusual traffic|captcha)\b/i,
+    "ACCESS_SIGNAL_LIMIT",
+  );
+}
+
+function appendPlainTextSignal(state, candidate, target, pattern, limitCode) {
+  if (!pattern.test(candidate.normalizedValue)) return;
+  if (target.length < state.limits.maxStatusSignalCandidates) {
+    target.push(candidate);
+  } else {
+    state.termination = "RESOURCE_LIMIT";
+    addDiagnostic(state, limitCode);
   }
 }
 
