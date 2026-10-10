@@ -2,6 +2,7 @@ import {
   DurableWorkflowStore,
   createHmacTokenizer,
   createTelemetryExporter,
+  projectTelemetryEvent,
   type TelemetryRecord,
   type TelemetrySink
 } from '@jevelopers/agent-harness-runtime';
@@ -23,4 +24,8 @@ const exporter = createTelemetryExporter({
 
 const page = store.readEventPage({ afterSequence: 0, limit: 100 });
 void page.events[0]?.type;
+const pageProjection = projectTelemetryEvent(page.events[0], tokenizer.tokenize);
+const listedProjection = projectTelemetryEvent(store.listEvents()[0], tokenizer.tokenize);
+void pageProjection.eventId;
+void listedProjection.eventId;
 void exporter.diagnostics().pendingRecords;

@@ -286,7 +286,7 @@ export interface TelemetrySink {
 
 export function createHmacTokenizer(key: Uint8Array): TelemetryTokenizer;
 export function projectTelemetryEvent(
-  event: Record<string, unknown>,
+  event: DurableWorkflowEvent,
   tokenize: (kind: 'event' | 'workflow', value: string) => string
 ): TelemetryRecord;
 export type TelemetryExporterOptions = {
