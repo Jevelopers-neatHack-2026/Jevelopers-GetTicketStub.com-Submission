@@ -53,9 +53,13 @@ function actor(overrides = {}) {
 }
 
 function versionFrom(base, patch = {}) {
-  const next = { ...base, ...patch, design_hash: undefined };
+  const artifactBytes = base.artifact_bytes;
+  const canonicalBase = { ...base };
+  delete canonicalBase.artifact_bytes;
+  const next = { ...canonicalBase, ...patch, design_hash: undefined };
   delete next.design_hash;
-  return { ...next, design_hash: computeDesignVersionHash(next) };
+  return { ...next, design_hash: computeDesignVersionHash(next),
+    ...(artifactBytes instanceof Uint8Array ? { artifact_bytes: artifactBytes } : {}) };
 }
 
 function sortedVersions(values) {
@@ -251,12 +255,21 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
       if (input.scope.tenant_id !== brief.tenant_id || input.scope.project_id !== brief.project_id) throw new Error("foreign scope");
       if (input.expected_brief_hash !== canonicalHash(brief)) return { status: "stale" };
       const currentId = current.get(input.brief_id) ?? null;
-      if (currentId !== input.expected_current_design_version_id) return { status: "stale" };
-      const currentDesign = currentId === null ? null : designs.get(currentId);
-      if ((currentDesign?.design_hash ?? null) !== input.expected_current_design_hash) return { status: "stale" };
+      if (input.selection_mode === "advance") {
+        if (currentId !== input.expected_current_design_version_id) return { status: "stale" };
+        const currentDesign = currentId === null ? null : designs.get(currentId);
+        if ((currentDesign?.design_hash ?? null) !== input.expected_current_design_hash) return { status: "stale" };
+      } else {
+        const parent = input.expected_parent_design_version_id === null ? null : designs.get(input.expected_parent_design_version_id);
+        if (!parent || parent.design_hash !== input.expected_parent_design_hash ||
+          input.design_version.parent_version_id !== parent.design_version_id) return { status: "stale" };
+      }
       designs.set(input.design_version.design_version_id, structuredClone(input.design_version));
-      current.set(input.brief_id, input.design_version.design_version_id);
-      selectionRevisions.set(input.brief_id, (selectionRevisions.get(input.brief_id) ?? 0) + 1);
+      stateArtifactBytes.set(input.design_version.artifact.artifact_id, Uint8Array.from(input.artifact_bytes));
+      if (input.selection_mode === "advance") {
+        current.set(input.brief_id, input.design_version.design_version_id);
+        selectionRevisions.set(input.brief_id, (selectionRevisions.get(input.brief_id) ?? 0) + 1);
+      }
       return { status: "saved" };
     },
     selectDesignVersion(input) {
@@ -272,7 +285,8 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
       current.set(input.brief_id, input.design_version_id);
       selectionRevisions.set(input.brief_id, revision + 1);
       return { status: "selected", selection: { tenant_id: brief.tenant_id, project_id: brief.project_id,
-        brief_id: input.brief_id, design_version_id: input.design_version_id, revision: revision + 1 } };
+        brief_id: input.brief_id, design_version_id: input.design_version_id,
+        design_hash: designs.get(input.design_version_id).design_hash, revision: revision + 1 } };
     },
     getBriefForDesign(input) {
       calls.storage.push({ method: "getBriefForDesign", scope: input.scope });
@@ -316,24 +330,33 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
     async generate(input) {
       calls.provider += 1;
       await input.recordTransportAttempt(input.transport_attempt_id);
-      return providerImpl ? providerImpl("generate", input) : providerOutput();
+      return providerImpl ? fixtureProviderOutput(await providerImpl("generate", input)) : providerOutput();
     },
     async edit(input) {
       calls.provider += 1;
       await input.recordTransportAttempt(input.transport_attempt_id);
-      return providerImpl ? providerImpl("edit", input) : providerOutput();
+      return providerImpl ? fixtureProviderOutput(await providerImpl("edit", input)) : providerOutput();
     },
   };
 
+  function fixtureProviderOutput(value) {
+    if (!value || !value.artifact || Object.hasOwn(value, "artifact_bytes")) return value;
+    const bytes = Buffer.from(`fixture artifact bytes:${value.artifact.artifact_id}`);
+    return { ...value, artifact: { ...value.artifact,
+      content_hash: `sha256:${createHash("sha256").update(bytes).digest("hex")}` }, artifact_bytes: bytes };
+  }
+
   function providerOutput() {
     generated += 1;
+    const artifactBytes = Buffer.from(`fixture artifact bytes:generated-${generated}`);
     return {
       design_version_id: `generated-design-${generated}`,
       artifact: {
         artifact_id: `generated-artifact-${generated}`,
-        content_hash: `sha256:${String(generated).padStart(64, "c")}`,
+        content_hash: `sha256:${createHash("sha256").update(artifactBytes).digest("hex")}`,
         media_type: "image/png",
       },
+      artifact_bytes: artifactBytes,
       provider: "fixture-provider",
       model: "fixture-model",
       usage: { completeness: "complete", input_tokens: 12, output_tokens: 24 },
@@ -593,6 +616,74 @@ test("edit checks current version, known source/artifact references, and parent 
   assert.equal(response.result.design_version.parent_version_id, "design-api-1");
   assert.equal(state.calls.provider, 1);
   assert.equal(state.current.get("brief-api-1"), response.result.design_version.design_version_id);
+});
+
+test("explicit-parent edit branches from a retained version without moving current selection", async () => {
+  await loadPlans();
+  const harness = await setup({ secondDesign: true });
+  const parentHash = harness.state.designs.get("design-api-1").design_hash;
+  const response = await harness.api.invoke(actor(), request("edit", {
+    brief_id: "brief-api-1", design_version_id: "design-api-1", selection_mode: "branch",
+    plan: boundEditPlan(harness.state, "design-api-1"),
+  }, "action-explicit-branch"));
+  assert.equal(response.ok, true, JSON.stringify(response));
+  const branch = response.result.design_version;
+  assert.equal(branch.parent_version_id, "design-api-1");
+  assert.equal(harness.state.current.get("brief-api-1"), "design-api-2");
+  assert.equal(harness.state.designs.get("design-api-1").design_hash, parentHash);
+  assert.equal(harness.state.designs.has(branch.design_version_id), true);
+  assert.equal(`sha256:${createHash("sha256").update(harness.state.stateArtifactBytes.get(branch.artifact.artifact_id)).digest("hex")}`,
+    branch.artifact.content_hash);
+  assert.equal(harness.state.calls.provider, 1);
+  const saved = harness.state.calls.storage.find((item) => item.method === "saveDesignVersion");
+  assert.ok(saved);
+});
+
+test("provider artifact bytes are copied before storage awaits and must match their declared hash", async () => {
+  await loadPlans();
+  const originalBytes = Uint8Array.from([7, 8, 9, 10]);
+  const expectedBytes = Uint8Array.from(originalBytes);
+  const digest = `sha256:${createHash("sha256").update(originalBytes).digest("hex")}`;
+  let externalBytes = originalBytes;
+  let enteredSave;
+  let releaseSave;
+  const saveStarted = new Promise((resolve) => { enteredSave = resolve; });
+  const saveGate = new Promise((resolve) => { releaseSave = resolve; });
+  const harness = await setup({ withDesign: false, providerImpl: async () => ({
+    design_version_id: "design-byte-snapshot",
+    artifact: { artifact_id: "artifact-byte-snapshot", content_hash: digest, media_type: "image/png" },
+    artifact_bytes: externalBytes,
+    provider: "fixture-provider", model: "fixture-model",
+    usage: { completeness: "complete", input_tokens: 1, output_tokens: 2 },
+  }) });
+  const save = harness.ports.storage.saveDesignVersion.bind(harness.ports.storage);
+  harness.ports.storage.saveDesignVersion = async (input, transaction) => {
+    enteredSave();
+    await saveGate;
+    return save(input, transaction);
+  };
+  const operation = harness.api.invoke(actor(), generationRequest("action-byte-snapshot"));
+  await saveStarted;
+  externalBytes.fill(0);
+  releaseSave();
+  const response = await operation;
+  assert.equal(response.ok, true, JSON.stringify(response));
+  assert.equal(response.result.design_version.artifact.content_hash, digest);
+  assert.deepEqual(harness.state.stateArtifactBytes.get("artifact-byte-snapshot"), expectedBytes);
+
+  const malformed = await setup({ withDesign: false, providerImpl: async () => ({
+    design_version_id: "design-byte-hash-mismatch",
+    artifact: { artifact_id: "artifact-byte-hash-mismatch", content_hash: `sha256:${"a".repeat(64)}`, media_type: "image/png" },
+    artifact_bytes: Uint8Array.from([1, 2, 3]),
+    provider: "fixture-provider", model: "fixture-model",
+    usage: { completeness: "complete", input_tokens: 1, output_tokens: 2 },
+  }) });
+  const rejected = await malformed.api.invoke(actor(), generationRequest("action-byte-hash-mismatch"));
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.error.code, "failed");
+  assert.equal(rejected.error.field, "artifact_content_hash");
+  assert.equal(malformed.state.calls.storage.some((item) => item.method === "saveDesignVersion"), false);
+  assert.equal(malformed.state.calls.usage[0].completeness, "complete");
 });
 
 test("malformed and unsupported requests fail before billing or provider dispatch", async () => {
@@ -1045,7 +1136,7 @@ test("restore selects the existing immutable version by selection CAS without cr
   }, "action-restore-1"));
   assert.equal(restored.ok, true, JSON.stringify(restored));
   assert.deepEqual(restored.result.selection, { tenant_id: "tenant-api-1", project_id: "project-api-1", brief_id: "brief-api-1",
-    design_version_id: "design-api-1", revision: 2 });
+    design_version_id: "design-api-1", design_hash: initialDesign.design_hash, revision: 2 });
   assert.equal(state.designs.size, 2);
   assert.equal(state.designs.get("design-api-1").design_hash, initialDesign.design_hash);
   assert.equal(state.designs.has("design-api-2"), true);
@@ -1062,6 +1153,7 @@ test("completed restore replay reports its original selection after later select
   const first = await api.invoke(actor(), firstRequest);
   assert.equal(first.ok, true, JSON.stringify(first));
   assert.equal(first.result.selection.revision, 2);
+  assert.equal(first.result.selection.design_hash, initialDesign.design_hash);
 
   const later = await api.invoke(actor(), request("restore", {
     brief_id: "brief-api-1", target_design_version_id: "design-api-2", expected_selection_revision: 2,
@@ -1079,11 +1171,13 @@ test("completed restore replay reports its original selection after later select
   assert.equal(repeated.replayed, true);
   assert.equal(repeated.result.selection.design_version_id, "design-api-1");
   assert.equal(repeated.result.selection.revision, 2);
+  assert.equal(repeated.result.selection.design_hash, initialDesign.design_hash);
   assert.equal(state.current.get("brief-api-1"), "design-api-2");
   assert.equal(state.selectionRevisions.get("brief-api-1"), 3);
   assert.equal(state.calls.provider, 0);
 
   const stored = [...state.jobs.values()].find((job) => job.action_id === "action-restore-replay");
+  assert.equal(stored.result.selection.design_hash, initialDesign.design_hash);
   stored.result.selection.authorization = "SYNTHETIC-NOT-A-REAL-CREDENTIAL";
   const privateReplay = structuredClone(firstRequest);
   privateReplay.event_id += ":private";
