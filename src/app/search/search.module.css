@@ -3,37 +3,13 @@
   min-height: 100dvh;
 }
 
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
-}
-.back {
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  color: var(--desk-ink);
-  transition: background-color var(--desk-release) ease;
-}
-.back:hover {
-  background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
-}
-
 .main {
   display: grid;
   align-content: start;
   gap: 18px;
   max-width: 720px;
   margin: 0 auto;
-  padding: 8px 16px 72px;
+  padding: calc(32px + env(safe-area-inset-top)) 16px 72px;
 }
 
 .title {
@@ -185,7 +161,7 @@
   white-space: nowrap;
 }
 .chev {
-  font-size: 1.5rem;
+  display: inline-flex;
   color: var(--desk-ink-soft);
 }
 
@@ -197,9 +173,6 @@
   .main {
     padding-top: 32px;
     gap: 22px;
-  }
-  .header {
-    padding-inline: 24px;
   }
 }
 

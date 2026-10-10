@@ -989,3 +989,65 @@ button.chip:focus-visible {
   opacity: 0.88;
   flex: none;
 }
+
+/* ======================================================================
+   ADMIT LINE: "Admit · Jamie R." when the stub was issued to a named guest.
+   Always the last item inside the edition's type block (never positioned over the title or art),
+   in that edition's own small type and ink. data-guest on the figure gives the block a little more room.
+   ====================================================================== */
+.admit {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+.admitName {
+  font-weight: 800;
+}
+.researched .admit {
+  font-size: 2.7cqw;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  opacity: 0.8;
+  margin-top: 0.8cqw;
+}
+.researched[data-guest] .type {
+  bottom: 5cqw;
+}
+.letterpress .lpAdmitName {
+  font-family: var(--font-ui), sans-serif;
+  font-size: 1.35cqw;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  max-width: 50cqw;
+}
+.risograph .admit {
+  font-size: 2.8cqw;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+  color: var(--ink);
+}
+.minimal .admit {
+  font-size: 2.6cqw;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  color: var(--ink);
+}
+.classic .admit {
+  font-family: var(--body);
+  font-size: 1.6cqw;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+.backAdmit {
+  font-size: calc(2.6 * var(--u));
+  letter-spacing: 0.16em;
+  color: var(--ink);
+  opacity: 0.85;
+}

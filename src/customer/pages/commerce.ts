@@ -45,6 +45,9 @@ export function materialPrice(material: Material): number {
 }
 
 export interface Quote {
+  /** Stable for the same choice (material, finish, size, quantity), so every screen can name the quote it priced. Reference only: the platform's FulfillmentQuote is not wired in. */
+  quoteId: string;
+  currency: "USD";
   material: Material;
   finish: Finish;
   size: PrintSize;
@@ -60,7 +63,8 @@ export function quote(material: Material, finish: Finish, size: PrintSize, qty =
   const itemMinor = materialPrice(material) * qty;
   const finishMinor = physical ? (FINISHES.find((f) => f.id === finish)?.upchargeMinor ?? 0) * qty : 0;
   const shippingMinor = physical ? SHIPPING_ESTIMATE_MINOR : 0;
-  return { material, finish, size, itemMinor, finishMinor, shippingMinor, totalMinor: itemMinor + finishMinor + shippingMinor, expiresAt: Date.now() + 15 * 60_000 };
+  const quoteId = `qt_${material}_${finish}_${size}_x${qty}`;
+  return { quoteId, currency: "USD", material, finish, size, itemMinor, finishMinor, shippingMinor, totalMinor: itemMinor + finishMinor + shippingMinor, expiresAt: Date.now() + 15 * 60_000 };
 }
 
 export interface Order {
@@ -70,6 +74,8 @@ export interface Order {
   stubIds: string[];
   lines: { title: string; material: Material; finish: Finish; size: PrintSize; totalMinor: number }[];
   totalMinor: number;
+  currency?: "USD"; // filled by addOrder
+  quoteId?: string; // the quote the order was priced from, when there is one
   method: "apple-pay" | "google-pay" | "card" | "gift-print" | "organizer-print";
   email?: string;
 }
@@ -82,6 +88,7 @@ export interface CartItem {
   finish: Finish;
   size: PrintSize;
   unitMinor: number; // item + finish, per stub
+  quoteId?: string; // the single-stub quote this unit price came from
   seats: CartSeat[]; // matching set: one stub per seat
   addedAt: string;
 }
@@ -128,7 +135,7 @@ function write<T>(key: string, value: T[]): void {
 
 export const loadOrders = () => read<Order>(ORDERS_KEY);
 export function addOrder(order: Omit<Order, "id" | "mode" | "createdAt">): Order {
-  const full: Order = { ...order, id: `sbx_${Math.random().toString(36).slice(2, 10)}`, mode: "sandbox", createdAt: new Date().toISOString() };
+  const full: Order = { currency: "USD", ...order, id: `sbx_${Math.random().toString(36).slice(2, 10)}`, mode: "sandbox", createdAt: new Date().toISOString() };
   write(ORDERS_KEY, [full, ...loadOrders()]);
   return full;
 }
@@ -147,6 +154,7 @@ export function cartItemFromStub(stub: Stub, material: Material, finish: Finish,
     finish,
     size,
     unitMinor: q.itemMinor + q.finishMinor,
+    quoteId: q.quoteId,
     seats,
     addedAt: new Date().toISOString(),
   };

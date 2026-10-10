@@ -154,7 +154,7 @@ export function FloatingToolbar({ stub, selected, onChange, onDone, onRemix }: P
           </Tool>
         )}
         <Tool icon={<DoneIcon />} onClick={onDone}>
-          Done
+          Back to stub
         </Tool>
       </Tools>
     </div>

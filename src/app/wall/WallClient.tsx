@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { StubView } from "@/customer/studio/stub/StubView";
@@ -9,6 +8,9 @@ import { MATERIALS, formatMoney, type Stub } from "@/customer/studio/types";
 import { FINISHES, materialPrice } from "@/customer/pages/commerce";
 import { copyText, absoluteUrl, encodeWall, memoryPath, formatDate, WALL_TOKEN_MAX } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
+import { LeavesMark } from "@/customer/pages/ui";
+import { useNavHidden } from "@/customer/nav/navState";
+import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { PaperButton, SandboxStrip, Stamp, Stamped, Switch, Tag, Tags, TearLink, Tool, Tools } from "@/customer/desk/Desk";
 import { FlipIcon } from "@/customer/desk/icons";
 import { EditIcon, OpenIcon, PrintIcon, ShareIcon } from "./liftIcons";
@@ -65,6 +67,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
   const [dragId, setDragId] = useState<string | null>(null);
   const publicRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [loaded, setLoaded] = useState(false);
@@ -93,7 +96,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
     );
     // bring the board up so the landing and its next steps are in view, on a phone as on a desk
     const sc = setTimeout(() => {
-      const top = boardRef.current?.getBoundingClientRect().top;
+      const top = (trackRef.current ?? boardRef.current)?.getBoundingClientRect().top;
       if (top !== undefined) window.scrollTo({ top: window.scrollY + top - 12, behavior: "instant" });
     }, 120);
     window.history.replaceState(null, "", "/wall");
@@ -183,13 +186,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
   }
 
   return (
-    <DeskPage
-      right={
-        <Link className={s.newLink} href="/" onClick={() => play("tap", { emphasis: "subtle" })}>
-          New stub
-        </Link>
-      }
-    >
+    <DeskPage>
       {landing ? <div className={`ts-stage desk-surface ${s.lights}`} aria-hidden="true" /> : null}
 
       {banner ? (
@@ -200,6 +197,12 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
           <TearLink type="button" onClick={() => setBanner(false)}>
             Dismiss
           </TearLink>
+        </div>
+      ) : null}
+
+      {landing ? (
+        <div ref={trackRef} className={s.track}>
+          <PathTrack current="wall" stubId={landing.id} fork />
         </div>
       ) : null}
 
@@ -243,6 +246,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
             <p className={s.emptyText}>Your first stub goes here.</p>
             <Stamp type="button" onClick={() => router.push("/")}>
               Make your first stub
+              <LeavesMark />
             </Stamp>
           </div>
         ) : (
@@ -345,13 +349,23 @@ function NextSteps({ stub }: { stub: Stub }) {
           Share your stub
         </Stamp>
         <PaperButton type="button" block className={s.printBtn} onClick={() => router.push(`/checkout/${stub.id}`)}>
-          <span>{digital ? "Get the file" : "Print it"}</span>
+          <span className={s.printLabel}>
+            {digital ? "Get the file" : "Print it"}
+            <LeavesMark />
+          </span>
           <span className={s.price}>{price}</span>
         </PaperButton>
         <p className={s.small}>{detail}</p>
-        <TearLink type="button" onClick={() => router.push(`/wallet/${stub.id}`)}>
-          Add to wallet
-        </TearLink>
+        <div className={s.noteLinks}>
+          <TearLink type="button" onClick={() => router.push(`/wallet/${stub.id}`)}>
+            Keep it in Wallet
+            <LeavesMark />
+          </TearLink>
+          <TearLink type="button" onClick={() => router.push(`/friends/${stub.id}`)}>
+            Send matching stubs to friends
+            <LeavesMark />
+          </TearLink>
+        </div>
       </div>
       <p className={s.small} role="status">
         {status}
@@ -364,6 +378,7 @@ function NextSteps({ stub }: { stub: Stub }) {
 /** A stub lifted under the lamp: the room dims to the stage, the stub tilts toward you, its tools sit on the cork. */
 function Lamp({ stub, lift, onPutBack, onDelete }: { stub: Stub; lift: Lift; onPutBack: () => void; onDelete: (id: string) => void }) {
   const router = useRouter();
+  useNavHidden(true);
   const [flipped, setFlipped] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [status, setStatus] = useState("");
@@ -425,17 +440,26 @@ function Lamp({ stub, lift, onPutBack, onDelete }: { stub: Stub; lift: Lift; onP
               <Tool icon={<FlipIcon />} onClick={flip}>
                 Flip
               </Tool>
-              <Tool icon={<OpenIcon />} onClick={() => router.push(path)}>
-                Open
+              <Tool icon={<OpenIcon />} aria-label="Open the stub's page" onClick={() => router.push(path)}>
+                <span className={s.toolGo}>
+                  Page
+                  <LeavesMark />
+                </span>
               </Tool>
               <Tool icon={<EditIcon />} onClick={() => router.push(`/studio/${stub.id}`)}>
-                Edit
+                <span className={s.toolGo}>
+                  Edit
+                  <LeavesMark />
+                </span>
               </Tool>
               <Tool icon={<ShareIcon />} onClick={async () => setStatus(await shareStub(stub))}>
                 Share
               </Tool>
               <Tool icon={<PrintIcon />} onClick={() => router.push(`/checkout/${stub.id}`)}>
-                Print
+                <span className={s.toolGo}>
+                  Print
+                  <LeavesMark />
+                </span>
                 <span className={s.toolPrice}>{formatMoney(printPrice(stub))}</span>
               </Tool>
             </Tools>

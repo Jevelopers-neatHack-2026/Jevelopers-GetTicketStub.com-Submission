@@ -10,6 +10,10 @@
   color: var(--desk-ink);
 }
 
+.track {
+  margin-bottom: 8px;
+}
+
 .headline {
   max-width: 18ch;
   margin: 8px 0 0;

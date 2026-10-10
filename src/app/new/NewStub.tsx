@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PaperButton, Stamp } from "@/customer/desk/Desk";
+import { LeavesMark } from "@/customer/pages/ui";
 import { useIsClient } from "@/customer/studio/editor/useClient";
 import type { EventData } from "@/customer/studio/types";
 import { DEMO_EVENTS, demoStubId } from "@/customer/studio/fixtures";
@@ -81,8 +82,14 @@ export function NewStub() {
           <h1 className={styles.errorTitle}>We couldn&apos;t read that link.</h1>
           <p className={styles.muted}>{error}</p>
           <div className={styles.actions}>
-            <Stamp onClick={() => router.push("/")}>Try another link</Stamp>
-            <PaperButton onClick={() => router.push("/search")}>Search for your show</PaperButton>
+            <Stamp onClick={() => router.push("/")}>
+              Paste another link
+              <LeavesMark />
+            </Stamp>
+            <PaperButton onClick={() => router.push("/search")}>
+              Search for your show
+              <LeavesMark />
+            </PaperButton>
           </div>
         </div>
       </main>

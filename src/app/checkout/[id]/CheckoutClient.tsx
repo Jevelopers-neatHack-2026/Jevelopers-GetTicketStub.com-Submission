@@ -8,7 +8,7 @@ import { holoAllowed, setFinish as applyFinish, setMaterial as applyMaterial } f
 import { haptic } from "@/customer/studio/feedback";
 import { getStub, upsertStub } from "@/customer/studio/store";
 import { MATERIALS, formatMoney, type Material, type Stub } from "@/customer/studio/types";
-import { PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
+import { LeavesMark, PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
 import { formatDate } from "@/customer/pages/share";
 import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, addOrder, addToCart, cartItemFromStub, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
 import { useMounted, nowMs } from "@/customer/pages/useMounted";
@@ -95,6 +95,8 @@ export default function CheckoutClient({ id }: { id: string }) {
       stubIds: [stub.id],
       lines: [{ title: stub.event.title, material, finish, size, totalMinor: q.totalMinor }],
       totalMinor: q.totalMinor,
+      currency: q.currency,
+      quoteId: q.quoteId,
       method: "card",
       email: email.trim() || undefined,
     });
@@ -248,7 +250,8 @@ export default function CheckoutClient({ id }: { id: string }) {
               </p>
             ) : null}
             <PaperButton type="button" block onClick={toCart} disabled={paid}>
-              Add to cart instead
+              Add to cart and open it
+              <LeavesMark />
             </PaperButton>
           </div>
 

@@ -10,6 +10,8 @@ import { EDITION_META } from "@/customer/studio/stub/editions";
 import { haptic, play } from "@/customer/studio/feedback";
 import { AgentChat } from "@/customer/studio/agent/AgentChat";
 import { AgentNotes } from "@/customer/studio/agent/AgentNotes";
+import { LeavesMark } from "@/customer/pages/ui";
+import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { PaperButton, PaperSheet, Stamp, Switch, Tag, Tags, Tool, Tools } from "@/customer/desk/Desk";
 import { AskIcon, FlipIcon, FriendsIcon, RemixIcon } from "@/customer/desk/icons";
 import { formatDate, hiddenLabel, setEdition, setHidden, stepEdition, type Selectable } from "./ops";
@@ -358,8 +360,14 @@ function EditorLoaded({ id }: { id: string }) {
         <h1>We couldn&apos;t find that stub on this device.</h1>
         <p>Stubs are saved in this browser. Make a new one from your ticket, or open your wall.</p>
         <div className={styles.missingActions}>
-          <Stamp onClick={() => window.setTimeout(() => router.push("/"), 200)}>Make a new stub</Stamp>
-          <PaperButton onClick={() => router.push("/wall")}>See your wall</PaperButton>
+          <Stamp onClick={() => window.setTimeout(() => router.push("/"), 200)}>
+            Paste a new link
+            <LeavesMark />
+          </Stamp>
+          <PaperButton onClick={() => router.push("/wall")}>
+            Open your wall
+            <LeavesMark />
+          </PaperButton>
         </div>
       </main>
     );
@@ -445,7 +453,10 @@ function EditorLoaded({ id }: { id: string }) {
         Flip
       </Tool>
       <Tool icon={<FriendsIcon />} onClick={() => router.push(`/friends/${stub.id}`)}>
-        Friends
+        <span className={styles.toolGo}>
+          Friends
+          <LeavesMark />
+        </span>
       </Tool>
       <Tool icon={<AskIcon />} active={sheet === "agent"} onClick={() => ask()}>
         Ask
@@ -487,16 +498,16 @@ function EditorLoaded({ id }: { id: string }) {
       <div className={`${styles.root} desk-surface`}>
         <div className={styles.desk}>
           <header className={styles.deskHeader}>
-            <Link className={styles.backLink} href="/wall">
-              <span aria-hidden="true">←</span> Your wall
-            </Link>
             <div className={styles.crumb}>
               <h1 className={styles.crumbTitle}>{ev.title}</h1>
               {crumb && <p className={styles.crumbSub}>{crumb}</p>}
             </div>
+            <PathTrack current="style" stubId={stub.id} className={styles.track} />
             <div className={styles.headerActions}>
-              <MuteToggle />
-              <PaperButton onClick={() => router.push(`/s/${shareToken}`)}>Share</PaperButton>
+              <PaperButton onClick={() => router.push(`/s/${shareToken}`)}>
+                Share page
+                <LeavesMark />
+              </PaperButton>
             </div>
           </header>
 
@@ -585,14 +596,16 @@ function EditorLoaded({ id }: { id: string }) {
     <div className={`${styles.root} desk-surface`}>
       <div className={styles.phone}>
         <header className={styles.topBar}>
-          <Link className={styles.back} href="/wall" aria-label="Back to your wall">
+          <Link className={styles.back} href="/wall">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M15 5l-7 7 7 7" />
             </svg>
+            Wall
           </Link>
           <h1 className={styles.title}>{ev.title}</h1>
           <MuteToggle />
         </header>
+        <PathTrack current="style" stubId={stub.id} className={styles.track} />
 
         <section
           ref={areaRef}

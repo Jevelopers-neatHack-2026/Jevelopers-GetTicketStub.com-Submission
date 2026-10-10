@@ -10,6 +10,7 @@ import type { EventData, Fact } from "../types";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play, stopPrint } from "@/customer/studio/feedback";
 import { MarkLegend, SourceMark, Stamped, TearLink } from "@/customer/desk/Desk";
+import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { researchEvent } from "./client";
 import styles from "./Printing.module.css";
 
@@ -221,6 +222,7 @@ export function Printing(props: {
 
   return (
     <section className={styles.stage} aria-label="Printing your stub" aria-busy={!settling}>
+      <PathTrack current="paste" className={styles.track} />
       <h1 className={styles.headline} key={headline} role="status" aria-live="polite">
         {headline}
       </h1>

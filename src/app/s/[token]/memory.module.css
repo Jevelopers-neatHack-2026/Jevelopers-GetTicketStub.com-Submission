@@ -415,6 +415,8 @@
   gap: 8px;
   margin: 0;
   min-width: 0;
+  /* the link preview scales with its column, so it keeps its 1200 × 630 shape at any width */
+  container-type: inline-size;
 }
 .previewFig figcaption {
   font: var(--type-label);
@@ -455,15 +457,23 @@
 }
 .og {
   display: grid;
-  --stub-max: 150px;
-  justify-items: start;
-  grid-template-columns: minmax(0, 1fr);
+  --stub-max: 24cqw;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
-  padding: 16px;
+  gap: 4cqw;
+  aspect-ratio: 1200 / 630;
+  padding: 4cqw;
+  overflow: hidden;
   border-radius: 6px;
   background: var(--desk-paper-raised);
   box-shadow: inset 0 0 0 1px var(--desk-rule), 0 1px 0 var(--desk-ledge), 0 14px 22px -16px rgb(23 20 15 / 0.5);
+}
+.og .storyMeta,
+.og .madeWith {
+  font-size: max(0.625rem, 2.6cqw);
+}
+.og .madeWith {
+  margin-top: 1cqw;
 }
 .ogText {
   display: grid;
@@ -472,7 +482,7 @@
 }
 .ogTitle {
   font: var(--type-h3);
-  font-size: 1.15rem;
+  font-size: max(0.8rem, 4.2cqw);
   font-variation-settings: "SOFT" 30, "opsz" 24;
   overflow-wrap: anywhere;
 }
@@ -576,11 +586,6 @@
 }
 
 /* Desktop: the stub is pinned on the left, the night scrolls on the right */
-@media (min-width: 640px) {
-  .og {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-}
 @media (min-width: 960px) {
   .layout {
     grid-template-columns: minmax(380px, 460px) minmax(0, 1fr);
@@ -602,10 +607,6 @@
   }
   .photos {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .previews {
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
   }
 }
 

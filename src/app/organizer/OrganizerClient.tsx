@@ -1,13 +1,13 @@
 "use client";
 import { useId, useMemo, useState } from "react";
-import { Field, PaperButton, PunchTabs, Rule, SandboxStrip, Stamp, Stamped, Tag, Tags, TearLink, Tool, Tools } from "@/customer/desk/Desk";
+import { FinishSwatches, Field, PaperButton, PunchTabs, Rule, SandboxStrip, SourceMark, Stamp, Stamped, Tag, Tags, TearLink, type FinishValue } from "@/customer/desk/Desk";
 import d from "@/customer/desk/Desk.module.css";
-import { FlipIcon } from "@/customer/desk/icons";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play } from "@/customer/studio/feedback";
-import { EDITIONS, formatMoney, type Edition } from "@/customer/studio/types";
+import { holoAllowed } from "@/customer/studio/editor/ops";
+import { EDITIONS, MATERIALS, formatMoney, withGuestName, type Edition, type Finish, type Material, type Stub } from "@/customer/studio/types";
 import { PageShell, CopyField, OnDesk, PaperLink, TearAnchor, ui } from "@/customer/pages/ui";
-import { SANDBOX_LABEL, addOrder } from "@/customer/pages/commerce";
+import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, addOrder, defaultSize, quote, sizesFor, type PrintSize } from "@/customer/pages/commerce";
 import {
   SAMPLE_CSV,
   autoMatch,
@@ -25,7 +25,13 @@ import { PrintRun } from "./PrintRun";
 import s from "./organizer.module.css";
 
 const STEPS = ["Design", "Guest list", "Check", "Publish"] as const;
-const PER_STUB_MINOR = 800;
+const MATERIAL_OPTIONS = MATERIALS.map((m) => ({ value: m.id, label: m.label, sub: formatMoney(m.priceMinor) }));
+
+/** "Classic stub · 2 × 5.5 in" becomes a tab ("Classic stub") with its dimensions beneath, as at checkout. */
+const sizeOption = (sz: PrintSize) => {
+  const [label, sub] = SIZE_LABEL[sz].split(" · ");
+  return { value: sz, label, sub };
+};
 const SAMPLE_GUEST = { name: "Priya Raman", seat: "A12" };
 const PAGE = 12;
 const EDITION_LABEL: Record<Edition, string> = {
@@ -75,7 +81,10 @@ export default function OrganizerClient() {
   const [published, setPublished] = useState(false);
   const [fileError, setFileError] = useState("");
   const [over, setOver] = useState(false);
-  const [flipped, setFlipped] = useState(false);
+  // Material, finish and size are chosen the way a fan chooses them at checkout, and priced by the same quote().
+  const [material, setMaterial] = useState<Material>("print");
+  const [finish, setFinish] = useState<Finish>("foil");
+  const [sizePick, setSizePick] = useState<PrintSize | null>(null);
 
   const guests = useMemo<Guest[]>(
     () =>
@@ -88,13 +97,20 @@ export default function OrganizerClient() {
   const seatLabel = (g: Guest) => (g.seat ? `Seat ${g.seat}` : undefined);
 
   // One stub per guest: the contact sheet, the preview and the print run all draw from these.
-  const guestStubs = useMemo(() => guests.map((g, i) => designStub(design, { id: `${design.setId}-${i}`, name: g.name, seat: seatLabel(g) })), [guests, design]);
+  // Each one carries the guest's name (printed "Admit · name" on the front) and the material and finish being priced.
+  const issue = (st: Stub, name: string): Stub => ({ ...withGuestName(st, name), material, finish });
+  const guestStubs = useMemo(
+    () => guests.map((g, i) => issue(designStub(design, { id: `${design.setId}-${i}`, seat: seatLabel(g) }), g.name)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [guests, design, material, finish],
+  );
 
   const sampleGuest = guests[0] ?? SAMPLE_GUEST;
   const inspect = step === 2 && guestStubs.length ? Math.min(page, guestStubs.length - 1) : -1;
   const preview = useMemo(
-    () => (inspect >= 0 ? guestStubs[inspect] : designStub(design, { id: "org-preview", name: sampleGuest.name, seat: seatLabel(sampleGuest) })),
-    [inspect, guestStubs, design, sampleGuest],
+    () => (inspect >= 0 ? guestStubs[inspect] : issue(designStub(design, { id: "org-preview", seat: seatLabel(sampleGuest) }), sampleGuest.name)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inspect, guestStubs, design, sampleGuest, material, finish],
   );
   const previewCaption = inspect >= 0 ? `${guests[inspect].name}, guest ${inspect + 1} of ${n}` : guests.length ? `Shown with ${sampleGuest.name}, your first guest.` : `Shown with a sample guest, ${sampleGuest.name}.`;
 
@@ -136,14 +152,24 @@ export default function OrganizerClient() {
 
   const canNext = step === 0 || (step === 1 && n > 0) || step === 2;
   const claimPath = `/organizer/claim?d=${encodeDesign(design)}`;
-  const total = PER_STUB_MINOR * n;
+  const physical = material !== "digital";
+  const sizes = sizesFor(material);
+  const size: PrintSize = sizePick && sizes.includes(sizePick) ? sizePick : defaultSize(preview, material);
+  const each = quote(material, finish, size);
+  const run = quote(material, finish, size, n);
+  const total = run.totalMinor;
+  const prices = Object.fromEntries(FINISHES.map((f) => [f.id, !physical || f.upchargeMinor === 0 ? "Included" : `+${formatMoney(f.upchargeMinor)}`])) as Record<FinishValue, string>;
+  const materialLabel = MATERIALS.find((m) => m.id === material)?.label ?? material;
+  const finishLabel = FINISHES.find((f) => f.id === finish)?.label ?? finish;
+  const verb = physical ? "Print" : "Send";
 
   function startRun() {
     if (!ordered) {
       const o = addOrder({
         stubIds: guests.map((_, i) => `${design.setId}-${i}`),
-        lines: [{ title: `${design.title} · ${n} guest stubs`, material: "print", finish: "matte", size: "classic", totalMinor: total }],
+        lines: [{ title: `${design.title} · ${n} guest stubs`, material, finish, size, totalMinor: total }],
         totalMinor: total,
+        quoteId: run.quoteId,
         method: "organizer-print",
       });
       setOrdered(o.id);
@@ -350,7 +376,7 @@ export default function OrganizerClient() {
               <PunchTabs
                 label="How to publish"
                 options={[
-                  { value: "print" as const, label: `Print all ${n}`, sub: `${formatMoney(PER_STUB_MINOR)} each` },
+                  { value: "print" as const, label: `${verb} all ${n}`, sub: `${formatMoney(each.itemMinor + each.finishMinor)} each` },
                   { value: "claim" as const, label: "Claim link", sub: "Free" },
                 ]}
                 value={publish}
@@ -359,13 +385,78 @@ export default function OrganizerClient() {
 
               {publish === "print" ? (
                 <div className={s.publish}>
-                  <p className={ui.muted}>We print every guest&apos;s stub with their name and seat, one after another.</p>
-                  <p className={s.runLine}>
-                    <span>
-                      {n} × {formatMoney(PER_STUB_MINOR)}
-                    </span>
-                    <strong>{formatMoney(total)}</strong>
+                  <p className={ui.muted}>
+                    {physical ? "We print every guest's stub with their name and seat, one after another." : "Every guest gets their stub on screen and as a wallet pass, with their name and seat."}
                   </p>
+
+                  <div className={s.group}>
+                    <span className="desk-label">Material</span>
+                    <PunchTabs
+                      label="Material"
+                      options={MATERIAL_OPTIONS}
+                      value={material}
+                      onChange={(m: Material) => {
+                        setMaterial(m);
+                        if (finish === "holo" && !holoAllowed(m)) setFinish("foil");
+                        setOrdered(null);
+                      }}
+                    />
+                  </div>
+                  <div className={s.group}>
+                    <span className="desk-label">Finish</span>
+                    <FinishSwatches
+                      value={finish}
+                      prices={prices}
+                      onChange={(f) => {
+                        // Holo only exists on Print and Framed, so choosing it moves the stock up and the price shows it.
+                        if (f === "holo" && !holoAllowed(material)) setMaterial("print");
+                        setFinish(f);
+                        setOrdered(null);
+                      }}
+                    />
+                    <p className={ui.status} aria-live="polite">
+                      {!physical ? "On screen and on the wallet pass, every finish is included." : holoAllowed(material) ? "Holo is on Print and Framed." : "Holo comes on Print and Framed. Choosing it moves you to Print."}
+                    </p>
+                  </div>
+                  {sizes.length > 1 ? (
+                    <div className={s.group}>
+                      <span className="desk-label">Size</span>
+                      <PunchTabs label="Size" options={sizes.map(sizeOption)} value={size} onChange={(v) => (setSizePick(v), setOrdered(null))} />
+                    </div>
+                  ) : null}
+
+                  <Rule kind="perf" />
+                  <dl className={s.receipt}>
+                    <div className={s.runLine}>
+                      <dt>
+                        {n} × {materialLabel}, per guest
+                      </dt>
+                      <dd>{formatMoney(run.itemMinor)}</dd>
+                    </div>
+                    {run.finishMinor ? (
+                      <div className={s.runLine}>
+                        <dt>
+                          {n} × {finishLabel} finish
+                        </dt>
+                        <dd>{formatMoney(run.finishMinor)}</dd>
+                      </div>
+                    ) : null}
+                    {physical ? (
+                      <div className={s.runLine}>
+                        <dt>Shipping, once</dt>
+                        <dd>
+                          {formatMoney(run.shippingMinor)}
+                          <SourceMark p="estimated" />
+                        </dd>
+                      </div>
+                    ) : null}
+                    <div className={`${s.runLine} ${s.runTotal}`}>
+                      <dt>
+                        Total for {n} {n === 1 ? "guest" : "guests"}
+                      </dt>
+                      <dd>{formatMoney(total)}</dd>
+                    </div>
+                  </dl>
                   {ordered ? (
                     <div className={s.done} role="status">
                       <Stamped>Published</Stamped>
@@ -378,7 +469,7 @@ export default function OrganizerClient() {
                     </div>
                   ) : (
                     <Stamp block price={formatMoney(total)} onClick={startRun}>
-                      Print all {n}
+                      {verb} all {n}
                     </Stamp>
                   )}
                 </div>
@@ -420,16 +511,9 @@ export default function OrganizerClient() {
         <aside className={s.previewCol} aria-label="Stub preview">
           {mounted ? (
             <OnDesk>
-              <StubView stub={preview} size="lg" tilt flipped={flipped} />
+              <StubView stub={preview} size="lg" tilt />
             </OnDesk>
           ) : null}
-          <div className={s.flipTool}>
-            <Tools label="Preview">
-              <Tool icon={<FlipIcon />} active={flipped} onClick={() => setFlipped((f) => !f)}>
-                {flipped ? "Front" : "Guest name"}
-              </Tool>
-            </Tools>
-          </div>
           <p className={s.caption}>{previewCaption}</p>
           <ul className={s.lockList}>
             <li>

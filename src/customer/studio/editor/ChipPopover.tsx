@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import type { Stub } from "../types";
+import { LeavesMark } from "@/customer/pages/ui";
 import { play, haptic } from "@/customer/studio/feedback";
 import { PaperSheet, SourceMark, Tag, Tags } from "@/customer/desk/Desk";
 import { altLabel, setFactValue, toggleKept } from "./ops";
@@ -58,7 +59,8 @@ export function ChipPopover({ stub, factId, onChange, onClose }: Props) {
             </Tag>
           </Tags>
           <Link className={styles.textLink} href="/search">
-            None of these · search
+            None of these? Search for your show
+            <LeavesMark />
           </Link>
         </div>
       )}

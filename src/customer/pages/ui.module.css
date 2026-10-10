@@ -2,10 +2,10 @@
    organizer). Paper by day: every colour comes from the desk tokens, every control is a desk part. */
 
 .shell {
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--nav-bar-h, 0px));
   display: flex;
   flex-direction: column;
-  max-width: 100vw;
+  max-width: 100%;
   overflow-x: clip;
 }
 .top {
@@ -32,6 +32,15 @@
   height: 24px;
   width: auto;
   display: block;
+}
+/* The sidebar carries the wordmark on the desktop, so the page header never repeats it there. */
+@media (min-width: 960px) {
+  :global([data-nav="on"]) .home {
+    display: none;
+  }
+  :global([data-nav="on"]) .logoOnly {
+    display: none;
+  }
 }
 .back {
   display: inline-flex;
@@ -173,6 +182,22 @@
 /* Link-flavoured desk buttons share the desk part's own classes (see ui.tsx) */
 .linkReset {
   text-decoration: none;
+}
+/* The small → on a control that leaves the screen. It sits at the icons' weight and nudges on hover. */
+.leaves {
+  flex: none;
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.2em;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.anchorMark .leaves {
+  margin-left: 0.3em;
+}
+a:hover > .leaves,
+a:hover > span > .leaves {
+  transform: translateX(3px);
 }
 
 /* Copy field: read-only link, then a paper button */

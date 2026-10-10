@@ -1,9 +1,11 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavHidden } from "@/customer/nav/navState";
 import type { Stub } from "../types";
 import { upsertStub } from "../store";
 import { TearGesture } from "@/customer/studio/stub/TearGesture";
+import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { PaperButton } from "@/customer/desk/Desk";
 import styles from "./TearFlow.module.css";
 
@@ -15,6 +17,7 @@ const FADE_MS = 600;
  * editor: the torn state is saved here, so the Editor's onTorn is not needed for the hand-off.
  */
 export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; onCancel: () => void }) {
+  useNavHidden(true);
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,11 +52,12 @@ export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; 
 
   return (
     <div className={`ts-stage desk-surface ${styles.stage} ${leaving ? styles.leaving : ""}`} role="dialog" aria-modal="true" aria-label="Tear off your stub">
+      <PathTrack current="tear" stubId={stub.id} className={styles.track} />
       <div className={styles.area}>
         <TearGesture stub={stub} onTorn={torn} />
       </div>
       <PaperButton type="button" onClick={cancel}>
-        Not yet
+        Back to styling
       </PaperButton>
     </div>
   );

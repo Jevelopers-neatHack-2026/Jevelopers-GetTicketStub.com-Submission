@@ -6,7 +6,7 @@ import { Field, PunchTabs, Rule, Stamp, TearLink } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play } from "@/customer/studio/feedback";
 import { encodeStub, upsertStub } from "@/customer/studio/store";
-import type { Edition } from "@/customer/studio/types";
+import { withGuestName, type Edition } from "@/customer/studio/types";
 import { PageShell, FriendlyError, OnDesk, ui } from "@/customer/pages/ui";
 import { decodeDesign, designEvent, designStub } from "@/customer/pages/organizer";
 import { photoToDataUrl } from "@/customer/pages/storyImage";
@@ -36,7 +36,7 @@ export default function OrganizerClaimClient({ token }: { token?: string }) {
   const [claiming, setClaiming] = useState(false);
 
   const chosen = edition ?? design?.allowed[0] ?? "researched";
-  const preview = useMemo(() => (design ? designStub(design, { id: "claim-preview", name: name.trim() || "Your name", edition: chosen }) : null), [design, name, chosen]);
+  const preview = useMemo(() => (design ? withGuestName(designStub(design, { id: "claim-preview", edition: chosen }), name.trim() || "Your name") : null), [design, name, chosen]);
 
   if (!mounted) return <PageShell>{null}</PageShell>;
   if (!design || !preview) {
@@ -56,7 +56,7 @@ export default function OrganizerClaimClient({ token }: { token?: string }) {
       return;
     }
     setClaiming(true);
-    const st = designStub(design!, { name: n, edition: chosen });
+    const st = withGuestName(designStub(design!, { edition: chosen }), n);
     st.id = Math.random().toString(36).slice(2, 10);
     st.torn = true;
     st.wallAngle = Math.round((Math.random() * 8 - 4) * 10) / 10;

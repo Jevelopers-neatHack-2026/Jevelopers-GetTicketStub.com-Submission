@@ -1,18 +1,26 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useNavHidden } from "@/customer/nav/navState";
 import d from "@/customer/desk/Desk.module.css";
 import { PaperButton, Rule, Stamp, Stamped, Tool, Tools } from "@/customer/desk/Desk";
 import { FlipIcon } from "@/customer/desk/icons";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play, haptic } from "@/customer/studio/feedback";
 import { decodeStub, getStub, upsertStub } from "@/customer/studio/store";
-import type { Stub } from "@/customer/studio/types";
+import { formatMoney, type Stub } from "@/customer/studio/types";
+import { FINISHES, materialPrice } from "@/customer/pages/commerce";
 import { PageShell, FriendlyError, OnDesk, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
 import { absoluteUrl, copyText, formatDate, isStub } from "@/customer/pages/share";
 import { renderStoryPng, downloadBlob, photoToDataUrl } from "@/customer/pages/storyImage";
 import { useMounted } from "@/customer/pages/useMounted";
 import { EventContent, Facts } from "./EventContent";
 import s from "./memory.module.css";
+
+/** What printing costs: the stock plus the finish add-on, the same sum checkout shows. */
+function printMinor(st: Stub): number {
+  const physical = st.material !== "digital";
+  return materialPrice(st.material) + (physical ? (FINISHES.find((f) => f.id === st.finish)?.upchargeMinor ?? 0) : 0);
+}
 
 export default function MemoryPage({ token, gift, giftTo }: { token: string; gift: boolean; giftTo?: string }) {
   const mounted = useMounted();
@@ -27,6 +35,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
   const setOwned = (next: Stub) => setOwnedState({ id: next.id, stub: next });
   const [flipped, setFlipped] = useState(false);
   const [wrapped, setWrapped] = useState(gift);
+  useNavHidden(wrapped);
   const [opening, setOpening] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [status, setStatus] = useState<{ text: string; ok?: boolean }>({ text: "" });
@@ -122,15 +131,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
 
   return (
     <>
-      <PageShell
-        right={
-          isOwner ? (
-            <TearAnchor href="/wall">Your wall</TearAnchor>
-          ) : (
-            <TearAnchor href="/new">Make yours</TearAnchor>
-          )
-        }
-      >
+      <PageShell>
         <div className={s.layout} inert={wrapped}>
           <div className={s.desk}>
             <OnDesk>
@@ -151,11 +152,11 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
                   Share your stub
                 </Stamp>
                 <div className={s.actionsPair}>
-                  <PaperLink href={`/checkout/${stub.id}`}>Print it</PaperLink>
+                  <PaperLink href={`/checkout/${stub.id}`}>{stub.material === "digital" ? "Get the file" : "Print it"} · {formatMoney(printMinor(stub))}</PaperLink>
                   <PaperLink href={`/wallet/${stub.id}`}>Add to Wallet</PaperLink>
                 </div>
                 <div className={s.tearHolder}>
-                  <TearAnchor href={`/friends/${stub.id}`}>Send matching stubs</TearAnchor>
+                  <TearAnchor href={`/friends/${stub.id}`}>Send matching stubs to friends</TearAnchor>
                 </div>
               </div>
             ) : null}
@@ -308,7 +309,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
                   Your night deserves a stub too.
                 </h2>
                 <p className={ui.muted}>Paste your ticket and get a stub with the setlist, the weather and the story of the night.</p>
-                <StampLink href="/new">Make yours</StampLink>
+                <StampLink href="/">Paste your ticket link</StampLink>
                 <TearAnchor href={claimHref}>Were you there too? Claim a matching stub</TearAnchor>
               </section>
             ) : null}

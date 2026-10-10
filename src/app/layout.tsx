@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter_Tight } from "next/font/google";
+import { NavFrame } from "@/customer/nav/NavFrame";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -31,7 +32,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" data-theme="light" className={`${fraunces.variable} ${interTight.variable}`}>
-      <body>{children}</body>
+      <body>
+        <NavFrame>{children}</NavFrame>
+      </body>
     </html>
   );
 }

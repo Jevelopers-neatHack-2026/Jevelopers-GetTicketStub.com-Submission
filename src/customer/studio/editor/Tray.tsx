@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import type { Stub } from "../types";
+import { LeavesMark } from "@/customer/pages/ui";
 import { SandboxStrip, Stamp } from "@/customer/desk/Desk";
 import { MaterialPicker, ctaVerb, totalLabel } from "./MaterialPicker";
 import { TearStrip } from "./TearStrip";
@@ -32,6 +33,7 @@ export function Tray({ stub, onChange, onTear, compact }: Props) {
         }}
       >
         {ctaVerb(stub.material)}
+        <LeavesMark />
       </Stamp>
       <TearStrip torn={stub.torn} onTear={onTear} />
     </section>

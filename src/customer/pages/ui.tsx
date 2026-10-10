@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useId, useState, type ComponentProps, type ReactNode } from "react";
+import { useId, useState, type ComponentProps, type JSX, type ReactNode } from "react";
 import d from "@/customer/desk/Desk.module.css";
 import { PaperButton, Stamped } from "@/customer/desk/Desk";
 import { play, haptic, type Cue } from "@/customer/studio/feedback";
@@ -16,6 +16,15 @@ function BackArrow() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M14.5 6 8.5 12l6 6" />
+    </svg>
+  );
+}
+
+/** The small → that marks a control which leaves the screen. Drawn at the icons' weight; never decoration. */
+export function LeavesMark(): JSX.Element {
+  return (
+    <svg className={s.leaves} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12h13M13 6.5 18.5 12 13 17.5" />
     </svg>
   );
 }
@@ -37,7 +46,7 @@ export function PageShell({
 }) {
   return (
     <div className={cx("desk-surface", s.shell, className)} data-theme="light">
-      <header className={s.top}>
+      <header className={cx(s.top, !back && !title && !right && s.logoOnly)}>
         {back ? (
           <Link className={s.back} href={back.href}>
             <BackArrow />
@@ -73,34 +82,44 @@ function useLinkPress(cue: Cue, buzz: number) {
   };
 }
 
-type LinkProps = Omit<ComponentProps<typeof Link>, "className"> & { block?: boolean; className?: string };
+type LinkProps = Omit<ComponentProps<typeof Link>, "className"> & {
+  block?: boolean;
+  className?: string;
+  /** Set when the link acts in place (a hash or the same page): drops the leaves-the-screen → mark. */
+  noMark?: boolean;
+};
 
 /** The one main action, when it goes to another page. Looks and sounds exactly like Stamp. */
-export function StampLink({ children, price, block, className, ...rest }: LinkProps & { price?: string }) {
+export function StampLink({ children, price, block, className, noMark, ...rest }: LinkProps & { price?: string }) {
   const press = useLinkPress("stamp", 12);
   return (
     <Link {...rest} {...press} className={cx(d.stamp, block && d.block, s.linkReset, className)}>
-      <span className={d.stampLabel}>{children}</span>
+      <span className={d.stampLabel}>
+        {children}
+        {noMark ? null : <LeavesMark />}
+      </span>
       {price ? <span className={d.stampStub}>{price}</span> : null}
     </Link>
   );
 }
 
 /** Secondary action to another page: card stock, same as PaperButton. */
-export function PaperLink({ children, block, className, ...rest }: LinkProps) {
+export function PaperLink({ children, block, className, noMark, ...rest }: LinkProps) {
   const press = useLinkPress("tap", 6);
   return (
     <Link {...rest} {...press} className={cx(d.paper, block && d.block, s.linkReset, className)}>
       {children}
+      {noMark ? null : <LeavesMark />}
     </Link>
   );
 }
 
 /** Tertiary link: plain text on a dotted tear line. */
-export function TearAnchor({ children, className, ...rest }: LinkProps) {
+export function TearAnchor({ children, className, noMark, ...rest }: LinkProps) {
   return (
-    <Link {...rest} className={cx(d.tearLink, s.linkReset, className)} onClick={() => play("tap", { emphasis: "subtle" })}>
+    <Link {...rest} className={cx(d.tearLink, s.linkReset, s.anchorMark, className)} onClick={() => play("tap", { emphasis: "subtle" })}>
       {children}
+      {noMark ? null : <LeavesMark />}
     </Link>
   );
 }

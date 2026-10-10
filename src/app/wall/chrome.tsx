@@ -26,7 +26,7 @@ export function Pin({ seed, press, delay }: { seed: string; press?: boolean; del
 export function DeskPage({ right, children }: { right?: ReactNode; children: ReactNode }) {
   return (
     <div className={`desk-surface ${c.page}`}>
-      <header className={c.top}>
+      <header className={`${c.top} ${right ? "" : c.logoOnly}`}>
         <Link className={c.home} href="/" aria-label="TicketStub home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/wordmark.svg" alt="TicketStub" />

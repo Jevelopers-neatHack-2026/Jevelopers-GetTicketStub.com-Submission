@@ -173,12 +173,15 @@
   box-shadow: 0 1px 0 var(--desk-rule);
 }
 .back {
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   height: 44px;
+  padding: 0 12px 0 8px;
   flex: none;
-  border-radius: 50%;
+  border-radius: 22px;
+  font: var(--type-ui);
+  text-decoration: none;
   color: var(--desk-ink);
   -webkit-tap-highlight-color: transparent;
 }
@@ -273,6 +276,8 @@
   grid-template-rows: auto 1fr;
   height: 100dvh;
   overflow: hidden;
+  /* the desk answers to the room it has beside the nav, not to the viewport. Fixed overlays are siblings of this element. */
+  container: desk / inline-size;
 }
 .deskHeader {
   display: flex;
@@ -281,19 +286,13 @@
   padding: 10px 20px;
   box-shadow: 0 1px 0 var(--desk-rule);
 }
-.backLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 8px;
-  color: var(--desk-ink);
-  font: var(--type-ui);
-  text-decoration: none;
+.track {
+  padding: 2px 16px 0;
 }
-.backLink:hover {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+.deskHeader .track {
+  flex: none;
+  width: 300px;
+  padding: 0;
 }
 .crumb {
   flex: 1;
@@ -319,7 +318,7 @@
 }
 .deskGrid {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 380px;
+  grid-template-columns: 240px minmax(0, 1fr) 340px;
   min-height: 0;
 }
 .rail {
@@ -362,11 +361,13 @@
 
 .deskCentre {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
   min-height: 0;
   min-width: 0;
   padding: 10px 16px 14px;
+  container: centre / inline-size;
 }
 .matBar {
   display: flex;
@@ -375,10 +376,12 @@
   gap: 16px;
 }
 .matSwitch {
-  width: 290px;
+  flex: 0 1 290px;
+  min-width: 0;
 }
 .size {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* The cutting mat: muted green, self-healing, inch grid, lit from the top left. Still paper family. */
@@ -505,6 +508,7 @@
   inset: 24px 0 0 24px;
   z-index: 1;
   display: flex;
+  flex-direction: column;
   background-image:
     linear-gradient(90deg, var(--line) 1px, transparent 1px),
     linear-gradient(180deg, var(--line) 1px, transparent 1px),
@@ -519,7 +523,7 @@
 }
 .area {
   --cap-w: min(560px, calc(100cqw - 96px));
-  --cap-h: clamp(260px, calc(100dvh - 340px), 520px);
+  --cap-h: clamp(240px, calc(100dvh - 520px), 420px);
   --box-h: min(calc((var(--cap-w) - var(--mat)) / var(--ar) + var(--mat)), var(--cap-h));
   position: relative;
   flex: 1;
@@ -541,18 +545,19 @@
 }
 .margin {
   flex: none;
-  width: 260px;
-  padding: 22px 22px 18px 0;
-  overflow-y: auto;
+  width: auto;
+  padding: 0 18px 14px;
 }
 
 .deskFooter {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
+  gap: 8px 20px;
 }
 .footTools {
-  width: 300px;
+  flex: 0 1 300px;
+  min-width: 0;
 }
 .zoom {
   display: flex;
@@ -583,22 +588,41 @@
   box-shadow: inset 0 0 0 1px var(--desk-rule-strong), 0 1px 0 var(--desk-ledge);
 }
 
-@media (min-width: 960px) and (max-width: 1279.98px) {
-  .deskGrid {
-    grid-template-columns: 240px minmax(0, 1fr) 340px;
-  }
+/* wide centre: the notes sit beside the stub */
+@container centre (min-width: 760px) {
   .matBody {
-    flex-direction: column;
+    flex-direction: row;
   }
   .margin {
-    width: auto;
-    padding: 0 18px 14px;
-    overflow: visible;
+    width: 260px;
+    padding: 22px 22px 18px 0;
+    overflow-y: auto;
   }
   .area {
-    --cap-h: clamp(240px, calc(100dvh - 520px), 420px);
+    --cap-w: min(560px, calc(100cqw - 96px - 260px));
+    --cap-h: clamp(260px, calc(100dvh - 340px), 520px);
   }
+}
+@container centre (max-width: 639.98px) {
   .keys {
+    display: none;
+  }
+}
+@container desk (min-width: 1280px) {
+  .deskGrid {
+    grid-template-columns: 300px minmax(0, 1fr) 380px;
+  }
+}
+@container desk (max-width: 959.98px) {
+  .deskHeader .track {
+    width: 270px;
+  }
+}
+@container desk (max-width: 959.98px) {
+  .deskGrid {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .rail {
     display: none;
   }
 }
@@ -619,4 +643,16 @@
   .leaving {
     display: none;
   }
+}
+
+/* a tool label that leaves the screen: the name and its mark stay on one line */
+.toolGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.toolGo svg {
+  width: 12px;
+  height: 12px;
 }

@@ -80,6 +80,8 @@ export interface Personalization {
   hiddenFields: string[];
   note?: string;
   friends: { name: string; seat?: string; claimed: boolean }[];
+  /** Whose stub this is, when it was issued to a named guest (organizer runs, claimed stubs). Printed "Admit · name" on the front and back. A fan's own stub has none. */
+  guestName?: string;
 }
 
 export interface Stub {
@@ -99,6 +101,12 @@ export interface Stub {
 
 export function currentVersion(s: Stub): DesignVersion {
   return s.versions.find((v) => v.id === s.currentVersionId) ?? s.versions[0];
+}
+
+/** The stub issued to one named guest: the name prints on the front and back, and the seat stays on the event. */
+export function withGuestName(s: Stub, name: string | undefined): Stub {
+  const guestName = name?.trim() || undefined;
+  return { ...s, personal: { ...s.personal, guestName, friends: [] } };
 }
 
 export function formatMoney(minor: number, currency = "USD"): string {

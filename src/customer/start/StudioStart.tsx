@@ -4,6 +4,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { PaperButton, Stamp, Tag, Tags, TearLink } from "@/customer/desk/Desk";
+import { LeavesMark } from "@/customer/pages/ui";
 import { PALE_HOURS, demoStubId, newStub, type DemoKey } from "@/customer/studio/fixtures";
 import { Printing } from "@/customer/studio/research/Printing";
 import { StubView } from "@/customer/studio/stub/StubView";
@@ -218,6 +219,7 @@ export function StudioStart() {
 
             <TearLink type="button" className={s.search} onClick={() => router.push("/search")}>
               No link? Search for your show
+              <LeavesMark />
             </TearLink>
           </div>
         </div>

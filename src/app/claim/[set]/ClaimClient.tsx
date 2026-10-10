@@ -7,7 +7,7 @@ import { haptic } from "@/customer/studio/feedback";
 import { NEATHACK, newStub } from "@/customer/studio/fixtures";
 import { decodeStub, encodeStub, upsertStub } from "@/customer/studio/store";
 import type { Stub } from "@/customer/studio/types";
-import { PageShell, FriendlyError, OnDesk, QrPlaceholder, ui } from "@/customer/pages/ui";
+import { LeavesMark, PageShell, FriendlyError, OnDesk, QrPlaceholder, ui } from "@/customer/pages/ui";
 import { formatDate, isStub } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "./claim.module.css";
@@ -155,6 +155,7 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
 
             <Stamp type="submit" block disabled={claiming}>
               Claim my stub
+              <LeavesMark />
             </Stamp>
             <MarkLegend marks={["simulated"]} />
           </form>

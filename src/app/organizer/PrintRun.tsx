@@ -3,6 +3,7 @@
 // another, with the printer running. They pile up under the slot; then "Published" lands.
 // Same printer, slot and stage as the fan reveal (research/Printing.tsx), run once per guest.
 import { useEffect, useState, type CSSProperties } from "react";
+import { useNavHidden } from "@/customer/nav/navState";
 import { PaperButton, Stamped, TearLink } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play, stopPrint } from "@/customer/studio/feedback";
@@ -15,6 +16,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export function PrintRun({ stubs, names, orderId, onClose, onClaim }: { stubs: Stub[]; names: string[]; orderId: string; onClose: () => void; onClaim: () => void }) {
+  useNavHidden(true);
   const n = stubs.length;
   const [count, setCount] = useState(0);
   const [done, setDone] = useState(false);

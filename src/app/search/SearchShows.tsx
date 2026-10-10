@@ -1,12 +1,11 @@
 "use client";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import type { EventData, EventType } from "@/customer/studio/types";
 import { HARBOUR_GAME, NEATHACK, PALE_HOURS } from "@/customer/studio/fixtures";
 import { searchEvents } from "@/customer/studio/research/client";
 import { MarkLegend, SourceMark, Tag, Tags, TearLink } from "@/customer/desk/Desk";
-import { MuteToggle } from "@/customer/studio/editor/MuteToggle";
+import { LeavesMark } from "@/customer/pages/ui";
 import { PICK_KEY } from "../new/NewStub";
 import styles from "./search.module.css";
 
@@ -85,15 +84,6 @@ export function SearchShows() {
 
   return (
     <div className={`desk-surface ${styles.page}`}>
-      <header className={styles.header}>
-        <Link href="/" className={styles.back} aria-label="Back to home">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-        </Link>
-        <MuteToggle />
-      </header>
-
       <main className={styles.main}>
         <h1 className={styles.title}>Search for your show</h1>
         <p className={styles.lede}>Type the artist, team or event. Pick the night and we print your stub.</p>
@@ -163,8 +153,9 @@ export function SearchShows() {
                   </span>
                   <span className={styles.rowMeta}>{[ev.subtitle, ev.venue, ev.city, formatDate(ev.dateISO)].filter(Boolean).join(" · ")}</span>
                 </span>
-                <span aria-hidden="true" className={styles.chev}>
-                  ›
+                <span className={styles.chev}>
+                  <span className="visually-hidden">Print this stub</span>
+                  <LeavesMark />
                 </span>
               </button>
             </li>
@@ -175,6 +166,7 @@ export function SearchShows() {
 
         <TearLink type="button" className={styles.fallback} onClick={() => router.push("/")}>
           Can&apos;t find it? Paste the link instead
+          <LeavesMark />
         </TearLink>
       </main>
     </div>

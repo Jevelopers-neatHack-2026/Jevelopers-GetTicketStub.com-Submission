@@ -125,6 +125,18 @@ function Subtitle({ c, className }: { c: Ctx; className?: string }) {
   );
 }
 
+/** "Admit · Jamie R." in the edition's own type and ink, last on the type block so it can't meet the title or the art. Only when the stub was issued to a named guest. */
+function Admit({ c, className }: { c: Ctx; className?: string }) {
+  const name = c.stub.personal.guestName;
+  if (!name) return null;
+  return (
+    <span className={cx(s.admit, className)}>
+      Admit<span aria-hidden="true"> · </span>
+      <span className={s.admitName}>{name}</span>
+    </span>
+  );
+}
+
 function Chip({ c, f }: { c: Ctx; f: Fact }) {
   if (!c.onChipTap)
     return (
@@ -240,6 +252,7 @@ function ResearchedFront({ c }: { c: Ctx }) {
         {meta && <span className={s.meta}>{meta}</span>}
         <span className={s.rule} aria-hidden="true" />
         <Facts c={c} />
+        <Admit c={c} />
       </div>
     </>
   );
@@ -257,9 +270,15 @@ function LetterpressFront({ c }: { c: Ctx }) {
       <span className={cx(s.lpCorner, s.lpCornerTL)} aria-hidden="true">
         No. {String(hashSeed(c.stub.id) % 100000).padStart(5, "0")}
       </span>
-      <span className={cx(s.lpCorner, s.lpCornerBR)} aria-hidden="true">
-        Admit one
-      </span>
+      {c.stub.personal.guestName ? (
+        <span className={cx(s.lpCorner, s.lpCornerBR)}>
+          <Admit c={c} className={s.lpAdmitName} />
+        </span>
+      ) : (
+        <span className={cx(s.lpCorner, s.lpCornerBR)} aria-hidden="true">
+          Admit one
+        </span>
+      )}
       <ArtBox c={c} />
       <div className={s.type}>
         {meta && <span className={s.meta}>{meta}</span>}
@@ -290,6 +309,7 @@ function RisoFront({ c }: { c: Ctx }) {
         <Subtitle c={c} />
         {meta && <span className={s.meta}>{meta}</span>}
         <Facts c={c} sep=" / " />
+        <Admit c={c} />
       </div>
     </>
   );
@@ -316,6 +336,7 @@ function MinimalFront({ c }: { c: Ctx }) {
         <Subtitle c={c} />
         {meta && <span className={s.meta}>{meta}</span>}
         <Facts c={c} sep="  /  " />
+        <Admit c={c} />
       </div>
     </>
   );
@@ -349,6 +370,7 @@ function ClassicFront({ c }: { c: Ctx }) {
           </dl>
         )}
         <Facts c={c} sep=" * " upper />
+        <Admit c={c} />
       </div>
       <span className={s.clPerf} aria-hidden="true" />
       <div className={s.clStub}>
@@ -481,6 +503,7 @@ function Back({ c }: { c: Ctx }) {
       <div className={s.backHead}>
         <span className={s.backKicker}>{KICKER[e.type] ?? "Programme"}</span>
         <span className={s.backTitle}>{e.title}</span>
+        <Admit c={c} className={s.backAdmit} />
       </div>
       <BackList c={c} />
       {(note || friends.length > 0) && (
@@ -580,6 +603,7 @@ export function StubView({ stub, flipped = false, tilt = false, size = "md", sel
     e.venue,
     e.city,
     c.date?.long,
+    stub.personal.guestName ? `Admits ${stub.personal.guestName}` : undefined,
     c.kept.length ? `Facts: ${c.kept.map((f) => f.label).join(", ")}` : undefined,
     c.unsure.length ? `${c.unsure.length} unsure ${c.unsure.length === 1 ? "fact" : "facts"} to check` : undefined,
     `${stub.finish} finish`,
@@ -595,6 +619,7 @@ export function StubView({ stub, flipped = false, tilt = false, size = "md", sel
       aria-label={label}
       data-edition={edition}
       data-size={size}
+      data-guest={stub.personal.guestName ? "" : undefined}
       onClick={onClick}
     >
       <div ref={tiltRef} className={s.tilt}>

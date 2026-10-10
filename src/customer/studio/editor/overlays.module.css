@@ -39,6 +39,7 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 44px;
   color: var(--desk-ink);
   font: var(--type-ui);

@@ -48,6 +48,9 @@ export default function CartClient() {
       stubIds: items.map((i) => i.stubId),
       lines: items.map((i) => ({ title: i.title, material: i.material, finish: i.finish, size: i.size, totalMinor: i.unitMinor * billableSeats(i) })),
       totalMinor: totals.totalMinor,
+      currency: "USD",
+      // one quote names the order only when the cart holds one priced item
+      quoteId: items.length === 1 ? items[0].quoteId : undefined,
       method: "card",
     });
     for (const i of items) {
@@ -124,7 +127,7 @@ export default function CartClient() {
                 })}
               </ul>
               <div>
-                <PaperLink href="/wall">Add another stub</PaperLink>
+                <PaperLink href="/wall">Add another stub from your wall</PaperLink>
               </div>
             </section>
 

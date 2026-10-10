@@ -4,7 +4,7 @@ import { useState } from "react";
 import { MarkLegend, Rule, SandboxStrip, SourceMark, Stamp } from "@/customer/desk/Desk";
 import { play } from "@/customer/studio/feedback";
 import { formatMoney } from "@/customer/studio/types";
-import { PageShell, EmptyState, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
+import { LeavesMark, PageShell, EmptyState, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
 import { loadCart, updateSeat, type CartItem } from "@/customer/pages/commerce";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "./unclaimed.module.css";
@@ -113,8 +113,9 @@ export default function UnclaimedClient({ id, seatIndex }: { id: string; seatInd
         <div className={s.actions}>
           <Stamp block onClick={confirm}>
             {cta}
+            <LeavesMark />
           </Stamp>
-          <TearAnchor href="/cart">Decide later</TearAnchor>
+          <TearAnchor href="/cart">Decide later, back to your cart</TearAnchor>
         </div>
         <MarkLegend marks={["simulated"]} />
       </div>

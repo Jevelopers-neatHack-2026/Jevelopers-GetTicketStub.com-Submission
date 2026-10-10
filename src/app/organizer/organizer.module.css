@@ -417,6 +417,23 @@
   background-size: 6px 2px;
   background-repeat: repeat-x;
 }
+.receipt {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.receipt dt {
+  min-width: 0;
+}
+.receipt dd {
+  order: 2;
+  margin: 0;
+  white-space: nowrap;
+}
+.runTotal {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+}
 .runLine strong {
   order: 2;
   font: var(--type-h3);
@@ -467,6 +484,4 @@
   display: block;
   text-wrap: balance;
 }
-.flipTool {
-  width: min(100%, 140px);
-}
+

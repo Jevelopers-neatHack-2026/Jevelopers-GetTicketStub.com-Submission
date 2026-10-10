@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import type { Stub } from "../types";
+import { LeavesMark } from "@/customer/pages/ui";
 import { PaperButton } from "@/customer/desk/Desk";
 import { readImageFile } from "./ops";
 import styles from "./overlays.module.css";
@@ -88,7 +89,8 @@ export function Memories({ stub, onChange }: Props) {
           <p className={styles.muted}>Send a matching stub to the people you went with.</p>
         )}
         <Link className={styles.textLink} href={`/friends/${stub.id}`}>
-          {stub.personal.friends.length ? "Manage matching stubs" : "Add friends"}
+          {stub.personal.friends.length ? "Manage matching stubs" : "Send matching stubs to friends"}
+          <LeavesMark />
         </Link>
       </div>
 

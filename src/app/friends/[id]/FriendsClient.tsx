@@ -6,7 +6,7 @@ import { StubView } from "@/customer/studio/stub/StubView";
 import { play, haptic } from "@/customer/studio/feedback";
 import { encodeStub, getStub, upsertStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
-import { PageShell, CopyField, EmptyArt, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
+import { LeavesMark, PageShell, CopyField, EmptyArt, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
 import { SANDBOX_LABEL, addToCart, cartItemFromStub, quote, defaultSize } from "@/customer/pages/commerce";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "./friends.module.css";
@@ -152,7 +152,8 @@ export default function FriendsClient({ id }: { id: string }) {
                 router.push("/cart");
               }}
             >
-              Add the set to your cart
+              Add the set and open your cart
+              <LeavesMark />
             </Stamp>
           </>
         )}

@@ -6,7 +6,7 @@
   --cork-dark: #8a6238;
   --cork-light: #e3c897;
   --frame: #3a2a1c;
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--nav-bar-h, 0px));
   display: flex;
   flex-direction: column;
   overflow-x: clip; /* the landing stub flies in from off-screen */
@@ -25,6 +25,19 @@
   align-items: center;
   min-height: 44px;
   min-width: 44px;
+}
+/* The sidebar carries the wordmark on the desktop, so the page header never repeats it there. */
+@media (min-width: 960px) {
+  :global([data-nav="on"]) .home {
+    display: none;
+  }
+  :global([data-nav="on"]) .logoOnly {
+    display: none;
+  }
+  /* with the header gone, the headline gets the header's room back */
+  :global([data-nav="on"]) .logoOnly + .main {
+    padding-top: 40px;
+  }
 }
 .home img {
   height: 22px;
