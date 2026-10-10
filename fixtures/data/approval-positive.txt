@@ -1,0 +1,1 @@
+{"synthetic":true,"version":"v2","output_digest":"fa009ebede64f2977f7bc986955cbd264abcd58b4dd1fccceff707d11eaa21bf","facts_revision":"facts-1","rights":"allowed"}

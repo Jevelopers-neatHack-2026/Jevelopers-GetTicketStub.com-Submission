@@ -1,0 +1,154 @@
+{
+  "$defs": {
+    "Criterion": {
+      "additionalProperties": false,
+      "description": "Authoritative master acceptance row retained without altered ownership.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "classification": {
+          "title": "Classification",
+          "type": "string"
+        },
+        "priority": {
+          "title": "Priority",
+          "type": "string"
+        },
+        "owner_role": {
+          "title": "Owner Role",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "verification": {
+          "title": "Verification",
+          "type": "string"
+        },
+        "evidence_required": {
+          "title": "Evidence Required",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "tested_revision_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tested Revision Refs",
+          "type": "array"
+        },
+        "notes": {
+          "title": "Notes",
+          "type": "string"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "implementation_issue_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Implementation Issue Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "classification",
+        "priority",
+        "owner_role",
+        "title",
+        "verification",
+        "evidence_required",
+        "status",
+        "evidence_refs",
+        "tested_revision_refs",
+        "notes",
+        "dependencies",
+        "implementation_issue_refs"
+      ],
+      "title": "Criterion",
+      "type": "object"
+    },
+    "Status": {
+      "description": "Canonical criterion state.",
+      "enum": [
+        "planned",
+        "in_progress",
+        "blocked",
+        "verified",
+        "deferred"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Original plan remains the authority; run output is an independent view.",
+  "properties": {
+    "format_version": {
+      "title": "Format Version",
+      "type": "string"
+    },
+    "document_date": {
+      "title": "Document Date",
+      "type": "string"
+    },
+    "kind": {
+      "title": "Kind",
+      "type": "string"
+    },
+    "allowed_statuses": {
+      "items": {
+        "$ref": "#/$defs/Status"
+      },
+      "title": "Allowed Statuses",
+      "type": "array"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/Criterion"
+      },
+      "title": "Criteria",
+      "type": "array"
+    }
+  },
+  "required": [
+    "format_version",
+    "document_date",
+    "kind",
+    "allowed_statuses",
+    "notes",
+    "criteria"
+  ],
+  "title": "Tracker",
+  "type": "object"
+}

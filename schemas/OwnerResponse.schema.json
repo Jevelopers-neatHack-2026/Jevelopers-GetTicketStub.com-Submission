@@ -1,0 +1,215 @@
+{
+  "$defs": {
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Sanitized derivative linked to an actual immutable source artifact.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "requirement": {
+          "title": "Requirement",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "run_id": {
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "component": {
+          "title": "Component",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "original_cutoff": {
+          "format": "date-time",
+          "title": "Original Cutoff",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "permission_ref": {
+          "title": "Permission Ref",
+          "type": "string"
+        },
+        "redaction_ref": {
+          "title": "Redaction Ref",
+          "type": "string"
+        },
+        "reviewer_access_ref": {
+          "title": "Reviewer Access Ref",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "trace",
+            "checkpoint",
+            "forecast",
+            "image",
+            "decision",
+            "evaluation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "requirement",
+        "case_id",
+        "run_id",
+        "component",
+        "revision",
+        "created_at",
+        "original_cutoff",
+        "mode",
+        "origin",
+        "path",
+        "sha256",
+        "permission_ref",
+        "redaction_ref",
+        "reviewer_access_ref",
+        "kind"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Origin": {
+      "description": "Where the actual artifact originated.",
+      "enum": [
+        "synthetic",
+        "recorded",
+        "sandbox-derived",
+        "live"
+      ],
+      "title": "Origin",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Owner runner response, checked against pinned revision and case oracles.",
+  "properties": {
+    "component_revision": {
+      "title": "Component Revision",
+      "type": "string"
+    },
+    "mode": {
+      "$ref": "#/$defs/Mode"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin"
+    },
+    "observations": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "minProperties": 1,
+      "title": "Observations",
+      "type": "object"
+    },
+    "evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "cost": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cost"
+    },
+    "cost_status": {
+      "default": "unknown",
+      "enum": [
+        "unknown",
+        "estimated",
+        "confirmed"
+      ],
+      "title": "Cost Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "component_revision",
+    "mode",
+    "origin",
+    "observations"
+  ],
+  "title": "OwnerResponse",
+  "type": "object"
+}

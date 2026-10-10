@@ -1,0 +1,1860 @@
+{
+  "schema_version": "1.0",
+  "cases": [
+    {
+      "id": "happy-path",
+      "requirements": [
+        "EVAL-01",
+        "AGT-01",
+        "ART-01",
+        "ART-02",
+        "IE-04.AC1",
+        "IE-04.AC3",
+        "IE-04.AC4"
+      ],
+      "fixtures": [
+        "research-positive"
+      ],
+      "component": "getticketstub.com",
+      "interface": "composed-journey",
+      "invariant": "sourced_facts; conflicts_preserved; immutable_revision; approved_output_matches; usage_correlated",
+      "assertions": [
+        {
+          "observation": "sourced_facts",
+          "expected": true
+        },
+        {
+          "observation": "conflicts_preserved",
+          "expected": true
+        },
+        {
+          "observation": "immutable_revision",
+          "expected": true
+        },
+        {
+          "observation": "approved_output_matches",
+          "expected": true
+        },
+        {
+          "observation": "usage_correlated",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "happy-path"
+    },
+    {
+      "id": "print-preflight",
+      "requirements": [
+        "ART-03",
+        "ART-04",
+        "IE-05D.AC1"
+      ],
+      "fixtures": [
+        "creative-positive"
+      ],
+      "component": "print-production",
+      "interface": "production",
+      "invariant": "personalization_matches; bundle_hash_matches; dimensions_valid",
+      "assertions": [
+        {
+          "observation": "personalization_matches",
+          "expected": true
+        },
+        {
+          "observation": "bundle_hash_matches",
+          "expected": true
+        },
+        {
+          "observation": "dimensions_valid",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "print-preflight"
+    },
+    {
+      "id": "print-invalid",
+      "requirements": [
+        "ART-04",
+        "IE-05D.AC1"
+      ],
+      "fixtures": [
+        "asset-negative"
+      ],
+      "component": "print-production",
+      "interface": "production",
+      "invariant": "typed_rejection; production_artifacts",
+      "assertions": [
+        {
+          "observation": "typed_rejection",
+          "expected": true
+        },
+        {
+          "observation": "production_artifacts",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "print-invalid"
+    },
+    {
+      "id": "quote-only",
+      "requirements": [
+        "FUL-01",
+        "IE-05D.AC2"
+      ],
+      "fixtures": [
+        "approval-positive"
+      ],
+      "component": "fulfillment-connectors",
+      "interface": "quote",
+      "invariant": "orders_submitted; expense_incurred",
+      "assertions": [
+        {
+          "observation": "orders_submitted",
+          "expected": 0
+        },
+        {
+          "observation": "expense_incurred",
+          "expected": false
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "quote-only"
+    },
+    {
+      "id": "authorization-mutation",
+      "requirements": [
+        "FUL-02",
+        "IE-05D.AC2"
+      ],
+      "fixtures": [
+        "approval-negative"
+      ],
+      "component": "fulfillment-connectors",
+      "interface": "submit",
+      "invariant": "typed_rejection; orders_submitted",
+      "assertions": [
+        {
+          "observation": "typed_rejection",
+          "expected": true
+        },
+        {
+          "observation": "orders_submitted",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "authorization-mutation"
+    },
+    {
+      "id": "ambiguous-send",
+      "requirements": [
+        "AGT-03",
+        "BUD-03",
+        "FIN-04",
+        "IE-05C.AC1"
+      ],
+      "fixtures": [
+        "usage-negative"
+      ],
+      "component": "agent-harness",
+      "interface": "recovery",
+      "invariant": "unknown_cost_retained; redispatch_count; hold_retained",
+      "assertions": [
+        {
+          "observation": "unknown_cost_retained",
+          "expected": true
+        },
+        {
+          "observation": "redispatch_count",
+          "expected": 0
+        },
+        {
+          "observation": "hold_retained",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "ambiguous-send"
+    },
+    {
+      "id": "transport-redelivery",
+      "requirements": [
+        "FIN-01",
+        "FIN-02",
+        "IE-05C.AC2"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "cost-intelligence",
+      "interface": "ingestion",
+      "invariant": "logical_effects; expense_postings",
+      "assertions": [
+        {
+          "observation": "logical_effects",
+          "expected": 1
+        },
+        {
+          "observation": "expense_postings",
+          "expected": 1
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "transport-redelivery"
+    },
+    {
+      "id": "billable-retry",
+      "requirements": [
+        "FIN-03",
+        "IE-05C.AC2"
+      ],
+      "fixtures": [
+        "usage-negative"
+      ],
+      "component": "cost-intelligence",
+      "interface": "ingestion",
+      "invariant": "distinct_attempts; expense_postings",
+      "assertions": [
+        {
+          "observation": "distinct_attempts",
+          "expected": 2
+        },
+        {
+          "observation": "expense_postings",
+          "expected": 2
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "billable-retry"
+    },
+    {
+      "id": "user-reissue",
+      "requirements": [
+        "IE-05C.AC2",
+        "CON-02"
+      ],
+      "fixtures": [
+        "approval-positive"
+      ],
+      "component": "agent-harness",
+      "interface": "reissue",
+      "invariant": "new_operation; linked_original; current_authority_checked",
+      "assertions": [
+        {
+          "observation": "new_operation",
+          "expected": true
+        },
+        {
+          "observation": "linked_original",
+          "expected": true
+        },
+        {
+          "observation": "current_authority_checked",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "user-reissue"
+    },
+    {
+      "id": "reconciliation",
+      "requirements": [
+        "FIN-05",
+        "IE-05C.AC4"
+      ],
+      "fixtures": [
+        "finance-positive"
+      ],
+      "component": "cost-intelligence",
+      "interface": "reconciliation",
+      "invariant": "confirmed_total; adjustment; estimate_replaced",
+      "assertions": [
+        {
+          "observation": "confirmed_total",
+          "expected": "1.10"
+        },
+        {
+          "observation": "adjustment",
+          "expected": "0.10"
+        },
+        {
+          "observation": "estimate_replaced",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "reconciliation"
+    },
+    {
+      "id": "invoice-coverage",
+      "requirements": [
+        "FIN-06",
+        "IE-05D.AC3"
+      ],
+      "fixtures": [
+        "finance-negative"
+      ],
+      "component": "cost-intelligence",
+      "interface": "projection",
+      "invariant": "invoice_double_count; coverage_unknown_visible",
+      "assertions": [
+        {
+          "observation": "invoice_double_count",
+          "expected": false
+        },
+        {
+          "observation": "coverage_unknown_visible",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "invoice-coverage"
+    },
+    {
+      "id": "subcent",
+      "requirements": [
+        "FIN-07",
+        "IE-05D.AC3"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "cost-intelligence",
+      "interface": "projection",
+      "invariant": "exact_total; rounded_before_projection",
+      "assertions": [
+        {
+          "observation": "exact_total",
+          "expected": "0.000123"
+        },
+        {
+          "observation": "rounded_before_projection",
+          "expected": false
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "subcent"
+    },
+    {
+      "id": "allocation",
+      "requirements": [
+        "FIN-08",
+        "IE-05D.AC3"
+      ],
+      "fixtures": [
+        "finance-positive"
+      ],
+      "component": "cost-intelligence",
+      "interface": "projection",
+      "invariant": "allocation_conserved",
+      "assertions": [
+        {
+          "observation": "allocation_conserved",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "allocation"
+    },
+    {
+      "id": "classification",
+      "requirements": [
+        "FIN-09",
+        "IE-05D.AC3"
+      ],
+      "fixtures": [
+        "finance-negative"
+      ],
+      "component": "cost-intelligence",
+      "interface": "projection",
+      "invariant": "revenue_distinct_from_cash; refund_tax_credit_fee_classified",
+      "assertions": [
+        {
+          "observation": "revenue_distinct_from_cash",
+          "expected": true
+        },
+        {
+          "observation": "refund_tax_credit_fee_classified",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "classification"
+    },
+    {
+      "id": "mode-isolation",
+      "requirements": [
+        "FIN-10",
+        "IE-05D.AC3"
+      ],
+      "fixtures": [
+        "usage-negative"
+      ],
+      "component": "cost-intelligence",
+      "interface": "projection",
+      "invariant": "synthetic_revenue_in_real_projection; paid_test_expense_retained",
+      "assertions": [
+        {
+          "observation": "synthetic_revenue_in_real_projection",
+          "expected": false
+        },
+        {
+          "observation": "paid_test_expense_retained",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "mode-isolation"
+    },
+    {
+      "id": "dashboard-totals",
+      "requirements": [
+        "DASH-01",
+        "DASH-02",
+        "DASH-04",
+        "IE-05D.AC4"
+      ],
+      "fixtures": [
+        "finance-positive"
+      ],
+      "component": "team-dashboard",
+      "interface": "dashboard-browser",
+      "invariant": "filter_export_totals_match; unknown_data_visible; summary_provenance_matches",
+      "assertions": [
+        {
+          "observation": "filter_export_totals_match",
+          "expected": true
+        },
+        {
+          "observation": "unknown_data_visible",
+          "expected": true
+        },
+        {
+          "observation": "summary_provenance_matches",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "dashboard-totals"
+    },
+    {
+      "id": "dashboard-authority",
+      "requirements": [
+        "DASH-03",
+        "IE-05D.AC4"
+      ],
+      "fixtures": [
+        "payload-negative"
+      ],
+      "component": "team-dashboard",
+      "interface": "dashboard-browser",
+      "invariant": "member_command_rejected; actor_audit_present; unauthorized_mutations",
+      "assertions": [
+        {
+          "observation": "member_command_rejected",
+          "expected": true
+        },
+        {
+          "observation": "actor_audit_present",
+          "expected": true
+        },
+        {
+          "observation": "unauthorized_mutations",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "dashboard-authority"
+    },
+    {
+      "id": "restart-before-send",
+      "requirements": [
+        "AGT-02",
+        "IE-05A.AC1"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "agent-harness",
+      "interface": "restart",
+      "invariant": "committed_steps_repeated; dispatches",
+      "assertions": [
+        {
+          "observation": "committed_steps_repeated",
+          "expected": 0
+        },
+        {
+          "observation": "dispatches",
+          "expected": 1
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "restart-before-send"
+    },
+    {
+      "id": "restart-after-checkpoint",
+      "requirements": [
+        "AGT-02",
+        "IE-05A.AC1"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "agent-harness",
+      "interface": "restart",
+      "invariant": "committed_steps_repeated",
+      "assertions": [
+        {
+          "observation": "committed_steps_repeated",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "restart-after-checkpoint"
+    },
+    {
+      "id": "restart-after-external-success",
+      "requirements": [
+        "AGT-02",
+        "IE-05A.AC1",
+        "IE-05C.AC1"
+      ],
+      "fixtures": [
+        "usage-negative"
+      ],
+      "component": "agent-harness",
+      "interface": "restart",
+      "invariant": "automatic_redispatch; ambiguity_retained",
+      "assertions": [
+        {
+          "observation": "automatic_redispatch",
+          "expected": 0
+        },
+        {
+          "observation": "ambiguity_retained",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "restart-after-external-success"
+    },
+    {
+      "id": "publication-loss",
+      "requirements": [
+        "FIN-01",
+        "FIN-02",
+        "IE-05C.AC3"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "agent-harness",
+      "interface": "usage-outbox",
+      "invariant": "eventual_delivery; expense_postings; trace_usage_double_count",
+      "assertions": [
+        {
+          "observation": "eventual_delivery",
+          "expected": true
+        },
+        {
+          "observation": "expense_postings",
+          "expected": 1
+        },
+        {
+          "observation": "trace_usage_double_count",
+          "expected": false
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "publication-loss"
+    },
+    {
+      "id": "duplicate-worker-race",
+      "requirements": [
+        "AGT-02",
+        "IE-05A.AC2"
+      ],
+      "fixtures": [
+        "creative-positive"
+      ],
+      "component": "agent-harness",
+      "interface": "concurrency-barrier",
+      "invariant": "logical_effects; lost_updates",
+      "assertions": [
+        {
+          "observation": "logical_effects",
+          "expected": 1
+        },
+        {
+          "observation": "lost_updates",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "duplicate-worker-race"
+    },
+    {
+      "id": "cancel-before-send",
+      "requirements": [
+        "IE-05A.AC3"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "agent-harness",
+      "interface": "cancellation",
+      "invariant": "dispatches; work_after_cancellation",
+      "assertions": [
+        {
+          "observation": "dispatches",
+          "expected": 0
+        },
+        {
+          "observation": "work_after_cancellation",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "cancel-before-send"
+    },
+    {
+      "id": "cancel-in-flight",
+      "requirements": [
+        "BUD-03",
+        "IE-05A.AC3"
+      ],
+      "fixtures": [
+        "usage-negative"
+      ],
+      "component": "agent-harness",
+      "interface": "cancellation",
+      "invariant": "late_output_selected; incurred_cost_preserved; uncertain_hold_retained",
+      "assertions": [
+        {
+          "observation": "late_output_selected",
+          "expected": false
+        },
+        {
+          "observation": "incurred_cost_preserved",
+          "expected": true
+        },
+        {
+          "observation": "uncertain_hold_retained",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "cancel-in-flight"
+    },
+    {
+      "id": "budget-contention",
+      "requirements": [
+        "BUD-01",
+        "BUD-02",
+        "IE-05A.AC4"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "cost-intelligence",
+      "interface": "concurrency-barrier",
+      "invariant": "capacity_conserved; limit_exceeded; unused_capacity_released",
+      "assertions": [
+        {
+          "observation": "capacity_conserved",
+          "expected": true
+        },
+        {
+          "observation": "limit_exceeded",
+          "expected": false
+        },
+        {
+          "observation": "unused_capacity_released",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "budget-contention"
+    },
+    {
+      "id": "design-head-contention",
+      "requirements": [
+        "ART-01",
+        "IE-05A.AC4"
+      ],
+      "fixtures": [
+        "creative-positive"
+      ],
+      "component": "creative-engine",
+      "interface": "concurrency-barrier",
+      "invariant": "lost_updates; parent_conflict_preserved",
+      "assertions": [
+        {
+          "observation": "lost_updates",
+          "expected": 0
+        },
+        {
+          "observation": "parent_conflict_preserved",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "design-head-contention"
+    },
+    {
+      "id": "bounded-recovery",
+      "requirements": [
+        "AGT-03",
+        "IE-05A.AC5",
+        "IE-05B.AC2"
+      ],
+      "fixtures": [
+        "usage-negative"
+      ],
+      "component": "agent-harness",
+      "interface": "failure-hooks",
+      "invariant": "retry_policy_respected; multiplicative_retries; budget_exceeded",
+      "assertions": [
+        {
+          "observation": "retry_policy_respected",
+          "expected": true
+        },
+        {
+          "observation": "multiplicative_retries",
+          "expected": false
+        },
+        {
+          "observation": "budget_exceeded",
+          "expected": false
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "bounded-recovery"
+    },
+    {
+      "id": "jev-malformed",
+      "requirements": [
+        "CON-03",
+        "IE-05B.AC1",
+        "IE-05B.AC5"
+      ],
+      "fixtures": [
+        "payload-negative"
+      ],
+      "component": "agent-harness",
+      "interface": "DecisionPort",
+      "invariant": "typed_rejection; invented_confidence; receipt_uncertainty_preserved",
+      "assertions": [
+        {
+          "observation": "typed_rejection",
+          "expected": true
+        },
+        {
+          "observation": "invented_confidence",
+          "expected": false
+        },
+        {
+          "observation": "receipt_uncertainty_preserved",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [
+        "jev"
+      ],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "jev-malformed"
+    },
+    {
+      "id": "research-conflicts",
+      "requirements": [
+        "AGT-01",
+        "IE-05B.AC3",
+        "IE-05B.AC4"
+      ],
+      "fixtures": [
+        "source-negative"
+      ],
+      "component": "event-intelligence",
+      "interface": "research",
+      "invariant": "material_conflicts_preserved; unsupported_fact_autoapproved",
+      "assertions": [
+        {
+          "observation": "material_conflicts_preserved",
+          "expected": true
+        },
+        {
+          "observation": "unsupported_fact_autoapproved",
+          "expected": false
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "research-conflicts"
+    },
+    {
+      "id": "supplier-ambiguity",
+      "requirements": [
+        "FUL-03",
+        "FUL-04",
+        "IE-05C.AC5"
+      ],
+      "fixtures": [
+        "usage-negative"
+      ],
+      "component": "fulfillment-connectors",
+      "interface": "reconciliation",
+      "invariant": "orders_submitted; duplicate_transition; automatic_redispatch",
+      "assertions": [
+        {
+          "observation": "orders_submitted",
+          "expected": 1
+        },
+        {
+          "observation": "duplicate_transition",
+          "expected": false
+        },
+        {
+          "observation": "automatic_redispatch",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "supplier-ambiguity"
+    },
+    {
+      "id": "wrong-tenant",
+      "requirements": [
+        "CON-02",
+        "ARC-02",
+        "IE-03B.AC1",
+        "IE-03B.AC3",
+        "IE-03B.AC4",
+        "IE-11B.AC1"
+      ],
+      "fixtures": [
+        "payload-negative"
+      ],
+      "component": "getticketstub.com",
+      "interface": "API-job-artifact",
+      "invariant": "typed_rejection; private_reads; unauthorized_writes; billable_dispatches",
+      "assertions": [
+        {
+          "observation": "typed_rejection",
+          "expected": true
+        },
+        {
+          "observation": "private_reads",
+          "expected": 0
+        },
+        {
+          "observation": "unauthorized_writes",
+          "expected": 0
+        },
+        {
+          "observation": "billable_dispatches",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "wrong-tenant"
+    },
+    {
+      "id": "stale-approval",
+      "requirements": [
+        "ART-02",
+        "CON-02",
+        "IE-03B.AC2",
+        "IE-11B.AC2"
+      ],
+      "fixtures": [
+        "approval-negative"
+      ],
+      "component": "getticketstub.com",
+      "interface": "approval-verifier",
+      "invariant": "typed_stale_rejection; handoffs; billable_dispatches",
+      "assertions": [
+        {
+          "observation": "typed_stale_rejection",
+          "expected": true
+        },
+        {
+          "observation": "handoffs",
+          "expected": 0
+        },
+        {
+          "observation": "billable_dispatches",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "stale-approval"
+    },
+    {
+      "id": "hostile-asset",
+      "requirements": [
+        "ART-05",
+        "IE-11B.AC3"
+      ],
+      "fixtures": [
+        "asset-negative"
+      ],
+      "component": "creative-engine",
+      "interface": "asset-handler",
+      "invariant": "quarantined; script_execution; unexpected_fetches",
+      "assertions": [
+        {
+          "observation": "quarantined",
+          "expected": true
+        },
+        {
+          "observation": "script_execution",
+          "expected": false
+        },
+        {
+          "observation": "unexpected_fetches",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "hostile-asset"
+    },
+    {
+      "id": "ssrf-egress",
+      "requirements": [
+        "AGT-05",
+        "IE-11A.AC1",
+        "IE-11A.AC2",
+        "IE-11A.AC4"
+      ],
+      "fixtures": [
+        "source-negative"
+      ],
+      "component": "event-intelligence",
+      "interface": "retrieval-egress",
+      "invariant": "private_targets_reached; redirects_checked; resource_limits_enforced",
+      "assertions": [
+        {
+          "observation": "private_targets_reached",
+          "expected": 0
+        },
+        {
+          "observation": "redirects_checked",
+          "expected": true
+        },
+        {
+          "observation": "resource_limits_enforced",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "linux",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "ssrf-egress"
+    },
+    {
+      "id": "prompt-injection",
+      "requirements": [
+        "AGT-04",
+        "CON-03",
+        "IE-11A.AC3",
+        "IE-11A.AC4"
+      ],
+      "fixtures": [
+        "research-negative"
+      ],
+      "component": "event-intelligence",
+      "interface": "research-DecisionPort-creative",
+      "invariant": "authority_changed; privileged_actions; content_kept_untrusted",
+      "assertions": [
+        {
+          "observation": "authority_changed",
+          "expected": false
+        },
+        {
+          "observation": "privileged_actions",
+          "expected": 0
+        },
+        {
+          "observation": "content_kept_untrusted",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "prompt-injection"
+    },
+    {
+      "id": "revocation",
+      "requirements": [
+        "ART-05",
+        "EVAL-04",
+        "IE-11B.AC5"
+      ],
+      "fixtures": [
+        "permission-negative"
+      ],
+      "component": "getticketstub.com",
+      "interface": "artifact-export",
+      "invariant": "revoked_read_rejected; artifact_visibility_widened",
+      "assertions": [
+        {
+          "observation": "revoked_read_rejected",
+          "expected": true
+        },
+        {
+          "observation": "artifact_visibility_widened",
+          "expected": false
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "revocation"
+    },
+    {
+      "id": "export-canaries",
+      "requirements": [
+        "EVAL-04",
+        "IE-11B.AC4"
+      ],
+      "fixtures": [
+        "payload-negative"
+      ],
+      "component": "integration-evals",
+      "interface": "evidence-export",
+      "invariant": "secret_canaries; pii_canaries; correlation_preserved",
+      "assertions": [
+        {
+          "observation": "secret_canaries",
+          "expected": 0
+        },
+        {
+          "observation": "pii_canaries",
+          "expected": 0
+        },
+        {
+          "observation": "correlation_preserved",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": true,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "export-canaries"
+    },
+    {
+      "id": "image-generation-edit",
+      "requirements": [
+        "ART-01",
+        "IE-07.AC2",
+        "IE-07.AC5"
+      ],
+      "fixtures": [
+        "creative-positive"
+      ],
+      "component": "creative-engine",
+      "interface": "GPT-Image-adapter",
+      "invariant": "output_hashes_verified; immutable_parent_link; actual_provider_receipt; usage_known_or_explicit_unknown",
+      "assertions": [
+        {
+          "observation": "output_hashes_verified",
+          "expected": true
+        },
+        {
+          "observation": "immutable_parent_link",
+          "expected": true
+        },
+        {
+          "observation": "actual_provider_receipt",
+          "expected": true
+        },
+        {
+          "observation": "usage_known_or_explicit_unknown",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [
+        "gpt-image"
+      ],
+      "operations": [
+        "generate",
+        "edit"
+      ],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "image-generation-edit"
+    },
+    {
+      "id": "image-failure",
+      "requirements": [
+        "IE-07.AC3"
+      ],
+      "fixtures": [
+        "asset-negative"
+      ],
+      "component": "creative-engine",
+      "interface": "GPT-Image-adapter",
+      "invariant": "structured_error; cost_uncertainty_preserved; late_output_selected",
+      "assertions": [
+        {
+          "observation": "structured_error",
+          "expected": true
+        },
+        {
+          "observation": "cost_uncertainty_preserved",
+          "expected": true
+        },
+        {
+          "observation": "late_output_selected",
+          "expected": false
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [
+        "gpt-image"
+      ],
+      "operations": [
+        "generate",
+        "edit"
+      ],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "image-failure"
+    },
+    {
+      "id": "canonical-conformance",
+      "requirements": [
+        "CON-01",
+        "CON-03",
+        "IE-03A.AC1",
+        "IE-03A.AC2",
+        "IE-03A.AC3",
+        "IE-03A.AC4",
+        "IE-03A.AC5",
+        "IE-03A.AC6"
+      ],
+      "fixtures": [
+        "payload-positive"
+      ],
+      "component": "shared-contracts",
+      "interface": "canonical-validators-consumers",
+      "invariant": "canonical_artifact_loaded; producer_consumer_compatible; negative_fixtures_rejected; stable_hashes; invalid_side_effects",
+      "assertions": [
+        {
+          "observation": "canonical_artifact_loaded",
+          "expected": true
+        },
+        {
+          "observation": "producer_consumer_compatible",
+          "expected": true
+        },
+        {
+          "observation": "negative_fixtures_rejected",
+          "expected": true
+        },
+        {
+          "observation": "stable_hashes",
+          "expected": true
+        },
+        {
+          "observation": "invalid_side_effects",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "canonical-conformance"
+    },
+    {
+      "id": "sponsor-artifacts",
+      "requirements": [
+        "SPN-01",
+        "SPN-02",
+        "SPN-03",
+        "EVAL-03",
+        "IE-08.AC2",
+        "IE-08.AC3",
+        "IE-08.AC5"
+      ],
+      "fixtures": [
+        "usage-positive"
+      ],
+      "component": "integration-evals",
+      "interface": "evidence-import",
+      "invariant": "neatlogs_trace_verified; entire_checkpoint_verified; cfo_forecast_verified; reviewer_access_verified",
+      "assertions": [
+        {
+          "observation": "neatlogs_trace_verified",
+          "expected": true
+        },
+        {
+          "observation": "entire_checkpoint_verified",
+          "expected": true
+        },
+        {
+          "observation": "cfo_forecast_verified",
+          "expected": true
+        },
+        {
+          "observation": "reviewer_access_verified",
+          "expected": true
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "sponsor-artifacts"
+    },
+    {
+      "id": "jev-held-out-comparison",
+      "requirements": [
+        "EVAL-02",
+        "IE-06B.AC1",
+        "IE-06B.AC2",
+        "IE-06B.AC5"
+      ],
+      "fixtures": [
+        "payload-positive"
+      ],
+      "component": "agent-harness",
+      "interface": "DecisionPort-benchmark",
+      "invariant": "held_out_frozen; actual_candidates_compared; ratified_targets_met; unknown_costs",
+      "assertions": [
+        {
+          "observation": "held_out_frozen",
+          "expected": true
+        },
+        {
+          "observation": "actual_candidates_compared",
+          "expected": true
+        },
+        {
+          "observation": "ratified_targets_met",
+          "expected": true
+        },
+        {
+          "observation": "unknown_costs",
+          "expected": 0
+        }
+      ],
+      "artifacts": [
+        "owner-observations",
+        "sanitized-evidence"
+      ],
+      "modes": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "provider_ids": [
+        "jev"
+      ],
+      "operations": [],
+      "platform": "any",
+      "safety": false,
+      "mandatory": true,
+      "timeout_seconds": 30,
+      "fault": "jev-held-out-comparison"
+    }
+  ]
+}

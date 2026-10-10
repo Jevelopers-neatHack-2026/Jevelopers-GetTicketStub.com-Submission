@@ -1,0 +1,209 @@
+{
+  "$defs": {
+    "Threshold": {
+      "additionalProperties": false,
+      "description": "An owner-ratified numerical target for a particular question and slice.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "stratum": {
+          "title": "Stratum",
+          "type": "string"
+        },
+        "metric": {
+          "enum": [
+            "macro_f1",
+            "precision",
+            "recall",
+            "coverage",
+            "abstention_rate",
+            "p95_latency_ms",
+            "critical_false_negatives",
+            "unknown_cost_rate"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "minimum",
+            "maximum"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Limit"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        },
+        "decision_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Decision Ref"
+        },
+        "ratified": {
+          "default": false,
+          "title": "Ratified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "question",
+        "stratum",
+        "metric",
+        "relation",
+        "limit",
+        "owner",
+        "decision_ref"
+      ],
+      "title": "Threshold",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Freeze thresholds and corpus identity before observing final evaluation.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "frozen_at": {
+      "format": "date-time",
+      "title": "Frozen At",
+      "type": "string"
+    },
+    "corpus_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Corpus Digest",
+      "type": "string"
+    },
+    "required_questions": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Required Questions",
+      "type": "array"
+    },
+    "thresholds": {
+      "items": {
+        "$ref": "#/$defs/Threshold"
+      },
+      "title": "Thresholds",
+      "type": "array"
+    },
+    "required_mode": {
+      "enum": [
+        "sandbox",
+        "live"
+      ],
+      "title": "Required Mode",
+      "type": "string"
+    },
+    "minimum_cost_reduction": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Minimum Cost Reduction"
+    },
+    "maximum_f1_loss": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Maximum F1 Loss"
+    },
+    "uncertainty_rule_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Uncertainty Rule Ref"
+    },
+    "cost_policy_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cost Policy Ref"
+    },
+    "latency_policy_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Latency Policy Ref"
+    },
+    "required_trials": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Required Trials",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "frozen_at",
+    "corpus_digest",
+    "required_questions",
+    "thresholds",
+    "required_mode",
+    "minimum_cost_reduction",
+    "maximum_f1_loss"
+  ],
+  "title": "Policy",
+  "type": "object"
+}

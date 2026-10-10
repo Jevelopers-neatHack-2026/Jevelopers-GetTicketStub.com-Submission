@@ -1,0 +1,42 @@
+[project]
+name = "integration-evals"
+version = "0.1.0"
+description = "Pinned cross-component verification and honest evidence gates"
+requires-python = ">=3.13"
+dependencies = ["pydantic>=2.12,<3", "typer>=0.20,<1"]
+
+[project.scripts]
+integration-evals = "integration_evals.cli:app"
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.14",
+    "basedpyright>=1.31",
+    "hatchling>=1.32.4",
+]
+
+[tool.basedpyright]
+typeCheckingMode = "all"
+pythonVersion = "3.13"
+include = ["src", "tests"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["COM812", "ISC001", "D203", "D213", "CPY001", "FBT001", "FBT002"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "ARG", "PLR2004", "SLF001", "D"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+filterwarnings = ["error"]
