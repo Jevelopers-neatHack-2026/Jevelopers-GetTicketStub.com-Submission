@@ -346,16 +346,14 @@ function sharedSourceClaim(left, right) {
 }
 
 function sharedOccurrenceObservation(left, right) {
-  const leftTitle = uniqueClaim(left, 'title');
-  const rightTitle = uniqueClaim(right, 'title');
-  if (!leftTitle || !rightTitle || !sharedSourceClaim(leftTitle, rightTitle)) return false;
-  for (const field of ['start', 'edition']) {
-    const leftClaim = uniqueClaim(left, field);
-    const rightClaim = uniqueClaim(right, field);
-    if (leftClaim && rightClaim && sharedSourceClaim(leftClaim, rightClaim)
-      && (field !== 'start' || leftClaim.precision !== 'unknown')) return true;
-  }
-  return false;
+  const hasSharedTitle = left.facts.title.some((leftClaim) => right.facts.title.some((rightClaim) =>
+    sharedSourceClaim(leftClaim, rightClaim)));
+  if (!hasSharedTitle) return false;
+  const hasSharedKnownStart = left.facts.start.some((leftClaim) => leftClaim.precision !== 'unknown'
+    && right.facts.start.some((rightClaim) => sharedSourceClaim(leftClaim, rightClaim)));
+  const hasSharedEdition = left.facts.edition.some((leftClaim) => right.facts.edition.some((rightClaim) =>
+    sharedSourceClaim(leftClaim, rightClaim)));
+  return hasSharedKnownStart || hasSharedEdition;
 }
 
 function dateRelation(left, right) {
@@ -375,12 +373,7 @@ function relatedTransitions(left, right, transitions) {
       && ((transition.predecessorId === left.candidateId && transition.successorId === right.candidateId)
         || (transition.predecessorId === right.candidateId && transition.successorId === left.candidateId))) related.push(transition);
     if (transition.transition === 'canceled'
-      && (transition.predecessorId === left.candidateId || transition.predecessorId === right.candidateId)) {
-      const sourceKeys = new Set(transition.supports.map(sourceReferenceKey));
-      const cancellationClaimIsLinked = [left, right].some((candidate) => candidate.facts.status.some((claim) =>
-        claim.value === 'canceled' && claim.supports.some((support) => sourceKeys.has(sourceReferenceKey(support)))));
-      if (cancellationClaimIsLinked) related.push(transition);
-    }
+      && (transition.predecessorId === left.candidateId || transition.predecessorId === right.candidateId)) related.push(transition);
   }
   return related.sort((leftLink, rightLink) => leftLink.id < rightLink.id ? -1 : leftLink.id > rightLink.id ? 1 : 0);
 }
@@ -456,19 +449,20 @@ export function compareOccurrenceIdentity(leftValue, rightValue, options = {}) {
     const hasCancellation = transitionKinds.has('canceled');
     const transitionReasons = [
       ...(hasReschedule ? ['explicit_reschedule_successor_link'] : []),
-      ...(hasCancellation ? ['explicit_cancellation_evidence'] : []),
+      ...(hasCancellation ? ['cancellation_status_uncertainty', 'explicit_cancellation_evidence'] : []),
       ...(hasReschedule && hasCancellation ? ['conflicting_transition_links'] : []),
     ];
+    const transitionConflicts = hasCancellation ? ['status'] : [];
     if (sourceReferenceConflict(candidates, attachedTransitions)) {
-      return decision(candidates, 'review', ['source_reference_conflict', ...transitionReasons], [], duplicates, attachedTransitions);
+      return decision(candidates, 'review', ['source_reference_conflict', ...transitionReasons], transitionConflicts, duplicates, attachedTransitions);
     }
 
     const internalConflicts = [...new Set([...internalConflictFields(left), ...internalConflictFields(right)])].sort();
     if (internalConflicts.length > 0) {
-      return decision(candidates, 'review', ['candidate_fact_conflict', ...transitionReasons], internalConflicts, duplicates, attachedTransitions);
+      return decision(candidates, 'review', ['candidate_fact_conflict', ...transitionReasons], [...internalConflicts, ...transitionConflicts], duplicates, attachedTransitions);
     }
 
-    const conflicts = [];
+    const conflicts = [...transitionConflicts];
     const distinctReasons = [];
     const reasons = [];
     const leftCity = uniqueClaim(left, 'city');

@@ -201,6 +201,90 @@ test('conflicting claims within one candidate are retained and require review', 
   assert.equal(result.candidates[0].facts.start.length, 2);
 });
 
+test('occurrence identity searches all equivalent title, start, and edition claim pairs in either order', () => {
+  const sharedTitle = { evidenceId: 'identity-page', contentHash: HASH_A, sourceField: 'event_name' };
+  const sharedStart = { evidenceId: 'identity-page', contentHash: HASH_A, sourceField: 'event_date' };
+  const sharedEdition = { evidenceId: 'identity-page', contentHash: HASH_A, sourceField: 'edition_year' };
+  const leftFacts = {
+    title: [
+      claim('title', 'Garden Light Festival', { evidenceId: 'left-title', contentHash: 'b'.repeat(64) }),
+      claim('title', 'Garden Light Festival', sharedTitle),
+    ],
+    start: [
+      temporal('start', '2027-08-01', 'date', { evidenceId: 'left-date', contentHash: 'c'.repeat(64) }),
+      temporal('start', '2027-08-01', 'date', sharedStart),
+    ],
+    edition: [
+      claim('edition', '2027', { evidenceId: 'left-edition', contentHash: 'd'.repeat(64) }),
+      claim('edition', '2027', sharedEdition),
+    ],
+  };
+  const rightFacts = {
+    title: [
+      claim('title', 'Garden Light Festival', sharedTitle),
+      claim('title', 'Garden Light Festival', { evidenceId: 'right-title', contentHash: 'e'.repeat(64) }),
+    ],
+    start: [
+      temporal('start', '2027-08-01', 'date', sharedStart),
+      temporal('start', '2027-08-01', 'date', { evidenceId: 'right-date', contentHash: 'f'.repeat(64) }),
+    ],
+    edition: [
+      claim('edition', '2027', sharedEdition),
+      claim('edition', '2027', { evidenceId: 'right-edition', contentHash: '0'.repeat(64) }),
+    ],
+  };
+  const fields = ['title', 'start', 'edition'];
+  const variants = (facts) => Array.from({ length: 1 << fields.length }, (_, mask) => {
+    const variant = { ...facts };
+    fields.forEach((field, index) => {
+      if ((mask & (1 << index)) !== 0) variant[field] = [...facts[field]].reverse();
+    });
+    return variant;
+  });
+  const assertPermutationInvariant = (leftCase, rightCase) => {
+    const baseline = compareOccurrenceIdentity(occurrence('festival-a', leftCase), occurrence('festival-b', rightCase));
+    assert.equal(baseline.relation, 'same_occurrence_candidate');
+    for (const leftVariant of variants(leftCase)) {
+      for (const rightVariant of variants(rightCase)) {
+        const result = compareOccurrenceIdentity(occurrence('festival-a', leftVariant), occurrence('festival-b', rightVariant));
+        assert.equal(result.relation, baseline.relation);
+        assert.deepEqual(result.reasonCodes, baseline.reasonCodes);
+        assert.deepEqual(result.conflictFields, baseline.conflictFields);
+        assert.deepEqual(result.provenanceReferences, baseline.provenanceReferences);
+        assert.deepEqual(result.duplicateContentHashes, baseline.duplicateContentHashes);
+      }
+    }
+  };
+  assertPermutationInvariant(leftFacts, rightFacts);
+  assertPermutationInvariant({ ...leftFacts, edition: [] }, { ...rightFacts, edition: [] });
+  assertPermutationInvariant({ ...leftFacts, start: [] }, { ...rightFacts, start: [] });
+});
+
+test('a shared source position with different claim origins remains review', () => {
+  const sharedTitle = { evidenceId: 'customer-page', contentHash: HASH_A, sourceField: 'event_name' };
+  const sharedStart = { evidenceId: 'customer-page', contentHash: HASH_A, sourceField: 'event_date' };
+  const left = occurrence('origin-a', {
+    title: [
+      claim('title', 'Garden Light Festival', { ...sharedTitle, origin: 'sourced' }),
+      claim('title', 'Garden Light Festival', { evidenceId: 'other-customer-source', contentHash: HASH_B, origin: 'customer_supplied' }),
+    ],
+    start: [temporal('start', '2027-08-01', 'date', sharedStart)],
+  });
+  const right = occurrence('origin-b', {
+    title: [claim('title', 'Garden Light Festival', { ...sharedTitle, origin: 'customer_supplied' })],
+    start: [temporal('start', '2027-08-01', 'date', sharedStart)],
+  });
+
+  const result = compareOccurrenceIdentity(left, right);
+  const reordered = compareOccurrenceIdentity(occurrence('origin-a', {
+    title: [...left.facts.title].reverse(), start: left.facts.start,
+  }), right);
+  assert.equal(result.relation, 'review');
+  assert.deepEqual(result.reasonCodes, ['compatible_facts_without_shared_source_identity']);
+  assert.equal(reordered.relation, result.relation);
+  assert.deepEqual(reordered.reasonCodes, result.reasonCodes);
+});
+
 test('reschedule link is immutable, source-backed, and preserves predecessor identity', () => {
   const oldOccurrence = occurrence('tour-stop-old', {
     title: [claim('title', 'Moonlight Tour')],
@@ -249,9 +333,70 @@ test('cancellation evidence creates an immutable predecessor record without clai
 
   const result = compareOccurrenceIdentity(scheduled, canceled, { transitions: [transition] });
   assert.equal(result.relation, 'review');
-  assert.deepEqual(result.reasonCodes, ['explicit_cancellation_evidence']);
+  assert.deepEqual(result.reasonCodes, ['cancellation_status_uncertainty', 'explicit_cancellation_evidence']);
+  assert.deepEqual(result.conflictFields, ['status']);
+  assert.equal(result.provenanceReferences.some((ref) => ref.evidenceId === 'notice' && ref.value === 'canceled'), true);
   assert.equal(result.transitionLinks[0].predecessorId, 'old-show');
   assert.equal(result.transitionLinks[0].successorId, null);
+});
+
+test('cancellation transition alone attaches to its compared predecessor and keeps status uncertainty', () => {
+  const cancellation = createOccurrenceTransition({
+    predecessorId: 'show-a',
+    successorId: null,
+    transition: 'canceled',
+    supports: [reference('status', 'canceled', { evidenceId: 'standalone-cancel-notice', contentHash: HASH_B })],
+  });
+  const sharedFacts = sharedOccurrenceFacts();
+  const scheduledLeft = occurrence('show-a', {
+    ...sharedFacts,
+    status: [claim('status', 'scheduled', { evidenceId: 'old-schedule', contentHash: 'c'.repeat(64) })],
+  });
+  const scheduledRight = occurrence('show-b', {
+    ...sharedFacts,
+    status: [claim('status', 'scheduled', { evidenceId: 'current-schedule', contentHash: 'd'.repeat(64) })],
+  });
+  const withoutStatusLeft = occurrence('show-a', sharedOccurrenceFacts());
+  const withoutStatusRight = occurrence('show-b', sharedOccurrenceFacts());
+
+  for (const [left, right] of [[scheduledLeft, scheduledRight], [withoutStatusLeft, withoutStatusRight]]) {
+    const forward = compareOccurrenceIdentity(left, right, { transitions: [cancellation] });
+    const reverse = compareOccurrenceIdentity(right, left, { transitions: [cancellation] });
+    assert.deepEqual(forward, reverse);
+    assert.equal(forward.relation, 'review');
+    assert.deepEqual(forward.reasonCodes, ['cancellation_status_uncertainty', 'explicit_cancellation_evidence']);
+    assert.deepEqual(forward.conflictFields, ['status']);
+    assert.equal(forward.transitionLinks.length, 1);
+    assert.equal(forward.transitionLinks[0].id, cancellation.id);
+    assert.equal(forward.provenanceReferences.some((ref) => ref.evidenceId === 'standalone-cancel-notice' && ref.value === 'canceled'), true);
+    assert.equal(forward.sourceAuthority, 'not_evaluated');
+  }
+});
+
+test('reschedule transition provenance is retained when only the transition list has the notice', () => {
+  const oldOccurrence = occurrence('rescheduled-old', {
+    title: [claim('title', 'Moonlight Tour')],
+    start: [temporal('start', '2027-06-15')],
+  });
+  const newOccurrence = occurrence('rescheduled-new', {
+    title: [claim('title', 'Moonlight Tour', { evidenceId: 'new-listing', contentHash: HASH_B })],
+    start: [temporal('start', '2027-06-22', 'date', { evidenceId: 'new-listing', contentHash: HASH_B })],
+  });
+  const reschedule = createOccurrenceTransition({
+    predecessorId: 'rescheduled-old',
+    successorId: 'rescheduled-new',
+    transition: 'rescheduled',
+    supports: [reference('status', 'rescheduled', { evidenceId: 'standalone-reschedule-notice', contentHash: 'c'.repeat(64) })],
+  });
+
+  const forward = compareOccurrenceIdentity(oldOccurrence, newOccurrence, { transitions: [reschedule] });
+  const reverse = compareOccurrenceIdentity(newOccurrence, oldOccurrence, { transitions: [reschedule] });
+  assert.deepEqual(forward, reverse);
+  assert.equal(forward.relation, 'different_occurrence_candidate');
+  assert.deepEqual(forward.reasonCodes, ['date_day_mismatch', 'explicit_reschedule_successor_link']);
+  assert.deepEqual(forward.conflictFields, ['start']);
+  assert.equal(forward.transitionLinks.length, 1);
+  assert.equal(forward.provenanceReferences.some((ref) => ref.evidenceId === 'standalone-reschedule-notice' && ref.value === 'rescheduled'), true);
 });
 
 test('comparison ordering and provenance are stable when candidates are supplied in either order', () => {
@@ -331,6 +476,7 @@ test('conflicting cancellation and reschedule links stay visible and determinist
   assert.equal(forward.provenanceReferences.some((ref) => ref.evidenceId === 'cancel-notice'), true);
   assert.equal(forward.provenanceReferences.some((ref) => ref.evidenceId === 'reschedule-notice'), true);
   assert.deepEqual(forward.reasonCodes, [
+    'cancellation_status_uncertainty',
     'candidate_fact_conflict',
     'conflicting_transition_links',
     'explicit_cancellation_evidence',

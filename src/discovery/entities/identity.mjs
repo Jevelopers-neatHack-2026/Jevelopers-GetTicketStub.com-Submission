@@ -164,6 +164,10 @@ function normalizedLabel(value) {
   return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
 }
 
+function compareCodeUnits(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function namesSimilar(left, right) {
   const leftNames = new Set(left.names.map((claim) => normalizedLabel(claim.value)).filter(Boolean));
   const rightNames = new Set(right.names.map((claim) => normalizedLabel(claim.value)).filter(Boolean));
@@ -235,7 +239,8 @@ function allSourceReferences(candidates) {
 }
 
 function identityDecision(candidates, relation, reasons, duplicates) {
-  const ordered = [...candidates].sort((left, right) => left.candidateId.localeCompare(right.candidateId));
+  // Candidate IDs use the same locale-independent UTF-16 code-unit order as occurrences.
+  const ordered = [...candidates].sort((left, right) => compareCodeUnits(left.candidateId, right.candidateId));
   return freezeDeep({
     schema: DECISION_SCHEMA,
     candidateIds: ordered.map((candidate) => candidate.candidateId),

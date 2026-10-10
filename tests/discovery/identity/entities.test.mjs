@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import { compareEntityIdentity, EntityIdentityError } from '../../../src/discovery/entities/identity.mjs';
@@ -135,6 +136,53 @@ test('without identity evidence, comparison is unknown and stays deterministic u
   assert.equal(forward.relation, 'unknown');
   assert.deepEqual(forward, reverse);
   assert.deepEqual(forward.candidateIds, ['a-company', 'z-company']);
+});
+
+test('candidate ID order is locale-independent for mixed-case and punctuation IDs', () => {
+  const identityModuleUrl = new URL('../../../src/discovery/entities/identity.mjs', import.meta.url).href;
+  const source = `
+    const { compareEntityIdentity } = await import(${JSON.stringify(identityModuleUrl)});
+    const ids = ['A', 'a', 'a-b', 'a.b', 'a:b', 'a_b'];
+    const observation = (candidateId) => ({
+      schema: 'ei-entity-observation-internal/v1', candidateId, kind: 'organization',
+    });
+    const results = [];
+    for (let index = 0; index < ids.length; index += 1) {
+      for (let other = index + 1; other < ids.length; other += 1) {
+        const first = ids[index];
+        const second = ids[other];
+        results.push([
+          compareEntityIdentity(observation(first), observation(second)).candidateIds,
+          compareEntityIdentity(observation(second), observation(first)).candidateIds,
+        ]);
+      }
+    }
+    console.log(JSON.stringify({ locale: new Intl.Collator().resolvedOptions().locale, results }));
+  `;
+  const runForLocale = (locale) => {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', source], {
+      encoding: 'utf8',
+      env: { ...process.env, LANG: `${locale}.UTF-8`, LC_ALL: `${locale}.UTF-8` },
+    });
+    assert.equal(child.error, undefined, child.error?.message);
+    assert.equal(child.status, 0, child.stderr);
+    return JSON.parse(child.stdout.trim());
+  };
+  const english = runForLocale('en_US');
+  const danish = runForLocale('da_DK');
+  const ids = ['A', 'a', 'a-b', 'a.b', 'a:b', 'a_b'];
+  const expected = [];
+  for (let index = 0; index < ids.length; index += 1) {
+    for (let other = index + 1; other < ids.length; other += 1) {
+      const pair = [ids[index], ids[other]];
+      expected.push([pair, pair]);
+    }
+  }
+
+  assert.equal(english.locale, 'en-US');
+  assert.equal(danish.locale, 'da-DK');
+  assert.deepEqual(english.results, expected);
+  assert.deepEqual(danish.results, expected);
 });
 
 test('malformed, private, accessor-backed, and over-bounded input fails without invoking getters', () => {
