@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { isProxy } from 'node:util/types';
+import { isPromise, isProxy } from 'node:util/types';
 import {
   getQuestionDefinition,
   QUESTION_REGISTRY_SCHEMA_VERSION,
@@ -23,6 +23,9 @@ export const ASSET_PERMISSION_SELECTION_LIMITS = Object.freeze({
   maxReferenceBytes: 192,
   maxOperationMs: 1500,
   maxHandleAgeMs: 60_000,
+  maxOutstandingSelections: 32,
+  maxConcurrentOperations: 16,
+  maxOutstandingAdapterCalls: 16,
 });
 
 const REQUEST_VERSION = 'asset-permission-request/1';
@@ -77,6 +80,23 @@ const eventTargetPrototype = typeof AbortSignal === 'function'
   : null;
 const eventTargetAdd = eventTargetPrototype?.addEventListener;
 const eventTargetRemove = eventTargetPrototype?.removeEventListener;
+const AbortControllerIntrinsic = globalThis.AbortController;
+const setTimeoutIntrinsic = globalThis.setTimeout;
+const clearTimeoutIntrinsic = globalThis.clearTimeout;
+const nativePromisePrototype = Promise.prototype;
+const nativePromiseThen = Promise.prototype.then;
+const ABORTED_BEFORE_ADAPTER = Symbol('aborted-before-adapter');
+
+function observeOrdinaryNativePromise(value) {
+  try {
+    if (!value || typeof value !== 'object' || isProxy(value) || !isPromise(value)) return;
+    if (Object.getPrototypeOf(value) !== nativePromisePrototype
+      || Object.getOwnPropertyDescriptor(value, 'constructor') !== undefined) return;
+    nativePromiseThen.call(value, undefined, () => undefined);
+  } catch {
+    // Exotic or malformed promise-like values are outside the sync-hook contract.
+  }
+}
 
 export class AssetPermissionSelectionError extends Error {
   constructor(code) {
@@ -209,6 +229,12 @@ function snapshotOptions(value) {
   return { signal, deadlineAtMs };
 }
 
+function abortOperation(operation, code) {
+  if (operation.abortReason !== null) return;
+  operation.abortReason = code;
+  operation.controller.abort(code);
+}
+
 function makeOperation(options) {
   const startedAt = performance.now();
   const localDeadline = startedAt + ASSET_PERMISSION_SELECTION_LIMITS.maxOperationMs;
@@ -217,40 +243,103 @@ function makeOperation(options) {
     : Math.min(localDeadline, options.deadlineAtMs);
   if (options.signal && abortSignalAbortedGetter.call(options.signal)) fail('CANCELLED');
   if (deadlineAtMs <= startedAt) fail('DEADLINE_EXCEEDED');
-  return { signal: options.signal, deadlineAtMs };
+  const controller = new AbortControllerIntrinsic();
+  const operation = {
+    callerSignal: options.signal,
+    signal: controller.signal,
+    deadlineAtMs,
+    controller,
+    abortReason: null,
+    callerAbortListener: null,
+    deadlineTimer: null,
+    finished: false,
+  };
+  try {
+    if (operation.callerSignal) {
+      operation.callerAbortListener = () => abortOperation(operation, 'CANCELLED');
+      eventTargetAdd.call(operation.callerSignal, 'abort', operation.callerAbortListener, { once: true });
+      if (abortSignalAbortedGetter.call(operation.callerSignal)) abortOperation(operation, 'CANCELLED');
+    }
+    const remainingMs = Math.max(0, deadlineAtMs - performance.now());
+    operation.deadlineTimer = setTimeoutIntrinsic(
+      () => abortOperation(operation, 'DEADLINE_EXCEEDED'),
+      remainingMs,
+    );
+    if (operation.abortReason !== null) fail(operation.abortReason);
+    return operation;
+  } catch (error) {
+    if (operation.deadlineTimer !== null) clearTimeoutIntrinsic(operation.deadlineTimer);
+    if (operation.callerSignal && operation.callerAbortListener) {
+      eventTargetRemove.call(operation.callerSignal, 'abort', operation.callerAbortListener);
+    }
+    throw error;
+  }
+}
+
+function beginOperation(options, resourceState) {
+  if (resourceState.activeOperations >= ASSET_PERMISSION_SELECTION_LIMITS.maxConcurrentOperations) fail('LIMIT_EXCEEDED');
+  resourceState.activeOperations += 1;
+  try {
+    const operation = makeOperation(options);
+    operation.resourceState = resourceState;
+    return operation;
+  } catch (error) {
+    resourceState.activeOperations -= 1;
+    throw error;
+  }
+}
+
+function finishOperation(operation) {
+  if (!operation || operation.finished) return;
+  operation.finished = true;
+  if (operation.deadlineTimer !== null) clearTimeoutIntrinsic(operation.deadlineTimer);
+  if (operation.callerSignal && operation.callerAbortListener) {
+    eventTargetRemove.call(operation.callerSignal, 'abort', operation.callerAbortListener);
+  }
+  operation.resourceState.activeOperations -= 1;
 }
 
 function checkOperation(operation) {
-  if (operation.signal && abortSignalAbortedGetter.call(operation.signal)) fail('CANCELLED');
-  if (performance.now() >= operation.deadlineAtMs) fail('DEADLINE_EXCEEDED');
+  if (operation.callerSignal && abortSignalAbortedGetter.call(operation.callerSignal)) {
+    abortOperation(operation, 'CANCELLED');
+  }
+  if (operation.abortReason !== null) fail(operation.abortReason);
+  if (performance.now() >= operation.deadlineAtMs) {
+    abortOperation(operation, 'DEADLINE_EXCEEDED');
+    fail('DEADLINE_EXCEEDED');
+  }
 }
 
 async function awaitAdapter(callback, argument, operation, assertCurrent) {
   checkOperation(operation);
-  const remainingMs = operation.deadlineAtMs - performance.now();
-  if (remainingMs <= 0) fail('DEADLINE_EXCEEDED');
-  let timer;
+  if (operation.resourceState.activeAdapterCalls >= ASSET_PERMISSION_SELECTION_LIMITS.maxOutstandingAdapterCalls) {
+    fail('LIMIT_EXCEEDED');
+  }
+  operation.resourceState.activeAdapterCalls += 1;
   let abortListener;
-  const cancelPromise = operation.signal
-    ? new Promise((resolve) => {
-      abortListener = () => resolve({ kind: 'cancelled' });
-      eventTargetAdd.call(operation.signal, 'abort', abortListener, { once: true });
-      if (abortSignalAbortedGetter.call(operation.signal)) resolve({ kind: 'cancelled' });
-    })
-    : new Promise(() => {});
-  const timeoutPromise = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({ kind: 'deadline' }), remainingMs);
+  const abortPromise = new Promise((resolve) => {
+    abortListener = () => resolve({ kind: 'aborted' });
+    eventTargetAdd.call(operation.signal, 'abort', abortListener, { once: true });
+    if (abortSignalAbortedGetter.call(operation.signal)) resolve({ kind: 'aborted' });
   });
   const callbackPromise = Promise.resolve()
-    .then(() => callback(argument, operation.signal))
-    .then((value) => ({ kind: 'value', value }), () => ({ kind: 'error' }));
-  const outcome = await Promise.race([callbackPromise, cancelPromise, timeoutPromise]);
-  clearTimeout(timer);
-  if (operation.signal && abortListener) eventTargetRemove.call(operation.signal, 'abort', abortListener);
-  if (outcome.kind === 'cancelled') fail('CANCELLED');
-  if (outcome.kind === 'deadline') fail('DEADLINE_EXCEEDED');
-  if (outcome.kind === 'error') fail('AUTHORITY_UNAVAILABLE');
+    .then(() => {
+      if (abortSignalAbortedGetter.call(operation.signal)) return ABORTED_BEFORE_ADAPTER;
+      return callback(argument, operation.signal);
+    })
+    .then((value) => value === ABORTED_BEFORE_ADAPTER
+      ? { kind: 'aborted' }
+      : { kind: 'value', value }, () => ({ kind: 'error' }))
+    .finally(() => { operation.resourceState.activeAdapterCalls -= 1; });
+  let outcome;
+  try {
+    outcome = await Promise.race([callbackPromise, abortPromise]);
+  } finally {
+    if (abortListener) eventTargetRemove.call(operation.signal, 'abort', abortListener);
+  }
+  if (outcome.kind === 'aborted') checkOperation(operation);
   checkOperation(operation);
+  if (outcome.kind === 'error') fail('AUTHORITY_UNAVAILABLE');
   assertCurrent();
   return outcome.value;
 }
@@ -423,9 +512,18 @@ function createContext(request, digest, operation, adapters, originalPrincipal =
     try {
       raw = adapters.readAuthorization(freezeArgument({ request, requestHash: digest }));
     } catch {
+      checkOperation(operation);
       fail('AUTHORITY_UNAVAILABLE');
     }
-    const authorization = snapshotAuthorization(raw, request, digest);
+    observeOrdinaryNativePromise(raw);
+    checkOperation(operation);
+    let authorization;
+    try {
+      authorization = snapshotAuthorization(raw, request, digest);
+    } catch (error) {
+      checkOperation(operation);
+      throw error;
+    }
     if (authorization.status !== 'authorized') fail('AUTHORIZATION_DENIED');
     if (context.originalPrincipal
       && (authorization.principalRef !== context.originalPrincipal.principalRef
@@ -444,9 +542,18 @@ function createContext(request, digest, operation, adapters, originalPrincipal =
           decision: entry.decision,
         }));
       } catch {
+        checkOperation(operation);
         fail('AUTHORITY_UNAVAILABLE');
       }
-      const checked = snapshotRoleRecheck(result, authorization, entry);
+      observeOrdinaryNativePromise(result);
+      checkOperation(operation);
+      let checked;
+      try {
+        checked = snapshotRoleRecheck(result, authorization, entry);
+      } catch (error) {
+        checkOperation(operation);
+        throw error;
+      }
       if (checked.status !== 'current') fail('ROLE_EVIDENCE_STALE');
     }
     for (const entry of context.permissionDecisions) {
@@ -462,9 +569,18 @@ function createContext(request, digest, operation, adapters, originalPrincipal =
           decision: entry.decision,
         }));
       } catch {
+        checkOperation(operation);
         fail('AUTHORITY_UNAVAILABLE');
       }
-      const checked = snapshotPermissionRecheck(result, authorization, entry);
+      observeOrdinaryNativePromise(result);
+      checkOperation(operation);
+      let checked;
+      try {
+        checked = snapshotPermissionRecheck(result, authorization, entry);
+      } catch (error) {
+        checkOperation(operation);
+        throw error;
+      }
       if (checked.status !== 'current') fail('PERMISSION_STALE');
     }
     checkOperation(operation);
@@ -700,9 +816,10 @@ function validAdapters(value) {
 
 function isThenableWithoutInvoking(value) {
   try {
-    if (!value || (typeof value !== 'object' && typeof value !== 'function') || isProxy(value)) return false;
+    if (!value || (typeof value !== 'object' && typeof value !== 'function')) return false;
     let current = value;
     while (current !== null) {
+      if (isProxy(current)) return true;
       const descriptor = Object.getOwnPropertyDescriptor(current, 'then');
       if (descriptor) return typeof descriptor.value === 'function' || typeof descriptor.get === 'function';
       current = Object.getPrototypeOf(current);
@@ -713,16 +830,74 @@ function isThenableWithoutInvoking(value) {
   }
 }
 
+function runWithOperation(options, resourceState, callback) {
+  const operation = beginOperation(options, resourceState);
+  return Promise.resolve()
+    .then(() => callback(operation))
+    .finally(() => finishOperation(operation));
+}
+
 /**
  * Create a private selector. All authorization callbacks are host-installed
  * trust boundaries. A client supplied record is never promoted by this module.
  */
 export function createAssetPermissionSelector(adapterInput) {
   const adapters = validAdapters(adapterInput);
-  const states = new WeakMap();
+  const states = new Map();
+  const expiredHandles = new WeakSet();
+  const resourceState = { activeOperations: 0, activeAdapterCalls: 0 };
+  const emptyArray = Object.freeze([]);
+
+  function clearSelectionState(handle, state, expired = false) {
+    if (states.get(handle) === state) states.delete(handle);
+    if (expired) expiredHandles.add(handle);
+    if (state.expiryTimer !== null) clearTimeoutIntrinsic(state.expiryTimer);
+    state.expiryTimer = null;
+    state.consumed = true;
+    state.request = null;
+    state.requestHash = null;
+    state.selectionId = null;
+    state.principalRef = null;
+    state.subjectRef = null;
+    state.assets = emptyArray;
+    state.diagnostics = emptyArray;
+  }
+
+  function purgeExpiredSelections() {
+    const now = performance.now();
+    let purged = 0;
+    for (const [handle, state] of states) {
+      if (now - state.createdAtMonotonic >= ASSET_PERMISSION_SELECTION_LIMITS.maxHandleAgeMs) {
+        clearSelectionState(handle, state, true);
+        purged += 1;
+      }
+    }
+    return purged;
+  }
+
+  function scheduleSelectionExpiry(handle, state) {
+    const elapsed = performance.now() - state.createdAtMonotonic;
+    const remaining = Math.max(1, ASSET_PERMISSION_SELECTION_LIMITS.maxHandleAgeMs - elapsed);
+    state.expiryTimer = setTimeoutIntrinsic(() => {
+      if (states.get(handle) !== state) return;
+      if (performance.now() - state.createdAtMonotonic >= ASSET_PERMISSION_SELECTION_LIMITS.maxHandleAgeMs) {
+        clearSelectionState(handle, state, true);
+      } else {
+        scheduleSelectionExpiry(handle, state);
+      }
+    }, remaining);
+    if (typeof state.expiryTimer?.unref === 'function') state.expiryTimer.unref();
+  }
+
+  function detachSelectionState(handle, state) {
+    if (states.get(handle) === state) states.delete(handle);
+    if (state.expiryTimer !== null) clearTimeoutIntrinsic(state.expiryTimer);
+    state.expiryTimer = null;
+  }
 
   const api = Object.freeze({
     async select(input, optionsInput) {
+      purgeExpiredSelections();
       const selectionInput = snapshotRecord(input, ['request', 'candidates']);
       if (!selectionInput) fail('INVALID_INPUT');
       const request = snapshotRequest(selectionInput.request);
@@ -730,11 +905,6 @@ export function createAssetPermissionSelector(adapterInput) {
       const candidateValues = snapshotArray(selectionInput.candidates, ASSET_PERMISSION_SELECTION_LIMITS.maxCandidates);
       if (!candidateValues) fail('INVALID_INPUT');
       const optionSnapshot = snapshotOptions(optionsInput);
-      const operation = makeOperation(optionSnapshot);
-      const context = createContext(request, digest, operation, adapters);
-      const originalPrincipal = context.currentAuthorization;
-      context.originalPrincipal = originalPrincipal;
-
       const parsed = [];
       const seenCandidates = new Set();
       const seenAssets = new Set();
@@ -749,221 +919,267 @@ export function createAssetPermissionSelector(adapterInput) {
         parsed.push(item);
       }
 
-      const diagnostics = [];
-      const selected = [];
-      try {
-        for (const item of parsed) {
-          checkOperation(operation);
-          const result = await inspectAndSelectCandidate(context, item, diagnostics);
+      return runWithOperation(optionSnapshot, resourceState, async (operation) => {
+        const context = createContext(request, digest, operation, adapters);
+        const originalPrincipal = context.currentAuthorization;
+        context.originalPrincipal = originalPrincipal;
+
+        const diagnostics = [];
+        const selected = [];
+        try {
+          for (const item of parsed) {
+            checkOperation(operation);
+            const result = await inspectAndSelectCandidate(context, item, diagnostics);
+            context.assertCurrent();
+            checkOperation(operation);
+            if (result) selected.push(result);
+          }
           context.assertCurrent();
           checkOperation(operation);
-          if (result) selected.push(result);
+        } catch (error) {
+          checkOperation(operation);
+          if (error instanceof AssetPermissionSelectionError) throw error;
+          fail('AUTHORITY_UNAVAILABLE');
         }
-        context.assertCurrent();
-        checkOperation(operation);
-      } catch (error) {
-        if (error instanceof AssetPermissionSelectionError) throw error;
-        fail('AUTHORITY_UNAVAILABLE');
-      }
 
-      const handle = Object.freeze(Object.create(null));
-      const selectionId = randomUUID();
-      const state = {
-        consumed: false,
-        createdAtMs: Date.now(),
-        request,
-        requestHash: digest,
-        selectionId,
-        principalRef: originalPrincipal.principalRef,
-        subjectRef: originalPrincipal.subjectRef,
-        assets: Object.freeze(selected),
-        diagnostics: Object.freeze(diagnostics.slice(0, ASSET_PERMISSION_SELECTION_LIMITS.maxCandidates * 2)),
-      };
-      states.set(handle, state);
-      return Object.freeze({
-        version: ASSET_PERMISSION_SELECTION_VERSION,
-        selectionId,
-        handle,
-        referenceImageCount: selected.length,
-        fallbackRequired: selected.length === 0,
+        purgeExpiredSelections();
+        if (states.size >= ASSET_PERMISSION_SELECTION_LIMITS.maxOutstandingSelections) fail('LIMIT_EXCEEDED');
+        const handle = Object.freeze(Object.create(null));
+        const selectionId = randomUUID();
+        const state = {
+          consumed: false,
+          createdAtMonotonic: performance.now(),
+          expiryTimer: null,
+          request,
+          requestHash: digest,
+          selectionId,
+          principalRef: originalPrincipal.principalRef,
+          subjectRef: originalPrincipal.subjectRef,
+          assets: Object.freeze(selected),
+          diagnostics: Object.freeze(diagnostics.slice(0, ASSET_PERMISSION_SELECTION_LIMITS.maxCandidates * 2)),
+        };
+        states.set(handle, state);
+        try {
+          scheduleSelectionExpiry(handle, state);
+        } catch {
+          clearSelectionState(handle, state);
+          fail('LIMIT_EXCEEDED');
+        }
+        try {
+          checkOperation(operation);
+        } catch (error) {
+          clearSelectionState(handle, state);
+          throw error;
+        }
+        return Object.freeze({
+          version: ASSET_PERMISSION_SELECTION_VERSION,
+          selectionId,
+          handle,
+          referenceImageCount: selected.length,
+          fallbackRequired: selected.length === 0,
+        });
       });
     },
 
     async handoff(handle, requestInput, optionsInput) {
-      const state = handle && typeof handle === 'object' && !isProxy(handle) ? states.get(handle) : null;
-      if (!state || state.consumed) fail('INVALID_SELECTION');
+      purgeExpiredSelections();
+      const isHandle = handle && typeof handle === 'object' && !isProxy(handle);
+      const state = isHandle ? states.get(handle) : null;
+      if (!state || state.consumed) {
+        if (isHandle && expiredHandles.has(handle)) fail('SELECTION_EXPIRED');
+        fail('INVALID_SELECTION');
+      }
+      if (performance.now() - state.createdAtMonotonic >= ASSET_PERMISSION_SELECTION_LIMITS.maxHandleAgeMs) {
+        clearSelectionState(handle, state, true);
+        fail('SELECTION_EXPIRED');
+      }
       state.consumed = true;
-      if (Date.now() - state.createdAtMs > ASSET_PERMISSION_SELECTION_LIMITS.maxHandleAgeMs) fail('SELECTION_EXPIRED');
-
-      const request = snapshotRequest(requestInput);
-      const digest = requestHash(request);
-      if (digest !== state.requestHash || canonicalRequest(request) !== canonicalRequest(state.request)) fail('REQUEST_MISMATCH');
-      const optionSnapshot = snapshotOptions(optionsInput);
-      const operation = makeOperation(optionSnapshot);
-      const context = createContext(request, digest, operation, adapters, {
-        principalRef: state.principalRef,
-        subjectRef: state.subjectRef,
-      });
-      const freshAssets = [];
-
+      detachSelectionState(handle, state);
       try {
-        for (const selected of state.assets) {
+        const request = snapshotRequest(requestInput);
+        const digest = requestHash(request);
+        if (digest !== state.requestHash || canonicalRequest(request) !== canonicalRequest(state.request)) fail('REQUEST_MISMATCH');
+        const optionSnapshot = snapshotOptions(optionsInput);
+        return await runWithOperation(optionSnapshot, resourceState, async (operation) => {
+          const context = createContext(request, digest, operation, adapters, {
+            principalRef: state.principalRef,
+            subjectRef: state.subjectRef,
+          });
+          const freshAssets = [];
+
+          try {
+            for (const selected of state.assets) {
+              checkOperation(operation);
+              const { candidate, inspection, transformedBytes, identity } = selected;
+              if (!inspection.matchesTransformedBytes(transformedBytes)
+                || sha256(transformedBytes) !== identity.transformedHash
+                || identity.sourceHash !== inspection.sourceHash
+                || identity.transformedHash !== inspection.transformedHash
+                || identity.assetVersion !== candidate.assetVersion
+                || !requestRefKeys.every((key) => identity[key] === request[key])) fail('ASSET_SNAPSHOT_MISMATCH');
+
+              if (typeof adapters.verifyRoleEvidence !== 'function'
+                || typeof adapters.recheckRoleEvidence !== 'function'
+                || typeof adapters.verifyPermission !== 'function'
+                || typeof adapters.recheckPermission !== 'function') fail('AUTHORITY_UNAVAILABLE');
+
+              context.assertCurrent();
+              const authorization = context.currentAuthorization;
+              const rawRole = await awaitAdapter(adapters.verifyRoleEvidence, freezeArgument({
+                request,
+                requestHash: digest,
+                authorization,
+                identity,
+                observation: candidate.roleEvidence,
+                handoffRevalidation: true,
+              }), operation, context.assertCurrent);
+              const roleDecision = snapshotRoleDecision(rawRole, identity, authorization);
+              if (roleDecision.status !== 'eligible' || roleDecision.associationStatus !== 'confirmed'
+                || !handoffRoles.has(identity.role)) fail('ROLE_EVIDENCE_STALE');
+              context.roleDecisions.push({ identity, decision: roleDecision });
+              context.assertCurrent();
+
+              const permission = permissionIdentity(request, candidate, inspection);
+              context.assertCurrent();
+              const permissionAuthorization = context.currentAuthorization;
+              const rawPermission = await awaitAdapter(adapters.verifyPermission, freezeArgument({
+                request,
+                requestHash: digest,
+                authorization: permissionAuthorization,
+                identity: permission,
+                claim: candidate.approvalClaim,
+                handoffRevalidation: true,
+              }), operation, context.assertCurrent);
+              const permissionDecision = snapshotPermissionDecision(rawPermission, permission, permissionAuthorization);
+              if (permissionDecision.status !== 'authorized'
+                || permissionDecision.revocationStatus !== 'active'
+                || permissionDecision.approvedHash !== identity.transformedHash
+                || permissionDecision.expiresAtMs <= Date.now()) fail('PERMISSION_DENIED');
+              context.permissionDecisions.push({ identity: permission, decision: permissionDecision });
+              context.assertCurrent();
+
+              freshAssets.push({ selected, roleDecision, permissionDecision });
+            }
+          } catch (error) {
+            checkOperation(operation);
+            if (error instanceof AssetPermissionSelectionError) throw error;
+            fail('AUTHORITY_UNAVAILABLE');
+          }
+
           checkOperation(operation);
-          const { candidate, inspection, transformedBytes, identity } = selected;
-          if (!inspection.matchesTransformedBytes(transformedBytes)
-            || sha256(transformedBytes) !== identity.transformedHash
-            || identity.sourceHash !== inspection.sourceHash
-            || identity.transformedHash !== inspection.transformedHash
-            || identity.assetVersion !== candidate.assetVersion
-            || !requestRefKeys.every((key) => identity[key] === request[key])) fail('ASSET_SNAPSHOT_MISMATCH');
-
-          if (typeof adapters.verifyRoleEvidence !== 'function'
-            || typeof adapters.recheckRoleEvidence !== 'function'
-            || typeof adapters.verifyPermission !== 'function'
-            || typeof adapters.recheckPermission !== 'function') fail('AUTHORITY_UNAVAILABLE');
-
           context.assertCurrent();
-          const authorization = context.currentAuthorization;
-          const rawRole = await awaitAdapter(adapters.verifyRoleEvidence, freezeArgument({
+          if (typeof adapters.publishHandoff !== 'function') fail('AUTHORITY_UNAVAILABLE');
+
+          const assets = freshAssets.map(({ selected, roleDecision, permissionDecision }) => {
+            const bytes = selected.inspection.copyTransformedBytes();
+            if (!bytes || !selected.inspection.matchesTransformedBytes(bytes)
+              || sha256(bytes) !== selected.identity.transformedHash) fail('ASSET_SNAPSHOT_MISMATCH');
+            return Object.freeze({
+              candidateRef: selected.identity.candidateRef,
+              assetRef: selected.identity.assetRef,
+              assetVersion: selected.identity.assetVersion,
+              organizationRef: selected.identity.organizationRef,
+              occurrenceRef: selected.identity.occurrenceRef,
+              editionRef: selected.identity.editionRef,
+              packageVersion: selected.identity.packageVersion,
+              intendedUse: selected.identity.intendedUse,
+              sourceRef: selected.identity.sourceRef,
+              evidenceRef: selected.identity.evidenceRef,
+              role: selected.identity.role,
+              roleQuestionId: selected.identity.questionId,
+              roleRegistryVersion: selected.identity.registryVersion,
+              roleSchemaVersion: selected.identity.schemaVersion,
+              roleRubricVersion: selected.identity.rubricVersion,
+              roleDefinitionHash: selected.identity.definitionHash,
+              roleTargetRef: selected.identity.targetRef,
+              observationRef: selected.identity.observationRef,
+              observationHash: selected.identity.observationHash,
+              observerRef: selected.identity.observerRef,
+              modelRef: selected.identity.modelRef,
+              regionRef: selected.identity.regionRef,
+              uncertaintyRef: selected.identity.uncertaintyRef,
+              inspectionPolicyVersion: SAFE_ASSET_POLICY_VERSION,
+              sourceHash: selected.identity.sourceHash,
+              transformedHash: selected.identity.transformedHash,
+              approvalRef: selected.candidate.approvalClaim.approvalRef,
+              issuerRef: permissionDecision.issuerRef,
+              approverRef: permissionDecision.approverRef,
+              permissionDecisionRef: permissionDecision.decisionRef,
+              permissionRevision: permissionDecision.permissionRevision,
+              revocationRef: permissionDecision.revocationRef,
+              revocationRevision: permissionDecision.revocationRevision,
+              expiresAtMs: permissionDecision.expiresAtMs,
+              roleDecisionRef: roleDecision.decisionRef,
+              roleEvidenceRevision: roleDecision.evidenceRevision,
+              bytes,
+            });
+          });
+          const fallbackRequired = assets.length === 0;
+          const payload = Object.freeze({
+            version: HANDOFF_VERSION,
+            selectionId: state.selectionId,
             request,
+            mode: fallbackRequired ? 'original-artwork' : 'permitted-reference-images',
+            permittedAssets: Object.freeze(assets),
+            referenceImages: Object.freeze(assets),
+            fallback: fallbackRequired ? Object.freeze({ mode: 'original-artwork' }) : null,
+          });
+          const publishContextSnapshot = freezeArgument({
+            version: ASSET_PERMISSION_SELECTION_VERSION,
             requestHash: digest,
-            authorization,
-            identity,
-            observation: candidate.roleEvidence,
-            handoffRevalidation: true,
-          }), operation, context.assertCurrent);
-          const roleDecision = snapshotRoleDecision(rawRole, identity, authorization);
-          if (roleDecision.status !== 'eligible' || roleDecision.associationStatus !== 'confirmed'
-            || !handoffRoles.has(identity.role)) fail('ROLE_EVIDENCE_STALE');
-          context.roleDecisions.push({ identity, decision: roleDecision });
+            selectionId: state.selectionId,
+            authorization: context.currentAuthorization,
+            roleDecisions: context.roleDecisions.map((entry) => ({
+              candidateRef: entry.identity.candidateRef,
+              decisionRef: entry.decision.decisionRef,
+              evidenceRevision: entry.decision.evidenceRevision,
+            })),
+            permissionDecisions: context.permissionDecisions.map((entry) => ({
+              candidateRef: entry.identity.candidateRef,
+              decisionRef: entry.decision.decisionRef,
+              permissionRevision: entry.decision.permissionRevision,
+              revocationRevision: entry.decision.revocationRevision,
+              transformedHash: entry.identity.transformedHash,
+            })),
+            finalBoundary: 'host-must-atomically-revalidate-current-authorization-and-permissions',
+          });
+          const publishContext = Object.freeze({
+            ...publishContextSnapshot,
+            deadlineAtMs: operation.deadlineAtMs,
+            signal: operation.signal,
+          });
+          checkOperation(operation);
           context.assertCurrent();
-
-          const permission = permissionIdentity(request, candidate, inspection);
-          context.assertCurrent();
-          const permissionAuthorization = context.currentAuthorization;
-          const rawPermission = await awaitAdapter(adapters.verifyPermission, freezeArgument({
-            request,
-            requestHash: digest,
-            authorization: permissionAuthorization,
-            identity: permission,
-            claim: candidate.approvalClaim,
-            handoffRevalidation: true,
-          }), operation, context.assertCurrent);
-          const permissionDecision = snapshotPermissionDecision(rawPermission, permission, permissionAuthorization);
-          if (permissionDecision.status !== 'authorized'
-            || permissionDecision.revocationStatus !== 'active'
-            || permissionDecision.approvedHash !== identity.transformedHash
-            || permissionDecision.expiresAtMs <= Date.now()) fail('PERMISSION_DENIED');
-          context.permissionDecisions.push({ identity: permission, decision: permissionDecision });
-          context.assertCurrent();
-
-          freshAssets.push({ selected, roleDecision, permissionDecision });
-        }
-      } catch (error) {
-        if (error instanceof AssetPermissionSelectionError) throw error;
-        fail('AUTHORITY_UNAVAILABLE');
-      }
-
-      checkOperation(operation);
-      context.assertCurrent();
-      if (typeof adapters.publishHandoff !== 'function') fail('AUTHORITY_UNAVAILABLE');
-
-      const assets = freshAssets.map(({ selected, roleDecision, permissionDecision }) => {
-        const bytes = selected.inspection.copyTransformedBytes();
-        if (!bytes || !selected.inspection.matchesTransformedBytes(bytes)
-          || sha256(bytes) !== selected.identity.transformedHash) fail('ASSET_SNAPSHOT_MISMATCH');
-        return Object.freeze({
-          candidateRef: selected.identity.candidateRef,
-          assetRef: selected.identity.assetRef,
-          assetVersion: selected.identity.assetVersion,
-          organizationRef: selected.identity.organizationRef,
-          occurrenceRef: selected.identity.occurrenceRef,
-          editionRef: selected.identity.editionRef,
-          packageVersion: selected.identity.packageVersion,
-          intendedUse: selected.identity.intendedUse,
-          sourceRef: selected.identity.sourceRef,
-          evidenceRef: selected.identity.evidenceRef,
-          role: selected.identity.role,
-          roleQuestionId: selected.identity.questionId,
-          roleRegistryVersion: selected.identity.registryVersion,
-          roleSchemaVersion: selected.identity.schemaVersion,
-          roleRubricVersion: selected.identity.rubricVersion,
-          roleDefinitionHash: selected.identity.definitionHash,
-          roleTargetRef: selected.identity.targetRef,
-          observationRef: selected.identity.observationRef,
-          observationHash: selected.identity.observationHash,
-          observerRef: selected.identity.observerRef,
-          modelRef: selected.identity.modelRef,
-          regionRef: selected.identity.regionRef,
-          uncertaintyRef: selected.identity.uncertaintyRef,
-          inspectionPolicyVersion: SAFE_ASSET_POLICY_VERSION,
-          sourceHash: selected.identity.sourceHash,
-          transformedHash: selected.identity.transformedHash,
-          approvalRef: selected.candidate.approvalClaim.approvalRef,
-          issuerRef: permissionDecision.issuerRef,
-          approverRef: permissionDecision.approverRef,
-          permissionDecisionRef: permissionDecision.decisionRef,
-          permissionRevision: permissionDecision.permissionRevision,
-          revocationRef: permissionDecision.revocationRef,
-          revocationRevision: permissionDecision.revocationRevision,
-          expiresAtMs: permissionDecision.expiresAtMs,
-          roleDecisionRef: roleDecision.decisionRef,
-          roleEvidenceRevision: roleDecision.evidenceRevision,
-          bytes,
+          checkOperation(operation);
+          let rawPublished;
+          try {
+            rawPublished = adapters.publishHandoff(payload, publishContext);
+          } catch {
+            checkOperation(operation);
+            fail('PUBLISH_REJECTED');
+          }
+          observeOrdinaryNativePromise(rawPublished);
+          checkOperation(operation);
+          const asynchronousPublish = isThenableWithoutInvoking(rawPublished);
+          checkOperation(operation);
+          if (asynchronousPublish) fail('PUBLISH_NOT_SYNCHRONOUS');
+          const published = snapshotPublishResult(rawPublished, digest, state.selectionId);
+          if (published.status !== 'published') fail('PUBLISH_REJECTED');
+          checkOperation(operation);
+          return Object.freeze({
+            status: fallbackRequired ? 'fallback_published' : 'published',
+            selectionId: state.selectionId,
+            handoffRef: published.handoffRef,
+            permittedAssetCount: assets.length,
+          });
         });
-      });
-      const fallbackRequired = assets.length === 0;
-      const payload = Object.freeze({
-        version: HANDOFF_VERSION,
-        selectionId: state.selectionId,
-        request,
-        mode: fallbackRequired ? 'original-artwork' : 'permitted-reference-images',
-        permittedAssets: Object.freeze(assets),
-        referenceImages: Object.freeze(assets),
-        fallback: fallbackRequired ? Object.freeze({ mode: 'original-artwork' }) : null,
-      });
-      const publishContextSnapshot = freezeArgument({
-        version: ASSET_PERMISSION_SELECTION_VERSION,
-        requestHash: digest,
-        selectionId: state.selectionId,
-        authorization: context.currentAuthorization,
-        roleDecisions: context.roleDecisions.map((entry) => ({
-          candidateRef: entry.identity.candidateRef,
-          decisionRef: entry.decision.decisionRef,
-          evidenceRevision: entry.decision.evidenceRevision,
-        })),
-        permissionDecisions: context.permissionDecisions.map((entry) => ({
-          candidateRef: entry.identity.candidateRef,
-          decisionRef: entry.decision.decisionRef,
-          permissionRevision: entry.decision.permissionRevision,
-          revocationRevision: entry.decision.revocationRevision,
-          transformedHash: entry.identity.transformedHash,
-        })),
-        finalBoundary: 'host-must-atomically-revalidate-current-authorization-and-permissions',
-      });
-      const publishContext = Object.freeze({
-        ...publishContextSnapshot,
-        deadlineAtMs: operation.deadlineAtMs,
-        signal: operation.signal,
-      });
-      checkOperation(operation);
-      context.assertCurrent();
-      checkOperation(operation);
-      let rawPublished;
-      try {
-        rawPublished = adapters.publishHandoff(payload, publishContext);
-      } catch {
-        fail('PUBLISH_REJECTED');
+      } finally {
+        clearSelectionState(handle, state);
       }
-      if (isThenableWithoutInvoking(rawPublished)) fail('PUBLISH_NOT_SYNCHRONOUS');
-      const published = snapshotPublishResult(rawPublished, digest, state.selectionId);
-      if (published.status !== 'published') fail('PUBLISH_REJECTED');
-      return Object.freeze({
-        status: fallbackRequired ? 'fallback_published' : 'published',
-        selectionId: state.selectionId,
-        handoffRef: published.handoffRef,
-        permittedAssetCount: assets.length,
-      });
+    },
+
+    purgeExpired() {
+      return purgeExpiredSelections();
     },
   });
 

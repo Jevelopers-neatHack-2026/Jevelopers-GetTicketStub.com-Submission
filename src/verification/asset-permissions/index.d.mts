@@ -260,7 +260,7 @@ export interface AssetPermissionPublishContext {
   }>[];
   readonly finalBoundary: 'host-must-atomically-revalidate-current-authorization-and-permissions';
   readonly deadlineAtMs: number;
-  readonly signal: AbortSignal | null;
+  readonly signal: AbortSignal;
 }
 
 export interface AssetPermissionHostAdapters {
@@ -274,7 +274,7 @@ export interface AssetPermissionHostAdapters {
     identity: AssetPermissionRoleIdentity;
     observation: AssetPermissionRoleObservation;
     handoffRevalidation?: true;
-  }>, signal?: AbortSignal) => AssetPermissionRoleDecision | Promise<AssetPermissionRoleDecision>;
+  }>, signal: AbortSignal) => AssetPermissionRoleDecision | Promise<AssetPermissionRoleDecision>;
   readonly recheckRoleEvidence: (input: Readonly<{
     request: AssetPermissionRequest;
     requestHash: string;
@@ -290,7 +290,7 @@ export interface AssetPermissionHostAdapters {
     identity: AssetPermissionPermissionIdentity;
     claim: AssetPermissionApprovalClaim;
     handoffRevalidation?: true;
-  }>, signal?: AbortSignal) => AssetPermissionDecision | Promise<AssetPermissionDecision>;
+  }>, signal: AbortSignal) => AssetPermissionDecision | Promise<AssetPermissionDecision>;
   readonly recheckPermission: (input: Readonly<{
     request: AssetPermissionRequest;
     requestHash: string;
@@ -343,6 +343,8 @@ export interface AssetPermissionSelector {
     request: AssetPermissionRequest,
     options?: AssetPermissionSelectorOptions,
   ): Promise<AssetPermissionHandoffResult>;
+  /** Purge expired abandoned handles and return the number released. */
+  purgeExpired(): number;
 }
 
 export interface AssetPermissionSelectionLimits {
@@ -351,6 +353,9 @@ export interface AssetPermissionSelectionLimits {
   readonly maxReferenceBytes: 192;
   readonly maxOperationMs: 1500;
   readonly maxHandleAgeMs: 60000;
+  readonly maxOutstandingSelections: 32;
+  readonly maxConcurrentOperations: 16;
+  readonly maxOutstandingAdapterCalls: 16;
 }
 
 export type AssetPermissionSelectionErrorCode =
