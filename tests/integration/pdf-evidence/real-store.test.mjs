@@ -45,8 +45,9 @@ function inspectManifest(directory, tenantId = 'tenant-pdf') {
   try {
     const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(tenantHash(tenantId));
     const count = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ?').get('evidence').count;
+    const factBundleCount = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ?').get('fact').count;
     const sealedCount = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles').get().count;
-    return { manifest: row ? JSON.parse(row.document) : null, bundleCount: count, sealedCount };
+    return { manifest: row ? JSON.parse(row.document) : null, bundleCount: count, factBundleCount, sealedCount };
   } finally {
     database.close();
   }
@@ -246,12 +247,15 @@ test('derived identities are domain-separated from raw evidence and derivation c
   assert.equal(changedSourceReplay.metadata.retrievedAt, changedSource.metadata.retrievedAt);
 
   const derivedSelection = await harness.store.materializeSelected(scope, { evidence: [first.evidence], facts: [] }, request());
-  const derivedPosition = derivedSelection.evidence[0].positions[0];
-  await assert.rejects(harness.store.appendFact(scope, {
-    field: 'event.name', status: 'sourced', rawValue: 'Community Night', normalizedValue: 'Community Night',
-    supports: [{ evidence: first.evidence, position: first.positions[0], contentHash: derivedPosition.contentHash }],
-  }, request()), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
-
+  const selectedDerivedPosition = derivedSelection.evidence[0].positions[0];
+  assert.equal(derivedSelection.evidence[0].source.contentHash, first.metadata.contentHash);
+  assert.notEqual(selectedDerivedPosition.contentHash, first.metadata.contentHash);
+  const privateDerived = await harness.store.withPrivatePayload(scope, first.evidence, request());
+  const derivedSupportText = privateDerived.positions[0].text;
+  assert.equal(privateDerived.positions[0].contentHash, first.positions[0].contentHash);
+  assert.equal(privateDerived.positions[0].contentHash, selectedDerivedPosition.contentHash);
+  assert.notEqual(privateDerived.positions[0].contentHash, first.metadata.contentHash);
+  assert.ok(derivedSupportText.length > 0);
   const rawText = 'Raw support remains available';
   const raw = await harness.store.ingestEvidence(scope, {
     sourceUrl: 'https://pdf.example.test/calendar.pdf?private=source-url-canary',
@@ -264,17 +268,138 @@ test('derived identities are domain-separated from raw evidence and derivation c
     positions: [{ locator: { kind: 'text-range', startByte: 0, endByte: Buffer.byteLength(rawText) }, content: rawText }],
   });
   assert.equal(raw.created, true);
-  const rawFact = await harness.store.appendFact(scope, {
-    field: 'event.name', status: 'sourced', rawValue: rawText, normalizedValue: rawText,
-    supports: [{ evidence: raw.evidence, position: raw.positions[0], contentHash: digest(Buffer.from(rawText)) }],
-  }, request());
-  assert.equal((await harness.store.readFact(scope, rawFact, request())).rawValue, rawText);
+  const rawSupport = { evidence: raw.evidence, position: raw.positions[0], contentHash: raw.metadata.contentHash };
+  assert.equal(rawSupport.contentHash, digest(Buffer.from(rawText)));
 
-  const { manifest, bundleCount } = inspectManifest(harness.directory);
+  const secondRawText = 'Second valid raw support';
+  const secondRaw = await harness.store.ingestEvidence(scope, {
+    sourceUrl: 'https://pdf.example.test/second-raw-source.txt',
+    canonicalUrl: 'https://pdf.example.test/second-raw-source.txt',
+    content: secondRawText,
+    contentType: 'text/plain',
+    retrievedAt: '2026-10-10T11:05:00.000-04:00',
+    sourceKind: 'external',
+    retentionHandle: harness.createPermit(),
+    positions: [{ locator: { kind: 'text-range', startByte: 0, endByte: Buffer.byteLength(secondRawText) }, content: secondRawText }],
+  });
+  assert.equal(secondRaw.created, true);
+  const secondRawSupport = {
+    evidence: secondRaw.evidence,
+    position: secondRaw.positions[0],
+    contentHash: secondRaw.metadata.contentHash,
+  };
+  assert.equal(secondRawSupport.contentHash, digest(Buffer.from(secondRawText)));
+
+  const persistedCounts = () => {
+    const after = inspectManifest(harness.directory);
+    return {
+      factMetadataCount: Object.keys(after.manifest.facts).length,
+      evidenceBundleCount: after.bundleCount,
+      factBundleCount: after.factBundleCount,
+      sealedBundleCount: after.sealedCount,
+    };
+  };
+  const assertPersistedCountsUnchanged = (expected, description) => {
+    assert.deepEqual(persistedCounts(), expected, description);
+  };
+
+  const beforeSourcedDerivedAttempt = persistedCounts();
+  assert.equal(beforeSourcedDerivedAttempt.factMetadataCount, 0);
+  assert.equal(beforeSourcedDerivedAttempt.factBundleCount, 0);
+  assert.equal(beforeSourcedDerivedAttempt.evidenceBundleCount, 5);
+  assert.equal(beforeSourcedDerivedAttempt.sealedBundleCount, 5);
+  await assert.rejects(harness.store.appendFact(scope, {
+    field: 'event.name', status: 'sourced', rawValue: derivedSupportText, normalizedValue: derivedSupportText,
+    supports: [{ evidence: first.evidence, position: first.positions[0], contentHash: first.metadata.contentHash }],
+  }, request()), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  assertPersistedCountsUnchanged(beforeSourcedDerivedAttempt, 'sourced derived support adds no fact or bundle rows');
+
+  const reopenedStore = harness.openStore();
+  const reopenedScope = await reopenedStore.scopeForAuthenticatedRequest(request());
+  const reopenedDerivedLookup = await reopenedStore.lookupEvidence(reopenedScope, first.metadata.evidenceId);
+  const reopenedDerivedSelection = await reopenedStore.materializeSelected(
+    reopenedScope, { evidence: [reopenedDerivedLookup], facts: [] }, request(),
+  );
+  const reopenedDerivedEvidence = reopenedDerivedSelection.evidence[0].handle;
+  const reopenedDerivedPositions = reopenedDerivedSelection.evidence[0].positions;
+  assert.equal(reopenedDerivedPositions.length, first.positions.length);
+  assert.equal(reopenedDerivedSelection.evidence[0].source.contentHash, first.metadata.contentHash);
+  assert.equal(reopenedDerivedPositions[0].contentHash, selectedDerivedPosition.contentHash);
+  assert.notEqual(reopenedDerivedPositions[0].contentHash, first.metadata.contentHash);
+  const reopenedRawEvidence = await reopenedStore.lookupEvidence(reopenedScope, raw.metadata.evidenceId);
+  const reopenedRawPositions = await reopenedStore.listEvidencePositions(reopenedScope, reopenedRawEvidence, request());
+  assert.equal(reopenedRawPositions.length, 1);
+  assert.equal(reopenedRawPositions[0].contentHash, raw.metadata.contentHash);
+  const reopenedRawSupport = {
+    evidence: reopenedRawEvidence,
+    position: reopenedRawPositions[0].handle,
+    contentHash: raw.metadata.contentHash,
+  };
+  assert.equal(reopenedRawSupport.contentHash, rawSupport.contentHash);
+  const reopenedSecondRawEvidence = await reopenedStore.lookupEvidence(reopenedScope, secondRaw.metadata.evidenceId);
+  const reopenedSecondRawPositions = await reopenedStore.listEvidencePositions(reopenedScope, reopenedSecondRawEvidence, request());
+  assert.equal(reopenedSecondRawPositions.length, 1);
+  assert.equal(reopenedSecondRawPositions[0].contentHash, secondRaw.metadata.contentHash);
+  const reopenedSecondRawSupport = {
+    evidence: reopenedSecondRawEvidence,
+    position: reopenedSecondRawPositions[0].handle,
+    contentHash: secondRaw.metadata.contentHash,
+  };
+  assert.equal(reopenedSecondRawSupport.contentHash, secondRawSupport.contentHash);
+
+  const validRawConflict = await reopenedStore.appendFact(reopenedScope, {
+    field: 'event.name',
+    status: 'conflicting',
+    candidates: [
+      {
+        originStatus: 'sourced', rawValue: rawText, normalizedValue: rawText,
+        supports: [reopenedRawSupport],
+      },
+      {
+        originStatus: 'sourced', rawValue: secondRawText, normalizedValue: secondRawText,
+        supports: [reopenedSecondRawSupport],
+      },
+    ],
+  }, request());
+  const validRawConflictValue = await reopenedStore.readFact(reopenedScope, validRawConflict, request());
+  assert.equal(validRawConflictValue.status, 'conflicting');
+  assert.deepEqual(validRawConflictValue.candidates.map((candidate) => candidate.rawValue), [rawText, secondRawText]);
+  const beforeConflictingDerivedAttempt = persistedCounts();
+  assert.equal(beforeConflictingDerivedAttempt.factMetadataCount, 1);
+  assert.equal(beforeConflictingDerivedAttempt.factBundleCount, 1);
+  assert.equal(beforeConflictingDerivedAttempt.evidenceBundleCount, 5);
+  assert.equal(beforeConflictingDerivedAttempt.sealedBundleCount, 6);
+
+  await assert.rejects(reopenedStore.appendFact(reopenedScope, {
+    field: 'event.name',
+    status: 'conflicting',
+    candidates: [
+      {
+        originStatus: 'sourced', rawValue: 'Raw support remains available', normalizedValue: 'Raw support remains available',
+        supports: [reopenedRawSupport],
+      },
+      {
+        originStatus: 'sourced', rawValue: derivedSupportText, normalizedValue: derivedSupportText,
+        supports: [{ evidence: reopenedDerivedEvidence, position: reopenedDerivedPositions[0].handle, contentHash: first.metadata.contentHash }],
+      },
+    ],
+  }, request()), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  assertPersistedCountsUnchanged(beforeConflictingDerivedAttempt, 'a derived conflict candidate adds no fact or bundle rows');
+
+  const rawFact = await reopenedStore.appendFact(reopenedScope, {
+    field: 'event.name', status: 'sourced', rawValue: rawText, normalizedValue: rawText,
+    supports: [reopenedRawSupport],
+  }, request());
+  assert.equal((await reopenedStore.readFact(reopenedScope, rawFact, request())).rawValue, rawText);
+
+  const { manifest, bundleCount, factBundleCount, sealedCount } = inspectManifest(harness.directory);
   assert.equal(manifest.schemaVersion, 2);
-  assert.equal(bundleCount, 4);
+  assert.equal(bundleCount, 5);
+  assert.equal(factBundleCount, 2, 'valid raw conflict and sourced controls each store one fact bundle');
+  assert.equal(sealedCount, 7);
   assert.equal(manifest.records[first.metadata.evidenceId].representation, 'pdf-derived-text');
   assert.equal(manifest.records[raw.metadata.evidenceId].representation, undefined);
+  assert.equal(manifest.records[secondRaw.metadata.evidenceId].representation, undefined);
   assert.equal(Object.values(manifest.families).filter((family) => family.representation === 'pdf-derived-text').length, 1);
 });
 
