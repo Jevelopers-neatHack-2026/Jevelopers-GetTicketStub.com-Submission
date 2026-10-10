@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,6 +28,9 @@ class HandoffCheckerTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.manifest_path = self.root / "tests/contracts/handoff-manifest.json"
         self.component_path = self.root / "release/component-manifest.json"
+        self.cli_script = self.root / "tools/verify_handoff.py"
+        self.cli_script.parent.mkdir(parents=True)
+        shutil.copyfile(REPOSITORY / "tools/verify_handoff.py", self.cli_script)
         self.manifest = json.loads((REPOSITORY / "tests/contracts/handoff-manifest.json").read_text())
         self.components = json.loads((REPOSITORY / "release/component-manifest.json").read_text())
         _write_json(self.manifest_path, self.manifest)
@@ -37,8 +42,33 @@ class HandoffCheckerTests(unittest.TestCase):
     def save_manifest(self) -> None:
         _write_json(self.manifest_path, self.manifest)
 
+    def save_components(self) -> None:
+        _write_json(self.component_path, self.components)
+
+    def restore_inputs(self) -> None:
+        self.manifest = json.loads((REPOSITORY / "tests/contracts/handoff-manifest.json").read_text())
+        self.components = json.loads((REPOSITORY / "release/component-manifest.json").read_text())
+        self.save_manifest()
+        self.save_components()
+
     def audit(self, kind: str) -> dict:
         return checker.audit(self.root, "tests/contracts/handoff-manifest.json", kind)
+
+    def run_cli(self, kind: str) -> tuple[subprocess.CompletedProcess[str], dict]:
+        result = subprocess.run(
+            [sys.executable, str(self.cli_script), "--kind", kind, "--manifest", "tests/contracts/handoff-manifest.json"],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            timeout=4,
+            check=False,
+        )
+        self.assertNotIn("Traceback", result.stderr)
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            self.fail(f"CLI did not emit valid JSON: {exc}; stderr={result.stderr!r}; stdout={result.stdout!r}")
+        return result, report
 
     @staticmethod
     def checks(report: dict, check_id: str) -> list[dict]:
@@ -289,6 +319,173 @@ class HandoffCheckerTests(unittest.TestCase):
         check = self.checks(report, "handoff-consumer.crosswalk.program_epic_reference.resolution")[0]
         self.assertEqual(check["status"], "untrusted")
         self.assertNotEqual(report["readiness_status"], "READY")
+
+    def test_alternate_component_manifest_path_is_rejected_before_any_read(self) -> None:
+        alternate = self.root / "tests/contracts/evidence/alternate-component.json"
+        _write_json(alternate, self.components)
+        self.manifest["component_manifest"] = "tests/contracts/evidence/alternate-component.json"
+        self.save_manifest()
+
+        result, report = self.run_cli("handoff-contracts")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(report["readiness_status"], "INVALID")
+        self.assertEqual(self.checks(report, "manifest.component_manifest")[0]["status"], "invalid")
+        self.assertFalse(any(item["id"].startswith("component_manifest.") for item in report["checks"]))
+
+    def test_fifo_evidence_fails_promptly_as_invalid_json_report(self) -> None:
+        fifo = self.root / "tests/contracts/evidence/fifo-receipt"
+        fifo.parent.mkdir(parents=True, exist_ok=True)
+        os.mkfifo(fifo)
+        component_id = checker.HANDOFF_SPECS["handoff-contracts"].components[0]
+        self.manifest["handoffs"]["handoff-contracts"]["pins"][component_id]["evidence"] = {
+            "path": "tests/contracts/evidence/fifo-receipt",
+            "sha256": "0" * 64,
+        }
+        self.save_manifest()
+
+        result, report = self.run_cli("handoff-contracts")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(report["readiness_status"], "INVALID")
+        self.assertEqual(self.checks(report, f"handoff-contracts.pins.{component_id}.evidence.local_file")[0]["status"], "invalid")
+
+    def test_malformed_evidence_pin_and_crosswalk_cli_reports_are_serializable(self) -> None:
+        kind = "handoff-contracts"
+        component_id = checker.HANDOFF_SPECS[kind].components[0]
+        mutations = (
+            ("malformed evidence", lambda: self.manifest["handoffs"][kind]["pins"][component_id].__setitem__("evidence", [])),
+            ("null pin", lambda: self.manifest["handoffs"][kind]["pins"].__setitem__(component_id, None)),
+            ("null crosswalk", lambda: self.manifest["handoffs"][kind]["crosswalk"].__setitem__("schema_version", None)),
+        )
+        for label, mutate in mutations:
+            with self.subTest(case=label):
+                self.restore_inputs()
+                mutate()
+                self.save_manifest()
+                result, report = self.run_cli(kind)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(report["readiness_status"], "INVALID")
+
+    def test_null_required_records_and_inventories_report_missing_ids_consistently(self) -> None:
+        for kind, spec in checker.HANDOFF_SPECS.items():
+            for inventory, identities, prefix in (
+                ("artifacts", spec.artifacts, "artifact:"),
+                ("fixtures", spec.fixtures, "fixture:"),
+            ):
+                with self.subTest(kind=kind, inventory=inventory, shape="null-record"):
+                    self.restore_inputs()
+                    inventory_value = self.manifest["handoffs"][kind][inventory]
+                    identity = next(iter(identities))
+                    inventory_value[identity] = None
+                    self.save_manifest()
+                    report = self.audit(kind)
+                    missing_ids = {item["id"] for item in report["missing_deliverables"]}
+                    self.assertEqual(report["readiness_status"], "INVALID")
+                    self.assertIn(f"{prefix}{identity}", missing_ids)
+                    self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+
+                with self.subTest(kind=kind, inventory=inventory, shape="null-inventory"):
+                    self.restore_inputs()
+                    self.manifest["handoffs"][kind][inventory] = None
+                    self.save_manifest()
+                    report = self.audit(kind)
+                    missing_ids = {item["id"] for item in report["missing_deliverables"]}
+                    self.assertEqual(report["readiness_status"], "INVALID")
+                    self.assertTrue({f"{prefix}{identity}" for identity in identities} <= missing_ids)
+                    self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+
+        self.restore_inputs()
+        self.manifest["handoffs"]["handoff-contracts"] = None
+        self.save_manifest()
+        report = self.audit("handoff-contracts")
+        missing_ids = {item["id"] for item in report["missing_deliverables"]}
+        spec = checker.HANDOFF_SPECS["handoff-contracts"]
+        self.assertEqual(report["readiness_status"], "INVALID")
+        self.assertTrue({f"artifact:{identity}" for identity in spec.artifacts} <= missing_ids)
+        self.assertTrue({f"fixture:{identity}" for identity in spec.fixtures} <= missing_ids)
+        self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+
+        self.restore_inputs()
+        self.manifest["handoffs"] = None
+        self.save_manifest()
+        report = self.audit("handoff-contracts")
+        self.assertEqual(report["exit_code"], 2)
+        self.assertTrue({f"artifact:{identity}" for identity in spec.artifacts} <= {item["id"] for item in report["missing_deliverables"]})
+        self.assertTrue({f"fixture:{identity}" for identity in spec.fixtures} <= {item["id"] for item in report["missing_deliverables"]})
+        self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+
+        self.manifest_path.write_text("null\n", encoding="utf-8")
+        result, report = self.run_cli("handoff-contracts")
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(self.checks(report, "manifest.shape")[0]["status"], "invalid")
+        missing_ids = {item["id"] for item in report["missing_deliverables"]}
+        self.assertTrue({f"artifact:{identity}" for identity in spec.artifacts} <= missing_ids)
+        self.assertTrue({f"fixture:{identity}" for identity in spec.fixtures} <= missing_ids)
+        self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+
+        self.restore_inputs()
+        self.manifest["handoffs"].pop("handoff-contracts")
+        self.save_manifest()
+        report = self.audit("handoff-contracts")
+        missing_ids = {item["id"] for item in report["missing_deliverables"]}
+        self.assertEqual(report["readiness_status"], "INVALID")
+        self.assertTrue({f"artifact:{identity}" for identity in spec.artifacts} <= missing_ids)
+        self.assertTrue({f"fixture:{identity}" for identity in spec.fixtures} <= missing_ids)
+        self.assertEqual(report["summary"]["missing_deliverables"], len(report["missing_deliverables"]))
+
+    def test_retry_limits_are_untrusted_bounded_owner_metadata(self) -> None:
+        provider = next(item for item in self.components["provider_surfaces"] if item["id"] == "jev")
+        for value in (0, 1, checker.MAX_RETRY_LIMIT):
+            with self.subTest(value=value):
+                provider["retry_limit"] = value
+                self.save_components()
+                report = self.audit("provider-readiness")
+                checks = self.checks(report, "component_manifest.provider_surfaces[0].retry_limit")
+                if not checks:
+                    checks = [item for item in report["checks"] if item["id"].endswith(".retry_limit")]
+                check = next(item for item in checks if item["id"].endswith(".retry_limit"))
+                self.assertEqual(check["status"], "untrusted")
+                self.assertEqual(report["readiness_status"], "BLOCKED")
+        for value in (-1, checker.MAX_RETRY_LIMIT + 1, True, "1"):
+            with self.subTest(invalid_value=value):
+                provider["retry_limit"] = value
+                self.save_components()
+                report = self.audit("provider-readiness")
+                check = next(item for item in report["checks"] if item["id"].endswith(".retry_limit"))
+                self.assertEqual(check["status"], "invalid")
+                self.assertEqual(report["readiness_status"], "INVALID")
+
+    def test_unhashable_provider_modes_return_invalid_json_from_cli(self) -> None:
+        provider = next(item for item in self.components["provider_surfaces"] if item["id"] == "jev")
+        for mode in ([], {}):
+            with self.subTest(mode=mode):
+                self.restore_inputs()
+                provider = next(item for item in self.components["provider_surfaces"] if item["id"] == "jev")
+                provider["status"] = "recorded"
+                provider["mode"] = mode
+                self.save_components()
+                result, report = self.run_cli("provider-readiness")
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(report["readiness_status"], "INVALID")
+                self.assertTrue(any(item["id"].endswith(".mode") and item["status"] == "invalid" for item in report["checks"]))
+
+    def test_escaped_surrogate_path_is_invalid_without_cli_exception(self) -> None:
+        kind = "provider-readiness"
+        component_id = checker.HANDOFF_SPECS[kind].components[0]
+        self.manifest["handoffs"][kind]["pins"][component_id]["evidence"] = {
+            "path": "release/handoff-evidence/\ud800",
+            "sha256": "0" * 64,
+        }
+        self.save_manifest()
+
+        result, report = self.run_cli(kind)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(report["readiness_status"], "INVALID")
+        check = self.checks(report, f"{kind}.pins.{component_id}.evidence.local_file")[0]
+        self.assertEqual(check["status"], "invalid")
+        self.assertIn("Unicode surrogate", check["reason"])
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ from typing import Any, Iterable
 TOOL_VERSION = "0.1.0"
 MANIFEST_SCHEMA = "event-intelligence/handoff-manifest"
 COMPONENT_SCHEMA = "event-intelligence/release-component-manifest"
+COMPONENT_MANIFEST_PATH = "release/component-manifest.json"
 EVIDENCE_VERIFIER_ID: str | None = None
 MAX_MANIFEST_BYTES = 1_048_576
 MAX_COMPONENT_BYTES = 1_048_576
@@ -34,6 +35,7 @@ MAX_JSON_ARRAY_ITEMS = 512
 MAX_RECORDS = 256
 MAX_EVIDENCE_REFS = 128
 MAX_PATH_CHARS = 512
+MAX_RETRY_LIMIT = 1_000
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 DECIMAL_RE = re.compile(r"^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?$")
@@ -655,6 +657,10 @@ def _check_tree_limits(value: Any, depth: int = 0) -> None:
 def _safe_relative_path(value: Any) -> tuple[str, ...]:
     if type(value) is not str or not value or len(value) > MAX_PATH_CHARS:
         raise InputProblem(f"path must be a non-empty string of at most {MAX_PATH_CHARS} characters")
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise InputProblem("path contains an unsupported Unicode surrogate") from exc
     if "\x00" in value or "\\" in value:
         raise InputProblem("path contains a forbidden NUL or backslash")
     if value.startswith("/") or re.match(r"^[A-Za-z]:", value):
@@ -670,11 +676,13 @@ def _read_local_file(root: Path, relpath: Any, *, max_bytes: int, allowed_prefix
     normalized = "/".join(parts)
     if allowed_prefixes is not None and not any(normalized.startswith(prefix) for prefix in allowed_prefixes):
         raise InputProblem("path is outside the designated sanitized evidence directories")
-    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
-        raise InputProblem("platform lacks required no-follow directory-open protections")
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NONBLOCK"):
+        raise InputProblem("platform lacks required no-follow and nonblocking open protections")
 
     flags_dir = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    flags_file = os.O_RDONLY | os.O_NOFOLLOW
+    # O_NONBLOCK makes opening a hostile FIFO prompt; regular files retain ordinary
+    # read semantics. The fstat check rejects all non-regular files before reading.
+    flags_file = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     descriptors: list[int] = []
     try:
         current_fd = os.open(str(root), flags_dir)
@@ -767,6 +775,39 @@ def _missing(report: dict[str, Any], item_id: str, owner_role: str, expected: An
     })
 
 
+def _missing_handoff_contents(kind: str, spec: HandoffSpec, report: dict[str, Any], reason: str) -> None:
+    """Keep absent scope inventories explicit when their parent object is unusable."""
+    _missing(
+        report,
+        f"handoff:{kind}",
+        spec.owner_role,
+        spec.triage_key,
+        None,
+        reason,
+        "Restore this scope's complete handoff object and required inventories.",
+    )
+    for component_id in spec.components:
+        _missing(
+            report,
+            f"pin:{component_id}",
+            COMPONENTS[component_id]["owner_role"],
+            "full accepted implementation commit and pin evidence",
+            None,
+            reason,
+            "Restore the exact component pin record and sanitized pin evidence.",
+        )
+    for artifact_id, artifact in spec.artifacts.items():
+        _missing(report, f"artifact:{artifact_id}", artifact.owner_role, artifact.identity, None, reason,
+                 "Supply this exact narrow artifact with its owner-reviewed revision pin and sanitized evidence.")
+    for fixture_id, fixture in spec.fixtures.items():
+        _missing(report, f"fixture:{fixture_id}", fixture.owner_role, fixture.expected, None, reason,
+                 "Execute this acceptance fixture against the pinned real artifacts and provide an accessible sanitized receipt.")
+    for item_id, description in spec.crosswalk.items():
+        owner = CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
+        _missing(report, f"crosswalk:{item_id}", owner, description, None, reason,
+                 "Record the external producer/consumer decision with its pinned review artifact.")
+
+
 def _validate_usage(value: Any, label: str, report: dict[str, Any]) -> bool:
     expected = {"status", "amount", "currency", "basis_ref"}
     if not _check_keys(value, expected, f"{label}.shape", report):
@@ -815,7 +856,7 @@ def _validate_evidence_ref(
         _add_check(report, f"{label}.evidence_ref_count", f"at most {MAX_EVIDENCE_REFS} evidence references per run", evidence_refs_seen, "invalid")
         return False
     if type(evidence) is not dict or set(evidence) != {"path", "sha256"}:
-        _add_check(report, f"{label}.evidence_shape", {"path", "sha256"}, _typename(evidence), "invalid")
+        _add_check(report, f"{label}.evidence_shape", ["path", "sha256"], _typename(evidence), "invalid")
         return False
     path = evidence["path"]
     declared_hash = evidence["sha256"]
@@ -837,8 +878,11 @@ def _validate_evidence_ref(
     return True
 
 
-def _load_component_manifest(root: Path, relpath: str, report: dict[str, Any]) -> dict[str, Any] | None:
+def _load_component_manifest(root: Path, relpath: Any, report: dict[str, Any]) -> dict[str, Any] | None:
     try:
+        parts = _safe_relative_path(relpath)
+        if "/".join(parts) != COMPONENT_MANIFEST_PATH:
+            raise InputProblem(f"component manifest path must be {COMPONENT_MANIFEST_PATH}")
         raw = _read_local_file(root, relpath, max_bytes=MAX_COMPONENT_BYTES)
         value = _parse_json(raw, "component manifest")
     except InputProblem as exc:
@@ -908,6 +952,8 @@ def _check_peer_candidate_records(records: Any, report: dict[str, Any]) -> None:
 def _check_component_records(records: Any, root: Path, report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     if type(records) is not list:
+        for component_id, detail in COMPONENTS.items():
+            _missing(report, f"component:{component_id}", detail["owner_role"], detail["repository"], _typename(records), "required component inventory is not an array", "Restore the bounded component inventory with each required component record.")
         return result
     for index, item in enumerate(records):
         label = f"component_manifest.components[{index}]"
@@ -951,12 +997,17 @@ def _check_component_records(records: Any, root: Path, report: dict[str, Any]) -
     actual_ids = set(result)
     if actual_ids != expected_ids:
         _add_check(report, "component_manifest.component_inventory", sorted(expected_ids), sorted(actual_ids), "invalid")
+        for component_id in sorted(expected_ids - actual_ids):
+            detail = COMPONENTS[component_id]
+            _missing(report, f"component:{component_id}", detail["owner_role"], detail["repository"], None, "required component record is omitted or malformed", "Restore the component record with an observed revision and explicit acceptance state.")
     return result
 
 
 def _check_provider_records(records: Any, report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     if type(records) is not list:
+        for provider_id, detail in PROVIDERS.items():
+            _missing(report, f"provider:{provider_id}", detail["owner_role"], "sanitized provider-readiness record", _typename(records), "provider inventory is not an array", "Restore this provider's separate sanitized readiness record without credentials.")
         return result
     expected_keys = {
         "id", "owner_role", "status", "endpoint_api_version", "sdk_runtime_version",
@@ -994,8 +1045,13 @@ def _check_provider_records(records: Any, report: dict[str, Any]) -> dict[str, d
                 _add_check(report, f"{label}.model_pin", "explicit versioned model identifier", model, "untrusted")
         for field in ("endpoint_api_version", "sdk_runtime_version", "parameters", "retry_limit", "account_project_eligibility", "rate_card_source", "rate_card_effective_date"):
             item_value = item[field]
-            if field == "retry_limit" and item_value is not None and type(item_value) is not int:
-                _add_check(report, f"{label}.{field}", "integer or null (booleans invalid)", item_value, "invalid")
+            if field == "retry_limit":
+                if item_value is None:
+                    _add_check(report, f"{label}.{field}", f"integer 0..{MAX_RETRY_LIMIT} or explicit limitation", None, "missing")
+                elif type(item_value) is not int or item_value < 0 or item_value > MAX_RETRY_LIMIT:
+                    _add_check(report, f"{label}.{field}", f"integer 0..{MAX_RETRY_LIMIT} (booleans invalid)", item_value, "invalid")
+                else:
+                    _add_check(report, f"{label}.{field}", f"owner-supplied bounded integer 0..{MAX_RETRY_LIMIT}", item_value, "untrusted", "the checker does not select provider retry policy")
             elif item_value is not None and type(item_value) not in {str, dict, list}:
                 _add_check(report, f"{label}.{field}", "string/object/array or null", _typename(item_value), "invalid")
             elif item_value is None:
@@ -1005,6 +1061,9 @@ def _check_provider_records(records: Any, report: dict[str, Any]) -> dict[str, d
     actual_ids = set(result)
     if actual_ids != expected_ids:
         _add_check(report, "component_manifest.provider_inventory", sorted(expected_ids), sorted(actual_ids), "invalid")
+        for provider_id in sorted(expected_ids - actual_ids):
+            detail = PROVIDERS[provider_id]
+            _missing(report, f"provider:{provider_id}", detail["owner_role"], "sanitized provider-readiness record", None, "required provider record is omitted or malformed", "Restore this provider's separate sanitized readiness record without credentials.")
     return result
 
 
@@ -1031,7 +1090,8 @@ def _check_component_bindings(
         label = f"{kind}.pins.{component_id}"
         pin = pins.get(component_id)
         if type(pin) is not dict or set(pin) != {"revision", "evidence"}:
-            _add_check(report, label, {"revision", "evidence"}, _typename(pin), "invalid")
+            _add_check(report, label, ["evidence", "revision"], _typename(pin), "invalid")
+            _missing(report, f"pin:{component_id}", COMPONENTS[component_id]["owner_role"], "full accepted implementation commit and pin evidence", _typename(pin), "required component pin is missing or malformed", "Restore the exact component pin record and sanitized pin evidence.")
             continue
         component = components.get(component_id)
         accepted = component.get("accepted_revision") if component else None
@@ -1057,6 +1117,10 @@ def _check_component_bindings(
         if provider is None:
             _add_check(report, f"{kind}.provider.{provider_id}", "provider record", None, "missing")
             _missing(report, f"provider:{provider_id}", PROVIDERS[provider_id]["owner_role"], "sanitized account/configuration record and explicit mode", "missing", "required provider surface has no record", "Provide a sanitized record through the approved owner process; never include credentials.")
+        elif type(provider.get("status")) is not str or type(provider.get("mode")) is not str:
+            actual = {"status": provider.get("status"), "mode": provider.get("mode")}
+            _add_check(report, f"{kind}.provider.{provider_id}", "recorded provider status and string mode", actual, "invalid", "provider status/mode types must be validated before membership checks")
+            _missing(report, f"provider:{provider_id}", PROVIDERS[provider_id]["owner_role"], "recorded owner-verified readiness evidence", actual, "provider record has invalid status or mode types", "Replace the malformed provider status/mode with owner-supplied sanitized metadata.")
         elif provider.get("status") != "recorded" or provider.get("mode") in {"mock", "simulated", "unknown"}:
             _add_check(report, f"{kind}.provider.{provider_id}", "recorded owner-verified readiness evidence", {"status": provider.get("status"), "mode": provider.get("mode")}, "missing")
             _missing(report, f"provider:{provider_id}", PROVIDERS[provider_id]["owner_role"], "nonbillable readiness record with explicit mode and verified account/model eligibility", {"status": provider.get("status"), "mode": provider.get("mode")}, "access and configuration are not established", "Record the owner-verified account and explicit configuration, or record a safe-check limitation.")
@@ -1067,7 +1131,7 @@ def _check_component_bindings(
         _add_check(report, f"{kind}.related_provider.{provider_id}", "separate release record; not a blocker for this narrow handoff", {"status": provider.get("status") if provider else "missing", "mode": provider.get("mode") if provider else "missing"}, "informational")
 
 
-def _validate_manifest_header(manifest: Any, report: dict[str, Any]) -> bool:
+def _validate_manifest_header(manifest: Any, report: dict[str, Any], kind: str) -> bool:
     if type(manifest) is not dict:
         _add_check(report, "manifest.shape", "JSON object", _typename(manifest), "invalid")
         return False
@@ -1087,8 +1151,10 @@ def _validate_manifest_header(manifest: Any, report: dict[str, Any]) -> bool:
     _add_check(report, "manifest.repository", "event-intelligence", manifest.get("repository"), "pass" if manifest.get("repository") == "event-intelligence" else "invalid")
     baseline = manifest.get("baseline_revision")
     _add_check(report, "manifest.baseline_revision", "full source revision", baseline, "pass" if type(baseline) is str and COMMIT_RE.fullmatch(baseline) else "invalid")
-    expected_component_path = "release/component-manifest.json"
-    _add_check(report, "manifest.component_manifest", expected_component_path, manifest.get("component_manifest"), "pass" if manifest.get("component_manifest") == expected_component_path else "invalid")
+    component_path = manifest.get("component_manifest")
+    _add_check(report, "manifest.component_manifest", COMPONENT_MANIFEST_PATH, component_path, "pass" if component_path == COMPONENT_MANIFEST_PATH else "invalid")
+    if component_path != COMPONENT_MANIFEST_PATH:
+        valid = False
     verifier_id = manifest.get("evidence_verifier_id")
     if verifier_id is None:
         _add_check(report, "trust.evidence_verifier", "accepted verifier implementation", None, "missing", "no trusted role/approval/evidence verifier has been accepted or implemented")
@@ -1098,9 +1164,13 @@ def _validate_manifest_header(manifest: Any, report: dict[str, Any]) -> bool:
     handoffs = manifest.get("handoffs")
     if type(handoffs) is not dict:
         _add_check(report, "manifest.handoffs", list(KINDS), _typename(handoffs), "invalid")
+        _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "requested handoff is unavailable because the handoff inventory is not an object")
         return False
+    missing_kinds = set(KINDS) - set(handoffs)
     if set(handoffs) != set(KINDS):
         _add_check(report, "manifest.handoff_inventory", list(KINDS), sorted(handoffs), "invalid")
+        if kind in missing_kinds:
+            _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "requested handoff key is omitted")
         valid = False
     else:
         _add_check(report, "manifest.handoff_inventory", list(KINDS), sorted(handoffs), "pass")
@@ -1118,6 +1188,7 @@ def _check_handoff_structure(
 ) -> bool:
     if type(value) is not dict:
         _add_check(report, f"{kind}.shape", "JSON object", _typename(value), "invalid")
+        _missing_handoff_contents(kind, spec, report, "required handoff object is missing or malformed")
         return False
     expected_keys = {
         "triage_key", "owner_role", "local_requirement_ids", "acceptance_roles", "workflow_state",
@@ -1162,6 +1233,9 @@ def _check_handoff_structure(
 def _check_crosswalk(kind: str, spec: HandoffSpec, value: Any, report: dict[str, Any]) -> None:
     if type(value) is not dict:
         _add_check(report, f"{kind}.crosswalk", sorted(spec.crosswalk), _typename(value), "invalid")
+        for item_id, description in spec.crosswalk.items():
+            owner = CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
+            _missing(report, f"crosswalk:{item_id}", owner, description, None, "required crosswalk inventory is missing or malformed", "Record the external producer/consumer decision with its pinned review artifact.")
         return
     if set(value) != set(spec.crosswalk):
         _add_check(report, f"{kind}.crosswalk.inventory", sorted(spec.crosswalk), {"present": sorted(value), "missing": sorted(set(spec.crosswalk) - set(value)), "unexpected": sorted(set(value) - set(spec.crosswalk))}, "invalid")
@@ -1169,7 +1243,7 @@ def _check_crosswalk(kind: str, spec: HandoffSpec, value: Any, report: dict[str,
         item = value.get(item_id)
         label = f"{kind}.crosswalk.{item_id}"
         if type(item) is not dict or set(item) != {"expectation", "resolution", "owner_role"}:
-            _add_check(report, label, {"expectation", "resolution", "owner_role"}, _typename(item), "invalid")
+            _add_check(report, label, ["expectation", "owner_role", "resolution"], _typename(item), "invalid")
             _missing(report, f"crosswalk:{item_id}", spec.owner_role, expected_description, "missing", "required crosswalk decision is absent or malformed", "Record the external producer/consumer decision with its pinned review artifact.")
             continue
         if item["expectation"] != expected_description:
@@ -1204,9 +1278,13 @@ def _check_artifacts(
 ) -> None:
     if type(value) is not dict:
         _add_check(report, f"{kind}.artifacts", sorted(spec.artifacts), _typename(value), "invalid")
+        for artifact_id, artifact in spec.artifacts.items():
+            _missing(report, f"artifact:{artifact_id}", artifact.owner_role, artifact.identity, None, "required artifact inventory is missing or malformed", "Supply this exact narrow artifact with its owner-reviewed revision pin and sanitized evidence.")
         return
     if len(value) > MAX_RECORDS:
         _add_check(report, f"{kind}.artifact_count", f"at most {MAX_RECORDS}", len(value), "invalid")
+        for artifact_id, artifact in spec.artifacts.items():
+            _missing(report, f"artifact:{artifact_id}", artifact.owner_role, artifact.identity, None, "required artifact inventory exceeds the structural record limit", "Restore the bounded inventory with one record for each required artifact.")
         return
     if set(value) != set(spec.artifacts):
         missing_ids = set(spec.artifacts) - set(value)
@@ -1215,12 +1293,13 @@ def _check_artifacts(
             artifact = spec.artifacts[artifact_id]
             _missing(report, f"artifact:{artifact_id}", artifact.owner_role, artifact.identity, None, "required artifact entry is omitted", f"Supply this exact narrow artifact with its owner-reviewed revision pin and sanitized evidence.")
     for artifact_id, artifact_spec in spec.artifacts.items():
+        if artifact_id not in value:
+            continue
         item = value.get(artifact_id)
         label = f"{kind}.artifacts.{artifact_id}"
-        if item is None:
-            continue
         keys = {"identity", "component", "owner_role", "required_review_roles", "status", "revision", "mode", "role_claims", "usage", "evidence"}
         if not _check_keys(item, keys, f"{label}.keys", report):
+            _missing(report, f"artifact:{artifact_id}", artifact_spec.owner_role, artifact_spec.identity, _typename(item), "required artifact record is malformed", "Restore this exact artifact record with the expected fields and sanitized evidence reference.")
             continue
         for field, expected in (
             ("identity", artifact_spec.identity),
@@ -1236,6 +1315,7 @@ def _check_artifacts(
         status = item["status"]
         if type(status) is not str or status not in {"pending", "provided"}:
             _add_check(report, f"{label}.status", ["pending", "provided"], status, "invalid", "verified/approved/closed/pass status claims are not accepted")
+            _missing(report, f"artifact:{artifact_id}", artifact_spec.owner_role, artifact_spec.identity, status, "required artifact status is malformed or unrecognized", "Record pending until the exact owner-reviewed artifact and evidence are available.")
             continue
         revision = item["revision"]
         component = components.get(artifact_spec.component)
@@ -1280,9 +1360,13 @@ def _check_fixtures(
 ) -> None:
     if type(value) is not dict:
         _add_check(report, f"{kind}.fixtures", sorted(spec.fixtures), _typename(value), "invalid")
+        for fixture_id, fixture in spec.fixtures.items():
+            _missing(report, f"fixture:{fixture_id}", fixture.owner_role, fixture.expected, None, "required fixture inventory is missing or malformed", "Execute this acceptance fixture against the pinned real artifacts and provide an accessible sanitized receipt.")
         return
     if len(value) > MAX_RECORDS:
         _add_check(report, f"{kind}.fixture_count", f"at most {MAX_RECORDS}", len(value), "invalid")
+        for fixture_id, fixture in spec.fixtures.items():
+            _missing(report, f"fixture:{fixture_id}", fixture.owner_role, fixture.expected, None, "required fixture inventory exceeds the structural record limit", "Restore the bounded inventory with one record for each required fixture.")
         return
     if set(value) != set(spec.fixtures):
         missing_ids = set(spec.fixtures) - set(value)
@@ -1291,18 +1375,20 @@ def _check_fixtures(
             fixture = spec.fixtures[fixture_id]
             _missing(report, f"fixture:{fixture_id}", fixture.owner_role, fixture.expected, None, "required fixture identity is omitted", "Execute this acceptance fixture against the pinned real artifacts and provide an accessible sanitized receipt.")
     for fixture_id, fixture_spec in spec.fixtures.items():
+        if fixture_id not in value:
+            continue
         item = value.get(fixture_id)
         label = f"{kind}.fixtures.{fixture_id}"
-        if item is None:
-            continue
         keys = {"expected", "owner_role", "status", "case_count", "mode", "subject_kind", "revision_pins", "usage", "evidence"}
         if not _check_keys(item, keys, f"{label}.keys", report):
+            _missing(report, f"fixture:{fixture_id}", fixture_spec.owner_role, fixture_spec.expected, _typename(item), "required fixture record is malformed", "Restore this fixture record with its required coverage fields and sanitized receipt reference.")
             continue
         _add_check(report, f"{label}.expected", fixture_spec.expected, item["expected"], "pass" if item["expected"] == fixture_spec.expected else "mismatch")
         _add_check(report, f"{label}.owner_role", fixture_spec.owner_role, item["owner_role"], "pass" if item["owner_role"] == fixture_spec.owner_role else "mismatch")
         status = item["status"]
         if type(status) is not str or status not in {"pending", "reported_pass", "reported_fail", "skipped"}:
             _add_check(report, f"{label}.status", ["pending", "reported_pass", "reported_fail", "skipped"], status, "invalid", "fixture booleans or unqualified pass strings are not accepted")
+            _missing(report, f"fixture:{fixture_id}", fixture_spec.owner_role, fixture_spec.expected, status, "required fixture status is malformed or unrecognized", "Run the named fixture against its required pinned subject and record its sanitized receipt.")
             continue
         case_count = item["case_count"]
         if type(case_count) is not int or case_count < 0:
@@ -1363,7 +1449,7 @@ def _check_fixtures(
         _validate_usage(item["usage"], f"{label}.usage", report)
 
 
-def _load_manifest(root: Path, manifest_relpath: str, report: dict[str, Any]) -> dict[str, Any] | None:
+def _load_manifest(root: Path, manifest_relpath: str, kind: str, report: dict[str, Any]) -> dict[str, Any] | None:
     try:
         parts = _safe_relative_path(manifest_relpath)
         if "/".join(parts) != "tests/contracts/handoff-manifest.json":
@@ -1372,8 +1458,13 @@ def _load_manifest(root: Path, manifest_relpath: str, report: dict[str, Any]) ->
         manifest = _parse_json(raw, "handoff manifest")
     except InputProblem as exc:
         _add_check(report, "manifest.read", "bounded local tests/contracts/handoff-manifest.json", manifest_relpath, "invalid", str(exc))
+        _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "required manifest could not be read safely")
         return None
-    return manifest if type(manifest) is dict else manifest
+    if type(manifest) is not dict:
+        _add_check(report, "manifest.shape", "JSON object", _typename(manifest), "invalid")
+        _missing_handoff_contents(kind, HANDOFF_SPECS[kind], report, "top-level handoff manifest must be a JSON object")
+        return None
+    return manifest
 
 
 def audit(root: Path, manifest_path: str, kind: str) -> dict[str, Any]:
@@ -1399,10 +1490,10 @@ def audit(root: Path, manifest_path: str, kind: str) -> dict[str, Any]:
             "A reported fixture pass is an untrusted claim until independently authenticated and tied to accepted artifact pins.",
         ],
     }
-    manifest = _load_manifest(root, manifest_path, report)
+    manifest = _load_manifest(root, manifest_path, kind, report)
     if manifest is None:
         return _finish_report(report)
-    if not _validate_manifest_header(manifest, report):
+    if not _validate_manifest_header(manifest, report, kind):
         return _finish_report(report)
 
     component_path = manifest.get("component_manifest")
@@ -1432,6 +1523,16 @@ def audit(root: Path, manifest_path: str, kind: str) -> dict[str, Any]:
 
 
 def _finish_report(report: dict[str, Any]) -> dict[str, Any]:
+    if EVIDENCE_VERIFIER_ID is None and not any(item["id"] == "trusted-evidence-verifier" for item in report["missing_deliverables"]):
+        _missing(
+            report,
+            "trusted-evidence-verifier",
+            HANDOFF_SPECS[report["kind"]].owner_role,
+            "accepted verifier for externally authorized role, pin, fixture and approval evidence",
+            "unavailable",
+            "the checker cannot authenticate owner authority or test-run provenance",
+            "Obtain the owners' accepted attestation format and trust root, then add a reviewed in-process verifier; never load one from the manifest.",
+        )
     invalid = any(check["status"] == "invalid" for check in report["checks"])
     mismatched = any(check["status"] in {"mismatch", "fail"} for check in report["checks"])
     missing = len(report["missing_deliverables"])
@@ -1453,18 +1554,9 @@ def _finish_report(report: dict[str, Any]) -> dict[str, Any]:
         report["readiness_status"] = "BLOCKED"
         report["exit_code"] = 1
     else:
-        # The verifier check is deliberately unresolved in this version; this branch is
-        # unreachable until a reviewed verifier and trusted evidence are implemented.
+        # This branch remains fail-closed if a future edit accidentally omits a blocker.
         report["readiness_status"] = "BLOCKED"
         report["exit_code"] = 1
-        report["missing_deliverables"].append({
-            "id": "trusted-evidence-verifier",
-            "owner_role": "Agent and research",
-            "expected": "accepted trusted verifier",
-            "actual": "unavailable",
-            "reason": "no accepted evidence verifier exists",
-            "next_action": "Add an owner-approved verifier in code after the trust protocol is agreed.",
-        })
     return report
 
 
