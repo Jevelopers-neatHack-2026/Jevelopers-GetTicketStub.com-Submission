@@ -753,7 +753,7 @@ test('Finance handoff final freshness observes callback-time outages and TTL exp
       await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
         (error) => error.code === 'REUSE_DENIED');
       assert.equal(handoffs, 0);
-      assert.equal(permissionChecks, 2);
+      assert.equal(permissionChecks, 3);
     }
   }
 });
@@ -1272,6 +1272,121 @@ test('final reads observe an outage or TTL crossing that occurs while permission
   ttlEnv.state.advanceOnPermissionTo = ttlEnv.clock.value + 1_000;
   const stale = await ttlEnv.store.getPrivateProfile(ttlCreated.scope, ttlCreated.authRequest, ttlCreated.lookup);
   assert.deepEqual({ status: stale.status, reason: stale.reason }, { status: 'stale', reason: 'ttl_expired' });
+});
+
+test('final authorization follows queued database preparation for private and public facts and Finance lineage', async (t) => {
+  for (const pathKind of ['private_facts', 'public_facts', 'private_finance', 'public_finance']) {
+    for (const mutation of ['acl', 'tenant', 'actor']) {
+      let armed = false;
+      let permissionChecks = 0;
+      let scheduled = false;
+      let revoked = false;
+      let handoffs = 0;
+      let authRequest;
+      const targetAction = pathKind.endsWith('facts')
+        ? (pathKind === 'private_facts' ? 'private_profile.read' : 'public_profile.read')
+        : 'finance.read_original_lineage';
+      const env = await fixture(t, {
+        ...(pathKind.startsWith('public') ? {
+          authorizePublicPublication: ({ identity, contentHash }) => ({
+            status: 'approved', identity, contentHash,
+            publicPermissions: [{ reference: 'PUBLIC_PERMISSION', contentHash, version: 1, use: 'fact_read' }],
+          }),
+        } : {}),
+        verifyPermission: ({ reference, contentHash, version, use }) => {
+          if (armed) permissionChecks += 1;
+          return { status: 'valid', reference, contentHash, version, use, validUntilMs: 8_640_000_000_000_000 };
+        },
+        authorizeAction: ({ action }) => {
+          if (armed && permissionChecks === 2 && action === targetAction && !scheduled) {
+            scheduled = true;
+            setImmediate(() => {
+              revoked = true;
+              if (mutation === 'tenant') authRequest.principal.tenantId = 'tenant-b';
+              if (mutation === 'actor') authRequest.principal.actorId = 'actor-revoked';
+            });
+          }
+          return !revoked;
+        },
+        consumeOriginalLineage: () => {
+          handoffs += 1;
+          return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+        },
+      });
+      authRequest = { principal: { tenantId: 'tenant-a', actorId: 'actor-tenant-a' } };
+      const created = pathKind.startsWith('public')
+        ? await putPublic(env.store, authRequest, await approvedBoundary(authRequest))
+        : await putPrivate(env.store, authRequest);
+      permissionChecks = 0;
+      armed = true;
+      if (pathKind === 'private_facts' || pathKind === 'public_facts') {
+        const read = pathKind === 'private_facts'
+          ? env.store.getPrivateProfile(created.scope, authRequest, created.lookup)
+          : env.store.getPublicProfile(created.scope, authRequest, created.lookup);
+        await assert.rejects(read, (error) => error.code === 'REUSE_DENIED');
+      } else {
+        await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+          (error) => error.code === 'REUSE_DENIED');
+      }
+      assert.equal(scheduled, true, `${pathKind}/${mutation} must stage a revocation before finalization`);
+      assert.equal(revoked, true, `${pathKind}/${mutation} mutation must run during async preparation`);
+      assert.equal(handoffs, 0, `${pathKind}/${mutation} must not disclose Finance lineage`);
+      assert.ok(permissionChecks >= 2);
+    }
+  }
+});
+
+test('final host permission callbacks can re-enter freshness writes without locking the prepared reader', async (t) => {
+  for (const pathKind of ['private_facts', 'public_facts', 'private_finance', 'public_finance']) {
+    let env;
+    let created;
+    let permissionChecks = 0;
+    let reentered = false;
+    let handoffs = 0;
+    env = await fixture(t, {
+      ...(pathKind.startsWith('public') ? {
+        authorizePublicPublication: ({ identity, contentHash }) => ({
+          status: 'approved', identity, contentHash,
+          publicPermissions: [{ reference: 'PUBLIC_PERMISSION', contentHash, version: 1, use: 'fact_read' }],
+        }),
+      } : {}),
+      verifyPermission: async ({ reference, contentHash, version, use }) => {
+        permissionChecks += 1;
+        if (created && permissionChecks === 3) {
+          env.clock.value += 1;
+          env.state.observation = () => ({ status: 'outage', validatedAt: new Date(env.clock.value).toISOString() });
+          await env.store.observe(created.scope, created.authRequest, {
+            profileRef: created.profile.profileRef,
+            scopeKind: pathKind.startsWith('private') ? 'tenant_private' : 'public_profile',
+            observation: { source: 'reentrant-final-permission-callback' },
+          });
+          reentered = true;
+        }
+        return { status: 'valid', reference, contentHash, version, use, validUntilMs: 8_640_000_000_000_000 };
+      },
+      consumeOriginalLineage: () => {
+        handoffs += 1;
+        return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+      },
+    });
+    const authRequest = request();
+    created = pathKind.startsWith('public')
+      ? await putPublic(env.store, authRequest, await approvedBoundary(authRequest))
+      : await putPrivate(env.store, authRequest);
+    permissionChecks = 0;
+    if (pathKind === 'private_facts' || pathKind === 'public_facts') {
+      const result = pathKind === 'private_facts'
+        ? await env.store.getPrivateProfile(created.scope, authRequest, created.lookup)
+        : await env.store.getPublicProfile(created.scope, authRequest, created.lookup);
+      assert.deepEqual({ status: result.status, reason: result.reason }, { status: 'unavailable', reason: 'observation_changed' });
+      assert.equal('facts' in result, false);
+    } else {
+      await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+        (error) => error.code === 'REUSE_DENIED');
+    }
+    assert.equal(reentered, true, `${pathKind} must allow the host callback's independent observation write`);
+    assert.equal(handoffs, 0);
+  }
 });
 
 test('storage writes conserve bytes and event-count reservations until invalidation converts them', async (t) => {

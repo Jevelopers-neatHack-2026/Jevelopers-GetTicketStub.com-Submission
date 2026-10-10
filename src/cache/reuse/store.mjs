@@ -500,25 +500,23 @@ export function createScopedReuseStore(options) {
     } catch { fail('REUSE_INTEGRITY'); }
   }
 
-  async function withDatabase(operation) {
-    return withLocalQueue(rootDirectory, async () => {
-      let database;
-      let transactionOpen = false;
+  async function openStoreDatabase() {
+    let database;
+    try {
+      await mkdir(rootDirectory, { recursive: true, mode: 0o700 });
+      const rootStats = await lstat(rootDirectory);
+      if (rootStats.isSymbolicLink() || !rootStats.isDirectory()) fail('REUSE_STORAGE');
+      await chmod(rootDirectory, 0o700);
+      const databasePath = path.join(rootDirectory, 'scoped-reuse.sqlite');
+      let prior = null;
       try {
-        await mkdir(rootDirectory, { recursive: true, mode: 0o700 });
-        const rootStats = await lstat(rootDirectory);
-        if (rootStats.isSymbolicLink() || !rootStats.isDirectory()) fail('REUSE_STORAGE');
-        await chmod(rootDirectory, 0o700);
-        const databasePath = path.join(rootDirectory, 'scoped-reuse.sqlite');
-        let prior = null;
-        try {
-          prior = await lstat(databasePath);
-          if (prior.isSymbolicLink() || !prior.isFile()) fail('REUSE_STORAGE');
-        } catch (error) { if (error?.code !== 'ENOENT') throw error; }
-        database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
-        const opened = await lstat(databasePath);
-        if (opened.isSymbolicLink() || !opened.isFile() || (prior && (opened.dev !== prior.dev || opened.ino !== prior.ino))) fail('REUSE_STORAGE');
-        database.exec(`
+        prior = await lstat(databasePath);
+        if (prior.isSymbolicLink() || !prior.isFile()) fail('REUSE_STORAGE');
+      } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+      database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
+      const opened = await lstat(databasePath);
+      if (opened.isSymbolicLink() || !opened.isFile() || (prior && (opened.dev !== prior.dev || opened.ino !== prior.ino))) fail('REUSE_STORAGE');
+      database.exec(`
           PRAGMA journal_mode = DELETE;
           PRAGMA synchronous = FULL;
           PRAGMA secure_delete = ON;
@@ -598,19 +596,36 @@ export function createScopedReuseStore(options) {
             payload_bytes INTEGER NOT NULL
           ) STRICT;
           CREATE INDEX IF NOT EXISTS reuse_outbox_pending ON reuse_outbox (scope_kind, partition_hash, status, next_attempt_at_ms);
-        `);
-        const outboxColumns = database.prepare('PRAGMA table_info(reuse_outbox)').all();
-        if (!outboxColumns.some((column) => column.name === 'active_attempt_id')) {
-          database.exec('ALTER TABLE reuse_outbox ADD COLUMN active_attempt_id TEXT');
-        }
-        if (!outboxColumns.some((column) => column.name === 'has_consumer')) {
-          database.exec('ALTER TABLE reuse_outbox ADD COLUMN has_consumer INTEGER NOT NULL DEFAULT 1 CHECK (has_consumer IN (0, 1))');
-        }
-        const entryColumns = database.prepare('PRAGMA table_info(reuse_entries)').all();
-        if (!entryColumns.some((column) => column.name === 'payload_purged')) {
-          database.exec('ALTER TABLE reuse_entries ADD COLUMN payload_purged INTEGER NOT NULL DEFAULT 0 CHECK (payload_purged IN (0, 1))');
-        }
-        await chmod(databasePath, 0o600);
+      `);
+      const outboxColumns = database.prepare('PRAGMA table_info(reuse_outbox)').all();
+      if (!outboxColumns.some((column) => column.name === 'active_attempt_id')) {
+        database.exec('ALTER TABLE reuse_outbox ADD COLUMN active_attempt_id TEXT');
+      }
+      if (!outboxColumns.some((column) => column.name === 'has_consumer')) {
+        database.exec('ALTER TABLE reuse_outbox ADD COLUMN has_consumer INTEGER NOT NULL DEFAULT 1 CHECK (has_consumer IN (0, 1))');
+      }
+      const entryColumns = database.prepare('PRAGMA table_info(reuse_entries)').all();
+      if (!entryColumns.some((column) => column.name === 'payload_purged')) {
+        database.exec('ALTER TABLE reuse_entries ADD COLUMN payload_purged INTEGER NOT NULL DEFAULT 0 CHECK (payload_purged IN (0, 1))');
+      }
+      await chmod(databasePath, 0o600);
+      return database;
+    } catch (error) {
+      database?.close();
+      throw safeError(error);
+    }
+  }
+
+  async function prepareStoreDatabase() {
+    return withLocalQueue(rootDirectory, openStoreDatabase);
+  }
+
+  async function withDatabase(operation) {
+    return withLocalQueue(rootDirectory, async () => {
+      let database;
+      let transactionOpen = false;
+      try {
+        database = await openStoreDatabase();
         database.exec('BEGIN IMMEDIATE');
         transactionOpen = true;
         const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();
@@ -1321,7 +1336,7 @@ export function createScopedReuseStore(options) {
         ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
         : null;
       const privateLink = linkedPrivateRef === null ? null
-        : database.prepare('SELECT link_id, payload_key_id, length(payload) AS payload_bytes FROM reuse_private_links WHERE public_entry_id = ? AND tenant_partition_hash = ?')
+        : database.prepare('SELECT link_id, payload_key_id, payload, length(payload) AS payload_bytes FROM reuse_private_links WHERE public_entry_id = ? AND tenant_partition_hash = ?')
           .get(row.entry_id, linkedPrivateRef.partitionHash);
       return { now: time.now, clockRollback: time.clockRollback, current, head, observation, privateLink };
     });
@@ -1356,6 +1371,134 @@ export function createScopedReuseStore(options) {
       return { state, now: final.now, observation, current: final.current, head: final.head, privateLink: final.privateLink };
     }
     return { state: { status: 'unavailable', reason: 'observation_changed' }, now: currentTime() };
+  }
+
+  async function finalizeCurrentFreshness(info, request, action, scopeKind, row, entryPayload, keys, readGuard,
+    pinsMatch, linkedPrivateRef, permissionCheck, complete) {
+    const entryInfo = scopeKind === 'public_profile' ? null : info;
+    const snapshot = () => withDatabase((database, time) => {
+      let current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
+        .get(row.entry_id, scopeKind, row.partition_hash);
+      if (!time.clockRollback && current && current.expires_at_ms <= time.now && current.payload_purged !== 1) {
+        expireEntry(database, entryInfo, current, current.eligible === 1 ? entryPayload : null, time.now, keys);
+        current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
+          .get(row.entry_id, scopeKind, row.partition_hash);
+      }
+      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
+        .get(scopeKind, row.partition_hash, row.identity_hash);
+      const observation = current?.eligible === 1
+        ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
+        : null;
+      const privateLink = linkedPrivateRef === null ? null
+        : database.prepare('SELECT link_id, payload_key_id, payload, length(payload) AS payload_bytes FROM reuse_private_links WHERE public_entry_id = ? AND tenant_partition_hash = ?')
+          .get(row.entry_id, linkedPrivateRef.partitionHash);
+      return { now: time.now, clockRollback: time.clockRollback, current, head, observation, privateLink };
+    });
+    const finishEarly = (state, now) => complete({ state, now }, undefined);
+    const first = await snapshot();
+    if (first.clockRollback) return finishEarly({ status: 'unavailable', reason: 'clock_rollback' }, first.now);
+    if (!first.current || first.current.eligible !== 1 || !first.head || first.head.entry_id !== row.entry_id) {
+      return finishEarly({ status: 'unavailable', reason: first.current?.expires_at_ms <= first.now ? 'expired' : 'invalidated' }, first.now);
+    }
+    if (first.current.expires_at_ms <= first.now) return finishEarly({ status: 'unavailable', reason: 'expired' }, first.now);
+    if (!sameStoredEntry(first.current, row)) return finishEarly({ status: 'unavailable', reason: 'observation_changed' }, first.now);
+    if (!first.observation) return finishEarly({ status: 'unavailable', reason: 'observation_missing' }, first.now);
+    if (linkedPrivateRef && (!first.privateLink || first.privateLink.link_id !== linkedPrivateRef.linkId
+      || first.privateLink.payload_key_id !== linkedPrivateRef.payloadKeyId
+      || first.privateLink.payload_bytes !== linkedPrivateRef.payloadBytes
+      || !Buffer.from(first.privateLink.payload).equals(Buffer.from(linkedPrivateRef.payload)))) {
+      return finishEarly({ status: 'unavailable', reason: 'invalidated' }, first.now);
+    }
+    const observationKey = first.observation.payload_key_id === keys.payloadKey.keyId
+      ? keys.payloadKey
+      : await resolveKey(scopeKind === 'public_profile' ? null : info, 'payload', first.observation.payload_key_id, readGuard);
+    const observation = unseal(observationKey.key, row.partition_hash, 'observation', first.observation.observation_id,
+      first.observation.payload, first.observation.payload_key_id);
+
+    // Finish all asynchronous filesystem, key and permission work before the final action check.
+    // The connection is open but has no transaction while trusted host callbacks run.
+    const database = await prepareStoreDatabase();
+    let transactionOpen = false;
+    let final;
+    let finalPermissionState;
+    try {
+      if (permissionCheck) finalPermissionState = await permissionCheck();
+      await authorize(info, request, action, { profileRef: row.entry_id });
+      database.exec('BEGIN IMMEDIATE');
+      transactionOpen = true;
+      const currentMax = database.prepare("SELECT value FROM reuse_meta WHERE key = 'clock_max_ms'").get();
+      const now = currentTime();
+      const previousMax = currentMax ? Number(currentMax.value) : null;
+      if (currentMax && (!Number.isSafeInteger(previousMax) || previousMax < 0 || previousMax > MAX_TIME)) fail('REUSE_INTEGRITY');
+      const clockRollback = Boolean(currentMax && now < previousMax);
+      if (!clockRollback && (!currentMax || now > previousMax)) {
+        database.prepare("INSERT INTO reuse_meta (key, value) VALUES ('clock_max_ms', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(now));
+      }
+      let current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
+        .get(row.entry_id, scopeKind, row.partition_hash);
+      if (!clockRollback && current && current.expires_at_ms <= now && current.payload_purged !== 1) {
+        expireEntry(database, entryInfo, current, current.eligible === 1 ? entryPayload : null, now, keys);
+        current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
+          .get(row.entry_id, scopeKind, row.partition_hash);
+      }
+      const head = database.prepare('SELECT entry_id, expires_at_ms FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
+        .get(scopeKind, row.partition_hash, row.identity_hash);
+      const latestObservation = current?.eligible === 1
+        ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
+        : null;
+      const privateLink = linkedPrivateRef === null ? null
+        : database.prepare('SELECT link_id, payload_key_id, payload, length(payload) AS payload_bytes FROM reuse_private_links WHERE public_entry_id = ? AND tenant_partition_hash = ?')
+          .get(row.entry_id, linkedPrivateRef.partitionHash);
+      let state;
+      if (clockRollback) {
+        state = { status: 'unavailable', reason: 'clock_rollback' };
+      } else if (!current || current.eligible !== 1 || !head || head.entry_id !== row.entry_id) {
+        state = { status: 'unavailable', reason: current?.expires_at_ms <= now ? 'expired' : 'invalidated' };
+      } else if (current.expires_at_ms <= now) {
+        state = { status: 'unavailable', reason: 'expired' };
+      } else if (!sameStoredEntry(current, first.current) || !sameStoredObservation(latestObservation, first.observation)) {
+        state = { status: 'unavailable', reason: 'observation_changed' };
+      } else if (linkedPrivateRef && !sameStoredPrivateLink(privateLink, first.privateLink)) {
+        state = { status: 'unavailable', reason: 'invalidated' };
+      } else if (!latestObservation) {
+        state = { status: 'unavailable', reason: 'observation_missing' };
+      } else {
+        state = eligibility(current, entryPayload, observation, now, false, pinsMatch);
+      }
+      final = { state, now, observation, current, head, privateLink, permissionState: finalPermissionState };
+      database.exec('COMMIT');
+      transactionOpen = false;
+    } catch (error) {
+      if (transactionOpen) {
+        try { database.exec('ROLLBACK'); } catch { /* SQLite also rolls back when the connection closes. */ }
+      }
+      throw safeError(error);
+    } finally {
+      database.close();
+    }
+    // Internal completion only builds the result or invokes the authorized Finance callback.
+    // It runs synchronously after the persisted snapshot and outside any SQLite transaction.
+    return await complete(final, finalPermissionState);
+  }
+
+  function sameStoredEntry(left, right) {
+    return Boolean(left && right && left.entry_id === right.entry_id && left.scope_kind === right.scope_kind
+      && left.partition_hash === right.partition_hash && left.identity_hash === right.identity_hash
+      && left.version === right.version && left.expires_at_ms === right.expires_at_ms
+      && left.eligible === right.eligible && left.payload_key_id === right.payload_key_id
+      && left.payload_bytes === right.payload_bytes && left.payload_purged === right.payload_purged
+      && Buffer.from(left.payload).equals(Buffer.from(right.payload)));
+  }
+
+  function sameStoredObservation(left, right) {
+    return Boolean(left && right && left.observation_id === right.observation_id && left.entry_id === right.entry_id
+      && left.sequence === right.sequence && left.observed_at_ms === right.observed_at_ms && left.status === right.status
+      && left.payload_key_id === right.payload_key_id && Buffer.from(left.payload).equals(Buffer.from(right.payload)));
+  }
+
+  function sameStoredPrivateLink(left, right) {
+    return Boolean(left && right && left.link_id === right.link_id && left.payload_key_id === right.payload_key_id
+      && left.payload_bytes === right.payload_bytes && Buffer.from(left.payload).equals(Buffer.from(right.payload)));
   }
 
   async function lookupProfile(scope, request, scopeKind, lookupValue, use = 'fact_read') {
@@ -1427,7 +1570,7 @@ export function createScopedReuseStore(options) {
       if (info) await authorize(info, request, `${scopeKind === 'public_profile' ? 'public' : 'private'}_profile.read`);
       return Object.freeze({ status: state.status, reason: state.reason, profileRef: row.entry_id });
     }
-    let permissionState = await maybePermissions(info, request, entryPayload, use, candidate.now);
+    const permissionState = await maybePermissions(info, request, entryPayload, use, candidate.now);
     if (info) await authorize(info, request, `${scopeKind === 'public_profile' ? 'public' : 'private'}_profile.read`);
     const invalidatePermission = async (state) => {
       if (state.status !== 'revoked' && state.status !== 'expired') return;
@@ -1446,50 +1589,64 @@ export function createScopedReuseStore(options) {
       if (info) await authorize(info, request, `${scopeKind === 'public_profile' ? 'public' : 'private'}_profile.read`);
       return Object.freeze({ status: finalState.state.status, reason: finalState.state.reason, profileRef: row.entry_id });
     }
-    permissionState = await maybePermissions(info, request, entryPayload, use, currentTime());
-    if (info) await authorize(info, request, `${scopeKind === 'public_profile' ? 'public' : 'private'}_profile.read`);
-    if (!permissionState.valid) {
-      await invalidatePermission(permissionState);
-      return Object.freeze({ status: 'ineligible', reason: `permission_${permissionState.status}`, profileRef: row.entry_id });
+    const preFinalPermissionState = await maybePermissions(info, request, entryPayload, use, currentTime());
+    if (!preFinalPermissionState.valid) {
+      await invalidatePermission(preFinalPermissionState);
+      return Object.freeze({ status: 'ineligible', reason: `permission_${preFinalPermissionState.status}`, profileRef: row.entry_id });
     }
     if (info) await authorize(info, request, readAction);
-    const finalCheck = await readCurrentFreshness(info, request, scopeKind, row, entryPayload, keys, readGuard, pinsMatch);
-    if (finalCheck.state.status !== 'fresh') {
-      if (info) await authorize(info, request, readAction);
-      return Object.freeze({ status: finalCheck.state.status, reason: finalCheck.state.reason, profileRef: row.entry_id });
-    }
-    if (permissionState.validUntilMs !== undefined && permissionState.validUntilMs <= finalCheck.now) {
-      await invalidatePermission({ status: 'expired' });
-      return Object.freeze({ status: 'ineligible', reason: 'permission_expired', profileRef: row.entry_id });
-    }
-    const finalObservation = finalCheck.observation;
-    if (scopeKind === 'public_profile') {
-      return Object.freeze({
-        status: 'hit',
-        profileRef: row.entry_id,
-        version: row.version,
-        facts: entryPayload.facts,
-        trust: 'untrusted_external',
-        rights: 'not_asserted',
-        permissionStatus: permissionState.status,
-        retrievedAt: iso(effectiveRetrievedAt(entryPayload, finalObservation)),
-        validatedAt: iso(finalObservation.validatedAtMs),
-        expiresAt: iso(row.expires_at_ms),
-        originalLineageStatus: entryPayload.lineage?.status ?? 'unknown',
+    const finalized = await finalizeCurrentFreshness(info, request, readAction, scopeKind, row, entryPayload, keys,
+      readGuard, pinsMatch, null,
+      () => maybePermissions(info, request, entryPayload, use, currentTime()),
+      (finalCheck, finalPermissionState) => {
+        if (finalPermissionState && !finalPermissionState.valid) {
+          return { kind: 'permission', state: finalPermissionState };
+        }
+        if (finalCheck.state.status !== 'fresh') {
+          return { kind: 'result', result: Object.freeze({
+            status: finalCheck.state.status, reason: finalCheck.state.reason, profileRef: row.entry_id,
+          }) };
+        }
+        if (!finalPermissionState?.valid) {
+          return { kind: 'permission', state: finalPermissionState ?? { status: 'unverified' } };
+        }
+        if (finalPermissionState.validUntilMs !== undefined && finalPermissionState.validUntilMs <= finalCheck.now) {
+          return { kind: 'permission', state: { status: 'expired' } };
+        }
+        const finalObservation = finalCheck.observation;
+        if (scopeKind === 'public_profile') {
+          return { kind: 'result', result: Object.freeze({
+            status: 'hit',
+            profileRef: row.entry_id,
+            version: row.version,
+            facts: entryPayload.facts,
+            trust: 'untrusted_external',
+            rights: 'not_asserted',
+            permissionStatus: finalPermissionState.status,
+            retrievedAt: iso(effectiveRetrievedAt(entryPayload, finalObservation)),
+            validatedAt: iso(finalObservation.validatedAtMs),
+            expiresAt: iso(row.expires_at_ms),
+            originalLineageStatus: entryPayload.lineage?.status ?? 'unknown',
+          }) };
+        }
+        return { kind: 'result', result: Object.freeze({
+          status: 'hit',
+          profileRef: row.entry_id,
+          version: row.version,
+          facts: entryPayload.facts,
+          trust: 'tenant_private',
+          permissionStatus: finalPermissionState.status,
+          retrievedAt: iso(effectiveRetrievedAt(entryPayload, finalObservation)),
+          validatedAt: iso(finalObservation.validatedAtMs),
+          expiresAt: iso(row.expires_at_ms),
+          originalLineageStatus: entryPayload.lineage?.status ?? 'unknown',
+        }) };
       });
+    if (finalized.kind === 'permission') {
+      await invalidatePermission(finalized.state);
+      return Object.freeze({ status: 'ineligible', reason: `permission_${finalized.state.status}`, profileRef: row.entry_id });
     }
-    return Object.freeze({
-      status: 'hit',
-      profileRef: row.entry_id,
-      version: row.version,
-      facts: entryPayload.facts,
-      trust: 'tenant_private',
-      permissionStatus: permissionState.status,
-      retrievedAt: iso(effectiveRetrievedAt(entryPayload, finalObservation)),
-      validatedAt: iso(finalObservation.validatedAtMs),
-      expiresAt: iso(row.expires_at_ms),
-      originalLineageStatus: entryPayload.lineage?.status ?? 'unknown',
-    });
+    return finalized.result;
   }
 
   async function getPrivateProfile(scope, request, lookup) {
@@ -1689,59 +1846,67 @@ export function createScopedReuseStore(options) {
     }
     if (!handoffFreshness || handoffFreshness.state.status !== 'fresh') fail('REUSE_DENIED');
     await authorize(info, request, 'finance.read_original_lineage', { profileRef: ref });
-    const finalPermissionState = await verifyStoredPermissions(info, request, payload, 'finance.read_original_lineage', currentTime());
-    if (!finalPermissionState.valid) fail('REUSE_DENIED');
+    const preFinalPermissionState = await verifyStoredPermissions(info, request, payload, 'finance.read_original_lineage', currentTime());
+    if (!preFinalPermissionState.valid) fail('REUSE_DENIED');
     await authorize(info, request, 'finance.read_original_lineage', { profileRef: ref });
-    let finalFreshness;
-    if (located.kind === 'private_entry') {
-      finalFreshness = await readCurrentFreshness(info, request, 'tenant_private', located.row, payload,
-        { ...keys, payloadKey: key }, lineageGuard, true);
-    } else {
+    if (located.kind === 'public_link') {
       publicParentKeys ??= await indexInfo(null, 'public_profile', lineageGuard);
       if (!publicParentKeys.payloadKey) publicParentKeys.payloadKey = await resolveKey(null, 'payload', located.parent.payload_key_id, lineageGuard);
       publicParentPayload ??= unseal(publicParentKeys.payloadKey.key, located.parent.partition_hash, 'entry', located.parent.entry_id,
         located.parent.payload, located.parent.payload_key_id);
-      finalFreshness = await readCurrentFreshness(null, request, 'public_profile', located.parent, publicParentPayload,
-        publicParentKeys, lineageGuard, true, {
-          partitionHash: keys.partitionHash,
-          linkId: located.row.link_id,
-          payloadKeyId: located.row.payload_key_id,
-          payloadBytes: located.row.payload.byteLength,
-        });
     }
-    if (!finalFreshness || finalFreshness.state.status !== 'fresh') fail('REUSE_DENIED');
-    const handoffTime = finalFreshness.now;
-    if (deadline !== null && handoffTime >= deadline) fail('REUSE_DENIED');
-    if (finalPermissionState.validUntilMs !== undefined && handoffTime >= finalPermissionState.validUntilMs) fail('REUSE_DENIED');
-    let response;
-    try {
-      response = await config.consumeOriginalLineage(Object.freeze({
-        tenantId: info.tenantId,
-        actorId: info.actorId,
-        request,
-        profileRef: ref,
-        scope: 'tenant_private',
-        contentHash: payload.contentHash,
-        version: located.kind === 'private_entry' ? located.row.version : payload.version,
-        lineage: payload.lineage ?? validateLineage({ status: 'unknown' }),
-        sourceRefs: payload.sourceRefs ?? Object.freeze([]),
-        correctionRefs: payload.correctionRefs ?? Object.freeze([]),
-        permissions: payload.permissions ?? Object.freeze([]),
-      }));
-    } catch { fail('REUSE_POLICY_UNAVAILABLE'); }
-    await authorize(info, request, 'finance.read_original_lineage', { profileRef: ref });
-    const safe = record(response, new Set(['status', 'logicalOperationBound', 'billedAttemptCount', 'usageObservationCount']));
-    if (!safe || !['linked', 'incomplete', 'unavailable'].includes(safe.status)
-      || typeof safe.logicalOperationBound !== 'boolean'
-      || !Number.isSafeInteger(safe.billedAttemptCount) || safe.billedAttemptCount < 0
-      || !Number.isSafeInteger(safe.usageObservationCount) || safe.usageObservationCount < 0) fail('REUSE_POLICY_UNAVAILABLE');
-    return Object.freeze({
-      status: safe.status,
-      logicalOperationBound: safe.logicalOperationBound,
-      billedAttemptCount: safe.billedAttemptCount,
-      usageObservationCount: safe.usageObservationCount,
-      allocationAuthority: 'finance_external',
-    });
+    const finalRow = located.kind === 'private_entry' ? located.row : located.parent;
+    const finalScopeKind = located.kind === 'private_entry' ? 'tenant_private' : 'public_profile';
+    const finalPayload = located.kind === 'private_entry' ? payload : publicParentPayload;
+    const finalKeys = located.kind === 'private_entry' ? { ...keys, payloadKey: key } : publicParentKeys;
+    const finalFreshness = await finalizeCurrentFreshness(info, request, 'finance.read_original_lineage', finalScopeKind,
+      finalRow, finalPayload, finalKeys, lineageGuard, true,
+      located.kind === 'public_link' ? {
+        partitionHash: keys.partitionHash,
+        linkId: located.row.link_id,
+        payloadKeyId: located.row.payload_key_id,
+        payload: located.row.payload,
+        payloadBytes: located.row.payload.byteLength,
+      } : null,
+      () => verifyStoredPermissions(info, request, payload, 'finance.read_original_lineage', currentTime()),
+      async (finalCheck, finalPermissionState) => {
+        if (!finalCheck || finalCheck.state.status !== 'fresh' || !finalPermissionState?.valid) fail('REUSE_DENIED');
+        const handoffTime = finalCheck.now;
+        if (deadline !== null && handoffTime >= deadline) fail('REUSE_DENIED');
+        if (finalPermissionState.validUntilMs !== undefined && handoffTime >= finalPermissionState.validUntilMs) fail('REUSE_DENIED');
+        let response;
+        try {
+          // Invoke the trusted host handoff synchronously after the final snapshot; the DB is closed.
+          response = config.consumeOriginalLineage(Object.freeze({
+            tenantId: info.tenantId,
+            actorId: info.actorId,
+            request,
+            profileRef: ref,
+            scope: 'tenant_private',
+            contentHash: payload.contentHash,
+            version: located.kind === 'private_entry' ? located.row.version : payload.version,
+            lineage: payload.lineage ?? validateLineage({ status: 'unknown' }),
+            sourceRefs: payload.sourceRefs ?? Object.freeze([]),
+            correctionRefs: payload.correctionRefs ?? Object.freeze([]),
+            permissions: payload.permissions ?? Object.freeze([]),
+          }));
+          response = await response;
+        } catch { fail('REUSE_POLICY_UNAVAILABLE'); }
+        await authorize(info, request, 'finance.read_original_lineage', { profileRef: ref });
+        const safe = record(response, new Set(['status', 'logicalOperationBound', 'billedAttemptCount', 'usageObservationCount']));
+        if (!safe || !['linked', 'incomplete', 'unavailable'].includes(safe.status)
+          || typeof safe.logicalOperationBound !== 'boolean'
+          || !Number.isSafeInteger(safe.billedAttemptCount) || safe.billedAttemptCount < 0
+          || !Number.isSafeInteger(safe.usageObservationCount) || safe.usageObservationCount < 0) fail('REUSE_POLICY_UNAVAILABLE');
+        return Object.freeze({
+          status: safe.status,
+          logicalOperationBound: safe.logicalOperationBound,
+          billedAttemptCount: safe.billedAttemptCount,
+          usageObservationCount: safe.usageObservationCount,
+          allocationAuthority: 'finance_external',
+        });
+      });
+    return finalFreshness;
   }
 
   async function invalidate(scope, request, inputValue) {
