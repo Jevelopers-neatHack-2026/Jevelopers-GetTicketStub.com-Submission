@@ -25,7 +25,16 @@ const EVENT_TYPES = new Set([
   'response_receipt_persisted',
   'external_outcome_unknown',
   'response_checkpoint_reconciled',
-  'schema_migrated_v1'
+  'schema_migrated_v1',
+  'operations_work_admitted',
+  'operations_work_claimed',
+  'operations_work_unknown',
+  'operations_work_requeued',
+  'operations_work_parked',
+  'operations_work_completed',
+  'operations_work_failed',
+  'operations_work_cancelled',
+  'operations_cancel_requested'
 ]);
 const STATES = new Set([
   'queued', 'running', 'awaiting_response', 'reconciliation_pending',

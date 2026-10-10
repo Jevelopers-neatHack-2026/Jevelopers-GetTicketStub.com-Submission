@@ -1,0 +1,547 @@
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { types as utilTypes } from 'node:util';
+import { DurableWorkflowStore } from '../../internal/durable-store.js';
+import { TelemetryExporter } from '../../internal/telemetry.js';
+import { OPERATIONS_STORAGE_CAPABILITY } from '../../internal/private-ops-store-capability.js';
+import {
+  operationsStoragePolicy,
+  readOperationsConfig,
+  validateLocalPlanWork
+} from './config.js';
+import { readOperationsHealth, requestOwnerRetention } from '../../health/private/health.js';
+
+const RUNNER_PATH = fileURLToPath(new URL('./runner.js', import.meta.url));
+const MAX_WAITERS = 16;
+
+function safeOwn(value, allowed, required = []) {
+  if (value === null || typeof value !== 'object' || utilTypes.isProxy(value) || Array.isArray(value)) {
+    throw new TypeError('The operations request is invalid.');
+  }
+  let prototype;
+  let keys;
+  try {
+    prototype = Object.getPrototypeOf(value);
+    keys = Reflect.ownKeys(value);
+  } catch {
+    throw new TypeError('The operations request is invalid.');
+  }
+  if ((prototype !== Object.prototype && prototype !== null) || keys.length > allowed.length) {
+    throw new TypeError('The operations request is invalid.');
+  }
+  const result = Object.create(null);
+  for (const key of keys) {
+    if (typeof key !== 'string' || !allowed.includes(key)) throw new TypeError('The operations request is invalid.');
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, key);
+    } catch {
+      throw new TypeError('The operations request is invalid.');
+    }
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError('The operations request is invalid.');
+    }
+    result[key] = descriptor.value;
+  }
+  if (required.some(key => !Object.hasOwn(result, key))) throw new TypeError('The operations request is invalid.');
+  return result;
+}
+
+function safeId(value, maximum = 128) {
+  return typeof value === 'string' && value.trim() === value && value.length <= maximum
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(value);
+}
+
+function nowMono() {
+  return performance.now();
+}
+
+function remaining(deadline) {
+  return Math.max(0, Math.floor(deadline - nowMono()));
+}
+
+function processIsAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid < 2) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false;
+    return true;
+  }
+}
+
+async function waitForEvent(child, event, timeoutMs) {
+  return new Promise(resolvePromise => {
+    let done = false;
+    const finish = value => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      child.off(event, onEvent);
+      resolvePromise(value);
+    };
+    const onEvent = (...args) => finish(args);
+    const timer = setTimeout(() => finish(null), Math.max(0, timeoutMs));
+    child.once(event, onEvent);
+    if (child.exitCode !== null || child.signalCode !== null) finish([child.exitCode, child.signalCode]);
+  });
+}
+
+function normalizeScope(value) {
+  const scope = safeOwn(value, ['tenantId', 'projectId'], ['tenantId', 'projectId']);
+  if (!safeId(scope.tenantId) || !safeId(scope.projectId)) {
+    throw new TypeError('The synthetic operations scope is invalid.');
+  }
+  return Object.freeze({ tenantId: scope.tenantId, projectId: scope.projectId });
+}
+
+/**
+ * Private local operations supervisor. Scope is an internal mechanics precondition,
+ * not application authorization; this worker never enables external dispatch.
+ */
+export function createOperationsWorker(input) {
+  const fields = safeOwn(input, ['databasePath', 'config', 'telemetry', 'ownerId']);
+  if (typeof fields.databasePath !== 'string' || fields.databasePath.trim() === ''
+      || fields.databasePath === ':memory:' || fields.databasePath.length > 1024) {
+    throw new TypeError('A file-backed operations database path is required.');
+  }
+  const config = readOperationsConfig(fields.config);
+  const ownerId = fields.ownerId ?? `ops-worker:${randomUUID()}`;
+  if (!safeId(ownerId, 128)) throw new TypeError('The operations worker identity is invalid.');
+  const telemetry = fields.telemetry;
+  if (telemetry !== undefined) {
+    let prototype;
+    let ownKeys;
+    try {
+      if (telemetry === null || typeof telemetry !== 'object' || utilTypes.isProxy(telemetry)) throw new Error();
+      prototype = Object.getPrototypeOf(telemetry);
+      ownKeys = Reflect.ownKeys(telemetry);
+    } catch {
+      throw new TypeError('The local telemetry exporter is invalid.');
+    }
+    if (prototype !== TelemetryExporter.prototype || ownKeys.length !== 0) {
+      throw new TypeError('The local telemetry exporter is invalid.');
+    }
+  }
+  const databasePath = resolve(fields.databasePath);
+  const store = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: config.busyTimeoutMs });
+  const policy = operationsStoragePolicy(config);
+  const children = new Map();
+  const waiters = new Set();
+  let lifecycle = 'starting';
+  let loopPromise = null;
+  let stopPromise = null;
+  let heartbeatAt = nowMono();
+  let lastSafeErrorCode = null;
+  let acquiredLoop = false;
+
+  function wakeWaiters() {
+    if (children.size > 0 && lifecycle !== 'stopped') return;
+    for (const waiter of waiters) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(lifecycle === 'accepting' || lifecycle === 'saturated');
+    }
+    waiters.clear();
+  }
+
+  function spawnClaim(claim) {
+    const argv = [
+      RUNNER_PATH,
+      databasePath,
+      claim.jobId,
+      ownerId,
+      String(claim.generation),
+      String(claim.fence),
+      String(config.busyTimeoutMs)
+    ];
+    if (argv.reduce((total, item) => total + Buffer.byteLength(item, 'utf8'), 0) > 4096) {
+      lastSafeErrorCode = 'OPS_CHILD_ARGUMENTS_TOO_LARGE';
+      store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: claim.jobId, ownerId, generation: claim.generation, fence: claim.fence,
+        outcome: 'stopped'
+      });
+      return;
+    }
+    let child;
+    try {
+      child = spawn(process.execPath, argv, {
+        cwd: dirname(RUNNER_PATH),
+        env: { PATH: process.env.PATH ?? '', NODE_NO_WARNINGS: '1' },
+        stdio: 'ignore',
+        windowsHide: true
+      });
+    } catch {
+      lastSafeErrorCode = 'OPS_CHILD_START_FAILED';
+      store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: claim.jobId, ownerId, generation: claim.generation, fence: claim.fence,
+        outcome: 'stopped'
+      });
+      return;
+    }
+    const active = { child, claim, startedAt: nowMono(), settled: false };
+    children.set(claim.jobId, active);
+    try {
+      if (!Number.isSafeInteger(child.pid) || child.pid < 2) throw new Error('child pid unavailable');
+      store._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: claim.jobId,
+        ownerId,
+        generation: claim.generation,
+        fence: claim.fence,
+        runnerPid: child.pid
+      });
+    } catch {
+      lastSafeErrorCode = 'OPS_CHILD_IDENTITY_PERSIST_FAILED';
+      try { child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
+    }
+    child.once('error', () => {
+      lastSafeErrorCode = 'OPS_CHILD_PROCESS_ERROR';
+    });
+    child.once('close', (code, signal) => {
+      if (active.settled) return;
+      active.settled = true;
+      children.delete(claim.jobId);
+      const outcome = code === 0 ? 'completed'
+        : (lifecycle === 'stopping' || signal === 'SIGTERM' || signal === 'SIGKILL') ? 'shutdown'
+          : 'stopped';
+      try {
+        store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+          jobId: claim.jobId,
+          ownerId,
+          generation: claim.generation,
+          fence: claim.fence,
+          outcome
+        });
+      } catch (error) {
+        lastSafeErrorCode = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
+          ? error.code : 'OPS_RESULT_PERSIST_FAILED';
+      }
+      heartbeatAt = nowMono();
+      wakeWaiters();
+    });
+  }
+
+  async function acquisitionLoop() {
+    while (lifecycle === 'accepting' || lifecycle === 'saturated') {
+      heartbeatAt = nowMono();
+      if (children.size >= config.workerCount) {
+        lifecycle = 'saturated';
+        await delay(config.pollIntervalMs);
+        if (lifecycle === 'saturated' && children.size < config.workerCount) lifecycle = 'accepting';
+        continue;
+      }
+      try {
+        const stale = store._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy });
+        const recoverableJobIds = [];
+        let priorRunnerAlive = false;
+        for (const item of stale.items) {
+          if (item.runnerPid === null || !processIsAlive(item.runnerPid)) recoverableJobIds.push(item.jobId);
+          else priorRunnerAlive = true;
+        }
+        if (stale.incomplete) lastSafeErrorCode = 'OPS_STALE_CLAIM_SCAN_INCOMPLETE';
+        else if (priorRunnerAlive) lastSafeErrorCode = 'OPS_STALE_RUNNER_STILL_ACTIVE';
+        else if (['OPS_STALE_CLAIM_SCAN_INCOMPLETE', 'OPS_STALE_RUNNER_STILL_ACTIVE'].includes(lastSafeErrorCode)) {
+          lastSafeErrorCode = null;
+        }
+        const selected = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+          ownerId,
+          policy,
+          recoverableJobIds
+        });
+        const claim = selected?.claim ?? null;
+        if (claim) {
+          spawnClaim(claim);
+          continue;
+        }
+        if (selected?.incomplete) lastSafeErrorCode = 'OPS_SCHEDULER_SCAN_INCOMPLETE';
+        else if (lastSafeErrorCode === 'OPS_SCHEDULER_SCAN_INCOMPLETE') lastSafeErrorCode = null;
+      } catch (error) {
+        lastSafeErrorCode = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
+          ? error.code : 'OPS_STORE_UNAVAILABLE';
+      }
+      await delay(config.pollIntervalMs);
+    }
+  }
+
+  function start() {
+    if (lifecycle === 'accepting' || lifecycle === 'saturated') return loopPromise;
+    if (lifecycle !== 'starting' || acquiredLoop) throw new TypeError('The operations worker cannot be restarted after stop.');
+    acquiredLoop = true;
+    lifecycle = 'accepting';
+    loopPromise = acquisitionLoop().catch(error => {
+      lastSafeErrorCode = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
+        ? error.code : 'OPS_WORKER_LOOP_FAILED';
+      lifecycle = 'degraded';
+    });
+    return loopPromise;
+  }
+
+  function submitSyntheticWork(inputWork) {
+    if (lifecycle !== 'accepting' && lifecycle !== 'saturated') {
+      return Object.freeze({ accepted: false, code: 'OPS_UNAVAILABLE', reasonCode: 'WORKER_NOT_ACCEPTING', retryAfterMs: config.pollIntervalMs });
+    }
+    const request = safeOwn(inputWork,
+      ['trustedSyntheticScope', 'idempotencyKey', 'planJson', 'limitsJson'],
+      ['trustedSyntheticScope', 'idempotencyKey', 'planJson']);
+    const scope = normalizeScope(request.trustedSyntheticScope);
+    if (!safeId(request.idempotencyKey, 256)) throw new TypeError('The work identity is invalid.');
+    const validated = validateLocalPlanWork({
+      planJson: request.planJson,
+      limitsJson: request.limitsJson ?? '{}'
+    }, 'ops-validation-workflow', config);
+    let result;
+    try {
+      result = store._operationsAdmit(OPERATIONS_STORAGE_CAPABILITY, {
+        tenantId: scope.tenantId,
+        projectId: scope.projectId,
+        idempotencyKey: request.idempotencyKey,
+        workJson: validated.workJson,
+        policy
+      });
+    } catch (error) {
+      if (error?.code === 'STORE_BUSY' || error?.code === 'STORE_CLOSED' || error?.code === 'STORE_WRITE_FAILED') {
+        return Object.freeze({
+          accepted: false,
+          code: 'OPS_BACKPRESSURE',
+          reasonCode: error.code === 'STORE_BUSY' ? 'STORE_BUSY' : 'STORE_UNAVAILABLE',
+          retryAfterMs: error.code === 'STORE_BUSY' ? config.busyTimeoutMs * 2 : 500
+        });
+      }
+      throw error;
+    }
+    if (result.accepted && !result.duplicate) wakeWaiters();
+    return result;
+  }
+
+  function cancelSyntheticWork(inputCancel) {
+    const request = safeOwn(inputCancel,
+      ['trustedSyntheticScope', 'jobId', 'expectedGeneration'],
+      ['trustedSyntheticScope', 'jobId']);
+    const scope = normalizeScope(request.trustedSyntheticScope);
+    if (!safeId(request.jobId, 256)) throw new TypeError('The work identity is invalid.');
+    const current = store._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: scope.tenantId,
+      projectId: scope.projectId,
+      jobId: request.jobId
+    });
+    if (!current) return Object.freeze({ accepted: false, state: 'not_found' });
+    const result = store._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: scope.tenantId,
+      projectId: scope.projectId,
+      jobId: request.jobId,
+      expectedGeneration: request.expectedGeneration ?? current.generation
+    });
+    if (result.ownerId) {
+      const active = children.get(request.jobId);
+      if (active && active.claim.generation === result.generation && active.claim.fence === result.fence) {
+        try { active.child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
+      }
+    }
+    wakeWaiters();
+    return result;
+  }
+
+  function readScopedWorkPage(inputPage) {
+    const request = safeOwn(inputPage, ['trustedSyntheticScope', 'afterJobId', 'limit'], ['trustedSyntheticScope']);
+    const scope = normalizeScope(request.trustedSyntheticScope);
+    return store._operationsReadPage(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: scope.tenantId,
+      projectId: scope.projectId,
+      ...(request.afterJobId === undefined ? {} : { afterJobId: request.afterJobId }),
+      limit: request.limit ?? 25
+    });
+  }
+
+  function health() {
+    const age = Math.max(0, Math.floor(nowMono() - heartbeatAt));
+    let base;
+    try {
+      base = readOperationsHealth({
+        store,
+        config,
+        lifecycle,
+        heartbeatAgeMs: age
+      });
+    } catch (error) {
+      const code = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
+        ? error.code : 'OPS_HEALTH_UNAVAILABLE';
+      return Object.freeze({
+        schema: 'agent-harness.operations-health.v1',
+        state: 'degraded', live: lifecycle !== 'stopped', ready: false, localReady: false,
+        externalReady: false, externalDispatchEnabled: false,
+        degradedReasons: Object.freeze([code]),
+        process: Object.freeze({ childCount: children.size, workerCount: config.workerCount, waiterCount: waiters.size, rssBytes: process.memoryUsage().rss }),
+        lastSafeErrorCode: code
+      });
+    }
+    return Object.freeze({
+      ...base,
+      process: Object.freeze({
+        childCount: children.size,
+        workerCount: config.workerCount,
+        waiterCount: waiters.size,
+        rssBytes: process.memoryUsage().rss,
+        lastSafeErrorCode
+      }),
+      telemetrySink: telemetry ? telemetry.diagnostics().state : 'not_configured'
+    });
+  }
+
+  function requestRetention(inputRetention) {
+    return requestOwnerRetention(store, inputRetention);
+  }
+
+  function waitForIdle(timeoutMs = 5_000) {
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
+      throw new TypeError('The idle wait must be a finite bounded duration.');
+    }
+    if (children.size === 0) return Promise.resolve(true);
+    if (waiters.size >= Math.min(config.maxWaiters, MAX_WAITERS)) {
+      return Promise.resolve(false);
+    }
+    return new Promise(resolvePromise => {
+      const waiter = { resolve: resolvePromise, timer: null };
+      waiter.timer = setTimeout(() => {
+        waiters.delete(waiter);
+        resolvePromise(false);
+      }, timeoutMs);
+      waiters.add(waiter);
+    });
+  }
+
+  function stop(reason = 'requested') {
+    if (stopPromise) return stopPromise;
+    if (!['requested', 'signal', 'test'].includes(reason)) throw new TypeError('The stop reason is invalid.');
+    // This synchronous state change is the acquisition barrier for repeated or reentrant stop.
+    lifecycle = 'stopping';
+    stopPromise = (async () => {
+      const shutdownStartedAt = nowMono();
+      const deadline = shutdownStartedAt + config.shutdownTimeoutMs;
+      let escalatedChildren = 0;
+      for (const waiter of waiters) {
+        clearTimeout(waiter.timer);
+        waiter.resolve(false);
+      }
+      waiters.clear();
+      let remainingChildren = [...children.values()];
+      for (const active of remainingChildren) {
+        try { active.child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
+      }
+      const gracefulBudget = Math.max(0, remaining(deadline) - config.childKillGraceMs - config.childReapReserveMs);
+      if (remainingChildren.length > 0 && gracefulBudget > 0) {
+        await Promise.race([
+          Promise.all(remainingChildren.map(active => waitForEvent(active.child, 'close', gracefulBudget))),
+          delay(gracefulBudget)
+        ]);
+      }
+      remainingChildren = [...children.values()];
+      for (const active of remainingChildren) {
+        active.escalated = true;
+        escalatedChildren += 1;
+        try { active.child.kill('SIGKILL'); } catch { lastSafeErrorCode = 'OPS_CHILD_KILL_FAILED'; }
+      }
+      const reapBudget = Math.max(0, remaining(deadline) - config.childReapReserveMs);
+      if (remainingChildren.length > 0 && reapBudget > 0) {
+        await Promise.race([
+          Promise.all(remainingChildren.map(active => waitForEvent(active.child, 'close', reapBudget))),
+          delay(reapBudget)
+        ]);
+      }
+      const childrenReaped = children.size === 0;
+      if (!childrenReaped) lastSafeErrorCode = 'OPS_CHILD_REAP_INCOMPLETE';
+
+      let telemetryClosed = telemetry === undefined;
+      if (telemetry && childrenReaped && remaining(deadline) > 0) {
+        const close = Promise.resolve().then(() => telemetry.close()).then(() => true, () => false);
+        telemetryClosed = await Promise.race([close, delay(remaining(deadline)).then(() => false)]);
+        if (!telemetryClosed) lastSafeErrorCode = 'OPS_TELEMETRY_CLOSE_INCOMPLETE';
+      }
+
+      let storeClosed = false;
+      if (childrenReaped && telemetryClosed) {
+        try {
+          store.close();
+          storeClosed = true;
+        } catch {
+          lastSafeErrorCode = 'OPS_STORE_CLOSE_FAILED';
+        }
+      }
+      lifecycle = storeClosed ? 'stopped' : 'degraded';
+      wakeWaiters();
+      return Object.freeze({
+        stopped: storeClosed && childrenReaped && telemetryClosed,
+        state: lifecycle,
+        childrenReaped,
+        childCount: children.size,
+        telemetryClosed,
+        storeClosed,
+        elapsedMs: Math.max(0, Math.ceil(nowMono() - shutdownStartedAt)),
+        budgetMs: config.shutdownTimeoutMs,
+        escalatedChildren,
+        lastSafeErrorCode
+      });
+    })();
+    return stopPromise;
+  }
+
+  function installSignalHandlers(target = process) {
+    if (utilTypes.isProxy(target) || !target || typeof target.once !== 'function' || typeof target.off !== 'function') {
+      throw new TypeError('A native process-like signal target is required.');
+    }
+    const onTerm = () => { void stop('signal'); };
+    const onInt = () => { void stop('signal'); };
+    target.once('SIGTERM', onTerm);
+    target.once('SIGINT', onInt);
+    return () => {
+      target.off('SIGTERM', onTerm);
+      target.off('SIGINT', onInt);
+    };
+  }
+
+  return Object.freeze({
+    start,
+    stop,
+    submitSyntheticWork,
+    cancelSyntheticWork,
+    readScopedWorkPage,
+    requestRetention,
+    health,
+    waitForIdle,
+    installSignalHandlers,
+    get lifecycle() { return lifecycle; },
+    get activeChildCount() { return children.size; },
+    get databasePath() { return databasePath; }
+  });
+}
+
+function parseCli(args) {
+  if (args.length !== 4 || args[0] !== '--mode' || args[1] !== 'mock' || args[2] !== '--database-path'
+      || args[3].length === 0 || args[3].length > 1024) return null;
+  return { mode: 'mock', databasePath: args[3] };
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const cli = parseCli(process.argv.slice(2));
+  if (!cli) {
+    process.stderr.write('Usage: node src/worker/private/worker.js --mode mock --database-path PATH\n');
+    process.exitCode = 2;
+  } else {
+    try {
+      const worker = createOperationsWorker({ databasePath: cli.databasePath, config: { mode: 'mock' } });
+      const removeHandlers = worker.installSignalHandlers();
+      process.stdout.write(JSON.stringify({ event: 'operations_worker_started', mode: 'mock', schema: 6 }) + '\n');
+      await worker.start();
+      const result = await worker.stop('requested');
+      removeHandlers();
+      process.stdout.write(JSON.stringify({ event: 'operations_worker_stopped', ...result }) + '\n');
+      process.exitCode = result.stopped ? 0 : 2;
+    } catch {
+      process.stderr.write('The local operations worker could not start safely.\n');
+      process.exitCode = 2;
+    }
+  }
+}
