@@ -77,7 +77,7 @@ One monotonic 8-second budget covers DNS, connect, TLS, request write, headers, 
 
 ## Offline evidence and pending obligations
 
-The owned synthetic suite is part of the normal runtime test command and CI workflow. The named evidence target runs that suite with controlled DNS/HTTPS and emits a sanitized, revision-bound report. The target requires Node v22.23.3 and accepts only the offline `mock` fixture:
+The owned synthetic suite is part of the normal runtime test command and CI workflow. The named evidence target runs that suite with controlled DNS/HTTPS and emits a sanitized, revision-bound report. Local evidence accepts an attached branch or a detached checkout: detached evidence labels both source and candidate as `refs/detached/HEAD` and binds them to the verified `HEAD` commit and tree, with the base selected from the merge-base against local `main`. It does not synthesize GitHub event metadata. The target requires Node v22.23.3 and accepts only the offline `mock` fixture:
 
 ```sh
 PATH=/Users/completetech/.cache/acv1-toolchains/node-v22.23.3-darwin-arm64/bin:$PATH \

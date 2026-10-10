@@ -91,6 +91,32 @@ test('evidence_provenance: local fixture binds source, base, and candidate to lo
   }
 });
 
+test('evidence_provenance: detached local fixture binds its explicit ref, HEAD, tree, and base', () => {
+  const repo = makeRepository();
+  try {
+    const { root, baseCommit } = repo;
+    git(root, ['checkout', '--quiet', '-b', 'launch/jev-ci']);
+    writeFileSync(join(root, 'evidence.txt'), 'detached local candidate\n');
+    git(root, ['add', 'evidence.txt']);
+    const candidateCommit = commit(root, 'synthetic detached local candidate');
+    git(root, ['checkout', '--quiet', '--detach', candidateCommit]);
+
+    const provenance = resolveGitEvidenceProvenance(root, {});
+    assert.equal(provenance.eventName, 'local');
+    assert.equal(provenance.candidateKind, 'local_detached_commit');
+    assert.equal(provenance.sourceRef, 'refs/detached/HEAD');
+    assert.equal(provenance.sourceCommit, candidateCommit);
+    assert.equal(provenance.baseRef, 'refs/heads/main');
+    assert.equal(provenance.baseCommit, baseCommit);
+    assert.equal(provenance.candidateRef, 'refs/detached/HEAD');
+    assert.equal(provenance.candidateCommit, candidateCommit);
+    assert.equal(provenance.candidateTree, git(root, ['rev-parse', 'HEAD^{tree}']));
+    assert.equal(provenance.baseSelectionPolicy, 'merge_base_with_local_main');
+  } finally {
+    rmSync(repo.root, { recursive: true, force: true });
+  }
+});
+
 test('evidence_provenance: first feature push uses fetched main ancestry when push.before is zero', () => {
   const repo = featurePushFixture();
   try {

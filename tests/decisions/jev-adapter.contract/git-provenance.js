@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/u;
@@ -49,6 +49,24 @@ function checkedBranch(root, value) {
       || /[\u0000-\u0020\u007f]/u.test(value)) fail();
   if (git(root, ['check-ref-format', '--branch', value]) !== value) fail();
   return value;
+}
+
+function localHeadBranch(root) {
+  const result = spawnSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH ?? '' },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  if (result.error || result.signal !== null) fail();
+  if (result.status === 1) {
+    // With HEAD already verified as a commit, symbolic-ref's quiet status 1
+    // means HEAD is detached. Reject diagnostics or output as an actual error.
+    if (result.stdout !== '' || result.stderr !== '') fail();
+    return null;
+  }
+  if (result.status !== 0 || result.stderr !== '') fail();
+  return checkedBranch(root, result.stdout.trim());
 }
 
 function eventPayload(env) {
@@ -148,15 +166,15 @@ export function resolveGitEvidenceProvenance(root, env = process.env) {
   if (env.GITHUB_ACTIONS === 'true') {
     provenance = resolveGithubProvenance(root, env, candidateCommit);
   } else {
-    const branch = git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
-    const sourceRef = branch === '' ? 'HEAD' : `refs/heads/${checkedBranch(root, branch)}`;
+    const branch = localHeadBranch(root);
+    const sourceRef = branch === null ? 'refs/detached/HEAD' : `refs/heads/${branch}`;
     const main = checkedRef(root, 'refs/heads/main');
     const baseCommit = git(root, ['merge-base', candidateCommit, main.ref]);
     if (!safeSha(baseCommit)) fail();
     checkedCommit(root, baseCommit);
     provenance = {
       eventName: 'local',
-      candidateKind: 'local_commit',
+      candidateKind: branch === null ? 'local_detached_commit' : 'local_commit',
       sourceRef,
       sourceCommit: candidateCommit,
       baseRef: main.ref,
