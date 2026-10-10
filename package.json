@@ -1,0 +1,37 @@
+{
+  "name": "@jevelopers/event-intelligence-safe-retrieval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Internal controlled HTTP(S) retrieval primitives for event-intelligence",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/security/index.d.mts",
+      "import": "./src/security/index.mjs"
+    },
+    "./security/url-policy": {
+      "types": "./src/security/url-policy.d.mts",
+      "import": "./src/security/url-policy.mjs"
+    },
+    "./security/dns-resolver": {
+      "types": "./src/security/dns-resolver.d.mts",
+      "import": "./src/security/dns-resolver.mjs"
+    },
+    "./security/controlled-fetch": {
+      "types": "./src/security/controlled-fetch.d.mts",
+      "import": "./src/security/controlled-fetch.mjs"
+    }
+  },
+  "scripts": {
+    "verify": "node tools/verify.mjs",
+    "test:runner": "node --test tests/runner/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.types.json"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}
