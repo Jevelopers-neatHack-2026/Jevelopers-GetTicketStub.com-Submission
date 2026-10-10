@@ -90,6 +90,72 @@ test('rejects declarations, entity references, malformed XML, trailing markup, a
   }
 });
 
+test('reviews every raw unsupported attribute, including prototype-related names, on all supported elements', () => {
+  const rootOrdinary = `xmlns="${SVG_NS}" width="10" height="10"`;
+  const elementCases = [
+    ['root', 'svg', rootOrdinary, (attributes) => `<svg ${attributes}/>`],
+    ['group', 'g', 'fill="red"', (attributes) => `<svg ${rootOrdinary}><g ${attributes}><rect width="1" height="1"/></g></svg>`],
+    ['rect', 'rect', 'width="1" height="1"', (attributes) => `<svg ${rootOrdinary}><rect ${attributes}/></svg>`],
+    ['circle', 'circle', 'cx="1" cy="1" r="1"', (attributes) => `<svg ${rootOrdinary}><circle ${attributes}/></svg>`],
+    ['ellipse', 'ellipse', 'cx="1" cy="1" rx="1" ry="1"', (attributes) => `<svg ${rootOrdinary}><ellipse ${attributes}/></svg>`],
+    ['line', 'line', 'x1="0" y1="0" x2="1" y2="1"', (attributes) => `<svg ${rootOrdinary}><line ${attributes}/></svg>`],
+    ['polyline', 'polyline', 'points="0 0 1 1"', (attributes) => `<svg ${rootOrdinary}><polyline ${attributes}/></svg>`],
+    ['polygon', 'polygon', 'points="0 0 1 0 1 1"', (attributes) => `<svg ${rootOrdinary}><polygon ${attributes}/></svg>`],
+  ];
+  const unsupportedNames = ['__proto__', 'constructor', 'hasOwnProperty', 'toString', 'data-note'];
+  for (const [elementLabel, elementName, ordinary, wrap] of elementCases) {
+    for (const attributeName of unsupportedNames) {
+      for (const order of ['before', 'after']) {
+        const extra = `${attributeName}="x"`;
+        const attributes = order === 'before' ? `${extra} ${ordinary}` : `${ordinary} ${extra}`;
+        const result = inspect(bytes(wrap(attributes)));
+        const context = `${elementLabel} (${elementName}), ${attributeName} ${order} ordinary attributes`;
+        assert.equal(result.action, 'review', context);
+        assert.equal(result.diagnostics[0].code, 'SVG_UNSUPPORTED_FEATURE', context);
+        assert.equal(result.transformedHash, null, context);
+        assert.equal(result.copyTransformedBytes(), null, context);
+      }
+    }
+  }
+});
+
+test('resets raw attribute records for nested and sibling elements while retaining supported attributes', () => {
+  const legal = bytes(svg('<g fill="white" opacity="0.5"><rect fill="red" width="1" height="1"/><g stroke="black"><circle cx="2" cy="2" r="1"/></g><line x1="0" y1="0" x2="3" y2="3"/></g><polygon points="0 0 1 0 1 1"/>'));
+  const transformed = inspect(legal);
+  assert.equal(transformed.action, 'transformed');
+  const output = Buffer.from(transformed.copyTransformedBytes()).toString('utf8');
+  assert.match(output, /<g fill="white" opacity="0.5">/);
+  assert.match(output, /<g stroke="black"><circle cx="2" cy="2" r="1"\/>/);
+  assert.match(output, /<polygon points="0 0 1 0 1 1"\/>/);
+
+  const protoOnLaterSibling = inspect(bytes(svg('<rect width="1" height="1"/><circle cx="2" cy="2" r="1" __proto__="x"/>')));
+  assert.equal(protoOnLaterSibling.action, 'review');
+  assert.equal(protoOnLaterSibling.diagnostics[0].code, 'SVG_UNSUPPORTED_FEATURE');
+  assert.equal(protoOnLaterSibling.transformedHash, null);
+  assert.equal(protoOnLaterSibling.copyTransformedBytes(), null);
+
+  const protoOnNestedGroup = inspect(bytes(svg('<g><rect width="1" height="1"/><g __proto__="x"><circle cx="2" cy="2" r="1"/></g></g>')));
+  assert.equal(protoOnNestedGroup.action, 'review');
+  assert.equal(protoOnNestedGroup.diagnostics[0].code, 'SVG_UNSUPPORTED_FEATURE');
+  assert.equal(protoOnNestedGroup.transformedHash, null);
+  assert.equal(protoOnNestedGroup.copyTransformedBytes(), null);
+});
+
+test('rejects dangerous, duplicate, and oversized raw __proto__ attribute values', () => {
+  const cases = [
+    ['dangerous value', svg('<rect __proto__="url(https://evil.invalid/a.svg)" width="1" height="1"/>'), 'SVG_ACTIVE_CONTENT'],
+    ['duplicate names', svg('<rect __proto__="first" width="1" __proto__="second" height="1"/>'), 'SVG_MALFORMED'],
+    ['oversized value', svg(`<rect __proto__="${'x'.repeat(SAFE_ASSET_LIMITS.maxAttributeValueLength + 1)}" width="1" height="1"/>`), 'LIMIT_EXCEEDED'],
+  ];
+  for (const [name, source, code] of cases) {
+    const result = inspect(bytes(source));
+    assert.equal(result.action, 'reject', name);
+    assert.equal(result.diagnostics[0].code, code, name);
+    assert.equal(result.transformedHash, null, name);
+    assert.equal(result.copyTransformedBytes(), null, name);
+  }
+});
+
 test('rejects XML whitespace that SAX would discard inside tag delimiters', () => {
   const valid = `<svg xmlns="${SVG_NS}" width="10" height="10"><g><rect width="1" height="1"/></g></svg>`;
   const separators = [

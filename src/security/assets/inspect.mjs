@@ -328,18 +328,25 @@ function dangerousValue(value) {
   return /url\s*\(|@import|javascript\s*:|data\s*:/i.test(value);
 }
 
-function attributeMap(tag, state) {
-  const attributes = Object.values(tag.attributes ?? {});
-  if (attributes.length > SAFE_ASSET_LIMITS.maxAttributesPerElement) {
+function attributeMap(rawAttributes, expectedCount, state) {
+  if (!Array.isArray(rawAttributes) || rawAttributes.length !== expectedCount) {
+    state.fail('reject', 'SVG_MALFORMED');
+    return null;
+  }
+  if (rawAttributes.length > SAFE_ASSET_LIMITS.maxAttributesPerElement) {
     state.fail('reject', 'LIMIT_EXCEEDED');
     return null;
   }
   const result = new Map();
-  for (const attribute of attributes) {
+  for (const attribute of rawAttributes) {
     if (typeof attribute.name !== 'string' || typeof attribute.value !== 'string'
       || attribute.name.length > SAFE_ASSET_LIMITS.maxNameLength
       || attribute.value.length > SAFE_ASSET_LIMITS.maxAttributeValueLength) {
       state.fail('reject', 'LIMIT_EXCEEDED');
+      return null;
+    }
+    if (typeof attribute.prefix !== 'string' || typeof attribute.local !== 'string' || typeof attribute.uri !== 'string') {
+      state.fail('reject', 'SVG_MALFORMED');
       return null;
     }
     const name = attribute.name;
@@ -377,8 +384,8 @@ function commonPaintAttributes(name, value) {
   return undefined;
 }
 
-function parseAttributes(tag, name, state) {
-  const source = attributeMap(tag, state);
+function parseAttributes(rawAttributes, rawAttributeCount, name, state) {
+  const source = attributeMap(rawAttributes, rawAttributeCount, state);
   if (source === null) return null;
   const output = Object.create(null);
   const allowedShape = SHAPE_ATTRIBUTES[name];
@@ -554,10 +561,12 @@ function parseSvg(text, options, deadlineAtMs) {
   parser.oncomment = () => state.fail('reject', 'SVG_UNSUPPORTED_DECLARATION');
   let rawAttributeNames = new Set();
   let rawAttributeCount = 0;
+  let rawAttributeRecords = [];
   parser.onopentagstart = () => {
     state.guard();
     rawAttributeNames = new Set();
     rawAttributeCount = 0;
+    rawAttributeRecords = [];
   };
   parser.onattribute = (attribute) => {
     state.guard();
@@ -565,13 +574,20 @@ function parseSvg(text, options, deadlineAtMs) {
       state.fail('reject', 'SVG_MALFORMED');
       return;
     }
-    if (attribute.name.length > SAFE_ASSET_LIMITS.maxNameLength
-      || attribute.value.length > SAFE_ASSET_LIMITS.maxAttributeValueLength) {
+    rawAttributeCount += 1;
+    if (rawAttributeCount > SAFE_ASSET_LIMITS.maxAttributesPerElement) {
       state.fail('reject', 'LIMIT_EXCEEDED');
       return;
     }
-    rawAttributeCount += 1;
-    if (rawAttributeCount > SAFE_ASSET_LIMITS.maxAttributesPerElement) {
+    rawAttributeRecords.push({
+      name: attribute.name,
+      value: attribute.value,
+      prefix: attribute.prefix,
+      local: attribute.local,
+      uri: attribute.uri,
+    });
+    if (attribute.name.length > SAFE_ASSET_LIMITS.maxNameLength
+      || attribute.value.length > SAFE_ASSET_LIMITS.maxAttributeValueLength) {
       state.fail('reject', 'LIMIT_EXCEEDED');
       return;
     }
@@ -638,7 +654,7 @@ function parseSvg(text, options, deadlineAtMs) {
       state.fail('reject', 'SVG_MALFORMED');
       return;
     }
-    const attributes = parseAttributes(tag, rawName, state);
+    const attributes = parseAttributes(rawAttributeRecords, rawAttributeCount, rawName, state);
     if (attributes === null || state.action !== null) return;
     const node = { name: rawName, attributes, children: [] };
     if (state.stack.length === 0) state.root = node;
