@@ -20,6 +20,12 @@ const MAX_CAPTURE_TIMEOUT_MS = 500;
 const SUCCESS = 0;
 const FAILED = 1;
 const COUNTER_LIMIT = 64;
+// Keep the SDK automatic threshold above the admitted root + marker set so
+// forceFlush remains inside the prepare() request that owns every span.
+const SDK_BATCH_SIZE = NEATLOGS_SDK_MAPPING_LIMITS.totalSpans + 1;
+const ABORTED_GETTER = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
+const EVENT_TARGET_ADD = EventTarget.prototype.addEventListener;
+const EVENT_TARGET_REMOVE = EventTarget.prototype.removeEventListener;
 
 function safeFailure(reasonCode, fields = {}) {
   return Object.freeze({
@@ -91,9 +97,27 @@ function validateFactoryOptions(value) {
 
 function validateCallOptions(value) {
   const options = ownOptions(value, new Set(['signal']), { signal: undefined });
-  const signal = options.signal;
-  if (signal !== undefined && !(signal instanceof AbortSignal)) throw new TypeError();
   return options;
+}
+
+function inspectAbortSignal(signal) {
+  if (signal === undefined) return { valid: true, aborted: false };
+  if (isProxy(signal) || typeof ABORTED_GETTER !== 'function') {
+    return { valid: false, aborted: false };
+  }
+  try {
+    return { valid: true, aborted: Reflect.apply(ABORTED_GETTER, signal, []) === true };
+  } catch {
+    return { valid: false, aborted: false };
+  }
+}
+
+function addAbortListener(signal, listener) {
+  Reflect.apply(EVENT_TARGET_ADD, signal, ['abort', listener, { once: true }]);
+}
+
+function removeAbortListener(signal, listener) {
+  Reflect.apply(EVENT_TARGET_REMOVE, signal, ['abort', listener]);
 }
 
 function hrTimeToNanos(value) {
@@ -406,7 +430,7 @@ export function createNeatlogsSdkCapture(factoryOptions) {
         uploadAuthority: false,
         disableExport: false,
         mask: maskState.mask,
-        batchSize: NEATLOGS_SDK_MAPPING_LIMITS.totalSpans,
+        batchSize: SDK_BATCH_SIZE,
         flushInterval: 3600,
         spanExporter: exporter
       });
@@ -432,7 +456,9 @@ export function createNeatlogsSdkCapture(factoryOptions) {
       return safeFailure(error?.code ?? 'INVALID_CAPTURE_INPUT');
     }
     const signal = controls.signal;
-    if (signal?.aborted) return safeFailure('ABORTED_BEFORE_PREPARATION');
+    const initialSignalState = inspectAbortSignal(signal);
+    if (!initialSignalState.valid) return safeFailure('INVALID_CAPTURE_SIGNAL');
+    if (initialSignalState.aborted) return safeFailure('ABORTED_BEFORE_PREPARATION');
     if (hasUnsafeSdkEnvironment()) return safeFailure('UNSAFE_SDK_ENVIRONMENT');
 
     const request = {
@@ -449,21 +475,44 @@ export function createNeatlogsSdkCapture(factoryOptions) {
     activeRequest = request;
     let finishDone;
     request.done = new Promise(resolve => { finishDone = resolve; });
-    request.timeout = setTimeout(() => {
-      request.timedOut = true;
-      request.aborted = true;
-      request.abortReason = 'CAPTURE_TIMEOUT';
-    }, options.timeoutMs);
-    request.timeout.unref?.();
-    if (signal) {
-      request.abortListener = () => {
-        request.aborted = true;
-        request.abortReason = 'CAPTURE_ABORTED';
-      };
-      signal.addEventListener('abort', request.abortListener, { once: true });
-    }
-
+    let listenerRegistered = false;
     try {
+      request.timeout = setTimeout(() => {
+        if (!request.aborted) {
+          request.timedOut = true;
+          request.aborted = true;
+          request.abortReason = 'CAPTURE_TIMEOUT';
+        }
+      }, options.timeoutMs);
+      request.timeout.unref?.();
+      if (signal) {
+        request.abortListener = () => {
+          if (!request.aborted) {
+            request.aborted = true;
+            request.abortReason = 'CAPTURE_ABORTED';
+          }
+        };
+        try {
+          addAbortListener(signal, request.abortListener);
+          listenerRegistered = true;
+        } catch {
+          request.aborted = true;
+          request.abortReason = 'CAPTURE_SIGNAL_REGISTRATION_FAILED';
+        }
+        const registeredSignalState = inspectAbortSignal(signal);
+        if (!registeredSignalState.valid) {
+          request.aborted = true;
+          request.abortReason = 'INVALID_CAPTURE_SIGNAL';
+        } else if (registeredSignalState.aborted && !request.aborted) {
+          request.aborted = true;
+          request.abortReason = 'CAPTURE_ABORTED';
+        }
+      }
+      if (request.aborted) {
+        return safeFailure(request.abortReason ?? 'CAPTURE_ABORTED', {
+          generation: request.generation
+        });
+      }
       if (!(await ensureSdk(request))) {
         return safeFailure(request.aborted
           ? request.abortReason ?? 'CAPTURE_ABORTED'
@@ -553,10 +602,22 @@ export function createNeatlogsSdkCapture(factoryOptions) {
         counters: safeSdkCounters(client, maskState, exporter)
       });
     } finally {
-      clearTimeout(request.timeout);
-      if (signal && request.abortListener) signal.removeEventListener('abort', request.abortListener);
-      if (activeRequest === request) activeRequest = null;
-      finishDone();
+      try {
+        if (request.timeout !== null) clearTimeout(request.timeout);
+      } catch {
+        // Request release must not depend on caller-owned control cleanup.
+      } finally {
+        try {
+          if (listenerRegistered && signal && request.abortListener) {
+            removeAbortListener(signal, request.abortListener);
+          }
+        } catch {
+          // Ignore only cleanup errors; request work has already settled.
+        } finally {
+          if (activeRequest === request) activeRequest = null;
+          finishDone();
+        }
+      }
     }
   };
 

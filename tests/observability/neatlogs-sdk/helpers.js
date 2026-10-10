@@ -28,35 +28,7 @@ export function createTemporaryDirectory(prefix = 'neatlogs-sdk-local-') {
   };
 }
 
-export function createProjectedStoreEvents(databasePath) {
-  let generatedId = 0;
-  const store = DurableWorkflowStore.open({
-    databasePath,
-    clock: () => 2_000,
-    idFactory: () => `local-generated-${randomUUID()}-${++generatedId}`
-  });
-  const workflowId = `workflow:${SYNTHETIC_CANARIES[0]}`;
-  store.createWorkflow({
-    workflowId,
-    eventId: `event:${SYNTHETIC_CANARIES[0]}`,
-    checkpoint: {
-      customer: SYNTHETIC_CANARIES[3],
-      privateUrl: SYNTHETIC_CANARIES[1],
-      rawError: SYNTHETIC_CANARIES[4]
-    }
-  });
-  const lease = store.acquireLease({
-    workflowId,
-    ownerId: 'synthetic-local-worker',
-    ttlMs: 10_000,
-    eventId: `event:${SYNTHETIC_CANARIES[2]}`
-  });
-  store.transitionWorkflow({
-    ...lease,
-    expectedRevision: 0,
-    toState: 'running',
-    eventId: `event:${SYNTHETIC_CANARIES[5]}`
-  });
+export function projectStoreEvents(store) {
   const page = store.readEventPage({ afterSequence: 0, limit: 32 });
   const tokenizer = createHmacTokenizer(Buffer.alloc(32, 0x5a));
   const tokenize = tokenizer.tokenize.bind(tokenizer);
@@ -66,7 +38,49 @@ export function createProjectedStoreEvents(databasePath) {
   } finally {
     tokenizer.destroy?.();
   }
-  return { store, records, rawEventCount: page.events.length };
+  return { records, rawEventCount: page.events.length };
+}
+
+export function createProjectedStoreEvents(databasePath, { workflowCount = 1 } = {}) {
+  let generatedId = 0;
+  const store = DurableWorkflowStore.open({
+    databasePath,
+    clock: () => 2_000,
+    idFactory: () => `local-generated-${randomUUID()}-${++generatedId}`
+  });
+  if (!Number.isSafeInteger(workflowCount) || workflowCount < 1 || workflowCount > 32) {
+    store.close();
+    throw new TypeError('Synthetic workflow count must be from 1 through 32.');
+  }
+  for (let index = 0; index < workflowCount; index += 1) {
+    const suffix = index === 0 ? '' : `:${index}`;
+    const workflowId = `workflow:${SYNTHETIC_CANARIES[0]}${suffix}`;
+    store.createWorkflow({
+      workflowId,
+      eventId: `event:${SYNTHETIC_CANARIES[0]}${suffix}`,
+      checkpoint: {
+        customer: SYNTHETIC_CANARIES[3],
+        privateUrl: SYNTHETIC_CANARIES[1],
+        rawError: SYNTHETIC_CANARIES[4]
+      }
+    });
+    if (workflowCount === 1) {
+      const lease = store.acquireLease({
+        workflowId,
+        ownerId: 'synthetic-local-worker',
+        ttlMs: 10_000,
+        eventId: `event:${SYNTHETIC_CANARIES[2]}`
+      });
+      store.transitionWorkflow({
+        ...lease,
+        expectedRevision: 0,
+        toState: 'running',
+        eventId: `event:${SYNTHETIC_CANARIES[5]}`
+      });
+    }
+  }
+  const projected = projectStoreEvents(store);
+  return { store, ...projected };
 }
 
 function sanitizedEnvironment() {

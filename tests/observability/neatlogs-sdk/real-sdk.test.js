@@ -43,6 +43,9 @@ test('real Neatlogs 1.1.28 maps frozen synthetic durable events into a sanitized
   assert.equal(summary.sourceRecordCount, records.length);
   assert.equal(summary.rootSpanCount, records.length);
   assert.equal(summary.completionMarkerSpanCount, records.length);
+  assert.equal(summary.recursivelyFrozen, true);
+  assert.equal(summary.nestedCollectionMutationsRejected, true);
+  assert.equal(summary.serializedEnvelopeUnchangedAfterMutationAttempts, true);
   assert.equal(summary.networkGuard, guardMode);
   assert.equal(existsSync(artifactPath), true);
 

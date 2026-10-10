@@ -157,6 +157,15 @@ test('the total mask rebuilds a narrow envelope and strips ambient, input, outpu
   });
   assert.deepEqual({ ...result.status }, { code: 'UNSET', description: null });
   assert.equal(result.attributes['neatlogs.verification.marker'], undefined);
+  assert.equal(Object.isFrozen(result.events), true);
+  assert.equal(Object.isFrozen(result.links), true);
+  const frozenMaskOutput = JSON.stringify(result);
+  for (const collection of [result.events, result.links]) {
+    assert.throws(() => collection.push({ name: 'SYNTHETIC_MASK_MUTATION' }));
+    assert.equal(Reflect.set(collection, '0', { name: 'SYNTHETIC_MASK_INDEX' }), false);
+    assert.throws(() => collection.splice(0, 0, { name: 'SYNTHETIC_MASK_SPLICE' }));
+    assert.equal(JSON.stringify(result), frozenMaskOutput);
+  }
 
   const unknownEnvelope = { ...unsafe, unexpected: 'must-drop' };
   const unsafeResourceValue = {

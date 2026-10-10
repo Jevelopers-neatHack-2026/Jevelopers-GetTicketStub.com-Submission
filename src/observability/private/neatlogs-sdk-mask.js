@@ -207,8 +207,8 @@ function sanitizeSpanData(value) {
     : span.end_time - span.start_time;
   if (!finiteInteger(duration, 0, MAX_DURATION_NS)) throw new TypeError();
   const status = safeStatus(span.status);
-  const events = emptyArray(span.events);
-  const links = Object.hasOwn(span, 'links') ? emptyArray(span.links) : [];
+  const events = Object.freeze(emptyArray(span.events));
+  const links = Object.freeze(Object.hasOwn(span, 'links') ? emptyArray(span.links) : []);
   return Object.freeze({
     trace_id: span.trace_id,
     span_id: span.span_id,

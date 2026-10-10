@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -137,6 +138,33 @@ function verifySourcePins() {
 const records = JSON.parse(readFileSync(recordsPath, 'utf8'));
 const capture = createNeatlogsSdkCapture();
 const result = await capture.prepare(records);
+function recursivelyFrozen(value, seen = new Set()) {
+  if (value === null || typeof value !== 'object' || seen.has(value)) return true;
+  seen.add(value);
+  if (!Object.isFrozen(value)) return false;
+  return Reflect.ownKeys(value).every(key => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && Object.hasOwn(descriptor, 'value')
+      ? recursivelyFrozen(descriptor.value, seen)
+      : false;
+  });
+}
+
+let immutableCapture = false;
+if (result.status === 'captured_local') {
+  const beforeMutation = JSON.stringify(result.envelope);
+  const firstSpan = result.envelope.spans[0];
+  for (const collection of [firstSpan.events, firstSpan.links]) {
+    assert.equal(Object.isFrozen(collection), true);
+    assert.throws(() => collection.push({ name: 'SYNTHETIC_POST_VALIDATION_CANARY' }));
+    assert.equal(Reflect.set(collection, '0', { name: 'SYNTHETIC_INDEX_CANARY' }), false);
+    assert.throws(() => collection.splice(0, 0, { name: 'SYNTHETIC_SPLICE_CANARY' }));
+    assert.equal(JSON.stringify(result.envelope), beforeMutation);
+  }
+  assert.equal(JSON.stringify(result.envelope).includes('SYNTHETIC_'), false);
+  immutableCapture = recursivelyFrozen(result);
+  assert.equal(immutableCapture, true);
+}
 const closeResult = await capture.close();
 if (result.status !== 'captured_local' || closeResult.sdkShutdownCompleted !== true) {
   process.stdout.write(`${JSON.stringify({
@@ -183,6 +211,9 @@ if (result.status !== 'captured_local' || closeResult.sdkShutdownCompleted !== t
     sourceRecordCount: result.envelope.sourceRecordCount,
     rootSpanCount: result.envelope.rootSpanCount,
     completionMarkerSpanCount: result.envelope.completionMarkerSpanCount,
+    recursivelyFrozen: immutableCapture,
+    nestedCollectionMutationsRejected: true,
+    serializedEnvelopeUnchangedAfterMutationAttempts: true,
     networkGuard,
     artifactPath: relative(process.cwd(), artifactPath),
     artifactSha256
