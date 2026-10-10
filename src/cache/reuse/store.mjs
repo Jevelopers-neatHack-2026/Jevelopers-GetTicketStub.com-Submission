@@ -8,6 +8,7 @@ import {
 import { DatabaseSync } from 'node:sqlite';
 import { chmod, lstat, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { types as utilTypes } from 'node:util';
 import { isPrivacyBoundary } from '../../privacy/boundary.mjs';
 
 const ERROR_MESSAGES = Object.freeze({
@@ -35,6 +36,7 @@ const PERMISSION_FIELDS = new Set(['reference', 'contentHash', 'version', 'use']
 const PRIVATE_FACT_FIELDS = new Set(['status', 'value', 'reason', 'supportRefs', 'candidates']);
 const MAX_TIME = 8_640_000_000_000_000;
 const MAX_INVALIDATION_RECORD_BYTES = 2_048;
+const IS_PROXY = utilTypes.isProxy;
 const ABORTED_GETTER = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
 const TYPED_ARRAY_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype);
 const TYPED_ARRAY_TAG_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTOTYPE, Symbol.toStringTag).get;
@@ -156,7 +158,13 @@ function iso(value) {
 
 function signalAborted(signal) {
   if (signal === undefined) return false;
-  try { return ABORTED_GETTER.call(signal); } catch { fail('REUSE_INVALID'); }
+  try {
+    if (IS_PROXY(signal)) fail('REUSE_INVALID');
+    return ABORTED_GETTER.call(signal);
+  } catch (error) {
+    if (TRUSTED_ERRORS.has(error)) throw error;
+    fail('REUSE_INVALID');
+  }
 }
 
 function copyFacts(value, publicOnly = false) {

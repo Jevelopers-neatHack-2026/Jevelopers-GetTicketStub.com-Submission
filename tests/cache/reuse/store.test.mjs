@@ -174,6 +174,7 @@ async function putPublic(store, authRequest, boundaryData, input = {}) {
     pins: input.pins ?? PINS,
     observation: input.observation ?? Object.freeze({ source: 'opaque-host-observation' }),
     ...(input.freshnessTtlMs ? { freshnessTtlMs: input.freshnessTtlMs } : {}),
+    ...(input.signal ? { signal: input.signal } : {}),
   });
   return { scope, authRequest, profile, lookup: { identity: input.identity ?? IDENTITY, contentHash: input.contentHash ?? HASH_A, pins: input.pins ?? PINS } };
 }
@@ -576,20 +577,110 @@ test('cancellation during retention resolution leaves no visible profile', async
   assert.equal((await env.store.integritySnapshot(scope, request())).entryCount, 0);
 });
 
-test('signal checks use the intrinsic AbortSignal state and sanitize proxy failures', async (t) => {
+test('signal checks ignore own overrides and reject proxy inputs before profile admission', async (t) => {
   const env = await fixture(t);
   const shadowedSignal = new AbortController().signal;
   Object.defineProperty(shadowedSignal, 'aborted', { get() { throw new Error('SECRET_SIGNAL_GETTER'); } });
-  const created = await putPrivate(env.store, request(), { signal: shadowedSignal });
+  const created = await putPrivate(env.store, request(), { identity: { ...IDENTITY, editionId: 'shadowed-signal' }, signal: shadowedSignal });
   assert.equal(created.profile.status, 'stored');
 
   const scope = await env.store.scopeForAuthenticatedRequest(request());
-  const proxySignal = new Proxy(new AbortController().signal, { get() { throw new Error('SECRET_SIGNAL_PROXY'); } });
+  const transparent = new Proxy(new AbortController().signal, {});
+  const forwarding = new Proxy(new AbortController().signal, {
+    get(target, key, receiver) { return Reflect.get(target, key, receiver); },
+  });
+  let throwingProxyRead = false;
+  const throwing = new Proxy(new AbortController().signal, { get() { throwingProxyRead = true; throw new Error('SECRET_SIGNAL_PROXY'); } });
+  const controller = new AbortController();
+  const abortedSymbol = Object.getOwnPropertySymbols(controller.signal).find((symbol) => symbol.description === 'kAborted');
+  assert.ok(abortedSymbol, 'Node 22 AbortSignal state symbol is available for the masking regression');
+  controller.abort();
+  const masked = new Proxy(controller.signal, {
+    get(target, key, receiver) { return key === abortedSymbol ? false : Reflect.get(target, key, receiver); },
+  });
+  assert.equal(controller.signal.aborted, true);
+  assert.equal(Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get.call(masked), false,
+    'the Node 22 intrinsic getter alone accepts the state-masking proxy');
+
+  for (const [index, signal] of [transparent, forwarding, throwing, masked].entries()) {
+    await assert.rejects(env.store.putPrivateProfile(scope, request(), {
+      identity: { ...IDENTITY, editionId: `proxy-signal-${index}` }, contentHash: HASH_A, pins: PINS,
+      facts: facts(), observation: {}, signal,
+    }), (error) => error.code === 'REUSE_INVALID' && !error.message.includes('SECRET_SIGNAL'));
+  }
+  const alreadyAborted = new AbortController();
+  alreadyAborted.abort();
   await assert.rejects(env.store.putPrivateProfile(scope, request(), {
-    identity: { ...IDENTITY, editionId: 'proxy-signal-edition' }, contentHash: HASH_A, pins: PINS,
-    facts: facts(), observation: {}, signal: proxySignal,
-  }), (error) => error.code === 'REUSE_INVALID' && !error.message.includes('SECRET_SIGNAL'));
+    identity: { ...IDENTITY, editionId: 'already-aborted-signal' }, contentHash: HASH_A, pins: PINS,
+    facts: facts(), observation: {}, signal: alreadyAborted.signal,
+  }), (error) => error.code === 'REUSE_DENIED');
+  assert.equal(throwingProxyRead, false, 'proxy properties are never inspected');
   assert.equal((await env.store.integritySnapshot(scope, request())).entryCount, 1);
+  assert.equal((await env.store.integritySnapshot(scope, request())).eligibleEntryCount, 1);
+});
+
+test('public profile admission rejects forwarding and aborted-state masking proxies without writes', async (t) => {
+  const env = await fixture(t, {
+    authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }),
+  });
+  const authRequest = request();
+  const scope = await env.store.scopeForAuthenticatedRequest(authRequest);
+  const controller = new AbortController();
+  const abortedSymbol = Object.getOwnPropertySymbols(controller.signal).find((symbol) => symbol.description === 'kAborted');
+  assert.ok(abortedSymbol);
+  controller.abort();
+  const signals = [
+    new Proxy(new AbortController().signal, { get(target, key, receiver) { return Reflect.get(target, key, receiver); } }),
+    new Proxy(controller.signal, { get(target, key, receiver) { return key === abortedSymbol ? false : Reflect.get(target, key, receiver); } }),
+  ];
+  for (const [index, signal] of signals.entries()) {
+    const boundaryData = await approvedBoundary(authRequest);
+    await assert.rejects(putPublic(env.store, authRequest, boundaryData, {
+      identity: { ...IDENTITY, editionId: `public-proxy-${index}` }, signal,
+    }), (error) => error.code === 'REUSE_INVALID');
+  }
+  assert.equal((await env.store.integritySnapshot(scope, authRequest)).entryCount, 0);
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_entries WHERE scope_kind = \'public_profile\'').get().count, 0);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_private_links').get().count, 0);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_observations').get().count, 0);
+  } finally { database.close(); }
+});
+
+test('dispatch rejects proxy cancellation inputs before claiming or delivering an event', async (t) => {
+  const env = await fixture(t);
+  const created = await putPrivate(env.store);
+  await env.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change',
+  });
+  const controller = new AbortController();
+  const abortedSymbol = Object.getOwnPropertySymbols(controller.signal).find((symbol) => symbol.description === 'kAborted');
+  assert.ok(abortedSymbol);
+  controller.abort();
+  const signals = [
+    new Proxy(new AbortController().signal, {}),
+    new Proxy(controller.signal, { get(target, key, receiver) { return key === abortedSymbol ? false : Reflect.get(target, key, receiver); } }),
+  ];
+  for (const signal of signals) {
+    await assert.rejects(
+      env.store.dispatchPendingInvalidations(created.scope, created.authRequest, 20, 'tenant_private', signal),
+      (error) => error.code === 'REUSE_INVALID',
+    );
+  }
+  const alreadyAborted = new AbortController();
+  alreadyAborted.abort();
+  await assert.rejects(
+    env.store.dispatchPendingInvalidations(created.scope, created.authRequest, 20, 'tenant_private', alreadyAborted.signal),
+    (error) => error.code === 'REUSE_DENIED',
+  );
+  assert.equal(env.state.delivered, null);
+  assert.equal((await env.store.outboxSnapshot(created.scope, created.authRequest)).pending, 1);
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    const row = database.prepare('SELECT status, attempt_count, active_attempt_id FROM reuse_outbox WHERE entry_id = ?').get(created.profile.profileRef);
+    assert.deepEqual({ ...row }, { status: 'pending', attempt_count: 0, active_attempt_id: null });
+  } finally { database.close(); }
 });
 
 test('serialized encrypted payload size is bounded before committing', async (t) => {
