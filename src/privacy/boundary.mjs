@@ -236,12 +236,15 @@ export function createPrivacyBoundary(options = {}) {
   }
 
   function stateAfterMissingEntry(sessionInfo) {
+    const controller = sessionInfo.abortController;
     sessionInfo.generation += 1;
     sessionInfo.pendingFacts = null;
-    sessionInfo.abortController?.abort();
     sessionInfo.abortController = null;
     sessionInfo.state = 'expired';
     sessionInfo.reasonCode = 'source_expired';
+    // Commit the terminal state before abort dispatch, which synchronously runs
+    // listeners that may reenter this boundary.
+    controller?.abort();
   }
 
   function refreshSessionRetention(info, sessionInfo) {
@@ -331,11 +334,14 @@ export function createPrivacyBoundary(options = {}) {
     const finish = () => createResult(info, state);
     const quarantine = (reasonCode) => {
       if (!isCurrentAttempt(state, generation)) return finish();
-      controller.abort();
-      if (state.abortController === controller) state.abortController = null;
+      const abortController = state.abortController;
+      state.abortController = null;
       state.pendingFacts = null;
       state.state = 'quarantined';
       state.reasonCode = reasonCode;
+      // Abort listeners may cancel synchronously. The quarantine transition is
+      // committed first so a later successful cancellation remains terminal.
+      abortController?.abort();
       return finish();
     };
 
@@ -449,14 +455,16 @@ export function createPrivacyBoundary(options = {}) {
     const { info, state } = requireSession(scope, session);
     refreshSessionRetention(info, state);
     if (state.state === 'published' || state.state === 'cancelled' || state.state === 'expired') return false;
+    const controller = state.abortController;
     state.generation += 1;
-    state.abortController?.abort();
     state.abortController = null;
     state.pendingFacts = null;
     state.derivative = null;
     state.state = 'cancelled';
     state.reasonCode = 'cancelled';
     retained.delete(state.token);
+    // Make cancellation observable before synchronously notifying listeners.
+    controller?.abort();
     return true;
   }
 

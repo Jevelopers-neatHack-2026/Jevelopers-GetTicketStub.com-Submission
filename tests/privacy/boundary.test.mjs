@@ -326,6 +326,76 @@ test('review decision and facts Proxy cancellation cannot overwrite terminal sta
   }
 });
 
+test('abort-listener cancellation during quarantine remains terminal for rejected and throwing reviewers', async (t) => {
+  for (const reviewerFailure of ['rejected decision', 'throw']) {
+    await t.test(reviewerFailure, async () => {
+      let boundary;
+      let scope;
+      let source;
+      const cancellationResults = [];
+      const fixture = fixtureBoundary({
+        reviewPublicFacts(input) {
+          input.signal.addEventListener('abort', () => {
+            cancellationResults.push(boundary.cancel(scope, source.session));
+          });
+          if (reviewerFailure === 'throw') throw new Error('private reviewer failure');
+          return { status: 'rejected', tenantId: input.tenantId, sourceDigest: input.sourceDigest };
+        },
+      });
+      boundary = fixture.boundary;
+      scope = fixture.scopeA;
+      const flows = createPrivacyFlows(boundary);
+      source = boundary.begin(scope, { modality: 'plain_text', content: 'Private fixture' });
+
+      const result = await boundary.prepare(scope, source.session, {});
+      const diagnostic = boundary.diagnostics(scope, result);
+      assert.deepEqual(cancellationResults, [true]);
+      assert.equal(diagnostic.state, 'cancelled');
+      assert.equal(diagnostic.reasonCode, 'cancelled');
+      assert.equal(boundary.sessionState(scope, source.session), 'cancelled');
+      assert.equal(boundary.retainedOriginalCount(), 0);
+      assert.throws(() => boundary.publish(scope, source.session), /private evidence unavailable/);
+
+      const telemetry = flows.diagnostic.record(scope, result);
+      const serialized = JSON.parse(flows.serialize(scope, { telemetryValues: [telemetry] }));
+      assert.equal(serialized.telemetry[0].state, 'cancelled');
+      assert.equal(serialized.telemetry[0].reasonCode, 'cancelled');
+    });
+  }
+});
+
+test('explicit cancellation commits before dispatching reentrant abort listeners', async () => {
+  let boundary;
+  let source;
+  let entered;
+  let release;
+  const listenerResults = [];
+  const started = new Promise((resolve) => { entered = resolve; });
+  const blocked = new Promise((resolve) => { release = resolve; });
+  const fixture = fixtureBoundary({
+    reviewPublicFacts: async (input) => {
+      input.signal.addEventListener('abort', () => {
+        listenerResults.push(boundary.cancel(fixture.scopeA, source.session));
+      });
+      entered();
+      await blocked;
+      return { status: 'approved', tenantId: input.tenantId, sourceDigest: input.sourceDigest, facts: { event_name: 'Fixture' } };
+    },
+  });
+  boundary = fixture.boundary;
+  source = boundary.begin(fixture.scopeA, { modality: 'plain_text', content: 'Fixture' });
+  const pending = boundary.prepare(fixture.scopeA, source.session, {});
+  await started;
+
+  assert.equal(boundary.cancel(fixture.scopeA, source.session), true);
+  assert.deepEqual(listenerResults, [false]);
+  release();
+  const result = await pending;
+  assert.equal(boundary.diagnostics(fixture.scopeA, result).state, 'cancelled');
+  assert.equal(boundary.sessionState(fixture.scopeA, source.session), 'cancelled');
+  assert.equal(boundary.retainedOriginalCount(), 0);
+});
+
 test('concurrent prepare is single-flight and cancellation cannot be overwritten by a late result', async () => {
   let release;
   let entered;
@@ -394,24 +464,34 @@ test('expiry is authoritative across restart, prepare, purge, and the post-revie
   await t.test('expiry while reviewer is awaiting prevents commit and clears the original', async () => {
     let release;
     let entered;
+    let boundary;
+    let source;
+    const cancellationResults = [];
     const blocked = new Promise((resolve) => { release = resolve; });
     const started = new Promise((resolve) => { entered = resolve; });
     const text = 'Delayed fixture event';
-    const { boundary, scopeA, time } = fixtureBoundary({ reviewPublicFacts: async (input) => {
+    const fixture = fixtureBoundary({ reviewPublicFacts: async (input) => {
+      input.signal.addEventListener('abort', () => {
+        cancellationResults.push(boundary.cancel(fixture.scopeA, source.session));
+      });
       entered();
       await blocked;
       return { status: 'approved', tenantId: input.tenantId, sourceDigest: input.sourceDigest, facts: { event_name: 'Delayed Fixture' } };
     } });
-    const source = boundary.begin(scopeA, { modality: 'plain_text', content: text });
-    const pending = boundary.prepare(scopeA, source.session, {});
+    boundary = fixture.boundary;
+    source = boundary.begin(fixture.scopeA, { modality: 'plain_text', content: text });
+    const pending = boundary.prepare(fixture.scopeA, source.session, {});
     await started;
-    time.value += 10_000;
+    fixture.time.value += 10_000;
     assert.equal(boundary.purgeExpired(), 1);
     release();
     const result = await pending;
-    assert.equal(boundary.diagnostics(scopeA, result).state, 'expired');
+    assert.deepEqual(cancellationResults, [false]);
+    assert.equal(boundary.diagnostics(fixture.scopeA, result).state, 'expired');
+    assert.equal(boundary.diagnostics(fixture.scopeA, result).reasonCode, 'source_expired');
+    assert.equal(boundary.sessionState(fixture.scopeA, source.session), 'expired');
     assert.equal(boundary.retainedOriginalCount(), 0);
-    assert.throws(() => boundary.publish(scopeA, source.session), /private evidence unavailable/);
+    assert.throws(() => boundary.publish(fixture.scopeA, source.session), /private evidence unavailable/);
   });
 
   await t.test('expiry after preparation but before publication prevents derivative creation', async () => {
