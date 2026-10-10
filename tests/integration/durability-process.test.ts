@@ -341,3 +341,63 @@ for (const mode of [
 		});
 	});
 }
+
+for (const retryable of [false, true]) {
+	test(`reconciles committed publication after SIGKILL and restart before fail(${retryable})`, async () => {
+		using f = fixture();
+		const running = child(f.path, "job-uncertain");
+		const checkpoint = parse(
+			z.object({
+				value: z.object({
+					job: idSchema,
+					publication: idSchema,
+					claim: z.object({
+						job: idSchema,
+						ordinal: z.number(),
+						operation: idSchema,
+						attempt: idSchema,
+						stage: idSchema,
+						fence: z.number(),
+					}),
+				}),
+			}),
+			await running.message,
+		).value;
+		await kill(running.process, running.exited);
+		using restart = new DurabilityDatabase(f.path, undefined, () => 1001);
+		const jobs = new DurableBatchEngine(restart);
+		const before = new ObservationOutbox(restart).list(scope);
+		jobs.fail(
+			scope,
+			{ ...checkpoint.claim, input: Buffer.alloc(0), pins: Buffer.alloc(0) },
+			retryable,
+		);
+		const row = jobs.inventory(scope, checkpoint.job)[0];
+		assert.equal(jobs.job(scope, checkpoint.job).status, "succeeded");
+		assert.equal(row?.publication, checkpoint.publication);
+		assert.equal(row?.attempts, 1);
+		assert.equal(jobs.claim(scope), null);
+		const events = new ObservationOutbox(restart).list(scope);
+		assert.deepEqual(events.slice(0, before.length), before);
+		assert.ok(
+			events.some(
+				(e) =>
+					e.kind === "succeeded" &&
+					e.attempt === checkpoint.claim.attempt &&
+					e.publication === checkpoint.publication,
+			),
+		);
+		assert.equal(
+			restart.sql
+				.prepare("SELECT outcome FROM attempts WHERE id=?")
+				.get(checkpoint.claim.attempt)?.["outcome"],
+			"succeeded",
+		);
+		evidence(`uncertain-fail-${retryable}`, {
+			killedSignal: "SIGKILL",
+			checkpoint,
+			row,
+			observations: events,
+		});
+	});
+}

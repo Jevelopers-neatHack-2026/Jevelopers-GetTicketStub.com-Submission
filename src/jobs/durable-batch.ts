@@ -483,6 +483,25 @@ export class DurableBatchEngine {
 	fail(scope: Scope, claim: RowClaim, retryable: boolean): void {
 		this.db.transaction(() => {
 			const row = this.fenced(scope, claim);
+			const publication = this.store.publicationInTransaction(
+				scope,
+				row.operation,
+			);
+			if (publication) {
+				this.db.sql
+					.prepare(
+						"UPDATE rows SET status='succeeded',publication=?,code=NULL,lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
+					)
+					.run(publication.id, row.job, row.ordinal);
+				this.endAttempt(
+					{ ...row, publication: publication.id },
+					"succeeded",
+					null,
+					false,
+				);
+				this.finish(scope, row.job);
+				return;
+			}
 			const code = retryable ? "RENDER_RETRYABLE" : "RENDER_PERMANENT";
 			const retry = retryable && row.attempts < this.db.limits.maxAttempts;
 			this.endAttempt(row, retry ? "retryable" : "failed", code, true);
