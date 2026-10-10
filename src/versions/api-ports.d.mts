@@ -1,5 +1,6 @@
 import type {
   CreativeContextFence,
+  CreativeInvalidationResult,
   CreativeOperation,
   CreativePublicationTransaction,
   CreativeRuntimePorts,
@@ -13,8 +14,14 @@ import type { CreativeVersionStore, VersionScope } from "./store.mjs";
 
 type BaseStorage = NonNullable<CreativeRuntimePorts["storage"]>;
 type BaseJobs = NonNullable<CreativeRuntimePorts["jobs"]>;
+type BasePlanning = NonNullable<CreativeRuntimePorts["planning"]>;
 
 export interface CreativeVersionRuntimeStorage extends BaseStorage {
+  getBriefVersionByHash(input: { scope: TrustedScope; brief_id: string; brief_hash: string }):
+    Promise<import("../contracts/creative/v1.mjs").CreativeBrief | null> |
+    import("../contracts/creative/v1.mjs").CreativeBrief | null;
+  isBriefUsable(input: { scope: TrustedScope; brief_id: string; brief_hash: string }): Promise<boolean> | boolean;
+  isAssetFenced(input: { scope: TrustedScope; asset_id: string; content_hash: string }): Promise<boolean> | boolean;
   prepareDesignVersion(input: {
     scope: TrustedScope;
     brief_id: string;
@@ -55,10 +62,29 @@ export interface CreativeVersionRuntimeJobs extends BaseJobs {
       { status: "cancelled" | "stale_context"; job?: NonNullable<Awaited<ReturnType<BaseJobs["get"]>>> }>;
 }
 
-export type CreativeVersionRuntimePorts = Omit<CreativeRuntimePorts, "storage" | "jobs"> & {
+export type CreativeVersionRuntimePorts = Omit<CreativeRuntimePorts, "storage" | "jobs" | "planning"> & {
   storage: CreativeVersionRuntimeStorage;
   jobs: CreativeVersionRuntimeJobs;
+  planning: CreativeVersionRuntimePlanning;
 };
+
+export interface CreativeVersionRuntimePlanning extends Omit<BasePlanning, "applyInvalidation"> {
+  getBriefAction(input: { scope: import("../planning/index.mjs").PlanningScope; actor_id: string; action_id: string;
+    request_hash: string }): Promise<Readonly<{ status: "conflict" }> |
+      Readonly<{ status: "replayed"; brief_hash: string; plan: import("../planning/index.mjs").CreativeBriefPlan }> | null>;
+  saveBriefAction(input: { scope: import("../planning/index.mjs").PlanningScope; actor_id: string; action_id: string;
+    request_hash: string; plan: import("../planning/index.mjs").CreativeBriefPlan; expected_brief_hash: string | null }):
+    ReturnType<NonNullable<BasePlanning["saveBriefAction"]>>;
+  getBriefVersionByHash(input: { scope: import("../planning/index.mjs").PlanningScope; brief_id: string; brief_hash: string }):
+    Promise<import("../contracts/creative/v1.mjs").CreativeBrief | null> |
+    import("../contracts/creative/v1.mjs").CreativeBrief | null;
+  isBriefUsable(input: { scope: import("../planning/index.mjs").PlanningScope; brief_id: string; brief_hash: string }):
+    Promise<boolean> | boolean;
+  applyInvalidation(input: { trusted_scope: import("../planning/index.mjs").PlanningScope; actor_id: string;
+    action_id: string; operation: "brief.invalidate"; request_hash: string; event_id: string }):
+    Promise<Readonly<{ public_action_status: "conflict" }> |
+      Readonly<{ public_action_status: "completed" | "pending" | "replayed"; invalidation: CreativeInvalidationResult }>>;
+}
 
 export interface CreateCreativeVersionApiPortsOptions {
   store: CreativeVersionStore;

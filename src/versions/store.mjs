@@ -15,8 +15,10 @@ import {
   readContentAddressedObject,
   writeContentAddressedObject,
 } from "../storage/content-addressed.mjs";
+import { createCreativeBriefStore } from "../planning/index.mjs";
+import { initializeCreativeBriefDatabase } from "../planning/store.mjs";
 
-const STORAGE_VERSION = 3;
+const STORAGE_VERSION = 4;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9_.:-]{1,256}$/;
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -139,6 +141,10 @@ function selectionRequest(value, design) {
     if (design.parent_version_id === null) reject("invalid_request", "selection.mode");
     if (Object.hasOwn(value, "expected_revision") || Object.hasOwn(value, "expected_selected_design_version_id") ||
       Object.hasOwn(value, "expected_selected_design_hash")) reject("invalid_request", "selection");
+  }
+  if (value.mode === "advance" && design.parent_version_id !== value.expected_selected_design_version_id &&
+    !(design.parent_version_id === null && value.expected_selected_design_version_id !== null)) {
+    reject("stale_version", "design_version.parent_version_id");
   }
   return deepFreeze(snapshotJson(value));
 }
@@ -274,6 +280,7 @@ function publicationFenceCurrent(store, scope, fence) {
   try {
     const brief = store.getBrief({ scope, brief_id: scope.brief_id });
     if (!brief || canonicalHash(brief) !== fence.brief_hash) return false;
+    if (!store.isBriefUsable({ scope, brief_id: scope.brief_id, brief_hash: fence.brief_hash })) return false;
     if (fence.design_version_id !== undefined) {
       const design = store.getDesignVersion({ scope, brief_id: scope.brief_id,
         design_version_id: reference(fence.design_version_id, "publication_fence.design_version_id") });
@@ -322,7 +329,7 @@ function readStoredObjectSync(objectRoot, contentHash) {
 
 function makeSchema(db) {
   const version = db.prepare("PRAGMA user_version").get().user_version;
-  if (![0, 1, 2, STORAGE_VERSION].includes(version)) {
+  if (![0, 1, 2, 3, STORAGE_VERSION].includes(version)) {
     db.close();
     reject("unsupported_version", "storage_version");
   }
@@ -339,6 +346,46 @@ function makeSchema(db) {
       updated_at TEXT NOT NULL,
       PRIMARY KEY(tenant_id, project_id, brief_id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS creative_brief_actions (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      request_hash TEXT NOT NULL,
+      brief_id TEXT NOT NULL,
+      brief_hash TEXT NOT NULL,
+      result_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id, project_id, action_id)
+    ) STRICT;
+    CREATE TRIGGER IF NOT EXISTS creative_brief_actions_no_update
+      BEFORE UPDATE ON creative_brief_actions BEGIN SELECT RAISE(ABORT,'brief actions are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS creative_brief_actions_no_delete
+      BEFORE DELETE ON creative_brief_actions BEGIN SELECT RAISE(ABORT,'brief actions are immutable'); END;
+    CREATE TABLE IF NOT EXISTS creative_invalidation_actions (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      operation TEXT NOT NULL CHECK(operation='brief.invalidate'),
+      request_hash TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending','completed')),
+      result_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,action_id),
+      CHECK((status='pending' AND result_json IS NULL) OR (status='completed' AND result_json IS NOT NULL))
+    ) STRICT;
+    CREATE TRIGGER IF NOT EXISTS creative_invalidation_actions_transition
+      BEFORE UPDATE ON creative_invalidation_actions
+      WHEN OLD.status!='pending' OR NEW.status!='completed' OR
+        NEW.tenant_id!=OLD.tenant_id OR NEW.project_id!=OLD.project_id OR NEW.action_id!=OLD.action_id OR
+        NEW.actor_id!=OLD.actor_id OR NEW.operation!=OLD.operation OR NEW.request_hash!=OLD.request_hash OR
+        NEW.event_id!=OLD.event_id OR NEW.created_at!=OLD.created_at
+      BEGIN SELECT RAISE(ABORT,'invalidation action identity is immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS creative_invalidation_actions_no_delete
+      BEFORE DELETE ON creative_invalidation_actions BEGIN SELECT RAISE(ABORT,'invalidation actions are immutable'); END;
     CREATE TABLE IF NOT EXISTS creative_jobs (
       tenant_id TEXT NOT NULL,
       project_id TEXT NOT NULL,
@@ -488,6 +535,7 @@ export class CreativeVersionStore {
     try {
       this.db = new DatabaseSync(this.databasePath);
       makeSchema(this.db);
+      initializeCreativeBriefDatabase(this.db);
     } catch (error) {
       if (error instanceof VersionStoreError) throw error;
       reject("unavailable", "database", true);
@@ -512,6 +560,53 @@ export class CreativeVersionStore {
     return new Date(value).toISOString();
   }
 
+  planningStore(scope) {
+    this.assertOpen();
+    return createCreativeBriefStore({ database: this.db, trustedScope: scope });
+  }
+
+  #assertBriefNotInvalidated(scope, brief) {
+    const packageRef = brief.research_package_ref;
+    const store = this.planningStore(scope);
+    if (store.isPackageFenced(scope.tenant_id, scope.project_id, packageRef.package_id, packageRef.content_hash)) {
+      reject("stale_version", "brief.source_package_ref");
+    }
+    for (const fact of [...(brief.facts?.verified ?? []), ...(brief.facts?.unresolved ?? [])]) {
+      if (store.isFactFenced(scope.tenant_id, scope.project_id, packageRef.package_id, packageRef.content_hash, fact.fact_id)) {
+        reject("stale_version", "brief.facts");
+      }
+    }
+  }
+
+  isBriefUsable({ scope: inputScope, brief_id, brief_hash = undefined }) {
+    this.assertOpen();
+    const scope = validScope(inputScope, brief_id);
+    const brief = this.getBrief({ scope, brief_id: scope.brief_id });
+    if (!brief || (brief_hash !== undefined && canonicalHash(brief) !== brief_hash)) return false;
+    try {
+      this.#assertBriefNotInvalidated(scope, brief);
+      return true;
+    } catch (error) {
+      if (error instanceof VersionStoreError && error.code === "stale_version") return false;
+      throw error;
+    }
+  }
+
+  isAssetFenced({ scope: inputScope, asset_id, content_hash }) {
+    this.assertOpen();
+    const scope = validScope(inputScope, inputScope?.brief_id ?? "asset-check");
+    return this.planningStore(scope).isAssetFenced(scope.tenant_id, scope.project_id, asset_id, content_hash);
+  }
+
+  getBriefVersionByHash({ scope: inputScope, brief_id, brief_hash }) {
+    this.assertOpen();
+    const scope = validScope(inputScope, brief_id);
+    hash(brief_hash, "brief_hash");
+    const version = this.planningStore(scope).getBriefHistory(scope.brief_id)
+      .find((item) => item.brief_hash === brief_hash);
+    return version ? freezeReturned(version.brief) : null;
+  }
+
   getBrief({ scope: inputScope, brief_id }) {
     this.assertOpen();
     const scope = validScope(inputScope, brief_id);
@@ -522,7 +617,61 @@ export class CreativeVersionStore {
     const brief = snapshotJson(JSON.parse(row.brief_json), "integrity_error", "brief_snapshot");
     const validated = validateCreativeBrief(brief, { trustedScope: scope });
     if (canonicalHash(validated) !== row.brief_hash) reject("integrity_error", "brief_hash");
+    const historyStore = this.planningStore(scope);
+    let history = historyStore.getBriefHistory(scope.brief_id);
+    if (history.length === 0) {
+      // Supported migration path for a validated legacy head: copy its exact
+      // canonical CreativeBrief and hash into immutable history. This adds no
+      // source verification or rights claim that was not already stored.
+      historyStore.appendBriefVersion({ brief: validated, brief_hash: row.brief_hash,
+        created_at: validated.occurred_at });
+      history = historyStore.getBriefHistory(scope.brief_id);
+    }
+    if (history.at(-1)?.brief_hash !== row.brief_hash) reject("integrity_error", "brief_history.head");
     return freezeReturned(validated);
+  }
+
+  getBriefAction({ scope: inputScope, actor_id, action_id, request_hash }) {
+    this.assertOpen();
+    if (!isRecord(inputScope)) reject("scope_denied", "scope");
+    const tenant_id = reference(inputScope.tenant_id, "scope.tenant_id");
+    const project_id = reference(inputScope.project_id, "scope.project_id");
+    const actorId = reference(actor_id, "actor_id");
+    const actionId = reference(action_id, "action_id");
+    const requestHash = hash(request_hash, "request_hash");
+    const prior = this.db.prepare(`SELECT actor_id,request_hash,brief_id,brief_hash,result_json
+      FROM creative_brief_actions WHERE tenant_id=? AND project_id=? AND action_id=?`)
+      .get(tenant_id, project_id, actionId);
+    if (!prior) return null;
+    if (prior.actor_id !== actorId || prior.request_hash !== requestHash) return freezeReturned({ status: "conflict" });
+    const plan = snapshotJson(JSON.parse(prior.result_json), "integrity_error", "brief_action.result");
+    const briefId = reference(plan?.brief?.brief_id, "brief_action.brief_id");
+    if (briefId !== prior.brief_id || prior.brief_hash !== plan.brief_hash) reject("integrity_error", "brief_action.identity");
+    const scope = validScope({ tenant_id, project_id }, briefId);
+    const brief = validateCreativeBrief(plan.brief, { trustedScope: scope });
+    const { plan_hash: planHash, ...planBody } = plan;
+    if (canonicalHash(brief) !== prior.brief_hash || planHash !== canonicalHash(planBody)) {
+      reject("integrity_error", "brief_action.plan_hash");
+    }
+    return freezeReturned({ status: "replayed", brief_hash: prior.brief_hash, plan });
+  }
+
+  #persistBrief(scope, brief, expectedBriefHash) {
+    const current = this.getBrief({ scope, brief_id: brief.brief_id });
+    const currentHash = current ? canonicalHash(current) : null;
+    if (currentHash !== expectedBriefHash) return freezeReturned({ status: "stale", brief_hash: currentHash });
+    this.#assertBriefNotInvalidated(scope, brief);
+    if (currentHash === canonicalHash(brief)) return freezeReturned({ status: "saved", brief_hash: currentHash });
+    const historyStore = this.planningStore(scope);
+    if (historyStore.getBriefHistory(brief.brief_id).some((item) => item.brief_hash === canonicalHash(brief))) {
+      reject("stale_version", "brief_history.reactivation");
+    }
+    historyStore.appendBriefVersion({ brief, brief_hash: canonicalHash(brief), created_at: brief.occurred_at });
+    this.db.prepare(`INSERT INTO creative_briefs (tenant_id,project_id,brief_id,brief_hash,brief_json,updated_at)
+      VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,project_id,brief_id) DO UPDATE SET
+      brief_hash=excluded.brief_hash,brief_json=excluded.brief_json,updated_at=excluded.updated_at`)
+      .run(scope.tenant_id, scope.project_id, scope.brief_id, canonicalHash(brief), canonicalSerialize(brief), this.timestamp());
+    return freezeReturned({ status: "saved", brief_hash: canonicalHash(brief) });
   }
 
   putBrief({ scope: inputScope, brief: briefInput, expected_brief_hash = null }) {
@@ -535,23 +684,144 @@ export class CreativeVersionStore {
     if (expected_brief_hash !== null) hash(expected_brief_hash, "expected_brief_hash");
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const old = this.db.prepare(`SELECT brief_hash FROM creative_briefs
-        WHERE tenant_id=? AND project_id=? AND brief_id=?`)
-        .get(scope.tenant_id, scope.project_id, scope.brief_id);
-      if ((old?.brief_hash ?? null) !== expected_brief_hash) {
-        this.db.exec("ROLLBACK");
-        return freezeReturned({ status: "stale", brief_hash: old?.brief_hash ?? null });
-      }
-      this.db.prepare(`INSERT INTO creative_briefs (tenant_id,project_id,brief_id,brief_hash,brief_json,updated_at)
-        VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,project_id,brief_id) DO UPDATE SET
-        brief_hash=excluded.brief_hash,brief_json=excluded.brief_json,updated_at=excluded.updated_at`)
-        .run(scope.tenant_id, scope.project_id, scope.brief_id, briefHash, canonicalSerialize(brief), this.timestamp());
+      const result = this.#persistBrief(scope, brief, expected_brief_hash);
       this.db.exec("COMMIT");
-      return freezeReturned({ status: "saved", brief_hash: briefHash });
+      return result;
     } catch (error) {
       this.rollback();
       if (error instanceof VersionStoreError) throw error;
       reject("unavailable", "brief", true);
+    }
+  }
+
+  saveBriefAction({ scope: inputScope, actor_id, action_id, request_hash, plan, expected_brief_hash = null }) {
+    this.assertOpen();
+    const briefSnapshot = snapshotJson(plan?.brief, "invalid_request", "brief");
+    const briefId = reference(briefSnapshot?.brief_id, "brief_id");
+    const scope = validScope(inputScope, briefId);
+    const actorId = reference(actor_id, "actor_id");
+    const actionId = reference(action_id, "action_id");
+    const requestHash = hash(request_hash, "request_hash");
+    if (expected_brief_hash !== null) hash(expected_brief_hash, "expected_brief_hash");
+    const checkedPlan = snapshotJson(plan, "invalid_request", "plan");
+    const brief = validateCreativeBrief(briefSnapshot, { trustedScope: scope });
+    const { plan_hash: planHash, ...planBody } = checkedPlan;
+    if (checkedPlan.brief_hash !== canonicalHash(brief) || planHash !== canonicalHash(planBody)) {
+      reject("integrity_error", "brief_action.plan_hash");
+    }
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const prior = this.db.prepare(`SELECT actor_id,request_hash,brief_id,brief_hash,result_json FROM creative_brief_actions
+        WHERE tenant_id=? AND project_id=? AND action_id=?`).get(scope.tenant_id, scope.project_id, actionId);
+      if (prior) {
+        this.db.exec("COMMIT");
+        if (prior.actor_id !== actorId || prior.request_hash !== requestHash) return freezeReturned({ status: "conflict" });
+        return freezeReturned({ status: "replayed", brief_hash: prior.brief_hash,
+          plan: JSON.parse(prior.result_json) });
+      }
+      const result = this.#persistBrief(scope, brief, expected_brief_hash);
+      if (result.status !== "saved") {
+        this.db.exec("ROLLBACK");
+        return result;
+      }
+      this.db.prepare(`INSERT INTO creative_brief_actions
+        (tenant_id,project_id,action_id,actor_id,request_hash,brief_id,brief_hash,result_json,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?)`).run(scope.tenant_id, scope.project_id, actionId, actorId, requestHash,
+        briefId, canonicalHash(brief), canonicalSerialize(checkedPlan), this.timestamp());
+      this.db.exec("COMMIT");
+      return freezeReturned({ status: "saved", brief_hash: canonicalHash(brief), plan: checkedPlan });
+    } catch (error) {
+      this.rollback();
+      if (error instanceof VersionStoreError) throw error;
+      reject("unavailable", "brief_action", true);
+    }
+  }
+
+  beginInvalidationAction({ scope: inputScope, actor_id, action_id, operation, request_hash, event_id }) {
+    this.assertOpen();
+    if (!isRecord(inputScope)) reject("scope_denied", "scope");
+    const tenant_id = reference(inputScope.tenant_id, "scope.tenant_id");
+    const project_id = reference(inputScope.project_id, "scope.project_id");
+    const actorId = reference(actor_id, "actor_id");
+    const actionId = reference(action_id, "action_id");
+    const requestHash = hash(request_hash, "request_hash");
+    const eventId = reference(event_id, "event_id");
+    if (operation !== "brief.invalidate") reject("invalid_request", "operation");
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const prior = this.db.prepare(`SELECT actor_id,operation,request_hash,event_id,status,result_json
+        FROM creative_invalidation_actions WHERE tenant_id=? AND project_id=? AND action_id=?`)
+        .get(tenant_id, project_id, actionId);
+      if (prior) {
+        this.db.exec("COMMIT");
+        if (prior.actor_id !== actorId || prior.operation !== operation || prior.request_hash !== requestHash ||
+          prior.event_id !== eventId) return freezeReturned({ status: "conflict" });
+        if (prior.status === "completed") {
+          return freezeReturned({ status: "replayed", result: snapshotJson(JSON.parse(prior.result_json), "integrity_error", "invalidation_action.result") });
+        }
+        return freezeReturned({ status: "pending" });
+      }
+      const timestamp = this.timestamp();
+      this.db.prepare(`INSERT INTO creative_invalidation_actions
+        (tenant_id,project_id,action_id,actor_id,operation,request_hash,event_id,status,result_json,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,'pending',NULL,?,?)`).run(tenant_id, project_id, actionId, actorId,
+        operation, requestHash, eventId, timestamp, timestamp);
+      this.db.exec("COMMIT");
+      return freezeReturned({ status: "started" });
+    } catch (error) {
+      this.rollback();
+      if (error instanceof VersionStoreError) throw error;
+      reject("unavailable", "invalidation_action", true);
+    }
+  }
+
+  completeInvalidationAction({ scope: inputScope, actor_id, action_id, operation, request_hash, event_id, result }) {
+    this.assertOpen();
+    if (!isRecord(inputScope)) reject("scope_denied", "scope");
+    const tenant_id = reference(inputScope.tenant_id, "scope.tenant_id");
+    const project_id = reference(inputScope.project_id, "scope.project_id");
+    const actorId = reference(actor_id, "actor_id");
+    const actionId = reference(action_id, "action_id");
+    const requestHash = hash(request_hash, "request_hash");
+    const eventId = reference(event_id, "event_id");
+    if (operation !== "brief.invalidate" || !isRecord(result) || result.event_id !== eventId) {
+      reject("invalid_request", "invalidation_action.result");
+    }
+    const safeResult = snapshotJson(result, "invalid_request", "invalidation_action.result");
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const prior = this.db.prepare(`SELECT actor_id,operation,request_hash,event_id,status,result_json
+        FROM creative_invalidation_actions WHERE tenant_id=? AND project_id=? AND action_id=?`)
+        .get(tenant_id, project_id, actionId);
+      if (!prior || prior.actor_id !== actorId || prior.operation !== operation ||
+        prior.request_hash !== requestHash || prior.event_id !== eventId) {
+        this.db.exec("ROLLBACK");
+        return freezeReturned({ status: "conflict" });
+      }
+      if (prior.status === "completed") {
+        const stored = snapshotJson(JSON.parse(prior.result_json), "integrity_error", "invalidation_action.result");
+        this.db.exec("COMMIT");
+        if (canonicalSerialize(stored) !== canonicalSerialize(safeResult)) return freezeReturned({ status: "conflict" });
+        return freezeReturned({ status: "replayed", result: stored });
+      }
+      if (safeResult.approval_staleness?.status !== "acknowledged" || !safeResult.producer_acknowledgment) {
+        this.db.exec("COMMIT");
+        return freezeReturned({ status: "pending", result: safeResult });
+      }
+      const updated = this.db.prepare(`UPDATE creative_invalidation_actions
+        SET status='completed',result_json=?,updated_at=?
+        WHERE tenant_id=? AND project_id=? AND action_id=? AND status='pending'`)
+        .run(canonicalSerialize(safeResult), this.timestamp(), tenant_id, project_id, actionId);
+      if (updated.changes !== 1) {
+        this.db.exec("ROLLBACK");
+        return freezeReturned({ status: "conflict" });
+      }
+      this.db.exec("COMMIT");
+      return freezeReturned({ status: "completed", result: safeResult });
+    } catch (error) {
+      this.rollback();
+      if (error instanceof VersionStoreError) throw error;
+      reject("unavailable", "invalidation_action", true);
     }
   }
 
@@ -623,6 +893,7 @@ export class CreativeVersionStore {
     const brief = validateCreativeBrief(briefInput, { trustedScope: scope });
     const briefHash = canonicalHash(brief);
     if (designInput.brief_hash !== briefHash) reject("stale_version", "brief_hash");
+    this.#assertBriefNotInvalidated(scope, brief);
     const design = validateDesignVersion(designInput, {
       trustedScope: { ...scope, design_version_id: designInput.design_version_id },
       brief_hash: briefHash,
@@ -641,7 +912,12 @@ export class CreativeVersionStore {
     }
     if (selection.mode === "branch" && design.parent_version_id === null) reject("invalid_request", "selection.mode");
     if (selection.mode === "advance" && design.parent_version_id !== selection.expected_selected_design_version_id) {
-      reject("stale_version", "design_version.parent_version_id");
+      const prior = selection.expected_selected_design_version_id === null ? null : this.db.prepare(`SELECT brief_hash
+        FROM design_versions WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, selection.expected_selected_design_version_id);
+      if (design.parent_version_id !== null || !prior || prior.brief_hash === briefHash) {
+        reject("stale_version", "design_version.parent_version_id");
+      }
     }
     const configuration = configurationSnapshot(input.configuration_snapshot);
     const now = this.timestamp();
@@ -985,6 +1261,7 @@ export class CreativeVersionStore {
         if (ownsTransaction) this.db.exec("COMMIT");
         return conflict;
       }
+      this.#assertBriefNotInvalidated(scope, intent.context.brief_snapshot);
       let parentDesignHash = null;
       if (design.parent_version_id !== null) {
         parentDesignHash = getDesignHashAt(this.db, scope, design.parent_version_id);
@@ -1040,8 +1317,12 @@ export class CreativeVersionStore {
           return conflict;
         }
         if (currentId !== null && getDesignHashAt(this.db, scope, currentId) !== currentHash) reject("integrity_error", "selection.design_hash");
-        if (design.parent_version_id !== currentId ||
-          (currentId === null ? parentDesignHash !== null : parentDesignHash !== currentHash)) {
+        const resetFromOldBrief = design.parent_version_id === null && currentId !== null &&
+          this.db.prepare(`SELECT brief_hash FROM design_versions WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=?`)
+            .get(scope.tenant_id, scope.project_id, scope.brief_id, currentId)?.brief_hash !== intent.context.brief_hash;
+        if ((design.parent_version_id !== currentId && !resetFromOldBrief) ||
+          (design.parent_version_id === currentId &&
+            (currentId === null ? parentDesignHash !== null : parentDesignHash !== currentHash))) {
           reject("stale_version", "design_version.parent_version_id");
         }
         revision = currentRevision + 1;
@@ -1398,6 +1679,7 @@ export class CreativeVersionStore {
         if (ownsTransaction) this.db.exec("ROLLBACK");
         return Object.freeze({ status: "stale" });
       }
+      this.#assertBriefNotInvalidated(scope, currentBrief);
       const current = this.db.prepare(`SELECT design_version_id,design_hash,revision FROM version_selections
         WHERE tenant_id=? AND project_id=? AND brief_id=?`)
         .get(scope.tenant_id, scope.project_id, scope.brief_id);
