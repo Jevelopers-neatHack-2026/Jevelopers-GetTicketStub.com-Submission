@@ -148,7 +148,7 @@ test('actual isolated PDF observations persist encrypted, reopen, and privately 
   assert.ok(privatePayload.positions.every((position) => position.locator.kind === 'pdf-text-box'));
 
   const callerBytes = Buffer.from(multipage);
-  const callerReaderOptions = { maxTextCodeUnits: 50_000, maxOutputBytes: 1_000_000 };
+  const callerReaderOptions = { maxTextCodeUnits: 50_000, maxOutputBytes: 400_000 };
   const snapshotAttempt = reopenedStore.ingestDerivedPdfEvidence(reopenedScope, pdfInput(callerBytes, harness.createPermit(), {
     sourceUrl: 'https://pdf.example.test/snapshotted-input.pdf',
     canonicalUrl: 'https://pdf.example.test/snapshotted-input.pdf',
@@ -161,7 +161,7 @@ test('actual isolated PDF observations persist encrypted, reopen, and privately 
   assert.equal(snapshotted.metadata.contentHash, digest(multipage));
   const snapshottedPrivate = await reopenedStore.withPrivatePayload(reopenedScope, snapshotted.evidence, request());
   assert.equal(snapshottedPrivate.derivedPdf.limits.maxTextCodeUnits, 50_000);
-  assert.equal(snapshottedPrivate.derivedPdf.limits.maxOutputBytes, 1_000_000);
+  assert.equal(snapshottedPrivate.derivedPdf.limits.maxOutputBytes, 400_000);
   assert.ok(snapshottedPrivate.positions.some((position) => position.text.includes('Community Night')));
 
   const replay = await reopenedStore.ingestDerivedPdfEvidence(reopenedScope, pdfInput(multipage, harness.createPermit(), {
