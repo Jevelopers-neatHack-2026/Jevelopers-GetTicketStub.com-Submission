@@ -765,6 +765,8 @@ def _add_check(report: dict[str, Any], check_id: str, expected: Any, actual: Any
 
 
 def _missing(report: dict[str, Any], item_id: str, owner_role: str, expected: Any, actual: Any, reason: str, next_action: str) -> None:
+    if any(item.get("id") == item_id for item in report["missing_deliverables"]):
+        return
     report["missing_deliverables"].append({
         "id": item_id,
         "owner_role": owner_role,
@@ -826,6 +828,13 @@ def _validate_usage(value: Any, label: str, report: dict[str, Any]) -> bool:
             valid = False
         else:
             _add_check(report, f"{label}.unknown_is_not_zero", {"amount": None, "currency": None}, {"amount": amount, "currency": currency}, "pass")
+        if basis_ref is None:
+            _add_check(report, f"{label}.unknown_basis_ref", "null or non-empty string reference", None, "pass")
+        elif type(basis_ref) is str and basis_ref.strip():
+            _add_check(report, f"{label}.unknown_basis_ref", "null or non-empty string reference", basis_ref, "untrusted", "a basis reference does not authenticate unknown usage")
+        else:
+            _add_check(report, f"{label}.unknown_basis_ref", "null or non-empty string reference", _typename(basis_ref), "invalid")
+            valid = False
     elif status in {"estimated", "provider_confirmed"}:
         if type(amount) is not str or not DECIMAL_RE.fullmatch(amount) or type(currency) is not str or not currency or type(basis_ref) is not str or not basis_ref:
             _add_check(report, f"{label}.valued_usage", "decimal string, explicit currency and basis reference", {"amount": amount, "currency": currency, "basis_ref": basis_ref}, "invalid")
@@ -1003,12 +1012,13 @@ def _check_component_records(records: Any, root: Path, report: dict[str, Any]) -
     return result
 
 
-def _check_provider_records(records: Any, report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _check_provider_records(records: Any, report: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, list[str]]]:
     result: dict[str, dict[str, Any]] = {}
+    gaps_by_id: dict[str, list[str]] = {}
     if type(records) is not list:
         for provider_id, detail in PROVIDERS.items():
             _missing(report, f"provider:{provider_id}", detail["owner_role"], "sanitized provider-readiness record", _typename(records), "provider inventory is not an array", "Restore this provider's separate sanitized readiness record without credentials.")
-        return result
+        return result, gaps_by_id
     expected_keys = {
         "id", "owner_role", "status", "endpoint_api_version", "sdk_runtime_version",
         "model_id_version", "parameters", "retry_limit", "account_project_eligibility",
@@ -1026,21 +1036,33 @@ def _check_provider_records(records: Any, report: dict[str, Any]) -> dict[str, d
             _add_check(report, f"{label}.id", "unique provider surface ID", provider_id, "invalid")
             continue
         result[provider_id] = item
-        _add_check(report, f"{label}.owner_role", PROVIDERS[provider_id]["owner_role"], item["owner_role"], "pass" if item["owner_role"] == PROVIDERS[provider_id]["owner_role"] else "mismatch")
+        gaps: list[str] = []
+        expected_owner = PROVIDERS[provider_id]["owner_role"]
+        _add_check(report, f"{label}.owner_role", expected_owner, item["owner_role"], "pass" if item["owner_role"] == expected_owner else "mismatch")
+        if item["owner_role"] != expected_owner:
+            gaps.append("owner_role")
         if type(item["status"]) is not str or item["status"] not in {"pending", "recorded"}:
             _add_check(report, f"{label}.status", ["pending", "recorded"], item["status"], "invalid", "ready/approved booleans are not accepted readiness evidence")
+            gaps.append("status")
         else:
             _add_check(report, f"{label}.status", ["pending", "recorded"], item["status"], "missing" if item["status"] == "pending" else "untrusted", "recorded metadata still needs trusted owner verification")
+            if item["status"] != "recorded":
+                gaps.append("status")
         if type(item["mode"]) is not str or item["mode"] not in MODES:
             _add_check(report, f"{label}.mode", sorted(MODES), item["mode"], "invalid")
+            gaps.append("mode")
         else:
             _add_check(report, f"{label}.mode", sorted(MODES - {"unknown"}), item["mode"], "missing" if item["mode"] == "unknown" else "untrusted")
+            if item["mode"] in {"unknown", "mock", "simulated"}:
+                gaps.append("mode")
         if provider_id in {"jev", "research-vision-reasoning", "gpt-image"}:
             model = item["model_id_version"]
             if model is not None and (type(model) is not str or not model or model.lower() in {"latest", "auto"} or "latest" in model.lower()):
                 _add_check(report, f"{label}.model_pin", "explicit versioned model identifier, no moving alias", model, "invalid")
+                gaps.append("model_id_version")
             elif model is None:
                 _add_check(report, f"{label}.model_pin", "explicit versioned model identifier", None, "missing", "provider-specific model selection is unverified and must remain owner supplied")
+                gaps.append("model_id_version")
             else:
                 _add_check(report, f"{label}.model_pin", "explicit versioned model identifier", model, "untrusted")
         for field in ("endpoint_api_version", "sdk_runtime_version", "parameters", "retry_limit", "account_project_eligibility", "rate_card_source", "rate_card_effective_date"):
@@ -1048,15 +1070,21 @@ def _check_provider_records(records: Any, report: dict[str, Any]) -> dict[str, d
             if field == "retry_limit":
                 if item_value is None:
                     _add_check(report, f"{label}.{field}", f"integer 0..{MAX_RETRY_LIMIT} or explicit limitation", None, "missing")
+                    gaps.append(field)
                 elif type(item_value) is not int or item_value < 0 or item_value > MAX_RETRY_LIMIT:
                     _add_check(report, f"{label}.{field}", f"integer 0..{MAX_RETRY_LIMIT} (booleans invalid)", item_value, "invalid")
+                    gaps.append(field)
                 else:
                     _add_check(report, f"{label}.{field}", f"owner-supplied bounded integer 0..{MAX_RETRY_LIMIT}", item_value, "untrusted", "the checker does not select provider retry policy")
             elif item_value is not None and type(item_value) not in {str, dict, list}:
                 _add_check(report, f"{label}.{field}", "string/object/array or null", _typename(item_value), "invalid")
+                gaps.append(field)
             elif item_value is None:
                 _add_check(report, f"{label}.{field}", "owner-verified value or explicit limitation", None, "missing")
-        _validate_usage(item["usage"], f"{label}.usage", report)
+                gaps.append(field)
+        if not _validate_usage(item["usage"], f"{label}.usage", report):
+            gaps.append("usage")
+        gaps_by_id[provider_id] = sorted(set(gaps))
     expected_ids = set(PROVIDERS)
     actual_ids = set(result)
     if actual_ids != expected_ids:
@@ -1064,7 +1092,7 @@ def _check_provider_records(records: Any, report: dict[str, Any]) -> dict[str, d
         for provider_id in sorted(expected_ids - actual_ids):
             detail = PROVIDERS[provider_id]
             _missing(report, f"provider:{provider_id}", detail["owner_role"], "sanitized provider-readiness record", None, "required provider record is omitted or malformed", "Restore this provider's separate sanitized readiness record without credentials.")
-    return result
+    return result, gaps_by_id
 
 
 def _check_component_bindings(
@@ -1074,6 +1102,7 @@ def _check_component_bindings(
     root: Path,
     components: dict[str, dict[str, Any]],
     providers: dict[str, dict[str, Any]],
+    provider_gaps: dict[str, list[str]],
     report: dict[str, Any],
 ) -> None:
     required_components = handoff.get("required_components")
@@ -1096,36 +1125,69 @@ def _check_component_bindings(
         component = components.get(component_id)
         accepted = component.get("accepted_revision") if component else None
         revision = pin["revision"]
+        revision_matches = False
+        blockers: list[str] = []
         if revision is None:
             _add_check(report, f"{label}.revision", "accepted component revision", None, "missing")
-            _missing(report, f"pin:{component_id}", COMPONENTS[component_id]["owner_role"], "full accepted implementation commit and pin evidence", "unresolved", "no accepted external component revision is present", f"Publish the narrow delivering artifact and record its full commit after owner review.")
+            blockers.append("accepted component revision")
         elif type(revision) is not str or not COMMIT_RE.fullmatch(revision):
             _add_check(report, f"{label}.revision", "full 40-character commit", revision, "invalid")
+            blockers.append("valid full component revision")
         elif accepted is None:
             _add_check(report, f"{label}.revision", "match to accepted component-manifest pin", revision, "mismatch", "manifest pin cannot replace an accepted component pin")
+            blockers.append("owner-accepted component revision")
         elif revision != accepted:
             _add_check(report, f"{label}.revision", accepted, revision, "mismatch")
+            blockers.append("revision matching the component inventory")
         else:
             _add_check(report, f"{label}.revision", accepted, revision, "untrusted", "revision strings are not fetched or independently authenticated")
+            revision_matches = True
+            blockers.append("trusted verification of the component revision")
+        evidence_valid = False
         if pin["evidence"] is None:
             _add_check(report, f"{label}.evidence", "sanitized pin receipt", None, "missing")
+            blockers.append("sanitized pin evidence")
         else:
-            _validate_evidence_ref(root, pin["evidence"], label=f"{label}.evidence", kind=kind, report=report, component_pin=True)
+            evidence_valid = _validate_evidence_ref(root, pin["evidence"], label=f"{label}.evidence", kind=kind, report=report, component_pin=True)
+            if evidence_valid:
+                blockers.append("trusted verification of evidence owner, meaning and conformance")
+            else:
+                blockers.append("accessible pin evidence with a matching digest")
+        _missing(
+            report,
+            f"pin:{component_id}",
+            COMPONENTS[component_id]["owner_role"],
+            "full accepted implementation commit and independently verified pin evidence",
+            {"revision_matches_claimed_component_pin": revision_matches, "evidence_digest_matches": evidence_valid, "unverified_parts": blockers},
+            "component pin is absent or remains an untrusted revision/evidence claim",
+            "Publish the delivering artifact, record its full owner-reviewed revision and supply a sanitized pin receipt for independent verification.",
+        )
 
     for provider_id in spec.provider_surfaces:
         provider = providers.get(provider_id)
+        metadata_gaps = provider_gaps.get(provider_id, [])
         if provider is None:
             _add_check(report, f"{kind}.provider.{provider_id}", "provider record", None, "missing")
             _missing(report, f"provider:{provider_id}", PROVIDERS[provider_id]["owner_role"], "sanitized account/configuration record and explicit mode", "missing", "required provider surface has no record", "Provide a sanitized record through the approved owner process; never include credentials.")
         elif type(provider.get("status")) is not str or type(provider.get("mode")) is not str:
             actual = {"status": provider.get("status"), "mode": provider.get("mode")}
             _add_check(report, f"{kind}.provider.{provider_id}", "recorded provider status and string mode", actual, "invalid", "provider status/mode types must be validated before membership checks")
-            _missing(report, f"provider:{provider_id}", PROVIDERS[provider_id]["owner_role"], "recorded owner-verified readiness evidence", actual, "provider record has invalid status or mode types", "Replace the malformed provider status/mode with owner-supplied sanitized metadata.")
         elif provider.get("status") != "recorded" or provider.get("mode") in {"mock", "simulated", "unknown"}:
             _add_check(report, f"{kind}.provider.{provider_id}", "recorded owner-verified readiness evidence", {"status": provider.get("status"), "mode": provider.get("mode")}, "missing")
-            _missing(report, f"provider:{provider_id}", PROVIDERS[provider_id]["owner_role"], "nonbillable readiness record with explicit mode and verified account/model eligibility", {"status": provider.get("status"), "mode": provider.get("mode")}, "access and configuration are not established", "Record the owner-verified account and explicit configuration, or record a safe-check limitation.")
         else:
             _add_check(report, f"{kind}.provider.{provider_id}", "recorded owner-verified readiness evidence", {"status": provider.get("status"), "mode": provider.get("mode")}, "untrusted", "metadata presence is not account or budget authority proof")
+        if provider is not None:
+            if not metadata_gaps:
+                metadata_gaps = ["owner-verified account/project eligibility and independent evidence verification"]
+            _missing(
+                report,
+                f"provider:{provider_id}",
+                PROVIDERS[provider_id]["owner_role"],
+                "recorded configuration, account/project eligibility and independently verified nonbillable readiness",
+                {"status": _typename(provider.get("status")), "mode": _typename(provider.get("mode")), "unverified_or_missing_fields": metadata_gaps},
+                "provider state labels and configuration claims do not establish account access or authority",
+                "Supply sanitized owner-verified provider configuration and account/project eligibility; keep credentials out of evidence and add an accepted independent verifier.",
+            )
     for provider_id in spec.related_provider_surfaces:
         provider = providers.get(provider_id)
         _add_check(report, f"{kind}.related_provider.{provider_id}", "separate release record; not a blocker for this narrow handoff", {"status": provider.get("status") if provider else "missing", "mode": provider.get("mode") if provider else "missing"}, "informational")
@@ -1184,6 +1246,7 @@ def _check_handoff_structure(
     root: Path,
     components: dict[str, dict[str, Any]],
     providers: dict[str, dict[str, Any]],
+    provider_gaps: dict[str, list[str]],
     report: dict[str, Any],
 ) -> bool:
     if type(value) is not dict:
@@ -1223,7 +1286,7 @@ def _check_handoff_structure(
     else:
         _add_check(report, f"{kind}.acceptance_roles", expected_roles, roles, "pass")
 
-    _check_component_bindings(kind, spec, value, root, components, providers, report)
+    _check_component_bindings(kind, spec, value, root, components, providers, provider_gaps, report)
     _check_crosswalk(kind, spec, value.get("crosswalk"), report)
     _check_artifacts(kind, spec, value.get("artifacts"), root, components, report)
     _check_fixtures(kind, spec, value.get("fixtures"), root, components, report)
@@ -1240,21 +1303,24 @@ def _check_crosswalk(kind: str, spec: HandoffSpec, value: Any, report: dict[str,
     if set(value) != set(spec.crosswalk):
         _add_check(report, f"{kind}.crosswalk.inventory", sorted(spec.crosswalk), {"present": sorted(value), "missing": sorted(set(spec.crosswalk) - set(value)), "unexpected": sorted(set(value) - set(spec.crosswalk))}, "invalid")
     for item_id, expected_description in spec.crosswalk.items():
+        expected_owner = CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
         item = value.get(item_id)
         label = f"{kind}.crosswalk.{item_id}"
         if type(item) is not dict or set(item) != {"expectation", "resolution", "owner_role"}:
             _add_check(report, label, ["expectation", "owner_role", "resolution"], _typename(item), "invalid")
-            _missing(report, f"crosswalk:{item_id}", spec.owner_role, expected_description, "missing", "required crosswalk decision is absent or malformed", "Record the external producer/consumer decision with its pinned review artifact.")
+            actual = {"record": _typename(item)}
+            if type(item) is dict and "owner_role" in item:
+                actual["owner_role_claim"] = item["owner_role"]
+            _missing(report, f"crosswalk:{item_id}", expected_owner, expected_description, actual, "required crosswalk decision is absent or malformed", "Record the external producer/consumer decision with its pinned review artifact.")
             continue
         if item["expectation"] != expected_description:
             _add_check(report, f"{label}.expectation", expected_description, item["expectation"], "mismatch")
-        expected_owner = CROSSWALK_OWNER_OVERRIDES.get(kind, {}).get(item_id, spec.owner_role)
         if item["owner_role"] != expected_owner:
             _add_check(report, f"{label}.owner_role", expected_owner, item["owner_role"], "mismatch")
         resolution = item["resolution"]
         if resolution is None:
             _add_check(report, f"{label}.resolution", "owner-reviewed resolution", None, "missing", "checker expectation is not a canonical field decision")
-            _missing(report, f"crosswalk:{item_id}", item["owner_role"], expected_description, None, "field or behavior decision remains undecided", "Obtain the exact field decision from the listed contract owners and update the pinned crosswalk artifact.")
+            _missing(report, f"crosswalk:{item_id}", expected_owner, expected_description, {"resolution": None, "owner_role_claim": item["owner_role"]}, "field or behavior decision remains undecided", "Obtain the exact field decision from the listed contract owners and update the pinned crosswalk artifact.")
         elif kind == "handoff-consumer" and item_id == "program_epic_reference":
             expected_url = "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/3"
             if type(resolution) is str and resolution == expected_url:
@@ -1301,6 +1367,7 @@ def _check_artifacts(
         if not _check_keys(item, keys, f"{label}.keys", report):
             _missing(report, f"artifact:{artifact_id}", artifact_spec.owner_role, artifact_spec.identity, _typename(item), "required artifact record is malformed", "Restore this exact artifact record with the expected fields and sanitized evidence reference.")
             continue
+        identity_matches = True
         for field, expected in (
             ("identity", artifact_spec.identity),
             ("component", artifact_spec.component),
@@ -1310,44 +1377,99 @@ def _check_artifacts(
             actual = item[field]
             if actual != expected or type(actual) is not type(expected):
                 _add_check(report, f"{label}.{field}", expected, actual, "mismatch")
+                identity_matches = False
             else:
                 _add_check(report, f"{label}.{field}", expected, actual, "pass")
         status = item["status"]
-        if type(status) is not str or status not in {"pending", "provided"}:
+        status_valid = type(status) is str and status in {"pending", "provided"}
+        if not status_valid:
             _add_check(report, f"{label}.status", ["pending", "provided"], status, "invalid", "verified/approved/closed/pass status claims are not accepted")
-            _missing(report, f"artifact:{artifact_id}", artifact_spec.owner_role, artifact_spec.identity, status, "required artifact status is malformed or unrecognized", "Record pending until the exact owner-reviewed artifact and evidence are available.")
-            continue
+
         revision = item["revision"]
         component = components.get(artifact_spec.component)
         accepted_revision = component.get("accepted_revision") if component else None
+        revision_matches = False
+        if revision is None:
+            revision_status = "informational" if status == "pending" else "missing"
+            _add_check(report, f"{label}.revision", "full accepted 40-character component commit when provided", None, revision_status)
+        elif type(revision) is not str or not COMMIT_RE.fullmatch(revision):
+            _add_check(report, f"{label}.revision", "null or full 40-character commit", revision, "invalid")
+        elif status == "pending":
+            _add_check(report, f"{label}.revision", None, revision, "invalid", "pending artifacts may not carry unverified evidence or pin claims")
+        elif accepted_revision is None or revision != accepted_revision:
+            _add_check(report, f"{label}.revision", accepted_revision, revision, "mismatch", "artifact revision does not match an accepted component pin")
+        else:
+            _add_check(report, f"{label}.revision", accepted_revision, revision, "untrusted", "matching revision strings are not independently authenticated")
+            revision_matches = True
+
+        evidence_valid = False
+        if item["evidence"] is None:
+            _add_check(report, f"{label}.evidence", "sanitized receipt path and SHA-256 when provided", None, "informational" if status == "pending" else "missing")
+        elif status == "pending":
+            _add_check(report, f"{label}.pending_claims", {"evidence": None, "revision": None}, {"evidence": "present", "revision": revision}, "invalid", "pending artifacts may not carry unverified evidence or pin claims")
+        elif status == "provided":
+            evidence_valid = _validate_evidence_ref(root, item["evidence"], label=label, kind=kind, report=report)
+        else:
+            if type(item["evidence"]) is not dict or set(item["evidence"]) != {"path", "sha256"}:
+                _add_check(report, f"{label}.evidence_shape", ["path", "sha256"], _typename(item["evidence"]), "invalid")
+
+        mode = item["mode"]
+        mode_valid = type(mode) is str and mode in MODES
+        mode_qualifies = mode_valid and mode != "unknown" and (
+            not artifact_spec.rejects_mock or mode not in {"mock", "simulated"}
+        )
+        if not mode_valid:
+            _add_check(report, f"{label}.mode", sorted(MODES), mode, "invalid")
+        elif status == "pending" and mode == "unknown":
+            _add_check(report, f"{label}.mode", "unknown placeholder or explicit dependency mode", mode, "informational")
+        elif mode == "unknown" or (artifact_spec.rejects_mock and mode in {"mock", "simulated"}):
+            _add_check(report, f"{label}.mode", ["recorded", "sandbox", "live"], mode, "missing", "unknown/mock/simulated mode does not establish the required external artifact")
+        else:
+            _add_check(report, f"{label}.mode", sorted(MODES - {"unknown"}), mode, "untrusted")
+
+        roles = item["role_claims"]
+        roles_well_formed = type(roles) is list and all(type(role) is str for role in roles)
+        roles_match = roles_well_formed and roles == list(artifact_spec.review_roles)
+        if not roles_well_formed:
+            _add_check(report, f"{label}.role_claims", "string array; empty pending placeholder is allowed", _typename(roles), "invalid", "role claims are labels, never approval proof")
+        elif status == "pending" and not roles:
+            _add_check(report, f"{label}.role_claims", list(artifact_spec.review_roles), roles, "informational", "empty pending role claims are a valid placeholder")
+        elif not roles_match:
+            _add_check(report, f"{label}.role_claims", list(artifact_spec.review_roles), roles, "mismatch", "role strings are assertions and are never approval proof")
+        else:
+            _add_check(report, f"{label}.role_claims", list(artifact_spec.review_roles), roles, "untrusted", "reviewer role claims require an accepted verifier")
+
+        usage_valid = _validate_usage(item["usage"], f"{label}.usage", report)
         if status == "pending":
             _add_check(report, f"{label}.status", "provided evidence", "pending", "missing")
-            _missing(report, f"artifact:{artifact_id}", artifact_spec.owner_role, artifact_spec.identity, "pending", "required external artifact is not present", f"Deliver and pin {artifact_spec.identity}; keep its actual owner acknowledgement and fixture receipts accessible.")
-            if item["evidence"] is not None or item["revision"] is not None:
-                _add_check(report, f"{label}.pending_claims", {"evidence": None, "revision": None}, {"evidence": item["evidence"], "revision": revision}, "invalid", "pending artifacts may not carry unverified evidence or pin claims")
-        else:
-            if type(revision) is not str or not COMMIT_RE.fullmatch(revision):
-                _add_check(report, f"{label}.revision", "full 40-character commit", revision, "invalid")
-            elif accepted_revision is None or revision != accepted_revision:
-                _add_check(report, f"{label}.revision", accepted_revision, revision, "mismatch", "artifact revision does not match an accepted component pin")
-            else:
-                _add_check(report, f"{label}.revision", accepted_revision, revision, "untrusted", "matching revision strings are not independently authenticated")
-            if item["evidence"] is None:
-                _add_check(report, f"{label}.evidence", "sanitized receipt path and SHA-256", None, "missing")
-            else:
-                _validate_evidence_ref(root, item["evidence"], label=label, kind=kind, report=report)
-            roles = item["role_claims"]
-            if type(roles) is not list or roles != list(artifact_spec.review_roles):
-                _add_check(report, f"{label}.role_claims", list(artifact_spec.review_roles), roles, "mismatch", "role strings are assertions and are never approval proof")
-            else:
-                _add_check(report, f"{label}.role_claims", list(artifact_spec.review_roles), roles, "untrusted", "reviewer role claims require an accepted verifier")
-            if type(item["mode"]) is not str or item["mode"] not in MODES:
-                _add_check(report, f"{label}.mode", sorted(MODES), item["mode"], "invalid")
-            elif artifact_spec.rejects_mock and item["mode"] in {"mock", "simulated", "unknown"}:
-                _add_check(report, f"{label}.mode", ["recorded", "sandbox", "live"], item["mode"], "missing", "mock/simulated/unknown mode cannot prove the required external artifact")
-            else:
-                _add_check(report, f"{label}.mode", sorted(MODES - {"unknown"}), item["mode"], "untrusted" if item["mode"] != "unknown" else "missing")
-        _validate_usage(item["usage"], f"{label}.usage", report)
+        elif status == "provided":
+            _add_check(report, f"{label}.status", "authenticated provided artifact", "provided", "untrusted", "provided is a state label, not owner acceptance or conformance proof")
+
+        missing_parts = []
+        if not status_valid or status != "provided":
+            missing_parts.append("provided artifact")
+        if not identity_matches:
+            missing_parts.append("expected artifact identity/owner fields")
+        if not revision_matches:
+            missing_parts.append("matching accepted component revision")
+        if not evidence_valid:
+            missing_parts.append("accessible evidence with matching digest")
+        if not mode_qualifies:
+            missing_parts.append("qualifying dependency mode")
+        if not roles_match:
+            missing_parts.append("expected reviewer role claims")
+        if not usage_valid:
+            missing_parts.append("well-formed usage record")
+        missing_parts.append("trusted verification of owner, revision, evidence meaning and conformance")
+        _missing(
+            report,
+            f"artifact:{artifact_id}",
+            artifact_spec.owner_role,
+            artifact_spec.identity,
+            {"status": status if type(status) is str else _typename(status), "unverified_parts": missing_parts},
+            "required artifact is absent or its provided claim remains incomplete/untrusted",
+            f"Deliver and pin {artifact_spec.identity}, retain sanitized evidence, and obtain owner verification through the accepted trust process.",
+        )
 
 
 def _check_fixtures(
@@ -1501,12 +1623,12 @@ def audit(root: Path, manifest_path: str, kind: str) -> dict[str, Any]:
     if components_manifest is None:
         return _finish_report(report)
     components = _check_component_records(components_manifest.get("components"), root, report)
-    providers = _check_provider_records(components_manifest.get("provider_surfaces"), report)
+    providers, provider_gaps = _check_provider_records(components_manifest.get("provider_surfaces"), report)
     handoffs = manifest.get("handoffs", {})
     if kind not in handoffs:
         _add_check(report, f"{kind}.present", "required handoff object", None, "invalid")
         return _finish_report(report)
-    _check_handoff_structure(kind, handoffs[kind], spec, root, components, providers, report)
+    _check_handoff_structure(kind, handoffs[kind], spec, root, components, providers, provider_gaps, report)
     # A trusted verifier is mandatory for readiness, even if every file hash and every
     # self-reported status matches. This makes the current absence visible and fail-closed.
     if EVIDENCE_VERIFIER_ID is None:
@@ -1543,7 +1665,11 @@ def _finish_report(report: dict[str, Any]) -> dict[str, Any]:
         "missing_deliverables": missing,
         "required_artifacts": len(HANDOFF_SPECS[report["kind"]].artifacts),
         "required_fixtures": len(HANDOFF_SPECS[report["kind"]].fixtures),
-        "fixture_pass_claims": sum(check["id"].endswith(".status") and check["status"] == "untrusted" for check in report["checks"]),
+        "fixture_pass_claims": sum(
+            check["id"] == f"{report['kind']}.fixtures.{fixture_id}.status" and check["status"] == "untrusted"
+            for fixture_id in HANDOFF_SPECS[report["kind"]].fixtures
+            for check in report["checks"]
+        ),
         "evidence_refs_checked": report.get("evidence_refs_checked", 0),
         "required_usage_default": "unknown (never assumed zero)",
     }

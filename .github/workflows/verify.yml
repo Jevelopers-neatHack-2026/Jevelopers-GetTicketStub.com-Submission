@@ -26,7 +26,7 @@ jobs:
           python3 - <<'PY'
           import unittest
 
-          expected = 24
+          expected = 29
           suite = unittest.defaultTestLoader.discover(
               start_dir="tests/handoffs",
               pattern="test_verify_handoff.py",

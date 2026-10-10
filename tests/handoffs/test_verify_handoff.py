@@ -311,6 +311,27 @@ class HandoffCheckerTests(unittest.TestCase):
                 self.assertFalse(valid)
                 self.assertEqual(self.checks(report, "usage.unknown_is_not_zero")[0]["status"], "invalid")
 
+        for basis_ref in ({}, [], True, 1, ""):
+            with self.subTest(basis_ref=basis_ref):
+                report = {"checks": [], "missing_deliverables": []}
+                valid = checker._validate_usage(
+                    {"status": "unknown", "amount": None, "currency": None, "basis_ref": basis_ref},
+                    "usage",
+                    report,
+                )
+                self.assertFalse(valid)
+                self.assertEqual(self.checks(report, "usage.unknown_basis_ref")[0]["status"], "invalid")
+        for basis_ref, expected_status in ((None, "pass"), ("source-ref", "untrusted")):
+            with self.subTest(valid_basis_ref=basis_ref):
+                report = {"checks": [], "missing_deliverables": []}
+                valid = checker._validate_usage(
+                    {"status": "unknown", "amount": None, "currency": None, "basis_ref": basis_ref},
+                    "usage",
+                    report,
+                )
+                self.assertTrue(valid)
+                self.assertEqual(self.checks(report, "usage.unknown_basis_ref")[0]["status"], expected_status)
+
     def test_known_program_epic_url_is_a_reference_check_not_execution_proof(self) -> None:
         crosswalk = self.manifest["handoffs"]["handoff-consumer"]["crosswalk"]["program_epic_reference"]
         crosswalk["resolution"] = "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/3"
@@ -334,12 +355,12 @@ class HandoffCheckerTests(unittest.TestCase):
         self.assertFalse(any(item["id"].startswith("component_manifest.") for item in report["checks"]))
 
     def test_fifo_evidence_fails_promptly_as_invalid_json_report(self) -> None:
-        fifo = self.root / "tests/contracts/evidence/fifo-receipt"
+        fifo = self.root / "release/handoff-evidence/fifo-receipt"
         fifo.parent.mkdir(parents=True, exist_ok=True)
         os.mkfifo(fifo)
         component_id = checker.HANDOFF_SPECS["handoff-contracts"].components[0]
         self.manifest["handoffs"]["handoff-contracts"]["pins"][component_id]["evidence"] = {
-            "path": "tests/contracts/evidence/fifo-receipt",
+            "path": "release/handoff-evidence/fifo-receipt",
             "sha256": "0" * 64,
         }
         self.save_manifest()
@@ -348,7 +369,9 @@ class HandoffCheckerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertEqual(report["readiness_status"], "INVALID")
-        self.assertEqual(self.checks(report, f"handoff-contracts.pins.{component_id}.evidence.local_file")[0]["status"], "invalid")
+        check = self.checks(report, f"handoff-contracts.pins.{component_id}.evidence.local_file")[0]
+        self.assertEqual(check["status"], "invalid")
+        self.assertIn("not a regular file", check["reason"])
 
     def test_malformed_evidence_pin_and_crosswalk_cli_reports_are_serializable(self) -> None:
         kind = "handoff-contracts"
@@ -486,6 +509,217 @@ class HandoffCheckerTests(unittest.TestCase):
         check = self.checks(report, f"{kind}.pins.{component_id}.evidence.local_file")[0]
         self.assertEqual(check["status"], "invalid")
         self.assertIn("Unicode surrogate", check["reason"])
+
+    def test_pending_and_provided_artifact_structural_fields_are_status_independent(self) -> None:
+        invalid_modes = ([], {}, True, 1, None, "unrecognized")
+        for kind, spec in checker.HANDOFF_SPECS.items():
+            artifact_id = next(iter(spec.artifacts))
+            artifact_spec = spec.artifacts[artifact_id]
+            for status in ("pending", "provided"):
+                for bad_mode in invalid_modes:
+                    with self.subTest(kind=kind, status=status, bad_mode=bad_mode):
+                        self.restore_inputs()
+                        artifact = self.manifest["handoffs"][kind]["artifacts"][artifact_id]
+                        artifact["status"] = status
+                        artifact["mode"] = bad_mode
+                        artifact["role_claims"] = list(artifact_spec.review_roles)
+                        self.save_manifest()
+                        report = self.audit(kind)
+                        self.assertEqual(self.checks(report, f"{kind}.artifacts.{artifact_id}.mode")[0]["status"], "invalid")
+                        self.assertEqual(report["exit_code"], 2)
+                        json.dumps(report)
+
+                for bad_roles in (True, [1]):
+                    with self.subTest(kind=kind, status=status, bad_roles=bad_roles):
+                        self.restore_inputs()
+                        artifact = self.manifest["handoffs"][kind]["artifacts"][artifact_id]
+                        artifact["status"] = status
+                        artifact["mode"] = "recorded"
+                        artifact["role_claims"] = bad_roles
+                        self.save_manifest()
+                        report = self.audit(kind)
+                        self.assertEqual(self.checks(report, f"{kind}.artifacts.{artifact_id}.role_claims")[0]["status"], "invalid")
+                        self.assertEqual(report["exit_code"], 2)
+                        json.dumps(report)
+
+            self.restore_inputs()
+            artifact = self.manifest["handoffs"][kind]["artifacts"][artifact_id]
+            pending_mode = self.checks(self.audit(kind), f"{kind}.artifacts.{artifact_id}.mode")[0]
+            pending_roles = self.checks(self.audit(kind), f"{kind}.artifacts.{artifact_id}.role_claims")[0]
+            self.assertEqual(pending_mode["status"], "informational")
+            self.assertEqual(pending_roles["status"], "informational")
+            artifact["status"] = "provided"
+            artifact["mode"] = "recorded"
+            artifact["role_claims"] = list(artifact_spec.review_roles)
+            self.save_manifest()
+            report = self.audit(kind)
+            self.assertNotEqual(self.checks(report, f"{kind}.artifacts.{artifact_id}.mode")[0]["status"], "invalid")
+            self.assertNotEqual(self.checks(report, f"{kind}.artifacts.{artifact_id}.role_claims")[0]["status"], "invalid")
+            self.assertIn(f"artifact:{artifact_id}", {item["id"] for item in report["missing_deliverables"]})
+
+    def test_artifact_missing_identity_survives_provided_without_evidence_and_matching_bytes(self) -> None:
+        for kind, spec in checker.HANDOFF_SPECS.items():
+            artifact_id = next(iter(spec.artifacts))
+            artifact_spec = spec.artifacts[artifact_id]
+            with self.subTest(kind=kind, evidence="absent"):
+                self.restore_inputs()
+                artifact = self.manifest["handoffs"][kind]["artifacts"][artifact_id]
+                artifact.update({"status": "provided", "revision": None, "mode": "recorded", "role_claims": list(artifact_spec.review_roles), "evidence": None})
+                self.save_manifest()
+                report = self.audit(kind)
+                missing = [item for item in report["missing_deliverables"] if item["id"] == f"artifact:{artifact_id}"]
+                self.assertEqual(len(missing), 1)
+                self.assertIn("matching accepted component revision", missing[0]["actual"]["unverified_parts"])
+                self.assertIn("accessible evidence with matching digest", missing[0]["actual"]["unverified_parts"])
+                self.assertEqual(len({item["id"] for item in report["missing_deliverables"]}), len(report["missing_deliverables"]))
+
+            with self.subTest(kind=kind, evidence="digest-mismatch"):
+                self.restore_inputs()
+                artifact = self.manifest["handoffs"][kind]["artifacts"][artifact_id]
+                artifact.update({"status": "provided", "revision": "a" * 40, "mode": "recorded", "role_claims": list(artifact_spec.review_roles)})
+                relpath = checker.EVIDENCE_PREFIXES[kind][0] + "provided-claim.json"
+                evidence_path = self.root / relpath
+                evidence_path.parent.mkdir(parents=True, exist_ok=True)
+                evidence_path.write_bytes(b"synthetic evidence\n")
+                artifact["evidence"] = {"path": relpath, "sha256": "0" * 64}
+                self.save_manifest()
+                report = self.audit(kind)
+                self.assertIn(f"artifact:{artifact_id}", {item["id"] for item in report["missing_deliverables"]})
+                self.assertTrue(any(item["id"] == f"{kind}.artifacts.{artifact_id}.sha256" and item["status"] == "mismatch" for item in report["checks"]))
+
+            with self.subTest(kind=kind, evidence="matching-untrusted-bytes"):
+                self.restore_inputs()
+                artifact = self.manifest["handoffs"][kind]["artifacts"][artifact_id]
+                artifact_component = next(item for item in self.components["components"] if item["id"] == artifact_spec.component)
+                accepted_revision = "b" * 40
+                artifact_component["accepted_revision"] = accepted_revision
+                artifact_component["state"] = "pinned"
+                artifact.update({"status": "provided", "revision": accepted_revision, "mode": "recorded", "role_claims": list(artifact_spec.review_roles)})
+                relpath = checker.EVIDENCE_PREFIXES[kind][0] + "provided-claim.json"
+                evidence_path = self.root / relpath
+                evidence_path.parent.mkdir(parents=True, exist_ok=True)
+                evidence_bytes = b"synthetic evidence with a matching local digest\n"
+                evidence_path.write_bytes(evidence_bytes)
+                artifact["evidence"] = {"path": relpath, "sha256": hashlib.sha256(evidence_bytes).hexdigest()}
+                self.save_manifest()
+                self.save_components()
+                report = self.audit(kind)
+                missing = [item for item in report["missing_deliverables"] if item["id"] == f"artifact:{artifact_id}"]
+                self.assertEqual(len(missing), 1)
+                self.assertIn("trusted verification of owner, revision, evidence meaning and conformance", missing[0]["actual"]["unverified_parts"])
+                self.assertEqual(self.checks(report, f"{kind}.artifacts.{artifact_id}.trust")[0]["status"], "untrusted")
+                self.assertEqual(report["readiness_status"], "BLOCKED")
+
+    def test_provider_recorded_does_not_count_as_fixture_pass_and_keeps_provider_missing(self) -> None:
+        provider = next(item for item in self.components["provider_surfaces"] if item["id"] == "jev")
+        provider["status"] = "recorded"
+        self.save_components()
+        report = self.audit("handoff-contracts")
+        self.assertEqual(report["summary"]["fixture_pass_claims"], 0)
+
+        provider_readiness = self.audit("provider-readiness")
+        provider_missing = [item for item in provider_readiness["missing_deliverables"] if item["id"] == "provider:jev"]
+        self.assertEqual(len(provider_missing), 1)
+        self.assertEqual(provider_missing[0]["owner_role"], checker.PROVIDERS["jev"]["owner_role"])
+        self.assertTrue({"endpoint_api_version", "sdk_runtime_version", "model_id_version", "retry_limit", "account_project_eligibility", "rate_card_source", "rate_card_effective_date"} <= set(provider_missing[0]["actual"]["unverified_or_missing_fields"]))
+
+        self.restore_inputs()
+        provider = next(item for item in self.components["provider_surfaces"] if item["id"] == "jev")
+        provider["status"] = "recorded"
+        self.save_components()
+        kind = "handoff-contracts"
+        fixture_id = next(iter(checker.HANDOFF_SPECS[kind].fixtures))
+        fixture = self.manifest["handoffs"][kind]["fixtures"][fixture_id]
+        fixture["status"] = "reported_pass"
+        fixture["case_count"] = 1
+        self.manifest["handoffs"]["handoff-metering"]["fixtures"][next(iter(checker.HANDOFF_SPECS["handoff-metering"].fixtures))]["status"] = "reported_pass"
+        self.manifest["handoffs"]["handoff-metering"]["fixtures"][next(iter(checker.HANDOFF_SPECS["handoff-metering"].fixtures))]["case_count"] = 1
+        self.save_manifest()
+        report = self.audit(kind)
+        self.assertEqual(report["summary"]["fixture_pass_claims"], 1)
+        self.assertEqual(self.checks(report, f"{kind}.fixtures.{fixture_id}.status")[0]["status"], "untrusted")
+
+    def test_pin_identity_stays_missing_for_claims_with_absent_or_matching_digest(self) -> None:
+        for kind, spec in checker.HANDOFF_SPECS.items():
+            component_id = spec.components[0]
+            with self.subTest(kind=kind, evidence="absent"):
+                self.restore_inputs()
+                self.manifest["handoffs"][kind]["pins"][component_id]["revision"] = "c" * 40
+                self.save_manifest()
+                report = self.audit(kind)
+                missing = [item for item in report["missing_deliverables"] if item["id"] == f"pin:{component_id}"]
+                self.assertEqual(len(missing), 1)
+                self.assertIn("sanitized pin evidence", missing[0]["actual"]["unverified_parts"])
+
+            with self.subTest(kind=kind, evidence="matching-untrusted-digest"):
+                self.restore_inputs()
+                component_record = next(item for item in self.components["components"] if item["id"] == component_id)
+                revision = "d" * 40
+                component_record["accepted_revision"] = revision
+                component_record["state"] = "pinned"
+                evidence_bytes = b"synthetic pin receipt\n"
+                relpath = "release/handoff-evidence/pin-receipt.json"
+                evidence_path = self.root / relpath
+                evidence_path.parent.mkdir(parents=True, exist_ok=True)
+                evidence_path.write_bytes(evidence_bytes)
+                self.manifest["handoffs"][kind]["pins"][component_id] = {
+                    "revision": revision,
+                    "evidence": {"path": relpath, "sha256": hashlib.sha256(evidence_bytes).hexdigest()},
+                }
+                self.save_manifest()
+                self.save_components()
+                report = self.audit(kind)
+                missing = [item for item in report["missing_deliverables"] if item["id"] == f"pin:{component_id}"]
+                self.assertEqual(len(missing), 1)
+                self.assertIn("trusted verification of evidence owner, meaning and conformance", missing[0]["actual"]["unverified_parts"])
+                self.assertEqual(self.checks(report, f"{kind}.pins.{component_id}.evidence.trust")[0]["status"], "untrusted")
+                self.assertEqual(report["readiness_status"], "BLOCKED")
+
+    def test_crosswalk_missing_owner_always_uses_trusted_scope_spec(self) -> None:
+        cases = (
+            ("handoff-contracts", "scope_approval_fields", "Product and frontend"),
+            ("provider-readiness", "budget_owner_and_revocation", "Finance and reliability"),
+            ("provider-readiness", "gpt_image_readiness_owner", "Creative and fulfillment"),
+            ("handoff-consumer", "package_identity_version_hash", "Creative and fulfillment"),
+            ("handoff-consumer", "external_approval_authority", "Product and frontend"),
+            ("handoff-metering", "trace_delivery_ack_recovery", "Agent and research"),
+        )
+        for kind, item_id, expected_owner in cases:
+            with self.subTest(kind=kind, item=item_id, mutation="null"):
+                self.restore_inputs()
+                self.manifest["handoffs"][kind]["crosswalk"][item_id] = None
+                self.save_manifest()
+                report = self.audit(kind)
+                item = next(row for row in report["missing_deliverables"] if row["id"] == f"crosswalk:{item_id}")
+                self.assertEqual(item["owner_role"], expected_owner)
+
+            with self.subTest(kind=kind, item=item_id, mutation="malformed-wrong-owner"):
+                self.restore_inputs()
+                self.manifest["handoffs"][kind]["crosswalk"][item_id] = {"owner_role": "Synthetic wrong role"}
+                self.save_manifest()
+                report = self.audit(kind)
+                item = next(row for row in report["missing_deliverables"] if row["id"] == f"crosswalk:{item_id}")
+                self.assertEqual(item["owner_role"], expected_owner)
+                self.assertEqual(item["actual"]["owner_role_claim"], "Synthetic wrong role")
+
+            with self.subTest(kind=kind, item=item_id, mutation="wrong-owner-unresolved"):
+                self.restore_inputs()
+                record = self.manifest["handoffs"][kind]["crosswalk"][item_id]
+                record["owner_role"] = "Synthetic wrong role"
+                record["resolution"] = None
+                self.save_manifest()
+                report = self.audit(kind)
+                item = next(row for row in report["missing_deliverables"] if row["id"] == f"crosswalk:{item_id}")
+                self.assertEqual(item["owner_role"], expected_owner)
+                self.assertEqual(item["actual"]["owner_role_claim"], "Synthetic wrong role")
+
+            with self.subTest(kind=kind, item=item_id, mutation="omitted"):
+                self.restore_inputs()
+                self.manifest["handoffs"][kind]["crosswalk"].pop(item_id)
+                self.save_manifest()
+                report = self.audit(kind)
+                item = next(row for row in report["missing_deliverables"] if row["id"] == f"crosswalk:{item_id}")
+                self.assertEqual(item["owner_role"], expected_owner)
 
 
 if __name__ == "__main__":
