@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DurabilityError, newId } from "../../src/internal/durability.js";
 import { fixture, file, plan, scope } from "../fixtures/durability/fixture.js";
+import { publishBatchInventory } from "../../src/internal/batch-finalization.js";
 
 for (const status of [
 	"queued",
@@ -77,4 +78,29 @@ test("rejects forged batch finalization authority with every row still queued", 
 		);
 	});
 	assert.equal(f.store.publication(scope, job.operation), null);
+});
+
+test("validates persisted policy before accepting an internal finalization request", () => {
+	using f = fixture();
+	const job = f.jobs.create(scope, plan("forged-policy", 2));
+	const first = f.jobs.claim(scope);
+	assert.ok(first);
+	f.jobs.complete(scope, first, [file()]);
+	const second = f.jobs.claim(scope);
+	assert.ok(second);
+	f.jobs.fail(scope, second, false);
+	const before = f.outbox.list(scope);
+	assert.throws(
+		() =>
+			f.db.transaction(() =>
+				publishBatchInventory(f.store, scope, {
+					...job,
+					policy: "allow_partial",
+				}),
+			),
+		(error: unknown) =>
+			error instanceof DurabilityError && error.code === "STALE_CLAIM",
+	);
+	assert.equal(f.store.publication(scope, job.operation), null);
+	assert.deepEqual(f.outbox.list(scope), before);
 });

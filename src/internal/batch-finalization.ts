@@ -68,6 +68,16 @@ export function publishBatchInventory(
 ): Publication {
 	const db = store.db;
 	db.requireTransaction();
+	const persisted = db.sql
+		.prepare("SELECT operation,policy,status FROM jobs WHERE id=?")
+		.get(job.id);
+	check(
+		persisted !== undefined &&
+			persisted["operation"] === job.operation &&
+			persisted["policy"] === job.policy &&
+			(persisted["status"] === "queued" || persisted["status"] === "running"),
+		"STALE_CLAIM",
+	);
 	const rows = db.sql
 		.prepare("SELECT * FROM rows WHERE job=? ORDER BY ordinal")
 		.all(job.id)
