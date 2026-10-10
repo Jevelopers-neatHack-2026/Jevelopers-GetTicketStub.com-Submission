@@ -382,6 +382,7 @@ function runIsolated(job) {
         "--nofile=64:64",
         "--",
         process.execPath,
+        "--disable-wasm-trap-handler",
         "--max-old-space-size=512",
         WORKER_PATH,
         String(job.options.maxTextCodeUnits),

@@ -287,6 +287,7 @@ test("known synthetic fixture reaches the decoder through the production Linux l
     "--nofile=64:64",
     "--",
     process.execPath,
+    "--disable-wasm-trap-handler",
     "--max-old-space-size=512",
     worker,
     "100000",
