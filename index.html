@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TicketStub Brand Board</title>
+<meta name="description" content="TicketStub master brand: positioning, logo system, colour, type, voice, motion and mockups.">
+<link rel="icon" href="logo/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..800,0..100,0..1;1,9..144,300..800,0..100,0..1&family=Inter+Tight:wght@400..600&display=swap">
+<style>
+/* Layout: a long paper sheet. Day = cream desk, night = ink stage. Sections are
+   left-labelled rows on a 12-col grid; mockups sit on their own darker band. */
+:root {
+  --orange: #E4572E; --copper: #B4693E; --moss: #26302A; --cyan: #7CC6D2; --cream: #F4ECDD; --ink: #17140F;
+  --bg: var(--cream); --fg: var(--ink); --muted: rgb(23 20 15 / .66); --line: rgb(23 20 15 / .14);
+  --surface: rgb(23 20 15 / .05); --band: #EAE0CE; --focus: var(--ink);
+  --show-day: inline-block; --show-night: none;
+  --foil: linear-gradient(135deg, #B4693E 0%, #E4572E 45%, #7CC6D2 100%);
+  --holo: repeating-linear-gradient(118deg, hsl(348 92% 58%) 0, hsl(34 94% 60%) 26px, hsl(58 90% 62%) 50px, hsl(150 82% 58%) 76px, hsl(200 92% 60%) 102px, hsl(280 88% 62%) 128px, hsl(348 92% 58%) 152px);
+  --display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --ui: "Inter Tight", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --s-1: .8rem; --s0: 1rem; --s1: 1.25rem; --s2: 1.563rem; --s3: 1.953rem; --s4: 2.441rem; --s5: 3.052rem; --s6: 3.815rem;
+  --shadow-paper: 0 1px 0 rgb(23 20 15 / .06), 0 10px 24px -10px rgb(23 20 15 / .45);
+  --ease: cubic-bezier(.2,.8,.2,1); --ease-flip: cubic-bezier(.45,0,.55,1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--ink); --fg: var(--cream); --muted: rgb(244 236 221 / .66); --line: rgb(244 236 221 / .14);
+    --surface: rgb(244 236 221 / .06); --band: #0E0C09; --focus: var(--cyan);
+    --show-day: none; --show-night: inline-block; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: var(--ink); --fg: var(--cream); --muted: rgb(244 236 221 / .66); --line: rgb(244 236 221 / .14);
+  --surface: rgb(244 236 221 / .06); --band: #0E0C09; --focus: var(--cyan);
+  --show-day: none; --show-night: inline-block; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 400 var(--s0)/1.5 var(--ui); padding-inline: clamp(16px, 4vw, 56px); padding-block: 0 64px; }
+.day { display: var(--show-day); } .night { display: var(--show-night); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 560; font-variation-settings: "SOFT" 30, "WONK" 0; letter-spacing: -.02em; line-height: 1.15; text-wrap: balance; margin: 0; }
+p { margin: 0; max-width: 62ch; }
+.label { font: 500 var(--s-1)/1.2 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.wrap { max-width: 1240px; margin-inline: auto; }
+.num { font-variant-numeric: tabular-nums; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9em; }
+
+/* top bar */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 20px; border-bottom: 1px solid var(--line); }
+.bar img { height: 28px; }
+.bar nav { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.bar a { color: var(--muted); text-decoration: none; font-size: var(--s-1); letter-spacing: .04em; }
+.bar a:hover { color: var(--fg); }
+
+/* hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; align-items: center; padding-block: 56px 64px; }
+.hero h1 { font-size: clamp(2.2rem, 5vw, var(--s6)); line-height: 1.05; }
+.hero h1 em { font-style: italic; font-variation-settings: "SOFT" 60, "WONK" 1; color: var(--orange); }
+.hero .pos { margin-top: 20px; font-size: var(--s1); color: var(--muted); }
+.attrs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+.attr { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-weight: 500; font-size: var(--s-1); letter-spacing: .06em; text-transform: uppercase; }
+.stage { position: relative; display: grid; place-items: center; aspect-ratio: 1; max-width: 420px; width: 100%; justify-self: center; background: var(--ink); border-radius: 4px; perspective: 1400px; overflow: hidden; touch-action: pan-y; }
+.stage::after { content: "Move over the stamp"; position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: rgb(244 236 221 / .55); font-size: var(--s-1); letter-spacing: .06em; }
+.foilstamp { position: relative; width: 52%; aspect-ratio: 4 / 5; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 380ms var(--ease-flip); isolation: isolate; filter: drop-shadow(0 18px 24px rgb(0 0 0 / .5)); }
+.foilstamp.live { transition: transform 80ms linear; }
+.foilstamp img { width: 100%; height: 100%; display: block; }
+.foilstamp .holo, .foilstamp .glare { position: absolute; inset: 0; -webkit-mask: url(logo/ts-stamp-mono-ink.svg) center / 100% 100% no-repeat; mask: url(logo/ts-stamp-mono-ink.svg) center / 100% 100% no-repeat; pointer-events: none; }
+.foilstamp .holo { background: var(--holo); background-size: 300% 300%; background-position: calc(50% + var(--fx, 0) * 1px) calc(50% + var(--fy, 0) * .4px); mix-blend-mode: color-dodge; opacity: calc(.08 + var(--glow, 0) * .32); }
+.foilstamp .glare { background: radial-gradient(farthest-corner circle at var(--px, 50%) var(--py, 50%), rgb(255 255 255 / calc(var(--glow, 0) * .55)) 4%, rgb(255 255 255 / calc(var(--glow, 0) * .12)) 24%, transparent 55%); mix-blend-mode: overlay; }
+
+/* sections */
+section { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 24px 48px; padding-block: 56px; border-top: 1px solid var(--line); }
+section > header h2 { font-size: var(--s3); }
+section > header p { margin-top: 10px; color: var(--muted); font-size: .95rem; }
+.why { color: var(--muted); font-size: .92rem; }
+.why b { color: var(--fg); font-weight: 600; }
+
+/* logo grid */
+.logos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.tile { display: grid; grid-template-rows: 180px auto; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.tile .art { display: grid; place-items: center; padding: 24px; }
+.tile .art img { max-height: 132px; max-width: 100%; }
+.tile .cap { padding: 12px 14px; border-top: 1px solid var(--line); font-size: .9rem; display: grid; gap: 2px; }
+.tile .cap b { font-weight: 600; }
+.tile .cap span { color: var(--muted); font-size: .85rem; }
+.on-cream { background: var(--cream); } .on-ink { background: var(--ink); } .on-art { background: url(references/mockup-art-glasgow.webp) center / cover; }
+.plate { background: var(--cream); padding: 12px; border-radius: 2px; display: grid; place-items: center; }
+.sizes { display: flex; align-items: end; gap: 18px; }
+.sizes figure { margin: 0; display: grid; gap: 6px; justify-items: center; font-size: .75rem; color: var(--muted); }
+.wide { grid-column: 1 / -1; }
+.wide .art { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 32px; }
+
+/* colour */
+.swatches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sw { border: 1px solid var(--line); border-radius: 4px; overflow: hidden; display: grid; grid-template-rows: 120px auto; }
+.sw .chip { display: flex; align-items: end; justify-content: space-between; padding: 12px; font: 600 var(--s-1)/1 var(--ui); letter-spacing: .04em; }
+.sw .meta { padding: 12px; display: grid; gap: 6px; font-size: .88rem; }
+.sw .meta b { font-family: var(--display); font-weight: 560; font-size: var(--s1); }
+.sw .meta .hex { font-variant-numeric: tabular-nums; letter-spacing: .04em; color: var(--muted); }
+.sw .meta .ratio { font-size: .8rem; color: var(--muted); }
+.foilbar { margin-top: 12px; height: 72px; border-radius: 4px; background: var(--foil); display: flex; align-items: center; justify-content: space-between; padding-inline: 16px; color: var(--ink); font-weight: 600; font-size: var(--s-1); letter-spacing: .06em; }
+.holobar { margin-top: 8px; height: 36px; border-radius: 4px; background: var(--holo); display: flex; align-items: center; padding-inline: 16px; color: var(--ink); font-weight: 600; font-size: var(--s-1); letter-spacing: .06em; }
+.copybtn { all: unset; cursor: pointer; border-radius: 2px; padding: 2px 4px; }
+.copybtn:focus-visible { outline: 2px solid currentColor; }
+
+/* type */
+.typepair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.spec { border: 1px solid var(--line); border-radius: 4px; padding: 24px; display: grid; gap: 14px; align-content: start; }
+.spec .big { font-family: var(--display); font-size: clamp(3rem, 8vw, 5.5rem); line-height: .95; font-weight: 560; font-variation-settings: "SOFT" 30; letter-spacing: -.03em; }
+.spec .big.ui { font-family: var(--ui); font-weight: 600; letter-spacing: -.02em; }
+.ladder { display: grid; gap: 10px; margin-top: 8px; }
+.ladder div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: baseline; border-bottom: 1px dashed var(--line); padding-bottom: 8px; }
+.ladder span { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.ladder p { font-family: var(--display); font-weight: 560; font-variation-settings: "SOFT" 30; line-height: 1.1; overflow-wrap: anywhere; }
+
+/* directions */
+.dirs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.dir { border: 1px solid var(--line); border-radius: 4px; overflow: hidden; display: grid; grid-template-rows: 140px auto; }
+.dir .look { position: relative; }
+.dir .body { padding: 16px; display: grid; gap: 8px; align-content: start; }
+.dir .tag { justify-self: start; font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.dir .tag.pick { background: var(--orange); color: var(--ink); border-color: transparent; }
+.look-a { background: linear-gradient(115deg, rgb(255 230 180 / .55), transparent 60%), var(--cream); }
+.look-a::before { content: "Ts"; position: absolute; left: 22px; bottom: 16px; font: 600 56px/1 var(--display); color: var(--ink); }
+.look-a::after { content: ""; position: absolute; right: 22px; top: 22px; width: 96px; height: 64px; background: #EDE2CC; box-shadow: var(--shadow-paper); transform: rotate(-4deg); }
+.look-b { background: radial-gradient(120% 90% at 80% 10%, rgb(124 198 210 / .35), transparent 50%), radial-gradient(90% 80% at 10% 100%, rgb(228 87 46 / .5), transparent 55%), var(--ink); }
+.look-b::before { content: ""; position: absolute; inset: 34px 36% 30px 36%; background: var(--foil); border-radius: 2px; }
+.look-c { background: repeating-linear-gradient(170deg, rgb(124 198 210 / .25) 0 2px, transparent 2px 7px), #EEF3F2; }
+.look-c::before { content: "SEC 104  ROW G  SEAT 9\A SAT OCT 12 2024"; white-space: pre; position: absolute; left: 20px; top: 40px; font: 600 13px/1.6 ui-monospace, Consolas, monospace; color: #222; }
+
+/* mockups band */
+.band { background: var(--band); margin-inline: calc(-1 * clamp(16px, 4vw, 56px)); padding-inline: clamp(16px, 4vw, 56px); }
+.band section { border-top: 0; }
+.mocks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 24px; align-items: start; }
+.mock { display: grid; gap: 12px; justify-items: center; }
+.mock figcaption { font-size: .88rem; color: var(--muted); text-align: center; max-width: 30ch; }
+.mock figcaption b { color: var(--fg); font-weight: 600; display: block; }
+.phone { width: 100%; max-width: 260px; aspect-ratio: 9 / 19.5; border-radius: 36px; background: #0B0A08; padding: 9px; box-shadow: 0 30px 60px -30px rgb(0 0 0 / .6); }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 28px; overflow: hidden; display: flex; flex-direction: column; }
+
+/* splash */
+.splash { background: radial-gradient(90% 60% at 50% 40%, rgb(228 87 46 / .22), transparent 70%), var(--ink); align-items: center; justify-content: center; gap: 18px; color: var(--cream); text-align: center; padding: 24px; }
+.splash img.st { width: 44%; filter: drop-shadow(0 12px 18px rgb(0 0 0 / .5)); }
+.splash img.wm { width: 72%; }
+.splash p { font-size: .78rem; color: rgb(244 236 221 / .7); max-width: 22ch; }
+.homescreen { display: flex; gap: 14px; align-items: center; }
+.homescreen img { width: 72px; border-radius: 17px; box-shadow: 0 8px 16px -8px rgb(0 0 0 / .6); }
+.homescreen span { font-size: .75rem; color: var(--muted); }
+
+/* studio screen (day) */
+.studio { background: var(--cream); color: var(--ink); }
+.studio .top { display: flex; align-items: center; justify-content: space-between; padding: 26px 16px 8px; font-size: .7rem; font-weight: 500; }
+.studio .top img { height: 18px; }
+.studio .top .mute { width: 26px; height: 26px; border-radius: 50%; background: rgb(23 20 15 / .07); display: grid; place-items: center; }
+.studio .desk { flex: 1; display: grid; place-items: center; position: relative; padding-top: 26px; }
+.stub { --r: 4px; position: relative; width: 58%; aspect-ratio: 2 / 3; background: var(--ink) url(references/mockup-art-glasgow.webp) center 60% / cover; padding: calc(2 * var(--r)); -webkit-mask: radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) / calc(3 * var(--r)) calc(3 * var(--r)), linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r)); mask: radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) / calc(3 * var(--r)) calc(3 * var(--r)), linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r)); transform: rotate(-2deg); }
+.stub-wrap { filter: drop-shadow(0 12px 14px rgb(23 20 15 / .45)); position: relative; display: grid; place-items: center; width: 100%; }
+.stub .t { position: absolute; top: 9%; left: 0; right: 0; text-align: center; font: 600 1.15rem/1 var(--display); letter-spacing: .14em; background: linear-gradient(135deg, #E8C08F, #B4693E 50%, #F4ECDD); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stub .a { position: absolute; top: 19%; left: 0; right: 0; text-align: center; font: 500 .48rem/1.2 var(--ui); letter-spacing: .2em; color: rgb(244 236 221 / .85); text-transform: uppercase; }
+.stub .f { position: absolute; bottom: 7%; left: 0; right: 0; text-align: center; font: 500 .42rem/1 var(--ui); letter-spacing: .18em; color: rgb(244 236 221 / .9); }
+.toolbar { position: absolute; top: 1%; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; background: var(--ink); border-radius: 10px; padding: 4px; box-shadow: 0 8px 16px -6px rgb(0 0 0 / .45); }
+.toolbar span { color: var(--cream); font-size: .56rem; padding: 4px 7px; border-radius: 6px; }
+.toolbar span:first-child { background: rgb(244 236 221 / .14); }
+.chip-low { position: absolute; bottom: 24%; right: 6%; background: var(--cream); color: var(--ink); font-size: .55rem; font-weight: 600; padding: 4px 8px; border-radius: 999px; box-shadow: 0 0 0 2px var(--orange); animation: pulse 1.6s var(--ease) infinite; white-space: nowrap; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 5px rgb(228 87 46 / .25); } }
+.materials { margin: 0 12px; display: grid; grid-template-columns: repeat(4, 1fr); background: rgb(23 20 15 / .06); border-radius: 999px; padding: 3px; font-size: .52rem; text-align: center; }
+.materials span { padding: 6px 0; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.materials span b { display: block; font-weight: 600; font-size: .58rem; }
+.materials .on { background: var(--cream); box-shadow: 0 1px 3px rgb(23 20 15 / .25); }
+.cta { margin: 10px 12px 22px; background: var(--orange); color: var(--ink); font-weight: 600; font-size: .75rem; text-align: center; padding: 11px; border-radius: 12px; }
+.hint { text-align: center; font-size: .55rem; color: rgb(23 20 15 / .66); margin-bottom: 8px; }
+
+/* stub back + sleeve */
+.backset { position: relative; width: 100%; max-width: 300px; aspect-ratio: 1; }
+.sleeve { position: absolute; inset: 18% 4% 0 10%; background: var(--moss); border-radius: 3px; box-shadow: 0 20px 30px -18px rgb(0 0 0 / .6); overflow: hidden; }
+.sleeve::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 34%; background: #1E2722; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.sleeve .label-strip { position: absolute; right: 8%; bottom: 10%; display: flex; align-items: center; gap: 8px; color: var(--cream); font: 500 .62rem/1.2 var(--ui); letter-spacing: .1em; text-transform: uppercase; }
+.sleeve .label-strip img { width: 26px; }
+.back { --r: 3.5px; position: absolute; width: 52%; left: 2%; top: 0; aspect-ratio: 3 / 4; background: var(--cream); padding: 14px 12px; color: var(--ink); transform: rotate(-6deg); -webkit-mask: radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) / calc(3 * var(--r)) calc(3 * var(--r)), linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r)); mask: radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) / calc(3 * var(--r)) calc(3 * var(--r)), linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r)); display: grid; grid-template-rows: auto 1fr auto; gap: 6px; }
+.back-wrap { position: absolute; inset: 0; filter: drop-shadow(0 10px 12px rgb(23 20 15 / .4)); }
+.back h4 { margin: 0; font: italic 600 .78rem/1 var(--display); font-variation-settings: "WONK" 1, "SOFT" 100; }
+.back ol { margin: 0; padding-left: 14px; font: italic 400 .5rem/1.55 var(--display); font-variation-settings: "WONK" 1, "SOFT" 100; }
+.back ol .star::after { content: " \2605"; color: var(--orange); }
+.back .foot { display: flex; justify-content: space-between; align-items: end; }
+.back .foot img { width: 18px; }
+.back .note { font: italic 400 .52rem/1.3 var(--display); font-variation-settings: "WONK" 1, "SOFT" 100; color: var(--copper); }
+.qr { width: 30px; height: 30px; background: conic-gradient(var(--ink) 25%, transparent 0 50%, var(--ink) 0 75%, transparent 0) 0 0 / 6px 6px; outline: 3px solid var(--ink); outline-offset: -3px; }
+
+/* share card */
+.share { width: 100%; max-width: 360px; aspect-ratio: 1.91; background: radial-gradient(120% 120% at 100% 0, rgb(124 198 210 / .18), transparent 50%), var(--ink); border-radius: 6px; display: grid; grid-template-columns: 38% 1fr; gap: 14px; padding: 14px; color: var(--cream); box-shadow: 0 20px 40px -24px rgb(0 0 0 / .6); }
+.share .stub { width: 100%; transform: rotate(-3deg); }
+.share .stub .t { font-size: .8rem; }
+.share .stub .a { font-size: .34rem; }
+.share .stub .f { font-size: .3rem; }
+.share .txt { display: grid; align-content: space-between; min-width: 0; }
+.share h3 { font-size: 1.05rem; line-height: 1.1; }
+.share p { font-size: .62rem; color: rgb(244 236 221 / .7); margin-top: 4px; }
+.share .made { display: flex; align-items: center; gap: 6px; font-size: .55rem; color: rgb(244 236 221 / .7); }
+.share .made img { height: 12px; }
+
+/* references */
+.refs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.refs figure { margin: 0; display: grid; gap: 6px; }
+.refs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 3px; display: block; }
+.refs figcaption { font-size: .78rem; color: var(--muted); }
+.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.rule { border-left: 3px solid var(--orange); padding: 2px 0 2px 12px; font-size: .92rem; }
+.rule b { display: block; font-weight: 600; }
+
+/* voice */
+.voice { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.voice th { text-align: left; font: 500 var(--s-1)/1.2 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 0 12px 8px 0; }
+.voice td { border-top: 1px solid var(--line); padding: 10px 12px 10px 0; vertical-align: top; }
+.voice td:nth-child(2) { font-weight: 500; }
+.voice td:nth-child(3) { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--orange); }
+.tablewrap { overflow-x: auto; }
+
+/* motion */
+.motion { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.m { border: 1px solid var(--line); border-radius: 4px; padding: 16px; display: grid; gap: 10px; align-content: start; }
+.m h3 { font-size: var(--s1); }
+.m dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: .86rem; }
+.m dt { font-variant-numeric: tabular-nums; font-weight: 600; }
+.m dd { margin: 0; color: var(--muted); }
+.track { height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+.track i { display: block; height: 100%; width: 30%; background: var(--foil); animation: sweep 2.6s var(--ease-flip) infinite alternate; }
+@keyframes sweep { to { transform: translateX(233%); } }
+
+/* don'ts */
+.donts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.dont { display: grid; gap: 10px; }
+.dont .ex { height: 130px; border: 1px solid var(--line); border-radius: 4px; display: grid; place-items: center; position: relative; overflow: hidden; }
+.dont .ex::after { content: "\2715"; position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; border-radius: 50%; background: var(--orange); color: var(--ink); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.dont p { font-size: .9rem; }
+.dont p b { font-weight: 600; }
+
+footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; color: var(--muted); font-size: .85rem; }
+
+@media (max-width: 860px) {
+  .logos, .swatches, .refs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mocks, .rules { grid-template-columns: 1fr; }
+  .hero { grid-template-columns: 1fr; padding-block: 36px 48px; }
+  section { grid-template-columns: 1fr; padding-block: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .foilstamp, .foilstamp.live { transition: none; }
+  .foilstamp { --glow: .55; }
+  .chip-low, .track i { animation: none; }
+}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <img class="day" src="logo/wordmark.svg" alt="TicketStub">
+    <img class="night" src="logo/wordmark-cream.svg" alt="TicketStub">
+    <nav aria-label="Sections">
+      <a href="#logo">Logo</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#mockups">Mockups</a><a href="#imagery">Imagery</a><a href="#voice">Voice</a><a href="#motion">Motion</a><a href="#donts">Don'ts</a>
+    </nav>
+  </div>
+
+  <div class="hero">
+    <div>
+      <p class="label">Brand board · v1 · neatHack 2026</p>
+      <h1 style="margin-top:14px">Turn your ticket into a stub <em>worth keeping.</em></h1>
+      <p class="pos">For people who want to keep the night, TicketStub is the keepsake studio that turns any ticket into a stub worth framing. No forms: drop your ticket and it's done.</p>
+      <div class="attrs" aria-label="Brand attributes"><span class="attr">Tactile</span><span class="attr">Premium</span><span class="attr">Playful</span></div>
+    </div>
+    <div class="stage" id="stage">
+      <div class="foilstamp" id="foilstamp">
+        <img src="logo/ts-stamp.svg" alt="The Ts stamp, TicketStub's symbol">
+        <div class="holo" aria-hidden="true"></div>
+        <div class="glare" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="directions">
+    <header><h2>Direction</h2><p>Paper by day, foil by night.</p></header>
+    <div>
+      <div class="dirs">
+        <article class="dir"><div class="look look-a" aria-hidden="true"></div><div class="body"><span class="tag pick">Base</span><h3>A. Paper Desk</h3><p class="why">Cream stock, warm raking light, a serif you could letterpress. <b>It makes the everyday studio feel like handling a real stub.</b></p></div></article>
+        <article class="dir"><div class="look look-b" aria-hidden="true"></div><div class="body"><span class="tag pick">Moments</span><h3>B. Night Stage</h3><p class="why">Ink and moss with copper-to-cyan light leaks. <b>We switch to it for printing, reveal, finishes and the tear, because foil only glows on dark.</b></p></div></article>
+        <article class="dir"><div class="look look-c" aria-hidden="true"></div><div class="body"><span class="tag">Edition only</span><h3>C. Box Office</h3><p class="why">Thermal mono and security waves. <b>Rejected as the master brand because it reads as a ticketing vendor; it lives on as the Classic stub edition.</b></p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="logo">
+    <header><h2>Logo</h2><p>A postage stamp: kept, sent, collected. The perforation is the same edge you tear in the app.</p></header>
+    <div class="logos">
+      <div class="tile"><div class="art on-cream"><img src="logo/ts-stamp.svg" alt="Ts stamp, full colour"></div><div class="cap"><b>Primary stamp</b><span>Foil gradient, Night Ink letters.</span></div></div>
+      <div class="tile"><div class="art on-ink"><img src="logo/ts-stamp.svg" alt="Ts stamp on ink"></div><div class="cap"><b>On night</b><span>The same file; foil reads on ink.</span></div></div>
+      <div class="tile"><div class="art on-cream"><img src="logo/ts-stamp-mono-orange.svg" alt="Ts stamp, single colour orange"></div><div class="cap"><b>One colour</b><span>Letters knocked out, for foil or emboss print.</span></div></div>
+      <div class="tile"><div class="art on-ink"><img src="logo/ts-stamp-mono-cream.svg" alt="Ts stamp, inverted cream"></div><div class="cap"><b>Inverted</b><span>Cream on ink.</span></div></div>
+      <div class="tile"><div class="art on-art"><div class="plate"><img src="logo/ts-stamp-mono-ink.svg" alt="Ts stamp on a cream plate over art" style="max-height:80px"></div></div><div class="cap"><b>Over art</b><span>Always on a plate, never bare.</span></div></div>
+      <div class="tile"><div class="art on-cream"><div class="sizes">
+        <figure><img src="logo/favicon.svg" width="16" height="16" alt="Favicon at 16 pixels"><figcaption class="num">16</figcaption></figure>
+        <figure><img src="logo/favicon.svg" width="24" height="24" alt="Favicon at 24 pixels"><figcaption class="num">24</figcaption></figure>
+        <figure><img src="logo/favicon.svg" width="32" height="32" alt="Favicon at 32 pixels"><figcaption class="num">32</figcaption></figure>
+        <figure><img src="logo/favicon.svg" width="64" height="64" alt="Favicon at 64 pixels"><figcaption class="num">64</figcaption></figure>
+      </div></div><div class="cap"><b>Favicon</b><span>Square stamp, 4 bites a side, heavier letters.</span></div></div>
+      <div class="tile wide"><div class="art on-cream"><img src="logo/lockup-horizontal.svg" alt="Horizontal lockup: stamp and Ticket Stub wordmark"><img src="logo/lockup-stacked.svg" alt="Stacked lockup" style="max-height:150px"></div><div class="cap"><b>Wordmark and lockups</b><span>Ticket┊Stub: the dotted tear line is the product's signature moment set in type. Under 120 px wide, use the compact wordmark without dots.</span></div></div>
+    </div>
+  </section>
+
+  <section id="colour">
+    <header><h2>Colour</h2><p>Six colours, each with one job. Tap a HEX to copy it.</p></header>
+    <div>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#E4572E;color:#17140F"><span>Primary</span><span>Aa 5.0</span></div><div class="meta"><b>Ticket Orange</b><button class="copybtn hex" data-hex="#E4572E">#E4572E</button><span>CTAs, the stamp, the one accent in generated art.</span><span class="ratio">Ink label 5.0:1 · large text only on cream (3.1:1)</span></div></div>
+        <div class="sw"><div class="chip" style="background:#B4693E;color:#17140F"><span>Secondary</span><span>Aa 4.4</span></div><div class="meta"><b>Copper</b><button class="copybtn hex" data-hex="#B4693E">#B4693E</button><span>Foil gradient start, print and frame tiers.</span><span class="ratio">Large text only on cream (3.6:1)</span></div></div>
+        <div class="sw"><div class="chip" style="background:#26302A;color:#F4ECDD"><span>Secondary dark</span><span>Aa 11.6</span></div><div class="meta"><b>Stage Moss</b><button class="copybtn hex" data-hex="#26302A">#26302A</button><span>Raised surfaces at night: sheets, panels, printing.</span><span class="ratio">Cream on moss 11.6:1</span></div></div>
+        <div class="sw"><div class="chip" style="background:#7CC6D2;color:#17140F"><span>Accent</span><span>Aa 9.5</span></div><div class="meta"><b>Holo Cyan</b><button class="copybtn hex" data-hex="#7CC6D2">#7CC6D2</button><span>Foil gradient end, focus and selection on dark.</span><span class="ratio">9.5:1 on ink · never text on cream</span></div></div>
+        <div class="sw"><div class="chip" style="background:#F4ECDD;color:#17140F;box-shadow:inset 0 -1px 0 rgb(23 20 15 / .1)"><span>Neutral light</span><span>Aa 15.6</span></div><div class="meta"><b>Stub Cream</b><button class="copybtn hex" data-hex="#F4ECDD">#F4ECDD</button><span>Paper and the day background.</span><span class="ratio">Ink on cream 15.6:1</span></div></div>
+        <div class="sw"><div class="chip" style="background:#17140F;color:#F4ECDD"><span>Neutral dark</span><span>Aa 15.6</span></div><div class="meta"><b>Night Ink</b><button class="copybtn hex" data-hex="#17140F">#17140F</button><span>Body text and the night background.</span><span class="ratio">Muted text = 66% opacity (5.6:1)</span></div></div>
+      </div>
+      <div class="foilbar"><span>Brand foil</span><span class="num">copper 0 · orange 45 · cyan 100 · 135°</span></div>
+      <div class="holobar">Holo spectrum · holographic stock and spot holo only</div>
+    </div>
+  </section>
+
+  <section id="type">
+    <header><h2>Type</h2><p>Two families, both SIL Open Font License. Major-third scale from 16&nbsp;px.</p></header>
+    <div>
+      <div class="typepair">
+        <div class="spec"><p class="label">Display · Fraunces</p><p class="big">Night 2 of 3</p><p class="why">opsz 144, wght 560, SOFT 30. <b>Its bracketed serifs match the stamped "Ts"</b>, and the WONK axis gives us a playful italic for handwritten-style notes.</p></div>
+        <div class="spec"><p class="label">Interface · Inter Tight</p><p class="big ui num">Sec 104 · Row G</p><p class="why">400 body, 500 labels, 600 buttons, tabular figures for dates, seats and prices. <b>It's compact enough for dense ticket data on a phone.</b></p></div>
+      </div>
+      <div class="ladder">
+        <div><span>61 · 6</span><p style="font-size:var(--s6)">12.10.24</p></div>
+        <div><span>48.8 · 5</span><p style="font-size:var(--s5)">The Pale Hours</p></div>
+        <div><span>39 · 4</span><p style="font-size:var(--s4)">Rosewood Hall, Glasgow</p></div>
+        <div><span>31.25 · 3</span><p style="font-size:var(--s3)">Your stub is ready</p></div>
+        <div><span>25 · 2</span><p style="font-size:var(--s2)">Pick a finish</p></div>
+        <div><span>20 · 1</span><p style="font-size:var(--s1);font-family:var(--ui);font-weight:600">Print it for $49</p></div>
+        <div><span>16 · 0</span><p style="font-size:var(--s0);font-family:var(--ui);font-weight:400">Drop a screenshot, email or PDF.</p></div>
+        <div><span>12.8 · −1</span><p style="font-size:var(--s-1);font-family:var(--ui);font-weight:500;letter-spacing:.08em;text-transform:uppercase">Night 2 of 3 · 7°C · Rain</p></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="band" id="mockups">
+  <div class="wrap">
+    <section>
+      <header><h2>Mockups</h2><p>The master brand in use. The stub itself is a Researched edition, so it carries its own palette.</p></header>
+      <div class="mocks">
+        <figure class="mock">
+          <div class="phone"><div class="screen splash">
+            <img class="st" src="logo/ts-stamp.svg" alt="">
+            <img class="wm" src="logo/wordmark-cream.svg" alt="TicketStub">
+            <p>Turn your ticket into a stub worth keeping.</p>
+          </div></div>
+          <div class="homescreen"><img src="logo/app-icon.svg" alt="TicketStub app icon"><span>App icon, 1024 px<br>foil stamp on Night Ink</span></div>
+          <figcaption><b>App icon and splash</b>Night stage: the first thing you see glows.</figcaption>
+        </figure>
+
+        <figure class="mock">
+          <div class="phone"><div class="screen studio">
+            <div class="top"><img src="logo/favicon.svg" alt=""><span class="num">Night 2 of 3</span><span class="mute" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#17140F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></span></div>
+            <div class="desk">
+              <div class="stub-wrap"><div class="stub"><span class="t">GLASGOW</span><span class="a">The Pale Hours</span><span class="f num">NIGHT 2 OF 3 · 7°C · RAIN</span></div></div>
+              <div class="toolbar" aria-hidden="true"><span>Font</span><span>Colour</span><span>Foil</span></div>
+              <span class="chip-low num">12 Oct? Tap to fix</span>
+            </div>
+            <p class="hint">Swipe for another style</p>
+            <div class="materials num"><span>Digital<b>$9</b></span><span>Card<b>$29</b></span><span class="on">Print<b>$49</b></span><span>Framed<b>$89</b></span></div>
+            <div class="cta">Print it for $49</div>
+          </div></div>
+          <figcaption><b>Studio</b>Paper desk. One stub, one floating toolbar, one primary action.</figcaption>
+        </figure>
+
+        <figure class="mock">
+          <div class="backset">
+            <div class="sleeve"><div class="label-strip"><img src="logo/ts-stamp-mono-orange.svg" alt="">TicketStub · Keep the night</div></div>
+            <div class="back-wrap"><div class="back">
+              <h4>Setlist</h4>
+              <ol><li>Lamplight</li><li>Kelvin Way</li><li class="star">Rain on Sauchiehall</li><li>Second Night</li><li>Low Tide Choir</li><li>Encore: Northern Lines</li></ol>
+              <div class="foot"><div><p class="note">you sang every word</p></div><div style="display:grid;gap:4px;justify-items:end"><span class="qr" aria-label="QR code to the memory page"></span><img src="logo/ts-stamp-mono-ink.svg" alt="Ts stamp"></div></div>
+            </div></div>
+          </div>
+          <figcaption><b>Stub back and print sleeve</b>Setlist, note, QR to the memory page, and the Ts stamp. Ships in a moss sleeve.</figcaption>
+        </figure>
+
+        <figure class="mock">
+          <div class="share">
+            <div class="stub-wrap"><div class="stub"><span class="t">GLASGOW</span><span class="a">The Pale Hours</span><span class="f num">NIGHT 2 OF 3</span></div></div>
+            <div class="txt">
+              <div><h3>The Pale Hours</h3><p class="num">Rosewood Hall, Glasgow · 12.10.24</p></div>
+              <div class="made"><img src="logo/favicon.svg" alt="">Make yours at ticketstub</div>
+            </div>
+          </div>
+          <figcaption><b>Share card</b>1200 × 630. The stub leads; the brand signs off small.</figcaption>
+        </figure>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="wrap">
+  <section id="imagery">
+    <header><h2>Imagery</h2><p>Paper in warm light by day. Objects on velvet with light leaks by night.</p></header>
+    <div>
+      <div class="refs">
+        <figure><img src="references/ts-stamp-vertical-velvet.webp" alt="Copper-to-cyan Ts stamp on dark velvet" loading="lazy"><figcaption>Stamp on velvet</figcaption></figure>
+        <figure><img src="references/ts-stamp-holo-rainbow.webp" alt="Embossed TS stamp crossed by a rainbow light leak" loading="lazy"><figcaption>Light leak</figcaption></figure>
+        <figure><img src="references/ts-stamp-emboss-lightleak.webp" alt="Blind-embossed TS stamp on paper" loading="lazy"><figcaption>Emboss</figcaption></figure>
+        <figure><img src="references/mood-stub-back-golden-hour.webp" alt="Back of a stub with setlist and note in golden-hour light" loading="lazy"><figcaption>Paper, golden hour</figcaption></figure>
+        <figure><img src="references/mood-holo-light.webp" alt="Holographic ticket catching rainbow light" loading="lazy"><figcaption>Holo finish</figcaption></figure>
+        <figure><img src="references/mockup-art-glasgow.webp" alt="Rainy Glasgow night with a figure under an orange umbrella" loading="lazy"><figcaption>Generated art, one orange accent</figcaption></figure>
+      </div>
+      <div class="rules">
+        <p class="rule"><b>No text in generated art</b>The type engine sets every letter.</p>
+        <p class="rule"><b>One orange accent</b>Every scene is muted except one Ticket Orange object.</p>
+        <p class="rule"><b>Facts become constraints</b>If the stub says rain, the art can't show snow.</p>
+        <p class="rule"><b>Describe, don't copy</b>No real logos, covers or likenesses.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="voice">
+    <header><h2>Voice</h2><p>Clarity over cleverness. Say what they get, then what to do.</p></header>
+    <div class="tablewrap">
+      <table class="voice">
+        <thead><tr><th>Moment</th><th>Write</th><th>Not</th></tr></thead>
+        <tbody>
+          <tr><td>First screen</td><td>Turn your ticket into a stub worth keeping.</td><td>Unleash your concert memories!</td></tr>
+          <tr><td>Printing</td><td>Building your stub…</td><td>Our AI is working its magic</td></tr>
+          <tr><td>Unsure field</td><td>Is this the date? Tap to fix.</td><td>Low confidence: please verify field</td></tr>
+          <tr><td>Buy</td><td>Print it for $49</td><td>Proceed to checkout</td></tr>
+          <tr><td>Finish</td><td>Tear to finish</td><td>Complete your design</td></tr>
+          <tr><td>Save</td><td>Save to your wall. We'll email you a link.</td><td>Create an account to continue</td></tr>
+          <tr><td>Error</td><td>We couldn't read that ticket. Try a clearer screenshot or search for the show.</td><td>Oops! Something went wrong.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="motion">
+    <header><h2>Motion, sound, haptics</h2><p>Everything should feel like handling paper. Sound is on by default, with mute always visible.</p></header>
+    <div class="motion">
+      <div class="m"><h3>Timing</h3><dl class="num"><dt>80</dt><dd>track pointer or gyro</dd><dt>160</dt><dd>chips, toolbar</dd><dt>240</dt><dd>sheets, style swap</dd><dt>380</dt><dd>settle, flip</dd><dt>600</dt><dd>reveal, pin</dd><dt>2600</dt><dd>print sweep</dd></dl><div class="track" aria-hidden="true"><i></i></div></div>
+      <div class="m"><h3>Sound</h3><dl><dt>Drop</dt><dd>paper slide</dd><dt>Print</dt><dd>thermal whirr loop</dd><dt>Done</dt><dd>paper snap</dd><dt>Tear</dt><dd>rip, then pin thunk</dd><dt>Buy</dt><dd>rubber stamp</dd></dl><p class="why">Source: cuelume.dev, under 600 ms, quiet mix.</p></div>
+      <div class="m"><h3>Haptics</h3><dl class="num"><dt>[12]</dt><dd>drop accepted</dd><dt>[4]</dt><dd>each perforation crossed</dd><dt>[30,30,60]</dt><dd>tear complete</dd><dt>[20]</dt><dd>pin to wall</dd></dl><p class="why">Android web vibrate; iOS relies on sound.</p></div>
+      <div class="m"><h3>Material</h3><dl><dt>Plate</dt><dd>fixed greyscale foil shape</dd><dt>Colour</dt><dd>gradient moves with light</dd><dt>Tilt</dt><dd>±11°, 1400 px perspective</dd><dt>Spring</dt><dd>k .055, damping .9, 60 Hz</dd></dl></div>
+    </div>
+  </section>
+
+  <section id="donts">
+    <header><h2>Don'ts</h2></header>
+    <div class="donts">
+      <div class="dont"><div class="ex on-cream"><p style="color:#E4572E;font-size:.85rem;max-width:22ch;padding:12px">Drop a screenshot, email or PDF to start your stub.</p></div><p><b>No body text in orange, copper or cyan on cream.</b> They fail 4.5:1. Use ink.</p></div>
+      <div class="dont"><div class="ex on-art"><img src="logo/ts-stamp.svg" alt="" style="height:80px"></div><p><b>No bare stamp on busy art.</b> Use the mono stamp on a cream or ink plate.</p></div>
+      <div class="dont"><div class="ex on-cream"><img src="logo/ts-stamp.svg" alt="" style="height:80px;transform:rotate(14deg);filter:hue-rotate(140deg) drop-shadow(4px 4px 0 #17140F)"></div><p><b>No rotating, re-colouring or effects on the mark.</b> The foil is always copper → orange → cyan at 135°.</p></div>
+    </div>
+  </section>
+
+  <footer><span>TicketStub brand kit · Jevelopers, neatHack 2026</span><span>Fonts: Fraunces and Inter Tight, SIL OFL 1.1</span></footer>
+</div>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const card = document.getElementById('foilstamp');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const set = (x, y, glow) => {
+    card.style.setProperty('--px', x + '%');
+    card.style.setProperty('--py', y + '%');
+    card.style.setProperty('--fx', ((x - 50) * 2.6).toFixed(1));
+    card.style.setProperty('--fy', ((y - 50) * 2.6).toFixed(1));
+    card.style.setProperty('--rx', ((0.5 - y / 100) * 22).toFixed(2) + 'deg');
+    card.style.setProperty('--ry', ((x / 100 - 0.5) * 22).toFixed(2) + 'deg');
+    card.style.setProperty('--glow', glow);
+  };
+  if (!still) {
+    stage.addEventListener('pointermove', (e) => {
+      const r = card.getBoundingClientRect();
+      const x = Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100));
+      const y = Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100));
+      card.classList.add('live');
+      set(x, y, 1);
+    });
+    stage.addEventListener('pointerleave', () => { card.classList.remove('live'); set(50, 50, 0); });
+  }
+  document.querySelectorAll('.copybtn').forEach((b) => b.addEventListener('click', () => {
+    const hex = b.dataset.hex;
+    const done = () => { b.textContent = 'Copied'; setTimeout(() => (b.textContent = hex), 1200); };
+    try { navigator.clipboard.writeText(hex).then(done, () => { getSelection().selectAllChildren(b); }); }
+    catch { getSelection().selectAllChildren(b); }
+  }));
+})();
+</script>
+
+</body>
+</html>
