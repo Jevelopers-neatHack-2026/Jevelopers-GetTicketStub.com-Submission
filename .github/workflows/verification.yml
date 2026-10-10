@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   tooling:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -21,7 +21,11 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run integration-evals validate
-      - run: uv run pytest --junitxml=reports/tooling-junit.xml
+      - name: Install platform isolation tooling
+        run: sudo apt-get update && sudo apt-get install --yes bubblewrap
+      - name: Verify real Linux isolation and retained owner output
+        run: sudo -n .venv/bin/python -m pytest tests/test_owner_output.py --junitxml=reports/linux-owner-junit.xml
+      - run: uv run pytest --ignore=tests/test_owner_output.py --junitxml=reports/tooling-junit.xml
       - name: Verify missing assembly is reported as blocked
         shell: bash
         run: |

@@ -1,0 +1,143 @@
+{
+  "$defs": {
+    "Mode": {
+      "description": "Execution transport mode, independent from fixture origin.",
+      "enum": [
+        "mock-only",
+        "recorded",
+        "sandbox",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "Origin": {
+      "description": "Where the actual artifact originated.",
+      "enum": [
+        "synthetic",
+        "recorded",
+        "sandbox-derived",
+        "live"
+      ],
+      "title": "Origin",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Owner-produced receipt bytes retain prediction, timing, cost and provenance.",
+  "properties": {
+    "row_id": {
+      "title": "Row Id",
+      "type": "string"
+    },
+    "candidate": {
+      "title": "Candidate",
+      "type": "string"
+    },
+    "trial": {
+      "title": "Trial",
+      "type": "integer"
+    },
+    "component": {
+      "title": "Component",
+      "type": "string"
+    },
+    "component_revision": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Component Revision",
+      "type": "string"
+    },
+    "model": {
+      "title": "Model",
+      "type": "string"
+    },
+    "config_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Config Digest",
+      "type": "string"
+    },
+    "input_digest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Input Digest",
+      "type": "string"
+    },
+    "mode": {
+      "$ref": "#/$defs/Mode"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin"
+    },
+    "executed_at": {
+      "format": "date-time",
+      "title": "Executed At",
+      "type": "string"
+    },
+    "prediction": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Prediction"
+    },
+    "latency_ms": {
+      "title": "Latency Ms",
+      "type": "number"
+    },
+    "cost": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cost"
+    },
+    "downstream_cost": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Downstream Cost"
+    },
+    "owner_review_ref": {
+      "title": "Owner Review Ref",
+      "type": "string"
+    }
+  },
+  "required": [
+    "row_id",
+    "candidate",
+    "trial",
+    "component",
+    "component_revision",
+    "model",
+    "config_digest",
+    "input_digest",
+    "mode",
+    "origin",
+    "executed_at",
+    "prediction",
+    "latency_ms",
+    "cost",
+    "downstream_cost",
+    "owner_review_ref"
+  ],
+  "title": "BenchmarkReceipt",
+  "type": "object"
+}

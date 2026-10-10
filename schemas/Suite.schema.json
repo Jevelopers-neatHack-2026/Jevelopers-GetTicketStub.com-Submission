@@ -150,6 +150,32 @@
           ],
           "default": null,
           "title": "Fault"
+        },
+        "dependencies": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "artifact_producers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Producers",
+          "type": "array"
+        },
+        "required_evidence_kinds": {
+          "default": [
+            "evaluation"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Evidence Kinds",
+          "type": "array"
         }
       },
       "required": [
@@ -191,6 +217,7 @@
       "items": {
         "$ref": "#/$defs/Case"
       },
+      "minItems": 1,
       "title": "Cases",
       "type": "array"
     }

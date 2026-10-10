@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -20,9 +21,10 @@ def synthetic_workspace(root: Path) -> Assembly:
         checkout.mkdir()
         _ = (checkout / "lockfile").write_bytes(b"synthetic test lock")
         _ = (checkout / "canonical.json").write_bytes(b'{"synthetic":true}')
+        _ = (checkout / "config.json").write_bytes(b'{"seed":17}')
         for arguments in (
             ("init",),
-            ("add", "lockfile", "canonical.json"),
+            ("add", "lockfile", "canonical.json", "config.json"),
             (
                 "-c",
                 "user.name=Fixture",
@@ -60,8 +62,9 @@ def synthetic_workspace(root: Path) -> Assembly:
         contract_digest=digest(b'{"synthetic":true}'),
         contract_artifact_path="canonical.json",
         fixture_digest=digest(b"catalog"),
-        runtime="test",
-        configuration_digest=digest(b"config"),
+        runtime=sys.version,
+        configuration_digest=digest(b'{"seed":17}'),
+        configuration_artifact_path="config.json",
     )
 
 
@@ -91,3 +94,35 @@ def test_assembly_rejects_when_canonical_artifact_hash_changed(tmp_path: Path) -
     with pytest.raises(InvalidArtifactError, match="canonical_artifact_pin_mismatch"):
         validate_assembly(altered, tmp_path, digest(b"catalog"))
     # Then a substituted local schema cannot clear the pin check.
+
+
+@pytest.mark.parametrize("change", ["runtime", "configuration_digest"])
+def test_assembly_rejects_when_execution_environment_pin_differs(
+    tmp_path: Path, change: str
+) -> None:
+    # Given clean actual checkouts and a false runtime or configuration identity.
+    assembly = synthetic_workspace(tmp_path)
+    value = "IMPOSSIBLE runtime" if change == "runtime" else digest(b"different configuration")
+    altered = assembly.model_copy(update={change: value})
+    # When verifying environment pins before dispatch.
+    with pytest.raises(InvalidArtifactError):
+        validate_assembly(altered, tmp_path, digest(b"catalog"))
+    # Then informational strings cannot masquerade as enforced execution identity.
+
+
+def test_component_manifest_accepts_when_unrelated_components_absent(tmp_path: Path) -> None:
+    # Given a selected producer and its actual canonical/evaluator dependency pins.
+    assembly = synthetic_workspace(tmp_path)
+    names = {"agent-harness", "shared-contracts", "integration-evals"}
+    scoped = assembly.model_copy(
+        update={
+            "kind": "component",
+            "owner": "agent-harness",
+            "components": tuple(
+                component for component in assembly.components if component.repository in names
+            ),
+        }
+    )
+    # When validating only this declared component scope.
+    validate_assembly(scoped, tmp_path, digest(b"catalog"))
+    # Then absent unrelated product services do not prevent producer-ready verification.

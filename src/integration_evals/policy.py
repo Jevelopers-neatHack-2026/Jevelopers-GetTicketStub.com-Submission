@@ -3,14 +3,17 @@
 from datetime import datetime
 from decimal import Decimal
 from operator import ge, le
+from pathlib import Path
 from typing import Final, Literal
 
 from pydantic import Field
 
 from integration_evals.artifacts import digest
+from integration_evals.benchmark_receipts import CandidatePin, validate_receipts
 from integration_evals.benchmarks import Corpus, Metrics, Sample, summarize, validate_corpus
 from integration_evals.errors import fail
 from integration_evals.models import Digest, Record
+from integration_evals.numeric_rules import NumericRules, evaluate_rules, register_blockers
 
 BASELINE_COUNT: Final = 2
 
@@ -53,6 +56,8 @@ class Policy(Record):
     cost_policy_ref: str | None = None
     latency_policy_ref: str | None = None
     required_trials: int = Field(default=1, ge=1)
+    candidates: tuple[CandidatePin, ...] = ()
+    numeric_rules: NumericRules | None = None
 
 
 class Promotion(Record):
@@ -81,9 +86,19 @@ def metric_value(metrics: Metrics, name: str) -> Decimal:
     return Decimal(str(values[name]))
 
 
-def policy_blockers(policy: Policy, corpus: Corpus, samples: tuple[Sample, ...]) -> tuple[str, ...]:
+def policy_blockers(
+    policy: Policy, corpus: Corpus, samples: tuple[Sample, ...], receipt_root: Path | None = None
+) -> tuple[str, ...]:
     """Reject missing authority, receipt coverage and predeclared policy before scoring."""
     blockers = list(validate_corpus(corpus))
+    blockers.extend(validate_receipts(policy.candidates, corpus, samples, receipt_root))
+    blockers.extend(
+        register_blockers(
+            policy.numeric_rules,
+            tuple((target.question, target.metric) for target in policy.thresholds),
+            policy.required_questions,
+        )
+    )
     held_out = {row.id for row in corpus.rows if row.split == "held-out"}
     expected = {
         (row, candidate, trial)
@@ -124,9 +139,11 @@ def policy_blockers(policy: Policy, corpus: Corpus, samples: tuple[Sample, ...])
     return tuple(blockers)
 
 
-def promotion(policy: Policy, corpus: Corpus, samples: tuple[Sample, ...]) -> Promotion:
+def promotion(
+    policy: Policy, corpus: Corpus, samples: tuple[Sample, ...], receipt_root: Path | None = None
+) -> Promotion:
     """Check frozen owner policy and real receipts without auto-promoting routing."""
-    blockers = policy_blockers(policy, corpus, samples)
+    blockers = policy_blockers(policy, corpus, samples, receipt_root)
     corpus_digest = digest(corpus.model_dump_json().encode())
     if blockers:
         return Promotion(
@@ -136,6 +153,8 @@ def promotion(policy: Policy, corpus: Corpus, samples: tuple[Sample, ...]) -> Pr
             policy_digest=digest(policy.model_dump_json().encode()),
         )
     failures: list[str] = []
+    if policy.numeric_rules is not None:
+        failures.extend(evaluate_rules(policy.numeric_rules, corpus, samples))
     metrics = tuple(
         summarize(samples, corpus.rows, candidate, question, stratum)
         for candidate in ("rules", "generative", "jev")

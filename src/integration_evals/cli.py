@@ -12,6 +12,7 @@ import typer
 from pydantic import TypeAdapter, ValidationError
 
 from integration_evals.artifacts import load_record, read_bytes
+from integration_evals.benchmark_receipts import BenchmarkReceipt
 from integration_evals.benchmarks import (
     Corpus,
     Sample,
@@ -21,10 +22,26 @@ from integration_evals.benchmarks import (
 )
 from integration_evals.errors import InvalidArtifactError
 from integration_evals.execution import Settings
-from integration_evals.models import Assembly, Catalog, Evidence, Mode, RequirementId, Run, Suite
+from integration_evals.models import (
+    Assembly,
+    Catalog,
+    Evidence,
+    Mode,
+    RequirementId,
+    Run,
+    Selection,
+    Suite,
+)
+from integration_evals.numeric_rules import NumericRules
 from integration_evals.policy import Policy, Promotion, policy_blockers, promotion
 from integration_evals.release import audit, export_audit
-from integration_evals.reporting import OwnerResponse, Tracker, save_run, validate_run
+from integration_evals.reporting import (
+    OwnerResponse,
+    Tracker,
+    save_run,
+    validate_evidence,
+    validate_run,
+)
 from integration_evals.runner import execute
 from integration_evals.specifications import (
     Requirements,
@@ -89,7 +106,8 @@ def validate(repository: Path | None = None) -> None:
         catalog = load_record(root / "fixtures/catalog.json", Catalog)
         suite = load_record(root / "scenarios/suite.json", Suite)
         validate_catalog(catalog, root / "fixtures", requirements)
-        validate_suite(suite, catalog, requirements)
+        selection = load_record(root / "scenarios/selection.json", Selection)
+        validate_suite(suite, catalog, requirements, selection)
         corpus = load_record(root / "benchmarks/corpus.json", Corpus)
         policy = load_record(root / "benchmarks/policy.json", Policy)
         blockers = policy_blockers(policy, corpus, ())
@@ -128,11 +146,15 @@ def run(
         authorize_paid=authorize_paid,
     )
     receipt = execute(suite, catalog, settings)
-    directory = save_run(receipt, Path(output), tracker)
+    directory = save_run(receipt, Path(output), tracker, settings.artifacts)
     requirements = load_record(repository / "planning/requirements.json", Requirements)
     export_audit(audit(receipt, tracker, requirements), directory / "release-audit.json")
     typer.echo(str(directory))
-    if any(result.outcome.value != "passed" for result in receipt.results):
+    if not receipt.selected_case_ids or any(
+        result.outcome.value != "passed"
+        for result in receipt.results
+        if result.case_id in receipt.selected_case_ids
+    ):
         raise typer.Exit(2)
 
 
@@ -142,12 +164,15 @@ def inspect(receipt: Path) -> None:
     """Reject inconsistent or sensitive run receipts before public packaging."""
     record = load_record(receipt, Run)
     validate_run(record)
+    validate_evidence(record.evidence, receipt.parent, record)
     typer.echo(f"Validated immutable receipt {record.id}")
 
 
 @app.command()
 @safe_command
-def benchmark(corpus: Path, samples: Path, policy: Path | None = None) -> None:
+def benchmark(
+    corpus: Path, samples: Path, policy: Path | None = None, receipt_root: Path | None = None
+) -> None:
     """Compute actual raw-sample metrics; report promotion blockers separately."""
     dataset = load_record(corpus, Corpus)
     raw = TypeAdapter(tuple[Sample, ...]).validate_json(read_bytes(samples))
@@ -161,7 +186,9 @@ def benchmark(corpus: Path, samples: Path, policy: Path | None = None) -> None:
     for blocker in blockers:
         typer.echo(f"Promotion BLOCKED: {blocker}")
     if policy is not None:
-        typer.echo(promotion(load_record(policy, Policy), dataset, raw).model_dump_json())
+        typer.echo(
+            promotion(load_record(policy, Policy), dataset, raw, receipt_root).model_dump_json()
+        )
 
 
 @app.command()
@@ -182,6 +209,9 @@ def schemas(destination: Path) -> None:
         OwnerResponse,
         Policy,
         Promotion,
+        Selection,
+        BenchmarkReceipt,
+        NumericRules,
     )
     for model in models:
         with (destination / f"{model.__name__}.schema.json").open("w", encoding="utf-8") as output:

@@ -56,7 +56,22 @@
       "safety": false,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "happy-path"
+      "fault": "happy-path",
+      "dependencies": [
+        "shared-contracts",
+        "agent-harness",
+        "event-intelligence",
+        "creative-engine",
+        "cost-intelligence"
+      ],
+      "artifact_producers": [
+        "getticketstub.com",
+        "shared-contracts",
+        "agent-harness",
+        "event-intelligence",
+        "creative-engine",
+        "cost-intelligence"
+      ]
     },
     {
       "id": "print-preflight",
@@ -678,7 +693,16 @@
       "safety": false,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "dashboard-totals"
+      "fault": "dashboard-totals",
+      "dependencies": [
+        "cost-intelligence",
+        "getticketstub.com"
+      ],
+      "artifact_producers": [
+        "team-dashboard",
+        "cost-intelligence",
+        "getticketstub.com"
+      ]
     },
     {
       "id": "dashboard-authority",
@@ -722,7 +746,16 @@
       "safety": true,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "dashboard-authority"
+      "fault": "dashboard-authority",
+      "dependencies": [
+        "cost-intelligence",
+        "getticketstub.com"
+      ],
+      "artifact_producers": [
+        "team-dashboard",
+        "cost-intelligence",
+        "getticketstub.com"
+      ]
     },
     {
       "id": "restart-before-send",
@@ -1184,7 +1217,11 @@
       "safety": false,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "jev-malformed"
+      "fault": "jev-malformed",
+      "required_evidence_kinds": [
+        "decision",
+        "evaluation"
+      ]
     },
     {
       "id": "research-conflicts",
@@ -1643,7 +1680,11 @@
       "safety": false,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "image-generation-edit"
+      "fault": "image-generation-edit",
+      "required_evidence_kinds": [
+        "image",
+        "evaluation"
+      ]
     },
     {
       "id": "image-failure",
@@ -1691,7 +1732,11 @@
       "safety": false,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "image-failure"
+      "fault": "image-failure",
+      "required_evidence_kinds": [
+        "image",
+        "evaluation"
+      ]
     },
     {
       "id": "canonical-conformance",
@@ -1802,7 +1847,24 @@
       "safety": false,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "sponsor-artifacts"
+      "fault": "sponsor-artifacts",
+      "required_evidence_kinds": [
+        "trace",
+        "checkpoint",
+        "forecast",
+        "evaluation"
+      ],
+      "artifact_producers": [
+        "integration-evals",
+        "agent-harness",
+        "cost-intelligence",
+        "marketing-material"
+      ],
+      "dependencies": [
+        "agent-harness",
+        "cost-intelligence",
+        "marketing-material"
+      ]
     },
     {
       "id": "jev-held-out-comparison",
@@ -1854,7 +1916,11 @@
       "safety": false,
       "mandatory": true,
       "timeout_seconds": 30,
-      "fault": "jev-held-out-comparison"
+      "fault": "jev-held-out-comparison",
+      "required_evidence_kinds": [
+        "decision",
+        "evaluation"
+      ]
     }
   ]
 }

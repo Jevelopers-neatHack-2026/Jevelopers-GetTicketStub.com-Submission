@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+import sys
 from datetime import timedelta
 from pathlib import Path
 from typing import Final
@@ -14,7 +15,15 @@ from integration_evals.artifacts import (
     reject_leaks,
 )
 from integration_evals.errors import fail
-from integration_evals.models import Assembly, Catalog, Component, Origin, RequirementId, Suite
+from integration_evals.models import (
+    Assembly,
+    Catalog,
+    Component,
+    Origin,
+    RequirementId,
+    Selection,
+    Suite,
+)
 
 REQUIRED_COMPONENTS: Final = frozenset(
     {
@@ -70,9 +79,20 @@ def validate_catalog(catalog: Catalog, root: Path, requirements: frozenset[Requi
                 fail("non_reserved_synthetic_source", item.id)
 
 
-def validate_suite(suite: Suite, catalog: Catalog, requirements: frozenset[RequirementId]) -> None:
+def validate_suite(
+    suite: Suite,
+    catalog: Catalog,
+    requirements: frozenset[RequirementId],
+    selection: Selection | None = None,
+) -> None:
     """Require owned cases, available fixtures and explicit mandatory selection."""
     unique_ids(tuple(case.id for case in suite.cases), "suite")
+    if selection is None:
+        fail("mandatory_registry_missing", "suite")
+    if not set(selection.mandatory_case_ids).issubset(
+        case.id for case in suite.cases if case.mandatory
+    ):
+        fail("mandatory_cases_omitted", "suite")
     fixtures = {item.id: item for item in catalog.fixtures}
     for case in suite.cases:
         if not set(case.requirements).issubset(requirements):
@@ -107,8 +127,18 @@ def validate_assembly(assembly: Assembly, workspace: Path, catalog_digest: str) 
     unique_ids(tuple(component.repository for component in assembly.components), "components")
     unique_ids(tuple(provider.id for provider in assembly.providers), "providers")
     names = {component.repository for component in assembly.components}
-    if not REQUIRED_COMPONENTS.issubset(names):
+    required = (
+        REQUIRED_COMPONENTS
+        if assembly.kind == "composed"
+        else {"shared-contracts", "integration-evals"}
+    )
+    if not required.issubset(names):
         fail("missing_component_pin", "assembly")
+    if (
+        assembly.kind == "composed" and assembly.owner != "getticketstub.com"
+    ) or assembly.owner not in names:
+        fail("manifest_owner_mismatch", "assembly")
+    validate_environment(assembly, workspace)
     if assembly.fixture_digest != catalog_digest:
         fail("catalog_pin_mismatch", "assembly")
     if assembly.contract_artifact_path is None:
@@ -135,6 +165,23 @@ def validate_component(component: Component, workspace: Path) -> None:
     lockfile = confined_path(checkout, component.lockfile_path)
     if digest(read_bytes(lockfile)) != component.lockfile_digest:
         fail("lockfile_pin_mismatch", component.repository)
+
+
+def validate_environment(assembly: Assembly, workspace: Path) -> None:
+    """Enforce actual interpreter identity and hash real configuration bytes before dispatch."""
+    if assembly.runtime != sys.version:
+        fail("runtime_pin_mismatch", "assembly")
+    if assembly.configuration_artifact_path is None:
+        fail("configuration_artifact_missing", "assembly")
+    if assembly.configuration_component not in {
+        component.repository for component in assembly.components
+    }:
+        fail("configuration_owner_missing", "assembly")
+    root = confined_path(workspace, assembly.configuration_component)
+    data = read_bytes(confined_path(root, assembly.configuration_artifact_path))
+    reject_leaks(data, "configuration")
+    if digest(data) != assembly.configuration_digest:
+        fail("configuration_pin_mismatch", "assembly")
 
 
 def source_fingerprint(repository: Path) -> str:

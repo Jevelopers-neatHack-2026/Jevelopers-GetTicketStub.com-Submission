@@ -36,6 +36,9 @@ ignore = ["COM812", "ISC001", "D203", "D213", "CPY001", "FBT001", "FBT002"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "ARG", "PLR2004", "SLF001", "D"]
 
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["integration_evals.models.Record"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-config", "--strict-markers"]

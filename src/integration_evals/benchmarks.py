@@ -59,6 +59,7 @@ class Sample(Record):
     component_revision: Revision
     config_digest: Digest
     receipt_ref: str | None = None
+    receipt_digest: Digest | None = None
     trial: int = Field(default=0, ge=0)
     critical: bool = False
     executed_at: datetime | None = None

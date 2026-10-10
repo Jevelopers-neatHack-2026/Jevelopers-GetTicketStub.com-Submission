@@ -524,6 +524,23 @@
       "title": "Context",
       "type": "string"
     },
+    "scope": {
+      "default": "composed",
+      "enum": [
+        "composed",
+        "component"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
+    "selected_case_ids": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Selected Case Ids",
+      "type": "array"
+    },
     "integration_revision": {
       "pattern": "^[a-f0-9]{40}$",
       "title": "Integration Revision",
@@ -589,6 +606,7 @@
       "items": {
         "$ref": "#/$defs/CaseResult"
       },
+      "minItems": 1,
       "title": "Results",
       "type": "array"
     },
@@ -613,6 +631,7 @@
     "id",
     "started_at",
     "context",
+    "selected_case_ids",
     "integration_revision",
     "source_digest",
     "working_tree_dirty",

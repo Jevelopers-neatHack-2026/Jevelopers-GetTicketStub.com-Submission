@@ -101,6 +101,19 @@
       "default": null,
       "title": "Receipt Ref"
     },
+    "receipt_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Receipt Digest"
+    },
     "trial": {
       "default": 0,
       "minimum": 0,

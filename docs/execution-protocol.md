@@ -25,6 +25,18 @@ Pass `--manifest` a JSON Assembly record accepted by the Python model in
 - the canonical contract artifact digest, fixture catalog digest, runtime string,
   configuration digest, and per-provider settings.
 
+The contract artifact path is relative to shared-contracts. The configuration artifact
+path/component identifies actual immutable configuration bytes; its digest is enforced.
+The runtime string must exactly match the executing interpreter's sys.version value.
+An owner must separately supply runtime evidence for its own non-Python toolchain.
+
+For an independent producer slice, use kind component, its actual owner name, and a
+nonempty selected_cases list. Include shared-contracts, integration-evals and the selected
+boundary's actual dependency closure. Unselected declared cases stay planned/skipped.
+The public exit code evaluates the explicit selection; the release audit still records
+the full unresolved program. A component-scoped run cannot establish composed acceptance.
+Full composed manifests remain app-owned and require the complete assembly.
+
 The required initial release includes app, shared-contracts, harness, research,
 creative, finance, and this evaluator. Every additionally consumed component must
 appear too. The evaluator validates HEAD, tree, working-copy cleanliness and exact
@@ -51,6 +63,14 @@ as numeric counters. Missing evidence prevents success. Exact output hashes and
 owner-produced revisions/permissions must join the run/case/requirement records.
 Output parsing is size-bounded and raw private stdout/stderr is withheld from public
 reports. Exit status, output digest, duration and cleanup status are retained.
+
+The request supplies a writable artifact_directory and IE_ARTIFACT_DIR. Evidence paths
+are relative to this staging directory. Only exact-run/case/requirement/producer joins,
+required evidence kinds and compatible real-origin claims are accepted. Sanitized,
+hash-checked bytes are copied to a durable run/case namespace before owner cleanup.
+Reports include those bytes, and inspect validates their hashes and joins again.
+Invocation and cleanup each own a new process session; remaining descendants are
+terminated on success, timeout or cancellation. Linux additionally uses a PID namespace.
 
 The cleanup command receives the same request and environment and is attempted in a
 finally path, with a bounded timeout. Failed or uncertain cleanup makes the case an
@@ -107,6 +127,19 @@ owner obligations in IE-06A/06B. Independent labels/adjudication and ratified nu
 quality, latency, cost, abstention and uncertainty rules are prerequisites.
 No tuning is permitted on final held-out labels. Mock/replay statistics cannot promote
 live routing. Complete owner-supplied policy and required-mode receipts remain blocked.
+
+Promotion now requires frozen candidate/question/model/configuration bindings and an
+approved receipt root. Every sample needs an exact receipt digest whose parsed owner
+record agrees on row, trial, input bytes, model, revision, mode, timestamp, prediction,
+latency and costs. A nonempty receipt string cannot establish eligibility. Ratified
+NumericRules provide actual minimum samples/families, paired-family accuracy interval
+width/lower bound, safety rows, and a complete mandatory metric register. Missing rules
+stay blocked; reference prose is not executed as policy. Required numeric values remain
+owner inputs. Use benchmark --policy <file> --receipt-root <approved-directory> to apply them.
+
+scenarios/selection.json is an independent mandatory declaration registry. Empty suites
+and deletion of mandatory cases fail before dispatch. Explicitly selected component
+subsets retain all other declared criteria as planned, never passing them implicitly.
 
 ## Results, reruns and authoritative tracker updates
 

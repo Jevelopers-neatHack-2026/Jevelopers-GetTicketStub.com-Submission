@@ -16,6 +16,8 @@ from integration_evals.artifacts import digest, read_bytes
 from integration_evals.errors import InvalidArtifactError, fail
 from integration_evals.execution import OwnerContext, OwnerExecution, blocked
 from integration_evals.models import Case, CaseResult, Mode, Origin, Outcome, Status
+from integration_evals.output_evidence import check_claim, retain
+from integration_evals.processes import ProcessSettings, invoke
 from integration_evals.reporting import OwnerResponse
 
 
@@ -23,22 +25,33 @@ def isolated_command(command: tuple[str, ...], isolated: str, mode: Mode) -> tup
     """Require operating-system network denial for offline owner execution."""
     if mode in {Mode.SANDBOX, Mode.LIVE}:
         return command
+    canonical_isolated = str(Path(isolated).resolve())
     if sys.platform == "darwin":
         sandbox = shutil.which("sandbox-exec")
         if sandbox:
-            return (sandbox, "-p", "(version 1)(allow default)(deny network*)", *command)
+            profile = "\n".join(
+                (
+                    "(version 1)",
+                    "(allow default)",
+                    "(deny network*)",
+                    "(deny file-write*)",
+                    f'(allow file-write* (subpath "{canonical_isolated}"))',
+                )
+            )
+            return (sandbox, "-p", profile, *command)
     else:
         bubblewrap = shutil.which("bwrap")
         if bubblewrap:
             return (
                 bubblewrap,
                 "--unshare-net",
+                "--unshare-pid",
                 "--die-with-parent",
                 "--ro-bind",
                 "/",
                 "/",
                 "--bind",
-                isolated,
+                canonical_isolated,
                 isolated,
                 "--dev",
                 "/dev",
@@ -66,6 +79,7 @@ def compare_response(
     ]
     if not response.evidence:
         return Outcome.ERROR, "owner-produced artifact evidence missing"
+    check_claim(case, context, response.evidence, response.origin)
     return (
         (Outcome.FAILED, "observation mismatch: " + ", ".join(mismatches))
         if mismatches
@@ -104,28 +118,40 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
                     "offline kernel network isolation unavailable",
                 )
             )
-        environment = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT") if key in os.environ}
-        environment.update(
-            {
-                "HOME": isolated,
-                "TMPDIR": isolated,
-                "IE_NAMESPACE": f"{context.run_id}-{case.id}",
-                "IE_MODE": settings.mode.value,
-                "IE_SEED": str(settings.seed),
-                "IE_CLOCK": context.clock.isoformat(),
-            }
-        )
-        credentials = {
-            p.credential_env: os.environ[p.credential_env]
-            for p in context.assembly.providers
-            if p.id in case.provider_ids and p.credential_env and p.credential_env in os.environ
+        environment = {
+            **{key: os.environ[key] for key in ("PATH", "SYSTEMROOT") if key in os.environ},
+            "HOME": isolated,
+            "TMPDIR": isolated,
+            "IE_NAMESPACE": f"{context.run_id}-{case.id}",
+            "IE_MODE": settings.mode.value,
+            "IE_SEED": str(settings.seed),
+            "IE_CLOCK": context.clock.isoformat(),
         }
         if settings.mode in {Mode.SANDBOX, Mode.LIVE}:
-            environment.update(credentials)
+            environment.update(
+                {
+                    p.credential_env: os.environ[p.credential_env]
+                    for p in context.assembly.providers
+                    if p.id in case.provider_ids
+                    and p.credential_env
+                    and p.mode in {Mode.SANDBOX, Mode.LIVE}
+                    and p.credential_env in os.environ
+                }
+            )
+        staging = Path(isolated) / "artifacts"
+        staging.mkdir()
+        environment["IE_ARTIFACT_DIR"] = str(staging)
         request = json.dumps(
             {
                 "case": case.model_dump(mode="json"),
                 "run_id": context.run_id,
+                "component_revision": component.revision,
+                "configuration_artifact": str(
+                    settings.workspace
+                    / context.assembly.configuration_component
+                    / (context.assembly.configuration_artifact_path or "")
+                ),
+                "artifact_directory": str(staging),
                 "namespace": environment["IE_NAMESPACE"],
                 "seed": settings.seed,
                 "clock": context.clock.isoformat(),
@@ -134,43 +160,46 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
         )
         try:
             with (Path(isolated) / "stdout").open("w+b") as stdout:
-                completed = subprocess.run(  # noqa: S603 - reviewed owner command under OS isolation
+                exit_code = invoke(
                     command,
-                    cwd=settings.workspace / component.repository,
-                    env=environment,
-                    input=request.encode(),
-                    stdout=stdout,
-                    stderr=subprocess.DEVNULL,
-                    timeout=case.timeout_seconds,
-                    check=False,
+                    ProcessSettings(
+                        checkout=settings.workspace / component.repository,
+                        environment=environment,
+                        payload=request.encode(),
+                        stdout=stdout,
+                        timeout=case.timeout_seconds,
+                    ),
                 )
-            exit_code = completed.returncode
             output = read_bytes(Path(isolated) / "stdout")
             output_digest = digest(output)
             if exit_code == 0:
                 response = OwnerResponse.model_validate_json(output)
                 outcome, reason = compare_response(case, response, context)
+                response = response.model_copy(
+                    update={"evidence": retain(case, context, response.evidence, staging)}
+                )
             else:
-                reason = f"owner runner exit {completed.returncode}; private output withheld"
+                reason = f"owner runner exit {exit_code}; private output withheld"
         except subprocess.TimeoutExpired:
             reason = "owner runner timeout; dispatch state remains unknown"
         except (ValidationError, InvalidArtifactError, OSError):
             reason = "invalid owner response or runtime failure; private payload withheld"
+            response = None
         finally:
             try:
-                cleanup = subprocess.run(  # noqa: S603 - reviewed cleanup under OS isolation
+                cleanup = invoke(
                     cleanup_command,
-                    cwd=settings.workspace / component.repository,
-                    env=environment,
-                    input=request.encode(),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=min(case.timeout_seconds, 30),
-                    check=False,
+                    ProcessSettings(
+                        checkout=settings.workspace / component.repository,
+                        environment=environment,
+                        payload=request.encode(),
+                        stdout=subprocess.DEVNULL,
+                        timeout=min(case.timeout_seconds, 30),
+                    ),
                 )
-                if cleanup.returncode != 0:
+                if cleanup != 0:
                     outcome, reason = Outcome.ERROR, "owner cleanup failed"
-                cleanup_status = "passed" if cleanup.returncode == 0 else "failed"
+                cleanup_status = "passed" if cleanup == 0 else "failed"
             except (subprocess.TimeoutExpired, OSError):
                 outcome, reason = Outcome.ERROR, "owner cleanup timeout/runtime failure"
                 cleanup_status = "unknown"

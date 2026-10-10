@@ -7,7 +7,7 @@ import pytest
 from integration_evals.artifacts import digest, load_record
 from integration_evals.cli import owned_requirements
 from integration_evals.errors import InvalidArtifactError
-from integration_evals.models import Catalog, Fixture, Mode, Origin, RequirementId, Suite
+from integration_evals.models import Catalog, Fixture, Mode, Origin, RequirementId, Selection, Suite
 from integration_evals.validation import validate_catalog, validate_suite
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -70,7 +70,8 @@ def test_suite_rejects_when_case_has_unknown_requirement() -> None:
     catalog = load_record(REPOSITORY / "fixtures/catalog.json", Catalog)
     first = suite.cases[0].model_copy(update={"requirements": (RequirementId("UNOWNED"),)})
     modified = Suite(cases=(first,))
+    selection = Selection(mandatory_case_ids=(first.id,))
     # When selecting this suite.
     with pytest.raises(InvalidArtifactError, match="orphan_case"):
-        validate_suite(modified, catalog, owned_requirements(REPOSITORY))
+        validate_suite(modified, catalog, owned_requirements(REPOSITORY), selection)
     # Then the orphan case is rejected before dispatch.

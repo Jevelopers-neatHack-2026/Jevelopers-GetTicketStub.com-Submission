@@ -123,7 +123,9 @@ class Assembly(Record):
     """App-owned composed release input; never inferred from moving branches."""
 
     schema_version: Literal["1.0"] = "1.0"
-    owner: Literal["getticketstub.com"]
+    owner: Identifier
+    kind: Literal["composed", "component"] = "composed"
+    selected_cases: tuple[CaseId, ...] | None = Field(default=None, min_length=1)
     integration_revision: Revision
     components: tuple[Component, ...] = Field(min_length=1)
     contract_digest: Digest
@@ -131,6 +133,8 @@ class Assembly(Record):
     fixture_digest: Digest
     runtime: str
     configuration_digest: Digest
+    configuration_component: str = "integration-evals"
+    configuration_artifact_path: str | None = None
     providers: tuple[Provider, ...] = ()
 
 
@@ -160,13 +164,23 @@ class Case(Record):
     mandatory: bool = True
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     fault: str | None = None
+    dependencies: tuple[str, ...] = ()
+    artifact_producers: tuple[str, ...] = ()
+    required_evidence_kinds: tuple[str, ...] = ("evaluation",)
 
 
 class Suite(Record):
     """Checked-in scenario selection and ownership map."""
 
     schema_version: Literal["1.0"] = "1.0"
-    cases: tuple[Case, ...]
+    cases: tuple[Case, ...] = Field(min_length=1)
+
+
+class Selection(Record):
+    """Independent mandatory registry prevents deleting cases to manufacture success."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    mandatory_case_ids: tuple[CaseId, ...] = Field(min_length=1)
 
 
 class Evidence(Record):
@@ -221,6 +235,8 @@ class Run(Record):
     rationale: str | None = None
     started_at: datetime
     context: Literal["local", "ci"]
+    scope: Literal["composed", "component"] = "composed"
+    selected_case_ids: tuple[CaseId, ...] = Field(min_length=1)
     integration_revision: Revision
     source_digest: Digest
     working_tree_dirty: bool
@@ -233,6 +249,6 @@ class Run(Record):
     clock: datetime
     components: tuple[Component, ...]
     providers: tuple[Provider, ...]
-    results: tuple[CaseResult, ...]
+    results: tuple[CaseResult, ...] = Field(min_length=1)
     evidence: tuple[Evidence, ...] = ()
     limitations: tuple[str, ...] = ()

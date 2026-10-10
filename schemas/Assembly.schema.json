@@ -188,9 +188,35 @@
       "type": "string"
     },
     "owner": {
-      "const": "getticketstub.com",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$",
       "title": "Owner",
       "type": "string"
+    },
+    "kind": {
+      "default": "composed",
+      "enum": [
+        "composed",
+        "component"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "selected_cases": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Cases"
     },
     "integration_revision": {
       "pattern": "^[a-f0-9]{40}$",
@@ -235,6 +261,23 @@
       "pattern": "^[a-f0-9]{64}$",
       "title": "Configuration Digest",
       "type": "string"
+    },
+    "configuration_component": {
+      "default": "integration-evals",
+      "title": "Configuration Component",
+      "type": "string"
+    },
+    "configuration_artifact_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Configuration Artifact Path"
     },
     "providers": {
       "default": [],
