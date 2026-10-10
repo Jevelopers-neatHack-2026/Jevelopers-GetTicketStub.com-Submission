@@ -41,6 +41,48 @@ test("unimplemented reserved case fails when it collects zero test files", () =>
   assert.equal(summary.status, "failed");
 });
 
+test("Python policy checks have a separate unit-only route with faithful unittest counts", () => {
+  const result = runVerifier(["--case=eval-policy-unit", "--mode=unit"]);
+  const summary = summaryFrom(result.stdout);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summary.case, "eval-policy-unit");
+  assert.equal(summary.mode, "unit");
+  assert.equal(summary.status, "passed");
+  assert.ok(summary.expected_cases > 0);
+  assert.equal(summary.expected_cases, summary.executed_cases + summary.skipped_cases);
+  assert.equal(summary.executed_cases, summary.passed_cases);
+  assert.equal(summary.failed_cases, 0);
+  assert.equal(summary.skipped_cases, 0);
+  assert.equal(summary.expected_failure_cases, 0);
+  assert.equal(summary.unexpected_success_cases, 0);
+  assert.equal(summary.provider_activity, "none");
+});
+
+test("Python policy checks reject mock, recorded, sandbox, and live mode labels", () => {
+  for (const mode of ["mock", "recorded", "sandbox", "live"]) {
+    const result = runVerifier(["--case=eval-policy-unit", `--mode=${mode}`]);
+    const summary = summaryFrom(result.stdout);
+    assert.equal(result.status, 1, mode);
+    assert.equal(summary.status, "failed", mode);
+    assert.equal(summary.reason, "unknown case or mode", mode);
+  }
+});
+
+test("Python launcher ignores PYTHONPATH startup injection", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "ei-pythonpath-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(path.join(directory, "sitecustomize.py"), "raise RuntimeError('PYTHONPATH was executed')\n");
+
+  const result = runVerifier(
+    ["--case=eval-policy-unit", "--mode=unit"],
+    { PYTHONPATH: directory },
+  );
+  const summary = summaryFrom(result.stdout);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summary.status, "passed");
+  assert.equal(summary.provider_activity, "none");
+});
+
 test("live mode remains blocked even when a config-shaped file is present", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "ei-verify-config-"));
   t.after(() => rm(directory, { recursive: true, force: true }));

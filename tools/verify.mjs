@@ -1,4 +1,5 @@
 import { open, readdir, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -13,7 +14,9 @@ const CASES = Object.freeze({
   evals: ["tests/evals"],
   "research-api": ["tests/api"],
   "verify-runner": ["tests/runner"],
+  "eval-policy-unit": [],
 });
+const PYTHON_SUMMARY_PREFIX = "PYTHON_VERIFY_SUMMARY_JSON=";
 
 function optionsFromCli(args) {
   const parsed = {};
@@ -157,6 +160,104 @@ async function executeMock(caseName, directories) {
   });
 }
 
+function pythonRouteFailure(reason) {
+  printSummary({
+    case: "eval-policy-unit",
+    mode: "unit",
+    status: "failed",
+    exit_code: 1,
+    runtime: null,
+    expected_cases: 0,
+    executed_cases: 0,
+    passed_cases: 0,
+    failed_cases: 0,
+    error_cases: 0,
+    runner_errors: 0,
+    runner_skips: 0,
+    skipped_cases: 0,
+    skip_events: 0,
+    subtest_skip_events: 0,
+    subtest_failure_events: 0,
+    subtest_error_events: 0,
+    incomplete_cases: 0,
+    expected_failure_cases: 0,
+    unexpected_success_cases: 0,
+    fixture_scope: "local policy and runner unit tests only",
+    provider_activity: "none",
+    reason,
+  });
+}
+
+async function executePythonUnit() {
+  await new Promise((resolve) => {
+    let child;
+    let outputBuffer = "";
+    let pythonSummary;
+    let settled = false;
+
+    function finishWithFallback(reason) {
+      if (settled) return;
+      settled = true;
+      pythonRouteFailure(reason);
+      resolve();
+    }
+
+    function consumeLine(line) {
+      if (line.startsWith(PYTHON_SUMMARY_PREFIX)) {
+        try { pythonSummary = JSON.parse(line.slice(PYTHON_SUMMARY_PREFIX.length)); }
+        catch { pythonSummary = undefined; }
+      } else {
+        process.stdout.write(line);
+      }
+    }
+
+    try {
+      child = spawn("python3", ["-I", "tools/run_python_tests.py", "--suite", "eval-policy-unit"], {
+        cwd: ROOT,
+        shell: false,
+        timeout: 120_000,
+        stdio: ["ignore", "pipe", "inherit"],
+      });
+    } catch {
+      finishWithFallback("Python test process could not start");
+      return;
+    }
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      outputBuffer += chunk;
+      let boundary;
+      while ((boundary = outputBuffer.indexOf("\n")) >= 0) {
+        consumeLine(outputBuffer.slice(0, boundary + 1));
+        outputBuffer = outputBuffer.slice(boundary + 1);
+      }
+    });
+    child.once("error", () => finishWithFallback("Python test process could not start"));
+    child.once("close", (code, signal) => {
+      if (settled) return;
+      if (outputBuffer) consumeLine(outputBuffer);
+      if (!pythonSummary || typeof pythonSummary !== "object") {
+        finishWithFallback("Python test process exited without a structured summary");
+        return;
+      }
+
+      settled = true;
+      const processPassed = code === 0 && signal === null;
+      const summaryPassed = pythonSummary.status === "passed" && pythonSummary.exit_code === 0;
+      const consistent = processPassed === summaryPassed;
+      printSummary({
+        ...pythonSummary,
+        status: processPassed && summaryPassed && consistent ? "passed" : "failed",
+        exit_code: processPassed && summaryPassed && consistent ? 0 : 1,
+        reason: consistent
+          ? pythonSummary.reason
+          : "Python process exit did not match its structured summary",
+      });
+      resolve();
+    });
+  });
+}
+
 async function main() {
   let selected;
   try { selected = optionsFromCli(process.argv.slice(2)); }
@@ -165,7 +266,10 @@ async function main() {
     return;
   }
   const { caseName, mode } = selected;
-  if (!caseName || !Object.hasOwn(CASES, caseName) || !["mock", "live"].includes(mode)) {
+  const modeAllowed = caseName === "eval-policy-unit"
+    ? mode === "unit"
+    : ["mock", "live"].includes(mode);
+  if (!caseName || !Object.hasOwn(CASES, caseName) || !modeAllowed) {
     printSummary({ case: caseName ?? null, mode: mode ?? null, status: "failed", exit_code: 1, reason: "unknown case or mode" });
     return;
   }
@@ -196,6 +300,10 @@ async function main() {
       provider_activity: "none",
       reason: "live mode is disabled until an adapter and accepted EI-01/EI-09 integration exist; configuration presence or shape is not authenticated authorization; no request was attempted",
     });
+    return;
+  }
+  if (caseName === "eval-policy-unit") {
+    await executePythonUnit();
     return;
   }
   await executeMock(caseName, CASES[caseName]);
