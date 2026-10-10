@@ -1,37 +1,44 @@
-.night {
-  min-height: 100dvh;
-  background: var(--ts-bg);
-  color: var(--ts-text);
+/* Printing happens on the stage: paper first, then the lights go down. */
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .errorPage {
-  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: var(--ts-space-5) var(--ts-space-4);
+  padding: 24px 16px;
 }
 
 .card {
+  display: grid;
+  gap: 16px;
   width: min(480px, 100%);
-  display: flex;
-  flex-direction: column;
-  gap: var(--ts-space-4);
-  padding: var(--ts-space-6) var(--ts-space-5);
-  border: 1.5px solid var(--ts-text);
-  border-radius: var(--ts-radius-sheet);
-  background: var(--ts-bg);
-  box-shadow: var(--ts-shadow-paper);
+  padding: 28px 24px;
+  background: var(--desk-paper-raised);
+  border-radius: 6px;
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 18px 30px -20px rgb(23 20 15 / 0.5), inset 0 0 0 1px var(--desk-rule);
 }
-.card h1 {
-  font-size: var(--ts-step-3);
+
+.errorTitle {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
 }
 
 .muted {
-  color: var(--ts-text-muted);
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--ts-space-3);
+  align-items: center;
+  gap: 14px;
 }

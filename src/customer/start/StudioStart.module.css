@@ -1,0 +1,347 @@
+/* The start section. Paper desk by day; the lights go down (600 ms, from .desk-surface) when it prints.
+   Phone first, then 960px and up. It assumes nothing about what sits above or below it. */
+.section {
+  --gutter: 16px;
+  --pad-t: 44px;
+  --pad-b: 56px;
+  position: relative;
+  min-height: 0;
+  padding: var(--pad-t) var(--gutter) var(--pad-b);
+  overflow-x: clip;
+  transition:
+    background-color 600ms var(--ts-ease-standard),
+    color 600ms var(--ts-ease-standard),
+    min-height 600ms var(--ts-ease-standard);
+}
+/* By day the section sits on whatever ground the page gives it, so there is no seam under a hero.
+   It only paints a ground of its own once the lights go down. */
+.section:not(.down) {
+  background-color: transparent;
+}
+.section::before,
+.section::after {
+  transition: opacity 600ms var(--ts-ease-standard);
+}
+.section:not(.down)::before,
+.section:not(.down)::after {
+  opacity: 0;
+}
+.down {
+  min-height: 100dvh;
+}
+
+.desk {
+  display: grid;
+  gap: 32px;
+  max-width: 1040px;
+  margin: 0 auto;
+  justify-items: center;
+  transition:
+    opacity 420ms var(--ts-ease-standard),
+    transform 420ms var(--ts-ease-standard);
+}
+.feeding {
+  pointer-events: none;
+}
+/* everything but the ticket lets go while the ticket feeds into the slot */
+.feeding .shelf,
+.feeding .title,
+.feeding .lede,
+.feeding .note,
+.feeding .actions,
+.feeding .demos,
+.feeding .search {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* ---------- The finished stub, under the light ---------- */
+.shelf {
+  --stub-max: 208px;
+  display: grid;
+  place-items: center;
+  padding: 8px 0 4px;
+  transition:
+    opacity 420ms var(--ts-ease-standard),
+    transform 420ms var(--ts-ease-standard);
+}
+
+/* ---------- Entry ---------- */
+.entry {
+  display: grid;
+  justify-items: start;
+  width: min(100%, 440px);
+}
+.entry > * {
+  max-width: 100%;
+}
+
+.title {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  transition: opacity 420ms var(--ts-ease-standard), transform 420ms var(--ts-ease-standard);
+}
+.lede {
+  margin: 8px 0 22px;
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+  text-wrap: pretty;
+  transition: opacity 420ms var(--ts-ease-standard), transform 420ms var(--ts-ease-standard);
+}
+
+/* ---------- The ticket ---------- */
+.ticketWrap {
+  position: relative;
+  width: 100%;
+  padding-bottom: 6px;
+}
+/* while it feeds, clip only the bottom: the ticket slides down into the slot, its shadow stays free elsewhere */
+.feeding .ticketWrap {
+  clip-path: inset(-24px -24px 0 -24px);
+}
+.ticket {
+  --tear: 112px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--tear);
+  background: var(--desk-paper-raised);
+  border-radius: 6px;
+  /* the perforation notches, cut top and bottom */
+  --cut: calc(100% - var(--tear));
+  -webkit-mask-image: radial-gradient(circle 9px at var(--cut) 0, #0000 97%, #000), radial-gradient(circle 9px at var(--cut) 100%, #0000 97%, #000);
+  mask-image: radial-gradient(circle 9px at var(--cut) 0, #0000 97%, #000), radial-gradient(circle 9px at var(--cut) 100%, #0000 97%, #000);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+  transition: transform 520ms cubic-bezier(0.5, 0, 0.9, 0.4);
+}
+/* the printed border an admission ticket carries */
+.ticket::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--desk-rule);
+  pointer-events: none;
+}
+/* the perforation */
+.ticket::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: var(--cut);
+  width: 2px;
+  margin-left: -1px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 1px, transparent 1.3px);
+  background-size: 2px 7px;
+  background-repeat: repeat-y;
+  pointer-events: none;
+}
+.ticketWrap {
+  filter: drop-shadow(0 1px 0 var(--desk-ledge)) drop-shadow(0 12px 14px rgb(23 20 15 / 0.18));
+}
+.feeding .ticket {
+  transform: translateY(104%);
+}
+
+.main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 18px 16px 16px 20px;
+}
+.admit {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  font-family: var(--font-display), var(--ts-font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  font-variation-settings: "SOFT" 0, "opsz" 14;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--desk-rule-strong);
+  box-shadow: 0 3px 0 -2px var(--desk-paper-raised), 0 4px 0 -2px var(--desk-rule-strong);
+}
+.linkLabel {
+  display: block;
+}
+
+/* ink type on the line, set like a typewriter ribbon: a touch of weight and tracking, never a form field */
+.ink {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 0 4px;
+  border: 0;
+  border-bottom: 1.5px solid var(--desk-rule-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--desk-ink);
+  caret-color: var(--desk-stamp);
+  font: var(--type-lede);
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.ink::placeholder {
+  color: var(--desk-ink-soft);
+  opacity: 0.7;
+}
+.ink:focus {
+  outline: none;
+  border-bottom-color: var(--desk-stamp);
+  box-shadow: 0 1.5px 0 var(--desk-stamp);
+}
+
+.tearOff {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 18px 12px 16px;
+}
+.no {
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+  color: var(--desk-ink-soft);
+}
+.paste {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+/* the printer slot the ticket feeds into */
+.slot {
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  bottom: 0;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(#2a251d, #0c0a07);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.feeding .slot {
+  opacity: 1;
+}
+
+.note {
+  min-height: 1.55em;
+  margin: 10px 0 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  transition: opacity 420ms var(--ts-ease-standard), transform 420ms var(--ts-ease-standard);
+}
+
+.actions {
+  margin-top: 6px;
+  transition: opacity 420ms var(--ts-ease-standard), transform 420ms var(--ts-ease-standard);
+}
+
+.demos {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+  transition: opacity 420ms var(--ts-ease-standard), transform 420ms var(--ts-ease-standard);
+}
+.demoLabel {
+  margin: 0;
+}
+
+.search {
+  margin-top: 24px;
+  transition: opacity 420ms var(--ts-ease-standard), transform 420ms var(--ts-ease-standard);
+}
+
+/* ---------- Printing in place ---------- */
+.printing {
+  /* the stage runs edge to edge: take back the padding the desk needs */
+  margin: calc(var(--pad-t) * -1) calc(var(--gutter) * -1) calc(var(--pad-b) * -1);
+  min-height: 100dvh;
+  animation: lightsDown 600ms var(--ts-ease-standard) both;
+  transition: opacity 360ms var(--ts-ease-standard);
+}
+.printingOut {
+  opacity: 0;
+}
+@keyframes lightsDown {
+  from {
+    opacity: 0;
+  }
+}
+
+/* the studio takes over: the stage deepens to the studio's ground before the route changes */
+.curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #17140f;
+  pointer-events: none;
+  animation: curtain 420ms var(--ts-ease-standard) both;
+}
+@keyframes curtain {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (min-width: 960px) {
+  .section {
+    --gutter: 32px;
+    --pad-t: 88px;
+    --pad-b: 104px;
+  }
+  .desk {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 72px;
+    align-items: center;
+    justify-items: start;
+  }
+  .shelf {
+    --stub-max: 300px;
+    justify-self: end;
+    padding: 24px 0;
+  }
+  .entry {
+    width: min(100%, 460px);
+  }
+  .title {
+    font: var(--type-h1);
+    font-variation-settings: "SOFT" 30, "opsz" 39;
+    letter-spacing: -0.02em;
+  }
+  .lede {
+    margin-bottom: 28px;
+  }
+  .ticket {
+    --tear: 132px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feeding .ticket {
+    transform: none;
+  }
+  .printing,
+  .curtain {
+    animation: none;
+  }
+  .section,
+  .desk,
+  .shelf,
+  .title,
+  .lede,
+  .note,
+  .actions,
+  .demos,
+  .search,
+  .ticket {
+    transition-duration: 0.01ms;
+  }
+}

@@ -244,14 +244,17 @@
 }
 .tag {
   --notch: 10px;
+  --tag-fill: var(--desk-paper-raised);
   position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-height: 36px;
   padding: 0 14px 0 calc(var(--notch) + 14px);
   border: 0;
-  background: var(--desk-paper-raised);
+  /* the outline is the tag's own background showing round a 1px-inset paper face (::after) */
+  background: var(--desk-rule-strong);
   color: var(--desk-ink);
   font: var(--type-ui);
   font-size: 0.94rem;
@@ -261,8 +264,16 @@
   user-select: none;
   transition:
     transform var(--desk-release) var(--desk-spring),
-    background-color var(--desk-release) ease,
     color var(--desk-release) ease;
+}
+.tag::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--tag-fill);
+  clip-path: polygon(calc(var(--notch) + 0.4px) 1px, calc(100% - 1px) 1px, calc(100% - 1px) calc(100% - 1px), calc(var(--notch) + 0.4px) calc(100% - 1px), 1.6px 50%);
+  transition: background-color var(--desk-release) ease;
 }
 .tag::before {
   /* eyelet */
@@ -277,18 +288,11 @@
   background: var(--desk-paper);
   box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
 }
-.tag::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  clip-path: inherit;
-  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
-  pointer-events: none;
-}
 .tag:hover {
   transform: rotate(-1.5deg);
 }
 .tag[aria-pressed="true"] {
+  --tag-fill: var(--desk-ink);
   background: var(--desk-ink);
   color: var(--desk-paper);
 }

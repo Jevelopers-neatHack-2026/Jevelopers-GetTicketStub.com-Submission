@@ -1,4 +1,6 @@
-import type { EventData, Stub } from "./types";
+import type { ArtLayer, EventData, Stub } from "./types";
+import { motifSeed } from "./stub/proceduralArt";
+import { hashSeed } from "./stub/rng";
 
 // Demo fixtures. Fictional band and teams; neatHack is the real demo event, facts marked pending where unknown.
 
@@ -53,16 +55,33 @@ export const HARBOUR_GAME: EventData = {
     homeScore: 2,
     awayScore: 1,
     moments: [
-      { minute: "23'", text: "Goal · [SCORER]" },
-      { minute: "58'", text: "Goal · [SCORER] (Northgate)" },
-      { minute: "89'", text: "Winner · [SCORER]", starred: true },
+      { minute: "23'", text: "Goal · Amara Okafor" },
+      { minute: "58'", text: "Goal · Tomas Reyes (Northgate)" },
+      { minute: "89'", text: "Winner · Ruaridh Boyd", starred: true },
     ],
   },
-  facts: [{ id: "final", label: "2 – 1", value: "2–1", source: "[SPORTS DATA API]", confidence: 0.9, provenance: "simulated", kept: true }],
+  facts: [
+    { id: "final", label: "2 – 1", value: "2–1", source: "match report", confidence: 0.9, provenance: "simulated", kept: true },
+    { id: "winner", label: "Winner at 89'", value: "Ruaridh Boyd, 89'", source: "match report", confidence: 0.88, provenance: "simulated" },
+    { id: "weather", label: "11°C · dry", value: "11°C, dry", source: "Open-Meteo", confidence: 0.9, provenance: "simulated" },
+  ],
 };
 
+/** Demo events by their short key, each with a stable stub id so opening one twice reopens the same stub. */
+export const DEMO_EVENTS = { neathack: NEATHACK, pale: PALE_HOURS, harbour: HARBOUR_GAME } as const;
+export type DemoKey = keyof typeof DEMO_EVENTS;
+export const demoStubId = (key: DemoKey) => `demo-${key}`;
+
+/** Concerts and shows keep the Glasgow hall painting; a game gets a floodlit ground, anything else a night of screens. */
+function artFor(event: EventData, id: string): ArtLayer {
+  const n = hashSeed(id) % 1_000_000;
+  if (event.type === "game") return { kind: "procedural", seed: motifSeed("stadium", n), provenance: "simulated" };
+  if (event.type === "generic") return { kind: "procedural", seed: motifSeed("grid", n), provenance: "simulated" };
+  return { kind: "image", src: "/brand/mockup-art-glasgow.webp", seed: 1, provenance: "simulated" };
+}
+
 export function newStub(event: EventData, id = Math.random().toString(36).slice(2, 10)): Stub {
-  const v = { id: `v1-${id}`, edition: "researched" as const, art: { kind: "image" as const, src: "/brand/mockup-art-glasgow.webp", seed: 1, provenance: "simulated" as const }, createdAt: new Date().toISOString() };
+  const v = { id: `v1-${id}`, edition: "researched" as const, art: artFor(event, id), createdAt: new Date().toISOString() };
   return {
     id,
     createdAt: new Date().toISOString(),

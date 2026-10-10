@@ -1,12 +1,15 @@
 "use client";
-// Night-stage printing reveal: the stub feeds out of a printer slot while researched facts drift in.
-// Tap a fact card to keep it on the stub. Minimum 2.5s on screen, then a shutter flash and onDone.
+// The printing reveal, shared by /new and the start section. It paints no ground of its own: the parent
+// supplies the stage (ts-stage desk-surface). The stub feeds out of the printer slot with a slight curl and
+// the ink settles, while researched facts arrive as receipt lines. Tap a line to stamp it "Kept".
+// Minimum 2.5s on screen, then the ink settles and onDone fires.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { newStub } from "../fixtures";
 import type { EventData, Fact } from "../types";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play, stopPrint } from "@/customer/studio/feedback";
+import { MarkLegend, SourceMark, Stamped, TearLink } from "@/customer/desk/Desk";
 import { researchEvent } from "./client";
 import styles from "./Printing.module.css";
 
@@ -15,7 +18,7 @@ const STAGGER_MS = 450;
 const DWELL_MS = 1600;
 const TAP_EXTEND_MS = 1500;
 const SKIP_AFTER_MS = 3000;
-const SHUTTER_MS = 320;
+const SETTLE_MS = 750;
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -32,6 +35,21 @@ function usePrefersReducedMotion(): boolean {
 
 const keyOf = (f: Fact, i: number) => `${f.id}-${i}`;
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** The headline names what is being looked up, from the event data: "Finding 12 October in Glasgow…". */
+function findingLine(event?: EventData): string {
+  if (!event) return "Finding your night…";
+  const m = event.dateISO ? /^(\d{4})-(\d{2})-(\d{2})/.exec(event.dateISO) : null;
+  const date = m && MONTHS[Number(m[2]) - 1] ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}` : "";
+  const city = event.city?.trim();
+  const place = !city ? "" : /^online$/i.test(city) ? "online" : `in ${city}`;
+  if (date && place) return `Finding ${date} ${place}…`;
+  if (date) return `Finding ${date}…`;
+  if (place) return `Finding the night ${place}…`;
+  return `Finding ${event.title}…`;
+}
+
 /** Push the auto-advance deadline out so a person can finish tapping facts (event-time only). */
 function extendDeadline(ref: { current: number }) {
   ref.current = Math.max(ref.current, Date.now() + TAP_EXTEND_MS);
@@ -39,6 +57,8 @@ function extendDeadline(ref: { current: number }) {
 
 export function Printing(props: {
   input: { url?: string; query?: string; event?: EventData };
+  /** Id the finished stub will carry, so the preview prints the same number and art. */
+  stubId?: string;
   onDone: (event: EventData) => void;
   onError: (message: string) => void;
 }) {
@@ -50,7 +70,8 @@ export function Printing(props: {
     Object.fromEntries((input.event?.facts ?? []).map((f, i) => [keyOf(f, i), !!f.kept])),
   );
   const [showSkip, setShowSkip] = useState(false);
-  const [flash, setFlash] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [settling, setSettling] = useState(false);
 
   // Refs mirror state for the finish timer (no stale closures).
   const onDoneRef = useRef(props.onDone);
@@ -95,12 +116,12 @@ export function Printing(props: {
       } catch {
         /* feedback is optional */
       }
-      setFlash(true);
+      setSettling(true);
       const final: EventData = {
         ...ev,
         facts: ev.facts.map((f, i) => ({ ...f, kept: !!keptRef.current[keyOf(f, i)] })),
       };
-      doneTimer = window.setTimeout(() => onDoneRef.current(final), reducedRef.current ? 0 : SHUTTER_MS);
+      doneTimer = window.setTimeout(() => onDoneRef.current(final), reducedRef.current ? 0 : SETTLE_MS);
     };
 
     const tick = window.setInterval(() => {
@@ -173,82 +194,99 @@ export function Printing(props: {
   }, [factCount, shown, reduced]);
 
   const toggle = (k: string) => {
+    const turningOn = !keptRef.current[k];
     setKept((m) => ({ ...m, [k]: !m[k] }));
-    try {
-      play("pin");
-      haptic(10);
-    } catch {
-      /* optional */
-    }
+    setTouched((m) => ({ ...m, [k]: true }));
+    // The "Kept" stamp plays its own thunk; taking a line off is a quiet tap.
+    if (!turningOn) {
+      try {
+        play("tap", { emphasis: "subtle" });
+      } catch {
+        /* optional */
+      }
+    } else haptic(10);
     // Give the person time to finish choosing.
     extendDeadline(deadlineRef);
   };
 
   const preview = useMemo(() => {
     if (!event) return undefined;
-    return newStub({ ...event, facts: event.facts.map((f, i) => ({ ...f, kept: !!kept[keyOf(f, i)] })) }, "printing-preview");
-  }, [event, kept]);
+    return newStub({ ...event, facts: event.facts.map((f, i) => ({ ...f, kept: !!kept[keyOf(f, i)] })) }, props.stubId ?? "printing-preview");
+  }, [event, kept, props.stubId]);
 
-  const facts = (event?.facts ?? []).slice(0, shown).map((f, i) => ({ f, i }));
-  const left = facts.filter((x) => x.i % 2 === 0);
-  const right = facts.filter((x) => x.i % 2 === 1);
-
-  const card = ({ f, i }: { f: Fact; i: number }) => {
-    const k = keyOf(f, i);
-    const on = !!kept[k];
-    return (
-      <button key={k} type="button" className={styles.card} aria-pressed={on} onClick={() => toggle(k)}>
-        <span className={styles.cardTop}>
-          <span className={styles.cardLabel}>{f.label}</span>
-          {on ? <span className={styles.kept}>Kept ✓</span> : <span className={styles.keep}>Keep</span>}
-        </span>
-        <span className={styles.cardMeta}>
-          <span>{f.source}</span>
-          <span className="provenance">{f.provenance}</span>
-          {f.confidence < 0.8 && f.provenance !== "pending" ? <span>Unsure</span> : null}
-        </span>
-      </button>
-    );
-  };
+  const lines = (event?.facts ?? []).slice(0, shown).map((f, i) => ({ f, i, k: keyOf(f, i) }));
+  const marks = [...new Set(lines.map((l) => l.f.provenance))];
+  const allIn = factCount > 0 && shown >= factCount;
+  const headline = settling ? "Letting the ink settle…" : allIn ? `Printing ${event?.title ?? "your stub"}…` : findingLine(event);
 
   return (
-    <section className={`ts-night ${styles.stage}`} aria-label="Printing your stub" aria-busy={!flash}>
-      <p className={styles.status} role="status" aria-live="polite">
-        Building your stub…
-      </p>
-      <p className={styles.hint}>{shown > 0 ? "Tap a fact to keep it on your stub." : " "}</p>
+    <section className={styles.stage} aria-label="Printing your stub" aria-busy={!settling}>
+      <h1 className={styles.headline} key={headline} role="status" aria-live="polite">
+        {headline}
+      </h1>
+      <p className={styles.hint}>{shown > 0 ? "Tap a line to keep it on your stub." : " "}</p>
 
       <div className={styles.layout}>
-        <div className={`${styles.col} ${styles.colLeft}`}>{left.map(card)}</div>
-
-        <div className={styles.center}>
-          <div className={styles.printer}>
-            <div className={styles.slot} aria-hidden="true" />
-            <div className={styles.feedWindow}>
-              <div className={`${styles.feed} ${reduced ? styles.reduced : ""}`} key={preview ? "stub" : "placeholder"}>
+        <div className={styles.printer}>
+          <div className={styles.slot} aria-hidden="true" />
+          <div className={styles.feedWindow}>
+            <div className={`${styles.feed} ${reduced ? styles.reduced : ""}`} key={preview ? "stub" : "placeholder"}>
+              <div className={`${styles.ink} ${settling ? styles.settling : ""}`}>
                 {preview ? <StubView stub={preview} size="md" /> : <div className={styles.placeholder} aria-hidden="true" />}
-                <div className={`${styles.foil} ${reduced ? styles.reduced : ""}`} aria-hidden="true" />
               </div>
             </div>
           </div>
         </div>
 
-        <div className={`${styles.col} ${styles.colRight}`}>{right.map(card)}</div>
+        <div className={`${styles.receipt} ${lines.length ? styles.receiptOn : ""}`} aria-hidden={lines.length ? undefined : true}>
+          <p className={`desk-label ${styles.receiptHead}`}>What we found</p>
+          <ol className={styles.lines}>
+            {lines.map(({ f, k }) => {
+              const on = !!kept[k];
+              return (
+                <li key={k} className={styles.lineItem}>
+                  <button type="button" className={styles.line} aria-pressed={on} onClick={() => toggle(k)}>
+                    <span className={styles.lineText}>
+                      <span className={styles.lineLabel}>
+                        {f.label}
+                        <SourceMark p={f.provenance} />
+                      </span>
+                      <span className={styles.lineSource}>
+                        {f.source}
+                        {f.confidence < 0.8 && f.provenance !== "pending" ? " · unsure" : ""}
+                      </span>
+                    </span>
+                    <span className={styles.lineAction}>
+                      {on ? (
+                        touched[k] ? (
+                          <Stamped>Kept</Stamped>
+                        ) : (
+                          <span className={styles.keptStatic}>Kept</span>
+                        )
+                      ) : (
+                        <span className={styles.keep}>Keep</span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          {marks.length ? <MarkLegend marks={marks} /> : null}
+        </div>
       </div>
 
-      {showSkip && !flash ? (
-        <button
-          type="button"
-          className={styles.skip}
-          onClick={() => {
-            skipRef.current = true;
-          }}
-        >
-          Skip to the stub
-        </button>
+      {showSkip && !settling ? (
+        <div className={styles.skip}>
+          <TearLink
+            onClick={() => {
+              skipRef.current = true;
+            }}
+          >
+            Skip to the stub
+          </TearLink>
+        </div>
       ) : null}
-
-      {flash ? <div className={styles.flash} aria-hidden="true" /> : null}
     </section>
   );
 }
