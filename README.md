@@ -39,7 +39,7 @@ python tools/build_logos.py
 
 ## Scope: two tiers
 
-This kit covers the **master brand** (app UI, logo, marketing, packaging). The stub **editions** (Classic, Letterpress, Risograph, Minimal, Researched) are the user's artwork and have their own palettes, defined in [ticket-studio](https://github.com/Jevelopers-neatHack-2026/ticket-studio) under `docs/stub-system.md`.
+This kit covers the **master brand** (app UI, logo, marketing, packaging). The stub **editions** (Classic, Letterpress, Risograph, Minimal, Researched) are the user's artwork and have their own palettes, described in the [existing brand spec](SPEC.md#two-tiers). The architecture assigns artwork versions to [creative-engine](https://github.com/Jevelopers-neatHack-2026/creative-engine/blob/main/docs/architecture/OWNERSHIP.md) and printable composition to [print-production](https://github.com/Jevelopers-neatHack-2026/print-production/blob/main/docs/architecture/OWNERSHIP.md); implementation remains planned. The previously referenced `ticket-studio` repository could not be resolved in the organization inventory.
 
 Built with the brandkit skill workflow. Skill curated by Collective Brain (collectivebrain.de) and WhiteFox Automations (whitefox-automations.com).
 
