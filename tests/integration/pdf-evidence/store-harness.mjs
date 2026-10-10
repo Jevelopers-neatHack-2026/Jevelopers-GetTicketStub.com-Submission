@@ -40,6 +40,46 @@ export function twoPagePdfWithBlankSecondPage() {
   return Buffer.from(pdf, 'ascii');
 }
 
+export function padPdfBeforeXref(source, targetByteLength) {
+  if (!(source instanceof Uint8Array) || !Number.isSafeInteger(targetByteLength) || targetByteLength < source.byteLength) {
+    throw new TypeError('invalid PDF padding target');
+  }
+  const sourceText = Buffer.from(source).toString('latin1');
+  const xrefStart = sourceText.lastIndexOf('\nxref\n') + 1;
+  const startxrefMatch = /startxref\r?\n(\d+)\r?\n%%EOF(?:\r?\n)?$/.exec(sourceText);
+  if (xrefStart <= 0 || !startxrefMatch || Number(startxrefMatch[1]) !== xrefStart) {
+    throw new TypeError('expected classic xref PDF fixture');
+  }
+  const tail = sourceText.slice(xrefStart);
+  const startxrefPattern = /startxref\r?\n\d+\r?\n%%EOF(?:\r?\n)?$/;
+  const startxrefMatchText = startxrefPattern.exec(tail)?.[0];
+  if (!startxrefMatchText) throw new TypeError('expected terminal startxref');
+  const newline = startxrefMatchText.includes('\r\n') ? '\r\n' : '\n';
+  const hasTrailingNewline = startxrefMatchText.endsWith(newline);
+  let paddingBytes = targetByteLength - source.byteLength;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const updatedTail = tail.replace(startxrefPattern,
+      `startxref${newline}${Number(startxrefMatch[1]) + paddingBytes}${newline}%%EOF${hasTrailingNewline ? newline : ''}`);
+    const padded = Buffer.concat([
+      Buffer.from(sourceText.slice(0, xrefStart), 'latin1'),
+      Buffer.alloc(paddingBytes, 0x20),
+      Buffer.from(updatedTail, 'latin1'),
+    ]);
+    if (padded.byteLength === targetByteLength) {
+      const paddedText = padded.toString('latin1');
+      const paddedStartxref = /startxref\r?\n(\d+)\r?\n%%EOF(?:\r?\n)?$/.exec(paddedText);
+      const shiftedXrefStart = xrefStart + paddingBytes;
+      if (Number(paddedStartxref?.[1]) !== shiftedXrefStart
+        || padded.subarray(shiftedXrefStart, shiftedXrefStart + 5).toString('latin1') !== 'xref\n') {
+        throw new TypeError('PDF xref offset does not match padded content');
+      }
+      return padded;
+    }
+    paddingBytes += targetByteLength - padded.byteLength;
+  }
+  throw new TypeError('PDF padding changed its requested byte length');
+}
+
 export async function createHarness(t, overrides = {}) {
   const directory = overrides.storeOptions?.directory ?? await mkdtemp(path.join(os.tmpdir(), 'ei-pdf-derived-store-'));
   if (overrides.storeOptions?.directory === undefined) t.after(() => rm(directory, { recursive: true, force: true }));
@@ -102,20 +142,21 @@ export async function createHarness(t, overrides = {}) {
       return authenticatedRequest?.principal?.tenantId === tenantId && authenticatedRequest.allowPrivate === true;
     },
     consumePrivatePayload({ source, positions }) {
-      return {
+      const result = {
         sourceUrl: source.sourceUrl,
         canonicalUrl: source.canonicalUrl,
         contentType: source.contentType,
         sourceKind: source.sourceKind,
         retrievedAt: source.retrievedAt,
         sourceHash: source.contentHash,
-        derivedPdf: source.derivedPdf,
         positions: positions.map((position) => ({
           locator: position.locator,
           contentHash: position.contentHash,
           text: position.content.toString('utf8'),
         })),
       };
+      if (source.derivedPdf !== undefined) result.derivedPdf = source.derivedPdf;
+      return result;
     },
     now: () => clock.value,
     maxSourceBytes: 5 * 1024 * 1024,

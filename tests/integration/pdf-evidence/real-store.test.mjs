@@ -16,6 +16,7 @@ import {
   digest,
   EPOCH,
   FIXTURES,
+  padPdfBeforeXref,
   request,
   twoPagePdfWithBlankSecondPage,
 } from './store-harness.mjs';
@@ -44,7 +45,8 @@ function inspectManifest(directory, tenantId = 'tenant-pdf') {
   try {
     const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(tenantHash(tenantId));
     const count = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ?').get('evidence').count;
-    return { manifest: row ? JSON.parse(row.document) : null, bundleCount: count };
+    const sealedCount = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles').get().count;
+    return { manifest: row ? JSON.parse(row.document) : null, bundleCount: count, sealedCount };
   } finally {
     database.close();
   }
@@ -125,7 +127,12 @@ test('actual isolated PDF observations persist encrypted, reopen, and privately 
   assert.ok(metadataOnly.positions.length > 0);
   assert.ok(metadataOnly.positions.every((position) => position.locator.kind === 'pdf-text-box'));
   assert.equal(JSON.stringify(metadataOnly).includes('Community Night'), false);
-  assert.equal(JSON.stringify(metadataOnly.positions[0].locator).includes('text'), false);
+  assert.deepEqual(Object.keys(metadataOnly.positions[0].locator).sort(), [
+    'coordinateSystem', 'geometry', 'height', 'kind', 'pageHeight', 'pageIndex', 'pageWidth',
+    'rotation', 'textIndex', 'width', 'x', 'y',
+  ]);
+  assert.equal(Object.hasOwn(metadataOnly.positions[0].locator, 'text'), false);
+  assert.equal(Object.hasOwn(metadataOnly.positions[0].locator, 'content'), false);
   assert.equal(Object.isFrozen(metadataOnly), true);
 
   const reopenedStore = harness.openStore();
@@ -447,8 +454,7 @@ test('derived PDF source and reader-output limits stay fixed when trusted store 
   const scope = await harness.store.scopeForAuthenticatedRequest(request());
   const source = await readFile(fileURLToPath(new URL('text-multipage.pdf', FIXTURES)));
   const sourceCeiling = 5 * 1024 * 1024;
-  const exactSource = Buffer.alloc(sourceCeiling, 0x20);
-  exactSource.set(source);
+  const exactSource = padPdfBeforeXref(source, sourceCeiling);
   const atCeiling = await harness.store.ingestDerivedPdfEvidence(scope, pdfInput(exactSource, harness.createPermit(), {
     sourceUrl: 'https://pdf.example.test/exact-source-ceiling.pdf',
     canonicalUrl: 'https://pdf.example.test/exact-source-ceiling.pdf',
@@ -456,8 +462,7 @@ test('derived PDF source and reader-output limits stay fixed when trusted store 
   assert.equal(atCeiling.outcome, 'stored');
   assert.equal(atCeiling.metadata.contentHash, digest(exactSource));
 
-  const oversizedSource = Buffer.alloc(sourceCeiling + 1, 0x20);
-  oversizedSource.set(source);
+  const oversizedSource = padPdfBeforeXref(source, sourceCeiling + 1);
   await assert.rejects(harness.store.ingestDerivedPdfEvidence(scope, pdfInput(oversizedSource, harness.createPermit(), {
     sourceUrl: 'https://pdf.example.test/over-source-ceiling.pdf',
     canonicalUrl: 'https://pdf.example.test/over-source-ceiling.pdf',
@@ -718,8 +723,9 @@ test('retention that expires during a real SQLite write-lock wait rolls back the
   const integrity = await harness.store.integritySnapshot(scope);
   assert.equal(integrity.availableEvidence, 0);
   assert.equal(integrity.encryptedPayloadRecords, 0);
-  const { manifest } = inspectManifest(root);
-  assert.equal(Object.values(manifest.records).filter((record) => record.representation === 'pdf-derived-text').length, 0);
+  const { manifest, sealedCount } = inspectManifest(root);
+  assert.equal(manifest, null, 'an expired first write leaves no manifest row');
+  assert.equal(sealedCount, 0, 'the rolled-back SQL transaction leaves no sealed payload rows');
 });
 
 test('a manifest-trigger failure rolls back sealed derived bytes and schema migration together', async (t) => {
