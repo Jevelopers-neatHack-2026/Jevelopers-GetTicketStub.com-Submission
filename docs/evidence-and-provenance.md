@@ -1,5 +1,9 @@
 # AH-10 internal telemetry evidence
 
+## Historical snapshot: 2026-10-10
+
+This page preserves the internal telemetry increment and its schema-4 compatibility description from that snapshot. The schema-4 migration paragraph below describes that earlier increment; the current private local runtime and OPS mechanics are documented in [runtime foundation](decisions/runtime-foundation.md) and the [local runtime runbook](local-runtime-runbook.md). The separate local Neatlogs SDK conformance evidence is recorded in the [PR31 local SDK handoff](../triage/agent-creative-v1/execution/neatlogs-sdk-local-full-handoff.md). The earlier statement that a Neatlogs adapter would require future work refers to this internal exporter boundary; the later local SDK work remains disconnected from service ingestion and does not establish Finance, sponsor, or global AH-10 acceptance.
+
 ## Scope and provenance
 
 This increment adds an internal, redacted, bounded telemetry pipeline over the existing SQLite `workflow_events` table. It does not wire the Neatlogs SDK, send telemetry to a service, enable Entire, or claim public canonical telemetry agreement. The sink is always supplied explicitly by the caller; there is no production no-op or mock fallback.
