@@ -10,10 +10,12 @@ import { evaluateCompletion } from "../../tools/verify.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 function runVerifier(args, env = {}) {
+  const childEnv = { ...process.env, ...env };
+  delete childEnv.NODE_TEST_CONTEXT;
   return spawnSync(process.execPath, [path.join(ROOT, "tools/verify.mjs"), ...args], {
     cwd: ROOT,
     encoding: "utf8",
-    env: { ...process.env, ...env },
+    env: childEnv,
   });
 }
 
@@ -39,6 +41,32 @@ test("unimplemented reserved case fails when it collects zero test files", () =>
   assert.equal(summary.test_files, 0);
   assert.equal(summary.expected_cases, 0);
   assert.equal(summary.status, "failed");
+});
+
+test("evidence-facts mock case runs only local durable-store and provenance fixtures", () => {
+  const result = runVerifier(["--case=evidence-facts", "--mode=mock"]);
+  const summary = summaryFrom(result.stdout);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(summary.case, "evidence-facts");
+  assert.equal(summary.mode, "mock");
+  assert.equal(summary.status, "passed");
+  assert.equal(summary.test_files, 2);
+  assert.ok(summary.expected_cases > 0);
+  assert.equal(summary.expected_cases, summary.terminal_cases);
+  assert.equal(summary.failed_cases, 0);
+  assert.equal(summary.skipped_cases, 0);
+  assert.equal(summary.provider_activity, "none");
+  assert.equal(summary.fixture_scope, "local controlled fixtures only");
+});
+
+test("evidence remains a compatibility alias for the canonical evidence-facts case", () => {
+  const canonical = summaryFrom(runVerifier(["--case=evidence-facts", "--mode=mock"]).stdout);
+  const aliasResult = runVerifier(["--case=evidence", "--mode=mock"]);
+  const alias = summaryFrom(aliasResult.stdout);
+  assert.equal(aliasResult.status, 0, aliasResult.stderr);
+  assert.equal(alias.case, "evidence-facts");
+  assert.equal(alias.expected_cases, canonical.expected_cases);
+  assert.equal(alias.test_files, canonical.test_files);
 });
 
 test("Python policy checks have a separate unit-only route with faithful unittest counts", () => {
