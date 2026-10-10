@@ -57,7 +57,7 @@ export async function renderCalibration(outputDirectory: string) {
 			">",
 			`><style>@font-face{font-family:'PP Calibration';src:url(data:font/woff2;base64,${font.bytes.toString("base64")}) format('woff2');font-weight:400;font-style:normal;font-display:block}</style>`,
 		);
-	const { browser, context, denied, binarySha256 } =
+	const { browser, context, denied, binarySha256, sandbox } =
 		await openOfflineBrowser(pins);
 	try {
 		await probeNetwork(context, denied);
@@ -175,6 +175,7 @@ export async function renderCalibration(outputDirectory: string) {
 				version: browser.version(),
 				revision: pins.browser.revision,
 				binarySha256,
+				sandbox,
 			},
 			font: {
 				sha256: font.sha256,

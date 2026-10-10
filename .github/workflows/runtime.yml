@@ -11,6 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install exact dependencies and verified Node archive
-        run: docker run --rm --platform linux/amd64 -v "$PWD:/work" -w /work "$PP_RENDERER_IMAGE" bash scripts/ci-install.sh
+        run: docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --security-opt apparmor=docker-default -e HOME=/tmp -v "$PWD:/work" -w /work "$PP_RENDERER_IMAGE" bash scripts/ci-install.sh
       - name: Verify with operating-system networking disabled
-        run: docker run --rm --platform linux/amd64 --network none --ipc host -e PP_RENDERER_IMAGE -e TZ=UTC -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright -v "$PWD:/work" -w /work "$PP_RENDERER_IMAGE" bash scripts/ci-offline.sh
+        run: out/toolchain/node-v24.21.0-linux-x64/bin/node scripts/security/run-offline.mjs

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readlink, readdir, statfs } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { arch, platform, release } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -113,6 +113,106 @@ const browserMetadata = z.object({
 	),
 });
 
+const namespaceId = z.string().regex(/^(ipc|net):\[\d+\]$/);
+const linuxSecuritySchema = z.object({
+	uid: z.number().int().positive(),
+	gid: z.number().int().positive(),
+	status: z.string(),
+	apparmor: z.literal("docker-default (enforce)"),
+	ipc: namespaceId,
+	net: namespaceId,
+	host: z.object({ ipc: namespaceId, net: namespaceId }),
+	interfaces: z.array(z.string()),
+	shmBytes: z.number().int().min(1073741824),
+	shmType: z.literal(0x01021994),
+});
+
+export function requireLinuxContainerSecurity(value: unknown) {
+	const parsed = linuxSecuritySchema.safeParse(value);
+	requireCheck(
+		parsed.success,
+		"CONTAINER_POLICY_FAILURE",
+		"Required Linux container security observations are missing or invalid.",
+	);
+	const observed = parsed.data;
+	const field = (name: string) =>
+		new RegExp(`^${name}:[ \\t]*(.+)$`, "m").exec(observed.status)?.[1]?.trim();
+	const uids = field("Uid")?.split(/\s+/).map(Number);
+	const gids = field("Gid")?.split(/\s+/).map(Number);
+	const filters = Number(field("Seccomp_filters"));
+	requireCheck(
+		uids?.length === 4 &&
+			uids.every((id) => id === observed.uid) &&
+			gids?.length === 4 &&
+			gids.every((id) => id === observed.gid) &&
+			["CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"].every((name) =>
+				/^0+$/.test(field(name) ?? ""),
+			) &&
+			field("NoNewPrivs") === "1" &&
+			field("Seccomp") === "2" &&
+			Number.isInteger(filters) &&
+			filters >= 1 &&
+			observed.ipc.startsWith("ipc:") &&
+			observed.host.ipc.startsWith("ipc:") &&
+			observed.net.startsWith("net:") &&
+			observed.host.net.startsWith("net:") &&
+			observed.ipc !== observed.host.ipc &&
+			observed.net !== observed.host.net &&
+			observed.interfaces.length === 1 &&
+			observed.interfaces[0] === "lo",
+		"CONTAINER_POLICY_FAILURE",
+		"Linux requires non-root, zero capabilities, enforced security filters, private IPC and isolated networking.",
+	);
+	return {
+		uid: observed.uid,
+		gid: observed.gid,
+		capabilities: "none" as const,
+		noNewPrivileges: true,
+		seccomp: "filter" as const,
+		apparmor: observed.apparmor,
+		ipcNamespace: observed.ipc,
+		networkNamespace: observed.net,
+		hostNamespaces: observed.host,
+		interfaces: observed.interfaces,
+		shmBytes: observed.shmBytes,
+	};
+}
+
+export async function observeLinuxContainerSecurity() {
+	try {
+		const [status, apparmor, ipc, net, host, interfaces, shm] =
+			await Promise.all([
+				readFile("/proc/self/status", "utf8"),
+				readFile("/proc/self/attr/current", "utf8"),
+				readlink("/proc/self/ns/ipc"),
+				readlink("/proc/self/ns/net"),
+				readFile("/run/pp-security/host-namespaces.json", "utf8"),
+				readdir("/sys/class/net"),
+				statfs("/dev/shm"),
+			]);
+		return requireLinuxContainerSecurity({
+			uid: process.getuid?.(),
+			gid: process.getgid?.(),
+			status,
+			apparmor: apparmor.trim(),
+			ipc,
+			net,
+			host: JSON.parse(host),
+			interfaces,
+			shmBytes: shm.blocks * shm.bsize,
+			shmType: shm.type,
+		});
+	} catch (error) {
+		if (error instanceof VerificationFailure) throw error;
+		if (error instanceof Error)
+			throw new VerificationFailure(
+				"CONTAINER_POLICY_FAILURE",
+				"Required Linux security state could not be observed.",
+			);
+		throw error;
+	}
+}
+
 export async function assertEnvironment() {
 	const pins = await loadPins();
 	requireCheck(
@@ -179,6 +279,9 @@ export async function assertEnvironment() {
 	);
 	let profile: "local-macos" | "pinned-linux-ci";
 	let osVersion: string;
+	let containerSecurity: Awaited<
+		ReturnType<typeof observeLinuxContainerSecurity>
+	> | null = null;
 	switch (platform()) {
 		case "darwin":
 			osVersion = execFileSync("/usr/bin/sw_vers", ["-productVersion"], {
@@ -205,6 +308,7 @@ export async function assertEnvironment() {
 			);
 			osVersion = "Ubuntu 24.04";
 			profile = "pinned-linux-ci";
+			containerSecurity = await observeLinuxContainerSecurity();
 			break;
 		}
 		default:
@@ -230,6 +334,7 @@ export async function assertEnvironment() {
 			timezone: pins.timezone,
 			environmentLocale: "C.UTF-8",
 			image: profile === "pinned-linux-ci" ? pins.image.reference : null,
+			containerSecurity,
 			tools,
 			packageLockSha256: sha256(await readResource("package-lock.json")),
 		},
