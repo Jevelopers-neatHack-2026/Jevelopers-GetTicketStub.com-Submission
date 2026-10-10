@@ -252,7 +252,7 @@ test('derived identities are domain-separated from raw evidence and derivation c
   assert.notEqual(selectedDerivedPosition.contentHash, first.metadata.contentHash);
   const privateDerived = await harness.store.withPrivatePayload(scope, first.evidence, request());
   const derivedSupportText = privateDerived.positions[0].text;
-  assert.equal(privateDerived.positions[0].contentHash, first.positions[0].contentHash);
+  assert.equal(privateDerived.positions[0].contentHash, digest(Buffer.from(derivedSupportText, 'utf8')));
   assert.equal(privateDerived.positions[0].contentHash, selectedDerivedPosition.contentHash);
   assert.notEqual(privateDerived.positions[0].contentHash, first.metadata.contentHash);
   assert.ok(derivedSupportText.length > 0);
