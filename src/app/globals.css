@@ -1,4 +1,5 @@
 @import "../brand/tokens.css";
+@import "../customer/desk/desk.css";
 
 /* TicketStub studio base. Paper by day (default), stage by night (.ts-night, prefers-color-scheme: dark). */
 *,

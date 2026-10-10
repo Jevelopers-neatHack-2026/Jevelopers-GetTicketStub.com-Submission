@@ -1,0 +1,135 @@
+.page {
+  min-height: 100dvh;
+  padding-bottom: 64px;
+}
+.head,
+.type,
+.sheets {
+  display: grid;
+  gap: 12px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 16px 8px;
+}
+.title {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 96;
+  letter-spacing: -0.02em;
+  max-width: 18ch;
+}
+.lede {
+  font: var(--type-lede);
+  max-width: 60ch;
+  color: var(--desk-ink-soft);
+}
+.type {
+  gap: 10px;
+  padding-top: 32px;
+}
+.hero {
+  font: var(--type-hero);
+  font-variation-settings: "SOFT" 0, "opsz" 144;
+  letter-spacing: -0.03em;
+}
+.h1 {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 96;
+  letter-spacing: -0.02em;
+  max-width: 22ch;
+  text-wrap: balance;
+}
+.h2 {
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 48;
+  letter-spacing: -0.02em;
+}
+.h3 {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+}
+.body {
+  font: var(--type-body);
+  max-width: 62ch;
+}
+.data {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  max-width: 1180px;
+  margin: 32px auto 0;
+  padding: 0 16px;
+}
+@media (min-width: 960px) {
+  .cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.col {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  padding: 20px 20px 8px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--desk-rule);
+}
+.colName {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--desk-rule-strong);
+}
+.part {
+  display: grid;
+  gap: 14px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--desk-rule);
+}
+.part:last-child {
+  border-bottom: 0;
+}
+.partHead {
+  display: grid;
+  gap: 4px;
+}
+.partName {
+  font: var(--type-h3);
+  font-size: 1rem;
+  font-variation-settings: "SOFT" 30;
+}
+.partJob {
+  font: var(--type-label);
+  font-size: 0.875rem;
+  color: var(--desk-ink-soft);
+  max-width: 52ch;
+}
+.partBody {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.factLine {
+  font: var(--type-ui);
+}
+.sheetBody {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.sheetBody > button:not(:last-child) {
+  width: 100%;
+}

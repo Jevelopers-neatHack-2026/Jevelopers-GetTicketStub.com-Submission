@@ -1,0 +1,672 @@
+/* Desk parts. Every control is a print-shop object: it has a ledge it sits on, it sinks when
+   pressed and it makes a sound (see Desk.tsx). Colours come only from desk.css tokens, so the
+   same part works on paper and on the stage. */
+
+/* ---------- Stamp: the one main action per screen ---------- */
+.stamp {
+  --ledge: 3px;
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--desk-stamp);
+  color: var(--desk-stamp-label);
+  font: 600 1rem/1 var(--font-ui), var(--ts-font-ui);
+  text-decoration: none;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -1px 0 rgb(0 0 0 / 0.12),
+    0 var(--ledge) 0 var(--desk-stamp-ledge),
+    0 calc(var(--ledge) + 6px) 14px -8px rgb(23 20 15 / 0.55);
+  transform: translateY(0);
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    box-shadow var(--desk-release) var(--desk-spring);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.stamp::after {
+  /* ink texture: the same grain, pressed into the colour */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.18;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/><feColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.1 0 0 0 0 0.05 0 0 0 1.6 -0.5'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.stamp:hover {
+  --ledge: 4px;
+  transform: translateY(-1px);
+}
+.stamp[data-pressed="true"] {
+  --ledge: 0px;
+  transform: translateY(3px);
+  transition-duration: var(--desk-press);
+  transition-timing-function: ease-out;
+}
+.stamp[disabled] {
+  filter: saturate(0.25);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.stamp.block {
+  display: flex;
+  width: 100%;
+}
+.stampLabel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 22px;
+}
+.stampStub {
+  /* the price sits on its own perforated stub, the way a ticket carries its fare */
+  display: flex;
+  align-items: center;
+  padding: 0 18px 0 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  background-image: radial-gradient(circle, var(--desk-stamp-ledge) 1.4px, transparent 1.6px);
+  background-size: 2px 7px;
+  background-repeat: repeat-y;
+  background-position: 0 center;
+}
+
+/* ---------- Paper button: secondary actions ---------- */
+.paper {
+  --ledge: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--desk-rule-strong);
+  border-radius: 8px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-decoration: none;
+  box-shadow: 0 var(--ledge) 0 var(--desk-ledge);
+  transform: translateY(0);
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    box-shadow var(--desk-release) var(--desk-spring),
+    border-color var(--desk-release) ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.paper:hover {
+  border-color: var(--desk-ink);
+}
+.paper[data-pressed="true"] {
+  --ledge: 0px;
+  transform: translateY(2px);
+  transition-duration: var(--desk-press);
+}
+.paper.block {
+  display: flex;
+  width: 100%;
+}
+
+/* ---------- Tear link: tertiary, a dotted tear line as the underline ---------- */
+.tearLink {
+  justify-self: start;
+  border: 0;
+  padding: 2px 0;
+  background: none;
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-decoration: none;
+  background-image: radial-gradient(circle, currentColor 0.9px, transparent 1.1px);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  transition: background-size var(--desk-release) var(--desk-spring);
+}
+.tearLink:hover {
+  background-size: 4px 2px;
+}
+
+/* ---------- Tool: small labelled tools beside the stub ---------- */
+.tools {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+.tool {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink);
+  font: var(--type-label);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: background-color var(--desk-release) ease;
+}
+.tool svg {
+  width: 24px;
+  height: 24px;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.tool:hover {
+  background: color-mix(in srgb, var(--desk-ink) 5%, transparent);
+}
+.tool[data-pressed="true"] svg {
+  transform: scale(0.86) rotate(-8deg);
+  transition-duration: var(--desk-press);
+}
+.tool[aria-pressed="true"] {
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong), 0 1px 0 var(--desk-ledge);
+}
+
+/* ---------- Punched tabs: one choice from a few ---------- */
+.tabs {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1px 2px var(--desk-ledge);
+}
+.tabThumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: 7px;
+  background: var(--desk-paper-raised);
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 4px 10px -6px rgb(23 20 15 / 0.5), inset 0 0 0 1px var(--desk-rule);
+  transition:
+    transform 340ms var(--desk-spring),
+    width 340ms var(--desk-spring);
+  pointer-events: none;
+}
+.tabThumb::before {
+  /* the punch: a little hole through the selected tab, showing the desk under it */
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1px 1px var(--desk-ledge);
+}
+.tab {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 10px 6px 6px;
+  border: 0;
+  background: none;
+  color: var(--desk-ink-soft);
+  font: var(--type-ui);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: color var(--desk-release) ease;
+}
+.tab[aria-checked="true"] {
+  color: var(--desk-ink);
+}
+.tabSub {
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink-soft);
+}
+
+/* ---------- Paper tag: chips ---------- */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag {
+  --notch: 10px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px 0 calc(var(--notch) + 14px);
+  border: 0;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  font-size: 0.94rem;
+  clip-path: polygon(var(--notch) 0, 100% 0, 100% 100%, var(--notch) 100%, 0 50%);
+  filter: drop-shadow(0 1px 0 var(--desk-ledge));
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    background-color var(--desk-release) ease,
+    color var(--desk-release) ease;
+}
+.tag::before {
+  /* eyelet */
+  content: "";
+  position: absolute;
+  left: calc(var(--notch) + 1px);
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--desk-paper);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+.tag::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: inherit;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+  pointer-events: none;
+}
+.tag:hover {
+  transform: rotate(-1.5deg);
+}
+.tag[aria-pressed="true"] {
+  background: var(--desk-ink);
+  color: var(--desk-paper);
+}
+.tag[data-pressed="true"] {
+  transform: translateY(1px) rotate(-1.5deg);
+  transition-duration: var(--desk-press);
+}
+.tagCount {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+/* ---------- Finish swatches: you see the material, not a word ---------- */
+.swatches {
+  display: flex;
+  gap: 12px;
+}
+.swatch {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--desk-ink-soft);
+  font: var(--type-label);
+  -webkit-tap-highlight-color: transparent;
+}
+.swatchChip {
+  position: relative;
+  width: 52px;
+  height: 40px;
+  border-radius: 3px;
+  background: #efe5d2;
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 6px 12px -8px rgb(23 20 15 / 0.55), inset 0 0 0 1px rgb(23 20 15 / 0.1);
+  overflow: hidden;
+  transition: transform 320ms var(--desk-spring), box-shadow 320ms var(--desk-spring);
+}
+.swatchChip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 400ms var(--ts-ease-standard), transform 900ms var(--ts-ease-standard);
+}
+.swatch[data-finish="foil"] .swatchChip::after {
+  opacity: 0.85;
+  background: linear-gradient(115deg, transparent 20%, rgb(255 255 255 / 0.55) 42%, transparent 58%), var(--ts-foil);
+  background-size: 220% 100%, 100% 100%;
+  background-position: 100% 0, 0 0;
+  transition: background-position 900ms var(--ts-ease-standard);
+}
+.swatch[data-finish="holo"] .swatchChip::after {
+  opacity: 0.55;
+  background:
+    linear-gradient(115deg, transparent 20%, rgb(255 255 255 / 0.6) 42%, transparent 58%),
+    linear-gradient(135deg, #b4693e, #e4572e 30%, #f0c36a 50%, #7cc6d2 72%, #9a8fd6);
+  background-size: 220% 100%, 160% 160%;
+  background-position: 100% 0, 0 0;
+  mix-blend-mode: multiply;
+  transition: background-position 900ms var(--ts-ease-standard);
+}
+.swatch:hover .swatchChip::after {
+  background-position: 0 0, 100% 100%;
+}
+.swatch[aria-checked="true"] {
+  color: var(--desk-ink);
+}
+.swatch[aria-checked="true"] .swatchChip {
+  transform: translateY(-4px) rotate(-2deg);
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 14px 18px -10px rgb(23 20 15 / 0.6), 0 0 0 2px var(--desk-paper), 0 0 0 3.5px var(--desk-ink);
+}
+.swatchPrice {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+/* ---------- Switch: a paper slider in a slot ---------- */
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.switchSlot {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  transition: background-color 260ms ease;
+}
+.switchKnob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--desk-paper-raised);
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 2px 5px rgb(23 20 15 / 0.35);
+  transition: transform 300ms var(--desk-spring);
+}
+.switch[aria-checked="true"] .switchSlot {
+  background: var(--desk-stamp);
+}
+.switch[aria-checked="true"] .switchKnob {
+  transform: translateX(20px);
+}
+.switchText {
+  display: grid;
+  gap: 2px;
+}
+.switchHint {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+
+/* ---------- Field: write on the line ---------- */
+.field {
+  display: grid;
+  gap: 4px;
+}
+.fieldInput {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0 6px;
+  border: 0;
+  border-bottom: 1.5px solid var(--desk-rule-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--desk-ink);
+  font: var(--type-lede);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.fieldInput::placeholder {
+  color: var(--desk-ink-soft);
+  opacity: 0.7;
+}
+.fieldInput:focus {
+  outline: none;
+  border-bottom-color: var(--desk-stamp);
+  box-shadow: 0 1.5px 0 var(--desk-stamp);
+}
+.fieldHint {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+
+/* ---------- Rules ---------- */
+.rule {
+  height: 1px;
+  border: 0;
+  margin: 0;
+  background: var(--desk-rule);
+}
+.ruleDouble {
+  height: 4px;
+  border: 0;
+  margin: 0;
+  border-top: 1px solid var(--desk-rule-strong);
+  border-bottom: 1px solid var(--desk-rule-strong);
+}
+.rulePerf {
+  height: 2px;
+  border: 0;
+  margin: 0;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 1px, transparent 1.3px);
+  background-size: 7px 2px;
+  background-repeat: repeat-x;
+}
+
+/* ---------- Source marks: printer's marks instead of shouting pills ---------- */
+.mark {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-left: 0.18em;
+  vertical-align: 0.42em;
+  border-radius: 50%;
+  color: var(--desk-mark);
+}
+.mark[data-p="live"] {
+  background: currentColor;
+}
+.mark[data-p="simulated"] {
+  box-shadow: inset 0 0 0 1.4px currentColor;
+}
+.mark[data-p="estimated"] {
+  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+  box-shadow: inset 0 0 0 1.2px currentColor;
+}
+.mark[data-p="pending"] {
+  border: 1.2px dashed currentColor;
+}
+.mark[data-p="sandbox"] {
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1.4px currentColor;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.legend .mark {
+  margin: 0 5px 0 0;
+  vertical-align: 0.05em;
+}
+.sandbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  border-bottom: 1px solid var(--desk-rule);
+}
+.sandbox svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Paper sheet ---------- */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--desk-scrim);
+  animation: fadeIn 260ms ease both;
+}
+.sheet {
+  position: fixed;
+  z-index: 41;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 88dvh;
+  overflow: auto;
+  padding: 26px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  /* deckled top edge: a torn paper line instead of a rounded corner */
+  mask:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='10' preserveAspectRatio='none'><path d='M0 10 L0 4 L6 3 L11 5 L17 2.6 L24 4.2 L30 2.2 L37 3.8 L43 2.8 L50 4.6 L57 2.4 L63 3.6 L70 2 L77 4 L84 2.9 L90 4.4 L97 2.5 L104 3.9 L111 2.7 L120 4 L120 10 Z' fill='black'/></svg>") top / 120px 10px repeat-x,
+    linear-gradient(black, black) 0 9px / 100% calc(100% - 9px) no-repeat;
+  filter: drop-shadow(0 -10px 24px rgb(23 20 15 / 0.3));
+  animation: sheetIn 420ms var(--ts-ease-enter) both;
+}
+.sheetGrip {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 44px;
+  height: 2px;
+  margin-left: -22px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 1px, transparent 1.3px);
+  background-size: 6px 2px;
+}
+.sheetHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.sheetTitle {
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 48;
+  letter-spacing: -0.02em;
+}
+.close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: -8px -8px 0 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--desk-ink-soft);
+}
+.close:hover {
+  color: var(--desk-ink);
+  background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
+}
+@media (min-width: 960px) {
+  .sheet {
+    left: auto;
+    right: 24px;
+    bottom: 24px;
+    top: 24px;
+    width: 420px;
+    max-height: none;
+    border-radius: 4px;
+    mask: none;
+    padding-top: 24px;
+    box-shadow: 0 1px 0 var(--desk-ledge), 0 30px 60px -24px rgb(23 20 15 / 0.6);
+    filter: none;
+    animation-name: sheetInSide;
+  }
+  .sheetGrip {
+    display: none;
+  }
+}
+
+/* ---------- Stamped confirmation ---------- */
+.stamped {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 5px;
+  border: 2px solid var(--desk-stamp);
+  border-radius: 4px;
+  color: var(--desk-stamp);
+  font: 700 0.8rem/1 var(--font-ui), var(--ts-font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-4deg);
+  animation: stampIn 380ms var(--desk-spring) both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheetIn {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheetInSide {
+  from {
+    transform: translateX(calc(100% + 32px));
+  }
+}
+@keyframes stampIn {
+  0% {
+    opacity: 0;
+    transform: rotate(-4deg) scale(1.6);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-4deg) scale(0.94);
+  }
+  100% {
+    transform: rotate(-4deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp,
+  .paper,
+  .tag,
+  .tool svg,
+  .tabThumb,
+  .switchKnob,
+  .swatchChip {
+    transition: none;
+  }
+  .sheet,
+  .scrim,
+  .stamped {
+    animation: none;
+  }
+}

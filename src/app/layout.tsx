@@ -25,15 +25,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F4ECDD" },
-    { media: "(prefers-color-scheme: dark)", color: "#17140F" },
-  ],
+  themeColor: "#F4ECDD", // paper by day: the OS theme never flips the chrome
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${interTight.variable}`}>
+    <html lang="en" data-theme="light" className={`${fraunces.variable} ${interTight.variable}`}>
       <body>{children}</body>
     </html>
   );
