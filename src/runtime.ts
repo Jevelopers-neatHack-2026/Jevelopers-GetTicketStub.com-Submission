@@ -46,6 +46,7 @@ const RUNTIME_VERSION = "0.1.0";
 const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/;
 
 interface ExecuteHooks<T> {
+  readonly beforeTransport?: (transportCalled: boolean) => void;
   readonly onSuccess?: (value: T, sideEffectState: AttemptEffectState) => Promise<void>;
   readonly onFailure?: (sideEffectState: AttemptEffectState) => Promise<void>;
 }
@@ -197,6 +198,7 @@ export class FulfillmentConnectorRuntime {
       );
       throw this.failure("submit", staleQuote ? "stale_quote" : "invalid_input", "not_dispatched");
     }
+    this.assertQuoteCurrent(command.quote);
 
     const budgetRequest: BudgetRequest = {
       amountMinor: command.amountMinor,
@@ -284,6 +286,7 @@ export class FulfillmentConnectorRuntime {
       "submit",
       scope,
       async (context) => {
+        this.assertQuoteCurrent(command.quote);
         currentAttempt = await this.saveAttempt({
           ...currentAttempt,
           budgetReservationState: "pending",
@@ -332,10 +335,15 @@ export class FulfillmentConnectorRuntime {
             : {}),
           updatedAt: this.dependencies.clock.now()
         });
+        this.assertQuoteCurrent(command.quote);
         this.assertRuntimeMode("submit");
         return this.adapter.submit(command, context);
       },
       {
+        beforeTransport: (transportCalled) => this.assertQuoteCurrent(
+          command.quote,
+          transportCalled ? "possible" : "not_dispatched"
+        ),
         onSuccess: async (value) => {
           currentAttempt = await this.saveAttempt({
             ...currentAttempt,
@@ -474,14 +482,15 @@ export class FulfillmentConnectorRuntime {
         mode: this.mode,
         request: <R>(request: ProviderTransportRequest): Promise<R> => {
           this.assertRuntimeMode(operation);
-            let requestSnapshot: ProviderTransportRequest;
-            try {
-              requestSnapshot = snapshotJson(request) as ProviderTransportRequest;
-            } catch {
-              throw this.failure(operation, "invalid_input", transportCalled ? "possible" : "not_dispatched");
-            }
-            transportCalled = true;
-            return this.dependencies.transport.request<R>(requestSnapshot);
+          let requestSnapshot: ProviderTransportRequest;
+          try {
+            requestSnapshot = snapshotJson(request) as ProviderTransportRequest;
+          } catch {
+            throw this.failure(operation, "invalid_input", transportCalled ? "possible" : "not_dispatched");
+          }
+          hooks.beforeTransport?.(transportCalled);
+          transportCalled = true;
+          return this.dependencies.transport.request<R>(requestSnapshot);
         }
       }
     };
@@ -667,15 +676,22 @@ export class FulfillmentConnectorRuntime {
     ) {
       throw this.failure(operation, "invalid_input", "not_dispatched");
     }
-    if (Date.parse(quote.expiresAt) <= this.dependencies.clock.now()) {
-      throw this.failure(operation, "stale_quote", "not_dispatched");
-    }
+    this.assertQuoteCurrent(quote);
     if (
       quote.productionBundleDigest !== command.productionBundleDigest ||
       quote.totalMinor !== command.amountMinor ||
       quote.currency !== command.currency
     ) {
       throw this.failure(operation, "invalid_input", "not_dispatched");
+    }
+  }
+
+  private assertQuoteCurrent(
+    quote: SubmitCommand["quote"],
+    sideEffectState: AttemptEffectState = "not_dispatched"
+  ): void {
+    if (Date.parse(quote.expiresAt) <= this.dependencies.clock.now()) {
+      throw this.failure("submit", "stale_quote", sideEffectState);
     }
   }
 

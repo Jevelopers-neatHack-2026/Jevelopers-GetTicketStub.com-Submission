@@ -466,6 +466,125 @@ cases.push(["pre-submit validation rejects stale quotes before authorization, bu
   assert.equal(state.transportCalls.length, 0);
 }]);
 
+cases.push(["quote expiry during async submit phases blocks reservation or final transport", async () => {
+  const expiry = Date.parse("2026-10-10T15:00:00.000Z");
+  for (const phase of ["pre-submit", "issuer", "budget", "adapter-before-transport"]) {
+    const { runtime, state, adapter, dependencies } = createHarness({ authorizationAllowsReplay: true });
+    let now = Date.parse("2026-10-10T14:00:00.000Z");
+    dependencies.clock.now = () => now;
+    const expire = (at = Date.parse("2026-10-10T16:00:00.000Z")) => { now = at; };
+
+    if (phase === "pre-submit") {
+      const validate = adapter.validateBeforeSubmit.bind(adapter);
+      adapter.validateBeforeSubmit = async (...args) => {
+        const result = await validate(...args);
+        expire();
+        return result;
+      };
+    } else if (phase === "issuer") {
+      const verify = dependencies.authorizationVerifier.verifyAndClaim.bind(dependencies.authorizationVerifier);
+      dependencies.authorizationVerifier.verifyAndClaim = async (...args) => {
+        const result = await verify(...args);
+        expire();
+        return result;
+      };
+    } else if (phase === "budget") {
+      const authorize = dependencies.budgetClient.authorize.bind(dependencies.budgetClient);
+      dependencies.budgetClient.authorize = async (...args) => {
+        const result = await authorize(...args);
+        expire();
+        return result;
+      };
+    } else {
+      adapter.submit = async (command, context) => {
+        state.adapterCalls.push("submit");
+        await Promise.resolve();
+        expire(expiry);
+        await context.transport.request({
+          operation: "submit",
+          method: "POST",
+          path: "/fixture/orders",
+          body: command,
+          idempotencyKey: command.idempotencyKey
+        });
+        return { status: "supported", value: { providerRequestId: "request-fixture-1", acceptedAt: "2026-10-10T14:00:00.000Z" } };
+      };
+    }
+
+    await expectError(runtime.submit(envelope(submitCommand()), scope), "stale_quote", "not_dispatched");
+    assert.equal(state.transportCalls.length, 0, `${phase} dispatched after quote expiry`);
+    if (phase === "pre-submit") {
+      assert.equal(state.authorizationCalls.length, 0);
+      assert.equal(state.budgetCalls.length, 0);
+      assert.equal(state.attempts.size, 0);
+      continue;
+    }
+
+    const attempt = state.attempts.values().next().value;
+    assert.equal(state.authorizationCalls.length, 1);
+    assert.equal(attempt.sideEffectState, "not_dispatched");
+    if (phase === "issuer") {
+      assert.equal(state.budgetCalls.length, 0);
+      assert.equal(attempt.budgetReservationState, "not_requested");
+    } else {
+      assert.equal(state.budgetCalls.length, 1);
+      assert.equal(attempt.budgetReservationState, "reserved");
+      assert.equal(attempt.budgetReservationReference, "fixture-budget-reference");
+      assert.equal(state.adapterCalls.includes("submit"), phase === "adapter-before-transport");
+    }
+
+    const retryCode = phase === "issuer" ? "authorization_action_claimed" : "reservation_unresolved";
+    for (const idempotencyKey of ["idem-fixture-1", `${phase}-new-key`]) {
+      const restoredAttempts = new Map(JSON.parse(JSON.stringify([...state.attempts.entries()])));
+      const restored = createHarness({ sharedAttempts: restoredAttempts, authorizationAllowsReplay: true });
+      await expectError(
+        restored.runtime.submit(envelope(submitCommand({ idempotencyKey })), scope),
+        retryCode,
+        "not_dispatched"
+      );
+      assert.equal(restored.state.budgetCalls.length, 0);
+      assert.equal(restored.state.transportCalls.length, 0);
+    }
+    assert.equal(state.budgetCalls.length, phase === "issuer" ? 0 : 1);
+  }
+}]);
+
+cases.push(["an unexpired quote dispatches successfully", async () => {
+  const { runtime, state } = createHarness();
+  const result = await runtime.submit(envelope(submitCommand()), scope);
+  assert.equal(result.value.providerRequestId, "request-fixture-1");
+  assert.equal(state.budgetCalls.length, 1);
+  assert.equal(state.transportCalls.filter((call) => call.operation === "submit").length, 1);
+}]);
+
+cases.push(["quote expiry exactly at the transport deadline rejects and retains the reservation", async () => {
+  const expiry = Date.parse("2026-10-10T15:00:00.000Z");
+  const { runtime, state, adapter, dependencies } = createHarness({ authorizationAllowsReplay: true });
+  let now = Date.parse("2026-10-10T14:00:00.000Z");
+  dependencies.clock.now = () => now;
+  adapter.submit = async (command, context) => {
+    state.adapterCalls.push("submit");
+    await Promise.resolve();
+    now = expiry;
+    await context.transport.request({
+      operation: "submit",
+      method: "POST",
+      path: "/fixture/orders",
+      body: command,
+      idempotencyKey: command.idempotencyKey
+    });
+    return { status: "supported", value: { providerRequestId: "request-fixture-1", acceptedAt: "2026-10-10T14:00:00.000Z" } };
+  };
+
+  await expectError(runtime.submit(envelope(submitCommand()), scope), "stale_quote", "not_dispatched");
+  const attempt = state.attempts.values().next().value;
+  assert.equal(state.budgetCalls.length, 1);
+  assert.equal(state.transportCalls.length, 0);
+  assert.equal(attempt.budgetReservationState, "reserved");
+  assert.equal(attempt.budgetReservationReference, "fixture-budget-reference");
+  assert.equal(attempt.sideEffectState, "not_dispatched");
+}]);
+
 cases.push(["submit rejects a quote that does not bind the exact amount, currency, and artifact", async () => {
   const { runtime, state } = createHarness();
   const mismatched = submitCommand({
