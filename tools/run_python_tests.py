@@ -147,7 +147,9 @@ def summarize_result(
     result: unittest.TestResult,
 ) -> dict[str, object]:
     outcomes = getattr(result, "case_outcomes", [])
-    skipped = sum("case_skipped" in outcome for outcome in outcomes)
+    # A test that reports any additional outcome was run, even if setup,
+    # teardown, or cleanup also emitted a skip callback.
+    skipped = sum(outcome == {"case_skipped"} for outcome in outcomes)
     failed = sum(bool(outcome & {"failure", "error"}) for outcome in outcomes)
     error_cases = sum("error" in outcome for outcome in outcomes)
     expected_failures = sum("expected_failure" in outcome for outcome in outcomes)

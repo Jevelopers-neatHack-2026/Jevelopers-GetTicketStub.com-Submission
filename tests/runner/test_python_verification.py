@@ -64,6 +64,48 @@ def synthetic_subtest_case(outcomes: tuple[str, ...]) -> unittest.TestCase:
     return case_type()
 
 
+def synthetic_lifecycle_case(
+    test_outcome: str,
+    teardown_outcome: str | None = None,
+) -> unittest.TestCase:
+    def cleanup_error() -> None:
+        raise RuntimeError("synthetic cleanup error")
+
+    def run_test(self: unittest.TestCase) -> None:
+        if test_outcome == "failure":
+            self.fail("synthetic test failure")
+        if test_outcome == "error":
+            raise RuntimeError("synthetic test error")
+        if test_outcome == "skip":
+            self.skipTest("synthetic test skip")
+        if test_outcome == "skip_with_cleanup_error":
+            self.addCleanup(cleanup_error)
+            self.skipTest("synthetic test skip before cleanup")
+        if test_outcome == "subtest_failure_then_skip":
+            with self.subTest(part="failure"):
+                self.fail("synthetic subtest failure")
+            self.skipTest("synthetic top-level skip")
+
+    def tear_down(self: unittest.TestCase) -> None:
+        if teardown_outcome == "failure":
+            self.fail("synthetic tearDown failure")
+        if teardown_outcome == "error":
+            raise RuntimeError("synthetic tearDown error")
+        if teardown_outcome == "skip":
+            self.skipTest("synthetic tearDown skip")
+
+    case_type = type(
+        f"SyntheticLifecycleCase_{next(_case_numbers)}",
+        (unittest.TestCase,),
+        {
+            "__module__": __name__,
+            "runTest": run_test,
+            "tearDown": tear_down,
+        },
+    )
+    return case_type()
+
+
 class PythonVerificationRunnerTests(unittest.TestCase):
     def test_missing_listed_file_fails_with_zero_execution_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -100,6 +142,9 @@ class PythonVerificationRunnerTests(unittest.TestCase):
         self.assertEqual(summary["passed_cases"], 1)
         self.assertEqual(summary["failed_cases"], 0)
         self.assertEqual(summary["skipped_cases"], 1)
+        self.assertEqual(summary["skip_events"], 1)
+        self.assertEqual(summary["runner_skips"], 0)
+        self.assertEqual(summary["subtest_skip_events"], 0)
         self.assertEqual(summary["status"], "failed")
 
     def test_failures_and_errors_are_counted_once_per_test(self) -> None:
@@ -252,6 +297,49 @@ class PythonVerificationRunnerTests(unittest.TestCase):
         self.assertEqual(summary["error_cases"], 1)
         self.assertEqual(summary["runner_errors"], 0)
 
+    def test_ordinary_skip_callbacks_never_hide_failed_executions(self) -> None:
+        cases = (
+            ("failure", "skip", 0, 0),
+            ("error", "skip", 1, 0),
+            ("skip", "failure", 0, 0),
+            ("skip", "error", 1, 0),
+            ("skip_with_cleanup_error", None, 1, 0),
+            ("subtest_failure_then_skip", None, 0, 1),
+        )
+        for test_outcome, teardown_outcome, error_count, subtest_failure_count in cases:
+            with self.subTest(test_outcome=test_outcome, teardown_outcome=teardown_outcome):
+                summary = run_test_suite(
+                    "eval-policy-unit",
+                    unittest.TestSuite(
+                        [synthetic_lifecycle_case(test_outcome, teardown_outcome)]
+                    ),
+                    stream=io.StringIO(),
+                )
+
+                self.assertEqual(summary["status"], "failed")
+                self.assertEqual(summary["exit_code"], 1)
+                self.assertEqual(summary["expected_cases"], 1)
+                self.assertEqual(summary["executed_cases"], 1)
+                self.assertEqual(summary["passed_cases"], 0)
+                self.assertEqual(summary["failed_cases"], 1)
+                self.assertEqual(summary["error_cases"], error_count)
+                self.assertEqual(summary["runner_errors"], 0)
+                self.assertEqual(summary["skipped_cases"], 0)
+                self.assertEqual(summary["skip_events"], 1)
+                self.assertEqual(summary["runner_skips"], 0)
+                self.assertEqual(summary["subtest_skip_events"], 0)
+                self.assertEqual(
+                    summary["subtest_failure_events"],
+                    subtest_failure_count,
+                )
+                self.assertEqual(summary["subtest_error_events"], 0)
+                self.assertEqual(summary["incomplete_cases"], 0)
+                self.assertEqual(summary["expected_failure_cases"], 0)
+                self.assertEqual(summary["unexpected_success_cases"], 0)
+                self.assertEqual(
+                    summary["reason"],
+                    "tests or unittest setup/teardown hooks were skipped",
+                )
 
     def test_pass_summary_counts_are_faithful(self) -> None:
         summary = run_test_suite(
