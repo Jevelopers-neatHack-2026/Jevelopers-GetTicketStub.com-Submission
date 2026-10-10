@@ -94,6 +94,23 @@ function eventGraph(count, detailed = false) {
   return Buffer.from(`<!doctype html><script type="application/ld+json">${JSON.stringify({ "@graph": events })}</script>`);
 }
 
+function jsonLdScripts(blocks) {
+  const scripts = blocks.map((block) => `<script type="application/ld+json">${JSON.stringify(block)}</script>`).join("");
+  return Buffer.from(`<!doctype html>${scripts}`);
+}
+
+function eventScripts(count) {
+  const blocks = [];
+  for (let offset = 0; offset < count; offset += 3) {
+    const events = Array.from({ length: Math.min(3, count - offset) }, (_, index) => ({
+      "@type": "Event",
+      name: `Block ${blocks.length} Event ${index}`,
+    }));
+    blocks.push({ "@graph": events });
+  }
+  return jsonLdScripts(blocks);
+}
+
 function sourceInput(store, doc, retentionHandle, authenticatedRequest = request()) {
   return {
     sources: [{ document: doc, retentionHandle }],
@@ -230,6 +247,84 @@ test("cities and annual editions remain separate even when event names match", a
   assert.ok(result.occurrenceDecisions.some((decision) => decision.conflictFields.includes("edition") && decision.conflictFields.includes("start")));
 });
 
+test("separate JSON-LD scripts retain block identity across events, organizations, and transitions", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = jsonLdScripts([
+    { "@graph": [
+      { "@type": "Event", name: "Harbor Lights Tour", startDate: "2027-08-01", location: { address: { addressLocality: "Boston" } } },
+      { "@type": "Event", name: "Night Market", startDate: "2027-09-10", eventStatus: "https://schema.org/EventCancelled" },
+      { "@type": "Organization", name: "Harbor Arts Center" },
+    ] },
+    { "@graph": [
+      { "@type": "Event", name: "Harbor Lights Tour", startDate: "2027-08-01", location: { address: { addressLocality: "Portland" } } },
+      { "@type": "Event", name: "Night Market replacement", startDate: "2027-09-11", eventStatus: "https://schema.org/EventRescheduled" },
+      { "@type": "Organization", name: "Harbor Arts Collective" },
+    ] },
+  ]);
+  const result = await composeSourceIdentity(sourceInput(harness.store, document(bytes), harness.createPermit()));
+  const extractedEvents = result.sources[0].extraction.events;
+
+  assert.deepEqual(extractedEvents.map(({ entityId, ordinal, blockIndex }) => [entityId, ordinal, blockIndex]), [
+    ["event:script-0:/@graph/0", 0, 0],
+    ["event:script-0:/@graph/1", 1, 0],
+    ["event:script-1:/@graph/0", 0, 1],
+    ["event:script-1:/@graph/1", 1, 1],
+  ]);
+  assert.deepEqual(result.sources[0].extraction.organizations.map(({ entityId, ordinal, blockIndex }) => [entityId, ordinal, blockIndex]), [
+    ["organization:script-0:/@graph/2", 0, 0],
+    ["organization:script-1:/@graph/2", 0, 1],
+  ]);
+
+  assert.equal(result.occurrenceCandidates.length, 4);
+  assert.equal(result.entityCandidates.length, 2);
+  assert.equal(result.occurrenceDecisions.length, 6);
+  assert.equal(result.entityDecisions.length, 1);
+  assert.deepEqual(result.occurrenceCandidates.filter((candidate) => candidate.facts.title[0].value === "Harbor Lights Tour")
+    .map((candidate) => candidate.facts.city[0].value).sort(), ["Boston", "Portland"]);
+  assert.deepEqual(result.entityCandidates.map((candidate) => candidate.names[0].value).sort(), [
+    "Harbor Arts Center",
+    "Harbor Arts Collective",
+  ]);
+  assert.equal(result.entityDecisions[0].relation, "review");
+  assert.ok(result.entityDecisions[0].reasonCodes.includes("name_similarity_without_strong_identity"));
+
+  const candidateIds = [
+    ...result.entityCandidates.map((candidate) => candidate.candidateId),
+    ...result.occurrenceCandidates.map((candidate) => candidate.candidateId),
+  ];
+  assert.equal(new Set(candidateIds).size, candidateIds.length);
+  for (const transition of result.unresolvedTransitions) {
+    const candidate = result.occurrenceCandidates.find((entry) => entry.candidateId === transition.candidateId);
+    assert.ok(candidate);
+    assert.equal(candidate.facts.status[0].value, transition.transition);
+  }
+  assert.deepEqual(result.unresolvedTransitions.map(({ transition }) => transition).sort(), ["canceled", "rescheduled"]);
+  assert.deepEqual(result.transitionLinks, []);
+
+  const fullHash = digest(bytes);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request());
+  const evidence = await harness.store.lookupEvidence(scope, result.sources[0].evidence.evidenceId);
+  const positions = await harness.store.listEvidencePositions(scope, evidence, request());
+  for (const candidate of result.occurrenceCandidates) {
+    for (const claims of Object.values(candidate.facts)) {
+      for (const claim of claims) {
+        const [support] = claim.supports;
+        assert.equal(support.contentHash, fullHash);
+        assert.equal(support.locator.kind, "text-range");
+        const rawBytes = bytes.subarray(support.locator.startByte, support.locator.endByte);
+        assert.ok(result.facts.some((fact) => fact.field === support.field && fact.rawValue === rawBytes.toString("utf8")
+          && fact.supports[0].contentHash === fullHash));
+        const storedPosition = positions.find((position) => position.locator.kind === "text-range"
+          && position.locator.startByte === support.locator.startByte
+          && position.locator.endByte === support.locator.endByte);
+        assert.ok(storedPosition);
+        assert.equal(storedPosition.contentHash, digest(rawBytes));
+        assert.notEqual(storedPosition.contentHash, fullHash);
+      }
+    }
+  }
+});
+
 test("separate equal-byte sources stay duplicate evidence with unknown independence", async (t) => {
   const harness = await createHarness(t);
   const bytes = Buffer.from(`<!doctype html><script type="application/ld+json">${JSON.stringify({
@@ -252,6 +347,7 @@ test("separate equal-byte sources stay duplicate evidence with unknown independe
   assert.notEqual(result.sources[0].evidence.evidenceId, result.sources[1].evidence.evidenceId);
   assert.equal(result.sources[0].evidence.duplicateGroupId, result.sources[1].evidence.duplicateGroupId);
   assert.equal(result.occurrenceDecisions.length, 1);
+  assert.notEqual(result.occurrenceCandidates[0].candidateId, result.occurrenceCandidates[1].candidateId);
   assert.equal(result.occurrenceDecisions[0].relation, "review");
   assert.deepEqual(result.occurrenceDecisions[0].duplicateContentHashes, [digest(bytes)]);
   assert.ok(result.facts.every((fact) => fact.supports.every((support) => support.independence === "unknown")));
@@ -422,6 +518,10 @@ test("replay reports immutable stored provenance separately from the current ret
   const replay = await composeSourceIdentity(sourceInput(harness.store, replayDocument, harness.createPermit()));
 
   assert.equal(replay.sources[0].evidence.evidenceId, first.sources[0].evidence.evidenceId);
+  assert.deepEqual(replay.occurrenceCandidates.map(({ candidateId }) => candidateId),
+    first.occurrenceCandidates.map(({ candidateId }) => candidateId));
+  assert.deepEqual(replay.entityCandidates.map(({ candidateId }) => candidateId),
+    first.entityCandidates.map(({ candidateId }) => candidateId));
   assert.equal(replay.sources[0].evidence.retrievedAt, oldRetrievedAt);
   assert.equal(replay.sources[0].storedSource.retrievedAt, oldRetrievedAt);
   assert.equal(replay.sources[0].observedRetrievedAt, currentRetrievedAt);
@@ -853,6 +953,18 @@ test("candidate and pair-comparison limits accept 23 identities and reject 24", 
   assert.equal(atLimit.limits.maxComparisons, 256);
   await expectCompositionError(
     composeSourceIdentity(sourceInput(harness.store, document(eventGraph(24)), harness.createPermit())),
+    "RESOURCE_LIMIT",
+  );
+});
+
+test("candidate limits count repeated block-local ordinals as distinct entities", async (t) => {
+  const harness = await createHarness(t);
+  const atLimit = await composeSourceIdentity(sourceInput(harness.store, document(eventScripts(23)), harness.createPermit()));
+  assert.equal(atLimit.occurrenceCandidates.length, 23);
+  assert.equal(atLimit.occurrenceDecisions.length, 253);
+  assert.equal(new Set(atLimit.occurrenceCandidates.map(({ candidateId }) => candidateId)).size, 23);
+  await expectCompositionError(
+    composeSourceIdentity(sourceInput(harness.store, document(eventScripts(24)), harness.createPermit())),
     "RESOURCE_LIMIT",
   );
 });

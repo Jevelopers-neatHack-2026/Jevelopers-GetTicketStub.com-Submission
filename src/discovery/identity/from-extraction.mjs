@@ -386,15 +386,35 @@ function validZone(zone) {
   return hours <= 14 && minutes <= 59 && !(hours === 14 && minutes !== 0);
 }
 
+function sourceEntityKey(entity, observationKind, seenKeys, seenEntityIds) {
+  const { blockIndex, ordinal, entityId, jsonPointer } = entity;
+  if (entity.kind !== observationKind
+    || !Number.isSafeInteger(blockIndex) || blockIndex < 0 || blockIndex >= IDENTITY_LIMITS.maxJsonLdBlocks
+    || !Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= IDENTITY_LIMITS.maxEntities
+    || typeof jsonPointer !== "string" || jsonPointer.length > MAX_BYTES_PER_SOURCE
+    || entityId !== `${observationKind}:script-${blockIndex}:${jsonPointer}`) fail("SOURCE_BINDING_FAILED");
+  const key = `${observationKind}:script-${blockIndex}:${ordinal}`;
+  if (seenKeys.has(key) || seenEntityIds.has(entityId)) fail("SOURCE_BINDING_FAILED");
+  seenKeys.add(key);
+  seenEntityIds.add(entityId);
+  return key;
+}
+
 function draftSourceCandidates(extraction, document) {
   if (!sourceHashMatches(extraction, document)) fail("SOURCE_BINDING_FAILED");
   const drafts = [];
+  const seenEntityKeys = new Set();
+  const seenEntityIds = new Set();
   const entities = [
     ...extraction.events.map((entity) => ({ entity, observationKind: "event" })),
     ...extraction.organizations.map((entity) => ({ entity, observationKind: "organization" })),
-  ];
+  ].map(({ entity, observationKind }) => ({
+    entity,
+    observationKind,
+    entityKey: sourceEntityKey(entity, observationKind, seenEntityKeys, seenEntityIds),
+  }));
   try {
-    for (const { entity, observationKind } of entities) {
+    for (const { entity, observationKind, entityKey } of entities) {
       for (const candidate of entity.candidates) {
         if (candidate.suggestionOnly === true) continue;
         const field = FACT_METHODS.get(candidate.field);
@@ -428,7 +448,7 @@ function draftSourceCandidates(extraction, document) {
         const precision = mapped.temporal ? derivePrecision(normalizedValue) : undefined;
         drafts.push({
           observationKind,
-          ordinal: entity.ordinal,
+          entityKey,
           identityField,
           identityValue: observationKind === "organization" ? normalizedValue : mapped.value,
           sourceField: bound.input.field,
@@ -603,8 +623,10 @@ function snapshotSelectedSource(value, expected) {
   };
 }
 
-function candidateId(kind, evidenceId, ordinal) {
-  return `${kind}-${evidenceId.replaceAll("-", "")}-${ordinal}`;
+function candidateId(kind, evidenceId, entityKey) {
+  const match = /^(event|organization):script-(0|[1-9]\d*):(0|[1-9]\d*)$/.exec(entityKey);
+  if (!match || (match[1] === "event" ? kind !== "event" : kind !== "org")) fail("SOURCE_BINDING_FAILED");
+  return `${kind}-${evidenceId.replaceAll("-", "")}-${match[2]}-${match[3]}`;
 }
 
 function mapStoreFact(record, draft, fullHash, metadata) {
@@ -645,10 +667,10 @@ function projectObservations(sourceRuns) {
     for (const item of source.identityFacts) {
       const { draft, fact, claim } = item;
       facts.push(fact);
-      const candidateKey = `${draft.observationKind}:${draft.ordinal}`;
+      const candidateKey = draft.entityKey;
       const candidate = byEntity.get(candidateKey) ?? {
         kind: draft.observationKind,
-        ordinal: draft.ordinal,
+        entityKey: draft.entityKey,
         facts: Object.create(null),
       };
       const field = draft.observationKind === "organization" ? "names" : draft.identityField;
@@ -662,12 +684,12 @@ function projectObservations(sourceRuns) {
       if (candidate.kind === "organization") {
         entities.push(Object.freeze({
           schema: ENTITY_SCHEMA,
-          candidateId: candidateId("org", source.evidence.evidenceId, candidate.ordinal),
+          candidateId: candidateId("org", source.evidence.evidenceId, candidate.entityKey),
           kind: "organization",
           names: Object.freeze(candidate.facts.names ?? []),
         }));
       } else {
-        const candidateIdValue = candidateId("event", source.evidence.evidenceId, candidate.ordinal);
+        const candidateIdValue = candidateId("event", source.evidence.evidenceId, candidate.entityKey);
         const occurrenceFacts = Object.create(null);
         for (const field of ["title", "series", "edition", "city", "venue", "start", "end", "status"]) {
           if (candidate.facts[field]) occurrenceFacts[field] = Object.freeze(candidate.facts[field]);
@@ -769,9 +791,15 @@ export async function composeSourceIdentity(inputValue) {
     }
     if (!sourceRuns.some((source) => source.drafts.length > 0)) fail("NO_IDENTITY_CANDIDATES");
 
-    const identityCandidateCount = sourceRuns.reduce((count, source) => count
-      + source.entities.filter((entry) => entry.observationKind === "event" && source.drafts.some((draft) => draft.observationKind === "event" && draft.ordinal === entry.entity.ordinal)).length
-      + source.entities.filter((entry) => entry.observationKind === "organization" && source.drafts.some((draft) => draft.observationKind === "organization" && draft.ordinal === entry.entity.ordinal)).length, 0);
+    const identityCandidateCount = sourceRuns.reduce((count, source) => {
+      const knownEntityKeys = new Set(source.entities.map((entry) => entry.entityKey));
+      const eligibleEntityKeys = new Set();
+      for (const draft of source.drafts) {
+        if (!knownEntityKeys.has(draft.entityKey)) fail("SOURCE_BINDING_FAILED");
+        eligibleEntityKeys.add(draft.entityKey);
+      }
+      return count + eligibleEntityKeys.size;
+    }, 0);
     if (identityCandidateCount > MAX_IDENTITY_CANDIDATES) fail("RESOURCE_LIMIT");
     const totalComparisons = identityCandidateCount * (identityCandidateCount - 1) / 2;
     if (totalComparisons > MAX_COMPARISONS) fail("RESOURCE_LIMIT");
