@@ -55,6 +55,7 @@ test("keeps multiple JSON-LD events separate and preserves exact UTF-8 byte posi
   assert.deepEqual(result.parserVersions, {
     html: "parse5@8.0.1",
     htmlStream: "parse5-parser-stream@8.0.0",
+    xml: "sax@1.6.1",
     json: `node@${process.versions.node}/JSON.parse+ei-json-index@1`,
   });
   assert.equal(result.events.length, 2);
@@ -130,6 +131,73 @@ test("preserves BOM, CRLF, entity, and non-ASCII offsets against original bytes"
   assertExactRanges(result, input.bytes);
 });
 
+test("parses XHTML with XML self-closing, CDATA, entity, and UTF-8 source semantics", async () => {
+  const input = document(Buffer.from(
+    '\uFEFF<?xml version="1.0" encoding="UTF-8"?>\r\n<!DOCTYPE html SYSTEM "https://remote.invalid/xhtml.dtd">\r\n'
+    + '<html xmlns="http://www.w3.org/1999/xhtml"><head><meta property="og:title" content="Caf&#xE9; &amp; 🍵" />'
+    + '<script src="/app.js" />'
+    + '<script type="application/ld+json"><![CDATA[{"@type":"Event","name":"Café Night"}]]></script></head>'
+    + '<body><p>Visible &amp; retained.</p><p><![CDATA[Cancelled: this event will not take place.]]></p></body></html>',
+  ), "application/xhtml+xml");
+  const result = await extractDeterministically(input);
+  assert.equal(result.status, "PARTIAL");
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0].candidates.find((candidate) => candidate.field === "name").normalizedValue, "Café Night");
+  assert.equal(result.pageMetadata[0].rawValue, "Caf&#xE9; &amp; 🍵");
+  assert.equal(result.pageMetadata[0].normalizedValue, "Café & 🍵");
+  assert.ok(result.visibleText.some((candidate) => candidate.normalizedValue === "Visible & retained."));
+  assert.equal(result.visibleText.find((candidate) => candidate.normalizedValue === "Visible & retained.").rawValue, "Visible &amp; retained.");
+  assert.equal(result.statusMentions.length, 1);
+  assert.equal(result.statusMentions[0].normalizedValue, "Cancelled: this event will not take place.");
+  assert.equal(result.statusMentions[0].rawValue, "Cancelled: this event will not take place.");
+  assertExactRanges(result, input.bytes);
+});
+
+test("rejects malformed XHTML and internal entity declarations without resolving them", async () => {
+  const externalDtdOnly = document(Buffer.from(
+    '<!DOCTYPE html SYSTEM "https://remote.invalid/xhtml.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><body>Cancelled event</body></html>',
+  ), "application/xhtml+xml");
+  const externalDtd = await extractDeterministically(externalDtdOnly);
+  assert.equal(externalDtd.status, "PARTIAL");
+  assert.match(externalDtd.statusMentions[0].normalizedValue, /Cancelled/);
+
+  const externalEntity = document(Buffer.from(
+    '<!DOCTYPE html [<!ENTITY ext SYSTEM "https://remote.invalid/entity">]>'
+    + '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>&ext;Cancelled event</p></body></html>',
+  ), "application/xhtml+xml");
+  const entityResult = await extractDeterministically(externalEntity);
+  assert.equal(entityResult.status, "NO_ANSWER");
+  assert.ok(entityResult.diagnostics.some((item) => item.code === "XHTML_DTD_UNSUPPORTED"));
+
+  const unknownEntity = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>&unknown;Cancelled event</p></body></html>',
+  ), "application/xhtml+xml");
+  const unknownResult = await extractDeterministically(unknownEntity);
+  assert.equal(unknownResult.status, "NO_ANSWER");
+  assert.ok(unknownResult.diagnostics.some((item) => item.code === "MALFORMED_XHTML"));
+
+  const mismatched = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Cancelled event</body></html>',
+  ), "application/xhtml+xml");
+  const malformed = await extractDeterministically(mismatched);
+  assert.equal(malformed.status, "NO_ANSWER");
+  assert.ok(malformed.diagnostics.some((item) => item.code === "MALFORMED_XHTML"));
+
+  const bounded = await extractDeterministically(externalDtdOnly, { limits: { maxHtmlNodes: 2 } });
+  assert.equal(bounded.status, "RESOURCE_LIMIT");
+  assert.equal(bounded.termination, "RESOURCE_LIMIT");
+
+  const controller = new AbortController();
+  const largeXhtml = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body>' + "<p>Static event copy</p>".repeat(2_000) + '</body></html>',
+  ), "application/xhtml+xml");
+  const inFlight = extractDeterministically(largeXhtml, { signal: controller.signal, limits: { htmlChunkCodeUnits: 1 } });
+  setImmediate(() => controller.abort());
+  const canceled = await inFlight;
+  assert.equal(canceled.status, "CANCELED");
+  assert.equal(canceled.termination, "CANCELED");
+});
+
 test("retains later cancellation evidence after the general visible-text budget is exhausted", async () => {
   const input = document(Buffer.from("<html><body><p>General introduction.</p><p>Cancelled: this event has moved to a new date.</p></body></html>"));
   const result = await extractDeterministically(input, { limits: { maxVisibleTextSegments: 1 } });
@@ -137,6 +205,7 @@ test("retains later cancellation evidence after the general visible-text budget 
   assert.equal(result.statusMentions.length, 1);
   assert.match(result.statusMentions[0].normalizedValue, /Cancelled.*new date/);
   assert.equal(result.status, "PARTIAL");
+  assert.equal(result.termination, "RESOURCE_LIMIT");
   assert.ok(result.diagnostics.some((item) => item.code === "VISIBLE_TEXT_LIMIT"));
   assertExactRanges(result, input.bytes);
 });
@@ -147,6 +216,46 @@ test("reports access challenges while keeping their visible source evidence", as
   assert.equal(result.status, "ACCESS_RESTRICTED");
   assert.ok(result.accessSignals.length > 0);
   assertExactRanges(result, input.bytes);
+});
+
+test("matches status and access phrases across visible inline markup after text quota", async () => {
+  const input = document(Buffer.from(
+    '<html><body><p>Introduction.</p><p>The event has <strong>moved</strong> to October 15.</p>'
+    + '<h1>Access <em>denied</em></h1><p>access <span hidden>blocked</span> denied</p>'
+    + '<p>access</p><p>denied</p></body></html>',
+  ));
+  const result = await extractDeterministically(input, { limits: { maxVisibleTextSegments: 1 } });
+  assert.equal(result.status, "ACCESS_RESTRICTED");
+  assert.equal(result.visibleText.length, 1);
+  assert.equal(result.statusMentions.length, 1);
+  assert.equal(result.statusMentions[0].normalizedValue, "The event has moved to October 15.");
+  assert.equal(result.accessSignals.length, 1);
+  assert.equal(result.accessSignals[0].normalizedValue, "Access denied");
+  assert.ok(result.accessSignals[0].rawValue.includes("<em>denied"));
+  assertExactRanges(result, input.bytes);
+
+  const splitOnlyByHidden = document(Buffer.from('<p>access <span hidden>noise</span> denied</p>'));
+  const hidden = await extractDeterministically(splitOnlyByHidden);
+  assert.equal(hidden.accessSignals.length, 0);
+  const splitAcrossBlocks = document(Buffer.from('<p>access</p><p>denied</p>'));
+  const blocks = await extractDeterministically(splitAcrossBlocks);
+  assert.equal(blocks.accessSignals.length, 0);
+});
+
+test("preserves ordered nested noscript JavaScript requirements and excludes hidden descendants", async () => {
+  const input = document(Buffer.from(
+    '<html><body><noscript>Please <b>enable <i>JavaScript</i></b> to continue'
+    + '<span hidden>JavaScript is not required</span></noscript></body></html>',
+  ));
+  const result = await extractDeterministically(input);
+  assert.equal(result.status, "JS_REQUIRED");
+  assert.ok(result.diagnostics.some((item) => item.code === "NOSCRIPT_REQUIRES_JAVASCRIPT"));
+  assertExactRanges(result, input.bytes);
+
+  const hiddenJoin = document(Buffer.from(
+    '<html><body><noscript>Java<span hidden> ignored </span>Script is required to continue</noscript></body></html>',
+  ));
+  assert.equal((await extractDeterministically(hiddenJoin)).status, "NO_ANSWER");
 });
 
 test("keeps malformed JSON-LD bounded and returns remaining visible evidence", async () => {
@@ -170,6 +279,16 @@ test("returns stable empty, unsupported media, and encoding outcomes", async () 
   const legacyCharset = await extractDeterministically(document(Buffer.from("<p>hello</p>"), "text/html; charset=windows-1252"));
   assert.equal(legacyCharset.status, "UNSUPPORTED_ENCODING");
 
+  const legacyHtmlBytes = Buffer.from('<meta charset="windows-1252"><p>caf\u00e9</p>', "latin1");
+  const legacyHtml = await extractDeterministically(document(legacyHtmlBytes, "text/html"));
+  assert.equal(legacyHtml.status, "UNSUPPORTED_ENCODING");
+  const legacyXhtmlBytes = Buffer.from(
+    '<?xml version="1.0" encoding="windows-1252"?><html xmlns="http://www.w3.org/1999/xhtml"><body>caf\u00e9</body></html>',
+    "latin1",
+  );
+  const legacyXhtml = await extractDeterministically(document(legacyXhtmlBytes, "application/xhtml+xml"));
+  assert.equal(legacyXhtml.status, "UNSUPPORTED_ENCODING");
+
   const malformedUtf8 = await extractDeterministically(document(Buffer.from([0x3c, 0x70, 0x3e, 0xff, 0x3c, 0x2f, 0x70, 0x3e])));
   assert.equal(malformedUtf8.status, "MALFORMED_ENCODING");
 
@@ -186,6 +305,43 @@ test("returns stable empty, unsupported media, and encoding outcomes", async () 
   ));
   assert.equal(jsonLdWithMetaLikeDescription.status, "PARTIAL");
   assert.equal(jsonLdWithMetaLikeDescription.events.length, 1);
+
+  const falseMetaCases = [
+    '<!-- <meta charset="windows-1252"> --><p>Cancelled event</p>',
+    '<meta name="description" content="charset=windows-1252"><p>Cancelled event</p>',
+    '<script>const example = \'<meta charset="windows-1252">\';</script><p>Cancelled event</p>',
+    '<meta http-equiv="refresh" content="text/html; charset=windows-1252"><p>Cancelled event</p>',
+  ];
+  for (const markup of falseMetaCases) {
+    const result = await extractDeterministically(document(Buffer.from(markup), "text/html"));
+    assert.equal(result.status, "PARTIAL");
+    assert.ok(result.statusMentions.length > 0);
+  }
+  const trueMeta = await extractDeterministically(document(
+    Buffer.from('<meta http-equiv="Content-Type" content="text/html; charset=windows-1252"><p>Cancelled event</p>'),
+    "text/html",
+  ));
+  assert.equal(trueMeta.status, "UNSUPPORTED_ENCODING");
+  const directCharset = await extractDeterministically(document(
+    Buffer.from('<meta charset="windows-1252"><p>Cancelled event</p>'),
+    "text/html",
+  ));
+  assert.equal(directCharset.status, "UNSUPPORTED_ENCODING");
+  const headerWins = await extractDeterministically(document(
+    Buffer.from('<meta charset="windows-1252"><p>Cancelled event</p>'),
+    "text/html; charset=utf-8",
+  ));
+  assert.equal(headerWins.status, "PARTIAL");
+  const unsupportedXmlDeclaration = await extractDeterministically(document(
+    Buffer.from('<?xml version="1.0" encoding="windows-1252"?><html xmlns="http://www.w3.org/1999/xhtml"><body>Cancelled</body></html>'),
+    "application/xhtml+xml",
+  ));
+  assert.equal(unsupportedXmlDeclaration.status, "UNSUPPORTED_ENCODING");
+  const xmlHeaderWins = await extractDeterministically(document(
+    Buffer.from('<?xml version="1.0" encoding="windows-1252"?><html xmlns="http://www.w3.org/1999/xhtml"><body>Cancelled</body></html>'),
+    "application/xhtml+xml; charset=utf-8",
+  ));
+  assert.equal(xmlHeaderWins.status, "PARTIAL");
 });
 
 test("enforces document, DOM, and JSON-LD entity ceilings", async () => {
@@ -221,7 +377,8 @@ test("bounds page metadata, canonical suggestions, JSON-LD blocks, and entity ca
     '<script type="application/ld+json">{"@type":"Event","name":"Two"}</script>',
   ].join("")));
   const blockLimited = await extractDeterministically(twoBlocks, { limits: { maxJsonLdBlocks: 1 } });
-  assert.equal(blockLimited.status, "RESOURCE_LIMIT");
+  assert.equal(blockLimited.status, "PARTIAL");
+  assert.equal(blockLimited.termination, "RESOURCE_LIMIT");
   assert.ok(blockLimited.diagnostics.some((item) => item.code === "JSONLD_BLOCK_LIMIT"));
 
   const candidateLimited = await extractDeterministically(document(
@@ -229,7 +386,63 @@ test("bounds page metadata, canonical suggestions, JSON-LD blocks, and entity ca
     "application/ld+json",
   ), { limits: { maxCandidatesPerEntity: 1 } });
   assert.equal(candidateLimited.events[0].candidates.length, 1);
+  assert.equal(candidateLimited.status, "PARTIAL");
+  assert.equal(candidateLimited.termination, "RESOURCE_LIMIT");
+  assert.equal(candidateLimited.jsonLdBlocks[0].status, "resource_limited");
   assert.ok(candidateLimited.diagnostics.some((item) => item.code === "JSONLD_CANDIDATE_LIMIT"));
+});
+
+test("reports JSON and plain-text quota exhaustion with resource outcomes and retained partial evidence", async () => {
+  const depthJson = '{"@type":"Event","name":"Show","extra":' + '['.repeat(65) + '0' + ']'.repeat(65) + '}';
+  const standaloneDepth = await extractDeterministically(document(Buffer.from(depthJson), "application/ld+json"));
+  assert.equal(standaloneDepth.status, "RESOURCE_LIMIT");
+  assert.equal(standaloneDepth.termination, "RESOURCE_LIMIT");
+  assert.equal(standaloneDepth.jsonLdBlocks[0].status, "resource_limited");
+
+  const embeddedNodeLimit = await extractDeterministically(document(Buffer.from(
+    '<html><body><script type="application/ld+json">{"@type":"Event","name":"Event"}</script></body></html>',
+  )), { limits: { maxJsonNodes: 1 } });
+  assert.equal(embeddedNodeLimit.status, "RESOURCE_LIMIT");
+  assert.equal(embeddedNodeLimit.termination, "RESOURCE_LIMIT");
+  assert.equal(embeddedNodeLimit.jsonLdBlocks[0].status, "resource_limited");
+
+  const embeddedByteLimit = await extractDeterministically(document(Buffer.from(
+    '<html><body><script type="application/ld+json">{"@type":"Event","name":"Event"}</script></body></html>',
+  )), { limits: { maxJsonLdBytes: 8 } });
+  assert.equal(embeddedByteLimit.status, "RESOURCE_LIMIT");
+  assert.equal(embeddedByteLimit.jsonLdBlocks[0].status, "resource_limited");
+
+  const embeddedPartial = await extractDeterministically(document(Buffer.from(
+    '<html><body><script type="application/ld+json">{"@type":"Event","name":"Event"}</script>'
+    + '<p>Fallback source copy.</p></body></html>',
+  )), { limits: { maxJsonNodes: 2 } });
+  assert.equal(embeddedPartial.status, "PARTIAL");
+  assert.equal(embeddedPartial.termination, "RESOURCE_LIMIT");
+  assert.equal(embeddedPartial.jsonLdBlocks[0].status, "resource_limited");
+  assert.ok(embeddedPartial.visibleText.some((candidate) => candidate.normalizedValue === "Fallback source copy."));
+
+  const standaloneByteLimit = await extractDeterministically(document(
+    Buffer.from('{"@type":"Event","name":"Event"}'), "application/ld+json",
+  ), { limits: { maxJsonLdBytes: 8 } });
+  assert.equal(standaloneByteLimit.status, "RESOURCE_LIMIT");
+  assert.equal(standaloneByteLimit.jsonLdBlocks[0].status, "resource_limited");
+
+  const plainNoEvidence = await extractDeterministically(document(Buffer.from("Long enough"), "text/plain"), {
+    limits: { maxVisibleTextBytes: 0 },
+  });
+  assert.equal(plainNoEvidence.status, "RESOURCE_LIMIT");
+  assert.equal(plainNoEvidence.termination, "RESOURCE_LIMIT");
+  assert.equal(plainNoEvidence.visibleText.length, 0);
+
+  const plainPartial = await extractDeterministically(document(
+    Buffer.from("Introduction then cancellation notice"), "text/plain",
+  ), { limits: { maxVisibleTextBytes: 12 } });
+  assert.equal(plainPartial.status, "PARTIAL");
+  assert.equal(plainPartial.termination, "RESOURCE_LIMIT");
+  assert.equal(plainPartial.visibleText[0].rawValue, "Introduction");
+  assert.equal(plainPartial.statusMentions.length, 1);
+  assert.match(plainPartial.statusMentions[0].normalizedValue, /cancellation/);
+  assertExactRanges(plainPartial, Buffer.from("Introduction then cancellation notice"));
 });
 
 test("honors cancellation and does not access the network for canonical or remote IDs", async () => {

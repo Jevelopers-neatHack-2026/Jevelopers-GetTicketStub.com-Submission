@@ -40,14 +40,9 @@ export function decodeUtf8(bytes) {
   }
 }
 
-export function declaredCharset(bytes, contentType, scanHtmlMeta = false) {
+export function declaredCharset(contentType) {
   const parameter = /(?:^|;)\s*charset\s*=\s*["']?([^;"'\s]+)/i.exec(contentType)?.[1];
-  if (parameter) return parameter.trim().toLowerCase();
-  if (!scanHtmlMeta) return null;
-  const prefix = bytes.subarray(0, Math.min(bytes.length, 2048)).toString("latin1");
-  const meta = /<meta\b[^>]*\bcharset\s*=\s*["']?([^"'\s/>;]+)/i.exec(prefix)?.[1];
-  const httpEquiv = /<meta\b[^>]*\bcontent\s*=\s*(["'])[^"']*?charset\s*=\s*([a-z0-9._-]+)/i.exec(prefix)?.[2];
-  return (meta ?? httpEquiv)?.trim().toLowerCase() ?? null;
+  return parameter?.trim().toLowerCase() ?? null;
 }
 
 export function createByteOffsetMap(text, expectedByteLength) {

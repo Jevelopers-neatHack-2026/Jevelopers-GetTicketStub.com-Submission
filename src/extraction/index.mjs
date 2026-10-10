@@ -1,5 +1,6 @@
-import { collectHtmlEvidence, parseHtmlDocument } from "./html.mjs";
+import { collectHtmlEvidence, declaredCharsetFromHtmlDocument, parseHtmlDocument } from "./html.mjs";
 import { extractJsonLdEntities } from "./jsonld.mjs";
+import { parseXhtmlDocument, xhtmlXmlDeclarationEncodingFromBytes } from "./xhtml.mjs";
 import {
   createByteOffsetMap,
   declaredCharset,
@@ -12,7 +13,7 @@ import {
   textCandidate,
 } from "./source.mjs";
 
-export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.0.0";
+export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.1.0";
 
 export const EXTRACTION_LIMITS = Object.freeze({
   maxDocumentBytes: 2 * 1024 * 1024,
@@ -99,19 +100,45 @@ export async function extractDeterministically(documentInput, options = {}) {
     });
   }
 
-  const charset = declaredCharset(bytes, document.contentType,
-    contentType === "text/html" || contentType === "application/xhtml+xml");
-  if (charset && !UTF8_CHARSETS.has(charset)) {
+  const headerCharset = declaredCharset(document.contentType);
+  if (headerCharset && !UTF8_CHARSETS.has(headerCharset)) {
     return emptyResult({
       status: "UNSUPPORTED_ENCODING",
       source,
       sourceHash,
-      diagnostics: [{ code: "UNSUPPORTED_CHARSET", charset }],
+      diagnostics: [{ code: "UNSUPPORTED_CHARSET", charset: headerCharset }],
     });
   }
 
   const decoded = decodeUtf8(bytes);
   if (!decoded.ok) {
+    if (!headerCharset && contentType === "text/html") {
+      const scanned = await scanHtmlCharsetFromBytes(bytes, signal, limits);
+      if (scanned.code === "CANCELED") {
+        return emptyResult({ status: "CANCELED", source, sourceHash, diagnostics: [{ code: "CANCELED_DURING_CHARSET_SCAN" }], termination: "CANCELED" });
+      }
+      if (scanned.code === "PARSER_DEADLINE") {
+        return emptyResult({ status: "RESOURCE_LIMIT", source, sourceHash, diagnostics: [{ code: "PARSER_DEADLINE" }], termination: "PARSER_DEADLINE" });
+      }
+      if (scanned.charset && !UTF8_CHARSETS.has(scanned.charset)) {
+        return emptyResult({
+          status: "UNSUPPORTED_ENCODING",
+          source,
+          sourceHash,
+          diagnostics: [{ code: "UNSUPPORTED_CHARSET", charset: scanned.charset }],
+        });
+      }
+    } else if (!headerCharset && contentType === "application/xhtml+xml") {
+      const xmlCharset = xhtmlXmlDeclarationEncodingFromBytes(bytes);
+      if (xmlCharset && !UTF8_CHARSETS.has(xmlCharset)) {
+        return emptyResult({
+          status: "UNSUPPORTED_ENCODING",
+          source,
+          sourceHash,
+          diagnostics: [{ code: "UNSUPPORTED_CHARSET", charset: xmlCharset }],
+        });
+      }
+    }
     return emptyResult({
       status: "MALFORMED_ENCODING",
       source,
@@ -133,6 +160,7 @@ export async function extractDeterministically(documentInput, options = {}) {
   const state = {
     source,
     sourceHash,
+    headerCharset,
     bytes,
     text,
     byteOffsetMap,
@@ -149,6 +177,7 @@ export async function extractDeterministically(documentInput, options = {}) {
     ambiguities: [],
     conflicts: [],
     termination: null,
+    forcedStatus: null,
     jsRequired: false,
     visibleTextTruncated: false,
   };
@@ -158,7 +187,7 @@ export async function extractDeterministically(documentInput, options = {}) {
   } else if (contentType === JSON_LD_TYPE) {
     await collectStandaloneJsonLd(state, signal);
   } else {
-    await collectHtml(state, signal);
+    await collectHtml(state, signal, contentType);
   }
 
   if (signal?.aborted && state.termination === null) {
@@ -184,9 +213,11 @@ export async function extractDeterministically(documentInput, options = {}) {
   const answerEvidenceCount = state.events.length + state.organizations.length
     + state.pageMetadata.length + state.visibleText.length + state.statusMentions.length;
   let status;
-  if (state.accessSignals.length > 0) status = "ACCESS_RESTRICTED";
+  if (state.forcedStatus) status = state.forcedStatus;
+  else if (state.accessSignals.length > 0) status = "ACCESS_RESTRICTED";
   else if (state.termination === "CANCELED") status = "CANCELED";
-  else if (state.termination === "RESOURCE_LIMIT" || state.termination === "PARSER_DEADLINE") status = "RESOURCE_LIMIT";
+  else if ((state.termination === "RESOURCE_LIMIT" || state.termination === "PARSER_DEADLINE")
+    && answerEvidenceCount === 0) status = "RESOURCE_LIMIT";
   else if (state.jsRequired && state.events.length === 0 && state.organizations.length === 0
     && state.pageMetadata.length === 0 && state.statusMentions.length === 0
     && state.visibleText.length <= 1) status = "JS_REQUIRED";
@@ -202,6 +233,7 @@ export async function extractDeterministically(documentInput, options = {}) {
     parserVersions: Object.freeze({
       html: "parse5@8.0.1",
       htmlStream: "parse5-parser-stream@8.0.0",
+      xml: "sax@1.6.1",
       json: JSON_PARSER_VERSION,
     }),
     status,
@@ -222,17 +254,29 @@ export async function extractDeterministically(documentInput, options = {}) {
   });
 }
 
-async function collectHtml(state, signal) {
-  const parsed = await parseHtmlDocument(state.text, { signal, limits: state.limits });
+async function collectHtml(state, signal, contentType) {
+  const parsed = contentType === "text/html"
+    ? await parseHtmlDocument(state.text, { signal, limits: state.limits })
+    : await parseXhtmlDocument(state.text, { signal, limits: state.limits });
   if (!parsed.ok) {
     state.termination = parsed.code === "CANCELED" ? "CANCELED"
       : parsed.code === "PARSER_DEADLINE" ? "PARSER_DEADLINE"
-        : parsed.code === "HTML_PARSER_FAILURE" ? null : "RESOURCE_LIMIT";
+        : parsed.code === "HTML_NODE_LIMIT" ? "RESOURCE_LIMIT"
+          : parsed.code === "HTML_PARSER_FAILURE" ? null : null;
     addDiagnostic(state, parsed.code);
     return;
   }
 
-  for (const error of parsed.parseErrors) {
+  const declaredDocumentCharset = state.headerCharset ?? (contentType === "text/html"
+    ? declaredCharsetFromHtmlDocument(parsed.document, state.byteOffsetMap)
+    : parsed.xmlEncoding?.toLowerCase() ?? null);
+  if (declaredDocumentCharset && !UTF8_CHARSETS.has(declaredDocumentCharset)) {
+    state.forcedStatus = "UNSUPPORTED_ENCODING";
+    addDiagnostic(state, "UNSUPPORTED_CHARSET", { charset: declaredDocumentCharset });
+    return;
+  }
+
+  for (const error of parsed.parseErrors ?? []) {
     const exact = Number.isInteger(error.startOffset) && Number.isInteger(error.endOffset)
       ? exactRange(state.text, state.bytes, state.byteOffsetMap, error.startOffset, error.endOffset)
       : null;
@@ -257,11 +301,10 @@ async function collectHtml(state, signal) {
     addDiagnostic(state, "CANCELED_DURING_HTML_TRAVERSAL");
     return;
   }
-  if (html.resourceLimited) {
+  if (!Array.isArray(html.scriptBlocks)) {
     state.termination = "RESOURCE_LIMIT";
     return;
   }
-
   state.canonicalSuggestions = html.canonicalSuggestions;
   state.pageMetadata = html.pageMetadata;
   state.visibleText = html.visibleText;
@@ -269,6 +312,7 @@ async function collectHtml(state, signal) {
   state.accessSignals = html.accessSignals;
   state.jsRequired = html.jsRequired;
   state.visibleTextTruncated = html.visibleTextTruncated;
+  if (html.resourceLimited) state.termination = "RESOURCE_LIMIT";
 
   const seenBlocks = new Map();
   for (let index = 0; index < html.scriptBlocks.length; index += 1) {
@@ -291,6 +335,7 @@ async function collectHtml(state, signal) {
     }
     if (exactBlock.locator.endByte - exactBlock.locator.startByte > state.limits.maxJsonLdBytes) {
       addDiagnostic(state, "JSONLD_BYTE_LIMIT", { locator: exactBlock.locator, limit: state.limits.maxJsonLdBytes });
+      state.termination = "RESOURCE_LIMIT";
       state.jsonLdBlocks.push(Object.freeze({ blockIndex: index, status: "resource_limited", locator: exactBlock.locator }));
       continue;
     }
@@ -327,9 +372,11 @@ async function collectHtml(state, signal) {
     });
     if (!extracted.ok) {
       addDiagnostic(state, extracted.code, { blockIndex: index, locator: exactBlock.locator });
+      const resourceFailure = extracted.code === "JSON_DEPTH_LIMIT" || extracted.code === "JSON_NODE_LIMIT";
+      if (resourceFailure) state.termination = "RESOURCE_LIMIT";
       state.jsonLdBlocks.push(Object.freeze({
         blockIndex: index,
-        status: "malformed",
+        status: resourceFailure ? "resource_limited" : "malformed",
         locator: exactBlock.locator,
         ...(duplicateOfBlockIndex !== undefined ? { duplicateOfBlockIndex } : {}),
       }));
@@ -337,17 +384,31 @@ async function collectHtml(state, signal) {
     }
     state.events.push(...extracted.entities);
     state.organizations.push(...extracted.organizations);
-    if (extracted.truncated) addDiagnostic(state, "JSONLD_ENTITY_LIMIT", { blockIndex: index });
-    if (extracted.candidateTruncated) addDiagnostic(state, "JSONLD_CANDIDATE_LIMIT", { blockIndex: index });
+    if (extracted.truncated) {
+      state.termination = "RESOURCE_LIMIT";
+      addDiagnostic(state, "JSONLD_ENTITY_LIMIT", { blockIndex: index });
+    }
+    if (extracted.candidateTruncated) {
+      state.termination = "RESOURCE_LIMIT";
+      addDiagnostic(state, "JSONLD_CANDIDATE_LIMIT", { blockIndex: index });
+    }
     state.jsonLdBlocks.push(Object.freeze({
       blockIndex: index,
-      status: duplicateOfBlockIndex === undefined ? "parsed" : "duplicate_parsed",
+      status: extracted.truncated || extracted.candidateTruncated ? "resource_limited"
+        : duplicateOfBlockIndex === undefined ? "parsed" : "duplicate_parsed",
       locator: exactBlock.locator,
       eventCount: extracted.entities.length,
       organizationCount: extracted.organizations.length,
       ...(duplicateOfBlockIndex !== undefined ? { duplicateOfBlockIndex } : {}),
     }));
   }
+}
+
+async function scanHtmlCharsetFromBytes(bytes, signal, limits) {
+  const prefix = bytes.subarray(0, Math.min(bytes.length, 2048)).toString("latin1");
+  const parsed = await parseHtmlDocument(prefix, { signal, limits });
+  if (!parsed.ok) return { charset: null, code: parsed.code };
+  return { charset: declaredCharsetFromHtmlDocument(parsed.document, null, 2048), code: null };
 }
 
 async function collectStandaloneJsonLd(state, signal) {
@@ -365,6 +426,11 @@ async function collectStandaloneJsonLd(state, signal) {
   if (state.bytes.length > state.limits.maxJsonLdBytes) {
     state.termination = "RESOURCE_LIMIT";
     addDiagnostic(state, "JSONLD_BYTE_LIMIT", { limit: state.limits.maxJsonLdBytes });
+    state.jsonLdBlocks.push(Object.freeze({
+      blockIndex: 0,
+      status: "resource_limited",
+      locator: Object.freeze({ kind: "text-range", startByte: 0, endByte: state.bytes.length }),
+    }));
     return;
   }
   const extracted = extractJsonLdEntities({
@@ -378,18 +444,21 @@ async function collectStandaloneJsonLd(state, signal) {
   });
   if (!extracted.ok) {
     addDiagnostic(state, extracted.code, { locator: { kind: "text-range", startByte: 0, endByte: state.bytes.length } });
+    const resourceFailure = extracted.code === "JSON_DEPTH_LIMIT" || extracted.code === "JSON_NODE_LIMIT";
+    if (resourceFailure) state.termination = "RESOURCE_LIMIT";
     state.jsonLdBlocks.push(Object.freeze({
       blockIndex: 0,
-      status: "malformed",
+      status: resourceFailure ? "resource_limited" : "malformed",
       locator: Object.freeze({ kind: "text-range", startByte: 0, endByte: state.bytes.length }),
     }));
     return;
   }
   state.events.push(...extracted.entities);
   state.organizations.push(...extracted.organizations);
+  if (extracted.truncated || extracted.candidateTruncated) state.termination = "RESOURCE_LIMIT";
   state.jsonLdBlocks.push(Object.freeze({
     blockIndex: 0,
-    status: "parsed",
+    status: extracted.truncated || extracted.candidateTruncated ? "resource_limited" : "parsed",
     locator: Object.freeze({ kind: "text-range", startByte: 0, endByte: state.bytes.length }),
     eventCount: extracted.entities.length,
     organizationCount: extracted.organizations.length,
@@ -403,11 +472,37 @@ function collectPlainText(state) {
     addDiagnostic(state, "EMPTY_DOCUMENT");
     return;
   }
-  if (state.bytes.length > state.limits.maxVisibleTextBytes || state.limits.maxVisibleTextSegments === 0) {
-    addDiagnostic(state, "VISIBLE_TEXT_LIMIT", { limit: state.limits.maxVisibleTextBytes });
-    return;
+  const truncated = state.bytes.length > state.limits.maxVisibleTextBytes || state.limits.maxVisibleTextSegments === 0;
+  let endOffset = state.text.length;
+  if (state.bytes.length > state.limits.maxVisibleTextBytes) {
+    endOffset = 0;
+    for (let index = 0; index < state.byteOffsetMap.length; index += 1) {
+      const byteOffset = state.byteOffsetMap[index];
+      if (byteOffset !== 0xffff_ffff && byteOffset <= state.limits.maxVisibleTextBytes) endOffset = index;
+      if (byteOffset > state.limits.maxVisibleTextBytes) break;
+    }
   }
-  const candidate = textCandidate({
+  const candidate = endOffset > 0 && state.limits.maxVisibleTextSegments > 0
+    ? textCandidate({
+      field: "visibleText",
+      kind: "visible-text",
+      text: state.text,
+      bytes: state.bytes,
+      byteOffsetMap: state.byteOffsetMap,
+      startOffset: 0,
+      endOffset,
+      normalizedValue: state.text.slice(0, endOffset).replace(/^\uFEFF/, ""),
+    })
+    : null;
+  if (candidate && typeof candidate.normalizedValue === "string" && candidate.normalizedValue !== "") {
+    state.visibleText.push(candidate);
+  }
+  if (truncated) {
+    state.termination = "RESOURCE_LIMIT";
+    state.visibleTextTruncated = true;
+    addDiagnostic(state, "VISIBLE_TEXT_LIMIT", { limit: state.limits.maxVisibleTextBytes });
+  }
+  const wholeDocumentCandidate = textCandidate({
     field: "visibleText",
     kind: "visible-text",
     text: state.text,
@@ -417,16 +512,12 @@ function collectPlainText(state) {
     endOffset: state.text.length,
     normalizedValue: state.text.replace(/^\uFEFF/, ""),
   });
-  if (!candidate) {
-    addDiagnostic(state, "VISIBLE_TEXT_POSITION_UNAVAILABLE");
-    return;
+  if (!wholeDocumentCandidate) return;
+  if (/\b(cancel(?:led|ed|lation)?|postpon(?:ed|ement)?|reschedul(?:ed|e|ing)|new date|date changed|moved to)\b/i.test(wholeDocumentCandidate.normalizedValue)) {
+    state.statusMentions.push(wholeDocumentCandidate);
   }
-  state.visibleText.push(candidate);
-  if (/\b(cancel(?:led|ed|lation)?|postpon(?:ed|ement)?|reschedul(?:ed|e|ing)|new date|date changed|moved to)\b/i.test(candidate.normalizedValue)) {
-    state.statusMentions.push(candidate);
-  }
-  if (/\b(access denied|request blocked|you (?:have been|are) blocked|verify (?:that )?you are human|security challenge|unusual traffic|captcha)\b/i.test(candidate.normalizedValue)) {
-    state.accessSignals.push(candidate);
+  if (/\b(access denied|request blocked|you (?:have been|are) blocked|verify (?:that )?you are human|security challenge|unusual traffic|captcha)\b/i.test(wholeDocumentCandidate.normalizedValue)) {
+    state.accessSignals.push(wholeDocumentCandidate);
   }
 }
 
@@ -508,6 +599,7 @@ function emptyResult({ status, source, sourceHash, diagnostics, termination = nu
     parserVersions: Object.freeze({
       html: "parse5@8.0.1",
       htmlStream: "parse5-parser-stream@8.0.0",
+      xml: "sax@1.6.1",
       json: JSON_PARSER_VERSION,
     }),
     status,

@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "parse5": "8.0.1",
-    "parse5-parser-stream": "8.0.0"
+    "parse5-parser-stream": "8.0.0",
+    "sax": "1.6.1"
   }
 }

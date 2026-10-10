@@ -4,6 +4,12 @@ import { performance } from "node:perf_hooks";
 import { exactRange, normalizeCandidateValue, resolveUrlSuggestion, textCandidate } from "./source.mjs";
 
 const HIDDEN_TAGS = new Set(["head", "script", "style", "template", "noscript", "title"]);
+const BLOCK_TAGS = new Set([
+  "address", "article", "aside", "blockquote", "body", "caption", "dd", "details", "dialog", "div",
+  "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5",
+  "h6", "header", "hgroup", "hr", "html", "li", "main", "menu", "nav", "ol", "p", "pre", "section",
+  "summary", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
+]);
 const OPEN_GRAPH_FIELDS = new Map([
   ["og:title", "name"],
   ["og:description", "description"],
@@ -24,6 +30,39 @@ const STATUS_TEXT = /\b(cancel(?:led|ed|lation)?|postpon(?:ed|ement)?|reschedul(
 const ACCESS_TEXT = /\b(access denied|request blocked|you (?:have been|are) blocked|verify (?:that )?you are human|security challenge|unusual traffic|captcha)\b/i;
 const JS_REQUIRED_TEXT = /\b(?:javascript|js) (?:is )?(?:required|disabled|not enabled)|enable (?:javascript|js) to continue\b/i;
 const MOUNT_IDS = new Set(["root", "app", "__next", "__nuxt", "svelte"]);
+
+export function declaredCharsetFromHtmlDocument(htmlDocument, byteOffsetMap, maximumByteOffset = 2048) {
+  const stack = [{ node: htmlDocument, insideTemplate: false }];
+  let visited = 0;
+  while (stack.length > 0 && visited < 100_000) {
+    const current = stack.pop();
+    const node = current.node;
+    visited += 1;
+    if (!current.insideTemplate && node?.tagName === "meta") {
+      const startOffset = node.sourceCodeLocation?.startOffset;
+      const startByte = Number.isInteger(startOffset)
+        ? byteOffsetMap ? byteOffsetMap[startOffset] : startOffset
+        : undefined;
+      if (startByte !== undefined && startByte <= maximumByteOffset) {
+        const direct = attributeValue(node, "charset")?.trim();
+        if (direct) return direct.toLowerCase();
+        const httpEquiv = attributeValue(node, "http-equiv")?.trim().toLowerCase();
+        const content = attributeValue(node, "content");
+        if (httpEquiv === "content-type" && typeof content === "string") {
+          const match = /(?:^|;)\s*charset\s*=\s*(?:"([^"]*)"|'([^']*)'|([^;\s]+))/i.exec(content);
+          const value = match?.[1] ?? match?.[2] ?? match?.[3];
+          if (value) return value.trim().toLowerCase();
+        }
+      }
+    }
+    const children = Array.isArray(node?.childNodes) ? node.childNodes : [];
+    const insideTemplate = current.insideTemplate || node?.tagName === "template";
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: children[index], insideTemplate });
+    }
+  }
+  return null;
+}
 
 export async function parseHtmlDocument(text, { signal, limits }) {
   const parseErrors = [];
@@ -119,6 +158,8 @@ export async function collectHtmlEvidence({
   let nodeCount = 0;
   let visibleTextBytes = 0;
   let visibleCharacterCount = 0;
+  let visibleRun = { text: "", first: null, last: null };
+  let resourceLimited = false;
   let visibleTextTruncated = false;
   let metadataTruncated = false;
   let canonicalTruncated = false;
@@ -127,6 +168,40 @@ export async function collectHtmlEvidence({
   let noscriptSignalsTruncated = false;
 
   const stack = [{ node: htmlDocument, hidden: false, insideNoscript: false, insideTemplate: false }];
+  const flushVisibleRun = () => {
+    if (visibleRun.first && visibleRun.last) {
+      const normalizedValue = normalizeCandidateValue(visibleRun.text);
+      if (normalizedValue !== "") {
+        const candidate = makeHtmlTextCandidate({
+          field: "visibleText",
+          text,
+          sourceBytes,
+          byteOffsetMap,
+          startOffset: visibleRun.first.startOffset,
+          endOffset: visibleRun.last.endOffset,
+          normalizedValue,
+        });
+        if (candidate && STATUS_TEXT.test(normalizedValue)) {
+          if (statusMentions.length < limits.maxStatusSignalCandidates) statusMentions.push(candidate);
+          else if (!statusSignalsTruncated) {
+            addDiagnostic(diagnostics, limits, "STATUS_SIGNAL_LIMIT", null);
+            statusSignalsTruncated = true;
+            resourceLimited = true;
+          }
+        }
+        if (candidate && ACCESS_TEXT.test(normalizedValue)) {
+          if (accessSignals.length < limits.maxStatusSignalCandidates) accessSignals.push(candidate);
+          else if (!accessSignalsTruncated) {
+            addDiagnostic(diagnostics, limits, "ACCESS_SIGNAL_LIMIT", null);
+            accessSignalsTruncated = true;
+            resourceLimited = true;
+          }
+        }
+      }
+    }
+    visibleRun = { text: "", first: null, last: null };
+  };
+
   while (stack.length > 0) {
     if (signal?.aborted) return { canceled: true };
     if (nodeCount > 0 && nodeCount % limits.traversalYieldEvery === 0) {
@@ -134,6 +209,10 @@ export async function collectHtmlEvidence({
       if (signal?.aborted) return { canceled: true };
     }
     const current = stack.pop();
+    if (current.kind === "flush") {
+      flushVisibleRun();
+      continue;
+    }
     const node = current.node;
     nodeCount += 1;
     if (nodeCount > limits.maxHtmlNodes) {
@@ -147,6 +226,9 @@ export async function collectHtmlEvidence({
     const insideNoscript = current.insideNoscript || tagName === "noscript";
     const insideTemplate = current.insideTemplate || tagName === "template";
     const location = node?.sourceCodeLocation;
+
+    const runBoundary = (tagName !== "" && (BLOCK_TAGS.has(tagName) || ownHidden || tagName === "br"));
+    if (runBoundary) flushVisibleRun();
 
     if (tagName === "link" && !insideTemplate) {
       const rel = attributeValue(node, "rel");
@@ -172,6 +254,7 @@ export async function collectHtmlEvidence({
           } else if (candidate && !canonicalTruncated) {
             addDiagnostic(diagnostics, limits, "CANONICAL_SUGGESTION_LIMIT", null);
             canonicalTruncated = true;
+            resourceLimited = true;
           } else if (!candidate) {
             addDiagnostic(diagnostics, limits, "SOURCE_POSITION_UNAVAILABLE", null);
           }
@@ -207,6 +290,7 @@ export async function collectHtmlEvidence({
         } else if (candidate && !metadataTruncated) {
           addDiagnostic(diagnostics, limits, "PAGE_METADATA_LIMIT", null);
           metadataTruncated = true;
+          resourceLimited = true;
         } else if (!candidate) {
           addDiagnostic(diagnostics, limits, "SOURCE_POSITION_UNAVAILABLE", null);
         }
@@ -223,17 +307,22 @@ export async function collectHtmlEvidence({
 
     if (tagName === "noscript" && !current.hidden && !insideTemplate && !hasHiddenPresentation(node)) {
       if (jsRequiredSignals.length < limits.maxNoscriptSignals) {
-        const signalCandidate = textInsideNoscript(node, text, sourceBytes, byteOffsetMap, limits);
-        if (signalCandidate) jsRequiredSignals.push(signalCandidate);
+        const noscript = textInsideNoscript(node, text, sourceBytes, byteOffsetMap, limits);
+        if (noscript.candidate) jsRequiredSignals.push(noscript.candidate);
+        if (noscript.resourceLimited) {
+          resourceLimited = true;
+          addDiagnostic(diagnostics, limits, "NOSCRIPT_NODE_LIMIT", null);
+        }
       } else if (!noscriptSignalsTruncated) {
         addDiagnostic(diagnostics, limits, "NOSCRIPT_SIGNAL_LIMIT", null);
         noscriptSignalsTruncated = true;
+        resourceLimited = true;
       }
     }
 
     if (tagName !== "" && !hidden && hasMountPoint(node)) mountPointCount += 1;
     if (node?.nodeName === "#text" && !hidden && !insideNoscript
-      && typeof node.value === "string" && node.value.trim() !== "") {
+      && typeof node.value === "string") {
       const span = location && exactRange(text, sourceBytes, byteOffsetMap, location.startOffset, location.endOffset);
       const normalizedValue = normalizeCandidateValue(node.value);
       visibleCharacterCount += normalizedValue.length;
@@ -241,48 +330,44 @@ export async function collectHtmlEvidence({
       if (!span) {
         addDiagnostic(diagnostics, limits, "VISIBLE_TEXT_POSITION_UNAVAILABLE", null);
       } else {
-        const candidate = makeHtmlTextCandidate({
-          field: "visibleText",
-          text,
-          sourceBytes,
-          byteOffsetMap,
-          startOffset: location.startOffset,
-          endOffset: location.endOffset,
-          normalizedValue,
-        });
-        if (candidate) {
-          if (STATUS_TEXT.test(normalizedValue)) {
-            if (statusMentions.length < limits.maxStatusSignalCandidates) statusMentions.push(candidate);
-            else if (!statusSignalsTruncated) {
-              addDiagnostic(diagnostics, limits, "STATUS_SIGNAL_LIMIT", null);
-              statusSignalsTruncated = true;
-            }
-          }
-          if (ACCESS_TEXT.test(normalizedValue)) {
-            if (accessSignals.length < limits.maxStatusSignalCandidates) accessSignals.push(candidate);
-            else if (!accessSignalsTruncated) {
-              addDiagnostic(diagnostics, limits, "ACCESS_SIGNAL_LIMIT", null);
-              accessSignalsTruncated = true;
-            }
-          }
+        if (node.value.trim() !== "") {
+          if (!visibleRun.first) visibleRun.first = { startOffset: location.startOffset, endOffset: location.endOffset };
+          visibleRun.last = { startOffset: location.startOffset, endOffset: location.endOffset };
+        }
+        if (visibleRun.first) visibleRun.text += node.value;
 
-          if (visibleText.length >= limits.maxVisibleTextSegments
-            || visibleTextBytes + rawLength > limits.maxVisibleTextBytes) {
-            if (!visibleTextTruncated) addDiagnostic(diagnostics, limits, "VISIBLE_TEXT_LIMIT", null);
-            visibleTextTruncated = true;
-          } else {
-            visibleTextBytes += rawLength;
-            visibleText.push(candidate);
+        if (node.value.trim() !== "") {
+          const candidate = makeHtmlTextCandidate({
+            field: "visibleText",
+            text,
+            sourceBytes,
+            byteOffsetMap,
+            startOffset: location.startOffset,
+            endOffset: location.endOffset,
+            normalizedValue,
+          });
+          if (candidate) {
+            if (visibleText.length >= limits.maxVisibleTextSegments
+              || visibleTextBytes + rawLength > limits.maxVisibleTextBytes) {
+              if (!visibleTextTruncated) addDiagnostic(diagnostics, limits, "VISIBLE_TEXT_LIMIT", null);
+              visibleTextTruncated = true;
+              resourceLimited = true;
+            } else {
+              visibleTextBytes += rawLength;
+              visibleText.push(candidate);
+            }
           }
         }
       }
     }
 
     const children = Array.isArray(node?.childNodes) ? node.childNodes : [];
+    if (runBoundary) stack.push({ kind: "flush" });
     for (let index = children.length - 1; index >= 0; index -= 1) {
       stack.push({ node: children[index], hidden, insideNoscript, insideTemplate });
     }
   }
+  flushVisibleRun();
 
   for (const signalCandidate of jsRequiredSignals) {
     if (JS_REQUIRED_TEXT.test(signalCandidate.normalizedValue)) {
@@ -304,6 +389,7 @@ export async function collectHtmlEvidence({
     jsRequired,
     mountPointCount,
     visibleTextTruncated,
+    resourceLimited,
     nodeCount,
   };
 }
@@ -384,6 +470,8 @@ function attributeValueRange(text, elementLocation, attributeName) {
 }
 
 function scriptContentSpan(location) {
+  if (Number.isInteger(location?.jsonContentSpan?.startOffset)
+    && Number.isInteger(location?.jsonContentSpan?.endOffset)) return location.jsonContentSpan;
   if (!location?.startTag || !Number.isInteger(location.startTag.endOffset)) return null;
   const startOffset = location.startTag.endOffset;
   const endOffset = Number.isInteger(location.endTag?.startOffset)
@@ -425,7 +513,9 @@ function hasMountPoint(node) {
 
 function textInsideNoscript(node, text, sourceBytes, byteOffsetMap, limits) {
   const pieces = [];
-  const stack = (Array.isArray(node.childNodes) ? node.childNodes : []).map((child) => ({ node: child, hidden: false }));
+  const children = Array.isArray(node.childNodes) ? node.childNodes : [];
+  const stack = [];
+  for (let index = children.length - 1; index >= 0; index -= 1) stack.push({ node: children[index], hidden: false });
   let visited = 0;
   while (stack.length > 0 && visited < limits.maxNoscriptNodes) {
     const current = stack.pop();
@@ -434,15 +524,23 @@ function textInsideNoscript(node, text, sourceBytes, byteOffsetMap, limits) {
     const tagName = typeof child?.tagName === "string" ? child.tagName.toLowerCase() : "";
     const hidden = current.hidden || (tagName !== "" && (HIDDEN_TAGS.has(tagName) || hasHiddenPresentation(child)));
     if (child?.nodeName === "#text" && !hidden && typeof child.value === "string") pieces.push(child.value);
-    if (hidden) continue;
-    for (const descendant of child?.childNodes ?? []) stack.push({ node: descendant, hidden });
+    if (hidden) {
+      pieces.push("\u0000");
+      continue;
+    }
+    const descendants = child?.childNodes ?? [];
+    for (let index = descendants.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: descendants[index], hidden });
+    }
   }
-  if (stack.length > 0) return null;
-  const value = normalizeCandidateValue(pieces.join(" "));
-  if (value === "") return null;
+  if (stack.length > 0) return { candidate: null, resourceLimited: true };
+  const value = normalizeCandidateValue(pieces.join(""));
+  if (value === "") return { candidate: null, resourceLimited: false };
   const location = node.sourceCodeLocation;
-  if (!location || !Number.isInteger(location.startOffset) || !Number.isInteger(location.endOffset)) return null;
-  return textCandidate({
+  if (!location || !Number.isInteger(location.startOffset) || !Number.isInteger(location.endOffset)) {
+    return { candidate: null, resourceLimited: false };
+  }
+  return { candidate: textCandidate({
     field: "accessLimitation.javascriptRequirementCopy",
     kind: "noscript-signal",
     text,
@@ -452,7 +550,7 @@ function textInsideNoscript(node, text, sourceBytes, byteOffsetMap, limits) {
     endOffset: location.endOffset,
     normalizedValue: value,
     suggestionOnly: true,
-  });
+  }), resourceLimited: false };
 }
 
 function hasMeaningfulPageEvidence(pageMetadata, canonicalSuggestions) {

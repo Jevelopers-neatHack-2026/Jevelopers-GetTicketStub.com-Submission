@@ -123,7 +123,7 @@ export interface ExtractionOptions {
 
 export interface ExtractionResult {
   readonly extractorVersion: string;
-  readonly parserVersions: Readonly<{ html: string; htmlStream: string; json: string }>;
+  readonly parserVersions: Readonly<{ html: string; htmlStream: string; xml: string; json: string }>;
   readonly status: ExtractionStatus;
   readonly termination: ExtractionTermination;
   readonly source: ExtractionSource | null;
