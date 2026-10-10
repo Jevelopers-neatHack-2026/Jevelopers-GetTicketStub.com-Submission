@@ -80,6 +80,61 @@ test('the boundary snapshots byte input and candidate fields before async review
   assert.equal(boundary.diagnostics(scopeA, result).state, 'ready_for_publish');
 });
 
+test('R2 copies bytes through typed-array intrinsics and sanitizes hostile source-object failures', async () => {
+  const canary = 'SOURCE-ERROR-PRIVATE-CANARY';
+  const sourceText = 'Safe intrinsic byte fixture';
+  const { boundary, scopeA } = fixtureBoundary({ reviewPublicFacts: knownReview(sourceText, { event_name: 'Safe fixture' }) });
+  const bytes = new Uint8Array(Buffer.from(sourceText));
+  let conversionCalls = 0;
+  Object.defineProperties(bytes, {
+    valueOf: { value() { conversionCalls += 1; throw new Error(canary); } },
+    constructor: { get() { conversionCalls += 1; throw new Error(canary); } },
+    [Symbol.iterator]: { get() { conversionCalls += 1; throw new Error(canary); } },
+  });
+  const source = boundary.begin(scopeA, { modality: 'plain_text', content: bytes });
+  assert.equal(conversionCalls, 0);
+  const result = await boundary.prepare(scopeA, source.session, {});
+  assert.equal(boundary.diagnostics(scopeA, result).state, 'ready_for_publish');
+  assert.equal(boundary.exportDerivative(scopeA, boundary.publish(scopeA, source.session)).facts.event_name, 'Safe fixture');
+
+  const revoked = Proxy.revocable(Uint8Array.of(65), {});
+  revoked.revoke();
+  let accessorCalled = false;
+  const accessorDocument = {};
+  Object.defineProperty(accessorDocument, 'content', {
+    enumerable: true,
+    get() {
+      accessorCalled = true;
+      throw new Error(canary);
+    },
+  });
+  const throwingDocument = new Proxy({ modality: 'plain_text', content: 'ignored' }, {
+    ownKeys() { throw new Error(canary); },
+  });
+  const revokedDocument = Proxy.revocable({ modality: 'plain_text', content: 'ignored' }, {});
+  revokedDocument.revoke();
+  const failures = [
+    () => boundary.begin(scopeA, { modality: 'plain_text', content: revoked.proxy }),
+    () => boundary.begin(scopeA, accessorDocument),
+    () => boundary.begin(scopeA, throwingDocument),
+    () => boundary.begin(scopeA, revokedDocument.proxy),
+  ];
+  const errors = [];
+  for (const attempt of failures) {
+    try {
+      attempt();
+      assert.fail('hostile source input unexpectedly succeeded');
+    } catch (error) {
+      errors.push(error);
+      assert.equal(error.message, 'private evidence unavailable');
+      assert.equal(error.cause, undefined);
+    }
+  }
+  assert.equal(accessorCalled, false);
+  for (const error of errors) assert.equal(error.stack.includes(canary), false);
+  assert.equal(boundary.retainedOriginalCount(), 0);
+});
+
 test('reviewer rejection, exception, and mismatched tenant or digest fail closed', async (t) => {
   const cases = [
     ['rejection', async (input) => ({ status: 'rejected', tenantId: input.tenantId, sourceDigest: input.sourceDigest })],

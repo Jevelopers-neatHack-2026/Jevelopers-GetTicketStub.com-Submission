@@ -122,6 +122,133 @@ test('verified public fixture facts traverse the real cache, telemetry, decision
   assert.equal(boundary.diagnostics(scopeA, result).state, 'ready_for_publish');
 });
 
+test('serializer rejects caller array hooks and verifies the scope even for empty selections', () => {
+  const { flows, scopeA } = setup();
+  const canary = 'UNREVIEWED-SERIALIZATION-CANARY';
+  const selectionFields = ['cacheValues', 'telemetryValues', 'decisionValues', 'creativeValues'];
+
+  for (const field of selectionFields) {
+    const values = [];
+    values.map = () => [{ facts: { event_name: canary } }];
+    let error;
+    try {
+      flows.serialize(scopeA, { [field]: values });
+    } catch (caught) {
+      error = caught;
+    }
+    assert.equal(error?.message, 'private evidence unavailable');
+    assert.equal(`${error?.stack ?? ''}${error?.cause ?? ''}`.includes(canary), false);
+  }
+
+  let speciesCalls = 0;
+  let toJSONCalls = 0;
+  class AttackerArray extends Array {
+    static get [Symbol.species]() {
+      speciesCalls += 1;
+      throw new Error(canary);
+    }
+
+    toJSON() {
+      toJSONCalls += 1;
+      return [{ facts: { event_name: canary } }];
+    }
+  }
+  const subclass = new AttackerArray();
+  assert.throws(() => flows.serialize(scopeA, { cacheValues: subclass }), (error) => {
+    assert.equal(error.message, 'private evidence unavailable');
+    assert.equal(error.stack.includes(canary), false);
+    return true;
+  });
+  assert.equal(speciesCalls, 0);
+  assert.equal(toJSONCalls, 0);
+
+  assert.throws(() => flows.serialize({}, {}), /private evidence unavailable/);
+});
+
+test('serializer rejects forged handles, accessors, proxies, and throwing collection traps without partial output', async () => {
+  const { boundary, flows, scopeA, scopeB } = setup({
+    reviewPublicFacts: exactFixtureReview('public fixture', { event_name: 'Public fixture' }),
+  });
+  const start = boundary.begin(scopeA, { modality: 'plain_text', content: 'public fixture' });
+  const result = await boundary.prepare(scopeA, start.session, {});
+  const issued = boundary.publish(scopeA, start.session);
+  const forged = { ...issued };
+  const canary = 'SELECTION-ERROR-PRIVATE-CANARY';
+  flows.cache.put(scopeA, 'public-fixture', issued);
+  const telemetry = flows.diagnostic.record(scopeA, result);
+  const decision = flows.makeDecisionState(scopeA, issued);
+  const creative = flows.makeCreativePayload(scopeA, issued);
+  const baselineCache = flows.cache.snapshot(scopeA);
+  const baselineTelemetry = flows.diagnostic.snapshot(scopeA);
+  const errors = [];
+
+  const accessorArray = [issued];
+  let accessorCalled = false;
+  Object.defineProperty(accessorArray, '0', {
+    configurable: true,
+    get() {
+      accessorCalled = true;
+      throw new Error(canary);
+    },
+  });
+  const throwingArray = new Proxy([], {
+    getPrototypeOf() { throw new Error(canary); },
+  });
+  const revoked = Proxy.revocable([], {});
+  revoked.revoke();
+  const throwingSelections = new Proxy({}, {
+    ownKeys() { throw new Error(canary); },
+  });
+  const descriptorSelections = new Proxy({ cacheValues: [] }, {
+    getOwnPropertyDescriptor() { throw new Error(canary); },
+  });
+  let selectionGetterCalled = false;
+  const accessorSelections = {};
+  Object.defineProperty(accessorSelections, 'cacheValues', {
+    enumerable: true,
+    get() {
+      selectionGetterCalled = true;
+      throw new Error(canary);
+    },
+  });
+
+  for (const [label, scope, selection] of [
+    ['accessor', scopeA, { cacheValues: accessorArray }],
+    ['selection accessor', scopeA, accessorSelections],
+    ['array proxy', scopeA, { cacheValues: throwingArray }],
+    ['revoked array', scopeA, { cacheValues: revoked.proxy }],
+    ['ownKeys proxy', scopeA, throwingSelections],
+    ['descriptor proxy', scopeA, descriptorSelections],
+    ['forged handle after valid selection', scopeA, { cacheValues: [issued, forged] }],
+    ['cross tenant', scopeB, { cacheValues: [issued] }],
+  ]) {
+    try {
+      flows.serialize(scope, selection);
+      assert.fail(`${label} selection unexpectedly serialized`);
+    } catch (error) {
+      errors.push(error);
+      assert.equal(error.message, 'private evidence unavailable');
+    }
+  }
+
+  assert.equal(accessorCalled, false);
+  assert.equal(selectionGetterCalled, false);
+  for (const error of errors) {
+    assert.equal(error.stack.includes(canary), false);
+    assert.equal(error.cause, undefined);
+  }
+  assert.deepEqual(flows.cache.snapshot(scopeA), baselineCache);
+  assert.deepEqual(flows.diagnostic.snapshot(scopeA), baselineTelemetry);
+  assert.doesNotMatch(errors.map((error) => `${error.message}\n${error.stack}`).join('\n'), new RegExp(canary));
+  const laterValidOutput = flows.serialize(scopeA, {
+    cacheValues: [issued],
+    telemetryValues: [telemetry],
+    decisionValues: [decision],
+    creativeValues: [creative],
+  });
+  assert.match(laterValidOutput, /Public fixture/);
+});
+
 test('R2 copied, cloned, or relabeled handles cannot spoof derivative contents, tenants, telemetry, or flow payloads', async () => {
   const sourceText = 'Verified Fixture';
   const { boundary, flows, scopeA, scopeB } = setup({

@@ -69,10 +69,21 @@ export function authorizeAction(policy, request) {
 
 export function optionalInjectionSignal(text, classifier) {
   if (typeof text !== 'string' || typeof classifier !== 'function') return null;
+  let result;
   try {
-    const result = classifier(text);
-    return typeof result === 'boolean' ? result : null;
+    result = classifier(text);
   } catch {
     return null;
   }
+  if (typeof result === 'boolean') return result;
+
+  // This API is synchronous. Promise-like/malformed values are never signals, but
+  // assimilate and discard them so rejected async classifiers cannot become an
+  // unhandled rejection or leak their error text through Node's process handler.
+  try {
+    Promise.resolve(result).then(undefined, () => undefined);
+  } catch {
+    // Promise assimilation failures are optional-classifier failures too.
+  }
+  return null;
 }

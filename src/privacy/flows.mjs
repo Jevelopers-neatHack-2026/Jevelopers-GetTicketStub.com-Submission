@@ -24,13 +24,116 @@ function safeDiagnostic(boundary, scope, result) {
   return boundary.diagnostics(scope, result);
 }
 
+const FACT_FIELDS = Object.freeze(['event_name', 'event_date', 'venue']);
+const SELECTION_FIELDS = new Set(['cacheValues', 'telemetryValues', 'decisionValues', 'creativeValues']);
+const MAX_SELECTION_LENGTH = 10_000;
+
+function copyFacts(facts) {
+  const copy = Object.create(null);
+  for (let index = 0; index < FACT_FIELDS.length; index += 1) {
+    const key = FACT_FIELDS[index];
+    if (!Object.hasOwn(facts, key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(facts, key);
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'string') throw deny();
+    copy[key] = descriptor.value;
+  }
+  return copy;
+}
+
 function renderDerivative(boundary, scope, derivative) {
   const data = boundary.exportDerivative(scope, derivative);
-  return {
-    recordId: data.recordId,
-    facts: { ...data.facts },
-    provenance: { modality: data.modality, trust: data.trust },
-  };
+  const provenance = Object.create(null);
+  provenance.modality = data.modality;
+  provenance.trust = data.trust;
+  const output = Object.create(null);
+  output.recordId = data.recordId;
+  output.facts = copyFacts(data.facts);
+  output.provenance = provenance;
+  return output;
+}
+
+function copyTelemetry(value) {
+  const categories = [];
+  const sourceCategories = value.redactionCategories;
+  for (let index = 0; index < sourceCategories.length; index += 1) categories[index] = sourceCategories[index];
+  const output = Object.create(null);
+  output.recordId = value.recordId;
+  output.state = value.state;
+  output.modality = value.modality;
+  output.trust = value.trust;
+  output.reasonCode = value.reasonCode;
+  output.redactionCategories = categories;
+  return output;
+}
+
+function copyEvidence(value) {
+  const provenance = Object.create(null);
+  provenance.modality = value.provenance.modality;
+  provenance.trust = value.provenance.trust;
+  const output = Object.create(null);
+  output.recordId = value.recordId;
+  output.facts = copyFacts(value.facts);
+  output.provenance = provenance;
+  return output;
+}
+
+function copyCreativeEvidence(value) {
+  const evidence = Object.create(null);
+  evidence.modality = value.evidence.modality;
+  evidence.trust = value.evidence.trust;
+  const output = Object.create(null);
+  output.recordId = value.recordId;
+  output.eventFacts = copyFacts(value.eventFacts);
+  output.evidence = evidence;
+  return output;
+}
+
+function readSelectionObject(value) {
+  try {
+    if (value === undefined) return Object.create(null);
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) throw deny();
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw deny();
+    const keys = Reflect.ownKeys(value);
+    const output = Object.create(null);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index];
+      if (typeof key !== 'string' || !SELECTION_FIELDS.has(key)) throw deny();
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')) throw deny();
+      output[key] = descriptor.value;
+    }
+    return output;
+  } catch {
+    throw deny();
+  }
+}
+
+function readSelectionArray(value) {
+  try {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) throw deny();
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+    const length = lengthDescriptor?.value;
+    if (!lengthDescriptor || !Object.hasOwn(lengthDescriptor, 'value') || !Number.isSafeInteger(length) || length < 0 || length > MAX_SELECTION_LENGTH) throw deny();
+    const keys = Reflect.ownKeys(value);
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      const key = keys[keyIndex];
+      if (key === 'length') continue;
+      if (typeof key !== 'string') throw deny();
+      const arrayIndex = Number(key);
+      if (!Number.isSafeInteger(arrayIndex) || arrayIndex < 0 || String(arrayIndex) !== key || arrayIndex >= length) throw deny();
+    }
+    const output = new Array(length);
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')) throw deny();
+      output[index] = descriptor.value;
+    }
+    return output;
+  } catch {
+    throw deny();
+  }
 }
 
 function freezePayload(value) {
@@ -149,26 +252,40 @@ export function createPrivacyFlows(boundary) {
   }
 
   function serialize(scope, selections = {}) {
-    if (selections === null || typeof selections !== 'object' || Array.isArray(selections)) throw deny();
-    const allowed = new Set(['cacheValues', 'telemetryValues', 'decisionValues', 'creativeValues']);
-    const keys = Reflect.ownKeys(selections);
-    if (keys.some((key) => typeof key !== 'string' || !allowed.has(key))) throw deny();
-    const selected = Object.create(null);
-    for (const key of keys) {
-      const descriptor = Object.getOwnPropertyDescriptor(selections, key);
-      if (!descriptor || !Object.hasOwn(descriptor, 'value')) throw deny();
-      selected[key] = descriptor.value;
+    // Check the issuer-backed tenant capability before touching caller-controlled data,
+    // including the empty-selection case.
+    partitionFor(scope);
+    try {
+      const selected = readSelectionObject(selections);
+      const cacheValues = readSelectionArray(selected.cacheValues);
+      const telemetryValues = readSelectionArray(selected.telemetryValues);
+      const decisionValues = readSelectionArray(selected.decisionValues);
+      const creativeValues = readSelectionArray(selected.creativeValues);
+      const cache = new Array(cacheValues.length);
+      const telemetry = new Array(telemetryValues.length);
+      const decisionsOutput = new Array(decisionValues.length);
+      const creative = new Array(creativeValues.length);
+      for (let index = 0; index < cacheValues.length; index += 1) {
+        cache[index] = renderDerivative(boundary, scope, cacheValues[index]);
+      }
+      for (let index = 0; index < telemetryValues.length; index += 1) {
+        telemetry[index] = copyTelemetry(telemetryPayload(scope, telemetryValues[index]));
+      }
+      for (let index = 0; index < decisionValues.length; index += 1) {
+        decisionsOutput[index] = copyEvidence(decisionPayload(scope, decisionValues[index]));
+      }
+      for (let index = 0; index < creativeValues.length; index += 1) {
+        creative[index] = copyCreativeEvidence(creativePayload(scope, creativeValues[index]));
+      }
+      const output = Object.create(null);
+      output.cache = cache;
+      output.telemetry = telemetry;
+      output.decisions = decisionsOutput;
+      output.creative = creative;
+      return JSON.stringify(output);
+    } catch {
+      throw deny();
     }
-    const valuesFor = (key) => {
-      const value = selected[key] ?? [];
-      if (!Array.isArray(value)) throw deny();
-      return value;
-    };
-    const cacheValues = valuesFor('cacheValues').map((item) => renderDerivative(boundary, scope, item));
-    const telemetryValues = valuesFor('telemetryValues').map((item) => telemetryPayload(scope, item));
-    const decisionValues = valuesFor('decisionValues').map((item) => decisionPayload(scope, item));
-    const creativeValues = valuesFor('creativeValues').map((item) => creativePayload(scope, item));
-    return JSON.stringify({ cache: cacheValues, telemetry: telemetryValues, decisions: decisionValues, creative: creativeValues });
   }
 
   return Object.freeze({

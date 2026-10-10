@@ -9,6 +9,10 @@ const REASONS = new Set(['unverified_public_facts', 'review_unavailable', 'unsup
 const TRUST = 'untrusted_external';
 const UNAVAILABLE = 'private evidence unavailable';
 const privacyBoundaries = new WeakSet();
+const TYPED_ARRAY_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype);
+const TYPED_ARRAY_TAG_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTOTYPE, Symbol.toStringTag).get;
+const TYPED_ARRAY_LENGTH_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTOTYPE, 'length').get;
+const UINT8_ARRAY_SET = Uint8Array.prototype.set;
 
 function deny() {
   return new Error(UNAVAILABLE);
@@ -82,33 +86,51 @@ function validateFacts(value) {
   return Object.freeze(facts);
 }
 
-function sourceSnapshot(modality, content, maxBytes) {
-  if (typeof modality !== 'string' || !ALL_MODALITIES.has(modality)) throw deny();
-  if (typeof content !== 'string' && !(content instanceof Uint8Array)) throw deny();
-  let raw;
-  let text = null;
-  let bytes;
-  if (typeof content === 'string') {
-    if (!isWellFormed(content)) throw deny();
-    text = content;
-    bytes = Buffer.from(content, 'utf8');
-    raw = TEXT_MODALITIES.has(modality) ? content : Buffer.from(bytes);
-  } else {
-    bytes = Buffer.from(content);
-    if (TEXT_MODALITIES.has(modality)) {
-      try {
-        text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-      } catch {
-        text = null;
-      }
-      raw = text === null ? Buffer.from(bytes) : text;
-    } else {
-      raw = Buffer.from(bytes);
-    }
+function copyUint8Array(content, maxBytes) {
+  try {
+    if (TYPED_ARRAY_TAG_GETTER.call(content) !== 'Uint8Array') throw deny();
+    const length = TYPED_ARRAY_LENGTH_GETTER.call(content);
+    if (!Number.isSafeInteger(length) || length === 0 || length > maxBytes) throw deny();
+    const bytes = new Uint8Array(length);
+    // TypedArray#set reads the source's internal typed-array slots; it does not call
+    // caller-owned valueOf, iterator, constructor, or indexed accessors.
+    UINT8_ARRAY_SET.call(bytes, content);
+    return bytes;
+  } catch {
+    throw deny();
   }
-  if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) throw deny();
-  const digest = createHash('sha256').update(bytes).digest('hex');
-  return { modality, raw, text, digest };
+}
+
+function sourceSnapshot(modality, content, maxBytes) {
+  try {
+    if (typeof modality !== 'string' || !ALL_MODALITIES.has(modality)) throw deny();
+    let raw;
+    let text = null;
+    let bytes;
+    if (typeof content === 'string') {
+      if (!isWellFormed(content)) throw deny();
+      text = content;
+      bytes = Buffer.from(content, 'utf8');
+      raw = TEXT_MODALITIES.has(modality) ? content : Buffer.from(bytes);
+    } else {
+      bytes = copyUint8Array(content, maxBytes);
+      if (TEXT_MODALITIES.has(modality)) {
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        } catch {
+          text = null;
+        }
+        raw = text === null ? Buffer.from(bytes) : text;
+      } else {
+        raw = Buffer.from(bytes);
+      }
+    }
+    if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) throw deny();
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    return { modality, raw, text, digest };
+  } catch {
+    throw deny();
+  }
 }
 
 function validateCandidate(value) {

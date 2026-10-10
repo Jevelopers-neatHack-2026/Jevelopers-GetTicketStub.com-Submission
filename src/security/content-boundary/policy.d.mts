@@ -20,4 +20,8 @@ export interface AuthorizationDecision {
 export declare function createTrustedActionPolicy(input: TrustedActionPolicyInput): TrustedActionPolicy;
 export declare function createActionRequest(capability: string, billableUnits?: number): ActionRequest;
 export declare function authorizeAction(policy: TrustedActionPolicy, request: ActionRequest): AuthorizationDecision;
+/**
+ * Synchronous annotation only. Non-boolean values, including async classifier results,
+ * return null; promise-like settlements and rejections are observed and discarded.
+ */
 export declare function optionalInjectionSignal(text: string, classifier: unknown): boolean | null;

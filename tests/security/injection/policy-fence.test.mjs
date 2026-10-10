@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   authorizeAction,
   createActionRequest,
@@ -33,6 +35,68 @@ test('classifier miss, failure, malformed output, or positive signal cannot chan
   assert.equal(optionalInjectionSignal('text', () => { throw new Error('failed'); }), null);
   assert.equal(optionalInjectionSignal('text', () => ({ allowed: true })), null);
   assert.equal(optionalInjectionSignal('text', () => true), true);
+});
+
+test('async classifier failures and throwing thenables are swallowed in a real Node 22 child process', () => {
+  const policyUrl = new URL('../../../src/security/content-boundary/policy.mjs', import.meta.url).href;
+  const cwd = fileURLToPath(new URL('../../../', import.meta.url));
+  const script = `
+    import { optionalInjectionSignal } from ${JSON.stringify(policyUrl)};
+    const canary = 'CLASSIFIER-PRIVATE-ASYNC-ERROR-CANARY';
+    const values = [
+      optionalInjectionSignal('private source', async () => { throw new Error(canary); }),
+      optionalInjectionSignal('private source', () => Promise.reject(new Error(canary))),
+      optionalInjectionSignal('private source', () => Promise.resolve(true)),
+      optionalInjectionSignal('private source', () => ({ get then() { throw new Error(canary); } })),
+      optionalInjectionSignal('private source', () => ({ then() { throw new Error(canary); } })),
+      optionalInjectionSignal('private source', () => ({ then(_resolve, reject) { reject(new Error(canary)); } })),
+    ];
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    console.log(JSON.stringify({ survived: true, values }));
+  `;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 5_000,
+  });
+  const canary = 'CLASSIFIER-PRIVATE-ASYNC-ERROR-CANARY';
+  assert.equal(child.error, undefined, child.error?.message);
+  assert.equal(child.status, 0, child.stderr);
+  assert.equal(child.stderr, '');
+  assert.equal(`${child.stdout}${child.stderr}`.includes(canary), false);
+  assert.deepEqual(JSON.parse(child.stdout.trim()), {
+    survived: true,
+    values: [null, null, null, null, null, null],
+  });
+});
+
+test('async and malformed classifier annotations leave allowed and denied action outcomes unchanged', async () => {
+  const allowedPolicy = createTrustedActionPolicy({ allowedCapabilities: ['search', 'publish'], maxBillableUnits: 2 });
+  const approvalPolicy = createTrustedActionPolicy({
+    allowedCapabilities: ['search', 'publish'],
+    maxBillableUnits: 2,
+    approvalRequiredCapabilities: ['publish'],
+  });
+  const search = createActionRequest('search', 1);
+  const publish = createActionRequest('publish', 1);
+  const allowed = authorizeAction(allowedPolicy, search);
+  const denied = authorizeAction(approvalPolicy, publish);
+  const classifiers = [
+    [undefined, null],
+    [() => false, false],
+    [() => true, true],
+    [() => 'malformed', null],
+    [() => { throw new Error('CLASSIFIER-PRIVATE-SYNC-CANARY'); }, null],
+    [async () => { throw new Error('CLASSIFIER-PRIVATE-ASYNC-CANARY'); }, null],
+    [() => Promise.reject(new Error('CLASSIFIER-PRIVATE-PROMISE-CANARY')), null],
+    [() => ({ then() { throw new Error('CLASSIFIER-PRIVATE-THENABLE-CANARY'); } }), null],
+  ];
+  for (const [classifier, expectedAnnotation] of classifiers) {
+    assert.equal(optionalInjectionSignal('untrusted source', classifier), expectedAnnotation);
+    assert.deepEqual(authorizeAction(allowedPolicy, search), allowed);
+    assert.deepEqual(authorizeAction(approvalPolicy, publish), denied);
+  }
+  await new Promise((resolve) => setImmediate(resolve));
 });
 
 test('capability, billable-unit ceiling, and approval checks remain independent and deterministic', () => {
