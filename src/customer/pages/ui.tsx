@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useId, useState, type ComponentProps, type JSX, type ReactNode } from "react";
 import d from "@/customer/desk/Desk.module.css";
 import { PaperButton, Stamped } from "@/customer/desk/Desk";
+import { Breadcrumbs, useCrumbs } from "@/customer/nav/Breadcrumbs";
 import { play, haptic, type Cue } from "@/customer/studio/feedback";
 import { SANDBOX_LABEL } from "./commerce";
 import { absoluteUrl, copyText } from "./share";
@@ -31,7 +32,7 @@ export function LeavesMark(): JSX.Element {
 
 export function PageShell({
   title,
-  back,
+  back: backProp,
   right,
   narrow,
   children,
@@ -44,10 +45,17 @@ export function PageShell({
   children: ReactNode;
   className?: string;
 }) {
+  // A child route shows its breadcrumbs; `back` stays as the fallback for a route the tree doesn't know.
+  let back = backProp;
+  const known = useCrumbs().length;
+  const crumbs = known > 1;
+  if (known > 0) back = undefined; // the tree knows this route: no back link needed
   return (
     <div className={cx("desk-surface", s.shell, className)} data-theme="light">
-      <header className={cx(s.top, !back && !title && !right && s.logoOnly)}>
-        {back ? (
+      <header className={cx(s.top, !crumbs && !back && !title && !right && s.logoOnly)}>
+        {crumbs ? (
+          <Breadcrumbs />
+        ) : back ? (
           <Link className={s.back} href={back.href}>
             <BackArrow />
             <span className={s.backText}>{back.label}</span>
@@ -58,7 +66,7 @@ export function PageShell({
             <img src="/brand/lockup-horizontal.svg" alt="TicketStub" />
           </Link>
         )}
-        {title ? <span className={s.topTitle}>{title}</span> : null}
+        {title && !crumbs ? <span className={s.topTitle}>{title}</span> : null}
         {right ? <div className={s.topRight}>{right}</div> : null}
       </header>
       <main className={cx(s.main, narrow && s.narrow)}>{children}</main>

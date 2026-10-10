@@ -1,9 +1,39 @@
 "use client";
-// Local-only persistence for the hackathon build. Share links carry the stub itself (see encodeStub),
+// Local persistence: the cache and the signed-out mode. Signed in, account/sync.ts merges it with the account's wall.
+// Old share links carry the stub itself (see encodeStub),
 // so memory pages work without a backend. Storage can throw (private mode): every access is guarded.
 import type { Stub } from "./types";
 
 const KEY = "ticketstub.wall.v1";
+const DELETED_KEY = "ticketstub.wall.deleted.v1";
+/** Fired after a local change the account sync should hear about. A sync's own writes don't fire it. */
+export const WALL_CHANGED = "ticketstub:wall-changed";
+
+function changed(): void {
+  try {
+    window.dispatchEvent(new Event(WALL_CHANGED));
+  } catch {
+    /* no window (server render) */
+  }
+}
+
+/** Ids removed on this device that the account hasn't heard about yet. Signed out they just accumulate, a few bytes each. */
+export function loadDeleted(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveDeleted(ids: string[]): void {
+  try {
+    localStorage.setItem(DELETED_KEY, JSON.stringify([...new Set(ids)]));
+  } catch {
+    /* storage unavailable or full */
+  }
+}
 
 export function loadWall(): Stub[] {
   try {
@@ -24,12 +54,18 @@ function slim(stub: Stub): Stub {
   };
 }
 
-export function saveWall(stubs: Stub[]): void {
+/** Write the wall without telling the sync (the sync's own result goes through here). */
+export function writeWall(stubs: Stub[]): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(stubs.map(slim)));
   } catch {
     /* storage unavailable or full: the session still works in memory */
   }
+}
+
+export function saveWall(stubs: Stub[]): void {
+  writeWall(stubs);
+  changed();
 }
 
 export function getStub(id: string): Stub | undefined {
@@ -38,10 +74,13 @@ export function getStub(id: string): Stub | undefined {
 
 export function upsertStub(stub: Stub): void {
   const wall = loadWall().filter((s) => s.id !== stub.id);
-  saveWall([stub, ...wall]);
+  const gone = loadDeleted();
+  if (gone.includes(stub.id)) saveDeleted(gone.filter((id) => id !== stub.id));
+  saveWall([{ ...stub, updatedAt: Date.now() }, ...wall]);
 }
 
 export function removeStub(id: string): void {
+  saveDeleted([...loadDeleted(), id]);
   saveWall(loadWall().filter((s) => s.id !== id));
 }
 

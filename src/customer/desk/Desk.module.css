@@ -532,7 +532,7 @@
 /* ---------- Paper sheet ---------- */
 .scrim {
   position: fixed;
-  inset: 0;
+  inset: 0 0 0 var(--nav-w, 0px);
   z-index: 40;
   background: var(--desk-scrim);
   animation: fadeIn 260ms ease both;
@@ -540,7 +540,7 @@
 .sheet {
   position: fixed;
   z-index: 41;
-  left: 0;
+  left: var(--nav-w, 0px);
   right: 0;
   bottom: 0;
   max-height: 88dvh;

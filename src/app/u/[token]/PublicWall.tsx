@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { api } from "@/customer/account/api";
+import type { Stub } from "@/customer/studio/types";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { decodeWall, formatDate, memoryPath } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
@@ -10,10 +12,26 @@ import s from "./public.module.css";
 
 export default function PublicWall({ token }: { token: string }) {
   const mounted = useMounted();
-  const stubs = useMemo(() => (mounted ? decodeWall(token) : []), [mounted, token]);
+  // A short token is the account's public wall on the server; an old link carries the stubs themselves.
+  const legacy = useMemo(() => (mounted ? decodeWall(token) : []), [mounted, token]);
+  const [remote, setRemote] = useState<{ token: string; stubs: Stub[] | null } | null>(null);
+  useEffect(() => {
+    if (!mounted || token.includes(".")) return;
+    let live = true;
+    api
+      .publicWall(token)
+      .then((r) => live && setRemote({ token, stubs: r.stubs }))
+      .catch(() => live && setRemote({ token, stubs: null }));
+    return () => {
+      live = false;
+    };
+  }, [mounted, token]);
+  const asked = !token.includes(".");
+  const settled = !asked || remote?.token === token;
+  const stubs = remote?.token === token && remote.stubs ? remote.stubs : legacy;
   const cities = new Set(stubs.map((x) => x.event.city).filter(Boolean)).size;
 
-  if (!mounted) return <DeskPage>{null}</DeskPage>;
+  if (!mounted || (stubs.length === 0 && !settled)) return <DeskPage>{null}</DeskPage>;
   if (stubs.length === 0) {
     return (
       <DeskPage>

@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Edition, Material, Stub } from "../types";
@@ -10,6 +9,7 @@ import { EDITION_META } from "@/customer/studio/stub/editions";
 import { haptic, play } from "@/customer/studio/feedback";
 import { AgentChat } from "@/customer/studio/agent/AgentChat";
 import { AgentNotes } from "@/customer/studio/agent/AgentNotes";
+import { Breadcrumbs } from "@/customer/nav/Breadcrumbs";
 import { LeavesMark } from "@/customer/pages/ui";
 import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { PaperButton, PaperSheet, Stamp, Switch, Tag, Tags, Tool, Tools } from "@/customer/desk/Desk";
@@ -24,7 +24,6 @@ import { MaterialFrame } from "./MaterialFrame";
 import { Inspector } from "./Inspector";
 import { Tray } from "./Tray";
 import { FinishSheet, TearStage } from "./TearFlow";
-import { MuteToggle } from "./MuteToggle";
 import { useIsClient, useMediaQuery } from "./useClient";
 import styles from "./Editor.module.css";
 
@@ -499,6 +498,7 @@ function EditorLoaded({ id }: { id: string }) {
         <div className={styles.desk}>
           <header className={styles.deskHeader}>
             <div className={styles.crumb}>
+              <Breadcrumbs className={styles.crumbs} />
               <h1 className={styles.crumbTitle}>{ev.title}</h1>
               {crumb && <p className={styles.crumbSub}>{crumb}</p>}
             </div>
@@ -596,14 +596,8 @@ function EditorLoaded({ id }: { id: string }) {
     <div className={`${styles.root} desk-surface`}>
       <div className={styles.phone}>
         <header className={styles.topBar}>
-          <Link className={styles.back} href="/wall">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 5l-7 7 7 7" />
-            </svg>
-            Wall
-          </Link>
+          <Breadcrumbs className={styles.crumbs} />
           <h1 className={styles.title}>{ev.title}</h1>
-          <MuteToggle />
         </header>
         <PathTrack current="style" stubId={stub.id} className={styles.track} />
 

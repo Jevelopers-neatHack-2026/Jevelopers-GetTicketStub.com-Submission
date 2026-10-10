@@ -1,18 +1,21 @@
-/* The nav frame. Stacking: the sidebar and bar sit at 30 (the drawer at 31-32), below every full-screen
-   stage (the paper sheet is the lowest at 40, then the lamp, gift, tear, print run and the lights-down at
-   50-100), so a stage always covers the nav. Paper and ink come from the desk tokens. */
+/* The nav frame. The sidebar is always there: open or folded to a rail on the desktop, a 56px rail on the
+   phone with the full sidebar sliding over the content as a drawer. Stacking: the sidebar sits at 110, above
+   every stage (the lowest is 40, the highest 100), because the stages start at its right edge (--nav-w on
+   <html>) and the flyout must reach over them. The drawer and its scrim sit at 120-121. Paper and ink come
+   from the desk tokens; during a stage moment the sidebar takes the night values with a 600 ms fade. */
 
 .frame {
-  --nav-w: 244px;
-  --nav-bar-h: 0px;
+  --side-w: 244px;
+  --rail-w: 56px;
   min-height: 100dvh;
+}
+.frame[data-full="false"] {
+  --side-w: 68px;
 }
 .content {
   min-width: 0;
-}
-/* the phone bar is fixed, so content clears it (pages take the same height off their own minimum) */
-.frame[data-bar="on"] .content {
-  padding-bottom: var(--nav-bar-h);
+  /* a layer that sweeps past the edge (the foil's spectrum) never makes the page scroll sideways */
+  overflow-x: clip;
 }
 
 /* ---------- the sidebar ---------- */
@@ -25,6 +28,10 @@
   background: var(--desk-paper);
   color: var(--desk-ink);
   font: var(--type-ui);
+  z-index: 110;
+  transition:
+    background-color 600ms ease,
+    color 600ms ease;
 }
 /* the right edge is a tear line */
 .side::after {
@@ -38,6 +45,25 @@
   background-size: 3px 6px;
   background-repeat: repeat-y;
   pointer-events: none;
+}
+
+/* stage moments: the same tokens as .ts-stage, set on the sidebar alone */
+:global(html[data-nav-stage]) .side {
+  --desk-paper: #17140f;
+  --desk-paper-raised: #26302a;
+  --desk-paper-sunk: #0f0d0a;
+  --desk-ink: #f4ecdd;
+  --desk-ink-soft: rgb(244 236 221 / 0.66);
+  --desk-rule: rgb(244 236 221 / 0.14);
+  --desk-rule-strong: rgb(244 236 221 / 0.4);
+  --desk-ledge: rgb(0 0 0 / 0.45);
+  --desk-scrim: rgb(0 0 0 / 0.55);
+  color-scheme: dark;
+}
+:global(html[data-nav-stage]) .item,
+:global(html[data-nav-stage]) .handle,
+:global(html[data-nav-stage]) .chev {
+  transition-duration: 600ms;
 }
 
 .head {
@@ -64,8 +90,7 @@
   height: 30px;
   width: auto;
 }
-.handle,
-.close {
+.handle {
   display: inline-grid;
   place-items: center;
   width: 36px;
@@ -79,30 +104,48 @@
     background var(--desk-release) ease,
     color var(--desk-release) ease;
 }
-.handle svg,
-.close svg {
+.handle svg {
   width: 20px;
   height: 20px;
 }
-.handle:hover,
-.close:hover {
+.handle:hover {
   background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
   color: var(--desk-ink);
 }
-.handle {
-  display: none;
-}
 
 .list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.list::-webkit-scrollbar {
+  display: none;
+}
+.tree,
+.kids,
+.fly ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tree {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   align-content: start;
-  flex: 1;
+}
+.top,
+.node {
+  display: block;
+  min-width: 0;
 }
 .rule {
   height: 6px;
   margin: 6px 10px;
   border: 0;
+  list-style: none;
   background-image: radial-gradient(circle, var(--desk-rule-strong) 0.9px, transparent 1.1px);
   background-size: 5px 2px;
   background-repeat: repeat-x;
@@ -113,12 +156,19 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* one place: icon, name, and (the cart) its count */
+/* ---------- one place: icon, name, and (the cart) its count ---------- */
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 .item {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
   width: 100%;
   min-height: 46px;
   padding: 0 12px 0 20px;
@@ -138,6 +188,16 @@
 .item:hover {
   background: color-mix(in srgb, var(--desk-ink) 5%, transparent);
   color: var(--desk-ink);
+}
+.item[data-trail="true"] {
+  color: var(--desk-ink);
+}
+/* the group's name leaves room for its fold */
+.row:has(.chev) .item {
+  padding-right: 40px;
+}
+.row:has(.chev) .count {
+  margin-right: 0;
 }
 /* the current place: a pressed card with a punched hole through it */
 .item[aria-current="page"] {
@@ -162,6 +222,12 @@
 .item[aria-pressed="true"] {
   color: var(--desk-ink-soft);
 }
+.item:focus-visible,
+.chev:focus-visible,
+.handle:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: -2px;
+}
 .icon {
   position: relative;
   display: inline-grid;
@@ -175,12 +241,13 @@
   height: 24px;
   transition: transform var(--desk-release) var(--desk-spring);
 }
-.item:hover .icon svg,
-.tab:hover .icon svg {
+.item:hover .icon svg {
   transform: translateY(-1px);
 }
 .label {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .count {
@@ -206,128 +273,225 @@
   box-shadow: 0 0 0 2px var(--desk-paper);
 }
 
-/* ---------- the phone: bar, drawer, scrim ---------- */
-.bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--desk-paper) 94%, transparent);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--desk-rule);
-}
-.frame[data-bar="off"] .bar {
-  display: none;
-}
-.tray {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 4px;
-  border-radius: 10px;
-  background: var(--desk-paper-sunk);
-  box-shadow: inset 0 1px 2px var(--desk-ledge);
-}
-.thumb {
+/* the fold: a chevron that turns down when the group is open */
+.chev {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc((100% - 8px) / 4);
-  border-radius: 7px;
-  background: var(--desk-paper-raised);
-  box-shadow:
-    0 1px 0 var(--desk-ledge),
-    0 4px 10px -6px rgb(23 20 15 / 0.5),
-    inset 0 0 0 1px var(--desk-rule);
-  transition:
-    transform 340ms var(--desk-spring),
-    opacity 200ms ease;
-  pointer-events: none;
-}
-.thumb::before {
-  content: "";
-  position: absolute;
-  top: 5px;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  margin-left: -3px;
-  border-radius: 50%;
-  background: var(--desk-paper-sunk);
-  box-shadow: inset 0 1px 1px var(--desk-ledge);
-}
-.tab {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 2px;
-  min-height: 48px;
-  padding: 11px 4px 4px;
+  top: 50%;
+  right: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  padding: 0;
   border: 0;
+  border-radius: 8px;
   background: none;
   color: var(--desk-ink-soft);
-  font: var(--type-label);
-  text-decoration: none;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  transition: color var(--desk-release) ease;
+  transition:
+    background var(--desk-release) ease,
+    color var(--desk-release) ease;
 }
-.tab[aria-current="page"] {
+.chev:hover {
+  background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
   color: var(--desk-ink);
 }
-.tab .icon,
-.tab .icon svg {
-  width: 22px;
-  height: 22px;
+.chev svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--desk-release) var(--desk-spring);
 }
-.badge {
-  position: absolute;
-  top: -5px;
-  left: 13px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--desk-ink);
-  color: var(--desk-paper);
-  font: 600 0.68rem/16px var(--font-ui), var(--ts-font-ui);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
+.chev[aria-expanded="true"] svg {
+  transform: rotate(90deg);
 }
 
+/* children: indented, smaller, joined to the parent by a dotted tear line */
+.kids {
+  position: relative;
+  margin-left: 21px;
+  padding-left: 12px;
+}
+.kids::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 19px;
+  left: 0;
+  width: 2px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 0.9px, transparent 1.1px);
+  background-size: 2px 5px;
+  background-repeat: repeat-y;
+}
+.row[data-kid] .item {
+  min-height: 38px;
+  gap: 8px;
+  padding-left: 14px;
+  font: var(--type-label);
+  font-size: 0.9rem;
+}
+.row[data-kid]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  width: 9px;
+  height: 2px;
+  margin-top: -1px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 0.9px, transparent 1.1px);
+  background-size: 4px 2px;
+  background-repeat: repeat-x;
+}
+.row[data-kid] .item[aria-current="page"]::before {
+  left: 5px;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+}
+.row[data-kid] .chev {
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+}
+.row[data-kid]:has(.chev) .item {
+  padding-right: 34px;
+}
+.kids .kids {
+  margin-left: 14px;
+}
+
+/* ---------- the flyout: a folded group's places, a card beside the rail ---------- */
+.fly {
+  position: fixed;
+  left: var(--nav-w, 68px);
+  z-index: 111;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 1px 0 var(--desk-ledge),
+    0 14px 30px -14px rgb(23 20 15 / 0.55);
+  animation: flyIn 160ms var(--desk-spring);
+}
+@keyframes flyIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+.flyHead {
+  padding: 4px 12px 6px;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--desk-ink-soft);
+}
+.flyRow .item {
+  min-height: 38px;
+  padding: 0 12px;
+  font: var(--type-label);
+  font-size: 0.9rem;
+}
+.frame[data-full="false"] .flyRow .item {
+  justify-content: flex-start;
+  padding: 0 12px;
+}
+.frame[data-full="false"] .fly .label {
+  display: block;
+}
+.flyRow .item[data-depth="2"] {
+  padding-left: 26px;
+}
+.flyRow .item[aria-current="page"]::before {
+  display: none;
+}
+
+/* ---------- the rail: icons only, children in the flyout ---------- */
+.frame[data-full="false"] .head {
+  flex-direction: column;
+  justify-content: center;
+  padding: 0;
+  gap: 4px;
+}
+.frame[data-full="false"] .wordmark,
+.frame[data-full="false"] .label,
+.frame[data-full="false"] .count,
+.frame[data-full="false"] .chev,
+.frame[data-full="false"] .kids {
+  display: none;
+}
+.frame[data-full="false"] .stampMark {
+  display: block;
+}
+.frame[data-full="false"] .item {
+  justify-content: center;
+  padding: 0;
+}
+.frame[data-full="false"] .row:has(.chev) .item {
+  padding-right: 0;
+}
+.frame[data-full="false"] .item[aria-current="page"]::before {
+  top: 5px;
+  left: 50%;
+  margin: 0 0 0 -3px;
+}
+.frame[data-full="false"] .dot {
+  display: block;
+}
+.frame[data-full="false"] .rule {
+  margin: 6px 14px;
+}
+
+/* ---------- the phone: a 56px rail on the left, the sidebar as a drawer over the content ---------- */
 @media (max-width: 959px) {
-  .frame[data-bar="on"] {
-    --nav-bar-h: calc(65px + env(safe-area-inset-bottom));
+  .frame[data-nav="on"] .content {
+    padding-left: var(--rail-w);
   }
   .side {
     position: fixed;
     top: 0;
     bottom: 0;
     left: 0;
-    z-index: 32;
-    width: min(300px, 84vw);
+    width: var(--rail-w);
+    padding: 12px 6px;
+    padding-top: max(12px, env(safe-area-inset-top));
     touch-action: pan-y;
-    transform: translateX(-102%);
-    visibility: hidden;
     transition:
-      transform 320ms cubic-bezier(0.2, 0.9, 0.25, 1),
-      visibility 0s linear 320ms;
+      width 320ms cubic-bezier(0.2, 0.9, 0.25, 1),
+      background-color 600ms ease,
+      color 600ms ease;
   }
-  .frame[data-drawer="true"] .side {
-    transform: none;
-    visibility: visible;
-    transition-delay: 0s;
+  .frame[data-full="true"] .side {
+    z-index: 121;
+    width: min(300px, 84vw);
+    padding: 12px 10px;
+    padding-top: max(12px, env(safe-area-inset-top));
     box-shadow: 16px 0 40px -18px rgb(23 20 15 / 0.55);
+  }
+  .frame[data-full="false"] .side::after {
+    width: 2px;
+  }
+  .frame[data-full="true"] .side::after {
+    display: none;
+  }
+  .frame[data-full="false"] .handle {
+    width: 40px;
+    height: 40px;
+  }
+  .frame[data-full="false"] .item {
+    min-height: 48px;
+  }
+  .frame[data-full="false"] .fly {
+    display: none;
   }
   .scrim {
     position: fixed;
     inset: 0;
-    z-index: 31;
+    z-index: 120;
     border: 0;
     padding: 0;
     background: var(--desk-scrim);
@@ -339,69 +503,25 @@
     opacity: 1;
     pointer-events: auto;
   }
-  .frame[data-nav="on"] .side::after {
-    display: none;
-  }
 }
 
 /* ---------- the desktop: a grid with the sidebar beside the content ---------- */
 @media (min-width: 960px) {
   .frame[data-nav="on"] {
     display: grid;
-    grid-template-columns: var(--nav-w) minmax(0, 1fr);
+    grid-template-columns: var(--side-w) minmax(0, 1fr);
     transition: grid-template-columns 300ms cubic-bezier(0.2, 0.9, 0.25, 1);
-  }
-  .frame[data-nav="on"][data-open="false"] {
-    --nav-w: 68px;
   }
   .side {
     position: sticky;
     top: 0;
-    z-index: 30;
     height: 100dvh;
+  }
+  .frame[data-full="true"] .side {
     overflow: hidden;
   }
-  .scrim,
-  .bar,
-  .close {
+  .scrim {
     display: none;
-  }
-  .frame[data-bar="on"] .content {
-    padding-bottom: 0;
-  }
-  .handle {
-    display: inline-grid;
-  }
-
-  /* the rail: icons only, the handle under the stamp mark */
-  .frame[data-open="false"] .head {
-    flex-direction: column;
-    justify-content: center;
-    padding: 0;
-    gap: 4px;
-  }
-  .frame[data-open="false"] .wordmark,
-  .frame[data-open="false"] .label,
-  .frame[data-open="false"] .count {
-    display: none;
-  }
-  .frame[data-open="false"] .stampMark {
-    display: block;
-  }
-  .frame[data-open="false"] .item {
-    justify-content: center;
-    padding: 0;
-  }
-  .frame[data-open="false"] .item[aria-current="page"]::before {
-    top: 5px;
-    left: 50%;
-    margin: 0 0 0 -3px;
-  }
-  .frame[data-open="false"] .dot {
-    display: block;
-  }
-  .frame[data-open="false"] .rule {
-    margin: 6px 14px;
   }
 }
 
@@ -409,24 +529,8 @@
   .frame,
   .side,
   .scrim,
-  .thumb {
+  .fly {
     transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
-}
-
-/* stage moments: the bar and the sidebar handle fade out while the lights are down */
-.bar,
-.handle {
-  transition:
-    opacity 600ms ease,
-    visibility 0s linear 0s;
-}
-:global(html[data-nav-hidden]) .bar,
-:global(html[data-nav-hidden]) .handle {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity 600ms ease,
-    visibility 0s linear 600ms;
 }

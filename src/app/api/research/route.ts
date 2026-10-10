@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { HARBOUR_GAME, NEATHACK, PALE_HOURS } from "@/customer/studio/fixtures";
 import type { EventData, EventType, Fact } from "@/customer/studio/types";
+import { lookupTicketmaster, parseTicketmasterUrl, type TicketmasterUrl, type TmLookupMiss, type TmLookupOk } from "@/customer/studio/research/ticketmaster";
+import { buildEventIntelligencePackage } from "@/customer/studio/research/ticketmasterPackage";
 
 // Research an event from a link. Real page fetch + schema.org parse + Open-Meteo weather.
 // Every fact carries source + provenance: "live" only for values fetched in this request,
@@ -310,6 +312,43 @@ ${text.slice(0, 6000)}`;
   }
 }
 
+// ---------- Ticketmaster Discovery (API key only) ----------
+
+/** Additive response field: what the Ticketmaster lookup did. "skipped" = no key, "error" = the API failed (429 included). */
+type TicketmasterMeta =
+  | { status: "ok"; eventId: string; matchedBy: "id" | "keyword"; retrievedAt: string; image?: TmLookupOk["image"] }
+  | { status: TmLookupMiss["status"]; reason: TmLookupMiss["reason"]; message: string };
+
+async function finishTicketmaster(tm: TmLookupOk): Promise<EventData & { ticketmaster: TicketmasterMeta }> {
+  const event = tm.event;
+  if (event.city && event.dateISO) {
+    const f = await weatherFact(event.city, event.dateISO, tm.matchedBy === "id" ? 0.9 : 0.5).catch(() => undefined);
+    if (f) event.facts.push(f);
+  }
+  if (!event.facts.some((f) => f.id === "weather")) {
+    event.facts.push({ id: "weather", label: "Weather: pending", value: event.city && event.dateISO ? "Weather lookup unavailable" : "Needs a city and a date", source: "Open-Meteo", confidence: 0.2, provenance: "pending" });
+  }
+  return {
+    ...event,
+    ticketmaster: { status: "ok", eventId: tm.eventId, matchedBy: tm.matchedBy, retrievedAt: tm.retrievedAt, image: tm.image },
+    eventIntelligencePackage: buildEventIntelligencePackage(tm),
+  } as EventData & { ticketmaster: TicketmasterMeta };
+}
+
+/** Last resort for a Ticketmaster link when neither the API nor the page could be read: a title from the slug, everything else pending. */
+function slugEvent(link: TicketmasterUrl): EventData | undefined {
+  if (!link.keyword) return undefined;
+  const title = link.keyword.replace(/(^| )[a-z]/g, (c) => c.toUpperCase());
+  const pending = (id: string, label: string): Fact => ({ id, label, value: "Not known yet", source: "Ticketmaster", sourceUrl: link.url, confidence: 0.2, provenance: "pending" });
+  return {
+    type: "generic",
+    title,
+    sourceUrl: link.url,
+    dateISO: undefined,
+    facts: [pending("date", "Date: pending"), pending("venue", "Venue: pending"), { id: "weather", label: "Weather: pending", value: "Needs a city and a date", source: "Open-Meteo", confidence: 0.2, provenance: "pending" }],
+  };
+}
+
 // ---------- Handler ----------
 
 function readError(status = 422) {
@@ -339,8 +378,26 @@ export async function POST(req: Request) {
     url = undefined;
   }
 
+  // Ticketmaster / Live Nation links go to the Discovery API first. Without a key, or on any API failure
+  // (429 included), we fall through to the page parse below and say so in `ticketmaster`.
+  const tmLink = url ? parseTicketmasterUrl(url) : undefined;
+  let tmMeta: TicketmasterMeta | undefined;
+  if (tmLink) {
+    const tm = await lookupTicketmaster(tmLink, { apiKey: process.env.TICKETMASTER_API_KEY });
+    if (tm.status === "ok") {
+      try {
+        return NextResponse.json(await finishTicketmaster(tm));
+      } catch {
+        tmMeta = { status: "error", reason: "bad-response", message: "Ticketmaster sent a response we could not use. Read the page instead." };
+      }
+    } else {
+      tmMeta = { status: tm.status, reason: tm.reason, message: tm.message };
+    }
+  }
+  const withTm = <T extends object>(e: T): T | (T & { ticketmaster: TicketmasterMeta }) => (tmMeta ? { ...e, ticketmaster: tmMeta } : e);
+
   // Demo keywords / known demo URLs return the fixture with its provenance as set.
-  const fixture = matchFixture(raw);
+  const fixture = tmLink ? undefined : matchFixture(raw);
   if (fixture) {
     const e = clone(fixture);
     if (url) e.sourceUrl = url.toString();
@@ -354,15 +411,21 @@ export async function POST(req: Request) {
         /* fixture stands on its own */
       }
     }
-    return NextResponse.json(e);
+    return NextResponse.json(withTm(e));
   }
 
   if (!url) return readError();
 
+  // A Ticketmaster page often refuses bots; the slug still names the event, so don't dead-end the person.
+  const tmFallback = () => {
+    const e = tmLink ? slugEvent(tmLink) : undefined;
+    return e ? NextResponse.json(withTm(e)) : readError();
+  };
+
   try {
     const html = await fetchPage(url.toString());
     const ex = extract(html, url.toString());
-    if (!ex) return readError();
+    if (!ex) return tmFallback();
     const { event } = ex;
 
     if (!event.dateISO) {
@@ -383,8 +446,8 @@ export async function POST(req: Request) {
     if (!event.facts.some((f) => f.id === "weather")) {
       event.facts.push({ id: "weather", label: "Weather: pending", value: "Weather lookup unavailable", source: "Open-Meteo", confidence: 0.2, provenance: "pending" });
     }
-    return NextResponse.json(event);
+    return NextResponse.json(withTm(event));
   } catch {
-    return readError();
+    return tmFallback();
   }
 }

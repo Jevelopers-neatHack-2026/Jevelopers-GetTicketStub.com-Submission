@@ -3,6 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PaperButton, Stamp } from "@/customer/desk/Desk";
 import { LeavesMark } from "@/customer/pages/ui";
+import { useNavStage } from "@/customer/nav/navState";
 import { useIsClient } from "@/customer/studio/editor/useClient";
 import type { EventData } from "@/customer/studio/types";
 import { DEMO_EVENTS, demoStubId } from "@/customer/studio/fixtures";
@@ -25,6 +26,7 @@ function readPicked(): EventData | undefined {
 /** The stage: paper at first, the lights go down over 600 ms (desk-surface animates the ground). */
 function Stage({ children }: { children?: React.ReactNode }) {
   const [dark, setDark] = useState(false);
+  useNavStage(dark);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setDark(true));
     return () => cancelAnimationFrame(raf);

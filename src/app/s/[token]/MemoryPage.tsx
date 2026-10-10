@@ -1,5 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "@/customer/account/api";
+import { sharePath } from "@/customer/account/share";
 import { useNavHidden } from "@/customer/nav/navState";
 import d from "@/customer/desk/Desk.module.css";
 import { PaperButton, Rule, Stamp, Stamped, Tool, Tools } from "@/customer/desk/Desk";
@@ -24,11 +26,26 @@ function printMinor(st: Stub): number {
 
 export default function MemoryPage({ token, gift, giftTo }: { token: string; gift: boolean; giftTo?: string }) {
   const mounted = useMounted();
+  // A short token is a snapshot on the server; anything else (every older link) carries the stub itself.
+  const [remote, setRemote] = useState<{ token: string; stub: Stub | null } | null>(null);
+  useEffect(() => {
+    if (!mounted) return;
+    let live = true;
+    api
+      .sharedStub(token)
+      .then((r) => live && setRemote({ token, stub: isStub(r.stub) ? r.stub : null }))
+      .catch(() => live && setRemote({ token, stub: null }));
+    return () => {
+      live = false;
+    };
+  }, [mounted, token]);
   const decoded = useMemo(() => {
     if (!mounted) return undefined;
+    if (remote?.token === token && remote.stub) return remote.stub;
+    if (remote?.token !== token) return undefined; // still asking the server
     const dec = decodeStub(token);
     return isStub(dec) ? dec : null;
-  }, [mounted, token]);
+  }, [mounted, token, remote]);
   const [ownedState, setOwnedState] = useState<{ id: string; stub?: Stub } | null>(null);
   if (decoded && ownedState?.id !== decoded.id) setOwnedState({ id: decoded.id, stub: getStub(decoded.id) });
   const owned = ownedState?.stub;
@@ -43,6 +60,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
   const [busy, setBusy] = useState(false);
 
   if (!mounted) return <PageShell>{null}</PageShell>;
+  if (decoded === undefined) return <PageShell>{null}</PageShell>;
   if (!decoded) {
     return (
       <PageShell>
@@ -70,7 +88,9 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
   }
 
   async function share() {
-    const data = { title: `${e.title} · TicketStub`, text: "My stub from that night.", url: shareUrl };
+    // The owner's link becomes a short server link when there is a server; everyone else re-shares the link they opened.
+    const url = isOwner ? absoluteUrl(await sharePath(stub)) : shareUrl;
+    const data = { title: `${e.title} · TicketStub`, text: "My stub from that night.", url };
     try {
       if (typeof navigator.share === "function") {
         await navigator.share(data);
@@ -79,7 +99,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
     } catch (err) {
       if ((err as DOMException)?.name === "AbortError") return;
     }
-    if (await copyText(shareUrl)) say("Link copied", true);
+    if (await copyText(url)) say("Link copied", true);
     else say("Couldn't copy the link. Copy it from the address bar.");
   }
 

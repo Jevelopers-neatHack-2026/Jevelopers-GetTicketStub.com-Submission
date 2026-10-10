@@ -1,13 +1,14 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { MarkLegend, SandboxStrip, SourceMark, Stamp, Stamped, TearLink, Rule } from "@/customer/desk/Desk";
+import { MarkLegend, SandboxStrip, SourceMark, Stamp, TearLink, Rule } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic } from "@/customer/studio/feedback";
 import { getStub, upsertStub } from "@/customer/studio/store";
 import { MATERIALS, formatMoney, type Stub } from "@/customer/studio/types";
 import { PageShell, EmptyState, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
-import { SANDBOX_LABEL, SIZE_LABEL, addOrder, billableSeats, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
+import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
+import { placeOrder, type Placed } from "@/customer/account/orders";
+import { SANDBOX_LABEL, SIZE_LABEL, billableSeats, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "./cart.module.css";
 
@@ -20,11 +21,13 @@ function seatStatus(seat: CartSeat): string {
 }
 
 export default function CartClient() {
-  const router = useRouter();
   const mounted = useMounted();
   const [items, setItems] = useState<CartItem[]>([]);
   const [stubs, setStubs] = useState<Record<string, Stub | undefined>>({});
   const [paid, setPaid] = useState(false);
+  const [placed, setPlaced] = useState<Placed | null>(null);
+  const [emailError, setEmailError] = useState("");
+  const receipt = useReceiptEmail();
 
   const [loaded, setLoaded] = useState(false);
   if (mounted && !loaded) {
@@ -42,9 +45,13 @@ export default function CartClient() {
 
   function pay() {
     if (paid) return;
+    if (receipt.problem) {
+      setEmailError(receipt.problem);
+      return;
+    }
     setPaid(true);
     const totals = cartTotals(items);
-    addOrder({
+    void placeOrder({
       stubIds: items.map((i) => i.stubId),
       lines: items.map((i) => ({ title: i.title, material: i.material, finish: i.finish, size: i.size, totalMinor: i.unitMinor * billableSeats(i) })),
       totalMinor: totals.totalMinor,
@@ -52,14 +59,14 @@ export default function CartClient() {
       // one quote names the order only when the cart holds one priced item
       quoteId: items.length === 1 ? items[0].quoteId : undefined,
       method: "card",
-    });
+      email: receipt.email || undefined,
+    }).then(setPlaced);
     for (const i of items) {
       const st = stubs[i.stubId];
       if (st) upsertStub({ ...st, material: i.material, finish: i.finish, torn: true });
     }
     saveCart([]);
     haptic([18, 40, 28]);
-    setTimeout(() => router.push("/wall?email=sent"), 900);
   }
 
   const totals = cartTotals(items);
@@ -158,9 +165,15 @@ export default function CartClient() {
                 Quote holds for 15 min
                 <SourceMark p="estimated" />. A quote is not a charge.
               </p>
+              {paid ? null : <ReceiptField id="cart-email" r={receipt} onChange={() => setEmailError("")} />}
+              {emailError ? (
+                <p className={ui.err} role="alert">
+                  {emailError}
+                </p>
+              ) : null}
               {paid ? (
                 <div className={s.done}>
-                  <Stamped>Ordered</Stamped>
+                  <AfterPay placed={placed} email={receipt.email} signedIn={receipt.signedIn} />
                 </div>
               ) : (
                 <Stamp block onClick={pay}>

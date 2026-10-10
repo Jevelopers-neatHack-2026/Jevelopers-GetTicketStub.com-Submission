@@ -1,13 +1,18 @@
 "use client";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { FinishSwatches, Field, PaperButton, PunchTabs, Rule, SandboxStrip, SourceMark, Stamp, Stamped, Tag, Tags, TearLink, type FinishValue } from "@/customer/desk/Desk";
 import d from "@/customer/desk/Desk.module.css";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play } from "@/customer/studio/feedback";
 import { holoAllowed } from "@/customer/studio/editor/ops";
 import { EDITIONS, MATERIALS, formatMoney, withGuestName, type Edition, type Finish, type Material, type Stub } from "@/customer/studio/types";
+import { ApiError, api, type OrganizerEventReply } from "@/customer/account/api";
+import { placeOrder } from "@/customer/account/orders";
+import { openSignIn } from "@/customer/account/signin";
+import { useAccount } from "@/customer/account/useAccount";
+import { absoluteUrl, copyText } from "@/customer/pages/share";
 import { PageShell, CopyField, OnDesk, PaperLink, TearAnchor, ui } from "@/customer/pages/ui";
-import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, addOrder, defaultSize, quote, sizesFor, type PrintSize } from "@/customer/pages/commerce";
+import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, defaultSize, quote, sizesFor, type PrintSize } from "@/customer/pages/commerce";
 import {
   SAMPLE_CSV,
   autoMatch,
@@ -44,7 +49,72 @@ const EDITION_LABEL: Record<Edition, string> = {
 
 type Guest = { name: string; seat?: string; extra?: string };
 
+/** Signing in leaves the page, so the work in progress waits in the browser for the trip. It is used once. */
+const DRAFT_KEY = "ticketstub.organizer.draft.v1";
+const DRAFT_MAX_AGE = 30 * 60_000;
+interface Draft {
+  at: number;
+  design: OrganizerDesign;
+  list: GuestList | null;
+  fileName: string;
+  map: ColumnMap;
+  material: Material;
+  finish: Finish;
+  sizePick: PrintSize | null;
+  publish: "print" | "claim";
+}
+function takeDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    localStorage.removeItem(DRAFT_KEY);
+    const d = raw ? (JSON.parse(raw) as Draft) : null;
+    return d && Date.now() - d.at < DRAFT_MAX_AGE && d.design ? d : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Pick which CSV column fills a part of the stub: the columns are paper tags, the chosen one is dark. */
+/** One claim link per guest, each with its own copy button, and one button for the whole list. */
+function GuestLinks({ claims }: { claims: OrganizerEventReply["claims"] }) {
+  const [all, setAll] = useState(false);
+  const [status, setStatus] = useState("");
+  const shown = all ? claims : claims.slice(0, 5);
+  const url = (token: string) => absoluteUrl(`/claim/g/${token}`);
+  const note = async (text: string, ok: boolean) => setStatus(ok ? text : "Couldn't copy. Select the link and copy it.");
+  return (
+    <div className={s.links}>
+      <ul className={s.linkList}>
+        {shown.map((c) => (
+          <li key={c.token} className={s.linkRow}>
+            <span className={s.linkName}>
+              {c.name}
+              {c.seat ? <span className={s.linkSeat}> · {c.seat}</span> : null}
+            </span>
+            <TearLink type="button" aria-label={`Copy ${c.name}'s link`} onClick={async () => note(`Copied ${c.name}'s link.`, await copyText(url(c.token)))}>
+              Copy link
+            </TearLink>
+          </li>
+        ))}
+      </ul>
+      {claims.length > 5 && !all ? (
+        <TearLink type="button" onClick={() => setAll(true)}>
+          Show all {claims.length}
+        </TearLink>
+      ) : null}
+      <PaperButton
+        type="button"
+        onClick={async () => note(`Copied ${claims.length} links as name, seat, link.`, await copyText(claims.map((c) => [c.name, c.seat ?? "", url(c.token)].join(",")).join("\n")))}
+      >
+        Copy all {claims.length} as a list
+      </PaperButton>
+      <p className={ui.status} aria-live="polite">
+        {status}
+      </p>
+    </div>
+  );
+}
+
 function ColumnTags({ label, headers, value, onChange, optional }: { label: string; headers: string[]; value: number; onChange: (v: number) => void; optional?: boolean }) {
   return (
     <div className={s.colRow}>
@@ -85,6 +155,29 @@ export default function OrganizerClient() {
   const [material, setMaterial] = useState<Material>("print");
   const [finish, setFinish] = useState<Finish>("foil");
   const [sizePick, setSizePick] = useState<PrintSize | null>(null);
+  const { status: acct, account } = useAccount();
+  const [events, setEvents] = useState<OrganizerEventReply | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
+  const [resumed, setResumed] = useState(false);
+
+  // Back from the emailed link: put the design, the guest list and the choices back as they were.
+  useEffect(() => {
+    const d = takeDraft();
+    if (!d) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setDesign(d.design);
+    setList(d.list);
+    setFileName(d.fileName);
+    setMap(d.map);
+    setMaterial(d.material);
+    setFinish(d.finish);
+    setSizePick(d.sizePick);
+    setPublish(d.publish);
+    setStep(3);
+    setResumed(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
 
   const guests = useMemo<Guest[]>(
     () =>
@@ -165,17 +258,65 @@ export default function OrganizerClient() {
 
   function startRun() {
     if (!ordered) {
-      const o = addOrder({
+      void placeOrder({
         stubIds: guests.map((_, i) => `${design.setId}-${i}`),
         lines: [{ title: `${design.title} · ${n} guest stubs`, material, finish, size, totalMinor: total }],
         totalMinor: total,
         quoteId: run.quoteId,
         method: "organizer-print",
-      });
-      setOrdered(o.id);
+        email: account?.email,
+      }).then((p) => setOrdered(p.order.id));
     }
     setRunning(true);
   }
+
+  /** Publishing keeps the guest links on the server, so it needs an account. Signed out, the sheet opens first. */
+  async function publishClaims() {
+    if (acct !== "in") {
+      try {
+        const draft: Draft = { at: Date.now(), design, list, fileName, map, material, finish, sizePick, publish };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {
+        /* storage full: the sign-in still works, the design just starts over */
+      }
+      openSignIn({
+        reason: "claim",
+        returnTo: "/organizer",
+        title: "Sign in to publish",
+        lede: "Guest links live in your account, so you can find them again. We'll email you a link.",
+      });
+      return;
+    }
+    setPublishing(true);
+    setPublishError("");
+    try {
+      const base = { ...designStub(design, { id: `${design.setId}-base` }), material, finish };
+      const res = await api.publishEvent(
+        design.title,
+        base,
+        guests.map((g) => ({ name: g.name, seat: g.seat })),
+      );
+      setEvents(res);
+      setPublished(true);
+      play("success");
+      haptic([18, 40, 28]);
+    } catch (e) {
+      const err = e as ApiError;
+      setPublishError(err.status === 401 ? "Your session ran out. Sign in again to publish." : "We couldn't publish just now. Your design and guest list are still here. Try again in a moment.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  // Back from sign-in with the draft restored: publish without asking twice.
+  const [autoDone, setAutoDone] = useState(false);
+  useEffect(() => {
+    if (!resumed || autoDone || acct !== "in" || publish !== "claim" || n === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAutoDone(true);
+    void publishClaims();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumed, autoDone, acct, publish, n]);
 
   const stepNav = (
     <nav aria-label="Steps" className={s.steps}>
@@ -475,17 +616,32 @@ export default function OrganizerClient() {
                 </div>
               ) : (
                 <div className={s.publish}>
-                  <p className={ui.muted}>Each guest claims their own stub and personalizes it within your locks.</p>
-                  {published ? (
+                  <p className={ui.muted}>Each guest gets their own link. It signs them in with their email and puts their named stub on their wall. Links last 30 days.</p>
+                  {published && events ? (
+                    <div className={s.done}>
+                      <Stamped>Published</Stamped>
+                      <GuestLinks claims={events.claims} />
+                    </div>
+                  ) : published ? (
                     <div className={s.done}>
                       <Stamped>Published</Stamped>
                       <CopyField path={claimPath} label="Guest claim link" />
                       <PaperLink href={claimPath}>Preview the guest page</PaperLink>
                     </div>
                   ) : (
-                    <Stamp block onClick={() => setPublished(true)}>
-                      Publish the claim link
-                    </Stamp>
+                    <>
+                      <Stamp block disabled={publishing || n === 0} onClick={() => void publishClaims()}>
+                        {publishing ? "Publishing" : acct === "in" ? `Publish ${n} guest ${n === 1 ? "link" : "links"}` : "Sign in to publish"}
+                      </Stamp>
+                      {publishError ? (
+                        <p className={ui.err} role="alert">
+                          {publishError}
+                        </p>
+                      ) : null}
+                      <TearLink type="button" onClick={() => setPublished(true)}>
+                        Share one link without guest names
+                      </TearLink>
+                    </>
                   )}
                 </div>
               )}

@@ -515,7 +515,7 @@
 /* The gift: the lights go down, you tear it open, the lights come back up (600 ms each way) */
 .giftStage.giftStage {
   position: fixed;
-  inset: 0;
+  inset: 0 0 0 var(--nav-w, 0px);
   z-index: 60;
   display: grid;
   place-items: center;

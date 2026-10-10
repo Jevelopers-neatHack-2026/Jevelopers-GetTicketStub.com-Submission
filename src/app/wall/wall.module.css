@@ -192,6 +192,25 @@
   font: var(--type-body);
   color: var(--desk-ink-soft);
 }
+/* the save offer: a perforated slip inside the note, before the actions */
+.save {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  border-block: 1px dashed var(--desk-rule-strong);
+}
+.saveText {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink);
+}
+.saveRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
 .noteActions {
   width: 100%;
   display: grid;
@@ -220,7 +239,7 @@
 /* lights come back up after the tear (the stage was dark on the way here) */
 .lights.lights {
   position: fixed;
-  inset: 0;
+  inset: 0 0 0 var(--nav-w, 0px);
   z-index: 80;
   pointer-events: none;
   animation: lightsUp 600ms var(--ts-ease-standard) 120ms both;
@@ -235,7 +254,7 @@
 /* ---------- the lamp ---------- */
 .lamp {
   position: fixed;
-  inset: 0;
+  inset: 0 0 0 var(--nav-w, 0px);
   z-index: 40;
   outline: none;
 }
@@ -272,7 +291,7 @@
   gap: 14px;
   padding: 0 16px max(20px, env(safe-area-inset-bottom));
   pointer-events: none;
-  --stub-max: min(calc(100vw - 32px), calc((100dvh - var(--lamp-top, 16px) - 350px) * 0.66));
+  --stub-max: min(calc(100vw - var(--nav-w, 0px) - 32px), calc((100dvh - var(--lamp-top, 16px) - 350px) * 0.66));
 }
 .lampBody > * {
   pointer-events: auto;

@@ -97,6 +97,8 @@ export interface Stub {
   wallAngle: number; // -4..4 degrees
   photos: string[]; // data urls (local only)
   setId?: string; // matching set / claim set
+  /** Epoch ms of the last change. Set on every upsert; the newer one wins when a device and an account merge. */
+  updatedAt?: number;
 }
 
 export function currentVersion(s: Stub): DesignVersion {

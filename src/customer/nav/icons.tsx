@@ -67,13 +67,21 @@ export function OrganizerIcon() {
   );
 }
 
-/** More: three punched holes. */
-export function MoreIcon() {
+/** Account: a person's head and shoulders. */
+export function AccountIcon() {
   return (
     <svg {...base}>
-      <circle cx="5.5" cy="12" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <circle cx="18.5" cy="12" r="1.5" />
+      <circle cx="12" cy="8.5" r="3.4" />
+      <path d="M5.5 19.5c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5" />
+    </svg>
+  );
+}
+
+/** A group's fold: points right, turns down when open. */
+export function ChevronIcon() {
+  return (
+    <svg {...base}>
+      <path d="m9.5 7 5 5-5 5" />
     </svg>
   );
 }

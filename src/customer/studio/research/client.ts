@@ -24,10 +24,19 @@ async function postJson<T>(path: string, body: unknown, fallbackError: string): 
   return data as T;
 }
 
+const EVENT_KEYS: (keyof EventData)[] = ["type", "title", "subtitle", "venue", "city", "dateISO", "seat", "sourceUrl", "setlist", "score", "cast", "programme", "facts"];
+
+/** Only the EventData fields: the route also returns research extras that must not be saved into (and synced with) a stub. */
+export function pickEvent(data: EventData): EventData {
+  const out: Record<string, unknown> = {};
+  for (const k of EVENT_KEYS) if (data[k] !== undefined) out[k] = data[k];
+  return out as unknown as EventData;
+}
+
 /** Research one event from a link (or a demo keyword). Throws Error(message) on failure. */
 export async function researchEvent(input: { url?: string; query?: string }): Promise<EventData> {
   if (input.url && input.url.trim()) {
-    return postJson<EventData>("/api/research", { url: input.url.trim() }, READ_ERROR);
+    return pickEvent(await postJson<EventData>("/api/research", { url: input.url.trim() }, READ_ERROR));
   }
   if (input.query && input.query.trim()) {
     const results = await searchEvents(input.query);
@@ -40,7 +49,7 @@ export async function researchEvent(input: { url?: string; query?: string }): Pr
 /** Search fallback. Results are demo events, labelled simulated. */
 export async function searchEvents(query: string): Promise<EventData[]> {
   const data = await postJson<{ results?: EventData[] }>("/api/research", { query }, "Search is unavailable right now. Try again in a moment.");
-  return Array.isArray(data.results) ? data.results : [];
+  return Array.isArray(data.results) ? data.results.map(pickEvent) : [];
 }
 
 /** Remix the art layer for a stub. The caller pushes it as a new DesignVersion. */

@@ -172,25 +172,15 @@
   background: var(--desk-paper);
   box-shadow: 0 1px 0 var(--desk-rule);
 }
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 44px;
-  padding: 0 12px 0 8px;
+.crumbs {
   flex: none;
-  border-radius: 22px;
-  font: var(--type-ui);
-  text-decoration: none;
-  color: var(--desk-ink);
-  -webkit-tap-highlight-color: transparent;
-}
-.back:active {
-  background: color-mix(in srgb, var(--desk-ink) 10%, transparent);
+  padding-left: 10px;
 }
 .title {
   flex: 1;
   min-width: 0;
+  padding-right: 10px;
+  text-align: right;
   font: var(--type-h3);
   font-variation-settings: "SOFT" 30, "opsz" 24;
   letter-spacing: -0.02em;
@@ -200,7 +190,7 @@
 }
 
 .stage {
-  --cap-w: min(calc(100vw - 32px), 608px);
+  --cap-w: min(calc(100vw - var(--nav-w, 0px) - 32px), 608px);
   --cap-h: clamp(300px, 46dvh, 440px);
   --box-h: min(calc((var(--cap-w) - var(--mat)) / var(--ar) + var(--mat)), var(--cap-h));
   position: relative;

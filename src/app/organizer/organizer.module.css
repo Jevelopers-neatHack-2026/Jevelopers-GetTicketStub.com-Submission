@@ -485,3 +485,33 @@
   text-wrap: balance;
 }
 
+
+/* published guest links */
+.links {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.linkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.linkRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--desk-rule-strong);
+  font: var(--type-body);
+}
+.linkName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.linkSeat {
+  color: var(--desk-ink-soft);
+  font-variant-numeric: tabular-nums;
+}

@@ -9,7 +9,7 @@
   display: block;
   margin: 0;
   /* never wider than the screen minus its gutter (frames shrink --stub-max by their mat) */
-  width: min(var(--w), var(--stub-max, calc(100vw - 32px)));
+  width: min(var(--w), var(--stub-max, calc(100vw - var(--nav-w, 0px) - 32px)));
   max-width: 100%;
   aspect-ratio: var(--aspect);
   container-type: inline-size;

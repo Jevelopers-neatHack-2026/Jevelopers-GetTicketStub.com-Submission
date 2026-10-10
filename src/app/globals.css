@@ -8,6 +8,11 @@
   box-sizing: border-box;
 }
 
+/* the left edge the nav takes: set by NavFrame (0 on the landing page and the parts board) */
+:root {
+  --nav-w: 0px;
+}
+
 html,
 body {
   margin: 0;

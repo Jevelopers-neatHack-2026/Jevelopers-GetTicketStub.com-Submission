@@ -1,37 +1,34 @@
 "use client";
-// One frame for every screen: a paper sidebar on the desktop, a punched-tab bar on the phone, and the
-// same sidebar sliding in from the left as the phone's drawer. It stays out of the landing page, the
-// parts board and the printing stage.
+// One frame for every screen but the landing page and the parts board: a paper sidebar that is always
+// there. On the desktop it is open or folded to a rail; on the phone it is a thin rail, and » opens the
+// same sidebar over the content as a drawer. Every route is in it, nested by parent (see routes.ts).
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
-import { CloseIcon, SoundIcon } from "@/customer/desk/icons";
+import { usePathname, useRouter } from "next/navigation";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
+import { SoundIcon } from "@/customer/desk/icons";
+import { AccountLine } from "@/customer/account/AccountLine";
+import { AccountRoot } from "@/customer/account/AccountRoot";
+import { sharePath } from "@/customer/account/share";
 import { loadCart } from "@/customer/pages/commerce";
+import { memoryPath } from "@/customer/pages/share";
+import { getStub } from "@/customer/studio/store";
 import { play, useMuted } from "@/customer/studio/feedback";
-import { CartIcon, HandleIcon, MakeIcon, MapIcon, MoreIcon, OrganizerIcon, WallIcon } from "./icons";
-import { useNavOpen } from "./navState";
+import { AccountIcon, CartIcon, ChevronIcon, HandleIcon, MakeIcon, MapIcon, OrganizerIcon, WallIcon } from "./icons";
+import { useDesktop, useNavOpen } from "./navState";
+import { NAV_FREE, buildTree, chainOf, useLocation, type IconKey, type RouteNode } from "./routes";
 import f from "./NavFrame.module.css";
 
-interface Place {
-  id: string;
-  href: string;
-  label: string;
-  Icon: ComponentType;
-  /** Routes that count as being at this place. */
-  at: (path: string) => boolean;
-}
+const ICONS: Record<IconKey, ComponentType> = {
+  make: MakeIcon,
+  wall: WallIcon,
+  cart: CartIcon,
+  map: MapIcon,
+  organizer: OrganizerIcon,
+  account: AccountIcon,
+};
 
-const PLACES: Place[] = [
-  { id: "make", href: "/", label: "Make", Icon: MakeIcon, at: (p) => p.startsWith("/studio") },
-  { id: "wall", href: "/wall", label: "Wall", Icon: WallIcon, at: (p) => p === "/wall" },
-  { id: "cart", href: "/cart", label: "Cart", Icon: CartIcon, at: (p) => p.startsWith("/cart") || p.startsWith("/checkout") },
-  { id: "map", href: "/map", label: "Desk map", Icon: MapIcon, at: (p) => p === "/map" },
-  { id: "organizer", href: "/organizer", label: "Organizer", Icon: OrganizerIcon, at: (p) => p.startsWith("/organizer") },
-];
-const MAIN = PLACES.slice(0, 3);
-const MORE = PLACES.slice(3);
-
-const HIDDEN = ["/", "/parts", "/new"];
+/** The widths the CSS gives the sidebar (open, folded, the phone's rail); --nav-w on <html> follows them. */
+const WIDTHS = { open: 244, rail: 68, phone: 56 };
 
 function subscribeStorage(cb: () => void) {
   window.addEventListener("storage", cb);
@@ -43,17 +40,48 @@ function useCartCount(): number {
   return useSyncExternalStore(subscribeStorage, () => loadCart().length, () => 0);
 }
 
+/** The depth-first order of the visible-or-not tree: the direction a navigation sounds in. */
+function order(nodes: RouteNode[], out: RouteNode[] = []): RouteNode[] {
+  for (const n of nodes) {
+    out.push(n);
+    if (n.children) order(n.children, out);
+  }
+  return out;
+}
+
 export function NavFrame({ children }: { children: ReactNode }) {
   const path = usePathname() ?? "/";
-  const show = !HIDDEN.includes(path);
+  const router = useRouter();
+  const show = !NAV_FREE.includes(path);
   const inStudio = path.startsWith("/studio");
+  const desktop = useDesktop();
   const [open, toggleOpen] = useNavOpen(inStudio);
   const [muted, setMuted] = useMuted();
   const count = useCartCount();
+  const { keys, stubs } = useLocation(path);
   // The drawer belongs to the route it was opened on, so any navigation closes it.
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
   const drawer = drawerPath === path;
+  const full = desktop ? open : drawer;
   const swipe = useRef<{ x: number; y: number } | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  // Groups open for the route you're on; the chevron overrides by hand until you go somewhere new inside them.
+  const [manual, setManual] = useState<Record<string, boolean>>({});
+  const [manualPath, setManualPath] = useState(path);
+  if (manualPath !== path) {
+    setManualPath(path);
+    setManual((m) => {
+      const next = { ...m };
+      keys.forEach((k) => delete next[k]);
+      return next;
+    });
+  }
+  const isOpen = (key: string) => manual[key] ?? keys.includes(key);
+
+  // The rail's flyout: the children of a folded group, on hover or focus.
+  const [fly, setFly] = useState<{ key: string; top: number } | null>(null);
+  const flyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const closeDrawer = () => {
     if (!drawer) return;
@@ -63,7 +91,7 @@ export function NavFrame({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!drawer) return;
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape") {
         setDrawerPath(null);
         play("close", { emphasis: "subtle" });
@@ -73,140 +101,261 @@ export function NavFrame({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [drawer]);
 
-  if (!show) {
+  // --nav-w on <html>: how much of the left edge the nav takes, so full-screen stages start at its right edge.
+  useEffect(() => {
+    const w = !show ? 0 : desktop ? (open ? WIDTHS.open : WIDTHS.rail) : WIDTHS.phone;
+    document.documentElement.style.setProperty("--nav-w", `${w}px`);
+  }, [show, desktop, open]);
+
+  const tree = useMemo(() => buildTree({ keys, stubs, cartCount: count, path }), [keys, stubs, count, path]);
+  const chain = useMemo(() => chainOf(tree, keys), [tree, keys]);
+  const current = chain[chain.length - 1];
+  const trail = new Set(chain.slice(0, -1));
+  const flat = useMemo(() => order(tree), [tree]);
+
+  const hrefOf = (n: RouteNode): string => {
+    if (!n.key.startsWith("share:")) return n.href;
+    const stub = getStub(n.key.slice(6));
+    return stub ? memoryPath(stub) : "/wall";
+  };
+
+  const select = (n: RouteNode) => {
+    const from = current ? flat.indexOf(current) : -1;
+    play("select", { emphasis: "subtle", direction: flat.indexOf(n) >= from ? "forward" : "back" });
+    if (drawer) setDrawerPath(null);
+  };
+
+  const rowKey = (e: KeyboardEvent<HTMLElement>) => {
+    const t = e.target as HTMLElement;
+    if (e.key === "Escape") return setFly(null);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const rows = [...(navRef.current?.querySelectorAll<HTMLElement>("[data-row-link]") ?? [])].filter((el) => el.offsetParent !== null);
+      const i = rows.indexOf(t);
+      if (i < 0) return;
+      e.preventDefault();
+      rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))]?.focus();
+    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      const chev = t.closest("[data-row]")?.querySelector<HTMLButtonElement>("button[data-chev]");
+      if (!chev) return;
+      const expanded = chev.getAttribute("aria-expanded") === "true";
+      if ((e.key === "ArrowRight") !== expanded) {
+        e.preventDefault();
+        chev.click();
+      }
+    }
+  };
+
+  const openFly = (key: string, el: HTMLElement) => {
+    if (full) return;
+    if (flyTimer.current) clearTimeout(flyTimer.current);
+    setFly({ key, top: Math.min(el.getBoundingClientRect().top, window.innerHeight - 80) });
+  };
+  const closeFly = () => {
+    if (flyTimer.current) clearTimeout(flyTimer.current);
+    flyTimer.current = setTimeout(() => setFly(null), 120);
+  };
+
+  const linkFor = (n: RouteNode, depth: number, withIcon: boolean) => {
+    const Icon = n.icon ? ICONS[n.icon] : null;
+    const href = hrefOf(n);
+    const here = n === current;
     return (
-      <div className={f.frame} data-nav="off">
-        {children}
-      </div>
+      <Link
+        href={href}
+        className={f.item}
+        data-depth={depth}
+        data-row-link
+        data-trail={trail.has(n) ? "true" : undefined}
+        aria-current={here ? "page" : undefined}
+        title={full ? undefined : n.label}
+        onClick={(e) => {
+          select(n);
+          if (n.key.startsWith("share:") && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+            // A server token is shorter and prettier than the encoded stub; use it when there is one.
+            const stub = getStub(n.key.slice(6));
+            if (stub) {
+              e.preventDefault();
+              void sharePath(stub).then((p) => router.push(p));
+            }
+          }
+          setFly(null);
+        }}
+      >
+        {withIcon && Icon ? (
+          <span className={f.icon}>
+            <Icon />
+            {n.count ? <span className={f.dot} aria-hidden /> : null}
+          </span>
+        ) : null}
+        <span className={f.label}>{n.label}</span>
+        {n.count ? (
+          <span className={f.count} aria-label={`${n.count} in your cart`}>
+            {n.count}
+          </span>
+        ) : null}
+      </Link>
     );
-  }
+  };
 
-  const current = PLACES.findIndex((p) => p.at(path));
-  const select = (i: number) => play("select", { emphasis: "subtle", direction: i >= current ? "forward" : "back" });
-  const barIndex = current < 0 ? -1 : current < MAIN.length ? current : MAIN.length;
-
-  const itemLink = (p: Place, i: number) => (
-    <Link
-      key={p.id}
-      href={p.href}
-      className={f.item}
-      aria-current={i === current ? "page" : undefined}
-      title={open ? undefined : p.label}
-      onClick={() => select(i)}
-    >
-      <span className={f.icon}>
-        <p.Icon />
-        {p.id === "cart" && count > 0 ? <span className={f.dot} aria-hidden /> : null}
-      </span>
-      <span className={f.label}>{p.label}</span>
-      {p.id === "cart" && count > 0 ? (
-        <span className={f.count} aria-label={`${count} in your cart`}>
-          {count}
-        </span>
-      ) : null}
-    </Link>
+  /** The nested tree, drawn when the sidebar is open. */
+  const nodeBody = (n: RouteNode, depth: number) => {
+    const kids = n.children ?? [];
+    const expandable = kids.length > 0;
+    const expanded = expandable && isOpen(n.key);
+    return (
+      <>
+        <div className={f.row} data-row data-kid={depth > 0 ? "true" : undefined}>
+          {linkFor(n, depth, depth === 0)}
+          {expandable ? (
+            <button
+              type="button"
+              data-chev
+              className={f.chev}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? "Fold" : "Open"} ${n.label}`}
+              onClick={() => {
+                setManual((m) => ({ ...m, [n.key]: !expanded }));
+                play("toggle", { emphasis: "subtle", direction: expanded ? "back" : "forward" });
+              }}
+            >
+              <ChevronIcon />
+            </button>
+          ) : null}
+        </div>
+        {expanded ? <ul className={f.kids}>{kids.map((k) => renderNode(k, depth + 1))}</ul> : null}
+      </>
+    );
+  };
+  const renderNode = (n: RouteNode, depth: number) => (
+    <li key={n.key} className={f.node}>
+      {nodeBody(n, depth)}
+    </li>
   );
 
+  /** The flyout card: a folded group's places, flattened, with the rail's hover and focus. */
+  const flyRows = (n: RouteNode, depth = 1): ReactNode[] =>
+    (n.children ?? []).flatMap((k) => [
+      <li key={k.key} className={f.flyRow}>
+        {linkFor(k, depth, false)}
+      </li>,
+      ...(k.children && isOpen(k.key) ? flyRows(k, depth + 1) : []),
+    ]);
+
+  const rule = tree.findIndex((n) => n.key === "map");
+
   return (
-    <div className={f.frame} data-nav="on" data-open={open} data-bar={inStudio ? "off" : "on"} data-drawer={drawer}>
-      <button type="button" className={f.scrim} aria-label="Close menu" tabIndex={-1} onClick={closeDrawer} />
-      <aside
-        className={f.side}
-        aria-label="TicketStub"
-        onPointerDown={(e) => {
-          swipe.current = { x: e.clientX, y: e.clientY };
-        }}
-        onPointerMove={(e) => {
-          const s = swipe.current;
-          if (!s || !drawer) return;
-          if (e.clientX - s.x < -56 && Math.abs(e.clientY - s.y) < 40) {
-            swipe.current = null;
-            closeDrawer();
-          }
-        }}
-        onPointerUp={() => (swipe.current = null)}
-        onPointerCancel={() => (swipe.current = null)}
-      >
-        <div className={f.head}>
-          <Link href="/" className={f.mark} aria-label="TicketStub home" onClick={() => select(0)}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={f.wordmark} src="/brand/wordmark.svg" alt="" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={f.stampMark} src="/brand/ts-stamp.svg" alt="" />
-          </Link>
-          <button
-            type="button"
-            className={f.handle}
-            aria-label={open ? "Fold the sidebar to a rail" : "Open the sidebar"}
-            title={open ? "Fold to a rail" : "Open the sidebar"}
-            aria-expanded={open}
-            onClick={() => {
-              play("toggle", { emphasis: "subtle", direction: open ? "back" : "forward" });
-              toggleOpen();
+    <div className={f.frame} data-nav={show ? "on" : "off"} data-full={show ? full : undefined} data-drawer={drawer}>
+      {show ? (
+        <>
+          <button type="button" className={f.scrim} aria-label="Close menu" tabIndex={-1} onClick={closeDrawer} />
+          <aside
+            className={f.side}
+            aria-label="TicketStub"
+            onKeyDown={rowKey}
+            onPointerDown={(e) => {
+              swipe.current = { x: e.clientX, y: e.clientY };
             }}
-          >
-            <HandleIcon open={open} />
-          </button>
-          <button type="button" className={f.close} aria-label="Close menu" onClick={closeDrawer}>
-            <CloseIcon />
-          </button>
-        </div>
-        <nav className={f.list} aria-label="Places">
-          {MAIN.map((p, i) => itemLink(p, i))}
-          <hr className={f.rule} />
-          {MORE.map((p, i) => itemLink(p, i + MAIN.length))}
-        </nav>
-        <div className={f.foot}>
-          <button
-            type="button"
-            className={f.item}
-            aria-pressed={muted}
-            title={open ? undefined : muted ? "Sound is off" : "Sound is on"}
-            onClick={() => {
-              setMuted(!muted);
-              if (muted) play("toggle", { emphasis: "subtle", direction: "forward" });
+            onPointerMove={(e) => {
+              const s = swipe.current;
+              if (!s || !drawer) return;
+              if (e.clientX - s.x < -56 && Math.abs(e.clientY - s.y) < 40) {
+                swipe.current = null;
+                closeDrawer();
+              }
             }}
+            onPointerUp={() => (swipe.current = null)}
+            onPointerCancel={() => (swipe.current = null)}
           >
-            <span className={f.icon}>
-              <SoundIcon muted={muted} />
-            </span>
-            <span className={f.label}>{muted ? "Sound off" : "Sound on"}</span>
-          </button>
-        </div>
-      </aside>
+            <div className={f.head}>
+              <Link href="/" className={f.mark} aria-label="TicketStub home" onClick={() => play("select", { emphasis: "subtle", direction: "back" })}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className={f.wordmark} src="/brand/wordmark.svg" alt="" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className={f.stampMark} src="/brand/ts-stamp.svg" alt="" />
+              </Link>
+              <button
+                type="button"
+                className={f.handle}
+                aria-label={full ? (desktop ? "Fold the sidebar to a rail" : "Close the menu") : desktop ? "Open the sidebar" : "Open the menu"}
+                title={full ? (desktop ? "Fold to a rail" : "Close the menu") : desktop ? "Open the sidebar" : "Open the menu"}
+                aria-expanded={full}
+                onClick={() => {
+                  if (desktop) {
+                    play("toggle", { emphasis: "subtle", direction: open ? "back" : "forward" });
+                    toggleOpen();
+                  } else if (drawer) closeDrawer();
+                  else {
+                    setDrawerPath(path);
+                    play("open", { emphasis: "subtle" });
+                  }
+                }}
+              >
+                <HandleIcon open={full} />
+              </button>
+            </div>
+            <nav className={f.list} ref={navRef} aria-label="Places">
+              <ul className={f.tree}>
+                {tree.map((n, i) => {
+                  const hasFly = !full && !!n.children?.length;
+                  return (
+                    <Fragment key={n.key}>
+                      {i === rule ? <li className={f.rule} role="separator" /> : null}
+                    <li
+                      className={f.top}
+                      onPointerEnter={(e) => {
+                        if (e.pointerType === "mouse" && hasFly) openFly(n.key, e.currentTarget);
+                      }}
+                      onPointerLeave={(e) => e.pointerType === "mouse" && closeFly()}
+                      onFocus={(e) => hasFly && openFly(n.key, e.currentTarget)}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closeFly();
+                      }}
+                    >
+                      {full ? (
+                        nodeBody(n, 0)
+                      ) : (
+                        <>
+                          <div className={f.row} data-row>
+                            {linkFor(n, 0, true)}
+                          </div>
+                          {hasFly && fly?.key === n.key ? (
+                            <div className={f.fly} style={{ top: fly.top }} role="group" aria-label={n.label}>
+                              <p className={f.flyHead}>{n.label}</p>
+                              <ul>{flyRows(n)}</ul>
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                    </li>
+                    </Fragment>
+                  );
+                })}
+              </ul>
+            </nav>
+            <div className={f.foot}>
+              <AccountLine compact={!full} />
+              <button
+                type="button"
+                className={f.item}
+                aria-pressed={muted}
+                title={full ? undefined : muted ? "Sound is off" : "Sound is on"}
+                onClick={() => {
+                  setMuted(!muted);
+                  if (muted) play("toggle", { emphasis: "subtle", direction: "forward" });
+                }}
+              >
+                <span className={f.icon}>
+                  <SoundIcon muted={muted} />
+                </span>
+                <span className={f.label}>{muted ? "Sound off" : "Sound on"}</span>
+              </button>
+            </div>
+          </aside>
+        </>
+      ) : null}
 
       <div className={f.content}>{children}</div>
-
-      <nav className={f.bar} aria-label="Places">
-        <div className={f.tray}>
-          <span className={f.thumb} style={{ transform: `translateX(${Math.max(barIndex, 0) * 100}%)`, opacity: barIndex < 0 ? 0 : 1 }} aria-hidden />
-          {MAIN.map((p, i) => (
-            <Link key={p.id} href={p.href} className={f.tab} aria-current={i === current ? "page" : undefined} onClick={() => select(i)}>
-              <span className={f.icon}>
-                <p.Icon />
-                {p.id === "cart" && count > 0 ? <span className={f.badge}>{count}</span> : null}
-              </span>
-              <span>{p.label}</span>
-            </Link>
-          ))}
-          <button
-            type="button"
-            className={f.tab}
-            aria-current={barIndex === MAIN.length ? "page" : undefined}
-            aria-haspopup="dialog"
-            aria-expanded={drawer}
-            onClick={() => {
-              setDrawerPath(path);
-              play("open", { emphasis: "subtle" });
-            }}
-          >
-            <span className={f.icon}>
-              <MoreIcon />
-            </span>
-            <span>More</span>
-          </button>
-        </div>
-      </nav>
+      <AccountRoot />
     </div>
   );
 }

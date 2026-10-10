@@ -3,7 +3,8 @@ import { useId, useState } from "react";
 import { Field, PunchTabs, Rule, SandboxStrip, Stamp, Stamped, Switch } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic } from "@/customer/studio/feedback";
-import { encodeStub, getStub } from "@/customer/studio/store";
+import { sharePath } from "@/customer/account/share";
+import { getStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
 import { PageShell, CopyField, EmptyState, OnDesk, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
 import { SANDBOX_LABEL, addOrder, materialPrice, updateSeat } from "@/customer/pages/commerce";
@@ -42,7 +43,7 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
     { value: "print" as const, label: "Ship a print", sub: formatMoney(printPrice) },
   ];
 
-  function send() {
+  async function send() {
     if (!stub) return;
     const to = name.trim();
     if (!to) {
@@ -61,8 +62,8 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
       addOrder({ stubIds: [gift.id], lines: [{ title: `Gift for ${to}: ${stub.event.title}`, material: "print", finish: stub.finish, size: "classic", totalMinor: printPrice }], totalMinor: printPrice, method: "gift-print" });
     }
     if (cartItem && seatIndex !== undefined) updateSeat(cartItem, seatIndex, { decision: "gift", name: to });
-    const token = encodeStub(gift);
-    setGiftPath(wrap ? `/s/${token}?gift=1&to=${encodeURIComponent(to)}` : `/s/${token}`);
+    const path = await sharePath(gift);
+    setGiftPath(wrap ? `${path}?gift=1&to=${encodeURIComponent(to)}` : path);
     haptic([18, 40, 28]);
   }
 
@@ -104,7 +105,7 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
             className={s.form}
             onSubmit={(e) => {
               e.preventDefault();
-              send();
+              void send();
             }}
           >
             <Field

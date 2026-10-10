@@ -2,6 +2,7 @@
 // Wall chrome shared by /wall and /u/[token]: the paper desk header and the pins.
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
+import { Breadcrumbs, useCrumbs } from "@/customer/nav/Breadcrumbs";
 import c from "./chrome.module.css";
 
 export { c as chrome };
@@ -24,13 +25,18 @@ export function Pin({ seed, press, delay }: { seed: string; press?: boolean; del
 
 /** Paper desk page: header with the wordmark, then the content. */
 export function DeskPage({ right, children }: { right?: ReactNode; children: ReactNode }) {
+  const crumbs = useCrumbs().length > 1;
   return (
     <div className={`desk-surface ${c.page}`}>
-      <header className={`${c.top} ${right ? "" : c.logoOnly}`}>
-        <Link className={c.home} href="/" aria-label="TicketStub home">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/wordmark.svg" alt="TicketStub" />
-        </Link>
+      <header className={`${c.top} ${right || crumbs ? "" : c.logoOnly}`}>
+        {crumbs ? (
+          <Breadcrumbs />
+        ) : (
+          <Link className={c.home} href="/" aria-label="TicketStub home">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/wordmark.svg" alt="TicketStub" />
+          </Link>
+        )}
         {right ? <div className={c.topRight}>{right}</div> : null}
       </header>
       <main className={c.main}>{children}</main>

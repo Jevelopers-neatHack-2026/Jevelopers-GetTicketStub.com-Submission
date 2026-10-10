@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Field, MarkLegend, PaperButton, Rule, FinishSwatches, PunchTabs, SandboxStrip, SourceMark, Stamp, Stamped, TearLink, type FinishValue } from "@/customer/desk/Desk";
+import { MarkLegend, PaperButton, Rule, FinishSwatches, PunchTabs, SandboxStrip, SourceMark, Stamp, TearLink, type FinishValue } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { MaterialFrame } from "@/customer/studio/editor/MaterialFrame";
 import { holoAllowed, setFinish as applyFinish, setMaterial as applyMaterial } from "@/customer/studio/editor/ops";
@@ -10,7 +10,9 @@ import { getStub, upsertStub } from "@/customer/studio/store";
 import { MATERIALS, formatMoney, type Material, type Stub } from "@/customer/studio/types";
 import { LeavesMark, PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
 import { formatDate } from "@/customer/pages/share";
-import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, addOrder, addToCart, cartItemFromStub, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
+import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
+import { placeOrder, type Placed } from "@/customer/account/orders";
+import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, addToCart, cartItemFromStub, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
 import { useMounted, nowMs } from "@/customer/pages/useMounted";
 import s from "./checkout.module.css";
 
@@ -27,9 +29,11 @@ export default function CheckoutClient({ id }: { id: string }) {
   const mounted = useMounted();
   const [stub, setStub] = useState<Stub | null | undefined>(undefined);
   const [size, setSize] = useState<PrintSize>("classic");
-  const [email, setEmail] = useState("");
+  const receipt = useReceiptEmail();
+  const email = receipt.email;
   const [error, setError] = useState("");
   const [paid, setPaid] = useState(false);
+  const [placed, setPlaced] = useState<Placed | null>(null);
   const [quoteAt, setQuoteAt] = useState(nowMs);
   const [now, setNow] = useState(nowMs);
   // The stub being priced: material and finish live on it, exactly as in the editor.
@@ -86,23 +90,22 @@ export default function CheckoutClient({ id }: { id: string }) {
       setError("This quote has run out. Refresh it to see the current price.");
       return;
     }
-    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError("That email doesn't look right. Check it, or leave it empty.");
+    if (receipt.problem) {
+      setError(receipt.problem);
       return;
     }
     setPaid(true);
-    addOrder({
+    void placeOrder({
       stubIds: [stub.id],
       lines: [{ title: stub.event.title, material, finish, size, totalMinor: q.totalMinor }],
       totalMinor: q.totalMinor,
       currency: q.currency,
       quoteId: q.quoteId,
       method: "card",
-      email: email.trim() || undefined,
-    });
+      email: email || undefined,
+    }).then(setPlaced);
     upsertStub({ ...stub, material, finish, torn: true });
     haptic([18, 40, 28]);
-    setTimeout(() => router.push("/wall?email=sent"), 900);
   }
 
   function toCart() {
@@ -220,24 +223,12 @@ export default function CheckoutClient({ id }: { id: string }) {
             )}
           </div>
 
-          <Field
-            id="co-email"
-            type="email"
-            label="Email for your receipt"
-            hint="We'll send the receipt and a link to your wall. You can leave it empty in the sandbox."
-            value={email}
-            autoComplete="email"
-            onChange={(ev) => {
-              setEmail(ev.target.value);
-              setError("");
-            }}
-          />
+          {paid ? null : <ReceiptField id="co-email" r={receipt} onChange={() => setError("")} />}
 
           <div className={s.actions}>
             {paid ? (
               <div className={s.done}>
-                <Stamped>Ordered</Stamped>
-                <p className={ui.muted}>Taking you to your wall.</p>
+                <AfterPay placed={placed} email={email} signedIn={receipt.signedIn} />
               </div>
             ) : (
               <Stamp block onClick={pay}>

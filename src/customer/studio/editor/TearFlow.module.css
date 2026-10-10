@@ -1,7 +1,7 @@
 /* Tear stage: the lights go down (600 ms), then the stub flies out and the wall takes over. */
 .stage {
   position: fixed;
-  inset: 0;
+  inset: 0 0 0 var(--nav-w, 0px);
   z-index: 70;
   display: flex;
   flex-direction: column;

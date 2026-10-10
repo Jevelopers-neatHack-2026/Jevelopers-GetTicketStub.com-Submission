@@ -1,7 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Field, MarkLegend, PaperButton, SourceMark, Stamp, Stamped } from "@/customer/desk/Desk";
+import { Field, MarkLegend, PaperButton, SourceMark, Stamp } from "@/customer/desk/Desk";
+import { openSignIn } from "@/customer/account/signin";
+import { useAccount } from "@/customer/account/useAccount";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic } from "@/customer/studio/feedback";
 import { NEATHACK, newStub } from "@/customer/studio/fixtures";
@@ -22,7 +24,7 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
   }, [mounted, from]);
   const event = set === "neathack" ? NEATHACK : source?.event;
 
-  const [signIn, setSignIn] = useState<"google" | "apple" | null>(null);
+  const { status: acct, account } = useAccount();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [claiming, setClaiming] = useState(false);
@@ -54,12 +56,6 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
         <FriendlyError title="We couldn't find this set." body="The claim link may be cut short. Ask the person who sent it for the link again." />
       </PageShell>
     );
-  }
-
-  function choose(p: "google" | "apple") {
-    setSignIn(p);
-    if (!name.trim()) setName("Judge");
-    setError("");
   }
 
   function claim() {
@@ -130,26 +126,27 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
             />
 
             <div className={s.signIn}>
-              <p className="desk-label">Or sign in to fill it for you</p>
-              {signIn ? (
-                <p className={s.signed} role="status">
-                  <Stamped>Signed in</Stamped>
-                  <span>
-                    with {signIn === "apple" ? "Apple" : "Google"}
-                    <SourceMark p="simulated" />
-                  </span>
-                </p>
+              {acct === "loading" ? null : account ? (
+                <>
+                  <p className="desk-label">Your wall</p>
+                  <p className={s.signed} role="status">
+                    <span>
+                      Signed in as {account.email}. This stub is saved to your wall.
+                    </span>
+                  </p>
+                </>
               ) : (
-                <div className={s.signRow}>
-                  <PaperButton type="button" onClick={() => choose("apple")}>
-                    Continue with Apple
-                    <SourceMark p="simulated" />
-                  </PaperButton>
-                  <PaperButton type="button" onClick={() => choose("google")}>
-                    Continue with Google
-                    <SourceMark p="simulated" />
-                  </PaperButton>
-                </div>
+                <>
+                  <p className="desk-label">Save it to your wall</p>
+                  <p className={s.signed}>
+                    <span>We&apos;ll email you a link, so this stub follows you to any phone or laptop.</span>
+                  </p>
+                  <div className={s.signRow}>
+                    <PaperButton type="button" onClick={() => openSignIn({ reason: "claim", returnTo: `${window.location.pathname}${window.location.search}` })}>
+                      Email me a link
+                    </PaperButton>
+                  </div>
+                </>
               )}
             </div>
 

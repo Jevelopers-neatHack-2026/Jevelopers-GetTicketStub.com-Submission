@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play, haptic } from "@/customer/studio/feedback";
 import { loadWall, removeStub, saveWall } from "@/customer/studio/store";
+import { api } from "@/customer/account/api";
+import { sharePath } from "@/customer/account/share";
+import { dismissSavePrompt, openSignIn, savePromptDismissed } from "@/customer/account/signin";
+import { WALL_SYNCED } from "@/customer/account/sync";
+import { useAccount } from "@/customer/account/useAccount";
 import { MATERIALS, formatMoney, type Stub } from "@/customer/studio/types";
 import { FINISHES, materialPrice } from "@/customer/pages/commerce";
 import { copyText, absoluteUrl, encodeWall, memoryPath, formatDate, WALL_TOKEN_MAX } from "@/customer/pages/share";
@@ -38,7 +43,7 @@ const materialLabel = (st: Stub) => MATERIALS.find((m) => m.id === st.material)?
 const finishLabel = (st: Stub) => (st.material === "digital" ? "" : (FINISHES.find((f) => f.id === st.finish)?.label ?? ""));
 
 async function shareStub(st: Stub): Promise<string> {
-  const url = absoluteUrl(memoryPath(st));
+  const url = absoluteUrl(await sharePath(st));
   if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
     try {
       await navigator.share({ title: st.event.title, url });
@@ -64,6 +69,9 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
   const [lift, setLift] = useState<Lift | null>(null);
   const [banner, setBanner] = useState(emailSent);
   const [isPublic, setIsPublic] = useState(false);
+  // the account's public page token, once the server has issued one; until then the encoded link stands in
+  const [publicToken, setPublicToken] = useState<string | null>(null);
+  const { status: acct } = useAccount();
   const [dragId, setDragId] = useState<string | null>(null);
   const publicRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLElement>(null);
@@ -80,6 +88,26 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
       /* storage unavailable */
     }
   }
+
+  // a sync that finished (sign-in, focus, another device) hands the merged wall back to the board
+  useEffect(() => {
+    const onSynced = () => setStubs(loadWall());
+    window.addEventListener(WALL_SYNCED, onSynced);
+    return () => window.removeEventListener(WALL_SYNCED, onSynced);
+  }, []);
+
+  // signed in with the page already public: fetch the stable token (the call is idempotent)
+  useEffect(() => {
+    if (acct !== "in" || !isPublic) return;
+    let live = true;
+    api
+      .setPublic(true)
+      .then((r) => live && setPublicToken(r.token))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [acct, isPublic]);
 
   const landing = pinnedId ? (stubs.find((x) => x.id === pinnedId) ?? null) : null;
   const landingId = landing?.id;
@@ -163,6 +191,14 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
     } catch {
       /* storage unavailable */
     }
+    if (acct === "in") {
+      api
+        .setPublic(next)
+        .then((r) => setPublicToken(next ? r.token : null))
+        .catch(() => {
+          /* the encoded link still works; the switch tries again next time */
+        });
+    }
   }
 
   function reorder(fromId: string, toId: string) {
@@ -192,7 +228,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
       {banner ? (
         <div className={s.banner} role="status">
           <p>
-            <strong>Check your email.</strong> We sent a link to your wall.
+            <strong>Check your email.</strong> Your receipt is on its way.
           </p>
           <TearLink type="button" onClick={() => setBanner(false)}>
             Dismiss
@@ -221,7 +257,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
             <Switch checked={isPublic} onChange={togglePublic} hint="Only people with the link can see it.">
               Public page
             </Switch>
-            {isPublic ? <PublicLink path={`/u/${encodeWall(stubs)}`} capped={stubs.length > WALL_TOKEN_MAX} /> : null}
+            {isPublic ? <PublicLink path={`/u/${publicToken ?? encodeWall(stubs)}`} capped={!publicToken && stubs.length > WALL_TOKEN_MAX} /> : null}
           </div>
         ) : null}
       </div>
@@ -333,6 +369,8 @@ function PublicLink({ path, capped }: { path: string; capped: boolean }) {
 function NextSteps({ stub }: { stub: Stub }) {
   const router = useRouter();
   const [status, setStatus] = useState("");
+  const { status: acct } = useAccount();
+  const [notNow, setNotNow] = useState(savePromptDismissed);
   const digital = stub.material === "digital";
   const price = formatMoney(printPrice(stub));
   const detail = [materialLabel(stub), finishLabel(stub)].filter(Boolean).join(", ");
@@ -344,6 +382,25 @@ function NextSteps({ stub }: { stub: Stub }) {
         It&apos;s on your wall.
       </h2>
       <p className={s.noteBody}>Send it to a friend, print it, or keep it on your phone.</p>
+      {acct === "out" && !notNow ? (
+        <div className={s.save}>
+          <p className={s.saveText}>Save to your wall. We&apos;ll email you a link, so your stubs follow you to any phone or laptop.</p>
+          <div className={s.saveRow}>
+            <PaperButton type="button" onClick={() => openSignIn({ reason: "save", returnTo: "/wall" })}>
+              Save to your wall
+            </PaperButton>
+            <TearLink
+              type="button"
+              onClick={() => {
+                dismissSavePrompt();
+                setNotNow(true);
+              }}
+            >
+              Not now
+            </TearLink>
+          </div>
+        </div>
+      ) : null}
       <div className={s.noteActions}>
         <Stamp type="button" block onClick={async () => setStatus(await shareStub(stub))}>
           Share your stub

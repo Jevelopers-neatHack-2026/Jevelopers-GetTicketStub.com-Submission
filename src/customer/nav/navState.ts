@@ -45,22 +45,41 @@ export function useNavOpen(inStudio: boolean): [boolean, () => void] {
   return [open, toggle];
 }
 
-// Stage moments (a stub lifted under the lamp, the tear, the finish picker) hide the bar and the sidebar
-// handle with a fade. Ref-counted, so two stages overlapping never show the nav early.
-let hiders = 0;
+// Stage moments (a stub lifted under the lamp, the tear, the printing stage, the finish picker) dim the nav
+// to the night palette with a 600 ms fade, but it stays usable. Ref-counted, so two stages overlapping
+// never lift the lights early.
+let stagers = 0;
 
-/** While `active`, the nav fades out (600 ms). Sets data-nav-hidden on <html>; NavFrame reads it in CSS. */
-export function useNavHidden(active: boolean) {
+/** While `active`, the nav switches to the stage palette. Sets data-nav-stage on <html>; NavFrame reads it in CSS. */
+export function useNavStage(active: boolean) {
   useEffect(() => {
     if (!active) return;
-    hiders += 1;
-    document.documentElement.setAttribute("data-nav-hidden", "");
+    stagers += 1;
+    document.documentElement.setAttribute("data-nav-stage", "");
     return () => {
-      hiders -= 1;
-      if (hiders <= 0) {
-        hiders = 0;
-        document.documentElement.removeAttribute("data-nav-hidden");
+      stagers -= 1;
+      if (stagers <= 0) {
+        stagers = 0;
+        document.documentElement.removeAttribute("data-nav-stage");
       }
     };
   }, [active]);
+}
+
+/** The old name, kept so callers still compile. */
+export const useNavHidden = useNavStage;
+
+const DESKTOP = "(min-width: 960px)";
+
+/** True from 960px up. False on the server, so the phone layout is the first paint. */
+export function useDesktop(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(DESKTOP);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(DESKTOP).matches,
+    () => false,
+  );
 }
