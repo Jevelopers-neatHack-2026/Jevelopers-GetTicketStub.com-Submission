@@ -21,6 +21,34 @@ jobs:
         with:
           python-version: '3.11.17'
       - run: npm ci
+      - name: Test bounded EI handoff checker
+        run: |
+          python3 - <<'PY'
+          import unittest
+
+          expected = 17
+          suite = unittest.defaultTestLoader.discover(
+              start_dir="tests/handoffs",
+              pattern="test_verify_handoff.py",
+          )
+          discovered = suite.countTestCases()
+          if discovered != expected:
+              raise SystemExit(f"Expected {expected} handoff tests, discovered {discovered}")
+
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if (
+              result.testsRun != expected
+              or not result.wasSuccessful()
+              or result.skipped
+              or result.expectedFailures
+              or result.unexpectedSuccesses
+          ):
+              raise SystemExit(
+                  f"Handoff tests incomplete or failed: ran={result.testsRun}, "
+                  f"skipped={len(result.skipped)}, failures={len(result.failures)}, "
+                  f"errors={len(result.errors)}"
+              )
+          PY
       - run: make verify CASE=eval-policy-unit MODE=unit
       - run: make verify CASE=safe-retrieval MODE=mock
       - run: make verify CASE=content-privacy MODE=mock
