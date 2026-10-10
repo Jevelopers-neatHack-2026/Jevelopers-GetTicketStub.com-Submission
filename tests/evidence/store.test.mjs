@@ -77,6 +77,7 @@ function sourceInput(source, {
   sourceUrl = 'https://events.example.test/night?ticket=SOURCE-URL-CANARY',
   canonicalUrl = 'https://events.example.test/night',
   sourceKind = 'external',
+  retrievedAt = '2026-10-10T14:59:59.000Z',
   retentionHandle,
   contentType = 'text/plain',
 } = {}) {
@@ -89,7 +90,7 @@ function sourceInput(source, {
     redirectChain: ['https://events.example.test/old-night'],
     content: source,
     contentType,
-    retrievedAt: '2026-10-10T14:59:59.000Z',
+    retrievedAt,
     sourceKind,
     retentionHandle,
     positions: [{ locator: { kind: 'text-range', startByte, endByte }, content: positionText }],
@@ -480,4 +481,47 @@ test('source positions are verified against text ranges and JSON pointers before
     sourceUrl: 'https://user:secret@structured.example.test/event',
     retentionHandle: createPermit('tenant-a'),
   }), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+});
+
+test('retrieval timestamps validate calendar, clock, and offset components without changing declared precision', async (t) => {
+  const { store, createPermit } = await createHarness(t);
+  const scope = await store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const invalidValues = [
+    '2026-02-30T12:00:00Z',
+    '2023-02-29T12:00:00Z',
+    '2026-04-31T12:00Z',
+    '2026-01-01T24:00:00Z',
+    '2026-01-01T23:60:00Z',
+    '2026-01-01T23:59:60Z',
+    '2026-01-01T12:00:00+23:60',
+    '2026-01-01T12:00:00+24:00',
+  ];
+  for (const retrievedAt of invalidValues) {
+    await assert.rejects(
+      store.ingestEvidence(scope, sourceInput('Event: Timestamp Check', {
+        sourceUrl: `https://timestamp.example.test/${encodeURIComponent(retrievedAt)}`,
+        canonicalUrl: `https://timestamp.example.test/${encodeURIComponent(retrievedAt)}`,
+        retrievedAt,
+        retentionHandle: createPermit('tenant-a'),
+      })),
+      (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID',
+      retrievedAt,
+    );
+  }
+
+  const declared = '2024-02-29T23:59:59.123456789+05:45';
+  const accepted = await store.ingestEvidence(scope, sourceInput('Event: Timestamp Check', {
+    sourceUrl: 'https://timestamp.example.test/leap-day',
+    canonicalUrl: 'https://timestamp.example.test/leap-day',
+    retrievedAt: declared,
+    retentionHandle: createPermit('tenant-a'),
+  }));
+  assert.equal(accepted.metadata.retrievedAt, declared);
+  const minutePrecision = await store.ingestEvidence(scope, sourceInput('Event: Timestamp Check', {
+    sourceUrl: 'https://timestamp.example.test/minute',
+    canonicalUrl: 'https://timestamp.example.test/minute',
+    retrievedAt: '2026-06-01T09:30-03:30',
+    retentionHandle: createPermit('tenant-a'),
+  }));
+  assert.equal(minutePrecision.metadata.retrievedAt, '2026-06-01T09:30-03:30');
 });
