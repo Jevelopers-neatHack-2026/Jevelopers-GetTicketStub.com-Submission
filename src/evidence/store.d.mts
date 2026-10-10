@@ -16,6 +16,7 @@ export type EvidenceErrorCode =
   | 'EVIDENCE_BUSY'
   | 'EVIDENCE_INTEGRITY'
   | 'EVIDENCE_KEY_UNAVAILABLE'
+  | 'EVIDENCE_CANCELLED'
   | 'EVIDENCE_STORAGE';
 
 export declare class EvidenceStoreError extends Error {
@@ -202,7 +203,7 @@ export interface StoredConflictingFact {
 
 export type StoredEvidenceFactRecord = StoredEvidenceFact | StoredMissingFact | StoredConflictingFact;
 
-export interface EvidencePrivatePayloadInput {
+export interface EvidencePrivatePayloadInput<Request = unknown> {
   readonly tenantId: string;
   readonly evidenceId: string;
   readonly metadata: AvailableEvidenceMetadata;
@@ -221,7 +222,51 @@ export interface EvidencePrivatePayloadInput {
     contentHash: string;
     content: Uint8Array;
   }>[];
-  readonly request: unknown;
+  readonly request: Request;
+}
+
+export type EvidencePrivatePayloadValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly EvidencePrivatePayloadValue[]
+  | { readonly [key: string]: EvidencePrivatePayloadValue };
+export type EvidencePrivatePayloadResult = EvidencePrivatePayloadValue | undefined;
+
+export interface EvidenceSelectedEvidence {
+  readonly handle: EvidenceHandle;
+  readonly metadata: AvailableEvidenceMetadata;
+  /** Stored private provenance; these values come from the encrypted bundle, not caller descriptors. */
+  readonly source: Readonly<{
+    sourceUrl: string;
+    canonicalUrl: string;
+    redirectChain: readonly string[];
+    contentType: string;
+    sourceKind: 'external' | 'customer_supplied';
+    retrievedAt: string;
+    retrievedAtMs: number;
+    /** Full source SHA-256; each position carries its own selected-content hash. */
+    contentHash: string;
+  }>;
+  readonly positions: readonly Readonly<{
+    handle: EvidencePositionHandle;
+    locator: TextRangeLocator | JsonPointerLocator;
+    /** Digest of the exact selected position bytes, distinct from source.contentHash. */
+    contentHash: string;
+  }>[];
+}
+
+export interface EvidenceSelectedMaterialization {
+  readonly evidence: readonly EvidenceSelectedEvidence[];
+  readonly facts: readonly StoredEvidenceFactRecord[];
+}
+
+export interface EvidenceSelectedMaterializationInput {
+  /** At most eight direct evidence handles; supporting evidence for selected facts is included automatically. */
+  readonly evidence: readonly EvidenceHandle[];
+  /** At most 128 selected fact handles. */
+  readonly facts: readonly EvidenceFactHandle[];
 }
 
 export interface EvidenceStoreOptions<Request = unknown> {
@@ -235,13 +280,26 @@ export interface EvidenceStoreOptions<Request = unknown> {
   readonly resolveRetention: (request: EvidenceRetentionRequest) => EvidenceRetentionDecision | Promise<EvidenceRetentionDecision>;
   readonly authorizePrivateAccess?: (request: Readonly<{
     tenantId: string;
-    request: unknown;
+    request: Request;
     action: string;
     evidenceIds: readonly string[];
     factIds: readonly string[];
   }>) => boolean | Promise<boolean>;
-  /** Trusted consumer for explicitly authorized private evidence. */
-  readonly consumePrivatePayload?: (input: EvidencePrivatePayloadInput) => unknown | Promise<unknown>;
+  /**
+   * Required for any private result release. Must synchronously re-derive the
+   * current authenticated tenant and current ACL for the exact action and IDs.
+   * It receives the expected tenant from an opaque store scope and must compare
+   * that with current host identity. Promise/thenable results fail closed.
+   */
+  readonly authorizePrivateAccessCurrent: (request: Readonly<{
+    tenantId: string;
+    request: Request;
+    action: string;
+    evidenceIds: readonly string[];
+    factIds: readonly string[];
+  }>) => boolean;
+  /** Trusted synchronous consumer for explicitly authorized private evidence. Runtime-denies native Promise results. */
+  readonly consumePrivatePayload?: (input: EvidencePrivatePayloadInput<Request>) => EvidencePrivatePayloadResult;
   readonly now?: () => number;
   readonly maxSourceBytes?: number;
   readonly maxPositionBytes?: number;
@@ -269,7 +327,14 @@ export interface EvidenceStore<Request = unknown> {
     locator: TextRangeLocator | JsonPointerLocator;
     contentHash: string;
   }>[] >;
-  withPrivatePayload(scope: EvidenceTenantScope, evidence: EvidenceHandle, request: Request): Promise<unknown>;
+  /** Bounded, all-or-error private snapshot; no raw source or position bytes are returned. */
+  materializeSelected(
+    scope: EvidenceTenantScope,
+    selection: EvidenceSelectedMaterializationInput,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<EvidenceSelectedMaterialization>;
+  withPrivatePayload(scope: EvidenceTenantScope, evidence: EvidenceHandle, request: Request): Promise<EvidencePrivatePayloadResult>;
   appendFact(scope: EvidenceTenantScope, fact: EvidenceFactInput, request: Request): Promise<EvidenceFactHandle>;
   lookupFact(scope: EvidenceTenantScope, factId: string): Promise<EvidenceFactHandle>;
   readFact(scope: EvidenceTenantScope, fact: EvidenceFactHandle, request: Request): Promise<StoredEvidenceFactRecord>;

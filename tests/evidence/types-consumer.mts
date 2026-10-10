@@ -1,10 +1,16 @@
 import { createProvenancePort, isProvenancePort } from '../../src/verification/provenance/index.mjs';
 import type {
   AvailableEvidenceMetadata,
+  EvidenceFactHandle,
   EvidenceFactInput,
+  EvidencePrivatePayloadInput,
+  EvidencePrivatePayloadResult,
+  EvidenceHandle,
   EvidenceIngestInput,
+  EvidenceSelectedMaterialization,
   EvidenceStore,
   EvidenceTenantScope,
+  EvidenceStoreOptions,
   StoredEvidenceFactRecord,
 } from '../../src/evidence/store.mjs';
 
@@ -16,6 +22,8 @@ interface AuthenticatedRequest {
 declare const store: EvidenceStore<AuthenticatedRequest>;
 declare const scope: EvidenceTenantScope;
 declare const request: AuthenticatedRequest;
+declare const evidenceHandle: EvidenceHandle;
+declare const factHandleForBatch: EvidenceFactHandle;
 declare const ingestInput: EvidenceIngestInput;
 declare const factInput: EvidenceFactInput;
 
@@ -24,6 +32,34 @@ const factHandle = await provenance.record(scope, factInput, request);
 const readFact: StoredEvidenceFactRecord = await provenance.read(scope, factHandle, request);
 const available: AvailableEvidenceMetadata = (await store.ingestEvidence(scope, ingestInput)).metadata;
 const evidenceMetadata = await store.getEvidenceMetadata(scope, (await store.ingestEvidence(scope, ingestInput)).evidence);
+const selectedMaterialization: EvidenceSelectedMaterialization = await store.materializeSelected(scope, {
+  evidence: [evidenceHandle],
+  facts: [factHandleForBatch],
+}, request, new AbortController().signal);
+const storedSourceUrl: string = selectedMaterialization.evidence[0].source.sourceUrl;
+const storedSourceTime: string = selectedMaterialization.evidence[0].source.retrievedAt;
+const selectedPositionDigest: string = selectedMaterialization.evidence[0].positions[0].contentHash;
+void storedSourceUrl;
+void storedSourceTime;
+void selectedPositionDigest;
+
+type CurrentPrivateAuthorizer = NonNullable<EvidenceStoreOptions<AuthenticatedRequest>['authorizePrivateAccessCurrent']>;
+const synchronousFinalAuthorizer: CurrentPrivateAuthorizer = ({ tenantId, action, evidenceIds, factIds }) =>
+  tenantId.length > 0 && action.length > 0 && evidenceIds.length + factIds.length > 0;
+void synchronousFinalAuthorizer;
+// @ts-expect-error final private authorization must be synchronous
+const asynchronousFinalAuthorizer: CurrentPrivateAuthorizer = async () => true;
+void asynchronousFinalAuthorizer;
+
+type PrivatePayloadConsumer = NonNullable<EvidenceStoreOptions<AuthenticatedRequest>['consumePrivatePayload']>;
+const synchronousPrivateConsumer: PrivatePayloadConsumer = (input: EvidencePrivatePayloadInput<AuthenticatedRequest>): EvidencePrivatePayloadResult => ({
+  retrievedAt: input.source.retrievedAt,
+  positions: input.positions.map((position) => position.contentHash),
+});
+void synchronousPrivateConsumer;
+// @ts-expect-error private-payload consumers cannot return Promises or thenables
+const asynchronousPrivateConsumer: PrivatePayloadConsumer = async () => ({ privateResult: 'not released' });
+void asynchronousPrivateConsumer;
 
 if (readFact.status === 'sourced' || readFact.status === 'inferred' || readFact.status === 'customer_supplied') {
   const support = readFact.supports[0];
