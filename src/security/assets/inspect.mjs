@@ -29,6 +29,7 @@ const NUMBER_SOURCE = '[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?';
 const END_OF_INPUT = '(?![\\s\\S])';
 const NUMBER_RE = new RegExp(`^${NUMBER_SOURCE}${END_OF_INPUT}`);
 const XML_S_SOURCE = '[\\x20\\x09\\x0a\\x0d]';
+const XML_S_CODE_POINTS = new Set([0x20, 0x09, 0x0a, 0x0d]);
 const NUMBER_LIST_SEPARATOR_SOURCE = `(?:${XML_S_SOURCE}*,${XML_S_SOURCE}*|${XML_S_SOURCE}+)`;
 const NUMBER_LIST_RE = new RegExp(`^${XML_S_SOURCE}*${NUMBER_SOURCE}(?:${NUMBER_LIST_SEPARATOR_SOURCE}${NUMBER_SOURCE})*${XML_S_SOURCE}*${END_OF_INPUT}`);
 const POINT_NUMBER_RE = new RegExp(NUMBER_SOURCE, 'g');
@@ -219,6 +220,36 @@ function hasXml10Characters(text, check) {
     if (!isXml10Character(first)) return false;
   }
   return check() === null;
+}
+
+function isXmlSpaceCodeUnit(codeUnit) {
+  return XML_S_CODE_POINTS.has(codeUnit);
+}
+
+// SAX 1.6.1 strict mode discards XML S after '<' and '</' before emitting
+// names. Reject those malformed delimiter forms on the original decoded text.
+function hasInvalidTagDelimiterWhitespace(text, check) {
+  for (let index = 0; index < text.length; index += 1) {
+    if ((index & 0x3ff) === 0 && check() !== null) return null;
+    if (text.charCodeAt(index) !== 0x3c) continue;
+    const next = text.charCodeAt(index + 1);
+    if (isXmlSpaceCodeUnit(next)) return true;
+    if (next === 0x2f && isXmlSpaceCodeUnit(text.charCodeAt(index + 2))) return true;
+  }
+  return check() === null ? false : null;
+}
+
+// The byte decoder preserves BOMs. This layer removes at most one BOM at the
+// beginning; a second BOM or one after prolog whitespace is not XML S and is
+// rejected before SAX can consume it as a parser marker.
+function hasBomInXmlProlog(text, check) {
+  let index = 0;
+  while (index < text.length && isXmlSpaceCodeUnit(text.charCodeAt(index))) {
+    if ((index & 0x3ff) === 0 && check() !== null) return null;
+    index += 1;
+  }
+  if (check() !== null) return null;
+  return text.charCodeAt(index) === 0xfeff;
 }
 
 function makeResult({ action, code, sourceBytes = null, sourceSize = null, sourceHash = undefined, transformedBytes = null }) {
@@ -507,6 +538,12 @@ function parseSvg(text, options, deadlineAtMs) {
   const validXmlCharacters = hasXml10Characters(text, () => state.guard());
   if (state.action !== null) return { action: state.action, code: state.code };
   if (!validXmlCharacters) return { action: 'reject', code: 'SVG_MALFORMED' };
+  const hasPrologBom = hasBomInXmlProlog(text, () => state.guard());
+  if (state.action !== null) return { action: state.action, code: state.code };
+  if (hasPrologBom) return { action: 'reject', code: 'SVG_MALFORMED' };
+  const invalidTagDelimiterWhitespace = hasInvalidTagDelimiterWhitespace(text, () => state.guard());
+  if (state.action !== null) return { action: state.action, code: state.code };
+  if (invalidTagDelimiterWhitespace) return { action: 'reject', code: 'SVG_MALFORMED' };
   if (text.includes('&')) return { action: 'reject', code: 'SVG_ENTITY_REFERENCE' };
   if (text.includes('<!')) return { action: 'reject', code: 'SVG_UNSUPPORTED_DECLARATION' };
   if (text.includes('<?')) return { action: 'reject', code: 'SVG_UNSUPPORTED_DECLARATION' };
@@ -685,7 +722,8 @@ export function inspectSafeAssetBytes(candidateBytes, options) {
 
   let text;
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(sourceBytes);
+    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(sourceBytes);
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
   } catch {
     const guardCode = guardState(parsedOptions, localDeadlineAtMs);
     return fail('reject', guardCode ?? 'INVALID_UTF8', sourceBytes, null, sourceHash);

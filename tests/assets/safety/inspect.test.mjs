@@ -90,6 +90,92 @@ test('rejects declarations, entity references, malformed XML, trailing markup, a
   }
 });
 
+test('rejects XML whitespace that SAX would discard inside tag delimiters', () => {
+  const valid = `<svg xmlns="${SVG_NS}" width="10" height="10"><g><rect width="1" height="1"/></g></svg>`;
+  const separators = [
+    ['space', ' '],
+    ['tab', '\t'],
+    ['line feed', '\n'],
+    ['carriage return', '\r'],
+  ];
+  const malformed = [];
+  for (const [label, separator] of separators) {
+    malformed.push(
+      [`root start name after ${label}`, valid.replace('<svg', `<${separator}svg`)],
+      [`child start name after ${label}`, valid.replace('<rect', `<${separator}rect`)],
+      [`root slash after ${label}`, valid.replace('</svg', `<${separator}/svg`)],
+      [`child slash after ${label}`, valid.replace('</g', `<${separator}/g`)],
+      [`root end name after ${label}`, valid.replace('</svg', `</${separator}svg`)],
+      [`child end name after ${label}`, valid.replace('</g', `</${separator}g`)],
+    );
+  }
+  for (const [name, source] of malformed) {
+    const result = inspect(bytes(source));
+    assert.equal(result.action, 'reject', name);
+    assert.equal(result.diagnostics[0].code, 'SVG_MALFORMED', name);
+    assert.equal(result.transformedHash, null, name);
+    assert.equal(result.copyTransformedBytes(), null, name);
+  }
+});
+
+test('checks malformed tag delimiters across SAX input chunk boundaries', () => {
+  const rootStart = `<svg xmlns="${SVG_NS}" width="10" height="10">`;
+  const childStart = '<g>';
+  const aligned = (prefix, delimiter, targetOffset) => {
+    const paddingLength = targetOffset - prefix.length;
+    assert.ok(paddingLength >= 0);
+    return `${prefix}${' '.repeat(paddingLength)}${delimiter}`;
+  };
+  const cases = [];
+  for (const separator of [' ', '\t', '\n', '\r']) {
+    cases.push(
+      [`root start after < with ${JSON.stringify(separator)}`, aligned('', `<${separator}svg xmlns="${SVG_NS}" width="10" height="10"/>`, 1023)],
+      [`child start after < with ${JSON.stringify(separator)}`, `${aligned(`${rootStart}${childStart}`, `<${separator}rect width="1" height="1"/>`, 1023)}</g></svg>`],
+      [`root slash after < with ${JSON.stringify(separator)}`, aligned(rootStart, `<${separator}/svg>`, 1023)],
+      [`child slash after < with ${JSON.stringify(separator)}`, `${aligned(`${rootStart}${childStart}`, `<${separator}/g>`, 1023)}</svg>`],
+      [`root end name after </ with ${JSON.stringify(separator)}`, aligned(rootStart, `</${separator}svg>`, 1022)],
+      [`child end name after </ with ${JSON.stringify(separator)}`, `${aligned(`${rootStart}${childStart}`, `</${separator}g>`, 1022)}</svg>`],
+    );
+  }
+  for (const [name, source] of cases) {
+    const result = inspect(bytes(source));
+    assert.equal(result.action, 'reject', name);
+    assert.equal(result.diagnostics[0].code, 'SVG_MALFORMED', name);
+    assert.equal(result.copyTransformedBytes(), null, name);
+  }
+});
+
+test('accepts zero or one initial UTF-8 BOM and rejects a second or prolog BOM', () => {
+  const source = svg('<rect width="1" height="1"/>');
+  const withoutBom = inspect(bytes(source));
+  const withBomBytes = bytes(`\uFEFF${source}`);
+  const withBom = inspect(withBomBytes);
+  assert.equal(withoutBom.action, 'transformed');
+  assert.equal(withBom.action, 'transformed');
+  assert.equal(withBom.sourceHash, hash(withBomBytes));
+  assert.equal(withBom.transformedHash, withoutBom.transformedHash);
+  assert.deepEqual(withBom.copyTransformedBytes(), withoutBom.copyTransformedBytes());
+
+  for (const [name, value] of [
+    ['two leading BOMs', `\uFEFF\uFEFF${source}`],
+    ['BOM after prolog whitespace', ` \t\n\r\uFEFF${source}`],
+  ]) {
+    const result = inspect(bytes(value));
+    assert.equal(result.action, 'reject', name);
+    assert.equal(result.diagnostics[0].code, 'SVG_MALFORMED', name);
+    assert.equal(result.transformedHash, null, name);
+    assert.equal(result.copyTransformedBytes(), null, name);
+  }
+});
+
+test('retains valid XML whitespace within tag syntax', () => {
+  const source = `<svg \t\nxmlns="${SVG_NS}" width="10" height="10"><g\r><rect width="1" height="1" /></g \t\n></svg \r>`;
+  const result = inspect(bytes(source));
+  assert.equal(result.action, 'transformed');
+  assert.equal(result.diagnostics[0].code, 'SVG_SANITIZED');
+  assert.match(Buffer.from(result.copyTransformedBytes()).toString('utf8'), /<rect height="1" width="1"\/>/);
+});
+
 test('rejects every tested XML 1.0 forbidden character before SVG normalization', () => {
   const cases = [
     ['vertical tab in viewBox separator', svg(`<rect width="1" height="1"/>`).replace('viewBox="0,0,120,80"', 'viewBox="0\u000b0 120 80"'), 'SVG_MALFORMED'],
