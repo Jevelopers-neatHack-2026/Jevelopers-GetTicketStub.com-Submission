@@ -28,7 +28,7 @@ export function isInspectionHandle(value) {
 }
 
 export function isSafePublicInspectionReference(value) {
-  if (typeof value !== "string" || value.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value)) return false;
+  if (typeof value !== "string" || value.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._:/+-]*$/.test(value)) return false;
   const normalized = value.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
   return !/(?:credential|token|secret|password|apikey|authorization|bearer|cookie)/.test(normalized) &&
     !/(?:sk|rk|gh[pousr]|xox[baprs])[-_][A-Za-z0-9_-]{8,}/i.test(value) &&
@@ -47,7 +47,16 @@ export class InspectionError extends Error {
 }
 
 function fail(code, field, message) {
-  throw new InspectionError(code, field, message);
+  // Validation paths occasionally include an input object key (for example
+  // while snapshotting nested arrays). Never echo credential-shaped keys or
+  // values in the public error envelope.
+  const comparableField = typeof field === "string"
+    ? field.replace(/\[\d+\]/g, "").replaceAll("_", "-")
+    : "";
+  const publicField = comparableField.length <= 200 && isSafePublicInspectionReference(comparableField)
+    ? field
+    : "inspection.input";
+  throw new InspectionError(code, publicField, message);
 }
 
 function plainRecord(value, field) {
@@ -196,7 +205,11 @@ function decodePng(bytes) {
   while (offset < input.length) {
     if (offset + 12 > input.length) fail("image_decode_failed", "artifact_bytes", "PNG chunk is truncated.");
     const length = input.readUInt32BE(offset);
-    const type = input.toString("ascii", offset + 4, offset + 8);
+    const typeBytes = input.subarray(offset + 4, offset + 8);
+    if ([...typeBytes].some((byte) => !((byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a)))) {
+      fail("image_decode_failed", "artifact_bytes", "PNG chunk type must use four ASCII letters.");
+    }
+    const type = typeBytes.toString("ascii");
     const dataStart = offset + 8;
     const dataEnd = dataStart + length;
     const nextOffset = dataEnd + 4;
@@ -363,6 +376,22 @@ export function inspectCreativeArtifact(input) {
     });
   } catch {
     fail("subject_invalid", "subject", "Brief or design version failed trusted scope and reference validation.");
+  }
+
+  // C01 validates identity shape, not whether an opaque identifier is safe to
+  // expose in inspection output. Keep the exact identity when it is safe, but
+  // reject credential-shaped references before they enter public handles or
+  // reports. Use one fixed diagnostic path so an unsafe value cannot escape
+  // through an error field.
+  const publicSubjectReferences = [
+    trustedScope.tenant_id,
+    trustedScope.project_id,
+    brief.brief_id,
+    design.design_version_id,
+    design.artifact.artifact_id,
+  ];
+  if (publicSubjectReferences.some((reference) => !isSafePublicInspectionReference(reference))) {
+    fail("invalid_references", "subject.identity", "A subject identity is not safe for public inspection output.");
   }
 
   let parentDesignHash = null;
@@ -549,7 +578,7 @@ export function validateVisualObservation(value, deterministic) {
   plainRecord(value.usage, "observation.usage");
   if (Object.keys(value.usage).some((key) => !["completeness", "usage_ref", "input_tokens", "output_tokens"].includes(key)) ||
     !["complete", "partial", "unknown"].includes(value.usage.completeness) ||
-    (value.usage.usage_ref !== undefined && !/^sha256:[a-f0-9]{64}$/.test(value.usage.usage_ref)) ||
+    (value.usage.usage_ref !== undefined && (typeof value.usage.usage_ref !== "string" || !/^sha256:[a-f0-9]{64}$/.test(value.usage.usage_ref))) ||
     [value.usage.input_tokens, value.usage.output_tokens].some((number) => number !== undefined && (!Number.isSafeInteger(number) || number < 0)) ||
     (value.usage.completeness === "complete" && (!Number.isSafeInteger(value.usage.input_tokens) || !Number.isSafeInteger(value.usage.output_tokens)))) {
     fail("invalid_observation", "observation.usage", "Observation usage provenance is malformed or incomplete.");

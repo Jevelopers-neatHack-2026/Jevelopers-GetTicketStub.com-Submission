@@ -401,6 +401,18 @@ test("indexed PNG samples at every supported packed depth must address an existi
     "palette entry count cannot exceed the packed index space");
 });
 
+test("PNG chunk names are validated as raw ASCII bytes rather than normalized text", () => {
+  const bytes = Buffer.from(png());
+  // The first chunk name should be IHDR. ASCII decoding masks this high bit,
+  // so keep the CRC valid and assert the decoder rejects the actual byte.
+  bytes[15] = 0xd2;
+  bytes.writeUInt32BE(crc32(bytes.subarray(12, 33)), 33);
+  const result = deterministic(createSubject({ bytes }));
+  assert.equal(result.checks.find((check) => check.id === "artifact_hash").status, "pass");
+  assert.equal(result.checks.find((check) => check.id === "artifact_decode").status, "fail");
+  assert.equal(result.checks.find((check) => check.id === "artifact_decode").reason, "image_decode_failed");
+});
+
 test("corrupt bytes, mismatched hashes, unsupported decoder, and denied permissions cannot reach JEV", () => {
   const subject = createSubject();
   const corrupt = deterministic(subject, { artifact_bytes: Uint8Array.from([...subject.bytes.slice(0, -1), 0]) });
@@ -455,6 +467,69 @@ test("parent identity and source references remain exact across immutable inspec
   assert.throws(() => deterministic(parent, { design_version: unknownSource }), /scope and reference validation/);
 });
 
+test("C01-valid subject IDs are screened before entering public inspection handles", () => {
+  for (const field of ["tenant_id", "project_id", "brief_id", "design_version_id", "artifact_id"]) {
+    const subject = createSubject();
+    const scope = structuredClone(trustedScope);
+    const brief = structuredClone(subject.brief);
+    const design = structuredClone(subject.design_version);
+    const unsafeValue = "Bearer";
+    if (field === "tenant_id" || field === "project_id") {
+      scope[field] = unsafeValue;
+      brief[field] = unsafeValue;
+      design[field] = unsafeValue;
+    } else if (field === "brief_id") {
+      scope.brief_id = unsafeValue;
+      brief.brief_id = unsafeValue;
+    } else if (field === "design_version_id") {
+      design.design_version_id = unsafeValue;
+    } else {
+      design.artifact.artifact_id = unsafeValue;
+    }
+    const validatedBrief = validateCreativeBrief(brief, { trustedScope: scope });
+    design.brief_hash = canonicalHash(validatedBrief);
+    design.design_hash = computeDesignVersionHash(design);
+    assert.throws(() => inspectCreativeArtifact({
+      trusted_scope: scope,
+      brief: validatedBrief,
+      design_version: design,
+      artifact_bytes: Uint8Array.from(subject.bytes),
+      used_assets: [{ asset_id: "asset-1", action: "reproduce" }],
+    }), (error) => error.code === "invalid_references" && error.field === "subject.identity" &&
+      !error.field.includes(unsafeValue), `${field} must not be copied into a public handle`);
+  }
+
+  const subject = createSubject();
+  const scope = structuredClone(trustedScope);
+  const brief = structuredClone(subject.brief);
+  const design = structuredClone(subject.design_version);
+  scope.project_id = "project+campaign";
+  brief.project_id = scope.project_id;
+  design.project_id = scope.project_id;
+  const validatedBrief = validateCreativeBrief(brief, { trustedScope: scope });
+  design.brief_hash = canonicalHash(validatedBrief);
+  design.design_hash = computeDesignVersionHash(design);
+  const safe = inspectCreativeArtifact({ trusted_scope: scope, brief: validatedBrief, design_version: design,
+    artifact_bytes: Uint8Array.from(subject.bytes), used_assets: [{ asset_id: "asset-1", action: "reproduce" }] });
+  assert.equal(safe.project_id, "project+campaign", "safe C01-compatible punctuation stays unchanged");
+});
+
+test("public diagnostic paths never echo sensitive nested keys while snapshotting", () => {
+  for (const key of ["person@example.test", "Bearer synthetic-fixture"]) {
+    const subject = createSubject();
+    const brief = structuredClone(subject.brief);
+    Object.defineProperty(brief, key, { value: new Array(1), enumerable: true, configurable: true });
+    assert.throws(() => inspectCreativeArtifact({
+      trusted_scope: trustedScope,
+      brief,
+      design_version: subject.design_version,
+      artifact_bytes: Uint8Array.from(subject.bytes),
+      used_assets: [{ asset_id: "asset-1", action: "reproduce" }],
+    }), (error) => error.field === "inspection.input" &&
+      !error.field.includes(key) && !error.message.includes(key));
+  }
+});
+
 test("visual observations bind exact brief, parent, design, artifact, observer, source, uncertainty, and usage identities", () => {
   const subject = createSubject();
   const inspected = deterministic(subject);
@@ -489,6 +564,21 @@ test("visual observations bind exact brief, parent, design, artifact, observer, 
   const accessorObserver = { ...observation.observer };
   Object.defineProperty(accessorObserver, "id", { enumerable: true, get() { throw new Error("getter ran"); } });
   assert.throws(() => validateVisualObservation({ ...observation, observer: accessorObserver }, inspected), /accessor properties/);
+  for (const usageRef of [
+    { nested_private: "synthetic private usage metadata", toString() { throw new Error("toString must not run"); } },
+    Object.defineProperty({}, "usage_ref", { enumerable: true, get() { throw new Error("getter must not run"); } }),
+  ]) {
+    let invoked = false;
+    if (Object.hasOwn(usageRef, "toString")) {
+      Object.defineProperty(usageRef, "toString", { enumerable: true, value() { invoked = true; return `sha256:${"a".repeat(64)}`; } });
+    }
+    assert.throws(() => validateVisualObservation({ ...observation,
+      usage: { ...observation.usage, usage_ref: usageRef } }, inspected), /usage provenance/);
+    assert.equal(invoked, false, "untrusted usage references must not be coerced");
+  }
+  const accessorUsage = { completeness: "unknown" };
+  Object.defineProperty(accessorUsage, "usage_ref", { enumerable: true, get() { throw new Error("getter must not run"); } });
+  assert.throws(() => validateVisualObservation({ ...observation, usage: accessorUsage }, inspected), /accessor properties/);
 });
 
 test("creative questions use independent evidence first and only expose validated prior answers to dependent routing", () => {
