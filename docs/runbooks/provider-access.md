@@ -10,7 +10,9 @@ From the repository root:
 python3 tools/verify_provider_readiness.py --profile fixtures/provider-profile.json --mode offline
 ```
 
-The committed fixture is intentionally incomplete. A valid fixture with pending external prerequisites prints deterministic JSON and exits `2`; that is the expected result for this fixture. `network_accessed` is always `false` for the current tool. The report includes the fixture ID, component Git revision and dirty-tree indicator, independent capability cells, blocked consumers, owner role, next action, evidence still needed, dependency mode, and typed diagnostics.
+The committed schema 1.1 fixture is intentionally incomplete. A valid fixture with pending external prerequisites prints deterministic JSON and exits `2`; that is the expected result for this fixture. `network_accessed` is always `false` for the current tool. Readiness report version 1.1 adds API-family and client-selection fields. The report includes the fixture ID, component Git revision and dirty-tree indicator, independent capability cells, blocked consumers, owner role, next action, evidence still needed, dependency mode, API family, client-selection mode, and typed diagnostics.
+
+Schema 1.0 profiles remain readable. In 1.0, an absent client selection means `unselected` and remains pending; an existing SDK record must still have a supported name, exact version, and immutable source revision to count as selected. Schema 1.0 cannot express the direct-HTTP selection. Schema 1.1 requires `client_selection` in every capability: choose `unselected`, `sdk`, or `direct_http`. The direct-HTTP form records an API version and a safe policy reference; those fields identify a local configuration choice and do not prove approval, entitlement, or a request. Unknown API/provider/endpoint combinations are rejected with sanitized diagnostics.
 
 Exit codes:
 
@@ -29,7 +31,9 @@ The checker accepts only environment-variable reference names. It enumerates pro
 
 The fixture records `TYPESAFE_API_KEY` as the TypeSafe server-injection name from the assigned packet. Account/project identity, value, and entitlement remain unknown. Do not add key values or customer records to a profile, test, CI variable, report, issue, or commit.
 
-The offline check rejects unknown fields, inline credential fields, non-HTTPS or non-allowlisted endpoints, unsupported provider/model identifier forms, unapproved moving aliases, stale identity evidence, and account/project/model mismatches. Diagnostic messages do not echo rejected values. The provider endpoint allowlist is local verifier policy; it is not a domain contract.
+The offline check rejects unknown fields, inline credential fields, non-HTTPS or non-allowlisted endpoints, unsupported API-family/provider/endpoint tuples, unselected client implementations, unpinned SDK versions, unsupported provider/model identifier forms, unapproved moving aliases, stale identity evidence, and account/project/model mismatches. Diagnostic messages do not echo rejected values. The API and endpoint allowlists are local verifier policy; they are not domain contracts or account approvals. The local supported surfaces are TypeSafe `systemone_v1` at `/v1/systemone`, OpenAI `images` at `/v1/images/generations`, OpenAI `responses` or `chat_completions` for the separate planner and baseline cells, and Neatlogs `public_api` or `trace_ingest`. The verifier does not treat the TypeSafe JEV surface as a general planner. Entire uses its local provenance-artifact path and has no provider API endpoint.
+
+The local SDK-name candidates are `typesafe-sdk-js` and `openai`; an SDK selection requires an exact semantic version and a 40- or 64-character immutable source revision. An owner may instead explicitly select direct HTTP with the API family's matching version (`v1` for the currently allowlisted surfaces) and a safe policy reference. `sdk: null` plus an unselected client remains pending. `not_applicable` billing is accepted only for Entire's local provenance path; an observed live service capability requires `api_metered` billing and `dependency_mode: live`. Sandbox or simulated evidence remains nonlive.
 
 ## Modes
 

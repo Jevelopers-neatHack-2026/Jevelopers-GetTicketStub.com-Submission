@@ -21,7 +21,10 @@ from typing import Any
 from urllib.parse import urlsplit
 
 
-TOOL_VERSION = "1.0"
+TOOL_VERSION = "1.1"
+PROFILE_VERSION = "1.1"
+REPORT_VERSION = "1.1"
+SUPPORTED_PROFILE_VERSIONS = frozenset({"1.0", PROFILE_VERSION})
 EXPECTED_CAPABILITIES = (
     "jev",
     "gpt_image",
@@ -109,6 +112,50 @@ SLUG_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 TYPE_SAFE_MODEL_RE = re.compile(r"^jev-\d+\.\d+\.\d+$")
 OPENAI_MODEL_RE = re.compile(r"^(?:gpt-[A-Za-z0-9][A-Za-z0-9._-]*|o\d+(?:-[A-Za-z0-9._-]+)?)$")
 GENERAL_MODEL_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,127}$")
+PINNED_SDK_VERSION_RE = re.compile(
+    r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
+IMMUTABLE_REVISION_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+SUPPORTED_SDKS = {
+    "typesafe": frozenset({"typesafe-sdk-js"}),
+    "openai": frozenset({"openai"}),
+}
+# Local preflight policy, grounded in the documented endpoints already recorded
+# in the runbook. This is an allowlist, not a claim of account entitlement.
+API_SURFACES: dict[tuple[str, str, str], tuple[str, frozenset[str]]] = {
+    ("jev", "typesafe", "systemone_v1"): (
+        "v1", frozenset({"https://api.typesafe.ai/v1/systemone"})
+    ),
+    ("gpt_image", "openai", "images"): (
+        "v1", frozenset({"https://api.openai.com/v1/images/generations"})
+    ),
+    ("planner_reasoning", "openai", "responses"): (
+        "v1", frozenset({"https://api.openai.com/v1/responses"})
+    ),
+    ("planner_reasoning", "openai", "chat_completions"): (
+        "v1", frozenset({"https://api.openai.com/v1/chat/completions"})
+    ),
+    ("generative_baseline", "openai", "responses"): (
+        "v1", frozenset({"https://api.openai.com/v1/responses"})
+    ),
+    ("generative_baseline", "openai", "chat_completions"): (
+        "v1", frozenset({"https://api.openai.com/v1/chat/completions"})
+    ),
+    ("neatlogs", "neatlogs", "public_api"): (
+        "v1", frozenset({"https://app.neatlogs.com/api/v1/public"})
+    ),
+    ("neatlogs", "neatlogs", "trace_ingest"): (
+        "v1",
+        frozenset(
+            {
+                "https://ingest.neatlogs.com/v1/traces",
+                "https://eu.ingest.neatlogs.com/v1/traces",
+            }
+        ),
+    ),
+}
+
+
 class ProfileError(Exception):
     """A typed validation error whose message never includes input values."""
 
@@ -260,6 +307,27 @@ def _validate_model(model_record: Any, capability_id: str, provider: str | None,
     approved_at = _date(record["approved_at"], f"{path}.approved_at", nullable=True)
     revalidate_by = _date(record["revalidate_by"], f"{path}.revalidate_by", nullable=True)
 
+    if capability_id not in MODEL_REQUIRED:
+        if identity_kind != "unselected" or policy_status != "pending" or any(
+            item is not None
+            for item in (
+                requested,
+                resolved,
+                approved_model,
+                expected_resolved,
+                approval_ref,
+                approved_by_role,
+                approved_at,
+                revalidate_by,
+            )
+        ):
+            _fail(
+                "MODEL_UNSUPPORTED_FOR_CAPABILITY",
+                path,
+                "This capability does not accept model identity or approval fields.",
+            )
+        return
+
     if requested is None:
         if identity_kind != "unselected" or policy_status != "pending" or any(
             item is not None for item in (resolved, approved_model, expected_resolved, approval_ref, approved_by_role, approved_at, revalidate_by)
@@ -316,6 +384,116 @@ def _validate_model(model_record: Any, capability_id: str, provider: str | None,
         expected = expected_resolved if alias else requested
         if expected is None or resolved != expected:
             _fail("MODEL_RESOLUTION_MISMATCH", f"{path}.resolved", "Resolved model identity does not match the approved requested identity.")
+
+
+def _validate_api_surface(
+    capability_id: str,
+    provider: str | None,
+    api_family: str | None,
+    endpoint: str | None,
+    path: str,
+) -> tuple[str, frozenset[str]] | None:
+    """Validate the capability/provider/API/endpoint tuple without opening it."""
+    if capability_id == "entire":
+        if api_family is not None or endpoint is not None:
+            _fail(
+                "API_NOT_APPLICABLE",
+                path,
+                "Entire provenance uses a local artifact path, not a provider API endpoint.",
+            )
+        return None
+    if provider is None:
+        if api_family is not None or endpoint is not None:
+            _fail("PROVIDER_SELECTION_REQUIRED", path, "Select a provider before recording an API family or endpoint.")
+        return None
+    if api_family is None:
+        return None
+    surface = API_SURFACES.get((capability_id, provider, api_family))
+    if surface is None:
+        _fail("API_FAMILY_UNSUPPORTED", f"{path}.api_family", "API family is not supported for this provider capability.")
+    expected_version, supported_endpoints = surface
+    if endpoint is not None and endpoint not in supported_endpoints:
+        _fail(
+            "API_ENDPOINT_MISMATCH",
+            f"{path}.endpoint",
+            "Endpoint does not match the selected provider capability and API family.",
+        )
+    return expected_version, supported_endpoints
+
+
+def _validate_client_selection(
+    *,
+    config: dict[str, Any],
+    capability_id: str,
+    provider: str | None,
+    api_surface: tuple[str, frozenset[str]] | None,
+    profile_version: str,
+    path: str,
+) -> str:
+    """Validate a pinned SDK or an explicitly versioned direct-HTTP policy."""
+    sdk = config["sdk"]
+    selection_present = "client_selection" in config
+    if profile_version == "1.0":
+        if selection_present:
+            _fail(
+                "PROFILE_VERSION_MISMATCH",
+                f"{path}.client_selection",
+                "client_selection requires provider profile schema 1.1.",
+            )
+        if capability_id == "entire":
+            if sdk is not None:
+                _fail("CLIENT_SELECTION_NOT_APPLICABLE", f"{path}.sdk", "Entire provenance does not use an API client.")
+            return "not_applicable"
+        if sdk is not None:
+            _validate_pinned_sdk(sdk, provider=provider, path=f"{path}.sdk")
+            if api_surface is None:
+                _fail("CLIENT_SELECTION_WITHOUT_API", f"{path}.sdk", "Select a supported provider API and endpoint before an SDK.")
+            return "sdk"
+        return "unselected"
+
+    selection = _object(
+        config.get("client_selection"),
+        f"{path}.client_selection",
+        {"mode", "api_version", "policy_ref"},
+    )
+    mode = _enum(selection["mode"], f"{path}.client_selection.mode", {"unselected", "sdk", "direct_http"})
+    api_version = _string(selection["api_version"], f"{path}.client_selection.api_version", nullable=True)
+    policy_ref = _nullable_ref(selection["policy_ref"], f"{path}.client_selection.policy_ref")
+
+    if capability_id == "entire":
+        if mode != "unselected" or sdk is not None or api_version is not None or policy_ref is not None:
+            _fail("CLIENT_SELECTION_NOT_APPLICABLE", f"{path}.client_selection", "Entire provenance does not use an API client.")
+        return "not_applicable"
+
+    if mode == "unselected":
+        if sdk is not None or api_version is not None or policy_ref is not None:
+            _fail("CLIENT_SELECTION_INCONSISTENT", f"{path}.client_selection", "Unselected client records cannot carry SDK or direct-HTTP policy fields.")
+        return "unselected"
+
+    if provider is None or config["api_family"] is None or config["endpoint"] is None or api_surface is None:
+        _fail("CLIENT_SELECTION_WITHOUT_API", f"{path}.client_selection", "Select a supported provider API and endpoint before a client implementation.")
+
+    if mode == "sdk":
+        if api_version is not None or policy_ref is not None or sdk is None:
+            _fail("CLIENT_SELECTION_INCONSISTENT", f"{path}.client_selection", "SDK selection requires one pinned SDK and no direct-HTTP policy fields.")
+        _validate_pinned_sdk(sdk, provider=provider, path=f"{path}.sdk")
+        return "sdk"
+
+    if sdk is not None or api_version is None or policy_ref is None:
+        _fail("CLIENT_SELECTION_INCONSISTENT", f"{path}.client_selection", "Direct-HTTP selection requires a versioned API policy reference and no SDK.")
+    expected_version, _ = api_surface
+    if api_version != expected_version:
+        _fail("DIRECT_HTTP_API_VERSION_MISMATCH", f"{path}.client_selection.api_version", "Direct-HTTP version does not match the selected provider API surface.")
+    return "direct_http"
+
+
+def _validate_pinned_sdk(sdk_value: Any, *, provider: str | None, path: str) -> None:
+    sdk = _object(sdk_value, path, {"name", "version", "source_revision"})
+    sdk_name = _string(sdk["name"], f"{path}.name", pattern=SLUG_RE)
+    _string(sdk["version"], f"{path}.version", pattern=PINNED_SDK_VERSION_RE)
+    _string(sdk["source_revision"], f"{path}.source_revision", pattern=IMMUTABLE_REVISION_RE)
+    if sdk_name not in SUPPORTED_SDKS.get(provider or "", frozenset()):
+        _fail("SDK_UNSUPPORTED", f"{path}.name", "SDK name is not in the local provider-specific supported set.")
 
 
 def _validate_status_record(
@@ -393,8 +571,9 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
             "capabilities",
         }
         root = _object(profile, "$", root_keys)
-        if root["schema_version"] != "1.0":
-            _fail("PROFILE_VERSION_UNSUPPORTED", "$.schema_version", "Only local provider profile schema 1.0 is supported.")
+        profile_version = _string(root["schema_version"], "$.schema_version")
+        if profile_version not in SUPPORTED_PROFILE_VERSIONS:
+            _fail("PROFILE_VERSION_UNSUPPORTED", "$.schema_version", "Only local provider profile schema 1.0 or 1.1 is supported.")
         _string(root["profile_id"], "$.profile_id", pattern=SAFE_ID_RE)
         _enum(root["environment"], "$.environment", {"development", "test", "production"})
 
@@ -504,26 +683,44 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
                 _fail("CONFIG_FIELD_UNSUPPORTED", f"{path}.sponsor_integration", "Sponsor setup applies only to Neatlogs and Entire cells.")
 
             config_path = f"{path}.configuration"
+            config_fields = {
+                "provider", "environment", "billing_mode", "api_family", "endpoint", "sdk",
+                "client_selection", "model", "credential_env", "account_ref", "project_ref",
+                "quota_status", "quota_summary", "quota_evidence_ref",
+            }
+            config_required = config_fields - {"client_selection"}
+            if profile_version == PROFILE_VERSION:
+                config_required.add("client_selection")
             config = _object(
                 cell["configuration"], config_path,
-                {"provider", "environment", "billing_mode", "api_family", "endpoint", "sdk", "model", "credential_env", "account_ref", "project_ref", "quota_status", "quota_summary", "quota_evidence_ref"},
+                config_fields,
+                required=config_required,
             )
             if config["provider"] != actual_provider:
                 _fail("PROVIDER_IDENTITY_MISMATCH", f"{config_path}.provider", "Capability and configuration provider identities must match.")
             config_environment = _enum(config["environment"], f"{config_path}.environment", {"development", "test", "production"})
             if config_environment != root["environment"]:
                 _fail("ENVIRONMENT_IDENTITY_MISMATCH", f"{config_path}.environment", "Per-provider environment must match the selected profile environment.")
-            _enum(config["billing_mode"], f"{config_path}.billing_mode", {"unknown", "api_metered", "sandbox", "simulated", "not_applicable"})
+            billing_mode = _enum(config["billing_mode"], f"{config_path}.billing_mode", {"unknown", "api_metered", "sandbox", "simulated", "not_applicable"})
+            if billing_mode == "not_applicable" and cell_id != "entire":
+                _fail(
+                    "BILLING_MODE_NOT_APPLICABLE_UNSUPPORTED",
+                    f"{config_path}.billing_mode",
+                    "Non-applicable billing is supported only for the local Entire provenance capability.",
+                )
             api_family = _string(config["api_family"], f"{config_path}.api_family", nullable=True, pattern=SLUG_RE)
             endpoint = _string(config["endpoint"], f"{config_path}.endpoint", nullable=True)
             if endpoint is not None and not _valid_endpoint(actual_provider, cell_id, endpoint, "inference"):
                 _fail("ENDPOINT_UNSAFE", f"{config_path}.endpoint", "Endpoint is not on the provider-specific HTTPS allowlist.")
-            sdk = config["sdk"]
-            if sdk is not None:
-                sdk_obj = _object(sdk, f"{config_path}.sdk", {"name", "version", "source_revision"})
-                _string(sdk_obj["name"], f"{config_path}.sdk.name", pattern=SLUG_RE)
-                _string(sdk_obj["version"], f"{config_path}.sdk.version")
-                _string(sdk_obj["source_revision"], f"{config_path}.sdk.source_revision")
+            api_surface = _validate_api_surface(cell_id, actual_provider, api_family, endpoint, config_path)
+            client_selection_mode = _validate_client_selection(
+                config=config,
+                capability_id=cell_id,
+                provider=actual_provider,
+                api_surface=api_surface,
+                profile_version=profile_version,
+                path=config_path,
+            )
             _validate_model(config["model"], cell_id, actual_provider, f"{config_path}.model", as_of)
             credential_env = _string(config["credential_env"], f"{config_path}.credential_env", nullable=True)
             if credential_env is not None:
@@ -576,6 +773,14 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
                 nullable_fields={"checked_at", "valid_until", "endpoint", "account_ref", "project_ref", "requested_model", "resolved_model", "evidence_ref"},
             )
             _enum(metadata["kind"], f"{path}.metadata.kind", {"none", "auth", "model_list"})
+            if cell_id not in MODEL_REQUIRED and any(
+                metadata[field] is not None for field in ("requested_model", "resolved_model")
+            ):
+                _fail(
+                    "MODEL_UNSUPPORTED_FOR_CAPABILITY",
+                    f"{path}.metadata",
+                    "This capability does not accept model identity fields in metadata records.",
+                )
             if metadata["status"] in {"observed", "denied", "unsupported"}:
                 if metadata["kind"] == "none" or metadata["endpoint"] is None:
                     _fail("METADATA_RECORD_INCOMPLETE", f"{path}.metadata", "Recorded metadata outcomes require an operation and endpoint.")
@@ -604,7 +809,23 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
                 nullable_fields={"checked_at", "valid_until", "endpoint", "account_ref", "project_ref", "requested_model", "resolved_model", "evidence_ref"},
             )
             _enum(live["dependency_mode"], f"{path}.live.dependency_mode", {"not_run", "mock", "recorded", "sandbox", "live"})
+            if cell_id not in MODEL_REQUIRED and any(
+                live[field] is not None for field in ("requested_model", "resolved_model")
+            ):
+                _fail(
+                    "MODEL_UNSUPPORTED_FOR_CAPABILITY",
+                    f"{path}.live",
+                    "This capability does not accept model identity fields in live records.",
+                )
             if live["status"] in {"observed", "denied"}:
+                if live["status"] == "observed" and config["billing_mode"] == "unknown":
+                    _fail("LIVE_BILLING_MODE_UNCONFIRMED", f"{config_path}.billing_mode", "Live provider outcomes require an explicitly recorded billing or non-applicability mode.")
+                if live["status"] == "observed" and config["billing_mode"] != "api_metered":
+                    _fail(
+                        "LIVE_BILLING_MODE_NON_METERED",
+                        f"{config_path}.billing_mode",
+                        "Observed live capability requires api_metered billing; non-live modes cannot establish it.",
+                    )
                 if config["billing_mode"] == "unknown":
                     _fail("LIVE_BILLING_MODE_UNCONFIRMED", f"{config_path}.billing_mode", "Live provider outcomes require an explicitly recorded billing or non-applicability mode.")
                 if live["status"] == "observed" and cell_id in MODEL_REQUIRED and config["model"]["policy_status"] != "approved":
@@ -626,6 +847,12 @@ def validate_profile(profile: Any, *, as_of: date) -> tuple[list[dict[str, str]]
                     _fail("SPONSOR_EVIDENCE_SURFACE_MISMATCH", f"{path}.live", "Entire provenance is a local sponsor artifact, not a provider inference result.")
                 if live["endpoint"] is None or not _valid_endpoint(actual_provider, cell_id, live["endpoint"], "inference"):
                     _fail("LIVE_RECORD_ENDPOINT_INVALID", f"{path}.live.endpoint", "Live provider evidence requires an allowlisted inference endpoint.")
+                if live["endpoint"] != endpoint:
+                    _fail(
+                        "LIVE_ENDPOINT_MISMATCH",
+                        f"{path}.live.endpoint",
+                        "Live evidence endpoint must match the configured provider API endpoint.",
+                    )
                 _check_record_identity(
                     record=live,
                     config={"account_ref": account_ref, "project_ref": project_ref, "model": config["model"]},
@@ -676,9 +903,16 @@ def assess_profile(profile: dict[str, Any], *, mode: str, as_of: date, environ: 
         model = config["model"]
         sponsor_config = cell["sponsor_integration"]
         usage_config = cell["future_usage_authorization"]
+        if capability_id == "entire":
+            client_selection_mode = "not_applicable"
+        elif "client_selection" not in config:
+            client_selection_mode = "sdk" if config["sdk"] is not None else "unselected"
+        else:
+            client_selection_mode = config["client_selection"]["mode"]
         blockers: list[dict[str, str]] = []
         config_fields_ready = (
-            sponsor_config["status"] == "configured" if capability_id == "entire" else True
+            sponsor_config["status"] == "configured" and config["billing_mode"] != "unknown"
+            if capability_id == "entire" else True
         )
         if config["billing_mode"] == "unknown":
             config_fields_ready = False
@@ -694,6 +928,9 @@ def assess_profile(profile: dict[str, Any], *, mode: str, as_of: date, environ: 
             if config["endpoint"] is None:
                 config_fields_ready = False
                 blockers.append(_diag("ENDPOINT_MISSING", capability_id, f"capabilities.{capability_id}.configuration.endpoint", "An explicit allowlisted provider endpoint is required."))
+            if client_selection_mode == "unselected":
+                config_fields_ready = False
+                blockers.append(_diag("CLIENT_SELECTION_PENDING", capability_id, f"capabilities.{capability_id}.configuration.client_selection", "Select a pinned supported SDK or explicit versioned direct-HTTP policy."))
             if capability_id in MODEL_REQUIRED:
                 if model["requested"] is None:
                     config_fields_ready = False
@@ -820,6 +1057,8 @@ def assess_profile(profile: dict[str, Any], *, mode: str, as_of: date, environ: 
                 "environment": config["environment"],
                 "billing_mode": config["billing_mode"],
                 "provider": cell["provider"],
+                "api_family": config["api_family"],
+                "client_selection_mode": client_selection_mode,
                 "requested_model": model["requested"],
                 "resolved_model": model["resolved"],
                 "model_policy": model["policy_status"],
@@ -931,7 +1170,7 @@ def assess_profile(profile: dict[str, Any], *, mode: str, as_of: date, environ: 
         exit_code = 3
 
     return {
-        "report_version": "1.0",
+        "report_version": REPORT_VERSION,
         "tool_version": TOOL_VERSION,
         "fixture_id": profile["profile_id"],
         "environment": profile["environment"],
@@ -1007,7 +1246,7 @@ def _component_revision() -> dict[str, str | bool]:
 
 def _report_invalid(code: str, *, mode: str, revision: dict[str, Any]) -> dict[str, Any]:
     return {
-        "report_version": "1.0",
+        "report_version": REPORT_VERSION,
         "tool_version": TOOL_VERSION,
         "fixture_id": None,
         "mode": mode,

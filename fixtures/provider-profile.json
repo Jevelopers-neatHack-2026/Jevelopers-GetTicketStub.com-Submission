@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.0",
-  "profile_id": "fixture_provider_profile_pending_v1",
+  "schema_version": "1.1",
+  "profile_id": "fixture_provider_profile_pending_v1_1",
   "environment": "development",
   "development_execution": {
     "access_preference": "codex_subscription",
@@ -31,6 +31,7 @@
         "api_family": "systemone_v1",
         "endpoint": "https://api.typesafe.ai/v1/systemone",
         "sdk": null,
+        "client_selection": {"mode": "unselected", "api_version": null, "policy_ref": null},
         "model": {
           "requested": null,
           "resolved": null,
@@ -99,6 +100,7 @@
         "api_family": null,
         "endpoint": null,
         "sdk": null,
+        "client_selection": {"mode": "unselected", "api_version": null, "policy_ref": null},
         "model": {
           "requested": null,
           "resolved": null,
@@ -167,6 +169,7 @@
         "api_family": null,
         "endpoint": null,
         "sdk": null,
+        "client_selection": {"mode": "unselected", "api_version": null, "policy_ref": null},
         "model": {
           "requested": null,
           "resolved": null,
@@ -241,6 +244,7 @@
         "api_family": null,
         "endpoint": null,
         "sdk": null,
+        "client_selection": {"mode": "unselected", "api_version": null, "policy_ref": null},
         "model": {
           "requested": null,
           "resolved": null,
@@ -315,6 +319,7 @@
         "api_family": null,
         "endpoint": null,
         "sdk": null,
+        "client_selection": {"mode": "unselected", "api_version": null, "policy_ref": null},
         "model": {
           "requested": null,
           "resolved": null,
@@ -389,6 +394,7 @@
         "api_family": null,
         "endpoint": null,
         "sdk": null,
+        "client_selection": {"mode": "unselected", "api_version": null, "policy_ref": null},
         "model": {
           "requested": null,
           "resolved": null,

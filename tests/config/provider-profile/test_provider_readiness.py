@@ -28,6 +28,20 @@ def cell_for(profile, capability_id):
     return next(item for item in profile["capabilities"] if item["id"] == capability_id)
 
 
+def select_direct_http(config, *, api_version="v1", policy_ref="evidence:runtime/synthetic-api-policy"):
+    config["sdk"] = None
+    config["client_selection"] = {
+        "mode": "direct_http",
+        "api_version": api_version,
+        "policy_ref": policy_ref,
+    }
+
+
+def select_pinned_sdk(config, *, name="typesafe-sdk-js", version="1.2.3", source_revision="a" * 40):
+    config["sdk"] = {"name": name, "version": version, "source_revision": source_revision}
+    config["client_selection"] = {"mode": "sdk", "api_version": None, "policy_ref": None}
+
+
 def add_jev_admin_record(profile, *, valid_until="2026-10-20"):
     cell = cell_for(profile, "jev")
     config = cell["configuration"]
@@ -36,6 +50,7 @@ def add_jev_admin_record(profile, *, valid_until="2026-10-20"):
     config["quota_status"] = "recorded"
     config["quota_summary"] = "Account limit documented; numeric value retained in administrator evidence."
     config["quota_evidence_ref"] = "evidence:admin/jev-quota"
+    select_direct_http(config)
     config["model"].update(
         {
             "requested": "jev-1.13.0",
@@ -56,6 +71,80 @@ def add_jev_admin_record(profile, *, valid_until="2026-10-20"):
             "account_ref": config["account_ref"],
             "project_ref": config["project_ref"],
             "evidence_ref": "evidence:admin/jev-eligibility",
+        }
+    )
+    return cell
+
+
+def make_live_observation(profile, capability_id, *, api_family, endpoint, model=None):
+    cell = cell_for(profile, capability_id)
+    config = cell["configuration"]
+    account_ref = f"urn:synthetic:{capability_id}:account"
+    project_ref = f"urn:synthetic:{capability_id}:project"
+    config.update(
+        billing_mode="api_metered",
+        api_family=api_family,
+        endpoint=endpoint,
+        credential_env={"typesafe": "TYPESAFE_API_KEY", "openai": "OPENAI_API_KEY", "neatlogs": "NEATLOGS_API_KEY"}.get(cell["provider"]),
+        account_ref=account_ref,
+        project_ref=project_ref,
+        quota_status="recorded",
+        quota_summary="synthetic quota record",
+        quota_evidence_ref=f"evidence:synthetic/{capability_id}-quota",
+    )
+    select_direct_http(config)
+    if model is not None:
+        config["model"].update(
+            {
+                "requested": model,
+                "resolved": model,
+                "identity_kind": "pinned",
+                "policy_status": "approved",
+                "approved_model": model,
+                "approval_ref": f"evidence:synthetic/{capability_id}-model-policy",
+                "approved_by_role": cell["owner_role"],
+                "approved_at": "2026-10-01",
+                "revalidate_by": "2026-11-01",
+            }
+        )
+    cell["eligibility"].update(
+        {
+            "status": "eligible",
+            "checked_at": "2026-10-01",
+            "valid_until": "2026-11-01",
+            "account_ref": account_ref,
+            "project_ref": project_ref,
+            "evidence_ref": f"evidence:synthetic/{capability_id}-eligibility",
+        }
+    )
+    if cell["future_usage_authorization"] is not None:
+        cell["future_usage_authorization"].update(
+            {
+                "status": "approved",
+                "budget_ref": f"evidence:synthetic/{capability_id}-budget",
+                "reservation_protocol_ref": f"evidence:synthetic/{capability_id}-reservation-protocol",
+            }
+        )
+    profile["live_test_authorization"].update(
+        {
+            "status": "approved",
+            "reservation_ref": f"evidence:synthetic/{capability_id}-reservation",
+            "evidence_ref": f"evidence:synthetic/{capability_id}-authorization",
+            "authorized_capabilities": [capability_id],
+        }
+    )
+    cell["live"].update(
+        {
+            "status": "observed",
+            "dependency_mode": "live",
+            "checked_at": "2026-10-01",
+            "valid_until": "2026-11-01",
+            "endpoint": endpoint,
+            "account_ref": account_ref,
+            "project_ref": project_ref,
+            "requested_model": model,
+            "resolved_model": model,
+            "evidence_ref": f"evidence:synthetic/{capability_id}-live",
         }
     )
     return cell
@@ -110,7 +199,9 @@ class ProviderReadinessTests(unittest.TestCase):
 
         self.assertEqual(report["status"], "pending")
         self.assertEqual(report["exit_code"], 2)
+        self.assertEqual(report["report_version"], "1.1")
         self.assertFalse(report["network_accessed"])
+        self.assertEqual(profile["schema_version"], "1.1")
         self.assertEqual([item["id"] for item in report["capabilities"]], list(readiness.EXPECTED_CAPABILITIES))
         self.assertEqual(report["development_execution"]["access_preference"], "codex_subscription")
         self.assertEqual(report["development_execution"]["model"], "gpt-image-2")
@@ -128,6 +219,8 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertEqual(by_id["gpt_image"]["status"], "pending")
         self.assertEqual(by_id["planner_reasoning"]["status"], "pending")
         self.assertEqual(by_id["generative_baseline"]["status"], "pending")
+        self.assertEqual(by_id["gpt_image"]["client_selection_mode"], "unselected")
+        self.assertIn("CLIENT_SELECTION_PENDING", {item["code"] for item in by_id["gpt_image"]["blockers"]})
         self.assertIn("CREDENTIAL_ENV_ABSENT", {item["code"] for item in by_id["jev"]["blockers"]})
 
     def test_offline_serialization_is_deterministic_for_same_inputs(self):
@@ -183,6 +276,195 @@ class ProviderReadinessTests(unittest.TestCase):
                 issue = self.first_issue(profile)
                 self.assertEqual(issue["code"], "ENDPOINT_UNSAFE")
                 self.assertNotIn(endpoint, issue["message"])
+
+    def test_api_family_provider_and_endpoint_are_bound_to_the_capability(self):
+        profile = load_fixture()
+        image = cell_for(profile, "gpt_image")["configuration"]
+        image.update(api_family="arbitrary_unimplemented_api", endpoint="https://api.openai.com/v1/images/generations")
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "API_FAMILY_UNSUPPORTED")
+        self.assertNotIn("arbitrary_unimplemented_api", issue["message"])
+
+        profile = load_fixture()
+        image = cell_for(profile, "gpt_image")["configuration"]
+        image.update(api_family="images", endpoint="https://api.openai.com/v1/chat/completions")
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "API_ENDPOINT_MISMATCH")
+
+        profile = load_fixture()
+        jev = cell_for(profile, "jev")
+        jev["configuration"]["provider"] = "openai"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "PROVIDER_IDENTITY_MISMATCH")
+
+        profile = load_fixture()
+        planner = cell_for(profile, "planner_reasoning")
+        planner["provider"] = planner["configuration"]["provider"] = "typesafe"
+        planner["configuration"].update(
+            api_family="systemone_v1",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+        )
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "API_FAMILY_UNSUPPORTED")
+
+    def test_supported_api_surface_controls_for_each_selected_provider_path(self):
+        cases = (
+            ("jev", "typesafe", "systemone_v1", "https://api.typesafe.ai/v1/systemone"),
+            ("gpt_image", "openai", "images", "https://api.openai.com/v1/images/generations"),
+            ("planner_reasoning", "openai", "responses", "https://api.openai.com/v1/responses"),
+            ("generative_baseline", "openai", "chat_completions", "https://api.openai.com/v1/chat/completions"),
+            ("neatlogs", "neatlogs", "trace_ingest", "https://ingest.neatlogs.com/v1/traces"),
+        )
+        for capability_id, provider, family, endpoint in cases:
+            with self.subTest(capability=capability_id, family=family):
+                profile = load_fixture()
+                cell = cell_for(profile, capability_id)
+                cell["provider"] = provider
+                config = cell["configuration"]
+                config["provider"] = provider
+                config.update(api_family=family, endpoint=endpoint)
+                select_direct_http(config)
+                errors, _ = self.validate(profile)
+                self.assertEqual(errors, [])
+
+    def test_unselected_api_or_client_stays_pending_and_v1_0_remains_compatible(self):
+        profile = load_fixture()
+        image = cell_for(profile, "gpt_image")["configuration"]
+        image.update(api_family="images", endpoint="https://api.openai.com/v1/images/generations")
+        errors, validated = self.validate(profile)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        gpt = next(item for item in report["capabilities"] if item["id"] == "gpt_image")
+        self.assertEqual(gpt["configuration_status"], "pending")
+        self.assertEqual(gpt["client_selection_mode"], "unselected")
+        self.assertIn("CLIENT_SELECTION_PENDING", {item["code"] for item in gpt["blockers"]})
+
+        legacy = load_fixture()
+        legacy["schema_version"] = "1.0"
+        for cell in legacy["capabilities"]:
+            cell["configuration"].pop("client_selection")
+        errors, validated = self.validate(legacy)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        jev = next(item for item in report["capabilities"] if item["id"] == "jev")
+        self.assertEqual(jev["client_selection_mode"], "unselected")
+        self.assertEqual(jev["configuration_status"], "pending")
+
+        select_pinned_sdk(cell_for(legacy, "jev")["configuration"])
+        # Schema 1.0 has no client_selection field; a fully pinned legacy SDK
+        # object remains an explicit client selection for backward compatibility.
+        cell_for(legacy, "jev")["configuration"].pop("client_selection")
+        errors, validated = self.validate(legacy)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        jev = next(item for item in report["capabilities"] if item["id"] == "jev")
+        self.assertEqual(jev["client_selection_mode"], "sdk")
+
+    def test_sdk_and_direct_http_selection_require_pins_and_versioned_policy(self):
+        profile = load_fixture()
+        image = cell_for(profile, "gpt_image")["configuration"]
+        image.update(api_family="images", endpoint="https://api.openai.com/v1/images/generations")
+        select_direct_http(image)
+        errors, validated = self.validate(profile)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        gpt = next(item for item in report["capabilities"] if item["id"] == "gpt_image")
+        self.assertEqual(gpt["client_selection_mode"], "direct_http")
+        self.assertNotIn("CLIENT_SELECTION_PENDING", {item["code"] for item in gpt["blockers"]})
+
+        image["client_selection"]["api_version"] = "v2"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "DIRECT_HTTP_API_VERSION_MISMATCH")
+
+        profile = load_fixture()
+        config = cell_for(profile, "jev")["configuration"]
+        select_pinned_sdk(config)
+        errors, validated = self.validate(profile)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        jev = next(item for item in report["capabilities"] if item["id"] == "jev")
+        self.assertEqual(jev["client_selection_mode"], "sdk")
+
+        config["sdk"]["version"] = "^1.2.3"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "CONFIG_VALUE_INVALID")
+        self.assertNotIn("^1.2.3", issue["message"])
+
+        config["sdk"]["version"] = "1.2.3"
+        config["sdk"]["source_revision"] = "main"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "CONFIG_VALUE_INVALID")
+        self.assertNotIn("main", issue["message"])
+
+        profile = load_fixture()
+        config = cell_for(profile, "jev")["configuration"]
+        select_pinned_sdk(config, name="unreviewed-sdk")
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "SDK_UNSUPPORTED")
+
+        profile = load_fixture()
+        config = cell_for(profile, "jev")["configuration"]
+        config["client_selection"].update(mode="sdk")
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "CLIENT_SELECTION_INCONSISTENT")
+
+    def test_image_live_observation_matches_the_configured_api_endpoint(self):
+        profile = load_fixture()
+        cell = make_live_observation(
+            profile,
+            "gpt_image",
+            api_family="images",
+            endpoint="https://api.openai.com/v1/images/generations",
+            model="gpt-image-1-2025-04-15",
+        )
+        errors, validated = self.validate(profile)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        image = next(item for item in report["capabilities"] if item["id"] == "gpt_image")
+        self.assertEqual(image["live_capability"], "observed")
+        self.assertEqual(image["live_evidence"]["endpoint"], cell["configuration"]["endpoint"])
+
+        cell["live"]["endpoint"] = "https://api.openai.com/v1/chat/completions"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "LIVE_ENDPOINT_MISMATCH")
+
+        cell["live"]["endpoint"] = "https://api.openai.com/v1/images/generations"
+        cell["configuration"]["endpoint"] = "https://api.openai.com/v1/chat/completions"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "API_ENDPOINT_MISMATCH")
+
+    def test_sponsor_only_model_fields_are_rejected_by_cli_without_echo(self):
+        for capability_id in ("neatlogs", "entire"):
+            for record_name in ("model", "metadata", "live"):
+                for field in ("requested", "resolved"):
+                    marker = f"SYNTHETIC_PRIVATE_{capability_id}_{record_name}_{field}"
+                    with self.subTest(capability=capability_id, record=record_name, field=field):
+                        profile = load_fixture()
+                        cell = cell_for(profile, capability_id)
+                        if record_name == "model":
+                            record = cell["configuration"]["model"]
+                            record[field] = marker
+                            if field == "requested":
+                                record["identity_kind"] = "pinned"
+                        else:
+                            cell[record_name][f"{field}_model"] = marker
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            profile_path = Path(temp_dir) / "profile.json"
+                            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+                            stdout = io.StringIO()
+                            stderr = io.StringIO()
+                            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr), mock.patch(
+                                "socket.create_connection", side_effect=AssertionError("network forbidden")
+                            ):
+                                exit_code = readiness.main(
+                                    ["--profile", str(profile_path), "--mode", "offline", "--as-of", "2026-10-10"]
+                                )
+                        self.assertEqual(exit_code, 1)
+                        rendered = stdout.getvalue() + stderr.getvalue()
+                        self.assertNotIn(marker, rendered)
+                        report = json.loads(stdout.getvalue())
+                        self.assertEqual(report["status"], "invalid")
+                        self.assertEqual(report["diagnostics"][0]["code"], "MODEL_UNSUPPORTED_FOR_CAPABILITY")
 
     def test_wrong_provider_model_identifier_is_rejected(self):
         profile = load_fixture()
@@ -318,6 +600,7 @@ class ProviderReadinessTests(unittest.TestCase):
         entire = by_id["entire"]
         self.assertEqual(neatlogs["sponsor_integration"]["status"], "pending")
         self.assertEqual(entire["sponsor_integration"]["applicability"], "required")
+        self.assertEqual(entire["client_selection_mode"], "not_applicable")
         self.assertEqual(entire["live_capability"], "pending")
         self.assertIn("SPONSOR_CONFIGURATION_PENDING", {item["code"] for item in neatlogs["blockers"]})
         self.assertIn("ENTIRE_ARTIFACT_PENDING", {item["code"] for item in entire["blockers"]})
@@ -334,6 +617,17 @@ class ProviderReadinessTests(unittest.TestCase):
         issue = self.first_issue(profile)
         self.assertEqual(issue["code"], "SPONSOR_CONFIGURATION_INCOMPLETE")
 
+        profile = load_fixture()
+        cell_for(profile, "entire")["configuration"]["billing_mode"] = "not_applicable"
+        errors, validated = self.validate(profile)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        entire = next(item for item in report["capabilities"] if item["id"] == "entire")
+        self.assertEqual(entire["billing_mode"], "not_applicable")
+        self.assertEqual(entire["configuration_status"], "pending")
+        self.assertEqual(entire["live_capability"], "pending")
+        self.assertIn("ENTIRE_ARTIFACT_PENDING", {item["code"] for item in entire["blockers"]})
+
     def test_mock_or_sandbox_mode_never_counts_as_observed_live_access(self):
         profile = load_fixture()
         cell_for(profile, "jev")["live"]["dependency_mode"] = "mock"
@@ -345,51 +639,19 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertEqual(jev["live_capability"], "pending")
 
         profile = load_fixture()
-        jev = cell_for(profile, "jev")
-        jev["configuration"]["billing_mode"] = "sandbox"
-        jev["live"].update(
-            {
-                "status": "observed",
-                "dependency_mode": "mock",
-                "checked_at": "2026-10-01",
-                "valid_until": "2026-10-20",
-                "endpoint": "https://api.typesafe.ai/v1/systemone",
-                "account_ref": "urn:typesafe:account:development",
-                "project_ref": "urn:agent-harness:project:acv1",
-                "requested_model": "jev-1.13.0",
-                "evidence_ref": "evidence:test/mock-run",
-            }
-        )
-        add_jev_admin_record(profile)
-        jev["configuration"]["billing_mode"] = "sandbox"
-        issue = self.first_issue(profile)
-        self.assertEqual(issue["code"], "LIVE_AUTHORIZATION_MISSING")
-
-        profile["live_test_authorization"].update(
-            {
-                "status": "approved",
-                "reservation_ref": "evidence:finance/mock-test-reservation",
-                "evidence_ref": "evidence:owner/mock-test-authorization",
-                "authorized_capabilities": ["jev"],
-            }
-        )
-        issue = self.first_issue(profile)
-        self.assertEqual(issue["code"], "LIVE_DEPENDENCY_MODE_MISMATCH")
-
-    def test_live_outcome_requires_matching_capability_authorization_and_live_mode(self):
-        profile = load_fixture()
         cell = add_jev_admin_record(profile)
-        profile["live_test_authorization"].update(
-            {
-                "status": "approved",
-                "reservation_ref": "evidence:finance/reservation",
-                "evidence_ref": "evidence:owner/live-approval",
-                "authorized_capabilities": ["jev"],
-            }
-        )
+        cell["configuration"]["billing_mode"] = "sandbox"
+        cell["live"]["dependency_mode"] = "sandbox"
+        errors, validated = self.validate(profile)
+        self.assertEqual(errors, [])
+        report = readiness.assess_profile(validated, mode="offline", as_of=AS_OF, environ={})
+        jev = next(item for item in report["capabilities"] if item["id"] == "jev")
+        self.assertEqual(jev["live_capability"], "pending")
+        self.assertIn("LIVE_CAPABILITY_PENDING", {item["code"] for item in jev["blockers"]})
+
+        cell["live"]["status"] = "observed"
         cell["live"].update(
             {
-                "status": "observed",
                 "dependency_mode": "live",
                 "checked_at": "2026-10-01",
                 "valid_until": "2026-10-20",
@@ -398,13 +660,30 @@ class ProviderReadinessTests(unittest.TestCase):
                 "project_ref": cell["configuration"]["project_ref"],
                 "requested_model": "jev-1.13.0",
                 "resolved_model": "jev-1.13.0",
-                "evidence_ref": "evidence:provider/jev-live",
+                "evidence_ref": "evidence:synthetic/mock-run",
             }
         )
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "LIVE_BILLING_MODE_NON_METERED")
+
+    def test_live_outcome_requires_matching_capability_authorization_and_live_mode(self):
+        profile = load_fixture()
+        cell = make_live_observation(
+            profile,
+            "jev",
+            api_family="systemone_v1",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+            model="jev-1.13.0",
+        )
+        cell["configuration"]["billing_mode"] = "unknown"
         issue = self.first_issue(profile)
         self.assertEqual(issue["code"], "LIVE_BILLING_MODE_UNCONFIRMED")
 
         cell["configuration"]["billing_mode"] = "sandbox"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "LIVE_BILLING_MODE_NON_METERED")
+
+        cell["configuration"]["billing_mode"] = "api_metered"
         cell["live"]["dependency_mode"] = "mock"
         issue = self.first_issue(profile)
         self.assertEqual(issue["code"], "LIVE_DEPENDENCY_MODE_MISMATCH")
@@ -419,6 +698,45 @@ class ProviderReadinessTests(unittest.TestCase):
         profile["live_test_authorization"]["authorized_capabilities"] = ["gpt_image"]
         issue = self.first_issue(profile)
         self.assertEqual(issue["code"], "LIVE_AUTHORIZATION_MISSING")
+
+    def test_each_nonlive_billing_classification_cannot_support_observed_metered_inference(self):
+        for billing_mode in ("sandbox", "simulated"):
+            with self.subTest(billing_mode=billing_mode):
+                pending_profile = load_fixture()
+                pending_cell = cell_for(pending_profile, "jev")
+                pending_cell["configuration"]["billing_mode"] = billing_mode
+                pending_cell["live"]["dependency_mode"] = "sandbox" if billing_mode == "sandbox" else "mock"
+                errors, validated = self.validate(pending_profile)
+                self.assertEqual(errors, [])
+                pending_report = readiness.assess_profile(
+                    validated, mode="offline", as_of=AS_OF, environ={}
+                )
+                pending_jev = next(item for item in pending_report["capabilities"] if item["id"] == "jev")
+                self.assertEqual(pending_jev["live_capability"], "pending")
+
+                profile = load_fixture()
+                cell = make_live_observation(
+                    profile,
+                    "jev",
+                    api_family="systemone_v1",
+                    endpoint="https://api.typesafe.ai/v1/systemone",
+                    model="jev-1.13.0",
+                )
+                cell["configuration"]["billing_mode"] = billing_mode
+                issue = self.first_issue(profile)
+                self.assertEqual(issue["code"], "LIVE_BILLING_MODE_NON_METERED")
+
+        profile = load_fixture()
+        cell = make_live_observation(
+            profile,
+            "jev",
+            api_family="systemone_v1",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+            model="jev-1.13.0",
+        )
+        cell["configuration"]["billing_mode"] = "not_applicable"
+        issue = self.first_issue(profile)
+        self.assertEqual(issue["code"], "BILLING_MODE_NOT_APPLICABLE_UNSUPPORTED")
 
     def test_metadata_only_evidence_does_not_verify_inference_or_image_generation(self):
         profile = load_fixture()
@@ -624,18 +942,48 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertIn("not a shared domain contract", schema["description"])
         self.assertFalse(schema["additionalProperties"])
         profile = load_fixture()
+        self.assertEqual(schema["properties"]["schema_version"]["enum"], ["1.0", "1.1"])
+        self.assertEqual(profile["schema_version"], "1.1")
         capability_schema = schema["$defs"]["capability"]
         configuration_schema = schema["$defs"]["configuration"]
         model_schema = schema["$defs"]["model"]
+        client_selection_schema = schema["$defs"]["clientSelection"]
+        self.assertEqual(configuration_schema["properties"]["client_selection"]["$ref"], "#/$defs/clientSelection")
+        self.assertEqual(set(client_selection_schema["required"]), {"mode", "api_version", "policy_ref"})
+        self.assertEqual(
+            client_selection_schema["properties"]["mode"]["enum"],
+            ["unselected", "sdk", "direct_http"],
+        )
+        self.assertTrue(any(item.get("if", {}).get("properties", {}).get("schema_version", {}).get("const") == "1.1" for item in schema["allOf"]))
+        self.assertTrue(any(item.get("if", {}).get("properties", {}).get("schema_version", {}).get("const") == "1.0" for item in schema["allOf"]))
+        schema_families = set(configuration_schema["properties"]["api_family"]["enum"]) - {None}
+        implementation_families = {key[2] for key in readiness.API_SURFACES}
+        self.assertEqual(schema_families, implementation_families)
+        sdk_schema = configuration_schema["properties"]["sdk"]["oneOf"][1]["properties"]
+        self.assertIn("pattern", sdk_schema["version"])
+        self.assertIn("pattern", sdk_schema["source_revision"])
+        self.assertEqual(len(configuration_schema["allOf"]), 3)
         for cell in profile["capabilities"]:
             self.assertTrue(set(capability_schema["required"]).issubset(cell))
             self.assertTrue(set(configuration_schema["required"]).issubset(cell["configuration"]))
             self.assertTrue(set(model_schema["required"]).issubset(cell["configuration"]["model"]))
+            self.assertIn("client_selection", cell["configuration"])
         self.assertIn("futureUsageAuthorization", schema["$defs"])
         self.assertIn("sponsorIntegration", schema["$defs"])
         errors, validated = self.validate(profile)
         self.assertEqual(errors, [])
         self.assertEqual(len(validated["capabilities"]), 6)
+
+    def test_runbook_describes_the_versioned_schema_api_and_client_selection_policy(self):
+        runbook = (REPO_ROOT / "docs" / "runbooks" / "provider-access.md").read_text(encoding="utf-8")
+        self.assertIn("Schema 1.0 profiles remain readable", runbook)
+        self.assertIn("Schema 1.1 requires `client_selection`", runbook)
+        self.assertIn("Readiness report version 1.1", runbook)
+        self.assertIn("`direct_http`", runbook)
+        self.assertIn("exact semantic version", runbook)
+        self.assertIn("`api_metered`", runbook)
+        for family in {key[2] for key in readiness.API_SURFACES}:
+            self.assertIn(f"`{family}`", runbook)
 
 
 if __name__ == "__main__":
