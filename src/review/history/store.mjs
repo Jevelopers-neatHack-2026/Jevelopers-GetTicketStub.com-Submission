@@ -43,8 +43,13 @@ const TYPED_ARRAY_TAG_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTO
 const TYPED_ARRAY_LENGTH_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTOTYPE, 'length').get;
 const TYPED_ARRAY_SET = Uint8Array.prototype.set;
 const TYPED_ARRAY_FILL = Uint8Array.prototype.fill;
+const REFLECT_APPLY = Reflect.apply;
 const MAX_VERSION_PLAINTEXT_BYTES = 512 * 1024;
 const MAX_VERSION_SEALED_BYTES = 512 * 1024;
+const TENANT_DATABASE_QUEUES = new Map();
+const ABORT_SIGNAL_ABORTED_GETTER = typeof AbortSignal === 'function'
+  ? Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get
+  : undefined;
 
 export class ReviewHistoryError extends Error {
   constructor(code = 'REVIEW_STORAGE') {
@@ -439,22 +444,40 @@ function createOpaque() {
   return Object.freeze(Object.create(null));
 }
 
+async function withTenantDatabaseQueue(directory, operation) {
+  const previous = TENANT_DATABASE_QUEUES.get(directory) ?? Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  TENANT_DATABASE_QUEUES.set(directory, current);
+  await previous.catch(() => {});
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (TENANT_DATABASE_QUEUES.get(directory) === current) TENANT_DATABASE_QUEUES.delete(directory);
+  }
+}
+
+function readAborted(signal) {
+  if (typeof ABORT_SIGNAL_ABORTED_GETTER !== 'function') fail();
+  try {
+    return REFLECT_APPLY(ABORT_SIGNAL_ABORTED_GETTER, signal, []);
+  } catch {
+    fail();
+  }
+}
+
 function readSignal(options) {
   if (options === undefined) return undefined;
   const input = ownDataRecord(options, new Set(['signal']));
   if (!input) fail();
   if (input.signal === undefined) return undefined;
-  try {
-    if (typeof AbortSignal === 'undefined' || !(input.signal instanceof AbortSignal)) fail();
-    return input.signal;
-  } catch (error) {
-    if (error instanceof ReviewHistoryError) throw error;
-    fail();
-  }
+  readAborted(input.signal);
+  return input.signal;
 }
 
 function throwIfAborted(signal) {
-  if (signal?.aborted) fail('REVIEW_ABORTED');
+  if (signal !== undefined && readAborted(signal)) fail('REVIEW_ABORTED');
 }
 
 function fieldView(field, record) {
@@ -838,6 +861,10 @@ export function createCorrectionHistoryStore(options) {
   }
 
   async function withTransaction(info, directory, operation, signal, finalBoundary) {
+    return withTenantDatabaseQueue(directory, () => withTransactionUnlocked(info, directory, operation, signal, finalBoundary));
+  }
+
+  async function withTransactionUnlocked(info, directory, operation, signal, finalBoundary) {
     let database;
     let open = false;
     let schemaReady = false;
@@ -934,6 +961,7 @@ export function createCorrectionHistoryStore(options) {
             DROP TABLE versions;
             ALTER TABLE versions_expiry_migration RENAME TO versions;
           `);
+          normalizeExpiredTombstones(database);
           database.exec('COMMIT');
         } catch (error) {
           try { database.exec('ROLLBACK'); } catch { /* The connection is closed by the outer transaction guard. */ }
@@ -944,6 +972,7 @@ export function createCorrectionHistoryStore(options) {
       await chmod(databasePath, 0o600);
       database.exec('BEGIN IMMEDIATE');
       open = true;
+      normalizeExpiredTombstones(database);
       const result = await operation(database);
       if (finalBoundary) await finalBoundary(result);
       throwIfAborted(signal);
@@ -960,6 +989,7 @@ export function createCorrectionHistoryStore(options) {
         try {
           database.exec('BEGIN IMMEDIATE');
           open = true;
+          normalizeExpiredTombstones(database);
           const now = nowMs();
           const expiredEvents = database.prepare("SELECT event_key FROM heads WHERE state = 'available' AND expires_at_ms <= ? LIMIT ?")
             .all(now, limits.maxHistories);
@@ -1005,6 +1035,27 @@ export function createCorrectionHistoryStore(options) {
     database.prepare('DELETE FROM downstream_references WHERE event_key = ?').run(eventKey);
     database.prepare('DELETE FROM invalidations WHERE event_key = ?').run(eventKey);
     return true;
+  }
+
+  function normalizeExpiredTombstones(database) {
+    database.exec(`
+      UPDATE versions SET version_id = NULL, parent_version_id = NULL, content_hash = NULL, material_hash = NULL,
+        expires_at_ms = NULL, encryption_key_id = NULL, sealed = NULL
+        WHERE state = 'expired' AND (version_id IS NOT NULL OR parent_version_id IS NOT NULL OR content_hash IS NOT NULL
+          OR material_hash IS NOT NULL OR expires_at_ms IS NOT NULL OR encryption_key_id IS NOT NULL OR sealed IS NOT NULL);
+      UPDATE versions SET version_id = NULL, parent_version_id = NULL, content_hash = NULL, material_hash = NULL,
+        expires_at_ms = NULL, encryption_key_id = NULL, sealed = NULL, state = 'expired'
+        WHERE event_key IN (SELECT event_key FROM heads WHERE state = 'expired')
+          AND (state != 'expired' OR version_id IS NOT NULL OR parent_version_id IS NOT NULL OR content_hash IS NOT NULL
+            OR material_hash IS NOT NULL OR expires_at_ms IS NOT NULL OR encryption_key_id IS NOT NULL OR sealed IS NOT NULL);
+      UPDATE heads SET revision = NULL, version_id = NULL, content_hash = NULL, material_hash = NULL,
+        expires_at_ms = NULL WHERE state = 'expired'
+          AND (revision IS NOT NULL OR version_id IS NOT NULL OR content_hash IS NOT NULL
+            OR material_hash IS NOT NULL OR expires_at_ms IS NOT NULL);
+      DELETE FROM idempotency WHERE event_key IN (SELECT event_key FROM heads WHERE state = 'expired');
+      DELETE FROM downstream_references WHERE event_key IN (SELECT event_key FROM heads WHERE state = 'expired');
+      DELETE FROM invalidations WHERE event_key IN (SELECT event_key FROM heads WHERE state = 'expired');
+    `);
   }
 
   function rowForVersion(database, eventKey, versionId) {
@@ -1061,13 +1112,20 @@ export function createCorrectionHistoryStore(options) {
     const directory = await tenantDirectory(info);
     const keyHash = keyed(info, indexKey, 'idempotency-key', idempotencyKey);
     const fingerprintValue = fingerprint(indexKey, info, eventKey, actorId, operation, normalizedInput);
+    let historyExpiresAtMs;
     try {
       return await withTransaction(info, directory, async (database) => {
         expireHistory(database, eventKey, nowMs());
-        return idempotentReplay(info, database, eventKey, keyHash, fingerprintValue);
+        const head = database.prepare('SELECT state, expires_at_ms FROM heads WHERE event_key = ?').get(eventKey);
+        const replay = await idempotentReplay(info, database, eventKey, keyHash, fingerprintValue);
+        if (replay && head?.state === 'available') historyExpiresAtMs = head.expires_at_ms;
+        return replay;
       }, undefined, async (replay) => {
         await reauthorizeRequest(info, request, eventId, action, actorId, field);
-        if (replay) assertNotExpired(Date.parse(replay.snapshot.expiresAt));
+        if (replay) {
+          assertNotExpired(Date.parse(replay.snapshot.expiresAt));
+          assertNotExpired(historyExpiresAtMs);
+        }
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1082,6 +1140,7 @@ export function createCorrectionHistoryStore(options) {
     const expiresAtMs = Math.min(firstRetention.expiresAtMs, upperBoundMs ?? firstRetention.expiresAtMs);
     const retention = Object.freeze({ ...firstRetention, expiresAtMs });
     let finalRetentionExpiresAtMs = retention.expiresAtMs;
+    let replayHistoryExpiresAtMs;
     const key = await payloadKeyFor(info);
     const keyHash = keyed(info, indexKey, 'idempotency-key', idempotencyKey);
     const fingerprintValue = fingerprint(indexKey, info, eventKey, actorId, operation, normalizedInput);
@@ -1089,9 +1148,10 @@ export function createCorrectionHistoryStore(options) {
       return await withTransaction(info, directory, async (database) => {
         const transactionTime = nowMs();
         expireHistory(database, eventKey, transactionTime);
+        const current = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
+        if (current?.state === 'available') replayHistoryExpiresAtMs = current.expires_at_ms;
         const replay = await idempotentReplay(info, database, eventKey, keyHash, fingerprintValue);
         if (replay) return replay;
-        const current = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
         throwIfAborted(signal);
         if (operation === 'initialize') {
           if (current?.state === 'expired') fail('REVIEW_EXPIRED');
@@ -1209,7 +1269,9 @@ export function createCorrectionHistoryStore(options) {
       }, signal, async (result) => {
         await reauthorizeRequest(info, request, eventId, action, actorId, field);
         if (result?.snapshot?.expiresAt) assertNotExpired(Date.parse(result.snapshot.expiresAt));
-        if (result?.replayed !== true) {
+        if (result?.replayed === true) {
+          assertNotExpired(replayHistoryExpiresAtMs);
+        } else {
           assertNotExpired(retention.expiresAtMs);
           assertNotExpired(finalRetentionExpiresAtMs);
         }
@@ -1295,18 +1357,21 @@ export function createCorrectionHistoryStore(options) {
   async function loadBase(info, eventId, baseVersionId, baseContentHash, indexKey, request, action, actorId, field) {
     const eventKey = keyed(info, indexKey, 'event', eventId);
     const directory = await tenantDirectory(info);
+    let historyExpiresAtMs;
     try {
       return await withTransaction(info, directory, async (database) => {
         expireHistory(database, eventKey, nowMs());
         const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
         if (!head) fail('REVIEW_NOT_FOUND');
         if (head.state !== 'available') fail('REVIEW_EXPIRED');
+        historyExpiresAtMs = head.expires_at_ms;
         const row = rowForVersion(database, eventKey, baseVersionId);
         if (!row || row.content_hash !== baseContentHash) fail('REVIEW_VERSION_CONFLICT');
         return { row, snapshot: await decryptVersion(info, row), directory, eventKey };
       }, undefined, async (base) => {
         await reauthorizeRequest(info, request, eventId, action, actorId, field);
         assertNotExpired(base.row.expires_at_ms);
+        assertNotExpired(historyExpiresAtMs);
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1501,16 +1566,22 @@ export function createCorrectionHistoryStore(options) {
     const actorId = await authorizeRequest(info, request, eventId, 'read_history_version');
     const indexKey = await indexKeyFor(info);
     try {
+      let historyExpiresAtMs;
       const eventKey = keyed(info, indexKey, 'event', eventId);
       const directory = await tenantDirectory(info);
       return await withTransaction(info, directory, async (database) => {
         expireHistory(database, eventKey, nowMs());
+        const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
+        if (!head) fail('REVIEW_NOT_FOUND');
+        if (head.state !== 'available') fail('REVIEW_EXPIRED');
+        historyExpiresAtMs = head.expires_at_ms;
         const row = rowForVersion(database, eventKey, versionId);
         if (!row) fail('REVIEW_NOT_FOUND');
         return decryptVersion(info, row);
       }, undefined, async (snapshot) => {
         await reauthorizeRequest(info, request, eventId, 'read_history_version', actorId);
         assertNotExpired(Date.parse(snapshot.expiresAt));
+        assertNotExpired(historyExpiresAtMs);
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1527,11 +1598,13 @@ export function createCorrectionHistoryStore(options) {
     try {
       const eventKey = keyed(info, indexKey, 'event', eventId);
       const directory = await tenantDirectory(info);
+      let historyExpiresAtMs;
       return await withTransaction(info, directory, async (database) => {
         expireHistory(database, eventKey, nowMs());
         const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
         if (!head) fail('REVIEW_NOT_FOUND');
         if (head.state !== 'available') fail('REVIEW_EXPIRED');
+        historyExpiresAtMs = head.expires_at_ms;
         const rows = database.prepare("SELECT * FROM versions WHERE event_key = ? AND state = 'available' ORDER BY revision ASC").all(eventKey);
         if (rows.length > limits.maxRevisionsPerHistory) fail('REVIEW_INTEGRITY');
         const snapshots = [];
@@ -1539,6 +1612,7 @@ export function createCorrectionHistoryStore(options) {
         return Object.freeze(snapshots);
       }, undefined, async (snapshots) => {
         await reauthorizeRequest(info, request, eventId, 'list_history', actorId);
+        assertNotExpired(historyExpiresAtMs);
         for (const snapshot of snapshots) assertNotExpired(Date.parse(snapshot.expiresAt));
       });
     } catch (error) {

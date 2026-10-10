@@ -145,7 +145,8 @@ async function inspectDatabase(root, tenantId = 'tenant-a') {
   try {
     return {
       heads: database.prepare('SELECT * FROM heads ORDER BY event_key').all(),
-      versions: database.prepare('SELECT event_key, revision, version_id, parent_version_id, content_hash, sealed, state FROM versions ORDER BY event_key, revision').all(),
+      versions: database.prepare(`SELECT event_key, revision, version_id, parent_version_id, content_hash, material_hash,
+        expires_at_ms, encryption_key_id, sealed, state FROM versions ORDER BY event_key, revision`).all(),
       versionSealedLengths: database.prepare('SELECT length(sealed) AS length FROM versions WHERE sealed IS NOT NULL ORDER BY event_key, revision').all()
         .map((row) => row.length),
       idempotencyCount: database.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count,
@@ -367,6 +368,164 @@ test('two processes cannot both commit from one base revision', async (t) => {
   assert.equal(history[1].parentVersionId, first.versionId);
 });
 
+test('asynchronous same-process corrections across store instances serialize to one CAS winner', async (t) => {
+  const harness = await createHarness(t, {
+    lockTimeoutMs: 25,
+    async authorize({ tenantId, actorId, request }) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && request?.principal?.tenantId === tenantId
+        && request?.principal?.actorId === actorId
+        && actorId !== 'outsider';
+    },
+  });
+  const first = (await createSeed(harness)).snapshot;
+  const otherStore = harness.openStore();
+  const otherScope = await otherStore.scopeForAuthenticatedRequest(harness.request);
+  const makeInput = (value, idempotencyKey) => ({
+    eventId: EVENT_ID,
+    baseVersionId: first.versionId,
+    baseContentHash: first.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value },
+    idempotencyKey,
+    retentionHandle: harness.createPermit(),
+  });
+  const [left, right] = await Promise.allSettled([
+    harness.store.applyCorrection(harness.scope, makeInput('2027-06-20', 'async-same-process-left'), harness.request),
+    otherStore.applyCorrection(otherScope, makeInput('2027-06-21', 'async-same-process-right'), harness.request),
+  ]);
+  const outcomes = [left, right];
+  assert.equal(outcomes.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(outcomes.filter((result) => result.status === 'rejected').length, 1);
+  const rejected = outcomes.find((result) => result.status === 'rejected');
+  assert.equal(rejected.reason.code, 'REVIEW_VERSION_CONFLICT');
+  assert.equal(rejected.reason.code === 'REVIEW_BUSY', false);
+  const history = await harness.store.listHistory(harness.scope, EVENT_ID, harness.request);
+  assert.deepEqual(history.map((snapshot) => snapshot.revision), [1, 2]);
+});
+
+test('same-key duplicate requests commit once and replay across store instances', async (t) => {
+  const harness = await createHarness(t, {
+    lockTimeoutMs: 25,
+    async authorize({ tenantId, actorId, request }) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && request?.principal?.tenantId === tenantId
+        && request?.principal?.actorId === actorId
+        && actorId !== 'outsider';
+    },
+  });
+  const first = (await createSeed(harness)).snapshot;
+  const otherStore = harness.openStore();
+  const otherScope = await otherStore.scopeForAuthenticatedRequest(harness.request);
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: first.versionId,
+    baseContentHash: first.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-20' },
+    idempotencyKey: 'async-same-key-duplicate',
+    retentionHandle: harness.createPermit(),
+  };
+  const results = await Promise.all([
+    harness.store.applyCorrection(harness.scope, input, harness.request),
+    otherStore.applyCorrection(otherScope, input, harness.request),
+  ]);
+  assert.deepEqual(results.map((result) => result.replayed).sort(), [false, true]);
+  assert.equal(results[0].snapshot.versionId, results[1].snapshot.versionId);
+  assert.equal((await harness.store.listHistory(harness.scope, EVENT_ID, harness.request)).length, 2);
+  assert.equal((await inspectDatabase(harness.root)).idempotencyCount, 2);
+});
+
+test('queued cancellation rolls back, commits expiry cleanup, and releases later tenant work', async (t) => {
+  let harness;
+  let armed = false;
+  let blockedAuthorizations = 0;
+  let resolveBlockedBoundary;
+  let releaseBlockedBoundary;
+  let resolveQueuedAuthorization;
+  const blockedBoundary = new Promise((resolve) => { resolveBlockedBoundary = resolve; });
+  const releaseGate = new Promise((resolve) => { releaseBlockedBoundary = resolve; });
+  const queuedAuthorization = new Promise((resolve) => { resolveQueuedAuthorization = resolve; });
+  harness = await createHarness(t, {
+    lockTimeoutMs: 25,
+    async authorize({ tenantId, actorId, action, request }) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      const allowed = request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && request?.principal?.tenantId === tenantId
+        && request?.principal?.actorId === actorId
+        && actorId !== 'outsider';
+      if (armed && action === 'apply_correction' && actorId === 'customer-block') {
+        blockedAuthorizations += 1;
+        if (blockedAuthorizations === 7) {
+          resolveBlockedBoundary();
+          await releaseGate;
+        }
+      }
+      if (armed && action === 'apply_correction' && actorId === 'customer-a') resolveQueuedAuthorization();
+      return allowed;
+    },
+  });
+  const initial = (await harness.store.createHistory(harness.scope, {
+    eventId: EVENT_ID,
+    sourceFacts: initialFacts(),
+    idempotencyKey: 'queued-expiring-initialize',
+    retentionHandle: harness.createPermit('tenant-a', 1_000),
+  }, harness.request)).snapshot;
+  await harness.store.registerDownstreamReference(harness.scope, {
+    eventId: EVENT_ID,
+    versionId: initial.versionId,
+    contentHash: initial.contentHash,
+    referenceId: 'queued-expiry-cleanup-reference',
+    kind: 'handoff_reference',
+  }, harness.request);
+
+  const blockingRequest = createRequest('tenant-a', 'customer-block');
+  const blockingScope = await harness.store.scopeForAuthenticatedRequest(blockingRequest);
+  const otherStore = harness.openStore();
+  const otherScope = await otherStore.scopeForAuthenticatedRequest(harness.request);
+  armed = true;
+  const blockedWrite = harness.store.applyCorrection(blockingScope, {
+    eventId: EVENT_ID,
+    baseVersionId: initial.versionId,
+    baseContentHash: initial.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-20' },
+    idempotencyKey: 'queued-blocked-write',
+    retentionHandle: harness.createPermit(),
+  }, blockingRequest);
+  await blockedBoundary;
+
+  const controller = new AbortController();
+  const queuedWrite = otherStore.applyCorrection(otherScope, {
+    eventId: EVENT_ID,
+    baseVersionId: initial.versionId,
+    baseContentHash: initial.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-21' },
+    idempotencyKey: 'queued-cancelled-write',
+    retentionHandle: harness.createPermit(),
+  }, harness.request, { signal: controller.signal });
+  await queuedAuthorization;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  controller.abort();
+  harness.clock.value = EPOCH + 1_000;
+  releaseBlockedBoundary();
+
+  await assert.rejects(blockedWrite, assertReviewError('REVIEW_EXPIRED'));
+  await assert.rejects(queuedWrite, assertReviewError('REVIEW_ABORTED'));
+  assert.equal(await otherStore.purgeExpired(otherScope, harness.request), 0);
+  const disk = await inspectDatabase(harness.root);
+  assert.equal(disk.heads[0].state, 'expired');
+  assert.equal(disk.versions.length, 1);
+  assert.equal(disk.versions[0].version_id, null);
+  assert.equal(disk.versions[0].sealed, null);
+  assert.equal(disk.idempotencyCount, 0);
+  assert.equal(disk.references, 0);
+  assert.equal(disk.invalidations, 0);
+});
+
 test('cancellation after the new row is staged rolls back version, head, and idempotency together', async (t) => {
   const controller = new AbortController();
   let armed = false;
@@ -526,6 +685,132 @@ test('malformed arrays and hostile error codes become fixed typed failures witho
   await assert.rejects(access(path.join(harness.root,
     createHash('sha256').update('event-intelligence:review-tenant:v1:tenant-a').digest('hex'),
     'history.sqlite')));
+});
+
+test('abort inputs use the intrinsic brand-checked state and never leak hostile getter errors', async (t) => {
+  for (const operation of ['create', 'correction', 'refresh']) {
+    for (const kind of ['aborted', 'throwing_getter_aborted', 'prototype_forgery', 'proxy', 'revoked_proxy']) {
+      await t.test(`${operation} rejects ${kind} with a fixed typed error and no mutation`, async (subtest) => {
+        const harness = await createHarness(subtest);
+        const first = (await createSeed(harness)).snapshot;
+        const before = await inspectDatabase(harness.root);
+        let getterCalls = 0;
+        let signal;
+        if (kind === 'aborted' || kind === 'throwing_getter_aborted') {
+          const controller = new AbortController();
+          controller.abort();
+          signal = controller.signal;
+          if (kind === 'throwing_getter_aborted') {
+            Object.defineProperty(signal, 'aborted', {
+              configurable: true,
+              get() {
+                getterCalls += 1;
+                throw new Error('SYNTHETIC_ABORT_SECRET');
+              },
+            });
+          }
+        } else if (kind === 'prototype_forgery') {
+          signal = Object.create(AbortSignal.prototype);
+          Object.defineProperty(signal, 'aborted', { value: false });
+        } else if (kind === 'proxy') {
+          signal = new Proxy(new AbortController().signal, {
+            get() { throw new Error('SYNTHETIC_ABORT_SECRET'); },
+          });
+        } else {
+          const revoked = Proxy.revocable(new AbortController().signal, {});
+          revoked.revoke();
+          signal = revoked.proxy;
+        }
+
+        let operationPromise;
+        if (operation === 'create') {
+          operationPromise = harness.store.createHistory(harness.scope, {
+            eventId: `${EVENT_ID}-abort-${kind}`,
+            sourceFacts: initialFacts(),
+            idempotencyKey: `abort-create-${kind}`,
+            retentionHandle: harness.createPermit(),
+          }, harness.request, { signal });
+        } else if (operation === 'correction') {
+          operationPromise = harness.store.applyCorrection(harness.scope, {
+            eventId: EVENT_ID,
+            baseVersionId: first.versionId,
+            baseContentHash: first.contentHash,
+            field: 'event_date',
+            value: { precision: 'date', value: '2027-06-20' },
+            idempotencyKey: `abort-correction-${kind}`,
+            retentionHandle: harness.createPermit(),
+          }, harness.request, { signal });
+        } else {
+          operationPromise = harness.store.refreshSources(harness.scope, {
+            eventId: EVENT_ID,
+            baseVersionId: first.versionId,
+            baseContentHash: first.contentHash,
+            sourceFacts: { event_name: { status: 'sourced', value: 'Abort Test Refresh', sourceEvidence: [evidence('abort-refresh', 'refresh')] } },
+            idempotencyKey: `abort-refresh-${kind}`,
+            retentionHandle: harness.createPermit(),
+          }, harness.request, { signal });
+        }
+
+        const expectedCode = kind === 'aborted' || kind === 'throwing_getter_aborted' ? 'REVIEW_ABORTED' : 'REVIEW_INVALID';
+        await assert.rejects(operationPromise, (error) => {
+          assert.ok(error instanceof ReviewHistoryError);
+          assert.equal(error.code, expectedCode);
+          assert.equal(error.message, expectedCode === 'REVIEW_ABORTED'
+            ? 'correction history operation cancelled' : 'invalid correction history input');
+          assert.equal(error.message.includes('SYNTHETIC_ABORT_SECRET'), false);
+          assert.equal(Object.hasOwn(error, 'cause'), false);
+          return true;
+        });
+        assert.equal(getterCalls, 0);
+        assert.deepEqual(await inspectDatabase(harness.root), before);
+      });
+    }
+
+    await t.test(`${operation} accepts a genuine non-aborted signal with an ignored own getter`, async (subtest) => {
+      const harness = await createHarness(subtest);
+      const first = (await createSeed(harness)).snapshot;
+      const controller = new AbortController();
+      let getterCalls = 0;
+      Object.defineProperty(controller.signal, 'aborted', {
+        configurable: true,
+        get() {
+          getterCalls += 1;
+          throw new Error('SYNTHETIC_ABORT_SECRET');
+        },
+      });
+      if (operation === 'create') {
+        const result = await harness.store.createHistory(harness.scope, {
+          eventId: `${EVENT_ID}-genuine-abort-signal`,
+          sourceFacts: initialFacts(),
+          idempotencyKey: 'genuine-abort-create',
+          retentionHandle: harness.createPermit(),
+        }, harness.request, { signal: controller.signal });
+        assert.equal(result.snapshot.revision, 1);
+      } else if (operation === 'correction') {
+        const result = await harness.store.applyCorrection(harness.scope, {
+          eventId: EVENT_ID,
+          baseVersionId: first.versionId,
+          baseContentHash: first.contentHash,
+          field: 'event_date',
+          value: { precision: 'date', value: '2027-06-20' },
+          idempotencyKey: 'genuine-abort-correction',
+          retentionHandle: harness.createPermit(),
+        }, harness.request, { signal: controller.signal });
+        assert.equal(result.snapshot.revision, 2);
+      } else {
+        const result = await harness.store.refreshSources(harness.scope, {
+          eventId: EVENT_ID,
+          baseVersionId: first.versionId,
+          baseContentHash: first.contentHash,
+          sourceFacts: { event_name: { status: 'sourced', value: 'Genuine Signal Refresh', sourceEvidence: [evidence('genuine-signal-refresh', 'refresh')] } },
+          idempotencyKey: 'genuine-abort-refresh',
+          retentionHandle: harness.createPermit(),
+        }, harness.request, { signal: controller.signal });
+        assert.equal(result.snapshot.revision, 2);
+      }
+      assert.equal(getterCalls, 0);
+    });
+  }
 });
 
 test('local date-time rejects DST gaps and preserves fold ambiguity without choosing an instant', async (t) => {
@@ -856,6 +1141,250 @@ test('reads and idempotent replay reject expiry reached during decryption and co
   }
 });
 
+test('historical reads and every replay path enforce the current shortened history expiry after awaits', async (t) => {
+  for (const operation of ['historical', 'history_list', 'initialize_replay', 'correction_replay', 'refresh_replay']) {
+    for (const boundary of ['key', 'authorization']) {
+      for (const delta of [0, 1]) {
+        await t.test(`${operation} during ${boundary} at ${delta === 0 ? 'equality' : 'crossing'}`, async (subtest) => {
+          const expiryAtMs = EPOCH + 1_000;
+          let harness;
+          let armed = false;
+          let authorizationCalls = 0;
+          let actionToAdvance;
+          const advanceClock = () => { harness.clock.value = expiryAtMs + delta; };
+          harness = await createHarness(subtest, {
+            lockTimeoutMs: 25,
+            authorize({ tenantId, actorId, request, action }) {
+              const allowed = request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+                && request?.principal?.tenantId === tenantId
+                && request?.principal?.actorId === actorId
+                && actorId !== 'outsider';
+              if (armed && boundary === 'authorization' && action === actionToAdvance) {
+                authorizationCalls += 1;
+                if (authorizationCalls === 3) advanceClock();
+              }
+              return allowed;
+            },
+            resolveKey({ tenantId, purpose, keyId }) {
+              const resolvedId = `${purpose}-v1`;
+              if (keyId && keyId !== resolvedId) throw new Error('SYNTHETIC_KEY_ERROR');
+              if (armed && boundary === 'key' && purpose === 'correction_payload' && keyId) advanceClock();
+              return {
+                keyId: resolvedId,
+                key: createHash('sha256').update(`${tenantId}:${purpose}:test-only-key-material`).digest(),
+              };
+            },
+          });
+
+          const initializeInput = {
+            eventId: EVENT_ID,
+            sourceFacts: initialFacts(),
+            idempotencyKey: `short-head-initialize-${operation}`,
+            retentionHandle: harness.createPermit('tenant-a', 60_000),
+          };
+          const first = (await harness.store.createHistory(harness.scope, initializeInput, harness.request)).snapshot;
+          await harness.store.registerDownstreamReference(harness.scope, {
+            eventId: EVENT_ID,
+            versionId: first.versionId,
+            contentHash: first.contentHash,
+            referenceId: `short-head-reference-${operation}`,
+            kind: 'approval_reference',
+          }, harness.request);
+
+          let replayOperation;
+          if (operation === 'historical' || operation === 'history_list' || operation === 'initialize_replay') {
+            const shortCorrection = await harness.store.applyCorrection(harness.scope, {
+              eventId: EVENT_ID,
+              baseVersionId: first.versionId,
+              baseContentHash: first.contentHash,
+              field: 'event_date',
+              value: { precision: 'date', value: '2027-06-20' },
+              idempotencyKey: `short-head-current-${operation}`,
+              retentionHandle: harness.createPermit('tenant-a', 1_000),
+            }, harness.request);
+            assert.equal(Date.parse(shortCorrection.snapshot.expiresAt), expiryAtMs);
+            actionToAdvance = operation === 'historical' ? 'read_history_version'
+              : operation === 'history_list' ? 'list_history' : 'initialize_history';
+            replayOperation = operation === 'historical'
+              ? () => harness.store.getHistoryVersion(harness.scope, EVENT_ID, first.versionId, harness.request)
+              : operation === 'history_list'
+                ? () => harness.store.listHistory(harness.scope, EVENT_ID, harness.request)
+                : () => harness.store.createHistory(harness.scope, initializeInput, harness.request);
+          } else if (operation === 'correction_replay') {
+            const originalCorrection = {
+              eventId: EVENT_ID,
+              baseVersionId: first.versionId,
+              baseContentHash: first.contentHash,
+              field: 'event_date',
+              value: { precision: 'date', value: '2027-06-20' },
+              idempotencyKey: 'short-head-original-correction',
+              retentionHandle: harness.createPermit('tenant-a', 60_000),
+            };
+            const second = (await harness.store.applyCorrection(harness.scope, originalCorrection, harness.request)).snapshot;
+            const shortCorrection = await harness.store.applyCorrection(harness.scope, {
+              eventId: EVENT_ID,
+              baseVersionId: second.versionId,
+              baseContentHash: second.contentHash,
+              field: 'event_name',
+              value: 'Updated Moon Night',
+              idempotencyKey: 'short-head-after-correction',
+              retentionHandle: harness.createPermit('tenant-a', 1_000),
+            }, harness.request);
+            assert.equal(Date.parse(shortCorrection.snapshot.expiresAt), expiryAtMs);
+            actionToAdvance = 'apply_correction';
+            replayOperation = () => harness.store.applyCorrection(harness.scope, originalCorrection, harness.request);
+          } else {
+            const originalRefresh = {
+              eventId: EVENT_ID,
+              baseVersionId: first.versionId,
+              baseContentHash: first.contentHash,
+              sourceFacts: { event_name: { status: 'sourced', value: 'Updated Moon Night', sourceEvidence: [evidence('short-head-refresh', 'Updated Moon Night')] } },
+              idempotencyKey: 'short-head-original-refresh',
+              retentionHandle: harness.createPermit('tenant-a', 60_000),
+            };
+            const second = (await harness.store.refreshSources(harness.scope, originalRefresh, harness.request)).snapshot;
+            const shortCorrection = await harness.store.applyCorrection(harness.scope, {
+              eventId: EVENT_ID,
+              baseVersionId: second.versionId,
+              baseContentHash: second.contentHash,
+              field: 'event_date',
+              value: { precision: 'date', value: '2027-06-20' },
+              idempotencyKey: 'short-head-after-refresh',
+              retentionHandle: harness.createPermit('tenant-a', 1_000),
+            }, harness.request);
+            assert.equal(Date.parse(shortCorrection.snapshot.expiresAt), expiryAtMs);
+            actionToAdvance = 'refresh_source_facts';
+            replayOperation = () => harness.store.refreshSources(harness.scope, originalRefresh, harness.request);
+          }
+
+          harness.clock.value = expiryAtMs - 1;
+          const before = await inspectDatabase(harness.root);
+          assert.ok(before.sealedBytes > 0);
+          assert.ok(before.idempotencyCount > 1);
+          assert.equal(before.references, 1);
+          assert.ok(before.invalidations > 0);
+          armed = true;
+          authorizationCalls = 0;
+          await assert.rejects(replayOperation(), assertReviewError('REVIEW_EXPIRED'));
+
+          const after = await inspectDatabase(harness.root);
+          assert.equal(after.heads[0].state, 'expired');
+          assert.equal(after.heads[0].version_id, null);
+          assert.equal(after.versions.every((row) => row.state === 'expired' && row.version_id === null
+            && row.parent_version_id === null && row.content_hash === null && row.material_hash === null
+            && row.expires_at_ms === null && row.encryption_key_id === null && row.sealed === null), true);
+          assert.equal(after.idempotencyCount, 0);
+          assert.equal(after.references, 0);
+          assert.equal(after.invalidations, 0);
+          assert.equal(after.sealedBytes, 0);
+        });
+      }
+    }
+  }
+});
+
+test('an idempotent replay discovered after a competing commit checks the shortened current head', async (t) => {
+  let harness;
+  let armed = false;
+  let replayKeyArmed = false;
+  let firstPermit;
+  let secondPermit;
+  let shortPermit;
+  let firstRetentionCalls = 0;
+  let resolveFirstEntered;
+  let resolveSecondEntered;
+  let releaseFirst;
+  let releaseSecond;
+  const firstEntered = new Promise((resolve) => { resolveFirstEntered = resolve; });
+  const secondEntered = new Promise((resolve) => { resolveSecondEntered = resolve; });
+  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  const secondGate = new Promise((resolve) => { releaseSecond = resolve; });
+  harness = await createHarness(t, {
+    resolveRetention: async ({ sourceExpiresAtMs, retentionHandle }) => {
+      if (armed && retentionHandle === firstPermit && firstRetentionCalls++ === 0) {
+        resolveFirstEntered();
+        await firstGate;
+      }
+      if (armed && retentionHandle === secondPermit) {
+        resolveSecondEntered();
+        await secondGate;
+      }
+      const expiresAtMs = retentionHandle === shortPermit ? EPOCH + 1_000 : EPOCH + 60_000;
+      return {
+        expiresAtMs: Math.min(expiresAtMs, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+        policyId: 'synthetic-private-history',
+        policyVersion: '1',
+        accessPolicy: 'tenant_private',
+      };
+    },
+    resolveKey({ tenantId, purpose, keyId }) {
+      const resolvedId = `${purpose}-v1`;
+      if (keyId && keyId !== resolvedId) throw new Error('SYNTHETIC_KEY_ERROR');
+      if (replayKeyArmed && purpose === 'correction_payload' && keyId) harness.clock.value = EPOCH + 1_000;
+      return {
+        keyId: resolvedId,
+        key: createHash('sha256').update(`${tenantId}:${purpose}:test-only-key-material`).digest(),
+      };
+    },
+  });
+  const first = (await createSeed(harness)).snapshot;
+  await harness.store.registerDownstreamReference(harness.scope, {
+    eventId: EVENT_ID,
+    versionId: first.versionId,
+    contentHash: first.contentHash,
+    referenceId: 'inner-replay-expiry-reference',
+    kind: 'handoff_reference',
+  }, harness.request);
+  firstPermit = harness.createPermit('tenant-a', 60_000);
+  secondPermit = harness.createPermit('tenant-a', 60_000);
+  shortPermit = harness.createPermit('tenant-a', 1_000);
+  const duplicateInput = {
+    eventId: EVENT_ID,
+    baseVersionId: first.versionId,
+    baseContentHash: first.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-20' },
+    idempotencyKey: 'inner-replay-shared-key',
+  };
+  armed = true;
+  const firstCommit = harness.store.applyCorrection(harness.scope, {
+    ...duplicateInput,
+    retentionHandle: firstPermit,
+  }, harness.request);
+  await firstEntered;
+  const delayedDuplicate = harness.store.applyCorrection(harness.scope, {
+    ...duplicateInput,
+    retentionHandle: secondPermit,
+  }, harness.request);
+  await secondEntered;
+  releaseFirst();
+  const committed = await firstCommit;
+  assert.equal(committed.replayed, false);
+  const shortHead = await harness.store.applyCorrection(harness.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: committed.snapshot.versionId,
+    baseContentHash: committed.snapshot.contentHash,
+    field: 'event_name',
+    value: 'Short Head Revision',
+    idempotencyKey: 'inner-replay-short-head',
+    retentionHandle: shortPermit,
+  }, harness.request);
+  assert.equal(Date.parse(shortHead.snapshot.expiresAt), EPOCH + 1_000);
+
+  harness.clock.value = EPOCH + 999;
+  replayKeyArmed = true;
+  releaseSecond();
+  await assert.rejects(delayedDuplicate, assertReviewError('REVIEW_EXPIRED'));
+  const disk = await inspectDatabase(harness.root);
+  assert.equal(disk.heads[0].state, 'expired');
+  assert.equal(disk.versions.length, 3);
+  assert.equal(disk.versions.every((row) => row.state === 'expired' && row.version_id === null && row.sealed === null), true);
+  assert.equal(disk.idempotencyCount, 0);
+  assert.equal(disk.references, 0);
+  assert.equal(disk.invalidations, 0);
+  assert.equal(disk.sealedBytes, 0);
+});
+
 test('any denied expired operation commits ciphertext, idempotency, reference, and invalidation cleanup', async (t) => {
   for (const operation of ['get', 'version', 'list', 'references', 'replay', 'failed_write']) {
     await t.test(operation, async (subtest) => {
@@ -977,82 +1506,167 @@ test('512 KiB ceiling measures the sealed envelope and rejected refresh preserve
   assert.equal((await rejectHarness.store.listDownstreamReferences(rejectHarness.scope, EVENT_ID, rejectHarness.request))[0].state, 'bound_to_version');
 });
 
-test('expiry cleanup migrates prior non-null version tombstones and clears linked private rows', async (t) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'ei-review-history-migration-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const tenantId = 'tenant-a';
-  const actorId = 'customer-a';
-  const eventId = 'legacy-event';
-  const tenantHash = createHash('sha256').update(`event-intelligence:review-tenant:v1:${tenantId}`).digest('hex');
-  const tenantDirectory = path.join(root, tenantHash);
-  await mkdir(tenantDirectory, { mode: 0o700 });
-  const databasePath = path.join(tenantDirectory, 'history.sqlite');
-  const database = new DatabaseSync(databasePath);
-  const eventKey = createHmac('sha256', createHash('sha256').update(`${tenantId}:correction_index:test-only-key-material`).digest())
+test('legacy migration preserves available history and normalizes prior explicit expiry tombstones', async (t) => {
+  const harness = await createHarness(t);
+  const activeEventId = 'legacy-active-history';
+  const expiredEventId = 'legacy-explicitly-purged-history';
+  const activeInitialize = {
+    eventId: activeEventId,
+    sourceFacts: initialFacts(),
+    idempotencyKey: 'legacy-active-initialize',
+    retentionHandle: harness.createPermit(),
+  };
+  const activeFirst = (await harness.store.createHistory(harness.scope, activeInitialize, harness.request)).snapshot;
+  await harness.store.registerDownstreamReference(harness.scope, {
+    eventId: activeEventId,
+    versionId: activeFirst.versionId,
+    contentHash: activeFirst.contentHash,
+    referenceId: 'legacy-active-reference',
+    kind: 'handoff_reference',
+  }, harness.request);
+  const activeCorrectionInput = {
+    eventId: activeEventId,
+    baseVersionId: activeFirst.versionId,
+    baseContentHash: activeFirst.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-20' },
+    idempotencyKey: 'legacy-active-correction',
+    retentionHandle: harness.createPermit(),
+  };
+  const activeSecond = (await harness.store.applyCorrection(harness.scope, activeCorrectionInput, harness.request)).snapshot;
+
+  const expiredInitialize = {
+    eventId: expiredEventId,
+    sourceFacts: initialFacts(),
+    idempotencyKey: 'legacy-expired-initialize',
+    retentionHandle: harness.createPermit('tenant-a', 1_000),
+  };
+  const expiredFirst = (await harness.store.createHistory(harness.scope, expiredInitialize, harness.request)).snapshot;
+  await harness.store.registerDownstreamReference(harness.scope, {
+    eventId: expiredEventId,
+    versionId: expiredFirst.versionId,
+    contentHash: expiredFirst.contentHash,
+    referenceId: 'legacy-expired-reference',
+    kind: 'approval_reference',
+  }, harness.request);
+  const expiredCorrectionInput = {
+    eventId: expiredEventId,
+    baseVersionId: expiredFirst.versionId,
+    baseContentHash: expiredFirst.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-21' },
+    idempotencyKey: 'legacy-expired-correction',
+    retentionHandle: harness.createPermit('tenant-a', 1_000),
+  };
+  const expiredSecond = (await harness.store.applyCorrection(harness.scope, expiredCorrectionInput, harness.request)).snapshot;
+  const tenantHash = createHash('sha256').update('event-intelligence:review-tenant:v1:tenant-a').digest('hex');
+  const indexKey = createHash('sha256').update('tenant-a:correction_index:test-only-key-material').digest();
+  const eventKeyFor = (eventId) => createHmac('sha256', indexKey)
     .update(`event-intelligence:review-index:v1:${tenantHash}:event:${eventId}`).digest('hex');
-  const oldVersionId = 'prior-schema-version';
+  const activeEventKey = eventKeyFor(activeEventId);
+  const expiredEventKey = eventKeyFor(expiredEventId);
+
+  harness.clock.value = EPOCH + 1_000;
+  const databasePath = path.join(harness.root, tenantHash, 'history.sqlite');
+  const database = new DatabaseSync(databasePath);
+  database.exec('BEGIN IMMEDIATE');
   database.exec(`
-    CREATE TABLE versions (
+    CREATE TABLE versions_legacy (
       event_key TEXT NOT NULL, revision INTEGER NOT NULL, version_id TEXT NOT NULL, parent_version_id TEXT,
       content_hash TEXT, material_hash TEXT, expires_at_ms INTEGER, encryption_key_id TEXT, sealed BLOB,
       state TEXT NOT NULL CHECK (state IN ('available', 'expired')),
       PRIMARY KEY (event_key, revision), UNIQUE (event_key, version_id)
     ) STRICT;
-    CREATE TABLE heads (
-      event_key TEXT PRIMARY KEY NOT NULL, revision INTEGER, version_id TEXT, content_hash TEXT,
-      material_hash TEXT, expires_at_ms INTEGER,
-      state TEXT NOT NULL CHECK (state IN ('available', 'expired'))
-    ) STRICT;
-    CREATE TABLE idempotency (
-      event_key TEXT NOT NULL, key_hash TEXT NOT NULL, fingerprint TEXT NOT NULL, version_id TEXT NOT NULL,
-      PRIMARY KEY (event_key, key_hash)
-    ) STRICT;
-    CREATE TABLE downstream_references (
-      event_key TEXT NOT NULL, reference_hash TEXT NOT NULL, bound_version_id TEXT NOT NULL,
-      bound_content_hash TEXT NOT NULL, encryption_key_id TEXT NOT NULL, sealed BLOB NOT NULL,
-      PRIMARY KEY (event_key, reference_hash)
-    ) STRICT;
-    CREATE TABLE invalidations (
-      event_key TEXT NOT NULL, reference_hash TEXT NOT NULL, prior_version_id TEXT NOT NULL,
-      prior_content_hash TEXT NOT NULL, next_version_id TEXT NOT NULL,
-      material_change INTEGER NOT NULL CHECK (material_change IN (0, 1)), reason TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      PRIMARY KEY (event_key, reference_hash, prior_version_id, prior_content_hash)
-    ) STRICT;
+    INSERT INTO versions_legacy SELECT * FROM versions;
+    DROP TABLE versions;
+    ALTER TABLE versions_legacy RENAME TO versions;
   `);
-  database.prepare(`INSERT INTO versions VALUES (?, 1, ?, NULL, ?, ?, ?, ?, ?, 'available')`)
-    .run(eventKey, oldVersionId, 'a'.repeat(64), 'b'.repeat(64), EPOCH - 1, 'payload-key-v1', Buffer.from('synthetic-ciphertext'));
-  database.prepare(`INSERT INTO heads VALUES (?, 1, ?, ?, ?, ?, 'available')`)
-    .run(eventKey, oldVersionId, 'a'.repeat(64), 'b'.repeat(64), EPOCH - 1);
+  // Recreate the prior implementation's explicit purge shape: it erased payloads,
+  // hashes and parent links but left each version_id on the expired row.
+  database.prepare(`UPDATE versions SET parent_version_id = NULL, content_hash = NULL, material_hash = NULL,
+    expires_at_ms = NULL, encryption_key_id = NULL, sealed = NULL, state = 'expired' WHERE event_key = ?`).run(expiredEventKey);
+  database.prepare(`UPDATE heads SET revision = NULL, version_id = NULL, content_hash = NULL, material_hash = NULL,
+    expires_at_ms = NULL, state = 'expired' WHERE event_key = ?`).run(expiredEventKey);
+  database.prepare('DELETE FROM idempotency WHERE event_key = ?').run(expiredEventKey);
+  database.prepare('DELETE FROM downstream_references WHERE event_key = ?').run(expiredEventKey);
+  database.prepare('DELETE FROM invalidations WHERE event_key = ?').run(expiredEventKey);
+  // Stale linked metadata is not emitted by the old atomic purge, but migration
+  // also removes it if a legacy database contains detached cleanup residue.
   database.prepare('INSERT INTO idempotency VALUES (?, ?, ?, ?)')
-    .run(eventKey, 'synthetic-key-hash', 'synthetic-fingerprint', oldVersionId);
+    .run(expiredEventKey, 'stale-idempotency-hash', 'stale-fingerprint', expiredFirst.versionId);
   database.prepare('INSERT INTO downstream_references VALUES (?, ?, ?, ?, ?, ?)')
-    .run(eventKey, 'synthetic-reference-hash', oldVersionId, 'a'.repeat(64), 'payload-key-v1', Buffer.from('synthetic-reference-ciphertext'));
+    .run(expiredEventKey, 'stale-reference-hash', expiredSecond.versionId, expiredSecond.contentHash,
+      'payload-key-v1', Buffer.from('stale-reference-envelope'));
   database.prepare('INSERT INTO invalidations VALUES (?, ?, ?, ?, ?, 1, ?, ?)')
-    .run(eventKey, 'synthetic-reference-hash', oldVersionId, 'a'.repeat(64), 'next-version', 'material_projection_changed', new Date(EPOCH - 2).toISOString());
+    .run(expiredEventKey, 'stale-reference-hash', expiredFirst.versionId, expiredFirst.contentHash,
+      expiredSecond.versionId, 'material_projection_changed', new Date(EPOCH).toISOString());
+  database.exec('COMMIT');
   database.close();
 
-  const request = { tenantId, actorId };
-  const store = createCorrectionHistoryStore({
-    directory: root,
-    resolveTenant: (context) => context.tenantId,
-    resolveActor: (context) => context.actorId,
-    authorize: ({ tenantId: authorizedTenant, actorId: authorizedActor, request: context }) =>
-      context.tenantId === authorizedTenant && context.actorId === authorizedActor,
-    resolveKey: () => ({ keyId: 'unused-test-key', key: Buffer.alloc(32) }),
-    resolveRetention: () => ({ expiresAtMs: EPOCH + 1_000, policyId: 'unused', policyVersion: '1', accessPolicy: 'tenant_private' }),
-    now: () => EPOCH,
-    lockedFields: [],
-  });
-  const scope = await store.scopeForAuthenticatedRequest(request);
-  assert.equal(await store.purgeExpired(scope, request), 1);
-  const disk = await inspectDatabase(root, tenantId);
-  assert.equal(disk.heads[0].state, 'expired');
-  assert.equal(disk.versions.length, 1);
-  assert.equal(disk.versions[0].version_id, null);
-  assert.equal(disk.versions[0].sealed, null);
-  assert.equal(disk.idempotencyCount, 0);
-  assert.equal(disk.references, 0);
-  assert.equal(disk.invalidations, 0);
-  assert.equal(disk.sealedBytes, 0);
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(harness.request);
+  const activeRead = await reopened.getHistory(reopenedScope, activeEventId, harness.request);
+  assert.equal(activeRead.versionId, activeSecond.versionId);
+  assert.equal(activeRead.contentHash, activeSecond.contentHash);
+  const activeReplay = await reopened.createHistory(reopenedScope, activeInitialize, harness.request);
+  assert.equal(activeReplay.replayed, true);
+  assert.equal(activeReplay.snapshot.versionId, activeFirst.versionId);
+  assert.equal(activeReplay.snapshot.contentHash, activeFirst.contentHash);
+  assert.deepEqual((await reopened.listHistory(reopenedScope, activeEventId, harness.request)).map((snapshot) => snapshot.revision), [1, 2]);
+
+  const disk = await inspectDatabase(harness.root);
+  const activeRows = disk.versions.filter((row) => row.event_key === activeEventKey);
+  const expiredRows = disk.versions.filter((row) => row.event_key === expiredEventKey);
+  assert.equal(activeRows.length, 2);
+  assert.deepEqual(activeRows.map((row) => row.version_id), [activeFirst.versionId, activeSecond.versionId]);
+  assert.deepEqual(activeRows.map((row) => row.content_hash), [activeFirst.contentHash, activeSecond.contentHash]);
+  assert.equal(activeRows.every((row) => row.state === 'available' && row.sealed !== null), true);
+  assert.equal(expiredRows.length, 2);
+  assert.equal(expiredRows.every((row) => row.state === 'expired' && row.version_id === null
+    && row.parent_version_id === null && row.content_hash === null && row.material_hash === null
+    && row.expires_at_ms === null && row.encryption_key_id === null && row.sealed === null), true);
+  const expiredHead = disk.heads.find((row) => row.event_key === expiredEventKey);
+  assert.equal(expiredHead.state, 'expired');
+  assert.equal(expiredHead.revision, null);
+  assert.equal(expiredHead.version_id, null);
+  assert.equal(expiredHead.content_hash, null);
+  assert.equal(expiredHead.material_hash, null);
+  assert.equal(expiredHead.expires_at_ms, null);
+  assert.equal(disk.idempotencyCount, 2);
+  assert.equal(disk.references, 1);
+  assert.equal(disk.invalidations, 1);
+
+  const tableInfo = new DatabaseSync(databasePath);
+  try {
+    assert.equal(tableInfo.prepare('PRAGMA table_info(versions)').all().find((column) => column.name === 'version_id').notnull, 0);
+  } finally {
+    tableInfo.close();
+  }
+  const priorCandidateDb = new DatabaseSync(databasePath);
+  try {
+    // The previously reviewed migration made the column nullable but copied
+    // version_id unchanged for already-expired rows. Recreate that durable state
+    // to ensure a later transaction can safely normalize it again.
+    priorCandidateDb.prepare('UPDATE versions SET version_id = ? WHERE event_key = ? AND revision = 1')
+      .run(expiredFirst.versionId, expiredEventKey);
+    priorCandidateDb.prepare('INSERT INTO idempotency VALUES (?, ?, ?, ?)')
+      .run(expiredEventKey, 'post-migration-stale-key', 'stale-fingerprint', expiredFirst.versionId);
+    priorCandidateDb.prepare('INSERT INTO downstream_references VALUES (?, ?, ?, ?, ?, ?)')
+      .run(expiredEventKey, 'post-migration-stale-reference', expiredFirst.versionId, expiredFirst.contentHash,
+        'payload-key-v1', Buffer.from('stale-migrated-reference'));
+    priorCandidateDb.prepare('INSERT INTO invalidations VALUES (?, ?, ?, ?, ?, 1, ?, ?)')
+      .run(expiredEventKey, 'post-migration-stale-reference', expiredFirst.versionId, expiredFirst.contentHash,
+        expiredSecond.versionId, 'material_projection_changed', new Date(EPOCH).toISOString());
+  } finally {
+    priorCandidateDb.close();
+  }
+  assert.equal(await reopened.purgeExpired(reopenedScope, harness.request), 0);
+  const repeated = await inspectDatabase(harness.root);
+  assert.equal(repeated.versions.filter((row) => row.event_key === expiredEventKey)
+    .every((row) => row.version_id === null && row.parent_version_id === null && row.content_hash === null
+      && row.material_hash === null && row.expires_at_ms === null && row.encryption_key_id === null && row.sealed === null), true);
+  assert.equal(repeated.idempotencyCount, 2);
+  assert.equal(repeated.references, 1);
+  assert.equal(repeated.invalidations, 1);
+  assert.equal((await reopened.getHistory(reopenedScope, activeEventId, harness.request)).contentHash, activeSecond.contentHash);
 });
