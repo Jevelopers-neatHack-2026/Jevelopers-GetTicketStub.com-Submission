@@ -12,6 +12,7 @@ const CASES = Object.freeze({
   "safe-retrieval": ["tests/security"],
   "content-privacy": ["tests/privacy", "tests/security/injection"],
   "evidence-facts": ["tests/evidence"],
+  "pdf-derived-evidence": ["tests/evidence", "tests/extraction/pdf", "tests/integration/pdf-evidence"],
   "deterministic-extraction": ["tests/extraction"],
   evals: ["tests/evals"],
   "research-api": ["tests/api"],
@@ -108,12 +109,12 @@ function printSummary(summary) {
   process.exitCode = summary.exit_code;
 }
 
-async function executeMock(caseName, directories) {
+async function executeMock(caseName, directories, mode = "mock", fixtureScope = "local controlled fixtures only") {
   const files = await collectTestFiles(directories);
   if (files.length === 0) {
     printSummary({
       case: caseName,
-      mode: "mock",
+      mode,
       status: "failed",
       exit_code: 1,
       test_files: 0,
@@ -124,7 +125,7 @@ async function executeMock(caseName, directories) {
       skipped_cases: 0,
       todo_cases: 0,
       cancelled_cases: 0,
-      fixture_scope: "local controlled fixtures only",
+      fixture_scope: fixtureScope,
       external_egress: "not measured",
       provider_activity: "none",
       reason: "no test files were collected",
@@ -148,7 +149,7 @@ async function executeMock(caseName, directories) {
   const { complete, terminal, counts } = evaluateCompletion(aggregate, enqueued);
   printSummary({
     case: caseName,
-    mode: "mock",
+    mode,
     status: complete ? "passed" : "failed",
     exit_code: complete ? 0 : 1,
     test_files: files.length,
@@ -159,7 +160,7 @@ async function executeMock(caseName, directories) {
     skipped_cases: counts?.skipped ?? 0,
     todo_cases: counts?.todo ?? 0,
     cancelled_cases: counts?.cancelled ?? 0,
-    fixture_scope: "local controlled fixtures only",
+    fixture_scope: fixtureScope,
     external_egress: "not measured",
     provider_activity: "none",
     reason: complete ? null : "tests did not complete as an all-pass, non-skipped run",
@@ -274,7 +275,9 @@ async function main() {
   const { caseName, mode } = selected;
   const modeAllowed = caseName === "eval-policy-unit"
     ? mode === "unit"
-    : ["mock", "live"].includes(mode);
+    : caseName === "pdf-derived-evidence"
+      ? mode === "linux-integration"
+      : ["mock", "live"].includes(mode);
   if (!caseName || !Object.hasOwn(CASES, caseName) || !modeAllowed) {
     printSummary({ case: caseName ?? null, mode: mode ?? null, status: "failed", exit_code: 1, reason: "unknown case or mode" });
     return;
@@ -288,6 +291,23 @@ async function main() {
       runtime: process.versions.node,
       required_runtime: "Node 22.x",
       reason: "verification must run on the supported Node 22 runtime",
+    });
+    return;
+  }
+  if (caseName === "pdf-derived-evidence" && process.platform !== "linux") {
+    printSummary({
+      case: caseName,
+      mode,
+      status: "failed",
+      exit_code: 1,
+      runtime: process.versions.node,
+      platform: process.platform,
+      test_files: 0,
+      expected_cases: 0,
+      terminal_cases: 0,
+      skipped_cases: 0,
+      provider_activity: "none",
+      reason: "the real isolated PDF-to-store integration requires Linux and cannot be counted as passed on another platform",
     });
     return;
   }
@@ -310,6 +330,10 @@ async function main() {
   }
   if (caseName === "eval-policy-unit") {
     await executePythonUnit();
+    return;
+  }
+  if (caseName === "pdf-derived-evidence") {
+    await executeMock(caseName, CASES[caseName], mode, "local PDF fixtures through the actual isolated reader and synthetic store adapters");
     return;
   }
   await executeMock(caseName, CASES[caseName]);

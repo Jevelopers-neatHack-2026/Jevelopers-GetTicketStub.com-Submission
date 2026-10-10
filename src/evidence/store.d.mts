@@ -1,3 +1,5 @@
+import type { PdfTextReaderErrorCode } from '../extraction/pdf/index.mjs';
+
 declare const tenantScopeBrand: unique symbol;
 declare const evidenceHandleBrand: unique symbol;
 declare const evidencePositionBrand: unique symbol;
@@ -73,6 +75,45 @@ export interface EvidencePositionInput {
   readonly content: string | Uint8Array;
 }
 
+export interface PdfTextBoxLocator {
+  readonly kind: 'pdf-text-box';
+  readonly pageIndex: number;
+  readonly textIndex: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly pageWidth: number;
+  readonly pageHeight: number;
+  readonly rotation: 0 | 90 | 180 | 270;
+  readonly coordinateSystem: 'viewport-points-top-left';
+  readonly geometry: 'approximate-text-item';
+}
+
+export type StoredEvidenceLocator = TextRangeLocator | JsonPointerLocator | PdfTextBoxLocator;
+
+export interface StoredPdfDerivedPage {
+  readonly pageIndex: number;
+  readonly width: number;
+  readonly height: number;
+  readonly rotation: 0 | 90 | 180 | 270;
+  readonly coordinateSystem: 'viewport-points-top-left';
+  readonly textPresence: 'text-present' | 'no-embedded-text';
+  readonly requiresInspection: true;
+  readonly textBoxCount: number;
+}
+
+export interface PdfDerivedProvenance {
+  readonly bindingVersion: 1;
+  readonly decoder: Readonly<{ name: 'pdfjs-dist'; version: '6.4.299'; configVersion: 'ei-text-pdf/1' }>;
+  readonly completeness: 'incomplete-text-only';
+  readonly requiresInspection: true;
+  readonly limits: Readonly<Record<string, number>>;
+  readonly pages: readonly StoredPdfDerivedPage[];
+  readonly textBoxCount: number;
+  readonly derivationDigest: string;
+}
+
 export interface AvailableEvidenceMetadata {
   readonly evidenceId: string;
   readonly version: number;
@@ -88,6 +129,8 @@ export interface AvailableEvidenceMetadata {
   readonly accessPolicy: 'tenant_private';
   readonly state: 'available';
   readonly positionCount: number;
+  readonly representation?: 'pdf-derived-text';
+  readonly derivationDigest?: string;
 }
 
 /** A minimal tombstone with no content hash, URL key, timestamp, or source linkage. */
@@ -118,6 +161,33 @@ export interface EvidenceIngestResult {
   readonly created: boolean;
   readonly metadata: AvailableEvidenceMetadata;
 }
+
+export interface PdfDerivedReaderOptions {
+  /** Lower than the reader's fixed maximum. Timeout is operational and excluded from derivation identity. */
+  readonly timeoutMs?: number;
+  /** Lower-only decoder caps; the effective values are persisted in provenance. */
+  readonly maxTextCodeUnits?: number;
+  readonly maxOutputBytes?: number;
+}
+
+export interface PdfDerivedEvidenceIngestInput {
+  readonly sourceUrl: string;
+  readonly canonicalUrl?: string;
+  readonly redirectChain?: readonly string[];
+  /** Exact copied bytes fetched from the source. Strings are rejected to avoid re-encoding the PDF. */
+  readonly content: Uint8Array;
+  readonly contentType: string;
+  readonly retrievedAt: string;
+  readonly sourceKind: 'external' | 'customer_supplied';
+  /** Opaque app-issued retention capability; caller tenant fields are never accepted. */
+  readonly retentionHandle: object;
+  readonly readerOptions?: PdfDerivedReaderOptions;
+}
+
+export type PdfDerivedEvidenceIngestResult =
+  | (EvidenceIngestResult & { readonly outcome: 'stored' })
+  | { readonly outcome: 'no-text'; readonly code: 'NO_EMBEDDED_TEXT'; readonly requiresInspection: true }
+  | { readonly outcome: 'rejected'; readonly code: PdfTextReaderErrorCode };
 
 export interface EvidenceSupportInput {
   readonly evidence: EvidenceHandle;
@@ -216,9 +286,11 @@ export interface EvidencePrivatePayloadInput<Request = unknown> {
     retrievedAt: string;
     retrievedAtMs: number;
     contentHash: string;
+    /** Present only for derived PDF text, and remains private provenance. */
+    derivedPdf?: PdfDerivedProvenance;
   }>;
   readonly positions: readonly Readonly<{
-    locator: TextRangeLocator | JsonPointerLocator;
+    locator: StoredEvidenceLocator;
     contentHash: string;
     content: Uint8Array;
   }>[];
@@ -248,10 +320,12 @@ export interface EvidenceSelectedEvidence {
     retrievedAtMs: number;
     /** Full source SHA-256; each position carries its own selected-content hash. */
     contentHash: string;
+    /** Present only for derived PDF text. Contains no text bytes or text strings. */
+    derivedPdf?: PdfDerivedProvenance;
   }>;
   readonly positions: readonly Readonly<{
     handle: EvidencePositionHandle;
-    locator: TextRangeLocator | JsonPointerLocator;
+    locator: StoredEvidenceLocator;
     /** Digest of the exact selected position bytes, distinct from source.contentHash. */
     contentHash: string;
   }>[];
@@ -320,11 +394,18 @@ export interface EvidenceIntegritySnapshot {
 export interface EvidenceStore<Request = unknown> {
   scopeForAuthenticatedRequest(request: Request): Promise<EvidenceTenantScope>;
   ingestEvidence(scope: EvidenceTenantScope, input: EvidenceIngestInput): Promise<EvidenceIngestResult>;
+  /** Invokes the pinned isolated PDF reader itself; caller-supplied observations and geometry are rejected. */
+  ingestDerivedPdfEvidence(
+    scope: EvidenceTenantScope,
+    input: PdfDerivedEvidenceIngestInput,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<PdfDerivedEvidenceIngestResult>;
   lookupEvidence(scope: EvidenceTenantScope, evidenceId: string): Promise<EvidenceHandle>;
   getEvidenceMetadata(scope: EvidenceTenantScope, evidence: EvidenceHandle): Promise<EvidenceMetadata>;
   listEvidencePositions(scope: EvidenceTenantScope, evidence: EvidenceHandle, request: Request): Promise<readonly Readonly<{
     handle: EvidencePositionHandle;
-    locator: TextRangeLocator | JsonPointerLocator;
+    locator: StoredEvidenceLocator;
     contentHash: string;
   }>[] >;
   /** Bounded, all-or-error private snapshot; no raw source or position bytes are returned. */
