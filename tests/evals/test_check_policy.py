@@ -360,6 +360,146 @@ class CheckPolicyTests(unittest.TestCase):
             self.assertFalse(report["promotion_eligible"])
             self.assertTrue(any("non-finite JSON number is forbidden: NaN" in error for error in report["errors"]))
 
+    def test_required_v1_metrics_targets_slices_and_floors_are_enforced(self) -> None:
+        mutations = (
+            (
+                "missing relevance target",
+                lambda policy: policy["required_questions"][1]["candidate_thresholds"].pop("relevance_recall_min"),
+                "candidate threshold identities must match the v1 registry",
+            ),
+            (
+                "changed relevance acceptance floor",
+                lambda policy: policy["required_questions"][1]["candidate_thresholds"].update(relevance_recall_min=0.10),
+                "relevance_recall_min must retain v1 acceptance floor 0.98",
+            ),
+            (
+                "missing required metric",
+                lambda policy: policy["required_questions"][1]["required_metrics"].remove("relevance_recall"),
+                "required_metrics must retain the complete versioned v1 metric registry",
+            ),
+            (
+                "missing negative slices",
+                lambda policy: [question.pop("required_negative_slices") for question in policy["required_questions"]],
+                "required_negative_slices must retain the complete versioned v1 slice identities",
+            ),
+            (
+                "missing per-slice floors",
+                lambda policy: [question.pop("per_slice_floor_min") for question in policy["required_questions"]],
+                "per_slice_floor_min must be a finite numeric rate",
+            ),
+            (
+                "boolean per-slice floor",
+                lambda policy: policy["required_questions"][0].update(per_slice_floor_min=True),
+                "per_slice_floor_min must be a finite numeric rate",
+            ),
+            (
+                "changed per-slice floor",
+                lambda policy: policy["required_questions"][0].update(per_slice_floor_min=0.01),
+                "per_slice_floor_min must retain v1 acceptance floor 0.9",
+            ),
+        )
+        for name, mutate, expected_error in mutations:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                policy = json.loads(POLICY.read_text(encoding="utf-8"))
+                mutate(policy)
+                policy_path = Path(directory) / "policy.json"
+                write_json(policy_path, policy)
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    exit_code = check_policy.main([
+                        "--policy", str(policy_path), "--corpus", str(MANIFEST), "--validate-only",
+                    ])
+                self.assertEqual(exit_code, 1)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report["status"], "invalid")
+                self.assertFalse(report["promotion_eligible"])
+                self.assertTrue(any(expected_error in error for error in report["errors"]), report["errors"])
+                self.assertTrue(any(expected_error in item["message"] for item in report["error_details"]))
+                self.assertTrue(any("No trusted owner-role signing keys" in blocker for blocker in report["promotion_blockers"]))
+
+    def test_unsupported_policy_version_and_compatibility_mismatch_are_invalid(self) -> None:
+        mutations = (
+            (
+                "unsupported major with matching pin",
+                lambda policy: (policy.update(policy_version="2.0.0"), policy["version_pins"].update(policy="2.0.0")),
+                "unsupported policy version '2.0.0'",
+            ),
+            (
+                "compatibility differs from actual version",
+                lambda policy: policy["version_compatibility"].update(policy_version="2.0.0"),
+                "version_compatibility.policy_version must equal the actual supported policy_version",
+            ),
+        )
+        for name, mutate, expected_error in mutations:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                policy = json.loads(POLICY.read_text(encoding="utf-8"))
+                mutate(policy)
+                policy_path = Path(directory) / "policy.json"
+                write_json(policy_path, policy)
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    exit_code = check_policy.main([
+                        "--policy", str(policy_path), "--corpus", str(MANIFEST), "--validate-only",
+                    ])
+                self.assertEqual(exit_code, 1)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report["status"], "invalid")
+                self.assertTrue(any(expected_error in error for error in report["errors"]), report["errors"])
+                self.assertTrue(any(expected_error in item["message"] for item in report["error_details"]))
+                self.assertTrue(any("No trusted owner-role signing keys" in blocker for blocker in report["promotion_blockers"]))
+
+    def test_unknown_downstream_cost_never_defaults_to_zero(self) -> None:
+        mutations = (
+            (
+                "true zero-cost flag",
+                lambda policy: policy["quality_cost_tradeoff"].update(unknown_or_missing_cost_is_zero=True),
+                "unknown_or_missing_cost_is_zero must be the explicit boolean false",
+            ),
+            (
+                "missing zero-cost flag",
+                lambda policy: policy["quality_cost_tradeoff"].pop("unknown_or_missing_cost_is_zero"),
+                "unknown_or_missing_cost_is_zero must be the explicit boolean false",
+            ),
+            (
+                "count workflow unknown as zero",
+                lambda policy: policy["cost_and_latency_targets"]["standard_workflow_cost_cap"].update(unknown_cost_treatment="count as zero"),
+                "standard workflow unknown_cost_treatment must equal unknown_is_not_zero_and_fails_cost_gate",
+            ),
+            (
+                "missing workflow treatment",
+                lambda policy: policy["cost_and_latency_targets"]["standard_workflow_cost_cap"].pop("unknown_cost_treatment"),
+                "standard workflow unknown_cost_treatment must equal unknown_is_not_zero_and_fails_cost_gate",
+            ),
+            (
+                "malformed comparison treatment",
+                lambda policy: policy["cost_and_latency_targets"]["comparison_total_cost_cap"].update(unknown_cost_treatment={"unknown": "zero"}),
+                "comparison total unknown_cost_treatment must equal unknown_is_not_zero_and_fails_cost_gate",
+            ),
+            (
+                "omit downstream review cost",
+                lambda policy: policy["cost_and_latency_targets"]["standard_workflow_cost_cap"]["includes"].remove("review and inspection time"),
+                "must retain all required provider, retrieval, retry, review, correction, and creative cost components",
+            ),
+        )
+        for name, mutate, expected_error in mutations:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                policy = json.loads(POLICY.read_text(encoding="utf-8"))
+                mutate(policy)
+                policy_path = Path(directory) / "policy.json"
+                write_json(policy_path, policy)
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    exit_code = check_policy.main([
+                        "--policy", str(policy_path), "--corpus", str(MANIFEST), "--validate-only",
+                    ])
+                self.assertEqual(exit_code, 1)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report["status"], "invalid")
+                self.assertFalse(report["promotion_eligible"])
+                self.assertTrue(any(expected_error in error for error in report["errors"]), report["errors"])
+                self.assertTrue(any(expected_error in item["message"] for item in report["error_details"]))
+                self.assertTrue(any("Finance cost-basis approval is pending" in blocker for blocker in report["promotion_blockers"]))
+
 
 class BuildSyntheticCorpusTests(unittest.TestCase):
     def setUp(self) -> None:

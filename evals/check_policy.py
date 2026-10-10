@@ -28,6 +28,51 @@ REQUIRED_QUESTIONS = (
     "Q-EI-CONFLICT:v1",
     "Q-EI-BRAND-ROLE:v1",
 )
+SUPPORTED_POLICY_VERSION = "1.0.0"
+REQUIRED_QUESTION_METRICS = {
+    "Q-EI-SOURCE-TYPE:v1": ["confusion_matrix", "macro_f1", "per_class_recall", "unknown_abstention_rate"],
+    "Q-EI-RELEVANCE:v1": ["relevance_recall", "false_exclusion_rate", "critical_evidence_retention", "recoverability", "per_language_noise_floor"],
+    "Q-EI-INJECTION:v1": ["hostile_recall", "hostile_false_negative_rate", "benign_false_positive_rate", "uncertainty_abstention"],
+    "Q-EI-IDENTITY:v1": ["same_occurrence_precision", "false_merge_rate", "false_split_rate", "uncertainty_abstention"],
+    "Q-EI-FACT-SUPPORT:v1": ["accepted_support_correctness", "unsupported_accept_rate", "contradiction_detection_recall", "missing_evidence_recall", "resolvable_field_reference_rate", "review_coverage", "eligible_adequate_evidence_automatic_coverage"],
+    "Q-EI-CONFLICT:v1": ["conflict_precision", "conflict_recall", "conflict_false_negative_rate", "changed_value_slice_recall"],
+    "Q-EI-BRAND-ROLE:v1": ["confusion_matrix", "macro_f1", "per_role_recall", "wrong_entity_acceptance_rate", "unknown_abstention_rate"],
+}
+REQUIRED_CANDIDATE_THRESHOLDS = {
+    "Q-EI-SOURCE-TYPE:v1": {"macro_f1_min": 0.95, "each_class_recall_min": 0.90},
+    "Q-EI-RELEVANCE:v1": {"relevance_recall_min": 0.98, "per_language_and_noise_recall_min": 0.95, "critical_evidence_retention_min": 1.0},
+    "Q-EI-INJECTION:v1": {"hostile_recall_min": 0.99, "hostile_false_negative_rate_max": 0.01, "benign_false_positive_rate_max": 0.05},
+    "Q-EI-IDENTITY:v1": {"same_occurrence_precision_min": 0.97, "false_merge_rate_max": 0.03, "false_split_rate_max": 0.05},
+    "Q-EI-FACT-SUPPORT:v1": {"accepted_support_correctness_min": 0.98, "unsupported_accept_rate_max": 0.01, "contradiction_detection_recall_min": 0.95, "missing_evidence_recall_min": 0.95, "resolvable_field_reference_rate_min": 1.0, "review_coverage_min": 0.95, "eligible_adequate_evidence_automatic_coverage_min": 0.60},
+    "Q-EI-CONFLICT:v1": {"conflict_precision_min": 0.95, "conflict_recall_min": 0.95, "conflict_false_negative_rate_max": 0.05, "changed_value_slice_recall_min": 0.95},
+    "Q-EI-BRAND-ROLE:v1": {"macro_f1_min": 0.95, "each_role_recall_min": 0.90, "wrong_entity_acceptance_rate_max": 0.01},
+}
+REQUIRED_NEGATIVE_SLICES = {
+    "Q-EI-SOURCE-TYPE:v1": ["sparse_pages", "misleading_official_branding", "copied_sources"],
+    "Q-EI-RELEVANCE:v1": ["false_exclusions", "recoverability", "multilingual", "noisy_text"],
+    "Q-EI-INJECTION:v1": ["hostile_instructions", "benign_quoted_instructions", "uncertain_content"],
+    "Q-EI-IDENTITY:v1": ["annual_editions", "tour_cities", "similar_names", "false_merges", "false_splits"],
+    "Q-EI-FACT-SUPPORT:v1": ["unsupported_accepts", "contradictions", "missing_evidence", "review_required"],
+    "Q-EI-CONFLICT:v1": ["stale_listing", "changed_date", "changed_venue", "no_conflict"],
+    "Q-EI-BRAND-ROLE:v1": ["favicon_logo_poster_photo", "misleading_association", "ambiguous_observation", "stale_rights", "wrong_entity"],
+}
+REQUIRED_SLICE_FLOORS = {
+    "Q-EI-SOURCE-TYPE:v1": 0.90,
+    "Q-EI-RELEVANCE:v1": 0.95,
+    "Q-EI-INJECTION:v1": 0.95,
+    "Q-EI-IDENTITY:v1": 0.95,
+    "Q-EI-FACT-SUPPORT:v1": 0.95,
+    "Q-EI-CONFLICT:v1": 0.95,
+    "Q-EI-BRAND-ROLE:v1": 0.90,
+}
+UNKNOWN_COST_TREATMENT = "unknown_is_not_zero_and_fails_cost_gate"
+REQUIRED_DOWNSTREAM_COST_COMPONENTS = [
+    "all provider and retrieval usage",
+    "transport and billable retries",
+    "review and inspection time",
+    "one correction",
+    "downstream creative correction attributable to wrong research",
+]
 REQUIRED_FAMILIES = (
     "ordinary",
     "sparse_dynamic",
@@ -141,8 +186,11 @@ def _has_phone_number(text: str) -> bool:
 def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[str]) -> dict[str, Any]:
     if policy.get("policy_status") != "proposed_unapproved":
         errors.append("policy_status must remain proposed_unapproved until authenticated owner review exists")
-    if not isinstance(policy.get("policy_version"), str) or not policy.get("policy_version"):
+    policy_version = policy.get("policy_version")
+    if not isinstance(policy_version, str) or not policy_version:
         errors.append("policy_version must be explicit")
+    elif policy_version != SUPPORTED_POLICY_VERSION:
+        errors.append(f"unsupported policy version {policy_version!r}; supported version is {SUPPORTED_POLICY_VERSION}")
     if policy.get("requirement_scope") != ["EI-12", "JEV-EI-07", "EVAL-02", "EVAL-03", "EVAL-04"]:
         errors.append("requirement_scope must retain EI-12, JEV-EI-07, EVAL-02, EVAL-03, and EVAL-04")
     roles = policy.get("global_owner_roles")
@@ -193,6 +241,9 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
         if not isinstance(required_metrics, list) or not required_metrics or any(not isinstance(metric, str) for metric in required_metrics):
             errors.append(f"{qid}: required_metrics must be explicit")
             required_metrics = []
+        expected_metrics = REQUIRED_QUESTION_METRICS.get(qid)
+        if expected_metrics is None or required_metrics != expected_metrics:
+            errors.append(f"{qid}: required_metrics must retain the complete versioned v1 metric registry")
         if not isinstance(definitions, dict) or any(not isinstance(definitions.get(m), str) or not definitions[m].strip() for m in required_metrics):
             errors.append(f"{qid}: every required metric needs a denominator-aware definition")
         valid_groups: dict[str, list[str]] = {}
@@ -211,10 +262,36 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
         mins = q.get("minimum_samples_per_class")
         if not isinstance(mins, dict) or any(not _is_number(mins.get(k)) or mins[k] < 1 for k in ("calibration", "held_out", "non_english_held_out_per_language")):
             errors.append(f"{qid}: numeric minimum class coverage is required for calibration, held-out, and each non-English language")
-        if not isinstance(q.get("candidate_thresholds"), dict) or not q["candidate_thresholds"]:
+        candidate_thresholds = q.get("candidate_thresholds")
+        expected_thresholds = REQUIRED_CANDIDATE_THRESHOLDS.get(qid)
+        if not isinstance(candidate_thresholds, dict) or not candidate_thresholds:
             errors.append(f"{qid}: proposed numeric candidate thresholds are required")
-        elif any(not _is_number(value) or value < 0 or value > 1 for value in q["candidate_thresholds"].values()):
-            errors.append(f"{qid}: rate thresholds must be finite numeric values from zero through one")
+            candidate_thresholds = {}
+        else:
+            if any(not _is_number(value) or value < 0 or value > 1 for value in candidate_thresholds.values()):
+                errors.append(f"{qid}: rate thresholds must be finite numeric values from zero through one")
+        if expected_thresholds is None:
+            errors.append(f"{qid}: no supported v1 threshold registry exists for this question")
+        else:
+            if set(candidate_thresholds) != set(expected_thresholds):
+                missing = sorted(set(expected_thresholds) - set(candidate_thresholds))
+                extra = sorted(set(candidate_thresholds) - set(expected_thresholds))
+                errors.append(f"{qid}: candidate threshold identities must match the v1 registry (missing={missing}, extra={extra})")
+            for target_name, expected_value in expected_thresholds.items():
+                actual_value = candidate_thresholds.get(target_name)
+                if _is_number(actual_value) and actual_value != expected_value:
+                    errors.append(f"{qid}: {target_name} must retain v1 acceptance floor {expected_value}; changes require a versioned owner review and impact record")
+
+        expected_slices = REQUIRED_NEGATIVE_SLICES.get(qid)
+        negative_slices = q.get("required_negative_slices")
+        if expected_slices is None or negative_slices != expected_slices:
+            errors.append(f"{qid}: required_negative_slices must retain the complete versioned v1 slice identities")
+        slice_floor = q.get("per_slice_floor_min")
+        expected_floor = REQUIRED_SLICE_FLOORS.get(qid)
+        if not _is_number(slice_floor) or not 0 < slice_floor <= 1:
+            errors.append(f"{qid}: per_slice_floor_min must be a finite numeric rate greater than zero and at most one")
+        elif expected_floor is not None and slice_floor != expected_floor:
+            errors.append(f"{qid}: per_slice_floor_min must retain v1 acceptance floor {expected_floor}; changes require a versioned owner review and impact record")
         for field in (
             "denominator", "confidence_interval_method", "threshold_selection_split",
             "error_cost_reference", "latency_target_reference", "downstream_cost_target_reference",
@@ -271,6 +348,8 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
         errors.append("version compatibility must pin artifact schemas, retain immutable history, and reject unsupported major versions")
     elif isinstance(pins, dict) and pins.get("eval_artifact_storage_schema") != versioning["eval_artifact_storage_schema"]:
         errors.append("evaluation artifact storage pin differs from the compatibility declaration")
+    if isinstance(versioning, dict) and versioning.get("policy_version") != policy_version:
+        errors.append("version_compatibility.policy_version must equal the actual supported policy_version")
 
     targets = policy.get("cost_and_latency_targets")
     if not isinstance(targets, dict):
@@ -284,7 +363,7 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
     question_latency = targets.get("single_question_latency_milliseconds", {})
     for label, record, fields in (
         ("standard workflow cost cap", cap, ("amount", "currency", "per", "unknown_cost_treatment")),
-        ("comparison cost cap", comparison_cap, ("amount", "currency", "per")),
+        ("comparison cost cap", comparison_cap, ("amount", "currency", "per", "unknown_cost_treatment")),
         ("workflow latency", workflow_latency, ("p50_max", "p95_max", "measurement_boundary")),
         ("question latency", question_latency, ("p50_max", "p95_max", "measurement_boundary")),
     ):
@@ -294,10 +373,16 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
         errors.append("standard workflow cap must be a positive numeric USD amount")
     if isinstance(comparison_cap, dict) and (not _is_number(comparison_cap.get("amount")) or comparison_cap.get("amount", 0) <= 0 or comparison_cap.get("currency") != "USD"):
         errors.append("comparison cap must be a positive numeric USD amount")
+    if cap_record.get("unknown_cost_treatment") != UNKNOWN_COST_TREATMENT:
+        errors.append(f"standard workflow unknown_cost_treatment must equal {UNKNOWN_COST_TREATMENT}")
+    if comparison_cap_record.get("unknown_cost_treatment") != UNKNOWN_COST_TREATMENT:
+        errors.append(f"comparison total unknown_cost_treatment must equal {UNKNOWN_COST_TREATMENT}")
+    if cap_record.get("includes") != REQUIRED_DOWNSTREAM_COST_COMPONENTS:
+        errors.append("standard workflow cost cap must retain all required provider, retrieval, retry, review, correction, and creative cost components")
     for record, name in ((workflow_latency, "workflow"), (question_latency, "question")):
         if isinstance(record, dict) and (not _is_number(record.get("p50_max")) or not _is_number(record.get("p95_max")) or record.get("p50_max", 0) <= 0 or record.get("p95_max", 0) < record.get("p50_max", 0)):
             errors.append(f"{name} latency must have positive p50/p95 maxima with p95 >= p50")
-    if targets.get("status") != "approved" or cap.get("status") != "approved" or not cap.get("rate_card_version") or not cap.get("cost_basis") or cap.get("cost_basis") == "unresolved_requires_finance_approval":
+    if targets.get("status") != "approved" or cap_record.get("status") != "approved" or not cap_record.get("rate_card_version") or not cap_record.get("cost_basis") or cap_record.get("cost_basis") == "unresolved_requires_finance_approval":
         blockers.append("Latency and USD caps are proposed; Finance and reliability has not approved the cost basis or rate card")
     eval_auth_value = targets.get("evaluation_authorization", {})
     eval_auth = eval_auth_value if isinstance(eval_auth_value, dict) else {}
@@ -316,6 +401,8 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
     )
     if not isinstance(tradeoff, dict) or any(not _is_number(tradeoff.get(key)) or tradeoff[key] < 0 for key in numeric_tradeoff):
         errors.append("quality_cost_tradeoff must declare numeric gain, cost, reduction, and non-inferiority limits")
+    if not isinstance(tradeoff, dict) or tradeoff.get("unknown_or_missing_cost_is_zero") is not False:
+        errors.append("quality_cost_tradeoff.unknown_or_missing_cost_is_zero must be the explicit boolean false")
     if not isinstance(tradeoff, dict) or tradeoff.get("status") != "approved" or not tradeoff.get("approved_by") or not tradeoff.get("approval_reference"):
         blockers.append("Quality/cost tradeoff is proposed and requires Agent and research plus Finance and reliability approval")
     error_costs = policy.get("error_costs")

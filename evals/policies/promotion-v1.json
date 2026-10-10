@@ -277,7 +277,7 @@
         "one correction",
         "downstream creative correction attributable to wrong research"
       ],
-      "unknown_cost_treatment": "unknown is not zero and fails the cost gate",
+      "unknown_cost_treatment": "unknown_is_not_zero_and_fails_cost_gate",
       "rate_card_version": null,
       "cost_basis": "unresolved_requires_finance_approval"
     },
@@ -285,6 +285,7 @@
       "amount": 10800.0,
       "currency": "USD",
       "per": "three required arms times 240 held-out cases times three seeds, with each case-arm-seed execution capped at USD 5.00 including retries and one correction",
+      "unknown_cost_treatment": "unknown_is_not_zero_and_fails_cost_gate",
       "status": "proposed_unapproved",
       "paid_run_authorization": "not_granted"
     },
