@@ -39,21 +39,24 @@ export const suiteRegistry = {
 			"PP-01B canonical shared-contracts package and immutable commit pin",
 	},
 	templates: {
-		state: "unimplemented",
+		state: "external-blocked",
 		dependency:
-			"Accepted supplier specification and versioned template implementation",
+			"PP-03 private template engine tested; canonical adapter, approved roster and confirmed supplier specification absent",
 	},
 	composition: {
-		state: "unimplemented",
-		dependency: "Production composition implementation",
+		state: "external-blocked",
+		dependency:
+			"PP-02 private composition tested; canonical creative/fact/approval adapters and real approved input pins absent",
 	},
 	typography: {
-		state: "unimplemented",
-		dependency: "Production typography profiles; calibration is corpus-limited",
+		state: "external-blocked",
+		dependency:
+			"PP-04 private typography tested; real approved field/font policies and exporter content conformance absent",
 	},
 	"approved-assets": {
-		state: "unimplemented",
-		dependency: "External approval contract and immutable asset implementation",
+		state: "external-blocked",
+		dependency:
+			"PP-05 private asset checks tested; canonical authoritative permission lookup and real approved asset fixtures absent",
 	},
 	"artifact-storage": {
 		state: "external-blocked",
@@ -61,12 +64,14 @@ export const suiteRegistry = {
 			"PP-10A private adapter tested; accepted canonical request/hash/scope adapter and app access fixtures absent",
 	},
 	preflight: {
-		state: "unimplemented",
-		dependency: "Supplier-bound production preflight implementation",
+		state: "external-blocked",
+		dependency:
+			"PP-07 private preflight tested; real supplier constraints, final exporter profile/content checks and canonical ProductionBundle status absent",
 	},
 	"bounded-repair": {
-		state: "unimplemented",
-		dependency: "Production bounded repair implementation",
+		state: "external-blocked",
+		dependency:
+			"PP-08 private bounded repair tested; real mechanical permission, canonical approval applicability and final export checks absent",
 	},
 	personalization: {
 		state: "unimplemented",
@@ -160,6 +165,89 @@ async function runLeaf(
 	suite: Exclude<SuiteName, "release">,
 	evidenceDir: string,
 ) {
+	const compositionFiles = {
+		templates: ["composition-model.test.js"],
+		composition: ["composition-model.test.js"],
+		typography: ["composition-model.test.js"],
+		"approved-assets": ["composition-assets.test.js"],
+		preflight: ["composition-preflight.test.js"],
+		"bounded-repair": ["composition-repair.test.js"],
+	} as const;
+	if (suite in compositionFiles) {
+		const localSuite = z
+			.enum([
+				"templates",
+				"composition",
+				"typography",
+				"approved-assets",
+				"preflight",
+				"bounded-repair",
+			])
+			.parse(suite);
+		const evidence = join(evidenceDir, suite, "local");
+		await mkdir(evidence, { recursive: true });
+		const paths = [
+			...compositionFiles[localSuite].map((file) => `unit/${file}`),
+			"integration/composition-render.test.js",
+		].map((file) =>
+			fileURLToPath(new URL(`../../tests/${file}`, import.meta.url)),
+		);
+		try {
+			const result = await promisify(execFile)(
+				process.execPath,
+				["--test", ...paths],
+				{
+					env: { ...process.env, PP_COMPOSITION_EVIDENCE_DIR: evidence },
+					timeout: 60000,
+					maxBuffer: 1024 * 1024,
+				},
+			);
+			await Promise.all([
+				writeFile(
+					join(evidenceDir, `${suite}-local.json`),
+					JSON.stringify(
+						{
+							state: "passed-private-mechanisms",
+							mode: "synthetic-draft-only",
+							command: [process.execPath, "--test", ...paths],
+							exitCode: 0,
+							stdoutDigest: hash(result.stdout),
+							stderrDigest: hash(result.stderr),
+							externalState: "external-blocked",
+						},
+						null,
+						2,
+					),
+				),
+				writeFile(join(evidence, "tests.stdout.txt"), result.stdout),
+				writeFile(join(evidence, "tests.stderr.txt"), result.stderr),
+			]);
+		} catch (error) {
+			if (error instanceof Error) {
+				await writeFile(
+					join(evidenceDir, `${suite}-local.json`),
+					JSON.stringify(
+						{
+							state: "failed-private-mechanisms",
+							externalState: "external-blocked",
+							code: "RUNTIME_FAILURE",
+						},
+						null,
+						2,
+					),
+				);
+				throw new VerificationFailure(
+					"RUNTIME_FAILURE",
+					"Private composition checks failed; external integration remains blocked.",
+				);
+			}
+			throw error;
+		}
+		throw new VerificationFailure(
+			"SUITE_UNIMPLEMENTED",
+			suiteRegistry[suite].dependency,
+		);
+	}
 	if (suiteRegistry[suite].state === "external-blocked") {
 		const files =
 			suite === "artifact-storage"
