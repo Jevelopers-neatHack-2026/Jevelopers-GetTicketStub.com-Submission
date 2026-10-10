@@ -1,7 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { types as utilTypes } from 'node:util';
-import { DurableWorkflowStore } from '../../internal/durable-store.js';
+import {
+  DurableWorkflowStore,
+  measureCheckpointPayload
+} from '../../internal/durable-store.js';
+import {
+  MAX_CHECKPOINT_SERIALIZED_BYTES
+} from '../../internal/checkpoint-bounds.js';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from '../../internal/private-local-store-capability.js';
 import {
   advanceBudget,
@@ -19,10 +25,15 @@ import {
   executeLocalStep,
   getNextReadyStep,
   getPlanStepIds,
+  getMaximumCompletedResultsJsonBytes,
   validatePrivateCheckpointResults
 } from './plan.js';
 import { createDefaultRegistry } from '../../tools/internal/registry.js';
-import { classifyRecovery, PRIVATE_CHECKPOINT_KIND } from '../../recovery/internal/classify.js';
+import {
+  classifyRecovery,
+  PRIVATE_CHECKPOINT_KIND,
+  recoverySnapshotWithinBounds
+} from '../../recovery/internal/classify.js';
 
 const CHECKPOINT_VERSION = 2;
 const CONTROLLER_KEYS = new Set([
@@ -111,7 +122,9 @@ function controllerState(value, workflowId) {
     || Array.isArray(fields.baseCheckpointData)
     || utilTypes.isProxy(fields.baseCheckpointData)
   ) fail('CONTROLLER_CHECKPOINT_INVALID');
-  if (Buffer.byteLength(JSON.stringify(fields), 'utf8') > 220_000) fail('CONTROLLER_CHECKPOINT_TOO_LARGE');
+  if (Buffer.byteLength(JSON.stringify(fields), 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES) {
+    fail('CONTROLLER_CHECKPOINT_TOO_LARGE');
+  }
   return fields;
 }
 
@@ -142,6 +155,50 @@ function readRecovery(snapshot, observedAtMs) {
     externalAttemptStates: snapshot.externalAttemptStates,
     observedAtMs
   }));
+}
+
+function checkpointRecoveryJson(snapshot, state, observedAtMs) {
+  return JSON.stringify({
+    before: workflowForRecovery(snapshot.workflow),
+    after: workflowForRecovery(snapshot.workflow),
+    checkpoint: {
+      sequence: snapshot.checkpoint.sequence,
+      schemaVersion: snapshot.checkpoint.schemaVersion,
+      data: state,
+      sha256: '0'.repeat(64)
+    },
+    externalAttemptStates: snapshot.externalAttemptStates,
+    observedAtMs
+  });
+}
+
+function assertCheckpointFitsStore(state, reasonForUnbounded) {
+  const measured = measureCheckpointPayload(state);
+  if (!measured) fail(reasonForUnbounded);
+  if (measured.serializedBytes > MAX_CHECKPOINT_SERIALIZED_BYTES) {
+    fail('CONTROLLER_CHECKPOINT_TOO_LARGE');
+  }
+}
+
+function assertPrivateCheckpointRoundTrip(snapshot, state, plan, observedAtMs) {
+  const fields = controllerState(state, snapshot.workflow.workflowId);
+  assertCheckpointFitsStore(fields, 'CONTROLLER_CHECKPOINT_UNSUPPORTED');
+  if (!recoverySnapshotWithinBounds(checkpointRecoveryJson(snapshot, fields, observedAtMs))) {
+    fail('CONTROLLER_CHECKPOINT_TOO_LARGE');
+  }
+
+  const maximumResultsBytes = getMaximumCompletedResultsJsonBytes(plan, fields.completedResultsJson);
+  // The actual JSON result set cannot exceed this byte bound. Backslashes make
+  // the projected string's JSON escaping worst-case; this string is measured
+  // only and is never stored or interpreted as a completed result.
+  const reservedState = {
+    ...fields,
+    completedResultsJson: '\\'.repeat(maximumResultsBytes)
+  };
+  assertCheckpointFitsStore(reservedState, 'CONTROLLER_CHECKPOINT_TOO_LARGE');
+  if (!recoverySnapshotWithinBounds(checkpointRecoveryJson(snapshot, reservedState, observedAtMs))) {
+    fail('CONTROLLER_CHECKPOINT_TOO_LARGE');
+  }
 }
 
 function unavailableSnapshot(snapshot) {
@@ -458,6 +515,7 @@ export async function runBoundedLocalPlan(input) {
       initialMono = performance.now();
     }
 
+    assertPrivateCheckpointRoundTrip(snapshot, state, plan, now);
     let currentAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
       workflowId,
       ownerId: fields.ownerId,
@@ -533,6 +591,7 @@ export async function runBoundedLocalPlan(input) {
         elapsedMs: elapsed
       });
       const completedState = buildCompletedCheckpoint(state, plan, resultRecord, completedBudget);
+      assertPrivateCheckpointRoundTrip(beforeCommit, completedState, plan, wallNow);
       const commitWallNow = store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
       const commitElapsed = elapsedNow(elapsedAtStart, initialMono);
       const commitClockReason = checkClockBudget(
@@ -575,6 +634,7 @@ export async function runBoundedLocalPlan(input) {
       const nextBudget = advanceBudget(state.budget, 'step', nextWall, nextElapsed, limitSet);
       if (!nextBudget.allowed) return controllerStop(nextBudget.reason, workflowId, checkpointSequence);
       const nextState = buildAdmissionCheckpoint(state, 'step', stepId, nextBudget.state);
+      assertPrivateCheckpointRoundTrip(snapshot, nextState, plan, nextWall);
       const nextAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
         workflowId,
         ownerId: fields.ownerId,

@@ -763,4 +763,53 @@ export function validatePrivateCheckpointResults(plan, completedResultsJson) {
   return validateCompletedResults(plan, completedResultsJson);
 }
 
+/**
+ * Return an upper bound for the canonical completed-results JSON byte length.
+ * The bound reserves the configured result budget and fixed identity metadata,
+ * without running any unadmitted operation or treating a placeholder as a result.
+ */
+export function getMaximumCompletedResultsJsonBytes(plan, completedResultsJson = '{}') {
+  const data = getPlanData(plan);
+  const limits = getLimitValues(data.limitSet);
+  const normalized = normalizedCompletedMap(data, completedResultsJson);
+  const completed = JSON.parse(completedResultsJson);
+  let minimumPendingBytes = 0;
+  let additionalCapacity = 0;
+  const projected = Object.create(null);
+  for (const stepId of data.schedule) {
+    if (Object.hasOwn(completed, stepId)) {
+      projected[stepId] = completed[stepId];
+      continue;
+    }
+
+    const step = data.stepsById.get(stepId);
+    const isText = step.operation === 'text.concat';
+    const minimumOutputBytes = isText ? 2 : 1;
+    const maximumOutputBytes = isText
+      ? limits.maxResultBytes
+      : Math.min(limits.maxResultBytes, 11);
+    if (maximumOutputBytes < minimumOutputBytes) fail('PLAN_RESULT_TOO_LARGE');
+
+    minimumPendingBytes += minimumOutputBytes;
+    additionalCapacity += maximumOutputBytes - minimumOutputBytes;
+    projected[stepId] = {
+      stepId,
+      planHash: data.planHash,
+      registryVersion: data.registryVersion,
+      runIdentity: data.runIdentity,
+      inputHash: 'sha256_' + '0'.repeat(64),
+      resultHash: 'sha256_' + '0'.repeat(64),
+      output: isText ? '' : 0
+    };
+  }
+
+  const minimumMapBytes = Buffer.byteLength(JSON.stringify(projected), 'utf8');
+  if (minimumMapBytes > limits.maxResultsJsonBytes) fail('PLAN_RESULT_TOO_LARGE');
+  const remainingTotalBytes = limits.maxTotalResultBytes - normalized.totalResultBytes;
+  const resultCapacityAfterMinimum = remainingTotalBytes - minimumPendingBytes;
+  if (resultCapacityAfterMinimum < 0) fail('PLAN_RESULT_TOO_LARGE');
+  const additionalBytes = Math.min(additionalCapacity, resultCapacityAfterMinimum);
+  return Math.min(limits.maxResultsJsonBytes, minimumMapBytes + additionalBytes);
+}
+
 export const PRIVATE_PLAN_KIND = PLAN_KIND;

@@ -14,10 +14,15 @@ import {
   getPlanStepIds,
   validatePrivateCheckpointResults
 } from '../../orchestrator/internal/plan.js';
+import {
+  MAX_CHECKPOINT_DEPTH,
+  MAX_CHECKPOINT_SERIALIZED_BYTES,
+  RECOVERY_SNAPSHOT_WRAPPER_BYTES
+} from '../../internal/checkpoint-bounds.js';
 
 const CHECKPOINT_KIND = 'agent-harness.private-bounded-local-checkpoint';
-const SNAPSHOT_MAX_BYTES = 262_144;
-const SNAPSHOT_MAX_DEPTH = 24;
+const SNAPSHOT_MAX_BYTES = MAX_CHECKPOINT_SERIALIZED_BYTES + RECOVERY_SNAPSHOT_WRAPPER_BYTES;
+const SNAPSHOT_MAX_DEPTH = MAX_CHECKPOINT_DEPTH + 4;
 const WORKFLOW_STATES = new Set([
   'queued',
   'running',
@@ -100,6 +105,16 @@ function parseSnapshot(snapshotJson) {
     if (error?.code === 'JSON_TOO_DEEP') throw new Error('SNAPSHOT_TOO_DEEP');
     if (error?.code === 'JSON_TOO_LARGE') throw new Error('SNAPSHOT_TOO_LARGE');
     throw new Error('SNAPSHOT_INVALID');
+  }
+}
+
+/** @internal Checks the projected wrapper's structural limits before admission. */
+export function recoverySnapshotWithinBounds(snapshotJson) {
+  try {
+    parseSnapshot(snapshotJson);
+    return true;
+  } catch {
+    return false;
   }
 }
 

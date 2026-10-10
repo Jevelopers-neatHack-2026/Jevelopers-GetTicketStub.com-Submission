@@ -7,7 +7,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
 import { DurableWorkflowStore, RuntimeError } from '@jevelopers/agent-harness-runtime';
+import {
+  MAX_CHECKPOINT_DEPTH,
+  MAX_CHECKPOINT_SERIALIZED_BYTES
+} from '../../src/internal/checkpoint-bounds.js';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from '../../src/internal/private-local-store-capability.js';
+import { measureCheckpointPayload } from '../../src/internal/durable-store.js';
 import {
   buildCompletedCheckpoint,
   buildInitialPrivateCheckpoint,
@@ -23,6 +28,7 @@ import {
 import {
   compilePlan,
   executeLocalStep,
+  getMaximumCompletedResultsJsonBytes,
   getNextReadyStep
 } from '../../src/orchestrator/internal/plan.js';
 import { inspectOperation, createDefaultRegistry } from '../../src/tools/internal/registry.js';
@@ -82,6 +88,39 @@ function createRunningWorkflow(
     eventId: workflowId + ':running'
   });
   return { ...lease, revision: running.revision };
+}
+
+function nestedCheckpointData(levels) {
+  let value = { preserved: 'bounded-depth-control' };
+  for (let index = 0; index < levels; index += 1) value = { child: value };
+  return value;
+}
+
+function initialCheckpointSizeForBase(workflowId, baseCheckpointData) {
+  const { limitSet, plan } = storeTestPlan({ workflowId, planJson: SINGLE_PLAN });
+  const startedWallMs = 1_790_000_000_000;
+  const deadlineWallMs = startedWallMs + getLimitValues(limitSet).maxElapsedMs;
+  const budget = createBudgetSnapshot(limitSet, startedWallMs, deadlineWallMs);
+  const stepId = getNextReadyStep(plan, '{}');
+  const admittedBudget = advanceBudget(budget, 'step', startedWallMs, 0, limitSet);
+  const state = buildInitialPrivateCheckpoint({
+    workflowId,
+    planJson: SINGLE_PLAN,
+    plan,
+    limitSet,
+    baseCheckpointData,
+    budget: admittedBudget.state,
+    stepId
+  });
+  const resultReservationBytes = getMaximumCompletedResultsJsonBytes(plan, state.completedResultsJson);
+  const sizeOnlyState = {
+    ...state,
+    completedResultsJson: '\\'.repeat(resultReservationBytes)
+  };
+  return Object.freeze({
+    initial: measureCheckpointPayload(state),
+    reserved: measureCheckpointPayload(sizeOnlyState)
+  });
 }
 
 function storeTestPlan({ workflowId, planJson = SINGLE_PLAN, limitsJson = '{}' }) {
@@ -750,6 +789,214 @@ test('finite original checkpoint numbers survive admission and computation SIGKI
       recovered.close();
     }
   }
+});
+
+test('generic checkpoint depth and byte controls survive private admission, recovery inspection, and reuse', async t => {
+  const crashCases = [
+    { name: 'depth20', checkpoint: nestedCheckpointData(20), stages: ['after-admission'] },
+    { name: 'depth24', checkpoint: nestedCheckpointData(24), stages: ['after-admission'] },
+    { name: 'depth30', checkpoint: nestedCheckpointData(30), stages: ['after-admission', 'after-compute'] },
+    { name: 'bytes200000', checkpoint: { payload: 'a'.repeat(200_000) }, stages: ['after-admission'] },
+    { name: 'bytes230000', checkpoint: { payload: 'a'.repeat(230_000) }, stages: ['after-admission', 'after-compute'] },
+    { name: 'utf8-120000', checkpoint: { payload: 'é'.repeat(120_000) }, stages: ['after-admission'] }
+  ];
+
+  for (const entry of crashCases) {
+    for (const stage of entry.stages) {
+      const temporary = temporaryDatabase('bounded-b3-' + entry.name + '-' + stage + '-');
+      t.after(() => temporary.cleanup());
+      const planPath = join(temporary.directory, 'plan.json');
+      const markerPath = join(temporary.directory, 'worker.ready');
+      writeFileSync(planPath, SINGLE_PLAN);
+      const setupStore = openStore(temporary.databasePath);
+      const lease = createRunningWorkflow(
+        setupStore,
+        'b3-' + entry.name + '-' + stage,
+        'worker-local',
+        60_000,
+        entry.checkpoint
+      );
+      assert.deepEqual(setupStore.getCheckpoint(lease.workflowId).data, entry.checkpoint);
+      setupStore.close();
+
+      const worker = spawnWithSignal(fixturePath('local-controller-crash.mjs'), [
+        temporary.databasePath,
+        lease.workflowId,
+        lease.ownerId,
+        String(lease.fence),
+        planPath,
+        markerPath,
+        stage
+      ]);
+      const { marker } = await killAtMarker(worker, markerPath);
+      assert.equal(marker.stage, stage);
+      if (stage === 'after-admission') {
+        assert.equal(marker.revision, 2);
+        assert.equal(marker.checkpointSequence, 2);
+      }
+      if (stage === 'after-compute') assert.match(marker.resultHash, /^sha256_[0-9a-f]{64}$/u);
+
+      const recovered = openStore(temporary.databasePath);
+      const pending = recovered.getCheckpoint(lease.workflowId);
+      assert.deepEqual(pending.data.baseCheckpointData, entry.checkpoint, entry.name + ' base preserved');
+      assert.equal(pending.data.budget.stepsAdmitted, 1, entry.name);
+      assert.equal(pending.data.budget.stepAttempts, 1, entry.name);
+      assert.equal(pending.data.budget.localRetries, 0, entry.name);
+      assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId }).kind,
+        'local-replay-candidate', entry.name + ' recovery inspection');
+      const eventsBeforeReplay = recovered.listEvents({ workflowId: lease.workflowId }).length;
+
+      const result = await runBoundedLocalPlan({
+        store: recovered,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence
+      });
+      assert.equal(result.status, 'completed', entry.name + ': ' + JSON.stringify(result));
+      assert.equal(result.results[0].output, 9, entry.name);
+      const completed = recovered.getCheckpoint(lease.workflowId);
+      assert.deepEqual(completed.data.baseCheckpointData, entry.checkpoint, entry.name + ' completed base');
+      assert.equal(completed.data.budget.stepsAdmitted, 1, entry.name);
+      assert.equal(completed.data.budget.stepAttempts, 2, entry.name);
+      assert.equal(completed.data.budget.localRetries, 1, entry.name);
+      assert.equal(completed.sequence, 4, entry.name);
+      assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId }).kind,
+        'durable-evidence-present', entry.name + ' completed inspection');
+      assert.equal(recovered.listEvents({ workflowId: lease.workflowId }).length, eventsBeforeReplay + 2);
+
+      const eventsAtCompletion = recovered.listEvents({ workflowId: lease.workflowId }).length;
+      const repeated = await runBoundedLocalPlan({
+        store: recovered,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence
+      });
+      assert.equal(repeated.resultHash, result.resultHash, entry.name + ' completed reuse');
+      assert.equal(recovered.getCheckpoint(lease.workflowId).sequence, completed.sequence, entry.name);
+      assert.equal(recovered.listEvents({ workflowId: lease.workflowId }).length, eventsAtCompletion, entry.name);
+      assert.equal(countRows(temporary.databasePath, 'operation_attempts'), 0, entry.name);
+      recovered.close();
+    }
+  }
+});
+
+test('private depth overflow is rejected before admission while generic schema-5 data remains readable', async t => {
+  const temporary = temporaryDatabase('bounded-b3-depth-boundary-');
+  t.after(() => temporary.cleanup());
+  const store = openStore(temporary.databasePath);
+  const base = nestedCheckpointData(MAX_CHECKPOINT_DEPTH - 1);
+  const lease = createRunningWorkflow(store, 'b3-private-depth-boundary', 'worker-local', 60_000, base);
+  assert.deepEqual(store.getCheckpoint(lease.workflowId).data, base, 'generic depth-128 checkpoint remains readable');
+  const before = snapshotDatabase(temporary.databasePath);
+
+  const result = await runBoundedLocalPlan({
+    store,
+    workflowId: lease.workflowId,
+    ownerId: lease.ownerId,
+    fence: lease.fence,
+    planJson: SINGLE_PLAN
+  });
+  assert.equal(result.status, 'stopped');
+  assert.equal(result.reason, 'CONTROLLER_CHECKPOINT_UNSUPPORTED');
+  assert.equal(snapshotDatabase(temporary.databasePath), before);
+  store.close();
+
+  const reopened = openStore(temporary.databasePath);
+  assert.equal(snapshotDatabase(temporary.databasePath), before, 'all rows and sqlite_sequence survive reopen unchanged');
+  assert.deepEqual(reopened.getCheckpoint(lease.workflowId).data, base);
+  reopened.close();
+});
+
+test('completion-result growth is reserved at the exact UTF-8 checkpoint boundary before admission', async t => {
+  const workflowId = 'b3-completion-growth-boundary';
+  const projectedBytes = units => initialCheckpointSizeForBase(workflowId, {
+    payload: '\0'.repeat(units) + 'é'
+  });
+  let low = 0;
+  let high = 180_000;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (projectedBytes(middle)?.reserved?.serializedBytes <= MAX_CHECKPOINT_SERIALIZED_BYTES) low = middle;
+    else high = middle - 1;
+  }
+  const atBoundary = projectedBytes(low)?.reserved;
+  const pastBoundary = projectedBytes(low + 1)?.reserved;
+  const initialPastBoundary = projectedBytes(low + 1)?.initial;
+  assert.ok(atBoundary);
+  assert.ok(pastBoundary);
+  assert.ok(initialPastBoundary);
+  assert.ok(initialPastBoundary.serializedBytes <= MAX_CHECKPOINT_SERIALIZED_BYTES,
+    'initial admission checkpoint fits; only the prospective result growth crosses the limit');
+  assert.ok(atBoundary.serializedBytes <= MAX_CHECKPOINT_SERIALIZED_BYTES);
+  assert.ok(atBoundary.serializedBytes >= MAX_CHECKPOINT_SERIALIZED_BYTES - 5);
+  assert.equal(pastBoundary.serializedBytes, atBoundary.serializedBytes + 6);
+  assert.ok(pastBoundary.serializedBytes > MAX_CHECKPOINT_SERIALIZED_BYTES);
+
+  const accepted = temporaryDatabase('bounded-b3-completion-growth-accepted-');
+  t.after(() => accepted.cleanup());
+  const acceptedStore = openStore(accepted.databasePath);
+  const acceptedBase = { payload: '\0'.repeat(low) + 'é' };
+  const acceptedLease = createRunningWorkflow(
+    acceptedStore,
+    workflowId,
+    'worker-local',
+    60_000,
+    acceptedBase
+  );
+  assert.deepEqual(acceptedStore.getCheckpoint(workflowId).data, acceptedBase);
+  const acceptedResult = await runBoundedLocalPlan({
+    store: acceptedStore,
+    workflowId,
+    ownerId: acceptedLease.ownerId,
+    fence: acceptedLease.fence,
+    planJson: SINGLE_PLAN
+  });
+  assert.equal(acceptedResult.status, 'completed');
+  const acceptedCheckpoint = acceptedStore.getCheckpoint(workflowId);
+  assert.deepEqual(acceptedCheckpoint.data.baseCheckpointData, acceptedBase);
+  assert.ok(measureCheckpointPayload(acceptedCheckpoint.data).serializedBytes <= MAX_CHECKPOINT_SERIALIZED_BYTES);
+  acceptedStore.close();
+  const acceptedReopened = openStore(accepted.databasePath);
+  assert.equal(inspectWorkflowRecovery({ store: acceptedReopened, workflowId }).kind, 'durable-evidence-present');
+  const acceptedEvents = acceptedReopened.listEvents({ workflowId }).length;
+  const acceptedReuse = await runBoundedLocalPlan({
+    store: acceptedReopened,
+    workflowId,
+    ownerId: acceptedLease.ownerId,
+    fence: acceptedLease.fence
+  });
+  assert.equal(acceptedReuse.resultHash, acceptedResult.resultHash);
+  assert.equal(acceptedReopened.listEvents({ workflowId }).length, acceptedEvents);
+  acceptedReopened.close();
+
+  const rejected = temporaryDatabase('bounded-b3-completion-growth-rejected-');
+  t.after(() => rejected.cleanup());
+  const rejectedStore = openStore(rejected.databasePath);
+  const rejectedBase = { payload: '\0'.repeat(low + 1) + 'é' };
+  const rejectedLease = createRunningWorkflow(
+    rejectedStore,
+    workflowId,
+    'worker-local',
+    60_000,
+    rejectedBase
+  );
+  assert.deepEqual(rejectedStore.getCheckpoint(rejectedLease.workflowId).data, rejectedBase);
+  const before = snapshotDatabase(rejected.databasePath);
+  const rejectedResult = await runBoundedLocalPlan({
+    store: rejectedStore,
+    workflowId: rejectedLease.workflowId,
+    ownerId: rejectedLease.ownerId,
+    fence: rejectedLease.fence,
+    planJson: SINGLE_PLAN
+  });
+  assert.equal(rejectedResult.status, 'stopped');
+  assert.equal(rejectedResult.reason, 'CONTROLLER_CHECKPOINT_TOO_LARGE');
+  assert.equal(snapshotDatabase(rejected.databasePath), before);
+  rejectedStore.close();
+  const rejectedReopened = openStore(rejected.databasePath);
+  assert.equal(snapshotDatabase(rejected.databasePath), before, 'all rows and sqlite_sequence survive reopen unchanged');
+  assert.deepEqual(rejectedReopened.getCheckpoint(rejectedLease.workflowId).data, rejectedBase);
+  rejectedReopened.close();
 });
 
 test('a replayed step can be followed by a later ordinary step admission', async t => {

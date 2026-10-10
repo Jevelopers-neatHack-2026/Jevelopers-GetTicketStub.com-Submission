@@ -6,6 +6,12 @@ import { dirname, resolve } from 'node:path';
 import { RuntimeError, runtimeError } from './errors.js';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from './private-local-store-capability.js';
 import {
+  MAX_CHECKPOINT_DEPTH,
+  MAX_CHECKPOINT_NODES,
+  MAX_CHECKPOINT_SERIALIZED_BYTES,
+  MAX_CHECKPOINT_SOURCE_UNITS
+} from './checkpoint-bounds.js';
+import {
   createLimitSet,
   validateBudgetSnapshot
 } from '../orchestrator/internal/limits.js';
@@ -18,10 +24,6 @@ import { parseBoundedJson } from '../orchestrator/internal/json.js';
 
 export const INTERNAL_SCHEMA_VERSION = 5;
 const CHECKPOINT_SCHEMA_VERSION = 2;
-const MAX_CHECKPOINT_DEPTH = 128;
-const MAX_CHECKPOINT_NODES = 10_000;
-const MAX_CHECKPOINT_SOURCE_UNITS = 256 * 1024;
-const MAX_CHECKPOINT_SERIALIZED_BYTES = 1024 * 1024;
 const MAX_JEV_OBSERVATION_PAGE_SIZE = 100;
 const JEV_MODEL_ID = 'jev-1.13.0';
 const SAFE_OPAQUE_REF = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u;
@@ -163,18 +165,41 @@ function canonicalValue(value, context, depth = 0) {
   }
 }
 
+function checkpointMetrics(data) {
+  if (!isRecord(data)) throw INVALID_CHECKPOINT_INPUT;
+  const context = { nodes: 0, sourceUnits: 0, seen: new Set() };
+  const normalized = canonicalValue(data, context);
+  const encoded = JSON.stringify(normalized);
+  const payload = '{"schemaVersion":' + CHECKPOINT_SCHEMA_VERSION + ',"data":' + encoded + '}';
+  return {
+    serializedBytes: Buffer.byteLength(payload, 'utf8'),
+    sourceUnits: context.sourceUnits,
+    nodes: context.nodes,
+    payload
+  };
+}
+
 function serializeCheckpoint(data, operation) {
   try {
-    if (!isRecord(data)) throw INVALID_CHECKPOINT_INPUT;
-    const normalized = canonicalValue(data, { nodes: 0, sourceUnits: 0, seen: new Set() });
-    const encoded = JSON.stringify(normalized);
-    const payload = '{"schemaVersion":' + CHECKPOINT_SCHEMA_VERSION + ',"data":' + encoded + '}';
-    if (Buffer.byteLength(payload, 'utf8') > MAX_CHECKPOINT_SERIALIZED_BYTES) {
-      throw INVALID_CHECKPOINT_INPUT;
-    }
-    return payload;
+    const measured = checkpointMetrics(data);
+    if (measured.serializedBytes > MAX_CHECKPOINT_SERIALIZED_BYTES) throw INVALID_CHECKPOINT_INPUT;
+    return measured.payload;
   } catch {
     fail(operation, 'INVALID_INPUT', 'Checkpoint data is invalid or exceeds the supported size and structure limits.');
+  }
+}
+
+/** @internal Measures the exact schema-5 payload without writing to SQLite. */
+export function measureCheckpointPayload(data) {
+  try {
+    const measured = checkpointMetrics(data);
+    return Object.freeze({
+      serializedBytes: measured.serializedBytes,
+      sourceUnits: measured.sourceUnits,
+      nodes: measured.nodes
+    });
+  } catch {
+    return null;
   }
 }
 
