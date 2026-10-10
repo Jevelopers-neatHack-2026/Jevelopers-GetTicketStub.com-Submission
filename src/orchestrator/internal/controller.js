@@ -3,7 +3,8 @@ import { performance } from 'node:perf_hooks';
 import { types as utilTypes } from 'node:util';
 import {
   DurableWorkflowStore,
-  measureCheckpointPayload
+  measureCheckpointPayload,
+  checkpointPayloadForIntegrity
 } from '../../internal/durable-store.js';
 import {
   MAX_CHECKPOINT_SERIALIZED_BYTES
@@ -32,7 +33,8 @@ import { createDefaultRegistry } from '../../tools/internal/registry.js';
 import {
   classifyRecovery,
   PRIVATE_CHECKPOINT_KIND,
-  recoverySnapshotWithinBounds
+  recoverySnapshotWithinBounds,
+  recoverySnapshotCheckpointHashMatches
 } from '../../recovery/internal/classify.js';
 
 const CHECKPOINT_VERSION = 2;
@@ -157,7 +159,7 @@ function readRecovery(snapshot, observedAtMs) {
   }));
 }
 
-function checkpointRecoveryJson(snapshot, state, observedAtMs) {
+function checkpointRecoveryJson(snapshot, state, observedAtMs, checkpointHash = '0'.repeat(64)) {
   return JSON.stringify({
     before: workflowForRecovery(snapshot.workflow),
     after: workflowForRecovery(snapshot.workflow),
@@ -165,7 +167,7 @@ function checkpointRecoveryJson(snapshot, state, observedAtMs) {
       sequence: snapshot.checkpoint.sequence,
       schemaVersion: snapshot.checkpoint.schemaVersion,
       data: state,
-      sha256: '0'.repeat(64)
+      sha256: checkpointHash
     },
     externalAttemptStates: snapshot.externalAttemptStates,
     observedAtMs
@@ -180,21 +182,51 @@ function assertCheckpointFitsStore(state, reasonForUnbounded) {
   }
 }
 
-function assertPrivateCheckpointRoundTrip(snapshot, state, plan, observedAtMs) {
+function maximumFutureCheckpointState(fields, plan, limitSet, maximumResultsBytes) {
+  const stepIds = getPlanStepIds(plan);
+  let longestStepId = stepIds[0];
+  for (const stepId of stepIds) {
+    if (Buffer.byteLength(stepId, 'utf8') > Buffer.byteLength(longestStepId, 'utf8')) {
+      longestStepId = stepId;
+    }
+  }
+  const limits = getLimitValues(limitSet);
+  return {
+    ...fields,
+    budget: {
+      ...fields.budget,
+      lastWallMs: fields.budget.deadlineWallMs,
+      elapsedMs: limits.maxElapsedMs,
+      stepsAdmitted: stepIds.length,
+      stepAttempts: limits.maxStepAttempts,
+      localRetries: limits.maxLocalRetries,
+      replans: limits.maxReplans,
+      iterations: limits.maxIterations,
+      totalResultBytes: limits.maxTotalResultBytes
+    },
+    completedResultsJson: '\\'.repeat(maximumResultsBytes),
+    pendingStepId: longestStepId,
+    lastAdmissionKind: 'replay',
+    lastAdmissionStepId: longestStepId
+  };
+}
+
+function assertPrivateCheckpointRoundTrip(snapshot, state, plan, limitSet, observedAtMs) {
   const fields = controllerState(state, snapshot.workflow.workflowId);
   assertCheckpointFitsStore(fields, 'CONTROLLER_CHECKPOINT_UNSUPPORTED');
-  if (!recoverySnapshotWithinBounds(checkpointRecoveryJson(snapshot, fields, observedAtMs))) {
+  const actualCheckpointHash = sha256(checkpointPayloadForIntegrity(fields));
+  const actualRecoveryProjection = checkpointRecoveryJson(snapshot, fields, observedAtMs, actualCheckpointHash);
+  if (
+    !recoverySnapshotWithinBounds(actualRecoveryProjection)
+    || !recoverySnapshotCheckpointHashMatches(actualRecoveryProjection)
+  ) {
     fail('CONTROLLER_CHECKPOINT_TOO_LARGE');
   }
 
   const maximumResultsBytes = getMaximumCompletedResultsJsonBytes(plan, fields.completedResultsJson);
-  // The actual JSON result set cannot exceed this byte bound. Backslashes make
-  // the projected string's JSON escaping worst-case; this string is measured
-  // only and is never stored or interpreted as a completed result.
-  const reservedState = {
-    ...fields,
-    completedResultsJson: '\\'.repeat(maximumResultsBytes)
-  };
+  // Reserve result growth plus every still-legal checkpoint metadata value.
+  // The backslash string is measurement-only and is never stored as a result.
+  const reservedState = maximumFutureCheckpointState(fields, plan, limitSet, maximumResultsBytes);
   assertCheckpointFitsStore(reservedState, 'CONTROLLER_CHECKPOINT_TOO_LARGE');
   if (!recoverySnapshotWithinBounds(checkpointRecoveryJson(snapshot, reservedState, observedAtMs))) {
     fail('CONTROLLER_CHECKPOINT_TOO_LARGE');
@@ -515,7 +547,7 @@ export async function runBoundedLocalPlan(input) {
       initialMono = performance.now();
     }
 
-    assertPrivateCheckpointRoundTrip(snapshot, state, plan, now);
+    assertPrivateCheckpointRoundTrip(snapshot, state, plan, limitSet, now);
     let currentAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
       workflowId,
       ownerId: fields.ownerId,
@@ -591,7 +623,7 @@ export async function runBoundedLocalPlan(input) {
         elapsedMs: elapsed
       });
       const completedState = buildCompletedCheckpoint(state, plan, resultRecord, completedBudget);
-      assertPrivateCheckpointRoundTrip(beforeCommit, completedState, plan, wallNow);
+      assertPrivateCheckpointRoundTrip(beforeCommit, completedState, plan, limitSet, wallNow);
       const commitWallNow = store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
       const commitElapsed = elapsedNow(elapsedAtStart, initialMono);
       const commitClockReason = checkClockBudget(
@@ -634,7 +666,7 @@ export async function runBoundedLocalPlan(input) {
       const nextBudget = advanceBudget(state.budget, 'step', nextWall, nextElapsed, limitSet);
       if (!nextBudget.allowed) return controllerStop(nextBudget.reason, workflowId, checkpointSequence);
       const nextState = buildAdmissionCheckpoint(state, 'step', stepId, nextBudget.state);
-      assertPrivateCheckpointRoundTrip(snapshot, nextState, plan, nextWall);
+      assertPrivateCheckpointRoundTrip(snapshot, nextState, plan, limitSet, nextWall);
       const nextAdmission = store._localControllerAdmit(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
         workflowId,
         ownerId: fields.ownerId,

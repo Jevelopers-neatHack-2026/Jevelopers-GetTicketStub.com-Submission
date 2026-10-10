@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { DurableWorkflowStore } from '@jevelopers/agent-harness-runtime';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from '../../../src/internal/private-local-store-capability.js';
 import {
@@ -15,12 +15,17 @@ import {
 } from '../../../src/orchestrator/internal/limits.js';
 import { compilePlan, getNextReadyStep } from '../../../src/orchestrator/internal/plan.js';
 
-const [databasePath, workflowId, ownerId, fenceText, planPath, markerPath, stage] = process.argv.slice(2);
-const store = DurableWorkflowStore.open({ databasePath });
+const [databasePath, workflowId, ownerId, fenceText, planPath, markerPath, stage, clockText] = process.argv.slice(2);
+const store = DurableWorkflowStore.open({
+  databasePath,
+  ...(clockText === undefined ? {} : { clock: () => Number(clockText) })
+});
 const fence = Number(fenceText);
 
 function pauseForKill(marker) {
-  writeFileSync(markerPath, JSON.stringify(marker));
+  const temporaryMarkerPath = markerPath + '.' + process.pid + '.tmp';
+  writeFileSync(temporaryMarkerPath, JSON.stringify(marker), { flag: 'wx' });
+  renameSync(temporaryMarkerPath, markerPath);
   return new Promise(() => setInterval(() => {}, 60_000));
 }
 

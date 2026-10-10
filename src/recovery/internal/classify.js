@@ -19,6 +19,7 @@ import {
   MAX_CHECKPOINT_SERIALIZED_BYTES,
   RECOVERY_SNAPSHOT_WRAPPER_BYTES
 } from '../../internal/checkpoint-bounds.js';
+import { checkpointPayloadForIntegrity } from '../../internal/durable-store.js';
 
 const CHECKPOINT_KIND = 'agent-harness.private-bounded-local-checkpoint';
 const SNAPSHOT_MAX_BYTES = MAX_CHECKPOINT_SERIALIZED_BYTES + RECOVERY_SNAPSHOT_WRAPPER_BYTES;
@@ -118,45 +119,6 @@ export function recoverySnapshotWithinBounds(snapshotJson) {
   }
 }
 
-function canonicalJson(value) {
-  if (value === null || typeof value === 'boolean' || typeof value === 'string') {
-    return JSON.stringify(value);
-  }
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error('CHECKPOINT_INVALID');
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    const parts = [];
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
-        throw new Error('CHECKPOINT_INVALID');
-      }
-      parts.push(canonicalJson(descriptor.value));
-    }
-    if (Reflect.ownKeys(value).length !== value.length + 1) throw new Error('CHECKPOINT_INVALID');
-    return '[' + parts.join(',') + ']';
-  }
-  if (value === null || typeof value !== 'object' || utilTypes.isProxy(value)) {
-    throw new Error('CHECKPOINT_INVALID');
-  }
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) throw new Error('CHECKPOINT_INVALID');
-  const keys = Reflect.ownKeys(value);
-  if (keys.some(key => typeof key !== 'string')) throw new Error('CHECKPOINT_INVALID');
-  keys.sort();
-  const parts = [];
-  for (const key of keys) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
-      throw new Error('CHECKPOINT_INVALID');
-    }
-    parts.push(JSON.stringify(key) + ':' + canonicalJson(descriptor.value));
-  }
-  return '{' + parts.join(',') + '}';
-}
-
 function readWorkflow(value) {
   const fields = exactRecord(
     value,
@@ -224,7 +186,31 @@ function readPrivateCheckpointData(value) {
 }
 
 function checkpointPayload(checkpointData) {
-  return '{"schemaVersion":2,"data":' + canonicalJson(checkpointData) + '}';
+  return checkpointPayloadForIntegrity(checkpointData);
+}
+
+/** @internal Verifies a projected checkpoint with the same serializer as schema-5 writes. */
+export function recoverySnapshotCheckpointHashMatches(snapshotJson) {
+  try {
+    const root = parseSnapshot(snapshotJson);
+    const projection = exactRecord(
+      root,
+      new Set(['before', 'after', 'checkpoint', 'externalAttemptStates', 'observedAtMs']),
+      ['before', 'after', 'checkpoint', 'externalAttemptStates', 'observedAtMs'],
+      'SNAPSHOT_INVALID'
+    );
+    const checkpoint = exactRecord(
+      projection.checkpoint,
+      new Set(['sequence', 'schemaVersion', 'data', 'sha256']),
+      ['sequence', 'schemaVersion', 'data', 'sha256'],
+      'CHECKPOINT_INVALID'
+    );
+    return typeof checkpoint.sha256 === 'string'
+      && /^[0-9a-f]{64}$/u.test(checkpoint.sha256)
+      && sha256(checkpointPayload(checkpoint.data)) === checkpoint.sha256;
+  } catch {
+    return false;
+  }
 }
 
 function validateAttemptBarrier(states) {

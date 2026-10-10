@@ -29,6 +29,7 @@ import {
   compilePlan,
   executeLocalStep,
   getMaximumCompletedResultsJsonBytes,
+  getPlanStepIds,
   getNextReadyStep
 } from '../../src/orchestrator/internal/plan.js';
 import { inspectOperation, createDefaultRegistry } from '../../src/tools/internal/registry.js';
@@ -57,6 +58,41 @@ const SELF_REHASH_PLAN = JSON.stringify({
     { id: 'first', operation: 'number.add', dependsOn: [], args: { left: 1, right: 2 } }
   ]
 });
+const LONG_FUTURE_STEP_ID = 'z'.repeat(48);
+const LONG_FUTURE_PLAN = JSON.stringify({
+  kind: PLAN_KIND,
+  version: 1,
+  steps: [
+    { id: 'a', operation: 'number.add', dependsOn: [], args: { left: 1, right: 2 } },
+    {
+      id: LONG_FUTURE_STEP_ID,
+      operation: 'number.add',
+      dependsOn: ['a'],
+      args: { left: { $result: 'a' }, right: 2 }
+    }
+  ]
+});
+
+function tenStepEscapedTextPlan() {
+  const ids = [
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', LONG_FUTURE_STEP_ID
+  ];
+  const suffixes = ['\\', '\0', 'é', '"', '\\é', '\0"', 'é\\', '"\0', 'tail'];
+  return JSON.stringify({
+    kind: PLAN_KIND,
+    version: 1,
+    steps: ids.map((id, index) => ({
+      id,
+      operation: 'text.concat',
+      dependsOn: index === 0 ? [] : [ids[index - 1]],
+      args: {
+        parts: index === 0
+          ? ['start"\\\0é']
+          : [{ $result: ids[index - 1] }, suffixes[index - 1]]
+      }
+    }))
+  });
+}
 
 function mutableClock(startAtMs) {
   let current = startAtMs;
@@ -113,9 +149,28 @@ function initialCheckpointSizeForBase(workflowId, baseCheckpointData) {
     stepId
   });
   const resultReservationBytes = getMaximumCompletedResultsJsonBytes(plan, state.completedResultsJson);
+  const limits = getLimitValues(limitSet);
+  const stepIds = getPlanStepIds(plan);
+  const longestStepId = stepIds.reduce((longest, stepId) => (
+    Buffer.byteLength(stepId, 'utf8') > Buffer.byteLength(longest, 'utf8') ? stepId : longest
+  ), stepIds[0]);
   const sizeOnlyState = {
     ...state,
-    completedResultsJson: '\\'.repeat(resultReservationBytes)
+    budget: {
+      ...state.budget,
+      lastWallMs: state.budget.deadlineWallMs,
+      elapsedMs: limits.maxElapsedMs,
+      stepsAdmitted: stepIds.length,
+      stepAttempts: limits.maxStepAttempts,
+      localRetries: limits.maxLocalRetries,
+      replans: limits.maxReplans,
+      iterations: limits.maxIterations,
+      totalResultBytes: limits.maxTotalResultBytes
+    },
+    completedResultsJson: '\\'.repeat(resultReservationBytes),
+    pendingStepId: longestStepId,
+    lastAdmissionKind: 'replay',
+    lastAdmissionStepId: longestStepId
   };
   return Object.freeze({
     initial: measureCheckpointPayload(state),
@@ -254,20 +309,40 @@ function spawnWithSignal(scriptPath, args = []) {
   child.stderr.setEncoding('utf8');
   child.stdout.on('data', chunk => { stdout += chunk; });
   child.stderr.on('data', chunk => { stderr += chunk; });
+  let closed = false;
   const done = new Promise((resolve, reject) => {
     child.once('error', reject);
-    child.once('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+    child.once('close', (code, signal) => {
+      closed = true;
+      resolve({ code, signal, stdout, stderr });
+    });
   });
-  return { child, done };
+  return { child, done, isClosed: () => closed };
 }
 
-async function killAtMarker(child, markerPath) {
-  await waitForFiles([markerPath]);
-  const marker = JSON.parse(readFileSync(markerPath, 'utf8'));
-  child.child.kill('SIGKILL');
-  const result = await child.done;
-  assert.equal(result.signal, 'SIGKILL');
-  return { marker, result };
+async function reapOwnedChild(child) {
+  if (!child.isClosed() && child.child.pid !== undefined) {
+    try {
+      child.child.kill('SIGKILL');
+    } catch {
+      // The process may have exited between the state check and kill.
+    }
+  }
+  await child.done.catch(() => undefined);
+}
+
+async function killAtMarker(child, markerPath, timeoutMs = 5_000, assertMarker = () => {}) {
+  try {
+    await waitForFiles([markerPath], timeoutMs);
+    const marker = JSON.parse(readFileSync(markerPath, 'utf8'));
+    assertMarker(marker);
+    if (!child.isClosed()) child.child.kill('SIGKILL');
+    const result = await child.done;
+    assert.equal(result.signal, 'SIGKILL');
+    return { marker, result };
+  } finally {
+    await reapOwnedChild(child);
+  }
 }
 
 function startRaceWorker({ mode, databasePath, workflowId, ownerId, fence, payloadPath, gatePath, workerId, resultPath, newOwnerId }) {
@@ -708,6 +783,184 @@ test('the four process-kill boundaries retain counters and never rerun a committ
   }
 });
 
+test('schema-5 checkpoint integer-key ordering survives normal completion and real crash recovery', async t => {
+  const cases = [
+    { name: 'top-level-numeric', checkpoint: { '2': 'two', '10': 'ten' } },
+    { name: 'nested-numeric', checkpoint: { nested: { '2': 'two', '10': 'ten' } } },
+    { name: 'array-object-numeric', checkpoint: { rows: [{ '2': 'two', '10': 'ten' }] } },
+    {
+      name: 'mixed-numeric-named',
+      checkpoint: { '2': 'two', '10': 'ten', alpha: 'first', zeta: { '3': 3, '12': 12 } }
+    },
+    {
+      name: 'named-and-finite',
+      checkpoint: { alpha: 'two', beta: 'ten', nested: { left: 1e21, right: -1.5 } }
+    }
+  ];
+
+  for (const entry of cases) {
+    const normal = temporaryDatabase('bounded-checkpoint-order-normal-' + entry.name + '-');
+    t.after(() => normal.cleanup());
+    const store = openStore(normal.databasePath);
+    let normalResult;
+    let lease;
+    try {
+      lease = createRunningWorkflow(store, 'key-order-' + entry.name, 'worker-local', 60_000, entry.checkpoint);
+      normalResult = await runBoundedLocalPlan({
+        store,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence,
+        planJson: SINGLE_PLAN
+      });
+      assert.equal(normalResult.status, 'completed', entry.name);
+      assert.equal(normalResult.results[0].output, 9, entry.name);
+      assert.deepEqual(store.getCheckpoint(lease.workflowId).data.baseCheckpointData, entry.checkpoint);
+    } finally {
+      store.close();
+    }
+
+    const normalReopened = openStore(normal.databasePath);
+    try {
+      assert.equal(inspectWorkflowRecovery({ store: normalReopened, workflowId: lease.workflowId }).kind,
+        'durable-evidence-present', entry.name);
+      const beforeReuse = snapshotDatabase(normal.databasePath);
+      const reused = await runBoundedLocalPlan({
+        store: normalReopened,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence
+      });
+      assert.equal(reused.resultHash, normalResult.resultHash, entry.name);
+      assert.equal(snapshotDatabase(normal.databasePath), beforeReuse, entry.name + ' reuse is read-only');
+    } finally {
+      normalReopened.close();
+    }
+
+    for (const stage of ['after-admission', 'after-compute']) {
+      const temporary = temporaryDatabase('bounded-checkpoint-order-' + stage + '-' + entry.name + '-');
+      t.after(() => temporary.cleanup());
+      const planPath = join(temporary.directory, 'plan.json');
+      const markerPath = join(temporary.directory, 'worker.ready');
+      writeFileSync(planPath, SINGLE_PLAN);
+      const setupStore = openStore(temporary.databasePath);
+      let crashLease;
+      try {
+        crashLease = createRunningWorkflow(
+          setupStore,
+          'key-order-' + stage + '-' + entry.name,
+          'worker-local',
+          60_000,
+          entry.checkpoint
+        );
+      } finally {
+        setupStore.close();
+      }
+
+      const worker = spawnWithSignal(fixturePath('local-controller-crash.mjs'), [
+        temporary.databasePath,
+        crashLease.workflowId,
+        crashLease.ownerId,
+        String(crashLease.fence),
+        planPath,
+        markerPath,
+        stage
+      ]);
+      const { marker } = await killAtMarker(worker, markerPath);
+      assert.equal(marker.stage, stage);
+
+      const recovered = openStore(temporary.databasePath);
+      try {
+        assert.deepEqual(recovered.getCheckpoint(crashLease.workflowId).data.baseCheckpointData, entry.checkpoint);
+        assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: crashLease.workflowId }).kind,
+          'local-replay-candidate', entry.name + ' ' + stage);
+        const result = await runBoundedLocalPlan({
+          store: recovered,
+          workflowId: crashLease.workflowId,
+          ownerId: crashLease.ownerId,
+          fence: crashLease.fence
+        });
+        assert.equal(result.status, 'completed', entry.name + ' ' + stage);
+        assert.equal(result.results[0].output, 9, entry.name + ' ' + stage);
+        assert.deepEqual(recovered.getCheckpoint(crashLease.workflowId).data.baseCheckpointData, entry.checkpoint);
+      } finally {
+        recovered.close();
+      }
+
+      const afterCrashReopen = openStore(temporary.databasePath);
+      try {
+        assert.equal(inspectWorkflowRecovery({ store: afterCrashReopen, workflowId: crashLease.workflowId }).kind,
+          'durable-evidence-present', entry.name + ' ' + stage);
+        const beforeReuse = snapshotDatabase(temporary.databasePath);
+        const reused = await runBoundedLocalPlan({
+          store: afterCrashReopen,
+          workflowId: crashLease.workflowId,
+          ownerId: crashLease.ownerId,
+          fence: crashLease.fence
+        });
+        assert.equal(reused.status, 'completed', entry.name + ' ' + stage);
+        assert.equal(snapshotDatabase(temporary.databasePath), beforeReuse, entry.name + ' ' + stage + ' reuse');
+      } finally {
+        afterCrashReopen.close();
+      }
+    }
+  }
+});
+
+test('crash markers publish atomically and owned children are reaped on parse and timeout failures', async t => {
+  const temporary = temporaryDatabase('bounded-marker-publication-');
+  t.after(() => temporary.cleanup());
+
+  const markerPath = join(temporary.directory, 'fragmented.ready');
+  const partialReadyPath = join(temporary.directory, 'fragmented.partial');
+  const fragmented = spawnWithSignal(fixturePath('local-controller-marker-publication.mjs'), [
+    markerPath,
+    'fragmented',
+    partialReadyPath
+  ]);
+  try {
+    await waitForFiles([partialReadyPath]);
+    assert.equal(existsSync(markerPath), false, 'the partial bytes remain under the temporary name');
+    const { marker, result } = await killAtMarker(fragmented, markerPath);
+    assert.deepEqual(marker, { stage: 'fragmented', complete: true });
+    assert.equal(result.signal, 'SIGKILL');
+  } finally {
+    await reapOwnedChild(fragmented);
+  }
+
+  const malformedPath = join(temporary.directory, 'malformed.ready');
+  const malformed = spawnWithSignal(fixturePath('local-controller-marker-publication.mjs'), [
+    malformedPath,
+    'malformed',
+    join(temporary.directory, 'unused.partial')
+  ]);
+  await assert.rejects(killAtMarker(malformed, malformedPath), SyntaxError);
+  assert.equal((await malformed.done).signal, 'SIGKILL', 'malformed JSON still terminates and reaps the owned child');
+
+  const assertionPath = join(temporary.directory, 'assertion.ready');
+  const assertionChild = spawnWithSignal(fixturePath('local-controller-marker-publication.mjs'), [
+    assertionPath,
+    'valid',
+    join(temporary.directory, 'unused.partial')
+  ]);
+  await assert.rejects(
+    killAtMarker(assertionChild, assertionPath, 5_000, marker => assert.equal(marker.stage, 'expected')),
+    assert.AssertionError
+  );
+  assert.equal((await assertionChild.done).signal, 'SIGKILL', 'assertion failure still reaps the owned child');
+
+  const missingPath = join(temporary.directory, 'missing.ready');
+  const silent = spawnWithSignal(fixturePath('local-controller-marker-publication.mjs'), [
+    missingPath,
+    'silent',
+    join(temporary.directory, 'unused.partial')
+  ]);
+  const started = performance.now();
+  await assert.rejects(killAtMarker(silent, missingPath, 50), /Fixture processes did not reach the release barrier/u);
+  assert.ok(performance.now() - started < 1_000, 'marker timeout fails promptly');
+  assert.equal((await silent.done).signal, 'SIGKILL', 'marker timeout still terminates and reaps the owned child');
+});
+
 test('finite original checkpoint numbers survive admission and computation SIGKILL recovery', async t => {
   const values = [
     42,
@@ -997,6 +1250,237 @@ test('completion-result growth is reserved at the exact UTF-8 checkpoint boundar
   assert.equal(snapshotDatabase(rejected.databasePath), before, 'all rows and sqlite_sequence survive reopen unchanged');
   assert.deepEqual(rejectedReopened.getCheckpoint(rejectedLease.workflowId).data, rejectedBase);
   rejectedReopened.close();
+});
+
+test('future metadata and results are reserved before admission across the maximum later step ID', async t => {
+  for (const entry of [
+    { name: 'one-hundred-below', payloadBytes: 259_974, expected: 'completed' },
+    { name: 'at-reported-overflow', payloadBytes: 260_074, expected: 'stopped' }
+  ]) {
+    const temporary = temporaryDatabase('bounded-b5-future-state-' + entry.name + '-');
+    t.after(() => temporary.cleanup());
+    const clock = mutableClock(1_000);
+    const store = openStore(temporary.databasePath, clock.read);
+    const base = { payload: 'x'.repeat(entry.payloadBytes) };
+    let lease;
+    let result;
+    let before;
+    try {
+      lease = createRunningWorkflow(store, 'w', 'worker-local', 60_000, base);
+      before = snapshotDatabase(temporary.databasePath);
+      result = await runBoundedLocalPlan({
+        store,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence,
+        planJson: LONG_FUTURE_PLAN
+      });
+
+      if (entry.expected === 'stopped') {
+        assert.equal(result.status, 'stopped', entry.name);
+        assert.equal(result.reason, 'CONTROLLER_CHECKPOINT_TOO_LARGE', entry.name);
+        assert.equal(snapshotDatabase(temporary.databasePath), before, entry.name + ' no durable mutation');
+        const untouched = store.getCheckpoint(lease.workflowId);
+        assert.equal(untouched.sequence, 1, entry.name);
+        assert.deepEqual(untouched.data, base, entry.name + ' opaque base retained');
+      } else {
+        assert.equal(result.status, 'completed', entry.name + ': ' + JSON.stringify(result));
+        assert.deepEqual(result.results.map(item => item.output), [3, 5], entry.name);
+        const completed = store.getCheckpoint(lease.workflowId);
+        assert.equal(completed.sequence, 5, entry.name);
+        assert.deepEqual(completed.data.baseCheckpointData, base, entry.name + ' opaque base retained');
+        assert.equal(completed.data.budget.stepsAdmitted, 2, entry.name);
+        assert.equal(completed.data.budget.stepAttempts, 2, entry.name);
+        assert.equal(completed.data.budget.localRetries, 0, entry.name);
+      }
+    } finally {
+      store.close();
+    }
+
+    const reopened = openStore(temporary.databasePath, clock.read);
+    try {
+      const afterOpen = snapshotDatabase(temporary.databasePath);
+      if (entry.expected === 'stopped') {
+        assert.equal(afterOpen, before, entry.name + ' reopen is read-only');
+        assert.equal(reopened.getCheckpoint('w').sequence, 1, entry.name);
+        assert.deepEqual(reopened.getCheckpoint('w').data, base, entry.name);
+      } else {
+        assert.equal(inspectWorkflowRecovery({ store: reopened, workflowId: 'w' }).kind,
+          'durable-evidence-present', entry.name);
+        const beforeReuse = snapshotDatabase(temporary.databasePath);
+        const reused = await runBoundedLocalPlan({
+          store: reopened,
+          workflowId: 'w',
+          ownerId: lease.ownerId,
+          fence: lease.fence
+        });
+        assert.equal(reused.resultHash, result.resultHash, entry.name);
+        assert.equal(snapshotDatabase(temporary.databasePath), beforeReuse, entry.name + ' completion reuse');
+        assert.equal(afterOpen, beforeReuse, entry.name + ' open does not mutate SQL tables');
+      }
+    } finally {
+      reopened.close();
+    }
+
+    if (entry.expected === 'completed') {
+      for (const stage of ['after-admission', 'after-compute']) {
+        const crash = temporaryDatabase('bounded-b5-near-boundary-' + stage + '-');
+        t.after(() => crash.cleanup());
+        const planPath = join(crash.directory, 'plan.json');
+        const markerPath = join(crash.directory, 'worker.ready');
+        writeFileSync(planPath, LONG_FUTURE_PLAN);
+        const crashClock = mutableClock(1_000);
+        const setup = openStore(crash.databasePath, crashClock.read);
+        let crashLease;
+        try {
+          crashLease = createRunningWorkflow(setup, 'w', 'worker-local', 60_000, base);
+        } finally {
+          setup.close();
+        }
+
+        const worker = spawnWithSignal(fixturePath('local-controller-crash.mjs'), [
+          crash.databasePath,
+          crashLease.workflowId,
+          crashLease.ownerId,
+          String(crashLease.fence),
+          planPath,
+          markerPath,
+          stage,
+          '1000'
+        ]);
+        const { marker } = await killAtMarker(worker, markerPath);
+        assert.equal(marker.stage, stage, entry.name);
+
+        const recovered = openStore(crash.databasePath, crashClock.read);
+        let crashResult;
+        try {
+          const pending = recovered.getCheckpoint('w');
+          assert.equal(pending.sequence, 2, entry.name + ' ' + stage);
+          assert.deepEqual(pending.data.baseCheckpointData, base, entry.name + ' ' + stage);
+          assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: 'w' }).kind,
+            'local-replay-candidate', entry.name + ' ' + stage);
+          crashResult = await runBoundedLocalPlan({
+            store: recovered,
+            workflowId: 'w',
+            ownerId: crashLease.ownerId,
+            fence: crashLease.fence
+          });
+          assert.equal(crashResult.status, 'completed', entry.name + ' ' + stage);
+          assert.deepEqual(crashResult.results.map(item => item.output), [3, 5], entry.name + ' ' + stage);
+          const completed = recovered.getCheckpoint('w');
+          assert.equal(completed.sequence, 6, entry.name + ' ' + stage);
+          assert.deepEqual(completed.data.baseCheckpointData, base, entry.name + ' ' + stage);
+          assert.equal(completed.data.budget.stepsAdmitted, 2, entry.name + ' ' + stage);
+          assert.equal(completed.data.budget.stepAttempts, 3, entry.name + ' ' + stage);
+          assert.equal(completed.data.budget.localRetries, 1, entry.name + ' ' + stage);
+        } finally {
+          recovered.close();
+        }
+
+        const crashReopened = openStore(crash.databasePath, crashClock.read);
+        try {
+          assert.equal(inspectWorkflowRecovery({ store: crashReopened, workflowId: 'w' }).kind,
+            'durable-evidence-present', entry.name + ' ' + stage);
+          const beforeReuse = snapshotDatabase(crash.databasePath);
+          const reused = await runBoundedLocalPlan({
+            store: crashReopened,
+            workflowId: 'w',
+            ownerId: crashLease.ownerId,
+            fence: crashLease.fence
+          });
+          assert.equal(reused.resultHash, crashResult.resultHash, entry.name + ' ' + stage);
+          assert.equal(snapshotDatabase(crash.databasePath), beforeReuse, entry.name + ' ' + stage + ' reuse');
+        } finally {
+          crashReopened.close();
+        }
+      }
+    }
+  }
+});
+
+test('future reservation covers replay labels, counter growth, UTF-8 results, and real SIGKILL recovery', async t => {
+  const planJson = tenStepEscapedTextPlan();
+  const base = {
+    opaque: 'original\\\0"é'.repeat(64),
+    nested: { stable: true, number: Number.MAX_SAFE_INTEGER + 1 }
+  };
+  const expectedOutput = ['start"\\\0é'];
+  const suffixes = ['\\', '\0', 'é', '"', '\\é', '\0"', 'é\\', '"\0', 'tail'];
+  for (const suffix of suffixes) expectedOutput.push(expectedOutput.at(-1) + suffix);
+
+  for (const stage of ['after-admission', 'after-compute']) {
+    const temporary = temporaryDatabase('bounded-b5-future-state-crash-' + stage + '-');
+    t.after(() => temporary.cleanup());
+    const planPath = join(temporary.directory, 'plan.json');
+    const markerPath = join(temporary.directory, 'worker.ready');
+    writeFileSync(planPath, planJson);
+    const setupStore = openStore(temporary.databasePath);
+    let lease;
+    let result;
+    try {
+      lease = createRunningWorkflow(setupStore, 'b5-many-' + stage, 'worker-local', 60_000, base);
+    } finally {
+      setupStore.close();
+    }
+
+    const worker = spawnWithSignal(fixturePath('local-controller-crash.mjs'), [
+      temporary.databasePath,
+      lease.workflowId,
+      lease.ownerId,
+      String(lease.fence),
+      planPath,
+      markerPath,
+      stage
+    ]);
+    const { marker } = await killAtMarker(worker, markerPath);
+    assert.equal(marker.stage, stage);
+
+    const recovered = openStore(temporary.databasePath);
+    try {
+      const pending = recovered.getCheckpoint(lease.workflowId);
+      assert.deepEqual(pending.data.baseCheckpointData, base, stage + ' opaque base preserved');
+      assert.equal(pending.data.budget.stepsAdmitted, 1, stage);
+      assert.equal(pending.data.budget.stepAttempts, 1, stage);
+      assert.equal(pending.data.budget.localRetries, 0, stage);
+      assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId }).kind,
+        'local-replay-candidate', stage);
+
+      result = await runBoundedLocalPlan({
+        store: recovered,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence
+      });
+      assert.equal(result.status, 'completed', stage + ': ' + JSON.stringify(result));
+      assert.deepEqual(result.results.map(item => item.output), expectedOutput, stage);
+      const completed = recovered.getCheckpoint(lease.workflowId);
+      assert.equal(completed.data.budget.stepsAdmitted, 10, stage);
+      assert.equal(completed.data.budget.stepAttempts, 11, stage);
+      assert.equal(completed.data.budget.localRetries, 1, stage);
+      assert.equal(completed.data.budget.iterations, 11, stage);
+      assert.deepEqual(completed.data.baseCheckpointData, base, stage + ' opaque base preserved');
+      assert.equal(inspectWorkflowRecovery({ store: recovered, workflowId: lease.workflowId }).kind,
+        'durable-evidence-present', stage);
+    } finally {
+      recovered.close();
+    }
+
+    const reopened = openStore(temporary.databasePath);
+    try {
+      const beforeReuse = snapshotDatabase(temporary.databasePath);
+      const reused = await runBoundedLocalPlan({
+        store: reopened,
+        workflowId: lease.workflowId,
+        ownerId: lease.ownerId,
+        fence: lease.fence
+      });
+      assert.equal(reused.status, 'completed', stage);
+      assert.equal(reused.resultHash, result.resultHash, stage);
+      assert.equal(snapshotDatabase(temporary.databasePath), beforeReuse, stage + ' all-table reuse');
+    } finally {
+      reopened.close();
+    }
+  }
 });
 
 test('a replayed step can be followed by a later ordinary step admission', async t => {

@@ -179,13 +179,26 @@ function checkpointMetrics(data) {
   };
 }
 
+function boundedCheckpointMetrics(data) {
+  const measured = checkpointMetrics(data);
+  if (measured.serializedBytes > MAX_CHECKPOINT_SERIALIZED_BYTES) throw INVALID_CHECKPOINT_INPUT;
+  return measured;
+}
+
 function serializeCheckpoint(data, operation) {
   try {
-    const measured = checkpointMetrics(data);
-    if (measured.serializedBytes > MAX_CHECKPOINT_SERIALIZED_BYTES) throw INVALID_CHECKPOINT_INPUT;
-    return measured.payload;
+    return boundedCheckpointMetrics(data).payload;
   } catch {
     fail(operation, 'INVALID_INPUT', 'Checkpoint data is invalid or exceeds the supported size and structure limits.');
+  }
+}
+
+/** @internal Returns the exact schema-5/envelope-2 bytes used by checkpoint writes. */
+export function checkpointPayloadForIntegrity(data) {
+  try {
+    return boundedCheckpointMetrics(data).payload;
+  } catch {
+    fail('checkpointIntegrity', 'CHECKPOINT_CORRUPT', 'The checkpoint failed its integrity check.');
   }
 }
 
