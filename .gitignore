@@ -1,0 +1,7 @@
+node_modules/
+.npm/
+.cache/
+.tmp/
+coverage/
+*.log
+.DS_Store

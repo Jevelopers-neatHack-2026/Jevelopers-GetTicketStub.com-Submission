@@ -4,7 +4,11 @@ Sourced event facts and research cache.
 
 ## Implementation status
 
-Documentation baseline only. Implementation and acceptance verification remain planned. No application scaffolding, provider connection, workflow, or license is implied.
+This repository contains an internal, bounded HTTP(S) retrieval utility under `src/security/`, a content privacy boundary and tenant-scoped flows under `src/privacy/`, deterministic local DNS/HTTP/TLS and privacy fixtures, a Node 22 test runner, and compile-checked consumer declarations. Retrieval validates URL and DNS policy, pins connections to vetted addresses, revalidates redirects, bounds response resources, and rejects unsupported or mismatched media. Privacy flows keep untrusted content quarantined until a configured trusted review approves the public facts.
+
+The utility is not yet integrated with the accepted research request/response contract. EI-01 (#7) and EI-09 (#9) remain prerequisites. Event source discovery, factual extraction, provenance, caching, provider connections, downstream parser hardening, and live release evidence remain pending. The local socket fixtures measure their own requests only; they do not assert production or external egress telemetry.
+
+Run `npm ci`, `make verify CASE=safe-retrieval MODE=mock`, `make verify CASE=content-privacy MODE=mock`, `npm run test:runner`, and `npm run typecheck` with Node 22.23.3. Details and limits are in [controlled retrieval](docs/security/controlled-retrieval.md) and [content privacy boundary](docs/privacy/content-boundary.md). These checks use local fixtures; they perform no application deployment, provider connection, or live retrieval.
 
 [Architecture reference](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
 
