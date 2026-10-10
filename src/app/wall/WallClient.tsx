@@ -1,15 +1,18 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { FitBox } from "@/customer/pages/FitBox";
 import { play, haptic } from "@/customer/studio/feedback";
 import { loadWall, removeStub, saveWall } from "@/customer/studio/store";
-import type { Stub } from "@/customer/studio/types";
-import { PageShell, CopyField, ui } from "@/customer/pages/ui";
+import { MATERIALS, formatMoney, type Stub } from "@/customer/studio/types";
+import { FINISHES, materialPrice } from "@/customer/pages/commerce";
 import { copyText, absoluteUrl, encodeWall, memoryPath, formatDate, WALL_TOKEN_MAX } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
+import { PaperButton, SandboxStrip, Stamp, Stamped, Switch, Tag, Tags, TearLink, Tool, Tools } from "@/customer/desk/Desk";
+import { FlipIcon } from "@/customer/desk/icons";
+import { EditIcon, OpenIcon, PrintIcon, ShareIcon } from "./liftIcons";
+import { DeskPage, Pin, chrome as c } from "./chrome";
 import s from "./wall.module.css";
 
 type Filter = "all" | "concert" | "game" | "show" | "generic";
@@ -21,15 +24,48 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "generic", label: "Other" },
 ];
 const PUBLIC_KEY = "ticketstub.wall.public.v1";
+const LAMP_MS = 600;
+const LAND_MS = 900;
 
-export default function WallClient({ emailSent }: { emailSent: boolean }) {
+/** What printing this stub costs: its material plus the finish upcharge, both from the price tables. */
+function printPrice(st: Stub): number {
+  const physical = st.material !== "digital";
+  return materialPrice(st.material) + (physical ? (FINISHES.find((f) => f.id === st.finish)?.upchargeMinor ?? 0) : 0);
+}
+const materialLabel = (st: Stub) => MATERIALS.find((m) => m.id === st.material)?.label ?? "";
+const finishLabel = (st: Stub) => (st.material === "digital" ? "" : (FINISHES.find((f) => f.id === st.finish)?.label ?? ""));
+
+async function shareStub(st: Stub): Promise<string> {
+  const url = absoluteUrl(memoryPath(st));
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title: st.event.title, url });
+      return "Shared.";
+    } catch {
+      /* cancelled or blocked: fall back to copying */
+    }
+  }
+  return (await copyText(url)) ? "Link copied. Anyone with the link can see this stub." : "Couldn't copy the link. Open the stub and copy it from there.";
+}
+
+interface Lift {
+  id: string;
+  leaving: boolean;
+  top: number;
+}
+
+export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent: boolean; pinnedId?: string; liftId?: string }) {
+  const router = useRouter();
   const mounted = useMounted();
   const [stubs, setStubs] = useState<Stub[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [lift, setLift] = useState<Lift | null>(null);
   const [banner, setBanner] = useState(emailSent);
   const [isPublic, setIsPublic] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+  const publicRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [loaded, setLoaded] = useState(false);
   if (mounted && !loaded) {
@@ -42,20 +78,82 @@ export default function WallClient({ emailSent }: { emailSent: boolean }) {
     }
   }
 
+  const landing = pinnedId ? (stubs.find((x) => x.id === pinnedId) ?? null) : null;
+  const landingId = landing?.id;
+
+  // The landing: the pin presses in as the stub settles. Then the address drops its ?pinned so a reload is at rest.
+  useEffect(() => {
+    if (!landingId) return;
+    const t = setTimeout(
+      () => {
+        play("pin");
+        haptic([30, 30, 60]);
+      },
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : LAND_MS - 120,
+    );
+    // bring the board up so the landing and its next steps are in view, on a phone as on a desk
+    const sc = setTimeout(() => {
+      const top = boardRef.current?.getBoundingClientRect().top;
+      if (top !== undefined) window.scrollTo({ top: window.scrollY + top - 12, behavior: "instant" });
+    }, 120);
+    window.history.replaceState(null, "", "/wall");
+    return () => {
+      clearTimeout(t);
+      clearTimeout(sc);
+    };
+  }, [landingId]);
+
+  const openLift = useCallback((id: string) => {
+    const r = publicRef.current?.getBoundingClientRect();
+    // keep the public switch in the light: the lamp starts below it when it's on screen
+    const top = r && r.bottom > 0 && r.top < window.innerHeight ? Math.ceil(r.bottom) + 12 : 16;
+    setLift({ id, leaving: false, top });
+    play("flick");
+    haptic([8]);
+  }, []);
+
+  // /wall?lift=<id> (from "On your wall" in the editor) opens with that stub already lifted
+  const [lifted, setLifted] = useState(false);
+  if (loaded && !lifted) {
+    setLifted(true);
+    if (liftId && stubs.some((x) => x.id === liftId)) setLift({ id: liftId, leaving: false, top: 16 });
+  }
+
+  const putBack = useCallback(() => {
+    setLift((cur) => {
+      if (!cur || cur.leaving) return cur;
+      play("pin");
+      haptic([10]);
+      timer.current = setTimeout(() => {
+        setLift(null);
+        document.querySelector<HTMLElement>(`[data-stub-id="${CSS.escape(cur.id)}"]`)?.focus();
+      }, LAMP_MS);
+      return { ...cur, leaving: true };
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { all: stubs.length, concert: 0, game: 0, show: 0, generic: 0 };
+    const n: Record<Filter, number> = { all: stubs.length, concert: 0, game: 0, show: 0, generic: 0 };
     for (const st of stubs) {
       const t = (st.event?.type ?? "generic") as Filter;
-      c[t in c ? t : "generic"]++;
+      n[t in n ? t : "generic"]++;
     }
-    return c;
+    return n;
   }, [stubs]);
   const cities = useMemo(() => new Set(stubs.map((x) => x.event.city).filter(Boolean)).size, [stubs]);
-  const visible = filter === "all" ? stubs : stubs.filter((x) => x.event.type === filter);
-  const selected = stubs.find((x) => x.id === selectedId) ?? null;
+  // a filter only shows up when it would find something, and only when there is more than one kind
+  const shownFilters = FILTERS.filter((f) => f.id !== "all" && counts[f.id] > 0);
+  const activeFilter = filter === "all" || counts[filter] > 0 ? filter : "all";
+  const visible = (activeFilter === "all" ? stubs : stubs.filter((x) => (x.event.type ?? "generic") === activeFilter)).filter((x) => x.id !== landingId);
+  const liftedStub = lift ? (stubs.find((x) => x.id === lift.id) ?? null) : null;
 
-  function togglePublic() {
-    const next = !isPublic;
+  function togglePublic(next: boolean) {
     setIsPublic(next);
     try {
       localStorage.setItem(PUBLIC_KEY, next ? "1" : "0");
@@ -81,70 +179,92 @@ export default function WallClient({ emailSent }: { emailSent: boolean }) {
   function remove(id: string) {
     removeStub(id);
     setStubs((prev) => prev.filter((x) => x.id !== id));
-    setSelectedId(null);
+    setLift(null);
   }
 
   return (
-    <PageShell
-      title="Your wall"
+    <DeskPage
       right={
-        <Link className="btn btn-quiet" href="/">
+        <Link className={s.newLink} href="/" onClick={() => play("tap", { emphasis: "subtle" })}>
           New stub
         </Link>
       }
     >
+      {landing ? <div className={`ts-stage desk-surface ${s.lights}`} aria-hidden="true" /> : null}
+
       {banner ? (
         <div className={s.banner} role="status">
           <p>
             <strong>Check your email.</strong> We sent a link to your wall.
           </p>
-          <button type="button" className={s.bannerClose} onClick={() => setBanner(false)} aria-label="Dismiss">
-            ×
-          </button>
+          <TearLink type="button" onClick={() => setBanner(false)}>
+            Dismiss
+          </TearLink>
         </div>
       ) : null}
 
-      <div className={s.layout}>
-        <section className={s.boardCol} aria-labelledby="wall-h">
-          <div className={s.head}>
-            <h1 id="wall-h" className={ui.h1}>
-              Your wall
-            </h1>
-            {mounted && stubs.length > 0 ? (
-              <p className={`${s.stats} num`}>
-                {stubs.length} {stubs.length === 1 ? "night" : "nights"} · {cities} {cities === 1 ? "city" : "cities"}
-              </p>
-            ) : null}
-          </div>
-
+      <div className={s.headRow}>
+        <div className={c.head}>
+          <h1 className={c.title}>Your wall</h1>
           {mounted && stubs.length > 0 ? (
-            <div className={s.chips} role="group" aria-label="Filter by event type">
-              {FILTERS.map((f) => (
-                <button key={f.id} type="button" className="chip" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
-                  {f.label} <span className="num">{counts[f.id]}</span>
-                </button>
-              ))}
-            </div>
+            <p className={c.caption}>
+              {stubs.length} {stubs.length === 1 ? "night" : "nights"}
+              {cities > 0 ? ` · ${cities} ${cities === 1 ? "city" : "cities"}` : ""}
+            </p>
           ) : null}
+        </div>
+        {mounted && stubs.length > 0 ? (
+          <div ref={publicRef} className={s.publicBox}>
+            <Switch checked={isPublic} onChange={togglePublic} hint="Only people with the link can see it.">
+              Public page
+            </Switch>
+            {isPublic ? <PublicLink path={`/u/${encodeWall(stubs)}`} capped={stubs.length > WALL_TOKEN_MAX} /> : null}
+          </div>
+        ) : null}
+      </div>
 
-          <div className={s.cork}>
-            {!mounted ? null : stubs.length === 0 ? (
-              <div className={s.empty}>
-                <div className={s.emptySlot} aria-hidden="true" />
-                <p className={ui.h2}>Your wall is empty. Your first stub goes here.</p>
-                <Link className="btn btn-primary" href="/">
-                  Make your first stub
-                </Link>
+      {mounted && shownFilters.length > 1 ? (
+        <Tags label="Filter by event type">
+          <Tag pressed={activeFilter === "all"} count={counts.all} onClick={() => setFilter("all")}>
+            All
+          </Tag>
+          {shownFilters.map((f) => (
+            <Tag key={f.id} pressed={activeFilter === f.id} count={counts[f.id]} onClick={() => setFilter(f.id)}>
+              {f.label}
+            </Tag>
+          ))}
+        </Tags>
+      ) : null}
+
+      <section ref={boardRef} className={`${c.cork} ${s.board}`} aria-label="Your stubs, pinned to a corkboard">
+        {!mounted ? null : stubs.length === 0 ? (
+          <div className={s.empty}>
+            <div className={s.emptySlot} aria-hidden="true" />
+            <p className={s.emptyText}>Your first stub goes here.</p>
+            <Stamp type="button" onClick={() => router.push("/")}>
+              Make your first stub
+            </Stamp>
+          </div>
+        ) : (
+          <>
+            {landing ? (
+              <div className={s.feature}>
+                <div className={s.landing} style={{ ["--angle" as string]: `${landing.wallAngle ?? 0}deg` } as CSSProperties}>
+                  <Pin seed={landing.id} press delay={LAND_MS - 160} />
+                  <StubView stub={landing} size="md" />
+                </div>
+                <NextSteps stub={landing} />
               </div>
-            ) : visible.length === 0 ? (
+            ) : null}
+            {visible.length === 0 && !landing ? (
               <p className={s.none}>No stubs of this type yet.</p>
             ) : (
-              <ul className={s.grid}>
+              <ul className={c.grid}>
                 {visible.map((st, i) => (
                   <li
                     key={st.id}
-                    className={`${s.pinned} ${dragId === st.id ? s.dragging : ""}`}
-                    style={{ ["--angle" as string]: `${st.wallAngle ?? 0}deg`, ["--i" as string]: i }}
+                    className={`${s.pinned} ${dragId === st.id ? s.dragging : ""} ${lift?.id === st.id ? s.lifted : ""}`}
+                    style={{ ["--angle" as string]: `${st.wallAngle ?? 0}deg`, ["--i" as string]: i } as CSSProperties}
                     draggable
                     onDragStart={(e) => {
                       setDragId(st.id);
@@ -160,17 +280,14 @@ export default function WallClient({ emailSent }: { emailSent: boolean }) {
                       setDragId(null);
                     }}
                   >
-                    <span className={s.pin} aria-hidden="true" />
+                    <Pin seed={st.id} />
                     <button
                       type="button"
+                      data-stub-id={st.id}
                       className={s.stubBtn}
                       aria-label={`Lift ${st.event.title}${st.event.dateISO ? `, ${formatDate(st.event.dateISO)}` : ""}`}
-                      aria-pressed={selectedId === st.id}
-                      onClick={() => {
-                        setSelectedId(st.id);
-                        play("flick");
-                        haptic([8]);
-                      }}
+                      aria-expanded={lift?.id === st.id}
+                      onClick={() => openLift(st.id)}
                     >
                       <StubView stub={st} size="sm" />
                     </button>
@@ -178,60 +295,92 @@ export default function WallClient({ emailSent }: { emailSent: boolean }) {
                 ))}
               </ul>
             )}
-          </div>
-          {mounted && stubs.length > 1 ? <p className={ui.muted}>Drag a stub to move it on your wall.</p> : null}
+          </>
+        )}
+      </section>
+      {mounted && stubs.length > 1 ? <p className={s.hint}>Drag a stub to move it on your wall.</p> : null}
 
-          {mounted && stubs.length > 0 ? (
-            <section className={`${ui.card} ${s.publicCard}`} aria-labelledby="public-h">
-              <div className={s.switchRow}>
-                <div>
-                  <h2 id="public-h" className={s.publicTitle}>
-                    Public page
-                  </h2>
-                  <p className={ui.muted}>Only people with the link can see it.</p>
-                </div>
-                <button type="button" role="switch" aria-checked={isPublic} aria-labelledby="public-h" className={s.switch} onClick={togglePublic}>
-                  <span className={s.knob} />
-                </button>
-              </div>
-              {isPublic ? (
-                <>
-                  <CopyField path={`/u/${encodeWall(stubs)}`} label="Public wall link" />
-                  {stubs.length > WALL_TOKEN_MAX ? <p className={ui.muted}>Your {WALL_TOKEN_MAX} newest stubs appear on the public page.</p> : null}
-                </>
-              ) : null}
-            </section>
-          ) : null}
-        </section>
-
-        <LiftPanel key={selected?.id ?? "idle"} stub={selected} onClose={() => setSelectedId(null)} onDelete={remove} hasStubs={mounted && stubs.length > 0} />
-      </div>
-    </PageShell>
+      {lift && liftedStub ? <Lamp key={liftedStub.id} stub={liftedStub} lift={lift} onPutBack={putBack} onDelete={remove} /> : null}
+    </DeskPage>
   );
 }
 
-function LiftPanel({ stub, onClose, onDelete, hasStubs }: { stub: Stub | null; onClose: () => void; onDelete: (id: string) => void; hasStubs: boolean }) {
+/** The public link on a paper strip. */
+function PublicLink({ path, capped }: { path: string; capped: boolean }) {
+  const [status, setStatus] = useState("");
+  const url = absoluteUrl(path);
+  return (
+    <div className={s.publicLink}>
+      <div className={s.copyRow}>
+        <input className={s.copyInput} readOnly aria-label="Public wall link" value={url} onFocus={(e) => e.currentTarget.select()} />
+        <PaperButton type="button" onClick={async () => setStatus((await copyText(url)) ? "Link copied." : "Couldn't copy. Select the link and copy it.")}>
+          Copy link
+        </PaperButton>
+      </div>
+      {capped ? <p className={s.small}>Your {WALL_TOKEN_MAX} newest stubs appear on the public page.</p> : null}
+      <p className={s.small} aria-live="polite">
+        {status}
+      </p>
+    </div>
+  );
+}
+
+/** The next steps, on a paper note pinned beside the stub that just landed. */
+function NextSteps({ stub }: { stub: Stub }) {
+  const router = useRouter();
+  const [status, setStatus] = useState("");
+  const digital = stub.material === "digital";
+  const price = formatMoney(printPrice(stub));
+  const detail = [materialLabel(stub), finishLabel(stub)].filter(Boolean).join(", ");
+  return (
+    <aside className={s.note} aria-labelledby="next-h">
+      <Pin seed={`${stub.id}-note`} />
+      <Stamped>Pinned</Stamped>
+      <h2 id="next-h" className={s.noteTitle}>
+        It&apos;s on your wall.
+      </h2>
+      <p className={s.noteBody}>Send it to a friend, print it, or keep it on your phone.</p>
+      <div className={s.noteActions}>
+        <Stamp type="button" block onClick={async () => setStatus(await shareStub(stub))}>
+          Share your stub
+        </Stamp>
+        <PaperButton type="button" block className={s.printBtn} onClick={() => router.push(`/checkout/${stub.id}`)}>
+          <span>{digital ? "Get the file" : "Print it"}</span>
+          <span className={s.price}>{price}</span>
+        </PaperButton>
+        <p className={s.small}>{detail}</p>
+        <TearLink type="button" onClick={() => router.push(`/wallet/${stub.id}`)}>
+          Add to wallet
+        </TearLink>
+      </div>
+      <p className={s.small} role="status">
+        {status}
+      </p>
+      <SandboxStrip />
+    </aside>
+  );
+}
+
+/** A stub lifted under the lamp: the room dims to the stage, the stub tilts toward you, its tools sit on the cork. */
+function Lamp({ stub, lift, onPutBack, onDelete }: { stub: Stub; lift: Lift; onPutBack: () => void; onDelete: (id: string) => void }) {
   const router = useRouter();
   const [flipped, setFlipped] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [status, setStatus] = useState("");
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const dragX = useRef<number | null>(null);
-  const dragged = useRef(false);
-  const stubId = stub?.id;
+  const swiped = useRef(false);
 
   useEffect(() => {
-    if (stubId && window.matchMedia("(max-width: 959px)").matches) closeRef.current?.focus();
-  }, [stubId]);
-
+    rootRef.current?.focus();
+  }, []);
   useEffect(() => {
-    if (!stubId) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onPutBack();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stubId, onClose]);
+  }, [onPutBack]);
 
   function flip() {
     setFlipped((f) => !f);
@@ -239,98 +388,76 @@ function LiftPanel({ stub, onClose, onDelete, hasStubs }: { stub: Stub | null; o
     haptic([10]);
   }
 
-  if (!stub) {
-    return (
-      <aside className={`${s.panel} ${s.panelIdle}`} aria-label="Lifted stub">
-        <p className={ui.muted}>{hasStubs ? "Tap a stub to lift it off the wall." : "Your stubs appear here when you lift them."}</p>
-      </aside>
-    );
-  }
-
   const path = memoryPath(stub);
+  const style = { ["--lamp-top" as string]: `${lift.top}px` } as CSSProperties;
   return (
-    <aside className={`${s.panel} ${s.panelOpen}`} aria-labelledby="lift-title">
-      <button type="button" className={s.scrim} aria-label="Put the stub back" tabIndex={-1} onClick={onClose} />
-      <div className={s.panelInner} role="dialog" aria-labelledby="lift-title">
-        <div className={s.panelHead}>
-          <h2 id="lift-title" className={s.liftTitle}>
-            {stub.event.title}
-          </h2>
-          <button ref={closeRef} type="button" className="btn btn-quiet" onClick={onClose}>
-            Put back
-          </button>
+    <div ref={rootRef} tabIndex={-1} role="dialog" aria-label={`${stub.event.title}, lifted off the wall`} className={`${s.lamp} ${lift.leaving ? s.lampOff : ""}`} style={style}>
+      <button type="button" className={s.scrim} aria-label="Pin it back" tabIndex={-1} onClick={onPutBack} />
+      <div className={s.lampBody}>
+        <div className={`ts-stage ${s.lampHead}`}>
+          <h2 className={s.lampTitle}>{stub.event.title}</h2>
+          <p className={s.lampMeta}>{[formatDate(stub.event.dateISO), stub.event.venue, stub.event.city].filter(Boolean).join(" · ")}</p>
         </div>
-        <p className={ui.muted}>{[formatDate(stub.event.dateISO), stub.event.venue, stub.event.city].filter(Boolean).join(" · ")}</p>
         <div
-          className={s.lifted}
-          role="button"
-          tabIndex={0}
-          aria-label={flipped ? "Show the front" : "Flip to the back"}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              flip();
-            }
-          }}
+          className={s.lampStub}
           onPointerDown={(e) => {
             dragX.current = e.clientX;
-            dragged.current = false;
+            swiped.current = false;
           }}
           onPointerMove={(e) => {
-            if (dragX.current !== null && !dragged.current && Math.abs(e.clientX - dragX.current) > 48) {
-              dragged.current = true;
+            if (dragX.current !== null && !swiped.current && Math.abs(e.clientX - dragX.current) > 48) {
+              swiped.current = true;
               flip();
             }
           }}
           onPointerUp={() => {
-            if (dragX.current !== null && !dragged.current) flip();
             dragX.current = null;
           }}
           onPointerCancel={() => {
             dragX.current = null;
           }}
         >
-          <FitBox>
-            <StubView stub={stub} size="md" tilt flipped={flipped} />
-          </FitBox>
+          <StubView stub={stub} size="md" tilt flipped={flipped} />
         </div>
-        <p className={`${ui.muted} ${s.hint}`}>Tap or drag sideways to flip.</p>
-        <div className={s.actions}>
-          <Link className="btn btn-primary" href={path}>
-            Open
-          </Link>
-          <Link className="btn" href={`/studio/${stub.id}`}>
-            Edit
-          </Link>
-          <button
-            type="button"
-            className="btn"
-            onClick={async () =>
-              setStatus((await copyText(absoluteUrl(path))) ? "Link copied. Anyone with the link can see this stub." : "Couldn't copy the link. Open the stub and copy it from there.")
-            }
-          >
-            Share
-          </button>
-          <button type="button" className="btn" onClick={() => router.push(`/checkout/${stub.id}`)}>
-            Print
-          </button>
-          <button
-            type="button"
-            className={`btn btn-quiet ${s.delete}`}
-            onClick={() => {
-              if (confirmDelete) {
-                play("tear");
-                onDelete(stub.id);
-              } else setConfirmDelete(true);
-            }}
-          >
-            {confirmDelete ? "Tap again to delete" : "Delete"}
-          </button>
+        <div className={`${c.cork} ${c.corkFlat} ${s.tray}`}>
+          <div className={s.trayPaper}>
+            <Tools label="Stub actions">
+              <Tool icon={<FlipIcon />} onClick={flip}>
+                Flip
+              </Tool>
+              <Tool icon={<OpenIcon />} onClick={() => router.push(path)}>
+                Open
+              </Tool>
+              <Tool icon={<EditIcon />} onClick={() => router.push(`/studio/${stub.id}`)}>
+                Edit
+              </Tool>
+              <Tool icon={<ShareIcon />} onClick={async () => setStatus(await shareStub(stub))}>
+                Share
+              </Tool>
+              <Tool icon={<PrintIcon />} onClick={() => router.push(`/checkout/${stub.id}`)}>
+                Print
+                <span className={s.toolPrice}>{formatMoney(printPrice(stub))}</span>
+              </Tool>
+            </Tools>
+            <div className={s.trayFoot}>
+              <p className={s.small} role="status">
+                {status || "Tap anywhere else to pin it back."}
+              </p>
+              <TearLink
+                type="button"
+                onClick={() => {
+                  if (confirmDelete) {
+                    play("tear");
+                    onDelete(stub.id);
+                  } else setConfirmDelete(true);
+                }}
+              >
+                {confirmDelete ? "Tap again to take it down" : "Take it down"}
+              </TearLink>
+            </div>
+          </div>
         </div>
-        <p className={ui.status} aria-live="polite">
-          {status}
-        </p>
       </div>
-    </aside>
+    </div>
   );
 }

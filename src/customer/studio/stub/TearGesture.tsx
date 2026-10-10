@@ -1,17 +1,24 @@
 "use client";
-// Signature move: tear the stub off along the perforation. Drag the handle (or use arrow keys,
-// Enter to finish). A tick + [4] haptic every ~8% crossed; past 60% it rips, flies up and away
-// (600ms enter ease), then onTorn() fires once.
+// Signature move: tear the stub off along the perforation. Drag the handle along the dotted line and
+// the torn edge opens behind your finger; the paper bends more the further you go. There is no
+// readout: progress is the paper and the sound (a light tick at every few perforation holes, fading
+// as you commit). Past 60% it rips, lifts off and flies away (600ms enter ease), then onTorn() fires once.
+// Keyboard: arrows move the handle, Enter tears. "Tear it off for me" does the same tear on its own,
+// and with reduced motion it skips the animation.
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { Stub } from "../types";
 import { haptic, play } from "../feedback";
+import { TearLink } from "@/customer/desk/Desk";
 import { StubView } from "./StubView";
 import t from "./TearGesture.module.css";
 
 const RIP_AT = 60;
-const TICK_EVERY = 8;
+const HOLE_PX = 12; // spacing of the perforation dots in the track
+const TICK_HOLES = 3; // tick on every third hole
+const KEY_STEP = 8;
 const RESIST = 0.82; // handle covers 82% of the finger's travel: paper resists
 const FLY_MS = 600;
+const AUTO_MS = 900;
 
 const clamp = (v: number) => Math.min(100, Math.max(0, v));
 const reduced = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -22,43 +29,71 @@ export function TearGesture({ stub, onTorn }: { stub: Stub; onTorn: () => void }
   const [phase, setPhase] = useState<"idle" | "drag" | "settle" | "ripped">("idle");
   const trackRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<{ x: number; p: number; id: number } | null>(null);
-  const lastTick = useRef(0);
+  const lastHole = useRef(0);
+  const lastTickAt = useRef(0);
   const done = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const raf = useRef<number | null>(null);
   const onTornRef = useRef(onTorn);
   useEffect(() => {
     onTornRef.current = onTorn;
   }, [onTorn]);
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      if (raf.current) cancelAnimationFrame(raf.current);
+    },
+    [],
+  );
 
   const rip = useCallback(() => {
     if (done.current) return;
     done.current = true;
     drag.current = null;
+    if (raf.current) cancelAnimationFrame(raf.current);
     setP(100);
     setPhase("ripped");
     play("tear");
     haptic([30, 30, 60]);
-    timer.current = setTimeout(() => onTornRef.current(), reduced() ? 220 : FLY_MS);
+    timer.current = setTimeout(() => onTornRef.current(), reduced() ? 260 : FLY_MS);
   }, []);
 
   const advance = useCallback(
     (next: number) => {
       if (done.current) return;
       const v = clamp(next);
-      const tick = Math.floor(v / TICK_EVERY);
-      if (tick > lastTick.current) {
-        play("tick");
-        haptic([4]);
+      const w = trackRef.current?.getBoundingClientRect().width || 300;
+      const hole = Math.floor(((v / 100) * w) / (HOLE_PX * TICK_HOLES));
+      const now = performance.now();
+      if (hole > lastHole.current && now - lastTickAt.current > 50) {
+        lastTickAt.current = now;
+        play("select", { emphasis: "subtle", volume: Math.max(0.3, 1 - v / 110) });
+        haptic(3);
       }
-      lastTick.current = tick;
+      lastHole.current = hole;
       setP(v);
       if (v >= RIP_AT) rip();
     },
     [rip],
   );
+
+  /** The button: tear on its own, slow then fast like a real tear. */
+  const tearItOff = () => {
+    if (done.current) return;
+    if (reduced()) {
+      rip();
+      return;
+    }
+    setPhase("drag");
+    const from = p;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / AUTO_MS);
+      advance(from + (RIP_AT + 1 - from) * k * k);
+      if (!done.current && k < 1) raf.current = requestAnimationFrame(step);
+    };
+    raf.current = requestAnimationFrame(step);
+  };
 
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
     if (done.current) return;
@@ -80,7 +115,7 @@ export function TearGesture({ stub, onTorn }: { stub: Stub; onTorn: () => void }
     drag.current = null;
     if (done.current) return;
     // not far enough: the paper springs back
-    lastTick.current = 0;
+    lastHole.current = 0;
     setPhase("settle");
     setP(0);
   };
@@ -89,15 +124,15 @@ export function TearGesture({ stub, onTorn }: { stub: Stub; onTorn: () => void }
     if (e.key === "ArrowRight" || e.key === "ArrowUp") {
       e.preventDefault();
       setPhase("drag");
-      advance(p + TICK_EVERY);
+      advance(p + KEY_STEP);
     } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
       e.preventDefault();
       setPhase("drag");
-      lastTick.current = Math.floor(clamp(p - TICK_EVERY) / TICK_EVERY);
-      setP(clamp(p - TICK_EVERY));
+      lastHole.current = 0;
+      setP(clamp(p - KEY_STEP));
     } else if (e.key === "Home") {
       e.preventDefault();
-      lastTick.current = 0;
+      lastHole.current = 0;
       setPhase("settle");
       setP(0);
     } else if (e.key === "Enter" || e.key === " ") {
@@ -107,32 +142,27 @@ export function TearGesture({ stub, onTorn }: { stub: Stub; onTorn: () => void }
   };
 
   const ripped = phase === "ripped";
-  // the stub lifts a little as the tear runs, then flies up and away
+  // the stub bends as the tear runs, then lifts off and flies up and away
+  const k = p / 100;
   const moverTransform = ripped
     ? "translate(14%, -135%) rotate(-14deg)"
-    : `translateY(${(-p * 0.08).toFixed(2)}px) rotate(${(-p * 0.03).toFixed(3)}deg)`;
+    : `perspective(900px) translateY(${(-k * 10).toFixed(2)}px) rotateX(${(k * 14).toFixed(2)}deg) rotateZ(${(-k * 4.5).toFixed(2)}deg)`;
   const pct = Math.round(p);
+  const bar = phase === "settle" ? t.settlingBar : "";
 
   return (
     <section className={t.wrap} aria-labelledby={headingId}>
       <h2 id={headingId} className={t.heading}>
-        Tear to finish
+        Tear it off
       </h2>
       <div className={t.stage}>
-        <div
-          className={`${t.mover} ${ripped ? t.flyAway : phase === "drag" ? t.dragging : t.settling}`}
-          style={{ transform: moverTransform }}
-        >
+        <div className={`${t.mover} ${ripped ? t.flyAway : phase === "drag" ? t.dragging : t.settling}`} style={{ transform: moverTransform }}>
           <StubView stub={stub} size="md" />
         </div>
       </div>
       <div className={t.track} ref={trackRef}>
-        <span className={`${t.line} ${phase === "settle" ? t.settlingBar : ""}`} aria-hidden="true" style={{ left: `${pct}%` }} />
-        <span
-          className={`${t.torn} ${phase === "settle" ? t.settlingBar : ""}`}
-          aria-hidden="true"
-          style={{ width: `${pct}%` }}
-        />
+        <span className={t.line} aria-hidden="true" />
+        <span className={`${t.torn} ${bar}`} aria-hidden="true" style={{ width: `${pct}%` }} />
         <div
           role="slider"
           tabIndex={0}
@@ -140,8 +170,8 @@ export function TearGesture({ stub, onTorn }: { stub: Stub; onTorn: () => void }
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={pct}
-          aria-valuetext={ripped ? "Torn" : `${pct}% torn. Tear past ${RIP_AT}% to finish; press Enter to tear.`}
-          className={`${t.handle} ${phase === "settle" ? t.settlingBar : ""}`}
+          aria-valuetext={ripped ? "Torn" : "Drag right to tear. Past the middle it comes off. Press Enter to tear it off."}
+          className={`${t.handle} ${bar}`}
           style={{ left: `${pct}%` }}
           onPointerDown={onDown}
           onPointerMove={onMove}
@@ -153,9 +183,9 @@ export function TearGesture({ stub, onTorn }: { stub: Stub; onTorn: () => void }
         </div>
       </div>
       <p className={t.hint}>Drag along the dotted line.</p>
-      <span className={t.pct} aria-hidden="true">
-        {ripped ? "Torn" : pct > 0 ? `${pct}%` : ""}
-      </span>
+      <TearLink type="button" onClick={tearItOff} disabled={ripped}>
+        Or tear it off for me
+      </TearLink>
     </section>
   );
 }

@@ -1,77 +1,93 @@
-.head {
+/* /u/[token]: the same corkboard as /wall, read-only. Board, pins and header are in app/wall/chrome.module.css. */
+
+.ownLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-decoration: none;
+  background-image: radial-gradient(circle, currentColor 0.9px, transparent 1.1px);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 calc(50% + 12px);
+}
+.stampLink {
+  display: inline-block;
+  text-decoration: none;
+  justify-self: start;
+}
+.lost {
   display: grid;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: 16px;
+  justify-items: start;
+  max-width: 560px;
+  padding-top: 24px;
 }
-.cork {
-  border-radius: 14px;
-  padding: 32px 16px;
-  background-color: color-mix(in srgb, var(--ts-copper) 62%, var(--ts-cream));
-  background-image:
-    radial-gradient(circle at 20% 30%, rgb(23 20 15 / 0.22) 0 1px, transparent 1.6px),
-    radial-gradient(circle at 70% 60%, rgb(23 20 15 / 0.16) 0 1.2px, transparent 1.8px),
-    radial-gradient(circle at 45% 85%, rgb(244 236 221 / 0.28) 0 1px, transparent 1.6px);
-  background-size: 9px 9px, 13px 13px, 11px 11px;
-  box-shadow: inset 0 0 0 6px color-mix(in srgb, var(--ts-copper) 70%, var(--ts-ink)), inset 0 4px 24px rgb(23 20 15 / 0.35);
-}
-.grid {
-  list-style: none;
+.lede {
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 32px 18px;
+  font: var(--type-lede);
+  color: var(--desk-ink-soft);
 }
+
 .pinned {
   position: relative;
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: 10px;
   transform: rotate(var(--angle));
+  animation: settle 520ms var(--ts-ease-enter) both;
+  animation-delay: calc(var(--i) * 40ms);
 }
-.pin {
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  z-index: 2;
-  width: 14px;
-  height: 14px;
-  margin-left: -7px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, var(--ts-cream), var(--ts-orange) 55%, color-mix(in srgb, var(--ts-orange) 60%, var(--ts-ink)));
-  box-shadow: 0 3px 4px rgb(23 20 15 / 0.45);
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateY(-14px) scale(1.04);
+  }
 }
 .stubLink {
   display: block;
-  filter: drop-shadow(0 8px 10px rgb(23 20 15 / 0.35));
-  transition: transform var(--ts-dur-base) var(--ts-ease-standard);
+  filter: drop-shadow(0 8px 8px rgb(40 24 8 / 0.4));
+  transition: transform 260ms var(--desk-spring);
 }
 .stubLink:hover {
   transform: translateY(-4px);
 }
-.caption {
-  color: var(--ts-ink);
-  font-size: 13px;
-  font-weight: 600;
+.stubLink:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 4px;
+}
+.label {
+  margin: 0;
+  max-width: 170px;
   text-align: center;
-  max-width: 160px;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--desk-ink);
 }
 .note {
-  margin-top: 12px;
+  margin: -8px 0 0;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
 }
 .cta {
-  margin-top: 32px;
   display: grid;
   gap: 16px;
   justify-items: start;
+  margin-top: 16px;
 }
-@media (min-width: 960px) {
-  .cork {
-    padding: 40px 32px;
-  }
-  .grid {
-    gap: 36px 28px;
+.ctaText {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 25;
+  letter-spacing: -0.02em;
+  max-width: 20ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pinned {
+    animation: none;
   }
 }

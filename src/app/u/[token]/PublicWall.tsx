@@ -1,60 +1,72 @@
 "use client";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { PageShell, FriendlyError, ui } from "@/customer/pages/ui";
 import { decodeWall, formatDate, memoryPath } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
+import { Stamp } from "@/customer/desk/Desk";
+import { DeskPage, Pin, chrome as c } from "@/app/wall/chrome";
 import s from "./public.module.css";
+
+const makeOwn = (
+  <Link className={s.ownLink} href="/">
+    Make your own wall
+  </Link>
+);
 
 export default function PublicWall({ token }: { token: string }) {
   const mounted = useMounted();
   const stubs = useMemo(() => (mounted ? decodeWall(token) : []), [mounted, token]);
   const cities = new Set(stubs.map((x) => x.event.city).filter(Boolean)).size;
 
-  if (!mounted) return <PageShell>{null}</PageShell>;
+  if (!mounted) return <DeskPage>{null}</DeskPage>;
   if (stubs.length === 0) {
     return (
-      <PageShell>
-        <FriendlyError title="We couldn't open this wall." body="The link may be cut short. Ask for the link again, or make a wall of your own." />
-      </PageShell>
+      <DeskPage>
+        <div className={s.lost}>
+          <h1 className={c.title}>We couldn&apos;t open this wall.</h1>
+          <p className={s.lede}>The link may be cut short. Ask for the link again, or make a wall of your own.</p>
+          <Link href="/" className={s.stampLink}>
+            <Stamp type="button" tabIndex={-1}>
+              Make your own wall
+            </Stamp>
+          </Link>
+        </div>
+      </DeskPage>
     );
   }
 
   return (
-    <PageShell
-      right={
-        <Link className="btn btn-primary" href="/">
-          Make your own wall
-        </Link>
-      }
-    >
-      <div className={s.head}>
-        <h1 className={ui.h1}>A TicketStub wall</h1>
-        <p className={`${ui.muted} num`}>
-          {stubs.length} {stubs.length === 1 ? "night" : "nights"} · {cities} {cities === 1 ? "city" : "cities"}
+    <DeskPage right={makeOwn}>
+      <div className={c.head}>
+        <h1 className={c.title}>A TicketStub wall</h1>
+        <p className={c.caption}>
+          {stubs.length} {stubs.length === 1 ? "night" : "nights"}
+          {cities > 0 ? ` · ${cities} ${cities === 1 ? "city" : "cities"}` : ""}
         </p>
       </div>
-      <div className={s.cork}>
-        <ul className={s.grid}>
+      <section className={c.cork} aria-label="Stubs pinned to a corkboard">
+        <ul className={c.grid}>
           {stubs.map((st, i) => (
-            <li key={`${st.id}-${i}`} className={s.pinned} style={{ ["--angle" as string]: `${st.wallAngle ?? 0}deg` }}>
-              <span className={s.pin} aria-hidden="true" />
+            <li key={`${st.id}-${i}`} className={s.pinned} style={{ ["--angle" as string]: `${st.wallAngle ?? 0}deg`, ["--i" as string]: i } as CSSProperties}>
+              <Pin seed={`${st.id}-${i}`} />
               <Link href={memoryPath(st)} className={s.stubLink} aria-label={`Open ${st.event.title}${st.event.dateISO ? `, ${formatDate(st.event.dateISO)}` : ""}`}>
                 <StubView stub={st} size="sm" />
               </Link>
-              <p className={s.caption}>{st.event.title}</p>
+              <p className={s.label}>{st.event.title}</p>
             </li>
           ))}
         </ul>
-      </div>
-      <p className={`${ui.muted} ${s.note}`}>Only people with the link can see this.</p>
+      </section>
+      <p className={s.note}>Only people with the link can see this.</p>
       <div className={s.cta}>
-        <p className={ui.h2}>Turn your ticket into a stub worth keeping.</p>
-        <Link className="btn btn-primary" href="/">
-          Make your own wall
+        <p className={s.ctaText}>Turn your ticket into a stub worth keeping.</p>
+        <Link href="/" className={s.stampLink}>
+          <Stamp type="button" tabIndex={-1}>
+            Make your own wall
+          </Stamp>
         </Link>
       </div>
-    </PageShell>
+    </DeskPage>
   );
 }
