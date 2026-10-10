@@ -784,6 +784,49 @@ export function createScopedReuseStore(options) {
       .run(observationId, entryId, seq, observation.validatedAtMs, observation.status, payloadKeyId, payload);
   }
 
+  function latestIdentityObservation(database, scopeKind, partitionHash, identityHash) {
+    return database.prepare(`SELECT o.observation_id, o.observed_at_ms, o.status, o.payload_key_id, o.payload,
+        e.content_hash_mac, e.entry_id, e.version
+      FROM reuse_observations o JOIN reuse_entries e ON e.entry_id = o.entry_id
+      WHERE e.scope_kind = ? AND e.partition_hash = ? AND e.identity_hash = ?
+      ORDER BY o.observed_at_ms DESC, e.version DESC, o.sequence DESC LIMIT 1`)
+      .get(scopeKind, partitionHash, identityHash);
+  }
+
+  function checkInitialObservationOrder(database, keys, scopeKind, observation) {
+    const latest = latestIdentityObservation(database, scopeKind, keys.partitionHash, keys.identityHash);
+    if (!latest) return false;
+    if (observation.validatedAtMs < latest.observed_at_ms) fail('REUSE_POLICY_UNAVAILABLE');
+    if (observation.validatedAtMs > latest.observed_at_ms) return false;
+    if (latest.status === 'body_changed' && latest.content_hash_mac === keys.contentMac
+      && latest.payload_key_id === keys.payloadKey.keyId) {
+      const prior = unseal(keys.payloadKey.key, keys.partitionHash, 'observation', latest.observation_id, latest.payload, latest.payload_key_id);
+      const expected = {
+        status: observation.status,
+        contentHash: observation.contentHash,
+        retrievedAtMs: observation.retrievedAtMs,
+        bodyObservedAtMs: observation.status === 'body_changed' ? observation.retrievedAtMs : null,
+        validatedAtMs: observation.validatedAtMs,
+        sourceVersion: observation.sourceVersion,
+        attemptLineage: observation.attemptLineage,
+      };
+      if (sameObservationIdentity(prior, expected)) return true;
+    }
+    fail('REUSE_POLICY_UNAVAILABLE');
+  }
+
+  function sameObservationIdentity(left, right) {
+    const observedBodyTime = (observation) => observation.bodyObservedAtMs
+      ?? (observation.status === 'body_changed' ? observation.retrievedAtMs : null);
+    return left.status === right.status
+      && left.contentHash === right.contentHash
+      && left.retrievedAtMs === right.retrievedAtMs
+      && observedBodyTime(left) === observedBodyTime(right)
+      && left.validatedAtMs === right.validatedAtMs
+      && left.sourceVersion === right.sourceVersion
+      && stable(left.attemptLineage) === stable(right.attemptLineage);
+  }
+
   function eventPayload(entry, payload, reason, consumerRef, now, indexKey) {
     return {
       eventId: randomUUID(),
@@ -943,7 +986,7 @@ export function createScopedReuseStore(options) {
     return { status: 'valid', valid: true, validUntilMs };
   }
 
-  async function verifyStoredPermissions(info, request, payload, authorizationAction, now, handoffFinal = false) {
+  async function verifyStoredPermissions(info, request, payload, authorizationAction, now) {
     if (!Array.isArray(payload.permissions) || payload.permissions.length === 0) return { status: 'not_asserted', valid: true };
     if (typeof config.verifyPermission !== 'function') return { status: 'unverified', valid: false };
     let validUntilMs = MAX_TIME;
@@ -962,14 +1005,7 @@ export function createScopedReuseStore(options) {
           nowMs: now,
         }));
       } catch { return { status: 'unverified', valid: false }; }
-      if (info) {
-        if (handoffFinal) {
-          const principal = await resolvePrincipal(request);
-          if (principal.tenantId !== info.tenantId || principal.actorId !== info.actorId) fail('REUSE_DENIED');
-        } else {
-          await authorize(info, request, authorizationAction);
-        }
-      }
+      if (info) await authorize(info, request, authorizationAction);
       const decision = permissionDecision(result, permission, currentTime());
       if (!decision.valid) return decision;
       validUntilMs = Math.min(validUntilMs, decision.validUntilMs);
@@ -1107,6 +1143,7 @@ export function createScopedReuseStore(options) {
       if (time.clockRollback || signalAborted(external.signal)) fail('REUSE_DENIED');
       const existing = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND cache_key_hash = ? AND eligible = 1 ORDER BY version DESC LIMIT 1')
         .get(scopeKind, keys.partitionHash, keys.cacheKeyHash);
+      const duplicateInitialObservation = checkInitialObservationOrder(database, keys, scopeKind, observation);
       if (existing) {
         if (existing.expires_at_ms <= time.now) {
           const oldPayload = decryptEntry(scoped, existing);
@@ -1114,21 +1151,29 @@ export function createScopedReuseStore(options) {
           return Object.freeze({ status: 'expired', profileRef: existing.entry_id, version: existing.version, freshness: 'unavailable', originalLineageStatus: 'unknown' });
         }
         const oldPayload = decryptEntry(scoped, existing);
-        insertObservation(database, existing.entry_id, existing.partition_hash, keys.payloadKey.keyId, keys.payloadKey.key,
-          { status: 'body_changed', retrievedAtMs: observation.retrievedAtMs, bodyObservedAtMs: observation.retrievedAtMs, validatedAtMs: observation.validatedAtMs, contentHash: index.contentHash, sourceVersion: observation.sourceVersion, attemptLineage: observation.attemptLineage });
-        registerConsumers(database, existing.entry_id, scopeKind, keys, consumers);
-        if (privateLinkPayload) {
-          const tenantLinkId = randomUUID();
-          const linkPayload = { ...privateLinkPayload, version: existing.version, expiresAtMs: existing.expires_at_ms };
-          const linkCiphertext = sealBounded(privateLinkKeys.payloadKey.key, privateLinkKeys.payloadKey.keyId, privateLinkKeys.partitionHash, 'private_link', tenantLinkId, linkPayload);
-          const priorLink = database.prepare('SELECT payload FROM reuse_private_links WHERE tenant_partition_hash = ? AND public_entry_id = ?').get(privateLinkKeys.partitionHash, existing.entry_id);
-          if (!priorLink && database.prepare('SELECT COUNT(*) AS count FROM reuse_private_links').get().count >= limits.maxPrivateLinks) fail('REUSE_CAPACITY');
-          ensureStorageCapacity(database, linkCiphertext.byteLength, priorLink?.payload?.byteLength ?? 0);
-          database.prepare('DELETE FROM reuse_private_links WHERE tenant_partition_hash = ? AND public_entry_id = ?').run(privateLinkKeys.partitionHash, existing.entry_id);
-          database.prepare('INSERT INTO reuse_private_links (link_id, tenant_partition_hash, public_entry_id, payload_key_id, payload) VALUES (?, ?, ?, ?, ?)')
-            .run(tenantLinkId, privateLinkKeys.partitionHash, existing.entry_id, privateLinkKeys.payloadKey.keyId, linkCiphertext);
+        if (!duplicateInitialObservation) {
+          insertObservation(database, existing.entry_id, existing.partition_hash, keys.payloadKey.keyId, keys.payloadKey.key,
+            { status: 'body_changed', retrievedAtMs: observation.retrievedAtMs, bodyObservedAtMs: observation.retrievedAtMs, validatedAtMs: observation.validatedAtMs, contentHash: index.contentHash, sourceVersion: observation.sourceVersion, attemptLineage: observation.attemptLineage });
         }
-        return Object.freeze({ status: 'existing', profileRef: existing.entry_id, version: existing.version, freshness: 'body_retrieved_unchanged', originalLineageStatus: lineage.status });
+        registerConsumers(database, existing.entry_id, scopeKind, keys, consumers);
+        let originalLineageStatus = oldPayload.lineage?.status ?? 'unknown';
+        if (privateLinkPayload) {
+          const priorLink = database.prepare('SELECT link_id FROM reuse_private_links WHERE tenant_partition_hash = ? AND public_entry_id = ?')
+            .get(privateLinkKeys.partitionHash, existing.entry_id);
+          if (priorLink) {
+            originalLineageStatus = 'unknown';
+          } else {
+            const tenantLinkId = randomUUID();
+            const linkPayload = { ...privateLinkPayload, version: existing.version, expiresAtMs: existing.expires_at_ms };
+            const linkCiphertext = sealBounded(privateLinkKeys.payloadKey.key, privateLinkKeys.payloadKey.keyId, privateLinkKeys.partitionHash, 'private_link', tenantLinkId, linkPayload);
+            if (database.prepare('SELECT COUNT(*) AS count FROM reuse_private_links').get().count >= limits.maxPrivateLinks) fail('REUSE_CAPACITY');
+            ensureStorageCapacity(database, linkCiphertext.byteLength);
+            database.prepare('INSERT INTO reuse_private_links (link_id, tenant_partition_hash, public_entry_id, payload_key_id, payload) VALUES (?, ?, ?, ?, ?)')
+              .run(tenantLinkId, privateLinkKeys.partitionHash, existing.entry_id, privateLinkKeys.payloadKey.keyId, linkCiphertext);
+            originalLineageStatus = lineage.status;
+          }
+        }
+        return Object.freeze({ status: 'existing', profileRef: existing.entry_id, version: existing.version, freshness: 'body_retrieved_unchanged', originalLineageStatus });
       }
       const current = database.prepare('SELECT * FROM reuse_entries WHERE scope_kind = ? AND partition_hash = ? AND identity_hash = ? AND eligible = 1 ORDER BY version DESC')
         .all(scopeKind, keys.partitionHash, keys.identityHash);
@@ -1261,7 +1306,7 @@ export function createScopedReuseStore(options) {
     return { status: 'fresh', reason: null };
   }
 
-  async function readCurrentFreshness(info, request, scopeKind, row, entryPayload, keys, readGuard, pinsMatch) {
+  async function readCurrentFreshness(info, request, scopeKind, row, entryPayload, keys, readGuard, pinsMatch, linkedPrivateRef = null) {
     const snapshot = () => withDatabase((database, time) => {
       let current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
         .get(row.entry_id, scopeKind, row.partition_hash);
@@ -1275,7 +1320,10 @@ export function createScopedReuseStore(options) {
       const observation = current?.eligible === 1
         ? database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1').get(row.entry_id)
         : null;
-      return { now: time.now, clockRollback: time.clockRollback, current, head, observation };
+      const privateLink = linkedPrivateRef === null ? null
+        : database.prepare('SELECT link_id, payload_key_id, length(payload) AS payload_bytes FROM reuse_private_links WHERE public_entry_id = ? AND tenant_partition_hash = ?')
+          .get(row.entry_id, linkedPrivateRef.partitionHash);
+      return { now: time.now, clockRollback: time.clockRollback, current, head, observation, privateLink };
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1299,8 +1347,13 @@ export function createScopedReuseStore(options) {
       if (final.current.version !== first.current.version || final.current.payload_bytes !== first.current.payload_bytes
         || !final.observation || final.observation.sequence !== first.observation.sequence
         || final.observation.observation_id !== first.observation.observation_id) continue;
+      if (linkedPrivateRef && (!final.privateLink || final.privateLink.link_id !== linkedPrivateRef.linkId
+        || final.privateLink.payload_key_id !== linkedPrivateRef.payloadKeyId
+        || final.privateLink.payload_bytes !== linkedPrivateRef.payloadBytes)) {
+        return { state: { status: 'unavailable', reason: 'invalidated' }, now: final.now };
+      }
       const state = eligibility(final.current, entryPayload, observation, final.now, false, pinsMatch);
-      return { state, now: final.now, observation };
+      return { state, now: final.now, observation, current: final.current, head: final.head, privateLink: final.privateLink };
     }
     return { state: { status: 'unavailable', reason: 'observation_changed' }, now: currentTime() };
   }
@@ -1518,6 +1571,22 @@ export function createScopedReuseStore(options) {
       if (!currentLast || currentLast.sequence !== last.sequence || currentLast.observation_id !== last.observation_id) {
         return Object.freeze({ status: 'unavailable', reason: 'observation_changed' });
       }
+      const identityLatest = latestIdentityObservation(database, input.scopeKind, keys.partitionHash, current.identity_hash);
+      if (!identityLatest || verified.validatedAtMs < identityLatest.observed_at_ms) {
+        return Object.freeze({ status: 'unavailable', reason: 'observation_changed' });
+      }
+      if (verified.validatedAtMs === identityLatest.observed_at_ms) {
+        if (identityLatest.entry_id !== ref || !sameObservationIdentity(rawCurrent, next)) fail('REUSE_POLICY_UNAVAILABLE');
+        return Object.freeze({
+          status: verified.status,
+          profileRef: ref,
+          invalidated: false,
+          duplicateObservation: true,
+          retrievedAt: iso(effectiveRetrievedAt(payload, rawCurrent)),
+          validatedAt: iso(rawCurrent.validatedAtMs),
+          usageLineage: rawCurrent.attemptLineage.status,
+        });
+      }
       const count = database.prepare('SELECT COUNT(*) AS count FROM reuse_observations WHERE entry_id = ?').get(ref).count;
       if (count >= limits.maxObservationsPerEntry) fail('REUSE_CAPACITY');
       insertObservation(database, ref, row.partition_hash, payloadKey.keyId, payloadKey.key, next, currentLast.sequence + 1);
@@ -1620,38 +1689,28 @@ export function createScopedReuseStore(options) {
     }
     if (!handoffFreshness || handoffFreshness.state.status !== 'fresh') fail('REUSE_DENIED');
     await authorize(info, request, 'finance.read_original_lineage', { profileRef: ref });
-    const finalPermissionState = await verifyStoredPermissions(info, request, payload, 'finance.read_original_lineage', currentTime(), true);
+    const finalPermissionState = await verifyStoredPermissions(info, request, payload, 'finance.read_original_lineage', currentTime());
     if (!finalPermissionState.valid) fail('REUSE_DENIED');
-    const finalRead = await withDatabase((database, time) => {
-      const current = database.prepare('SELECT eligible, expires_at_ms FROM reuse_entries WHERE entry_id = ? AND partition_hash = ?').get(ref, located.kind === 'private_entry' ? keys.partitionHash : located.parent.partition_hash);
-      const currentLink = located.kind === 'public_link'
-        ? database.prepare('SELECT link_id, payload_key_id, length(payload) AS payload_bytes FROM reuse_private_links WHERE public_entry_id = ? AND tenant_partition_hash = ?')
-          .get(ref, keys.partitionHash)
-        : null;
-      return { current, currentLink, now: time.now, clockRollback: time.clockRollback };
-    });
-    if (finalRead.current?.eligible === 1 && finalRead.current.expires_at_ms <= finalRead.now) {
-      if (located.kind === 'private_entry') {
-        await withDatabase((database, time) => {
-          const current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ?').get(ref);
-          expireEntry(database, info, current, payload, time.now, { ...keys, payloadKey: key });
+    await authorize(info, request, 'finance.read_original_lineage', { profileRef: ref });
+    let finalFreshness;
+    if (located.kind === 'private_entry') {
+      finalFreshness = await readCurrentFreshness(info, request, 'tenant_private', located.row, payload,
+        { ...keys, payloadKey: key }, lineageGuard, true);
+    } else {
+      publicParentKeys ??= await indexInfo(null, 'public_profile', lineageGuard);
+      if (!publicParentKeys.payloadKey) publicParentKeys.payloadKey = await resolveKey(null, 'payload', located.parent.payload_key_id, lineageGuard);
+      publicParentPayload ??= unseal(publicParentKeys.payloadKey.key, located.parent.partition_hash, 'entry', located.parent.entry_id,
+        located.parent.payload, located.parent.payload_key_id);
+      finalFreshness = await readCurrentFreshness(null, request, 'public_profile', located.parent, publicParentPayload,
+        publicParentKeys, lineageGuard, true, {
+          partitionHash: keys.partitionHash,
+          linkId: located.row.link_id,
+          payloadKeyId: located.row.payload_key_id,
+          payloadBytes: located.row.payload.byteLength,
         });
-      } else {
-        publicParentKeys ??= await indexInfo(null, 'public_profile', lineageGuard);
-        if (!publicParentKeys.payloadKey) publicParentKeys.payloadKey = await resolveKey(null, 'payload', located.parent.payload_key_id, lineageGuard);
-        publicParentPayload ??= unseal(publicParentKeys.payloadKey.key, located.parent.partition_hash, 'entry', located.parent.entry_id, located.parent.payload, located.parent.payload_key_id);
-        await withDatabase((database, time) => {
-          const current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ?').get(ref);
-          expireEntry(database, null, current, publicParentPayload, time.now, publicParentKeys);
-        });
-      }
-      await authorize(info, request, 'finance.read_original_lineage', { profileRef: ref });
-      fail('REUSE_DENIED');
     }
-    if (finalRead.clockRollback || !finalRead.current || finalRead.current.eligible !== 1
-      || (located.kind === 'public_link' && (!finalRead.currentLink || finalRead.currentLink.link_id !== located.row.link_id
-        || finalRead.currentLink.payload_key_id !== located.row.payload_key_id || finalRead.currentLink.payload_bytes !== located.row.payload.byteLength))) fail('REUSE_DENIED');
-    const handoffTime = finalRead.now;
+    if (!finalFreshness || finalFreshness.state.status !== 'fresh') fail('REUSE_DENIED');
+    const handoffTime = finalFreshness.now;
     if (deadline !== null && handoffTime >= deadline) fail('REUSE_DENIED');
     if (finalPermissionState.validUntilMs !== undefined && handoffTime >= finalPermissionState.validUntilMs) fail('REUSE_DENIED');
     let response;
@@ -1824,14 +1883,17 @@ export function createScopedReuseStore(options) {
       });
       if (!row) break;
       scanned += 1;
+      await dispatchGuard();
       const payloadKey = row.payloadKey ?? await resolveKey(scopeKind === 'public_profile' ? null : info, 'payload', row.payloadKeyId, dispatchGuard);
       const event = unseal(payloadKey.key, row.candidate.partition_hash, 'outbox', row.candidate.event_id, row.candidate.payload, row.candidate.payload_key_id);
       if (!event.consumerRef) {
         skippedEvents.add(row.candidate.event_id);
         continue;
       }
+      await dispatchGuard();
       const deliveryAttemptId = randomUUID();
       const attempt = await withDatabase((database, time) => {
+        if (signalAborted(signal)) fail('REUSE_DENIED');
         const current = database.prepare('SELECT status, attempt_count, next_attempt_at_ms, has_consumer FROM reuse_outbox WHERE event_id = ?').get(row.candidate.event_id);
         if (!current || !['pending', 'delivering'].includes(current.status) || current.has_consumer !== 1
           || current.attempt_count >= limits.maxOutboxAttempts
@@ -1851,7 +1913,6 @@ export function createScopedReuseStore(options) {
         skippedEvents.add(row.candidate.event_id);
         continue;
       }
-      attempted += 1;
       const expected = Object.freeze({
         eventId: row.candidate.event_id,
         consumerRef: event.consumerRef,
@@ -1862,6 +1923,20 @@ export function createScopedReuseStore(options) {
         attemptNumber: attempt,
         reason: event.reason,
       });
+      try {
+        await dispatchGuard();
+      } catch (error) {
+        await withDatabase((database) => {
+          database.prepare(`UPDATE reuse_outbox SET status = ?, attempt_count = ?, next_attempt_at_ms = ?,
+            has_consumer = ?, active_attempt_id = ?, payload_key_id = ?, payload = ?, payload_bytes = ?
+            WHERE event_id = ? AND status = 'delivering' AND attempt_count = ? AND active_attempt_id = ?`)
+            .run(row.candidate.status, row.candidate.attempt_count, row.candidate.next_attempt_at_ms,
+              row.candidate.has_consumer, row.candidate.active_attempt_id, row.candidate.payload_key_id,
+              row.candidate.payload, row.candidate.payload_bytes, row.candidate.event_id, attempt, deliveryAttemptId);
+        });
+        throw error;
+      }
+      attempted += 1;
       let ack;
       try { ack = await config.deliverInvalidation(expected); } catch { ack = null; }
       await dispatchGuard();

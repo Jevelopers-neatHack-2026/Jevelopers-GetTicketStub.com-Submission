@@ -291,6 +291,66 @@ test('304 observations preserve original retrieval time, outages do not invent r
   assert.equal((await env.store.outboxSnapshot(created.scope, created.authRequest)).unresolved, 1);
 });
 
+test('identity observation ordering rejects stale initial replays and equal-time conflicts without replacing current state', async (t) => {
+  for (const publicProfile of [false, true]) {
+    const env = await fixture(t, {
+      authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }),
+    });
+    const authRequest = request();
+    let created;
+    let boundaryData;
+    if (publicProfile) {
+      boundaryData = await approvedBoundary(authRequest);
+      created = await putPublic(env.store, authRequest, boundaryData);
+    } else {
+      created = await putPrivate(env.store, authRequest);
+    }
+    const originalTime = env.clock.value;
+
+    env.clock.value += 500;
+    const outageTime = env.clock.value;
+    env.state.observation = () => ({ status: 'outage', validatedAt: new Date(env.clock.value).toISOString() });
+    const outage = await env.store.observe(created.scope, authRequest, {
+      profileRef: created.profile.profileRef,
+      scopeKind: publicProfile ? 'public_profile' : 'tenant_private',
+      observation: { source: 'outage' },
+    });
+    assert.equal(outage.status, 'outage');
+    const restarted = createScopedReuseStore(env.options);
+    const restartedScope = await restarted.scopeForAuthenticatedRequest(authRequest);
+
+    env.clock.value += 500;
+    env.state.observation = () => ({
+      status: 'body_changed', contentHash: HASH_A,
+      retrievedAt: new Date(originalTime - 1_000).toISOString(),
+      validatedAt: new Date(originalTime).toISOString(),
+      attemptLineage: { status: 'unknown' },
+    });
+    if (publicProfile) {
+      const replayBoundary = await approvedBoundary(authRequest);
+      await assert.rejects(putPublic(restarted, authRequest, replayBoundary), (error) => error.code === 'REUSE_POLICY_UNAVAILABLE');
+    } else {
+      await assert.rejects(putPrivate(restarted, authRequest), (error) => error.code === 'REUSE_POLICY_UNAVAILABLE');
+    }
+    const read = publicProfile
+      ? await restarted.getPublicProfile(restartedScope, authRequest, created.lookup)
+      : await restarted.getPrivateProfile(restartedScope, authRequest, created.lookup);
+    assert.deepEqual({ status: read.status, reason: read.reason }, { status: 'unavailable', reason: 'source_outage' });
+
+    env.state.observation = () => ({ status: 'body_changed', contentHash: HASH_B,
+      retrievedAt: new Date(outageTime - 100).toISOString(), validatedAt: new Date(outageTime).toISOString() });
+    await assert.rejects(restarted.observe(restartedScope, authRequest, {
+      profileRef: created.profile.profileRef,
+      scopeKind: publicProfile ? 'public_profile' : 'tenant_private',
+      observation: { source: 'equal-time-conflict' },
+    }), (error) => error.code === 'REUSE_POLICY_UNAVAILABLE');
+    const remainsOutage = publicProfile
+      ? await restarted.getPublicProfile(restartedScope, authRequest, created.lookup)
+      : await restarted.getPrivateProfile(restartedScope, authRequest, created.lookup);
+    assert.equal(remainsOutage.reason, 'source_outage');
+  }
+});
+
 test('removed evidence, permission revocation, and policy changes persist ineligibility with an exact private outbox reference', async (t) => {
   const env = await fixture(t);
   const created = await putPrivate(env.store);
@@ -307,6 +367,7 @@ test('removed evidence, permission revocation, and policy changes persist inelig
 test('source removal and TTL expiry never return historical facts as fresh', async (t) => {
   const env = await fixture(t);
   const removedEntry = await putPrivate(env.store);
+  env.clock.value += 1_000;
   env.state.observation = () => ({ status: 'removed', validatedAt: new Date(env.clock.value).toISOString() });
   const removed = await env.store.observe(removedEntry.scope, removedEntry.authRequest, {
     profileRef: removedEntry.profile.profileRef, scopeKind: 'tenant_private', observation: {},
@@ -400,6 +461,71 @@ test('cancellation during delivery leaves the persisted attempt unresolved', asy
   );
 });
 
+test('cancellation after outbox selection or claim prevents dispatch and restores only the undelivered claim', async (t) => {
+  for (const abortAtDispatchAuthorization of [4, 6]) {
+    const controller = new AbortController();
+    let dispatchAuthorizationCalls = 0;
+    let deliveries = 0;
+    const env = await fixture(t, {
+      authorizeAction: async ({ action }) => {
+        if (action === 'outbox.dispatch' && ++dispatchAuthorizationCalls === abortAtDispatchAuthorization) {
+          await new Promise((resolve) => setImmediate(resolve));
+          controller.abort();
+        }
+        return true;
+      },
+      deliverInvalidation: async (expected) => {
+        deliveries += 1;
+        return expected;
+      },
+      verifyInvalidationAcknowledgement: () => true,
+    });
+    const created = await putPrivate(env.store);
+    await env.store.invalidate(created.scope, created.authRequest, {
+      profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change',
+    });
+    await assert.rejects(
+      env.store.dispatchPendingInvalidations(created.scope, created.authRequest, 20, 'tenant_private', controller.signal),
+      (error) => error.code === 'REUSE_DENIED',
+    );
+    assert.equal(deliveries, 0);
+    const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+    try {
+      const row = database.prepare('SELECT status, attempt_count, active_attempt_id FROM reuse_outbox WHERE entry_id = ?').get(created.profile.profileRef);
+      assert.deepEqual({ ...row }, { status: 'pending', attempt_count: 0, active_attempt_id: null });
+    } finally { database.close(); }
+  }
+
+  const controller = new AbortController();
+  let keyVersion = 1;
+  let deliveries = 0;
+  const keyEnv = await fixture(t, {
+    resolveKey: async ({ tenantId, scope, purpose, keyId }) => {
+      if (purpose === 'payload' && keyId?.endsWith(':v1') && keyVersion === 2) {
+        await new Promise((resolve) => setImmediate(resolve));
+        controller.abort();
+      }
+      return {
+        keyId: keyId ?? `${scope}:${purpose}:${tenantId ?? 'global'}:v${purpose === 'payload' ? keyVersion : 1}`,
+        key: Buffer.alloc(32, tenantId ? tenantId.charCodeAt(0) : 91),
+      };
+    },
+    deliverInvalidation: async (expected) => { deliveries += 1; return expected; },
+    verifyInvalidationAcknowledgement: () => true,
+  });
+  const created = await putPrivate(keyEnv.store);
+  await keyEnv.store.invalidate(created.scope, created.authRequest, {
+    profileRef: created.profile.profileRef, scopeKind: 'tenant_private', reason: 'material_fact_change',
+  });
+  keyVersion = 2;
+  await assert.rejects(
+    keyEnv.store.dispatchPendingInvalidations(created.scope, created.authRequest, 20, 'tenant_private', controller.signal),
+    (error) => error.code === 'REUSE_DENIED',
+  );
+  assert.equal(deliveries, 0);
+  assert.equal((await keyEnv.store.outboxSnapshot(created.scope, created.authRequest)).pending, 1);
+});
+
 test('public lineage stays tenant-private and rechecks the original permission before the finance callback', async (t) => {
   const env = await fixture(t, {
     authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }),
@@ -418,6 +544,85 @@ test('public lineage stays tenant-private and rechecks the original permission b
   const after = await env.store.getPublicProfile(created.scope, authRequest, created.lookup);
   assert.equal(after.status, 'unavailable');
   assert.equal(after.reason, 'invalidated');
+});
+
+test('public profile replay preserves the first tenant lineage link across unknown and changed resolver results', async (t) => {
+  let lineageResult = {
+    logicalOperationId: 'ORIGINAL_LOGICAL', billableAttemptId: 'ORIGINAL_BILLABLE',
+    transportAttemptId: 'ORIGINAL_TRANSPORT', providerRequestId: 'ORIGINAL_REQUEST',
+    observationIds: ['ORIGINAL_OBSERVATION'], usageEventIds: ['ORIGINAL_USAGE'], status: 'complete',
+  };
+  let referenceLabel = 'ORIGINAL';
+  const env = await fixture(t, {
+    authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }),
+    resolvePrivateProfileReferences: ({ contentHash }) => ({
+      permissions: [{ reference: 'PRIVATE_PERMISSION_CANARY', contentHash, version: 1, use: 'finance.read_original_lineage' }],
+      sourceRefs: [`${referenceLabel}_SOURCE`],
+      correctionRefs: [`${referenceLabel}_CORRECTION`],
+    }),
+    resolveLineage: () => {
+      if (lineageResult === 'throw') throw new Error('temporary lineage resolver outage');
+      return lineageResult;
+    },
+  });
+  const authRequest = request();
+  const boundaryData = await approvedBoundary(authRequest);
+  const created = await putPublic(env.store, authRequest, boundaryData);
+  const originalLink = (() => {
+    const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+    try {
+      const row = database.prepare('SELECT link_id, payload_key_id, payload FROM reuse_private_links WHERE public_entry_id = ?').get(created.profile.profileRef);
+      return { link_id: row.link_id, payload_key_id: row.payload_key_id, payload: Buffer.from(row.payload).toString('hex') };
+    } finally { database.close(); }
+  })();
+  const assertOriginal = async () => {
+    const handoff = await env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef);
+    assert.equal(handoff.status, 'linked');
+    assert.deepEqual(env.state.consumedLineage.sourceRefs, ['ORIGINAL_SOURCE']);
+    assert.deepEqual(env.state.consumedLineage.correctionRefs, ['ORIGINAL_CORRECTION']);
+    assert.equal(env.state.consumedLineage.lineage.logicalOperationId, 'ORIGINAL_LOGICAL');
+  };
+  await assertOriginal();
+
+  const replays = [
+    { result: { status: 'unknown' }, label: 'UNKNOWN' },
+    { result: 'throw', label: 'THROW' },
+    { result: { malformed: true }, label: 'MALFORMED' },
+    { result: {
+      logicalOperationId: 'LATER_LOGICAL', billableAttemptId: 'LATER_BILLABLE',
+      transportAttemptId: 'LATER_TRANSPORT', providerRequestId: 'LATER_REQUEST',
+      observationIds: ['LATER_OBSERVATION'], usageEventIds: ['LATER_USAGE'], status: 'complete',
+    }, label: 'LATER' },
+  ];
+  for (const replay of replays) {
+    lineageResult = replay.result;
+    referenceLabel = replay.label;
+    env.clock.value += 1_000;
+    await putPublic(env.store, authRequest, await approvedBoundary(authRequest));
+    const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+    try {
+      const row = database.prepare('SELECT link_id, payload_key_id, payload FROM reuse_private_links WHERE public_entry_id = ?').get(created.profile.profileRef);
+      assert.deepEqual({ link_id: row.link_id, payload_key_id: row.payload_key_id, payload: Buffer.from(row.payload).toString('hex') }, originalLink);
+    } finally { database.close(); }
+    await assertOriginal();
+  }
+
+  lineageResult = { status: 'unknown' };
+  referenceLabel = 'TENANT_B';
+  const tenantB = request('tenant-b');
+  const publicForB = await putPublic(env.store, tenantB, await approvedBoundary(tenantB));
+  assert.equal(publicForB.profile.status, 'existing');
+  const scopeB = await env.store.scopeForAuthenticatedRequest(tenantB);
+  await env.store.withPrivateLineage(scopeB, tenantB, created.profile.profileRef);
+  assert.deepEqual(env.state.consumedLineage.sourceRefs, ['TENANT_B_SOURCE']);
+  assert.deepEqual(env.state.consumedLineage.correctionRefs, ['TENANT_B_CORRECTION']);
+  const database = new DatabaseSync(path.join(env.directory, 'scoped-reuse.sqlite'));
+  try {
+    const preserved = database.prepare('SELECT link_id, payload_key_id, payload FROM reuse_private_links WHERE link_id = ?').get(originalLink.link_id);
+    assert.deepEqual({ link_id: preserved.link_id, payload_key_id: preserved.payload_key_id, payload: Buffer.from(preserved.payload).toString('hex') }, originalLink);
+    assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_private_links WHERE public_entry_id = ?').get(created.profile.profileRef).count, 2);
+  } finally { database.close(); }
+  await assertOriginal();
 });
 
 test('Finance lineage handoff revalidates permission version and the earliest deadline after authorization', async (t) => {
@@ -477,6 +682,82 @@ test('Finance lineage handoff revalidates permission version and the earliest de
   assert.equal(denied.reason, 'permission_unverified');
 });
 
+test('Finance lineage handoff rechecks the exact action after the final permission verifier callback', async (t) => {
+  for (const publicLink of [false, true]) {
+    let permissionChecks = 0;
+    let financeRevoked = false;
+    let handoffs = 0;
+    const env = await fixture(t, {
+      ...(publicLink ? { authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }) } : {}),
+      authorizeAction: ({ action }) => !(financeRevoked && action === 'finance.read_original_lineage'),
+      verifyPermission: ({ reference, contentHash, version, use }) => {
+        permissionChecks += 1;
+        if (permissionChecks === 2) financeRevoked = true;
+        return { status: 'valid', reference, contentHash, version, use, validUntilMs: 8_640_000_000_000_000 };
+      },
+      consumeOriginalLineage: () => {
+        handoffs += 1;
+        return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+      },
+    });
+    const authRequest = request();
+    const created = publicLink
+      ? await putPublic(env.store, authRequest, await approvedBoundary(authRequest))
+      : await putPrivate(env.store, authRequest);
+    permissionChecks = 0;
+    await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+      (error) => error.code === 'REUSE_DENIED');
+    assert.equal(permissionChecks, 2);
+    assert.equal(handoffs, 0);
+  }
+});
+
+test('Finance handoff final freshness observes callback-time outages and TTL expiry for private and public links', async (t) => {
+  for (const publicLink of [false, true]) {
+    for (const change of ['outage', 'ttl']) {
+      let permissionChecks = 0;
+      let created;
+      let env;
+      let handoffs = 0;
+      const base = 1_800_000_000_000;
+      env = await fixture(t, {
+        ...(publicLink ? { authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }) } : {}),
+        verifyPermission: async ({ reference, contentHash, version, use }) => {
+          permissionChecks += 1;
+          if (created && permissionChecks === 2) {
+            if (change === 'outage') {
+              env.clock.value += 1;
+              env.state.observation = () => ({ status: 'outage', validatedAt: new Date(env.clock.value).toISOString() });
+              await env.store.observe(created.scope, created.authRequest, {
+                profileRef: created.profile.profileRef,
+                scopeKind: publicLink ? 'public_profile' : 'tenant_private',
+                observation: { source: 'final-finance-permission-check' },
+              });
+            } else {
+              env.clock.value = base + 1_000;
+            }
+          }
+          return { status: 'valid', reference, contentHash, version, use, validUntilMs: 8_640_000_000_000_000 };
+        },
+        consumeOriginalLineage: () => {
+          handoffs += 1;
+          return { status: 'linked', logicalOperationBound: true, billedAttemptCount: 1, usageObservationCount: 1 };
+        },
+      });
+      const authRequest = request();
+      created = publicLink
+        ? await putPublic(env.store, authRequest, await approvedBoundary(authRequest), { freshnessTtlMs: 1_000 })
+        : await putPrivate(env.store, authRequest, { freshnessTtlMs: 1_000 });
+      permissionChecks = 0;
+      env.clock.value = base;
+      await assert.rejects(env.store.withPrivateLineage(created.scope, authRequest, created.profile.profileRef),
+        (error) => error.code === 'REUSE_DENIED');
+      assert.equal(handoffs, 0);
+      assert.equal(permissionChecks, 2);
+    }
+  }
+});
+
 test('public invalidation emits only an opaque content reference and host-approved consumer reference', async (t) => {
   const env = await fixture(t, {
     authorizePublicPublication: ({ identity, contentHash }) => ({ status: 'approved', identity, contentHash, publicPermissions: [] }),
@@ -516,6 +797,13 @@ test('retention expiry persists cleanup on an unavailable read; clock rollback b
   const rollback = await clockEnv.store.getPrivateProfile(clockCreated.scope, clockCreated.authRequest, clockCreated.lookup);
   assert.equal(rollback.status, 'unavailable');
   assert.equal(rollback.reason, 'clock_rollback');
+  assert.equal('profileRef' in rollback, false);
+  const blockedAdmission = await clockEnv.store.admitOperation(clockCreated.scope, clockCreated.authRequest, {
+    identity: IDENTITY, pins: PINS, mode: 'reuse',
+  });
+  assert.deepEqual(blockedAdmission, { status: 'unavailable', reason: 'clock_rollback' });
+  assert.equal('usage' in blockedAdmission, false);
+  assert.equal('admissionRef' in blockedAdmission, false);
 });
 
 test('retention revalidation cannot extend the originally stored expiration cap', async (t) => {
@@ -959,6 +1247,7 @@ test('final reads observe an outage or TTL crossing that occurs while permission
     verifyPermission: async ({ reference, contentHash, version, use }) => {
       if (created && env.state.nextPermissionObservation === 'outage') {
         env.state.nextPermissionObservation = null;
+        env.clock.value += 1;
         env.state.observation = () => ({ status: 'outage', validatedAt: new Date(env.clock.value).toISOString() });
         await env.store.observe(created.scope, created.authRequest, {
           profileRef: created.profile.profileRef, scopeKind: 'tenant_private', observation: { source: 'permission-callback' },
@@ -1257,6 +1546,7 @@ test('competing processes serialize invalidation CAS and observation ordering', 
   finally { database.close(); }
 
   const observed = await putPrivate(env.store, request(), { identity: { ...IDENTITY, editionId: 'observe-race' } });
+  env.clock.value += 1_000;
   const observeResults = await runPair('observe', observed.profile.profileRef);
   assert.equal(observeResults.filter((result) => result.outcome?.status === 'not_modified').length, 1);
   assert.equal(observeResults.filter((result) => result.errorCode === 'REUSE_BUSY').length, 1);

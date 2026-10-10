@@ -146,7 +146,9 @@ export interface LookupInput {
 export type LookupResult =
   | Readonly<{ status: 'miss' }>
   | Readonly<{ status: 'hit'; profileRef: string; version: number; facts: Readonly<Record<string, PrivateFact | string>>; trust: 'tenant_private' | 'untrusted_external'; rights?: 'not_asserted'; permissionStatus: string; retrievedAt: string; validatedAt: string; expiresAt: string; originalLineageStatus: 'complete' | 'unknown' }>
-  | Readonly<{ status: 'stale' | 'unavailable'; reason: string; profileRef: string }>
+  | Readonly<{ status: 'stale'; reason: 'policy_hash_stale' | 'body_changed' | 'ttl_expired' | 'identity_version_mismatch' | 'content_hash_mismatch'; profileRef: string }>
+  | Readonly<{ status: 'unavailable'; reason: 'clock_rollback' }>
+  | Readonly<{ status: 'unavailable'; reason: 'invalidated' | 'expired' | 'source_removed' | 'evidence_lost' | 'source_outage' | 'invalid_validation_time' | 'observation_missing' | 'observation_changed'; profileRef: string }>
   | Readonly<{ status: 'ineligible'; reason: string; profileRef: string }>;
 export type PrivateLookupResult =
   | Readonly<{ status: 'miss' }>
@@ -157,13 +159,12 @@ export type PublicLookupResult =
   | Readonly<{ status: 'hit'; profileRef: string; version: number; facts: Readonly<Record<string, string>>; trust: 'untrusted_external'; rights: 'not_asserted'; permissionStatus: string; retrievedAt: string; validatedAt: string; expiresAt: string; originalLineageStatus: 'complete' | 'unknown' }>
   | Exclude<LookupResult, { status: 'hit' }>;
 
-export type AdmissionResult = Readonly<{
-  status: 'admitted' | 'refresh_unresolved' | 'in_flight' | 'needs_reconciliation' | 'already_completed' | 'unavailable';
-  admissionRef?: string;
-  usage: 'unknown' | 'unresolved';
-  providerTransport?: 'not_implemented';
-  reason?: 'clock_rollback';
-}>;
+export type AdmissionResult =
+  | Readonly<{ status: 'unavailable'; reason: 'clock_rollback' }>
+  | Readonly<{ status: 'admitted' | 'refresh_unresolved'; admissionRef: string; usage: 'unknown'; providerTransport: 'not_implemented' }>
+  | Readonly<{ status: 'in_flight'; admissionRef: string; usage: 'unresolved' }>
+  | Readonly<{ status: 'needs_reconciliation'; admissionRef: string; usage: 'unknown' }>
+  | Readonly<{ status: 'already_completed'; admissionRef: string; usage: 'unresolved' }>;
 
 export interface ScopedReuseOptions<Request = unknown> {
   readonly directory: string;
