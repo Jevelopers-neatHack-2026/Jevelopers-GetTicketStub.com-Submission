@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveGitEvidenceProvenance } from './git-provenance.js';
 
 const [caseId, mode, fixtureId] = process.argv.slice(2);
 if (caseId !== 'ACV1-AH05' || mode !== 'mock' || fixtureId !== 'jev-phase-b-offline') {
@@ -105,9 +106,10 @@ const git = args => execFileSync('git', args, {
   encoding: 'utf8',
   env: commandEnvironment
 }).trim();
-const commit = git(['rev-parse', 'HEAD']);
-const tree = git(['rev-parse', 'HEAD^{tree}']);
-const base = git(['merge-base', 'HEAD', 'main']);
+const provenance = resolveGitEvidenceProvenance(root);
+const commit = provenance.candidateCommit;
+const tree = provenance.candidateTree;
+const base = provenance.baseCommit;
 const workingTree = git(['status', '--porcelain']);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const safeTestLines = rawTap.split(/\r?\n/u).filter(line =>
@@ -123,7 +125,7 @@ const sanitizedTap = [
 writeFileSync(tapPath, sanitizedTap);
 
 const manifest = {
-  artifactVersion: 1,
+  artifactVersion: 2,
   caseId,
   fixtureId,
   evidenceMode: 'synthetic_offline',
@@ -131,6 +133,18 @@ const manifest = {
   base,
   commit,
   tree,
+  provenance: {
+    eventName: provenance.eventName,
+    candidateKind: provenance.candidateKind,
+    sourceRef: provenance.sourceRef,
+    sourceCommit: provenance.sourceCommit,
+    baseRef: provenance.baseRef,
+    baseCommit: provenance.baseCommit,
+    candidateRef: provenance.candidateRef,
+    candidateCommit: provenance.candidateCommit,
+    candidateTree: provenance.candidateTree,
+    baseSelectionPolicy: provenance.baseSelectionPolicy
+  },
   workingTreeClean: workingTree.length === 0,
   dirtyPathCount: workingTree === '' ? 0 : workingTree.split('\n').length,
   nodeVersion: process.version,
@@ -190,6 +204,7 @@ if (child.error || child.status !== 0 || invalidMetricRow
     || testResults.tests < 1 || testResults.failed !== 0 || testResults.skipped !== 0
     || testResults.todo !== 0 || testResults.passed !== testResults.tests
     || missingAcceptanceGroups.length > 0
+    || workingTree.length !== 0
     || metricCounts.blockedUncontrolledNetworkAttempts !== 0
     || metricCounts.controlledHttpsWrites > metricCounts.controlledHttpsRequests
     || metricCounts.crashBeforeDispatch !== 1
