@@ -16,6 +16,7 @@ import { openOfflineBrowser } from "../../src/exporters/offline-browser.js";
 import { suiteNames } from "../../scripts/verify/dispatcher.js";
 import { resource } from "../../src/runtime/resources.js";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
 
 let temporary: string;
 let calibration: Awaited<ReturnType<typeof verifyRuntime>>;
@@ -145,6 +146,20 @@ test("rejects browser versions when the launched version differs", async () => {
 		}),
 		typed("BROWSER_PIN_MISMATCH"),
 	);
+});
+
+test("reports a typed sandbox failure without retry when browser launch rejects", async (t) => {
+	const pins = await loadPins();
+	const launch = t.mock.method(chromium, "launch", async () => {
+		throw new Error("synthetic launch failure containing private host detail");
+	});
+	await assert.rejects(openOfflineBrowser(pins), (error: unknown) => {
+		assert.ok(error instanceof VerificationFailure);
+		assert.equal(error.code, "SANDBOX_POLICY_FAILURE");
+		assert.ok(!error.message.includes("private host detail"));
+		return true;
+	});
+	assert.equal(launch.mock.callCount(), 1);
 });
 
 test("rejects missing embedded PDF font programs when text still parses", async () => {

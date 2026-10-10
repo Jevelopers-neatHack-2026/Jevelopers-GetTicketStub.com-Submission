@@ -58,6 +58,16 @@ requests. Local macOS evidence does not claim an OS-wide network namespace or
 packet capture. CI disables OS networking with Docker `--network none` for the
 complete build/typecheck/format/test/runtime phase after installation.
 
+Linux rendering enables Chromium sandboxing and fails closed on launch or
+effective-state probe failure. CI uses a non-root identity, private IPC with
+1 GiB shared memory, zero capabilities, no new privileges, and Docker's enforced
+AppArmor policy with a byte-pinned Playwright seccomp profile. Docker inspect,
+host/container namespace comparisons, live `/proc` observations and Chromium's
+`chrome://sandbox` report provide separate configuration and effective-state
+evidence. See [the auditable policy and probes](../../scripts/security/README.md).
+macOS receipts record sandbox-enabled launch configuration without claiming the
+Linux namespace/seccomp observations.
+
 The unmodified Latin normal 400 WOFF2 comes from `@fontsource/noto-sans@5.3.0`
 (upstream Google Fonts metadata v42, last modified 2025-09-11). npm locks tarball
 integrity. Original copyright and full SIL OFL 1.1 are preserved in
@@ -105,9 +115,11 @@ The image environment variable alone is not cryptographic attestation: provenanc
 comes from the workflow's digest-pinned Docker invocation. The host kernel is
 recorded, not fixed by the userland image.
 
-Docker's daemon was unavailable during local implementation. Linux CI execution
-and pinned-image output are **unverified locally**; macOS receipts do not certify
-Linux. CI prints sanitized runtime receipts to its job log. The workflow has no
+Docker's daemon was unavailable during the ROOT-R1 security revision. The earlier
+Linux runs passed rendering tests with disabled sandbox and host IPC; those runs
+do not verify the revised security configuration. Revised Linux execution is
+**pending remote CI**; macOS receipts do not certify Linux. CI prints sanitized
+runtime and observed security receipts to its job log. The workflow has no
 deploy/publish/provider/comment/issue-close steps. Linux CI execution, accountable
 reviewer sign-off and merged implementation evidence remain required for closure.
 Global acceptance IDs and their trackers remain under existing owners.
