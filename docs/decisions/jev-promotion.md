@@ -43,7 +43,7 @@ Materialize the split artifacts from the authored cases with:
 python3 evals/build_synthetic_corpus.py
 ```
 
-This command only maps the checked-in authored cases to observations, labels, manifest, and split lock. It does not create or pad benchmark rows. Membership changes require a reviewed corpus/lock version update and impact record. The held-out use ledger is empty and marked `not_consumed`.
+The first invocation initializes observations, labels, manifest, and split lock from the checked-in authored cases. An identical rerun is a no-op and preserves the current held-out use ledger byte-for-byte. If source membership, projected content, immutable lock fields, or manifest hashes differ, the builder refuses before changing any generated artifact; it does not reset held-out consumption. Publication uses a directory lock and no-clobber artifact creation so concurrent builders cannot replace existing history. A membership change requires a new immutable corpus path, a new version, an impact record, and owner-reviewed migration; this builder does not migrate in place. A changed or partial corpus must be restored or migrated explicitly before this command can proceed.
 
 ## Bounded comparison plan
 

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import hashlib
 import io
 import json
+import os
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +19,7 @@ EVALS = ROOT / "evals"
 sys.path.insert(0, str(EVALS))
 
 import check_policy  # noqa: E402
+import build_synthetic_corpus as corpus_builder  # noqa: E402
 
 
 POLICY = EVALS / "policies" / "promotion-v1.json"
@@ -303,6 +307,160 @@ class CheckPolicyTests(unittest.TestCase):
             write_json(policy_path, policy)
             report = check_policy.validate(policy_path, MANIFEST)
             self.assertTrue(any("unknown rates must remain null rather than a zero-price assumption" in error for error in report["errors"]))
+
+    def test_malformed_nested_policy_values_return_actionable_json_errors(self) -> None:
+        cases = (
+            (
+                "generative token cap",
+                lambda policy: policy["comparison"]["bounded_run_plan"]["generative_baseline"].__setitem__("max_input_tokens_per_case_attempt", None),
+                "generative baseline max_input_tokens_per_case_attempt must be a positive integer",
+            ),
+            (
+                "class coverage minimum",
+                lambda policy: policy["required_questions"][0].__setitem__("minimum_samples_per_class", None),
+                "minimum_samples_per_class must be an object",
+            ),
+            (
+                "unhashable class name",
+                lambda policy: policy["required_questions"][0].__setitem__("classes", [{}]),
+                "classes must be a nonempty unique list",
+            ),
+            (
+                "optional vision cap",
+                lambda policy: policy["comparison"]["bounded_run_plan"]["vision_baseline_for_brand_role"].__setitem__("additional_candidate_all_in_cap_usd_if_approved", None),
+                "optional fourth vision-arm cap must be separate",
+            ),
+        )
+        for name, mutate, expected_error in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                policy = json.loads(POLICY.read_text(encoding="utf-8"))
+                mutate(policy)
+                policy_path = Path(directory) / "policy.json"
+                write_json(policy_path, policy)
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    exit_code = check_policy.main(["--policy", str(policy_path), "--corpus", str(MANIFEST)])
+                self.assertEqual(exit_code, 1)
+                report = json.loads(output.getvalue())
+                self.assertEqual(report["status"], "invalid")
+                self.assertFalse(report["promotion_eligible"])
+                self.assertTrue(any(expected_error in error for error in report["errors"]), report["errors"])
+                self.assertEqual(len(report["error_details"]), len(report["errors"]))
+
+    def test_malformed_json_emits_structured_report_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            policy_path = Path(directory) / "policy.json"
+            policy_path.write_text('{"amount": NaN}', encoding="utf-8")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                exit_code = check_policy.main(["--policy", str(policy_path), "--corpus", str(MANIFEST)])
+            self.assertEqual(exit_code, 1)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["status"], "invalid")
+            self.assertFalse(report["promotion_eligible"])
+            self.assertTrue(any("non-finite JSON number is forbidden: NaN" in error for error in report["errors"]))
+
+
+class BuildSyntheticCorpusTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.cases, self.question_ids = corpus_builder.load_authored()
+        self.authored_bytes = corpus_builder.AUTHORED.read_bytes()
+        self.artifacts = corpus_builder.build_artifacts(self.cases, self.question_ids, self.authored_bytes)
+
+    def _snapshot(self, corpus: Path) -> dict[str, bytes]:
+        return {name: (corpus / name).read_bytes() for name in self.artifacts}
+
+    def _initialize(self, corpus: Path) -> None:
+        corpus.mkdir()
+        self.assertTrue(corpus_builder.publish_artifacts(corpus, self.artifacts))
+
+    def test_identical_rebuild_preserves_consumed_held_out_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "corpus"
+            self._initialize(corpus)
+            lock_path = corpus / "split-lock.json"
+            manifest_path = corpus / "manifest.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            case_id = next(row["case_id"] for row in lock["case_assignments"] if row["split"] == "held_out")
+            lock["held_out_usage"] = {
+                "status": "consumed",
+                "evaluation_runs": [{"run_id": "comparison-001", "case_ids": [case_id]}],
+            }
+            write_json(lock_path, lock)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["artifacts"]["split_lock"]["sha256"] = digest(lock_path)
+            manifest["split_lock"]["held_out_consumed"] = True
+            write_json(manifest_path, manifest)
+            before = self._snapshot(corpus)
+
+            self.assertFalse(corpus_builder.publish_artifacts(corpus, self.artifacts))
+            self.assertEqual(self._snapshot(corpus), before)
+            preserved_lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            self.assertEqual(preserved_lock["held_out_usage"]["status"], "consumed")
+            self.assertEqual(preserved_lock["held_out_usage"]["evaluation_runs"][0]["run_id"], "comparison-001")
+            preserved_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertTrue(preserved_manifest["split_lock"]["held_out_consumed"])
+            report = check_policy.validate(POLICY, manifest_path)
+            self.assertTrue(report["expected_vs_actual"]["held_out_consumed"])
+
+    def test_membership_change_under_same_version_is_rejected_before_any_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "corpus"
+            self._initialize(corpus)
+            before = self._snapshot(corpus)
+            changed_cases = [dict(row) for row in self.cases]
+            changed_cases[0]["case_id"] = "cal-001-replacement"
+            changed_authored = b"".join(corpus_builder.stable_bytes(row) for row in changed_cases)
+            changed_artifacts = corpus_builder.build_artifacts(changed_cases, self.question_ids, changed_authored)
+            expected_manifest = json.loads(changed_artifacts["manifest.json"])
+            self.assertEqual(expected_manifest["corpus_version"], corpus_builder.CORPUS_VERSION)
+
+            with self.assertRaisesRegex(ValueError, "locked corpus membership or content differs"):
+                corpus_builder.publish_artifacts(corpus, changed_artifacts)
+            self.assertEqual(self._snapshot(corpus), before)
+
+    def test_dangling_artifact_symlink_is_rejected_without_following_or_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "corpus"
+            corpus.mkdir()
+            dangling_target = Path(directory) / "missing-target"
+            artifact_link = corpus / "observations.jsonl"
+            artifact_link.symlink_to(dangling_target)
+            with self.assertRaisesRegex(ValueError, "is a symlink"):
+                corpus_builder.publish_artifacts(corpus, self.artifacts)
+            self.assertTrue(artifact_link.is_symlink())
+            self.assertEqual(artifact_link.readlink(), dangling_target)
+            self.assertEqual(sorted(path.name for path in corpus.iterdir()), ["observations.jsonl"])
+
+    def test_concurrent_builder_lock_refuses_without_publishing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "corpus"
+            corpus.mkdir()
+            directory_fd = corpus_builder._publish_lock(corpus)
+            try:
+                with self.assertRaisesRegex(ValueError, "another corpus builder holds the directory lock"):
+                    corpus_builder.publish_artifacts(corpus, self.artifacts)
+            finally:
+                fcntl.flock(directory_fd, fcntl.LOCK_UN)
+                os.close(directory_fd)
+            self.assertEqual(list(corpus.iterdir()), [])
+
+    def test_atomic_no_clobber_refuses_artifact_created_after_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "corpus"
+            corpus.mkdir()
+            destination = corpus / "observations.jsonl"
+            original_link = corpus_builder.os.link
+
+            def race_create_destination(source: object, target: object, **kwargs: object) -> None:
+                Path(target).write_bytes(b"concurrent writer's artifact")
+                original_link(source, target, **kwargs)
+
+            with patch.object(corpus_builder.os, "link", side_effect=race_create_destination):
+                with self.assertRaisesRegex(ValueError, "appeared during initialization"):
+                    corpus_builder.publish_artifacts(corpus, self.artifacts)
+            self.assertEqual(destination.read_bytes(), b"concurrent writer's artifact")
+            self.assertEqual(sorted(path.name for path in corpus.iterdir()), ["observations.jsonl"])
 
 
 if __name__ == "__main__":

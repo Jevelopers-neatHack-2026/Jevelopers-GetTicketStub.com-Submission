@@ -130,6 +130,10 @@ def _is_number(value: Any) -> bool:
         return False
 
 
+def _is_integer(value: Any, *, positive: bool = False) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and (value > 0 if positive else value >= 0)
+
+
 def _has_phone_number(text: str) -> bool:
     return any(sum(character.isdigit() for character in match.group(0)) >= 10 for match in PHONE_RE.finditer(text))
 
@@ -172,24 +176,36 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
         qid = q["id"]
         if q.get("owner_role") != "Agent and research":
             errors.append(f"{qid}: owner role must remain Agent and research")
-        classes = q.get("classes")
-        if not isinstance(classes, list) or not classes or len(set(classes)) != len(classes):
+        classes_value = q.get("classes")
+        classes_valid = (
+            isinstance(classes_value, list)
+            and bool(classes_value)
+            and all(isinstance(item, str) and item.strip() for item in classes_value)
+            and len(set(classes_value)) == len(classes_value)
+        )
+        if not classes_valid:
             errors.append(f"{qid}: classes must be a nonempty unique list")
             classes = []
+        else:
+            classes = classes_value
         required_metrics = q.get("required_metrics")
         definitions = q.get("metric_definitions")
-        if not isinstance(required_metrics, list) or not required_metrics:
+        if not isinstance(required_metrics, list) or not required_metrics or any(not isinstance(metric, str) for metric in required_metrics):
             errors.append(f"{qid}: required_metrics must be explicit")
             required_metrics = []
         if not isinstance(definitions, dict) or any(not isinstance(definitions.get(m), str) or not definitions[m].strip() for m in required_metrics):
             errors.append(f"{qid}: every required metric needs a denominator-aware definition")
+        valid_groups: dict[str, list[str]] = {}
         for field in ("positive_classes", "negative_classes", "unknown_classes"):
             values = q.get(field)
-            if not isinstance(values, list) or any(item not in classes for item in values):
+            if not isinstance(values, list) or any(not isinstance(item, str) or item not in classes for item in values):
                 errors.append(f"{qid}: {field} must identify valid classes")
-        pos = set(q.get("positive_classes") or [])
-        neg = set(q.get("negative_classes") or [])
-        unknown = set(q.get("unknown_classes") or [])
+                valid_groups[field] = []
+            else:
+                valid_groups[field] = values
+        pos = set(valid_groups.get("positive_classes", []))
+        neg = set(valid_groups.get("negative_classes", []))
+        unknown = set(valid_groups.get("unknown_classes", []))
         if pos & neg or pos & unknown or neg & unknown or (pos | neg | unknown) != set(classes):
             errors.append(f"{qid}: positive, negative, and unknown classes must partition all classes")
         mins = q.get("minimum_samples_per_class")
@@ -451,20 +467,31 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
                 expected_attempts = per_case_seed * 2
                 if maximum_attempts != expected_attempts:
                     errors.append(f"{model_key} attempt ceiling must cover one attempt plus one retry per case and seed")
+                if not _is_integer(maximum_attempts):
+                    errors.append(f"{model_key} maximum billable attempts must be a nonnegative integer before token totals can be checked")
+                safe_attempts = maximum_attempts if _is_integer(maximum_attempts) else 0
                 if model_key == "generative_baseline":
+                    per_attempt_caps: dict[str, int] = {}
                     for field in ("max_input_tokens_per_case_attempt", "max_output_tokens_per_case_attempt"):
-                        if not isinstance(arm.get(field), int) or isinstance(arm.get(field), bool) or arm[field] <= 0:
+                        if not _is_integer(arm.get(field), positive=True):
                             errors.append(f"generative baseline {field} must be a positive integer")
-                    if arm.get("maximum_input_tokens_total_including_retries") != maximum_attempts * arm.get("max_input_tokens_per_case_attempt", 0) or arm.get("maximum_output_tokens_total_including_retries") != maximum_attempts * arm.get("max_output_tokens_per_case_attempt", 0):
+                            per_attempt_caps[field] = 0
+                        else:
+                            per_attempt_caps[field] = arm[field]
+                    expected_input = safe_attempts * per_attempt_caps["max_input_tokens_per_case_attempt"]
+                    expected_output = safe_attempts * per_attempt_caps["max_output_tokens_per_case_attempt"]
+                    if arm.get("maximum_input_tokens_total_including_retries") != expected_input or arm.get("maximum_output_tokens_total_including_retries") != expected_output:
                         errors.append("generative baseline token totals do not match attempts and per-attempt ceilings")
                     if arm.get("published_cost_ceiling_usd") is not None or arm.get("unknown_cost_is_not_zero") is not True or arm.get("cost_blocks_execution_until_provider_model_and_rate_card_are_reviewed") is not True:
                         errors.append("generative baseline unknown pricing must remain null and block execution")
                 else:
-                    if not isinstance(arm.get("max_images_per_case_attempt"), int) or isinstance(arm.get("max_images_per_case_attempt"), bool) or arm["max_images_per_case_attempt"] <= 0:
+                    if not _is_integer(arm.get("max_images_per_case_attempt"), positive=True):
                         errors.append("vision baseline image-input ceiling must be a positive integer")
-                    if arm.get("maximum_image_inputs_total_including_retries") != maximum_attempts * arm.get("max_images_per_case_attempt", 0):
+                    max_images = arm.get("max_images_per_case_attempt") if _is_integer(arm.get("max_images_per_case_attempt"), positive=True) else 0
+                    if arm.get("maximum_image_inputs_total_including_retries") != safe_attempts * max_images:
                         errors.append("vision baseline image-input total does not match attempts and per-attempt ceiling")
-                    if not isinstance(arm.get("max_output_tokens_per_case_attempt"), int) or isinstance(arm.get("max_output_tokens_per_case_attempt"), bool) or arm.get("maximum_output_tokens_total_including_retries") != maximum_attempts * arm.get("max_output_tokens_per_case_attempt", 0):
+                    max_output = arm.get("max_output_tokens_per_case_attempt") if _is_integer(arm.get("max_output_tokens_per_case_attempt"), positive=True) else 0
+                    if max_output == 0 or arm.get("maximum_output_tokens_total_including_retries") != safe_attempts * max_output:
                         errors.append("vision baseline output-token total does not match attempts and per-attempt ceiling")
                     if arm.get("unknown_cost_is_not_zero") is not True or arm.get("published_cost_ceiling_usd") is not None:
                         errors.append("unknown vision pricing must remain null and block execution")
@@ -482,7 +509,9 @@ def validate_policy(policy: dict[str, Any], errors: list[str], blockers: list[st
                 errors.append("total comparison cap must equal required arms times held-out cases times seeds times per-case all-in cap")
             vision_arm = plan.get("vision_baseline_for_brand_role", {})
             vision_arm = vision_arm if isinstance(vision_arm, dict) else {}
-            if not math.isclose(vision_arm.get("additional_candidate_all_in_cap_usd_if_approved", -1), per_case_seed * proposed_case_cap if _is_number(proposed_case_cap) else -1, rel_tol=1e-12, abs_tol=1e-12):
+            vision_cap = vision_arm.get("additional_candidate_all_in_cap_usd_if_approved")
+            expected_vision_cap = per_case_seed * proposed_case_cap if _is_number(proposed_case_cap) else None
+            if not _is_number(vision_cap) or expected_vision_cap is None or not math.isclose(vision_cap, expected_vision_cap, rel_tol=1e-12, abs_tol=1e-12):
                 errors.append("optional fourth vision-arm cap must be separate and equal one arm's per-case cap total")
 
     deterministic_value = policy.get("deterministic_security_gate", {})
@@ -735,7 +764,7 @@ def validate_corpus(manifest_path: Path, manifest: dict[str, Any], policy: dict[
     if manifest_lock.get("assignment_sha256") != lock.get("assignment_sha256"):
         errors.append("manifest split-lock assignment digest differs from split-lock artifact")
 
-    split_counts = Counter(row.get("split") for row in assignment_by_id.values())
+    split_counts = Counter(row.get("split") for row in assignment_by_id.values() if isinstance(row.get("split"), str))
     actual_counts = {split: split_counts.get(split, 0) for split in ("calibration", "held_out")}
     if manifest.get("case_counts") != actual_counts or lock.get("split_counts") != actual_counts:
         errors.append("case counts differ between manifest, lock, and authored assignments")
@@ -751,6 +780,9 @@ def validate_corpus(manifest_path: Path, manifest: dict[str, Any], policy: dict[
     split_by_case: dict[str, str] = {}
     for case_id, assignment in assignment_by_id.items():
         split = assignment.get("split")
+        if not isinstance(split, str):
+            errors.append(f"{case_id}: split assignment must name calibration or held_out")
+            split = ""
         split_by_case[case_id] = split
         if split in family_counts and isinstance(assignment.get("scenario_family"), str):
             family_counts[split][assignment["scenario_family"]] += 1
@@ -834,7 +866,12 @@ def validate_corpus(manifest_path: Path, manifest: dict[str, Any], policy: dict[
     for split in ("calibration", "held_out"):
         for qid in REQUIRED_QUESTIONS:
             question = q_records.get(qid, {})
-            classes = question.get("classes", [])
+            classes_value = question.get("classes", [])
+            if not isinstance(classes_value, list) or any(not isinstance(value, str) for value in classes_value):
+                errors.append(f"{qid}: classes must be a list of strings before corpus label coverage can be counted")
+                classes = []
+            else:
+                classes = classes_value
             counts: Counter[str] = Counter()
             language_class_counts: dict[str, Counter[str]] = defaultdict(Counter)
             for case_id, label_row in labels_by_id.items():
@@ -852,9 +889,22 @@ def validate_corpus(manifest_path: Path, manifest: dict[str, Any], policy: dict[
             groups = {}
             for group_name in ("positive", "negative", "unknown"):
                 class_names = question.get(f"{group_name}_classes", [])
+                if not isinstance(class_names, list) or any(not isinstance(value, str) for value in class_names):
+                    errors.append(f"{qid}: {group_name}_classes must be a list of strings before label groups can be counted")
+                    class_names = []
                 groups[group_name] = sum(counts[class_name] for class_name in class_names if class_name in classes)
-            minimums = question.get("minimum_samples_per_class", {})
-            class_minimum = minimums.get(split, 0)
+            minimums_value = question.get("minimum_samples_per_class", {})
+            if not isinstance(minimums_value, dict):
+                errors.append(f"{qid}: minimum_samples_per_class must be an object before coverage can be counted")
+                minimums: dict[str, Any] = {}
+            else:
+                minimums = minimums_value
+            class_minimum_value = minimums.get(split, 0)
+            if not _is_number(class_minimum_value) or class_minimum_value < 0:
+                errors.append(f"{qid}: {split} minimum_samples_per_class must be a finite nonnegative number")
+                class_minimum = 0
+            else:
+                class_minimum = class_minimum_value
             for class_name in classes:
                 if counts[class_name] < class_minimum:
                     coverage_gaps.append(f"{split} {qid}/{class_name}: {counts[class_name]} of {class_minimum} required")
@@ -863,7 +913,12 @@ def validate_corpus(manifest_path: Path, manifest: dict[str, Any], policy: dict[
                 if count < group_minimum:
                     coverage_gaps.append(f"{split} {qid}/{group_name}: {count} of {group_minimum} required")
             if split == "held_out":
-                lang_minimum = minimums.get("non_english_held_out_per_language", 0)
+                lang_minimum_value = minimums.get("non_english_held_out_per_language", 0)
+                if not _is_number(lang_minimum_value) or lang_minimum_value < 0:
+                    errors.append(f"{qid}: non_english_held_out_per_language minimum must be a finite nonnegative number")
+                    lang_minimum = 0
+                else:
+                    lang_minimum = lang_minimum_value
                 for language in actual_languages:
                     for class_name in classes:
                         count = language_class_counts[language][class_name]
@@ -899,6 +954,9 @@ def validate_corpus(manifest_path: Path, manifest: dict[str, Any], policy: dict[
         if run["run_id"] in run_ids:
             errors.append(f"duplicate held-out evaluation run_id: {run['run_id']}")
         run_ids.add(run["run_id"])
+        if any(not isinstance(case_id, str) for case_id in run["case_ids"]):
+            errors.append(f"held-out run {run['run_id']} case_ids must contain only strings")
+            continue
         if len(run["case_ids"]) != len(set(run["case_ids"])):
             errors.append(f"held-out run {run['run_id']} repeats a case within the run")
         for case_id in run["case_ids"]:
@@ -950,8 +1008,16 @@ def validate(policy_path: Path, manifest_path: Path) -> dict[str, Any]:
     blockers: list[str] = []
     policy = read_json(policy_path, errors, "policy") or {}
     manifest = read_json(manifest_path, errors, "manifest") or {}
-    policy_summary = validate_policy(policy, errors, blockers)
-    corpus_summary = validate_corpus(manifest_path, manifest, policy, errors, blockers)
+    try:
+        policy_summary = validate_policy(policy, errors, blockers)
+    except Exception as exc:  # malformed untrusted JSON must become a report, never a traceback
+        errors.append(f"policy: validation could not continue for malformed policy data ({type(exc).__name__}: {exc})")
+        policy_summary = {}
+    try:
+        corpus_summary = validate_corpus(manifest_path, manifest, policy, errors, blockers)
+    except Exception as exc:  # preserve machine-readable invalid status for unexpected nested shapes
+        errors.append(f"corpus: validation could not continue for malformed corpus data ({type(exc).__name__}: {exc})")
+        corpus_summary = {}
     # Preserve stable order while avoiding repeated reasons from shared subchecks.
     errors = list(dict.fromkeys(errors))
     blockers = list(dict.fromkeys(blockers))
@@ -966,6 +1032,7 @@ def validate(policy_path: Path, manifest_path: Path) -> dict[str, Any]:
         "expected_vs_actual": corpus_summary,
         "policy_questions": policy_summary,
         "errors": errors,
+        "error_details": [{"code": "invalid_artifact", "message": message} for message in errors],
         "promotion_blockers": blockers,
         "evidence_status": {
             "provider_calls": 0,

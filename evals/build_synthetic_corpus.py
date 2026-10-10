@@ -5,6 +5,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import fcntl
+import os
+import stat
+import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -15,6 +20,7 @@ CORPUS = ROOT / "evals" / "corpus"
 AUTHORED = CORPUS / "authored-cases.jsonl"
 POLICY = ROOT / "evals" / "policies" / "promotion-v1.json"
 CORPUS_VERSION = "jev-ei-synthetic-smoke-fixture-1.0.0"
+GENERATED_ARTIFACTS = ("observations.jsonl", "labels.jsonl", "split-lock.json", "manifest.json")
 LABEL_STATUS = "author_authored_synthetic_expectation_not_independently_adjudicated"
 FAMILIES = (
     "ordinary", "sparse_dynamic", "unsupported", "no_answer",
@@ -43,9 +49,9 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def load_authored() -> tuple[list[dict[str, Any]], list[str]]:
-    cases = read_jsonl(AUTHORED)
-    policy = json.loads(POLICY.read_text(encoding="utf-8"))
+def load_authored(authored_path: Path = AUTHORED, policy_path: Path = POLICY) -> tuple[list[dict[str, Any]], list[str]]:
+    cases = read_jsonl(authored_path)
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
     question_ids = [row["id"] for row in policy["required_questions"]]
     seen: set[str] = set()
     for case in cases:
@@ -116,25 +122,13 @@ def materialize(cases: list[dict[str, Any]], question_ids: list[str]) -> tuple[l
     return observations, labels, assignments
 
 
-def write_json(path: Path, value: Any) -> bytes:
-    data = stable_bytes(value)
-    path.write_bytes(data)
-    return data
-
-
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> bytes:
-    data = b"".join(stable_bytes(row) for row in rows)
-    path.write_bytes(data)
-    return data
-
-
-def main() -> None:
-    cases, question_ids = load_authored()
+def build_artifacts(
+    cases: list[dict[str, Any]], question_ids: list[str], authored_bytes: bytes,
+) -> dict[str, bytes]:
+    """Render all generated corpus files in memory without touching the lock."""
     observations, labels, assignments = materialize(cases, question_ids)
-    CORPUS.mkdir(parents=True, exist_ok=True)
-    authored_bytes = AUTHORED.read_bytes()
-    observations_bytes = write_jsonl(CORPUS / "observations.jsonl", observations)
-    labels_bytes = write_jsonl(CORPUS / "labels.jsonl", labels)
+    observations_bytes = b"".join(stable_bytes(row) for row in observations)
+    labels_bytes = b"".join(stable_bytes(row) for row in labels)
     counts = Counter(row["split"] for row in cases)
     family_counts: dict[str, dict[str, int]] = {
         family: {
@@ -169,7 +163,7 @@ def main() -> None:
         "held_out_usage": {"status": "not_consumed", "evaluation_runs": []},
         "change_control": "Any membership change requires a new corpus and lock version, impact record, and Agent and research plus Finance and reliability review. Smoke fixture IDs do not certify real-world family independence.",
     }
-    lock_bytes = write_json(CORPUS / "split-lock.json", lock)
+    lock_bytes = stable_bytes(lock)
     manifest = {
         "manifest_version": "1.0.0",
         "corpus_version": CORPUS_VERSION,
@@ -222,10 +216,173 @@ def main() -> None:
             "held_out_consumed": False,
         },
     }
-    write_json(CORPUS / "manifest.json", manifest)
-    print(f"Wrote {len(cases)} author-authored smoke fixtures ({counts['calibration']} calibration, {counts['held_out']} held-out).")
+    manifest_bytes = stable_bytes(manifest)
+    return {
+        "observations.jsonl": observations_bytes,
+        "labels.jsonl": labels_bytes,
+        "split-lock.json": lock_bytes,
+        "manifest.json": manifest_bytes,
+    }
+
+
+def _load_json_bytes(data: bytes, path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(data.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{path.name} is not valid UTF-8 JSON; refusing to overwrite locked artifacts") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{path.name} must be a JSON object; refusing to overwrite locked artifacts")
+    return value
+
+
+def _read_existing_regular_file(path: Path) -> bytes:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"cannot safely open generated artifact {path.name} without following symlinks: {exc}") from exc
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError(f"generated artifact is not a regular file: {path.name}; refusing to overwrite it")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            return stream.read()
+    finally:
+        os.close(fd)
+
+
+def _validate_existing_artifacts(corpus_dir: Path, expected: dict[str, bytes]) -> None:
+    names = tuple(expected)
+    paths = {name: corpus_dir / name for name in names}
+    for path in paths.values():
+        if path.is_symlink():
+            raise ValueError(f"generated artifact path is a symlink: {path.name}; refusing to follow or replace it")
+    present = {name for name, path in paths.items() if os.path.lexists(path)}
+    if not present:
+        return
+    if present != set(names):
+        missing = sorted(set(names) - present)
+        existing = sorted(present)
+        raise ValueError(
+            "partial generated corpus exists (present: " + ", ".join(existing) + "; missing: " + ", ".join(missing)
+            + "); refusing all writes. Restore the immutable corpus or create a separately reviewed, versioned migration."
+        )
+
+    current = {name: _read_existing_regular_file(path) for name, path in paths.items()}
+    changed = [name for name in ("observations.jsonl", "labels.jsonl") if current[name] != expected[name]]
+    if changed:
+        raise ValueError(
+            "locked corpus membership or content differs in " + ", ".join(changed)
+            + "; refusing all writes under the existing corpus version. Create a new immutable corpus path and use an explicitly reviewed versioned migration."
+        )
+
+    lock_path = paths["split-lock.json"]
+    expected_lock = _load_json_bytes(expected["split-lock.json"], lock_path)
+    current_lock = _load_json_bytes(current["split-lock.json"], lock_path)
+    usage = current_lock.get("held_out_usage")
+    normalized_lock = dict(expected_lock)
+    normalized_lock["held_out_usage"] = usage
+    if stable_bytes(normalized_lock) != current["split-lock.json"]:
+        raise ValueError(
+            "split-lock immutable fields differ from the authored corpus; refusing all writes and preserving the current usage ledger. "
+            "Create a new immutable corpus path and use an explicitly reviewed versioned migration."
+        )
+
+    expected_manifest = _load_json_bytes(expected["manifest.json"], paths["manifest.json"])
+    _load_json_bytes(current["manifest.json"], paths["manifest.json"])
+    expected_manifest["artifacts"]["split_lock"]["sha256"] = digest(current["split-lock.json"])
+    runs = usage.get("evaluation_runs", []) if isinstance(usage, dict) else []
+    expected_manifest["split_lock"]["held_out_consumed"] = bool(runs)
+    if stable_bytes(expected_manifest) != current["manifest.json"]:
+        raise ValueError(
+            "manifest or split-lock digest differs from immutable corpus artifacts; refusing all writes and preserving the current usage ledger. "
+            "Create a new immutable corpus path and use an explicitly reviewed versioned migration."
+        )
+
+
+def _publish_lock(corpus_dir: Path) -> int:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        directory_fd = os.open(corpus_dir, flags)
+    except OSError as exc:
+        raise ValueError(f"cannot open corpus directory without following symlinks: {exc}") from exc
+    try:
+        fcntl.flock(directory_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(directory_fd)
+        raise ValueError("another corpus builder holds the directory lock; retry after it finishes") from exc
+    except OSError as exc:
+        os.close(directory_fd)
+        raise ValueError(f"cannot lock corpus directory safely: {exc}") from exc
+    return directory_fd
+
+
+def publish_artifacts(corpus_dir: Path, artifacts: dict[str, bytes]) -> bool:
+    """Create a corpus once; identical rebuilds are no-ops and mutations fail closed.
+
+    Returns True when this call initialized the generated artifacts and False for
+    an identical rebuild. Existing usage history is retained byte-for-byte.
+    """
+    if set(artifacts) != set(GENERATED_ARTIFACTS):
+        raise ValueError("unexpected generated artifact set")
+    if corpus_dir.is_symlink():
+        raise ValueError(f"corpus directory must not be a symlink: {corpus_dir}")
+    if not corpus_dir.is_dir():
+        raise ValueError(f"corpus directory does not exist: {corpus_dir}")
+    directory_fd = _publish_lock(corpus_dir)
+    try:
+        _validate_existing_artifacts(corpus_dir, artifacts)
+        paths = {name: corpus_dir / name for name in GENERATED_ARTIFACTS}
+        if all(os.path.lexists(path) for path in paths.values()):
+            return False
+
+        staged: list[tuple[Path, Path]] = []
+        try:
+            for name in GENERATED_ARTIFACTS:
+                data = artifacts[name]
+                with tempfile.NamedTemporaryFile(dir=corpus_dir, prefix=f".{name}.", suffix=".tmp", delete=False) as temp:
+                    temp.write(data)
+                    temp.flush()
+                    os.fsync(temp.fileno())
+                    staged.append((Path(temp.name), paths[name]))
+            # Hard-link publication is atomic and fails if any destination appeared;
+            # manifest is last, so readers never see a complete-looking partial set.
+            for temporary, destination in staged:
+                try:
+                    os.link(temporary, destination, follow_symlinks=False)
+                except FileExistsError as exc:
+                    raise ValueError(
+                        f"generated artifact appeared during initialization: {destination.name}; refusing to overwrite it"
+                    ) from exc
+        finally:
+            for temporary, _ in staged:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+    finally:
+        try:
+            fcntl.flock(directory_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(directory_fd)
+    return True
+
+
+def main() -> int:
+    try:
+        cases, question_ids = load_authored()
+        artifacts = build_artifacts(cases, question_ids, AUTHORED.read_bytes())
+        initialized = publish_artifacts(CORPUS, artifacts)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Corpus build refused: {exc}", file=sys.stderr)
+        return 2
+    counts = Counter(row["split"] for row in cases)
+    if initialized:
+        print(f"Initialized {len(cases)} author-authored smoke fixtures ({counts['calibration']} calibration, {counts['held_out']} held-out).")
+    else:
+        print(f"Corpus already matches {len(cases)} author-authored smoke fixtures; existing split-lock usage history preserved.")
     print("Corpus minimums remain unmet; no benchmark eligibility is implied.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
