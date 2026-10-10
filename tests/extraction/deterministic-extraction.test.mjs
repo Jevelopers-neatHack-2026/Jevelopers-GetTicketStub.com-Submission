@@ -336,6 +336,42 @@ test("maps XHTML comments and long numeric references without losing visible or 
   }
 });
 
+test("reports SAX token-buffer exhaustion as RESOURCE_LIMIT, distinct from malformed XHTML", async () => {
+  const longToken = "x".repeat(100_000);
+  const longDigits = "0".repeat(100_000);
+  const cases = [
+    { bufferName: "comment", body: `<!--${longToken}--><p>Cancelled event</p>` },
+    { bufferName: "attribValue", body: `<p title="${longToken}">Cancelled event</p>` },
+    { bufferName: "procInstBody", body: `<?probe ${longToken}?><p>Cancelled event</p>` },
+    { bufferName: "entity", body: `<p>&#${longDigits}67;ancelled event</p>` },
+  ];
+
+  for (const htmlChunkCodeUnits of [undefined, 257]) {
+    const options = htmlChunkCodeUnits === undefined ? undefined : { limits: { htmlChunkCodeUnits } };
+    for (const { bufferName, body } of cases) {
+      const input = document(Buffer.from(
+        `<html xmlns="http://www.w3.org/1999/xhtml"><body>${body}</body></html>`,
+      ), "application/xhtml+xml");
+      assert.ok(input.bytes.length < 2 * 1024 * 1024);
+      const result = await extractDeterministically(input, options);
+      assert.equal(result.status, "RESOURCE_LIMIT");
+      assert.equal(result.termination, "RESOURCE_LIMIT");
+      assert.ok(result.diagnostics.some((item) => item.code === "XHTML_TOKEN_BUFFER_LIMIT"
+        && item.bufferName === bufferName && item.limit === 65_536));
+      assert.equal(result.diagnostics.some((item) => item.code === "MALFORMED_XHTML"), false);
+    }
+  }
+
+  const malformed = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Cancelled event</body></html>',
+  ), "application/xhtml+xml");
+  const malformedResult = await extractDeterministically(malformed);
+  assert.equal(malformedResult.status, "NO_ANSWER");
+  assert.equal(malformedResult.termination, null);
+  assert.ok(malformedResult.diagnostics.some((item) => item.code === "MALFORMED_XHTML"));
+  assert.equal(malformedResult.diagnostics.some((item) => item.code === "XHTML_TOKEN_BUFFER_LIMIT"), false);
+});
+
 test("rejects malformed XHTML and internal entity declarations without resolving them", async () => {
   const externalDtdOnly = document(Buffer.from(
     '<!DOCTYPE html SYSTEM "https://remote.invalid/xhtml.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><body>Cancelled event</body></html>',

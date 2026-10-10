@@ -261,9 +261,13 @@ async function collectHtml(state, signal, contentType) {
   if (!parsed.ok) {
     state.termination = parsed.code === "CANCELED" ? "CANCELED"
       : parsed.code === "PARSER_DEADLINE" ? "PARSER_DEADLINE"
-        : parsed.code === "HTML_NODE_LIMIT" ? "RESOURCE_LIMIT"
+        : (parsed.code === "HTML_NODE_LIMIT" || parsed.code === "XHTML_TOKEN_BUFFER_LIMIT") ? "RESOURCE_LIMIT"
           : parsed.code === "HTML_PARSER_FAILURE" ? null : null;
-    addDiagnostic(state, parsed.code);
+    if (parsed.code === "XHTML_TOKEN_BUFFER_LIMIT") {
+      addDiagnostic(state, parsed.code, { bufferName: parsed.bufferName, limit: parsed.limit });
+    } else {
+      addDiagnostic(state, parsed.code);
+    }
     return;
   }
 

@@ -2,6 +2,7 @@ import sax from "sax";
 import { performance } from "node:perf_hooks";
 
 const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
+const SAX_TOKEN_BUFFER_LIMIT = sax.MAX_BUFFER_LENGTH;
 
 export function xhtmlXmlDeclarationEncodingFromBytes(bytes) {
   let start = 0;
@@ -33,12 +34,19 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
   let nodeCount = 1;
   let resourceLimited = false;
   let parseError = null;
+  let tokenBufferLimit = null;
   let forbiddenDtd = false;
   let xmlEncoding = null;
   let sourceCursor = text.charCodeAt(0) === 0xfeff ? 1 : 0;
   let cdataSection = null;
 
   const onParserError = (error) => {
+    if (parseError || tokenBufferLimit !== null) return;
+    const bufferName = saxBufferLimitName(error);
+    if (bufferName !== null) {
+      tokenBufferLimit = bufferName;
+      return;
+    }
     parseError = error;
   };
   parser.onerror = onParserError;
@@ -205,6 +213,7 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
     if (signal?.aborted) return { ok: false, code: "CANCELED" };
     if (performance.now() - startedAt > limits.parseTimeoutMs) return { ok: false, code: "PARSER_DEADLINE" };
     if (resourceLimited) return { ok: false, code: "HTML_NODE_LIMIT" };
+    if (tokenBufferLimit !== null) return xhtmlTokenBufferLimitResult(tokenBufferLimit);
     if (parseError) return { ok: false, code: forbiddenDtd ? "XHTML_DTD_UNSUPPORTED" : "MALFORMED_XHTML" };
 
     let endOffset = Math.min(text.length, offset + limits.htmlChunkCodeUnits);
@@ -220,6 +229,7 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
     } catch {
       parseError ||= new Error("Malformed XHTML");
     }
+    if (tokenBufferLimit !== null) return xhtmlTokenBufferLimitResult(tokenBufferLimit);
     if (parseError) return { ok: false, code: forbiddenDtd ? "XHTML_DTD_UNSUPPORTED" : "MALFORMED_XHTML" };
     if (resourceLimited) return { ok: false, code: "HTML_NODE_LIMIT" };
     offset = endOffset;
@@ -233,9 +243,28 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
   } catch {
     parseError ||= new Error("Malformed XHTML");
   }
+  if (tokenBufferLimit !== null) return xhtmlTokenBufferLimitResult(tokenBufferLimit);
   if (parseError) return { ok: false, code: forbiddenDtd ? "XHTML_DTD_UNSUPPORTED" : "MALFORMED_XHTML" };
   if (stack.length !== 1) return { ok: false, code: "MALFORMED_XHTML" };
   return { ok: true, document, xmlEncoding };
+}
+
+function xhtmlTokenBufferLimitResult(bufferName) {
+  return {
+    ok: false,
+    code: "XHTML_TOKEN_BUFFER_LIMIT",
+    bufferName,
+    limit: SAX_TOKEN_BUFFER_LIMIT,
+  };
+}
+
+function saxBufferLimitName(error) {
+  if (!(error instanceof Error)) return null;
+  const prefix = "Max buffer length exceeded: ";
+  const firstLine = error.message.split("\n", 1)[0];
+  if (!firstLine.startsWith(prefix)) return null;
+  const bufferName = firstLine.slice(prefix.length);
+  return /^[A-Za-z][A-Za-z0-9]*$/.test(bufferName) ? bufferName : null;
 }
 
 function appendText(parent, value, startOffset, endOffset, segments, limits) {

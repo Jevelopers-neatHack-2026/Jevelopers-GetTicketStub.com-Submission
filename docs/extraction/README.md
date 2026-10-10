@@ -12,6 +12,8 @@ Statuses include `PARTIAL`, `NO_ANSWER`, `JS_REQUIRED`, `ACCESS_RESTRICTED`, `UN
 
 Default ceilings bound response bytes (2 MiB), HTML nodes (100,000), HTML parser time (2.5 seconds), visible text (4,000 segments / 512 KiB), status/access phrases (128 each), canonical links (256), page metadata values (1,000), JSON-LD blocks (32), JSON-LD bytes per block (512 KiB), JSON nesting (64), JSON nodes per block (30,000), entities (128), candidates per entity (256), diagnostics (128), and noscript traversal/signals. Callers may lower limits. Parser recovery errors and truncated evidence are reported diagnostically. Visible status and access phrases have their own bounded retention, so a cancellation notice later in the document can remain even after the general visible-text budget is consumed.
 
+The pinned XHTML SAX parser has a separate 64 Ki code-unit threshold for token buffers that it cannot flush, including comments, attribute values, processing-instruction bodies, and entity names. Text and CDATA buffers are flushed during parsing. SAX checks buffer lengths at input-chunk boundaries, so an unflushable token can cross the threshold within a chunk before the parser stops; this returns `XHTML_TOKEN_BUFFER_LIMIT` with `RESOURCE_LIMIT` termination. The default XHTML chunk size is 16 Ki code units.
+
 This is an internal partial extraction component for controlled retrieval. It does not define or implement the accepted canonical event schema, full research API, external release, or persistence behavior.
 
 Run focused checks with Node 22.23.3:
