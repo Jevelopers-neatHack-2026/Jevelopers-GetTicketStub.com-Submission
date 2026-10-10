@@ -1,0 +1,27 @@
+name: immutable correction history
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  immutable-history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - run: npm ci
+      - name: Test private immutable correction history
+        run: node --test tests/review/history/*.test.mjs
+      - name: Type-check strict history consumer
+        run: >-
+          ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext
+          --moduleResolution NodeNext --lib ES2022,DOM --types node --skipLibCheck false
+          tests/review/history/types-consumer.mts
