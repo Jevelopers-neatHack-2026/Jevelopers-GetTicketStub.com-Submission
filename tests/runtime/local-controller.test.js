@@ -913,14 +913,17 @@ test('crash markers publish atomically and owned children are reaped on parse an
 
   const markerPath = join(temporary.directory, 'fragmented.ready');
   const partialReadyPath = join(temporary.directory, 'fragmented.partial');
+  const releasePath = join(temporary.directory, 'fragmented.release');
   const fragmented = spawnWithSignal(fixturePath('local-controller-marker-publication.mjs'), [
     markerPath,
     'fragmented',
-    partialReadyPath
+    partialReadyPath,
+    releasePath
   ]);
   try {
     await waitForFiles([partialReadyPath]);
     assert.equal(existsSync(markerPath), false, 'the partial bytes remain under the temporary name');
+    writeFileSync(releasePath, 'publish complete marker');
     const { marker, result } = await killAtMarker(fragmented, markerPath);
     assert.deepEqual(marker, { stage: 'fragmented', complete: true });
     assert.equal(result.signal, 'SIGKILL');

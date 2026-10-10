@@ -1,14 +1,13 @@
-import { renameSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, writeFileSync } from 'node:fs';
 
-const [markerPath, mode, partialReadyPath] = process.argv.slice(2);
+const [markerPath, mode, partialReadyPath, releasePath] = process.argv.slice(2);
 const temporaryPath = markerPath + '.' + process.pid + '.tmp';
 
 if (mode === 'fragmented') {
   writeFileSync(temporaryPath, '');
   writeFileSync(partialReadyPath, 'temporary marker started');
-  await new Promise(resolve => setTimeout(resolve, 20));
+  while (!existsSync(releasePath)) await new Promise(resolve => setTimeout(resolve, 5));
   writeFileSync(temporaryPath, '{"stage":"fragmented","complete":true}');
-  await new Promise(resolve => setTimeout(resolve, 20));
   renameSync(temporaryPath, markerPath);
 } else if (mode === 'malformed') {
   writeFileSync(temporaryPath, '{');
