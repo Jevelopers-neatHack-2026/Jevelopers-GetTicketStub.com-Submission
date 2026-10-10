@@ -269,6 +269,17 @@ function snapshotDatabase(databasePath) {
   }
 }
 
+function interceptLocalControllerTransactionClock(store, methodName, databasePath, clock, transactionNow) {
+  const original = store[methodName].bind(store);
+  let beforeTransaction = null;
+  store[methodName] = (...args) => {
+    beforeTransaction = snapshotDatabase(databasePath);
+    clock.set(transactionNow);
+    return original(...args);
+  };
+  return () => beforeTransaction;
+}
+
 function installWriteFailure(databasePath, table, workflowId, suffix) {
   const trigger = 'fail_local_' + suffix;
   const db = new DatabaseSync(databasePath);
@@ -903,6 +914,168 @@ test('limit deadline and clock rollback remain pinned across recovery without co
   assert.equal(retryStore.getCheckpoint(retryLease.workflowId).data.budget.stepAttempts, 1);
   assert.equal(retryStore.getCheckpoint(retryLease.workflowId).data.budget.localRetries, 0);
   retryStore.close();
+});
+
+test('admission transaction rejects 1ms, 100ms, and 250ms backward wall-clock samples atomically', async t => {
+  for (const rollbackMs of [1, 100, 250]) {
+    const start = 70_000;
+    const temporary = temporaryDatabase('bounded-admission-clock-rollback-' + rollbackMs + '-');
+    t.after(() => temporary.cleanup());
+    const clock = mutableClock(start);
+    const store = openStore(temporary.databasePath, clock.read);
+    const workflowId = 'admission-clock-rollback-' + rollbackMs;
+    const lease = createRunningWorkflow(store, workflowId, 'worker-clock-rollback');
+    const before = snapshotDatabase(temporary.databasePath);
+    const getBoundary = interceptLocalControllerTransactionClock(
+      store,
+      '_localControllerAdmit',
+      temporary.databasePath,
+      clock,
+      start - rollbackMs
+    );
+
+    const result = await runBoundedLocalPlan({
+      store,
+      workflowId,
+      ownerId: lease.ownerId,
+      fence: lease.fence,
+      planJson: SINGLE_PLAN
+    });
+    assert.equal(result.status, 'stopped', 'rollback ' + rollbackMs + 'ms');
+    assert.equal(result.reason, 'CLOCK_ROLLBACK', 'rollback ' + rollbackMs + 'ms');
+    assert.equal(getBoundary(), before, 'admission reached transaction before rollback check');
+    assert.equal(snapshotDatabase(temporary.databasePath), before, 'all rows roll back at admission');
+    store.close();
+
+    const reopened = openStore(temporary.databasePath, () => start);
+    assert.equal(snapshotDatabase(temporary.databasePath), before, 'all rows remain unchanged after reopen');
+    assert.equal(reopened.getWorkflow(workflowId).revision, lease.revision);
+    const checkpoint = reopened.getCheckpoint(workflowId);
+    assert.equal(checkpoint.sequence, 1);
+    assert.deepEqual(checkpoint.data, { preserved: 'synthetic-original-checkpoint' });
+    assert.equal(reopened.listEvents({ workflowId })
+      .some(event => event.type === 'private_local_step_admitted'), false);
+    reopened.close();
+  }
+});
+
+test('completion transaction rejects 1ms, 100ms, and 250ms backward wall-clock samples atomically', async t => {
+  for (const rollbackMs of [1, 100, 250]) {
+    const start = 80_000;
+    const temporary = temporaryDatabase('bounded-completion-clock-rollback-' + rollbackMs + '-');
+    t.after(() => temporary.cleanup());
+    const clock = mutableClock(start);
+    const store = openStore(temporary.databasePath, clock.read);
+    const workflowId = 'completion-clock-rollback-' + rollbackMs;
+    const lease = createRunningWorkflow(store, workflowId, 'worker-clock-rollback');
+    makeAdmission(store, lease, SINGLE_PLAN, '{}', workflowId + ':first-admission');
+    const getBoundary = interceptLocalControllerTransactionClock(
+      store,
+      '_localControllerComplete',
+      temporary.databasePath,
+      clock,
+      start - rollbackMs
+    );
+
+    const result = await runBoundedLocalPlan({
+      store,
+      workflowId,
+      ownerId: lease.ownerId,
+      fence: lease.fence
+    });
+    assert.equal(result.status, 'stopped', 'rollback ' + rollbackMs + 'ms');
+    assert.equal(result.reason, 'CLOCK_ROLLBACK', 'rollback ' + rollbackMs + 'ms');
+    const beforeCompletion = getBoundary();
+    assert.equal(typeof beforeCompletion, 'string', 'completion reached transaction after controller check');
+    assert.equal(snapshotDatabase(temporary.databasePath), beforeCompletion, 'completion transaction rolls back');
+    store.close();
+
+    const reopened = openStore(temporary.databasePath, () => start);
+    assert.equal(snapshotDatabase(temporary.databasePath), beforeCompletion, 'completion state is unchanged after reopen');
+    const checkpoint = reopened.getCheckpoint(workflowId);
+    assert.equal(checkpoint.sequence, 3, 'the replay admission remains consumed');
+    assert.equal(checkpoint.data.pendingStepId, 'only');
+    assert.equal(checkpoint.data.budget.stepsAdmitted, 1);
+    assert.equal(checkpoint.data.budget.stepAttempts, 2);
+    assert.equal(checkpoint.data.budget.localRetries, 1);
+    assert.equal(checkpoint.data.completedResultsJson, '{}');
+    assert.equal(reopened.listEvents({ workflowId })
+      .some(event => event.type === 'private_local_step_completed'), false);
+    reopened.close();
+  }
+});
+
+test('transaction clock keeps unchanged and forward-expired admission and completion controls', async t => {
+  async function runControl(boundary, adjustment) {
+    const start = boundary === '_localControllerAdmit' ? 90_000 : 100_000;
+    const temporary = temporaryDatabase('bounded-transaction-clock-control-' + boundary + '-' + adjustment + '-');
+    t.after(() => temporary.cleanup());
+    const clock = mutableClock(start);
+    const store = openStore(temporary.databasePath, clock.read);
+    const workflowId = 'transaction-clock-control-' + boundary + '-' + adjustment;
+    const lease = createRunningWorkflow(store, workflowId, 'worker-clock-control');
+    if (boundary === '_localControllerComplete') {
+      makeAdmission(store, lease, SINGLE_PLAN, '{}', workflowId + ':first-admission');
+    }
+    const target = adjustment === 'deadline' ? start + 30_000 : start + adjustment;
+    const getBoundary = interceptLocalControllerTransactionClock(
+      store,
+      boundary,
+      temporary.databasePath,
+      clock,
+      target
+    );
+    const result = await runBoundedLocalPlan({
+      store,
+      workflowId,
+      ownerId: lease.ownerId,
+      fence: lease.fence,
+      ...(boundary === '_localControllerAdmit' ? { planJson: SINGLE_PLAN } : {})
+    });
+    assert.equal(typeof getBoundary(), 'string');
+
+    if (adjustment === 'deadline') {
+      assert.equal(result.status, 'stopped');
+      assert.equal(snapshotDatabase(temporary.databasePath), getBoundary(), 'expired transaction writes nothing');
+      store.close();
+      const reopened = openStore(temporary.databasePath, () => start);
+      assert.equal(snapshotDatabase(temporary.databasePath), getBoundary(), 'expired state survives reopen unchanged');
+      const checkpoint = reopened.getCheckpoint(workflowId);
+      if (boundary === '_localControllerComplete') {
+        assert.equal(checkpoint.data.pendingStepId, 'only');
+        assert.equal(checkpoint.data.budget.stepAttempts, 2);
+        assert.equal(checkpoint.data.budget.localRetries, 1);
+      } else {
+        assert.equal(checkpoint.sequence, 1);
+        assert.deepEqual(checkpoint.data, { preserved: 'synthetic-original-checkpoint' });
+      }
+      reopened.close();
+      return;
+    }
+
+    if (adjustment === 251) {
+      assert.equal(result.status, 'stopped');
+      assert.equal(result.reason, 'CONTROLLER_INPUT_INVALID');
+      assert.equal(snapshotDatabase(temporary.databasePath), getBoundary(), 'excess forward drift writes nothing');
+      store.close();
+      const reopened = openStore(temporary.databasePath, () => start);
+      assert.equal(snapshotDatabase(temporary.databasePath), getBoundary(), 'excess forward drift remains unchanged after reopen');
+      reopened.close();
+      return;
+    }
+
+    assert.equal(result.status, 'completed', 'transaction adjustment ' + adjustment);
+    assert.equal(result.results[0].output, 9);
+    store.close();
+  }
+
+  for (const boundary of ['_localControllerAdmit', '_localControllerComplete']) {
+    await runControl(boundary, 0);
+    await runControl(boundary, 1);
+    await runControl(boundary, 250);
+    await runControl(boundary, 251);
+    await runControl(boundary, 'deadline');
+  }
 });
 
 test('the durable controller stops after final compute crosses the pinned elapsed deadline', async t => {

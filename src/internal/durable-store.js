@@ -274,6 +274,20 @@ function equalCheckpointData(left, right, operation) {
   return serializeCheckpoint(left, operation) === serializeCheckpoint(right, operation);
 }
 
+function assertLocalControllerTransactionClock(now, next, row, previous, operation) {
+  const persistedLastWallMs = Math.max(
+    Number(row.updated_at_ms),
+    previous?.budget.lastWallMs ?? next.budget.startedWallMs
+  );
+  const lowerBound = Math.max(next.budget.lastWallMs, persistedLastWallMs);
+  if (now < lowerBound) {
+    fail(operation, 'CLOCK_ROLLBACK', 'The local controller clock moved backwards during a transaction.');
+  }
+  if (now >= next.budget.deadlineWallMs || now - next.budget.lastWallMs > 250) {
+    fail(operation, 'INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.');
+  }
+}
+
 function assertPrivateCheckpointPins(previous, next, workflowId, operation) {
   if (
     next.workflowId !== workflowId
@@ -1392,9 +1406,6 @@ export class DurableWorkflowStore {
       if (Number(row.checkpoint_sequence) !== fields.expectedCheckpointSequence) {
         fail(operation, 'CONCURRENT_MODIFICATION', 'The workflow checkpoint changed since this operation was prepared.', true);
       }
-      if (now >= next.budget.deadlineWallMs || Math.abs(now - next.budget.lastWallMs) > 250) {
-        fail(operation, 'INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.');
-      }
       if (this.#db.prepare(`
         SELECT 1 FROM operation_attempts
         WHERE workflow_id = ? AND state IN ('intent','outcome_unknown','response_received') LIMIT 1
@@ -1412,6 +1423,7 @@ export class DurableWorkflowStore {
       } else if (!equalCheckpointData(next.baseCheckpointData, current.data, operation)) {
         fail(operation, 'CHECKPOINT_CORRUPT', 'The original workflow checkpoint cannot be rebound.');
       }
+      assertLocalControllerTransactionClock(now, next, row, previous, operation);
       assertAdmissionBudget(previous, next, fields.admissionKind, fields.stepId, operation);
 
       const eventType = fields.admissionKind === 'replay'
@@ -1496,9 +1508,6 @@ export class DurableWorkflowStore {
       if (Number(row.checkpoint_sequence) !== fields.expectedCheckpointSequence) {
         fail(operation, 'CONCURRENT_MODIFICATION', 'The workflow checkpoint changed since this operation was prepared.', true);
       }
-      if (now >= next.budget.deadlineWallMs || Math.abs(now - next.budget.lastWallMs) > 250) {
-        fail(operation, 'INVALID_INPUT', 'The local step clock snapshot is outside its supported boundary.');
-      }
       if (this.#db.prepare(`
         SELECT 1 FROM operation_attempts
         WHERE workflow_id = ? AND state IN ('intent','outcome_unknown','response_received') LIMIT 1
@@ -1514,6 +1523,7 @@ export class DurableWorkflowStore {
       if (!equalCheckpointData(previous, current.data, operation)) {
         fail(operation, 'CHECKPOINT_CORRUPT', 'The private local checkpoint changed while being read.');
       }
+      assertLocalControllerTransactionClock(now, next, row, previous, operation);
       assertCompletionBudget(previous, next, fields.stepId, operation);
 
       this.#assertEventAvailable(fields.eventId, operation);

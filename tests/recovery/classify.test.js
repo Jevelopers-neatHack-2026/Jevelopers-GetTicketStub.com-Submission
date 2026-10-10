@@ -287,6 +287,19 @@ test('recovery enforces plausible admission, retry, replan, and pending relation
   assert.equal(noAdmission.kind, 'stop');
   assert.equal(noAdmission.reason, 'BUDGET_CHECKPOINT_INCONSISTENT');
 
+  const orphanReplay = classifyRecovery(checkpointWithData(privateData({
+    pendingStepId: 'first',
+    lastAdmissionKind: 'replay',
+    budget: {
+      ...createBudgetSnapshot(createLimitSet(), 1_000, 31_000),
+      stepAttempts: 1,
+      localRetries: 1,
+      iterations: 1
+    }
+  })));
+  assert.equal(orphanReplay.kind, 'stop');
+  assert.equal(orphanReplay.reason, 'BUDGET_CHECKPOINT_INCONSISTENT');
+
   const limits = createLimitSet();
   let budget = createBudgetSnapshot(limits, 1_000, 31_000);
   budget = advanceBudget(budget, 'step', 1_000, 0, limits).state;
