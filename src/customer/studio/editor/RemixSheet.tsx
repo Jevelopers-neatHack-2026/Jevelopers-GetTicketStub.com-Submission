@@ -1,10 +1,11 @@
 "use client";
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { Stub } from "../types";
+import { currentVersion } from "../types";
 import { remixArt } from "@/customer/studio/research/client";
 import { play, haptic } from "@/customer/studio/feedback";
+import { PaperButton, PaperSheet, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import { addArtVersion, readImageFile } from "./ops";
-import { Sheet } from "./Sheet";
 import styles from "./overlays.module.css";
 
 export const VIBES = ["Neon", "Risograph", "70s", "Minimal"] as const;
@@ -15,20 +16,33 @@ interface PanelProps {
   /** Opens the agent for a free-text description. */
   onDescribe: () => void;
   onDone?: () => void;
-  compact?: boolean;
 }
 
-/** Vibe chips, a photo option and one CTA. Free text lives behind "Describe it instead". */
-export function RemixPanel({ stub, onChange, onDescribe, onDone, compact }: PanelProps) {
+/** Art from the stub's earlier remixes, so a remix can always be undone. One entry per look. */
+function earlierArt(stub: Stub) {
+  const cur = currentVersion(stub);
+  const seen = new Set<string>([`${cur.art.kind}:${cur.art.src ?? ""}:${cur.art.seed}`]);
+  return stub.versions
+    .map((v) => v.art)
+    .filter((a) => {
+      const key = `${a.kind}:${a.src ?? ""}:${a.seed}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+/** Vibe tags, a photo option and one action. Free text lives behind "Describe it instead". */
+export function RemixPanel({ stub, onChange, onDescribe, onDone }: PanelProps) {
   const [vibe, setVibe] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const idBase = useId();
+  const earlier = earlierArt(stub);
 
   const finish = (s: Stub) => {
     onChange(s);
-    play("done");
+    play("success");
     haptic([18, 40, 28]);
     onDone?.();
   };
@@ -64,50 +78,66 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone, compact }: Pane
 
   return (
     <div className={styles.stack} aria-busy={busy}>
-      {compact && <p className="label">Remix the art</p>}
-      <div className={styles.chipRow} role="group" aria-label="Vibe">
+      <span className="desk-label">Pick a look</span>
+      <Tags label="Vibe">
         {VIBES.map((v) => (
-          <button key={v} type="button" className="chip" aria-pressed={vibe === v} onClick={() => setVibe(vibe === v ? null : v)} disabled={busy}>
+          <Tag key={v} pressed={vibe === v} disabled={busy} onClick={() => setVibe(vibe === v ? null : v)}>
             {v}
-          </button>
+          </Tag>
         ))}
-        <button type="button" className="chip" disabled={busy} onClick={() => fileRef.current?.click()}>
+        <Tag disabled={busy} onClick={() => fileRef.current?.click()}>
           From my photo
-        </button>
-        <input
-          ref={fileRef}
-          id={`${idBase}-photo`}
-          className="visually-hidden"
-          tabIndex={-1}
-          aria-label="Choose a photo for the art"
-          type="file"
-          accept="image/*"
-          disabled={busy}
-          onChange={(e) => onPhoto(e.target.files?.[0])}
-        />
-      </div>
-      <button type="button" className={styles.textLinkBtn} onClick={onDescribe}>
-        Describe it instead ›
-      </button>
-      <button type="button" className={`btn btn-primary ${compact ? "" : "btn-block"}`} onClick={run} disabled={busy}>
+        </Tag>
+      </Tags>
+      <input
+        ref={fileRef}
+        className="visually-hidden"
+        tabIndex={-1}
+        aria-label="Choose a photo for the art"
+        type="file"
+        accept="image/*"
+        disabled={busy}
+        onChange={(e) => onPhoto(e.target.files?.[0])}
+      />
+      <TearLink onClick={onDescribe}>Describe it instead</TearLink>
+      <PaperButton block onClick={run} disabled={busy}>
         {busy ? "Remixing…" : "Remix the art"}
-      </button>
+      </PaperButton>
       <p className={styles.muted} role="status" aria-live="polite">
-        {busy ? "Remixing… keeps your text and edits" : error ?? "Keeps your text and edits. Each remix is saved as a new style."}
+        {busy ? "Remixing. Your text and edits stay." : (error ?? "Your text and edits stay. Each remix is kept, so you can go back.")}
       </p>
+      {earlier.length > 0 && (
+        <>
+          <span className="desk-label">Go back to</span>
+          <Tags label="Earlier art">
+            {earlier.map((a, i) => (
+              <Tag
+                key={`${a.kind}-${a.seed}-${i}`}
+                disabled={busy}
+                onClick={() => {
+                  onChange(addArtVersion(stub, a));
+                  onDone?.();
+                }}
+              >
+                {a.vibe === "photo" ? "Your photo" : a.vibe ? a.vibe : "First art"}
+              </Tag>
+            ))}
+          </Tags>
+        </>
+      )}
     </div>
   );
 }
 
-interface SheetProps extends Omit<PanelProps, "onDone" | "compact"> {
+interface SheetProps extends Omit<PanelProps, "onDone"> {
   open: boolean;
   onClose: () => void;
 }
 
 export function RemixSheet({ open, onClose, ...rest }: SheetProps) {
   return (
-    <Sheet title="Remix the art" open={open} onClose={onClose}>
+    <PaperSheet title="Remix the art" open={open} onClose={onClose}>
       <RemixPanel {...rest} onDone={onClose} />
-    </Sheet>
+    </PaperSheet>
   );
 }

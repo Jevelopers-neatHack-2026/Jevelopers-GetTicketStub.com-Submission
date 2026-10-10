@@ -92,9 +92,12 @@ export function setHidden(stub: Stub, field: string, hidden: boolean): Stub {
   return { ...stub, personal: { ...stub.personal, hiddenFields: hidden ? [...rest, field] : rest } };
 }
 
-export function cycleFont(stub: Stub): Stub {
-  const next = ((stub.personal.titleFont + 1) % 4) as 0 | 1 | 2 | 3;
-  return { ...stub, personal: { ...stub.personal, titleFont: next } };
+export function setFont(stub: Stub, index: 0 | 1 | 2 | 3): Stub {
+  return { ...stub, personal: { ...stub.personal, titleFont: index } };
+}
+
+export function setTitleColour(stub: Stub, value: string): Stub {
+  return { ...stub, personal: { ...stub.personal, titleColor: value } };
 }
 
 /** "" means the edition picks the colour from the art. */
@@ -104,12 +107,6 @@ export const TITLE_SWATCHES: { value: string; label: string }[] = [
   { value: "#E4572E", label: "Orange" },
   { value: "#F4ECDD", label: "Cream" },
 ];
-
-export function cycleColour(stub: Stub): Stub {
-  const i = TITLE_SWATCHES.findIndex((s) => s.value === stub.personal.titleColor);
-  const next = TITLE_SWATCHES[(i + 1) % TITLE_SWATCHES.length].value;
-  return { ...stub, personal: { ...stub.personal, titleColor: next } };
-}
 
 export function swatchLabel(value: string): string {
   return TITLE_SWATCHES.find((s) => s.value === value)?.label ?? "Custom";

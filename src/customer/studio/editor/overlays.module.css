@@ -1,75 +1,58 @@
-/* Studio overlays: sheets, toolbar, chips, material frames, tear stage. */
+/* Studio overlays: the floating toolbar and its pickers, the material frame, small shared pieces.
+   Colour only from the desk tokens (desk.css). Sheets are PaperSheet; the tear stage is TearFlow. */
 
 .iconBtn {
   display: inline-grid;
   place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: var(--ts-radius-pill);
+  border-radius: 50%;
   border: 0;
   background: transparent;
-  color: var(--ts-text);
+  color: var(--desk-ink);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--desk-release) ease;
 }
 .iconBtn:hover {
-  background: var(--ts-surface);
+  background: color-mix(in srgb, var(--desk-ink) 7%, transparent);
 }
-.iconBtn[aria-pressed="true"] {
-  color: var(--ts-orange);
+.iconBtn:active {
+  background: color-mix(in srgb, var(--desk-ink) 12%, transparent);
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: var(--ts-space-3);
+  gap: 12px;
 }
 .rowBetween {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ts-space-2);
+  gap: 8px;
 }
 .muted {
-  color: var(--ts-text-muted);
-  font-size: var(--ts-step--1);
-}
-.chipRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ts-space-2);
-}
-.chipRow :global(.chip),
-.bigChip {
-  min-height: 44px;
-  padding: 0 16px;
-}
-.chipRow :global(.chip[disabled]) {
-  opacity: 0.4;
-  cursor: not-allowed;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
 }
 .textLink {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--ts-text);
-  font-weight: 500;
-  text-underline-offset: 3px;
-}
-.textLinkBtn {
-  align-self: flex-start;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ts-text-muted);
-  font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  text-underline-offset: 4px;
+  text-decoration-color: var(--desk-rule-strong);
 }
 .plainList {
   margin: 0;
   padding-left: 1.1em;
+  font: var(--type-body);
+}
+.num {
+  font: var(--type-ui);
+  font-variant-numeric: tabular-nums;
 }
 .field {
   display: flex;
@@ -77,252 +60,156 @@
   gap: 6px;
 }
 .field textarea {
-  font: inherit;
-  color: var(--ts-text);
-  background: var(--ts-surface);
-  border: 1px solid color-mix(in srgb, var(--ts-text) 20%, transparent);
-  border-radius: var(--ts-radius-control);
+  font: var(--type-body);
+  font-style: italic;
+  color: var(--desk-ink);
+  background: var(--desk-paper-sunk);
+  border: 0;
+  border-radius: 6px;
   padding: 10px 12px;
   resize: vertical;
-  font-style: italic;
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  user-select: text;
+}
+.field textarea::placeholder {
+  color: var(--desk-ink-soft);
+}
+.field textarea:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
 }
 .photoRow {
   display: flex;
-  gap: var(--ts-space-2);
+  gap: 8px;
   overflow-x: auto;
-  padding-bottom: var(--ts-space-2);
+  padding-bottom: 8px;
 }
 .photoThumb {
   width: 64px;
   height: 64px;
   object-fit: cover;
-  border-radius: var(--ts-radius-paper);
-  box-shadow: var(--ts-shadow-paper);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 6px 12px -8px rgb(23 20 15 / 0.5);
   flex: none;
 }
 
-/* Sheet */
-.sheetLayer {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgb(23 20 15 / 0.45);
-  animation: fade var(--ts-dur-base) var(--ts-ease-enter);
-}
-.sheetPanel {
-  position: relative;
-  width: 100%;
-  max-height: 88dvh;
-  overflow: auto;
-  padding: var(--ts-space-2) var(--ts-space-4) calc(var(--ts-space-5) + env(safe-area-inset-bottom));
-  color: var(--ts-text);
-  animation: rise var(--ts-dur-settle) var(--ts-ease-enter);
-}
-.grabber {
-  width: 40px;
-  height: 4px;
-  border-radius: 2px;
-  margin: 0 auto var(--ts-space-2);
-  background: color-mix(in srgb, var(--ts-text) 30%, transparent);
-}
-.sheetHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ts-space-2);
-  margin-bottom: var(--ts-space-3);
-}
-.sheetTitle {
-  font-size: var(--ts-step-2);
-}
-.sheetBody {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ts-space-4);
-}
-@media (min-width: 960px) {
-  .sheetLayer {
-    align-items: center;
-  }
-  .sheetPanel {
-    width: min(520px, calc(100vw - 48px));
-    border: 1.5px solid var(--ts-text);
-    border-radius: var(--ts-radius-sheet);
-    padding-bottom: var(--ts-space-5);
-  }
-  .sheetWide {
-    width: min(860px, calc(100vw - 48px));
-  }
-  .grabber {
-    display: none;
-  }
-}
-@keyframes rise {
-  from {
-    transform: translateY(24px);
-    opacity: 0;
-  }
-}
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
-}
-
-/* Floating toolbar */
+/* ---------- Floating toolbar: a paper strip docked to the selected element ---------- */
 .toolbar {
-  display: inline-flex;
-  align-items: center;
+  position: relative;
+  display: grid;
   gap: 2px;
   padding: 4px;
-  border-radius: var(--ts-radius-pill);
-  background: var(--ts-ink);
-  color: var(--ts-cream);
-  box-shadow: var(--ts-shadow-lifted);
-  max-width: calc(100vw - 32px);
-  overflow-x: auto;
-  animation: rise var(--ts-dur-base) var(--ts-ease-enter);
+  border-radius: 10px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 1px 0 var(--desk-ledge),
+    0 16px 28px -12px rgb(23 20 15 / 0.5);
+  max-width: calc(100vw - 16px);
+  animation: dockIn 260ms var(--desk-spring) both;
 }
-.toolbar :focus-visible {
-  outline-color: var(--ts-cyan);
+.toolbar [role="toolbar"] {
+  grid-auto-columns: minmax(58px, 1fr);
 }
-.toolbarName {
-  padding: 0 10px 0 12px;
-  font-size: 11px;
-  letter-spacing: var(--ts-track-label);
-  text-transform: uppercase;
-  opacity: 0.7;
-  white-space: nowrap;
+.toolbar::after {
+  /* the notch that points at the element */
+  content: "";
+  position: absolute;
+  left: var(--arrow, 50%);
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: var(--desk-paper-raised);
+  box-shadow: 1px 1px 0 var(--desk-rule-strong);
+  transform: rotate(45deg);
 }
-.toolBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--ts-radius-pill);
-  background: transparent;
-  color: inherit;
-  font-size: 14px;
-  white-space: nowrap;
+[data-dock="below"] > .toolbar::after {
+  bottom: auto;
+  top: -5px;
+  box-shadow: -1px -1px 0 var(--desk-rule-strong);
 }
-.toolBtn:hover {
-  background: rgb(244 236 221 / 0.12);
+[data-dock="below"] > .toolbar {
+  animation-name: dockInBelow;
 }
-.toolBtn[aria-pressed="true"] {
-  background: rgb(244 236 221 / 0.18);
-}
-.toolGlyph {
-  font-family: var(--font-display), var(--ts-font-display);
-  font-size: 16px;
-}
-.swatch {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 1.5px solid rgb(244 236 221 / 0.7);
-}
-.foilSwatch {
-  background: var(--ts-foil);
-}
-
-/* Style grid */
-.styleGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--ts-space-3);
-}
-@media (min-width: 600px) {
-  .styleGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+@keyframes dockIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
   }
 }
-.styleGridCompact {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--ts-space-2);
-}
-.styleCell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: var(--ts-space-2);
-  min-height: 44px;
-  border-radius: var(--ts-radius-control);
-  border: 1.5px solid transparent;
-  background: var(--ts-surface);
-  text-align: center;
-}
-.styleCell[aria-pressed="true"] {
-  border-color: var(--ts-orange);
-}
-.styleThumb {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 120px;
-  overflow: hidden;
-  pointer-events: none;
-}
-.styleGridCompact .styleThumb {
-  height: 84px;
-}
-.styleName {
-  font-weight: 600;
-  font-size: 14px;
-}
-.styleBlurb {
-  font-size: 12px;
-  color: var(--ts-text-muted);
-  line-height: 1.3;
+@keyframes dockInBelow {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
 }
 
-/* Material picker */
-.segmented {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--ts-radius-control);
-  background: var(--ts-surface);
-}
-.segment {
+.picker {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  padding: 4px 2px;
+  gap: 4px;
+  padding: 4px 4px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px dashed var(--desk-rule-strong);
+  animation: fade 200ms ease both;
+}
+.pickItem {
+  flex: 1 1 0;
+  min-width: 58px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
   border: 0;
-  border-radius: calc(var(--ts-radius-control) - 3px);
-  background: transparent;
-  font-size: 13px;
-  line-height: 1.2;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--desk-release) ease;
 }
-.segment span:last-child {
-  font-weight: 600;
+.pickItem:hover {
+  background: color-mix(in srgb, var(--desk-ink) 5%, transparent);
 }
-.segment[aria-checked="true"] {
-  background: var(--ts-bg);
-  box-shadow: 0 0 0 1.5px var(--ts-text);
+.pickItem[aria-checked="true"] {
+  background: var(--desk-paper);
+  box-shadow: inset 0 0 0 1.5px var(--desk-ink);
+}
+.pickSample {
+  font-size: 1.5rem;
+  line-height: 1;
+  height: 1.6rem;
+  display: grid;
+  align-items: center;
+}
+.pickDot {
+  width: 26px;
+  height: 26px;
+  margin: 2px 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+.pickName {
+  font: var(--type-label);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--desk-ink-soft);
+}
+.pickItem[aria-checked="true"] .pickName {
+  color: var(--desk-ink);
 }
 
-/* Material frame around the stub */
+/* ---------- Material frame around the stub ----------
+   --mat is the total width the stock adds to the stub; --cap-w and --cap-h are the room the page
+   gives it, --ar its aspect. Pages that set none of them get the old behaviour (screen width). */
 .frame {
   position: relative;
   display: inline-block;
   max-width: 100%;
-  --stub-max: calc(100vw - 32px);
+  --mat: 0px;
+  --stub-max: min(calc(var(--cap-w, 100vw - 32px) - var(--mat)), calc((var(--cap-h, 9999px) - var(--mat)) * var(--ar, 1)));
   transition: padding var(--ts-dur-settle) var(--ts-ease-standard), background var(--ts-dur-settle) var(--ts-ease-standard);
 }
 .frameInner {
@@ -333,7 +220,7 @@
 }
 /* card: the stub printed on heavy card, a slightly darker stock showing at the edge */
 .frame_card {
-  --stub-max: calc(100vw - 32px - 12px);
+  --mat: 12px;
   padding: 6px;
   border-radius: 4px;
   background: var(--desk-paper-sunk, #ebe1cf);
@@ -341,13 +228,13 @@
 }
 /* print: the stub on a sheet of warm art paper, deckled by a soft inner edge */
 .frame_print {
-  --stub-max: calc(100vw - 32px - 36px);
+  --mat: 36px;
   padding: 18px;
   background: var(--desk-paper-raised, #fbf6ec);
   box-shadow: inset 0 0 0 1px rgb(23 20 15 / 0.06), 0 1px 0 var(--desk-ledge, rgb(23 20 15 / 0.2)), 0 18px 32px -18px rgb(23 20 15 / 0.5);
 }
 .frame_framed {
-  --stub-max: calc(100vw - 32px - 80px);
+  --mat: 80px;
   padding: 26px;
   background: var(--desk-paper-raised, #fbf6ec);
   border: 14px solid #2a221a;
@@ -355,6 +242,18 @@
   box-shadow: inset 0 0 0 1px rgb(23 20 15 / 0.15), inset 0 6px 14px -8px rgb(23 20 15 / 0.5), var(--ts-shadow-lifted);
 }
 
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .picker {
+    animation: none;
+  }
+}
 
 /* Tear stage */
 .tearStage {

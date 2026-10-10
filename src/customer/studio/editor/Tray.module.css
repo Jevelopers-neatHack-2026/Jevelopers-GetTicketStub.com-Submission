@@ -1,0 +1,107 @@
+/* The paper tray: stock, finish, the stamp, the tear. Colour only from the desk tokens. */
+
+.tray {
+  display: grid;
+  gap: 18px;
+  padding: 16px 16px 0;
+  border-radius: 8px;
+  background: var(--desk-paper-raised);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule),
+    0 1px 0 var(--desk-ledge),
+    0 18px 28px -22px rgb(23 20 15 / 0.45);
+  overflow: hidden;
+}
+.sandbox {
+  margin: -16px -16px -2px;
+}
+
+.picker {
+  display: grid;
+  gap: 16px;
+}
+.group {
+  display: grid;
+  gap: 8px;
+}
+.note {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  min-height: 1.2em;
+}
+
+/* ---------- Tear strip ---------- */
+.strip {
+  --notch: 7px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  margin: 2px -16px 0;
+  padding: 10px 16px 0;
+  border: 0;
+  background: var(--desk-paper-sunk);
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  font-variation-settings: normal;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    background-color var(--desk-release) ease;
+}
+.strip::before {
+  /* half-round notches where the perforation meets the edge */
+  content: "";
+  position: absolute;
+  left: calc(var(--notch) * -1);
+  right: calc(var(--notch) * -1);
+  top: calc(var(--notch) * -1);
+  height: calc(var(--notch) * 2);
+  background:
+    radial-gradient(circle at var(--notch) var(--notch), var(--desk-paper-raised) 0 var(--notch), transparent calc(var(--notch) + 0.5px)) left top / 50% 100% no-repeat,
+    radial-gradient(circle at calc(100% - var(--notch)) var(--notch), var(--desk-paper-raised) 0 var(--notch), transparent calc(var(--notch) + 0.5px)) right top / 50% 100% no-repeat;
+  pointer-events: none;
+}
+.stripPerf {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  border-top: 2px dashed var(--desk-rule-strong);
+}
+.strip:hover {
+  background: color-mix(in srgb, var(--desk-paper-sunk) 88%, var(--desk-ink));
+}
+.strip[data-pressed="true"] {
+  transform: translateY(2px);
+  transition-duration: var(--desk-press);
+}
+.stripLabel {
+  letter-spacing: -0.005em;
+}
+.stripCut {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.strip:hover .stripCut {
+  transform: translateX(4px);
+}
+.strip[data-torn="true"] .stripCut {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strip,
+  .stripCut {
+    transition: none;
+  }
+}

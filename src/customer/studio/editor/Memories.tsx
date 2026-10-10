@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import type { Stub } from "../types";
+import { PaperButton } from "@/customer/desk/Desk";
 import { readImageFile } from "./ops";
 import styles from "./overlays.module.css";
 
@@ -33,7 +34,7 @@ export function Memories({ stub, onChange }: Props) {
     <div className={styles.stack}>
       {ev.setlist && ev.setlist.length > 0 && (
         <div>
-          <p className="label">Setlist</p>
+          <p className="desk-label">Setlist</p>
           <p>
             {ev.setlist.length} songs
             {ev.setlist.some((s) => s.starred) && <> · ★ {ev.setlist.find((s) => s.starred)?.title}</>}
@@ -42,8 +43,8 @@ export function Memories({ stub, onChange }: Props) {
       )}
       {ev.score && (
         <div>
-          <p className="label">Final score</p>
-          <p className="num">
+          <p className="desk-label">Final score</p>
+          <p className={styles.num}>
             {ev.score.home} {ev.score.homeScore} – {ev.score.awayScore} {ev.score.away}
           </p>
           <p className={styles.muted}>{ev.score.moments.length} key moments</p>
@@ -51,13 +52,13 @@ export function Memories({ stub, onChange }: Props) {
       )}
       {ev.cast && ev.cast.length > 0 && (
         <div>
-          <p className="label">Cast</p>
+          <p className="desk-label">Cast</p>
           <p>{ev.cast.map((c) => c.name).join(", ")}</p>
         </div>
       )}
       {ev.programme && ev.programme.length > 0 && (
         <div>
-          <p className="label">Programme</p>
+          <p className="desk-label">Programme</p>
           <ul className={styles.plainList}>
             {ev.programme.map((p) => (
               <li key={p}>{p}</li>
@@ -67,7 +68,7 @@ export function Memories({ stub, onChange }: Props) {
       )}
 
       <label className={styles.field}>
-        <span className="label">Note on the back</span>
+        <span className="desk-label">Note on the back</span>
         <textarea
           rows={2}
           maxLength={140}
@@ -78,7 +79,7 @@ export function Memories({ stub, onChange }: Props) {
       </label>
 
       <div>
-        <p className="label">Friends</p>
+        <p className="desk-label">Friends</p>
         {stub.personal.friends.length > 0 ? (
           <p>
             {stub.personal.friends.map((f) => f.name).join(", ")} · {stub.personal.friends.filter((f) => f.claimed).length} claimed
@@ -92,7 +93,7 @@ export function Memories({ stub, onChange }: Props) {
       </div>
 
       <div>
-        <p className="label">Photos</p>
+        <p className="desk-label">Photos</p>
         {stub.photos.length > 0 && (
           <div className={styles.photoRow}>
             {stub.photos.map((src, i) => (
@@ -101,9 +102,7 @@ export function Memories({ stub, onChange }: Props) {
             ))}
           </div>
         )}
-        <button type="button" className="btn btn-quiet" onClick={() => fileRef.current?.click()}>
-          Add photos
-        </button>
+        <PaperButton onClick={() => fileRef.current?.click()}>Add photos</PaperButton>
         <input
           ref={fileRef}
           type="file"

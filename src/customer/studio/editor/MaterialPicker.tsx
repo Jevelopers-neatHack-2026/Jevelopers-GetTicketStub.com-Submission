@@ -1,19 +1,28 @@
 "use client";
-import { useId, useRef } from "react";
 import type { Finish, Material, Stub } from "../types";
 import { MATERIALS, formatMoney } from "../types";
-import { play } from "@/customer/studio/feedback";
+import { FINISHES } from "@/customer/pages/commerce";
+import { FinishSwatches, PunchTabs, type FinishValue } from "@/customer/desk/Desk";
 import { holoAllowed, setFinish, setMaterial } from "./ops";
-import styles from "./overlays.module.css";
-
-const FINISHES: { id: Finish; label: string }[] = [
-  { id: "matte", label: "Matte" },
-  { id: "foil", label: "Foil" },
-  { id: "holo", label: "Holo" },
-];
+import styles from "./Tray.module.css";
 
 export function priceOf(m: Material): number {
   return MATERIALS.find((x) => x.id === m)?.priceMinor ?? 0;
+}
+
+/** Finish add-ons only cost money on a physical stock; on screen they are included. */
+export function finishMinor(material: Material, finish: Finish): number {
+  if (material === "digital") return 0;
+  return FINISHES.find((f) => f.id === finish)?.upchargeMinor ?? 0;
+}
+
+/** What the "Print it" stamp carries: the stock plus the finish add-on, the same sum checkout shows. */
+export function totalLabel(m: Material, f: Finish): string {
+  return formatMoney(priceOf(m) + finishMinor(m, f));
+}
+
+export function ctaVerb(m: Material): string {
+  return m === "digital" ? "Get it" : "Print it";
 }
 
 export function ctaLabel(m: Material): string {
@@ -26,74 +35,34 @@ interface Props {
   onChange: (s: Stub) => void;
 }
 
-/** Digital $9 · Card $29 · Print $49 · Framed $89, plus the finish. Re-renders the stub on that stock. */
+const OPTIONS = MATERIALS.map((m) => ({ value: m.id, label: m.label, sub: formatMoney(m.priceMinor) }));
+
+/** Digital $9 · Card $29 · Print $49 · Framed $89, then the finish. Re-renders the stub on that stock. */
 export function MaterialPicker({ stub, onChange }: Props) {
-  const labelId = useId();
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const idx = MATERIALS.findIndex((m) => m.id === stub.material);
-
-  const pick = (m: Material) => {
-    if (m === stub.material) return;
-    play("tick");
-    onChange(setMaterial(stub, m));
-  };
-
-  const onKey = (e: React.KeyboardEvent) => {
-    const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-    if (!dir) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const next = (idx + dir + MATERIALS.length) % MATERIALS.length;
-    pick(MATERIALS[next].id);
-    refs.current[next]?.focus();
-  };
+  const physical = stub.material !== "digital";
+  const prices = Object.fromEntries(FINISHES.map((f) => [f.id, !physical || f.upchargeMinor === 0 ? "Included" : `+${formatMoney(f.upchargeMinor)}`])) as Record<FinishValue, string>;
+  const holoOk = holoAllowed(stub.material);
 
   return (
-    <div className={styles.stack}>
-      <div className={styles.rowBetween}>
-        <span className="label" id={labelId}>Material</span>
-        <span className="provenance">Sandbox prices</span>
+    <div className={styles.picker}>
+      <div className={styles.group}>
+        <span className="desk-label">Material</span>
+        <PunchTabs label="Material" options={OPTIONS} value={stub.material} onChange={(m) => onChange(setMaterial(stub, m))} />
       </div>
-      <div className={styles.segmented} role="radiogroup" aria-labelledby={labelId} onKeyDown={onKey}>
-        {MATERIALS.map((m, i) => (
-          <button
-            key={m.id}
-            ref={(el) => {
-              refs.current[i] = el;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={m.id === stub.material}
-            tabIndex={m.id === stub.material ? 0 : -1}
-            className={styles.segment}
-            onClick={() => pick(m.id)}
-          >
-            <span>{m.label}</span>
-            <span className="num">{formatMoney(m.priceMinor)}</span>
-          </button>
-        ))}
-      </div>
-      <div className={styles.chipRow} role="group" aria-label="Finish">
-        {FINISHES.map((f) => {
-          const blocked = f.id === "holo" && !holoAllowed(stub.material);
-          return (
-            <button
-              key={f.id}
-              type="button"
-              className="chip"
-              aria-pressed={stub.finish === f.id}
-              disabled={blocked}
-              title={blocked ? "Holo is for Print and Framed" : undefined}
-              onClick={() => {
-                play("tick");
-                onChange(setFinish(stub, f.id));
-              }}
-            >
-              {f.label}
-            </button>
-          );
-        })}
-        {!holoAllowed(stub.material) && <span className={styles.muted}>Holo on Print and Framed</span>}
+      <div className={styles.group}>
+        <span className="desk-label">Finish</span>
+        <FinishSwatches
+          value={stub.finish}
+          prices={prices}
+          onChange={(f) => {
+            // Holo only exists on Print and Framed, so choosing it moves the stock up and the price shows it.
+            if (f === "holo" && !holoOk) onChange(setFinish(setMaterial(stub, "print"), "holo"));
+            else onChange(setFinish(stub, f));
+          }}
+        />
+        <p className={styles.note} aria-live="polite">
+          {holoOk ? "Holo is on Print and Framed." : "Holo comes on Print and Framed. Choosing it moves you to Print."}
+        </p>
       </div>
     </div>
   );

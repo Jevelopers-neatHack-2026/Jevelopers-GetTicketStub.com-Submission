@@ -1,0 +1,115 @@
+/* Style previews: the real stub in every cell, never cropped. A stub sizes itself to its box, so
+   --stub-max is the only thing a cell sets. */
+
+.sheet {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.cell {
+  --stub-max: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--desk-paper);
+  color: var(--desk-ink);
+  text-align: center;
+  box-shadow: inset 0 0 0 1px var(--desk-rule), 0 1px 0 var(--desk-ledge);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    box-shadow var(--desk-release) var(--desk-spring);
+}
+.cell:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong), 0 2px 0 var(--desk-ledge), 0 14px 20px -14px rgb(23 20 15 / 0.45);
+}
+.cell:active {
+  transform: translateY(1px);
+  transition-duration: var(--desk-press);
+}
+.cell[aria-pressed="true"] {
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 2px var(--desk-ink), 0 1px 0 var(--desk-ledge);
+}
+.thumb {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 188px;
+  pointer-events: none;
+}
+.cell[data-shape="portrait"] .thumb > * {
+  --stub-max: 124px;
+}
+.name {
+  font: var(--type-ui);
+  font-weight: 600;
+}
+.blurb {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+@media (min-width: 560px) {
+  .grid:not(.rail) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Left rail ---------- */
+.rail {
+  gap: 10px;
+}
+.rail .cell {
+  padding: 10px 8px 10px;
+}
+.rail .thumb {
+  min-height: 0;
+}
+.rail .cell[data-shape="portrait"] .thumb > * {
+  --stub-max: 100%;
+}
+.rail .cell[data-shape="landscape"] {
+  grid-column: 1 / -1;
+}
+.rail .cell[data-edition="letterpress"] {
+  order: 5;
+}
+.rail .cell[data-edition="classic"] {
+  order: 6;
+}
+.aside {
+  order: 4;
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  padding: 0 4px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+.asideName {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+  letter-spacing: -0.02em;
+  color: var(--desk-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell {
+    transition: none;
+  }
+}

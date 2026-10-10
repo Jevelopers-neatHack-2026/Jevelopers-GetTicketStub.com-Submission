@@ -1,12 +1,14 @@
 "use client";
-// Research agent side chat. Narrates facts with source + provenance, lets the person keep or fix them,
-// and remixes the art (a remix pushes a new DesignVersion). Rule-based unless the server has a model;
-// rule-based replies are labelled "simulated agent".
+// Research agent chat. Opens only when the person taps Ask or types to the margin notes. Narrates facts
+// with a source mark, lets the person keep or fix them, and remixes the art (a remix pushes a new
+// DesignVersion). Rule-based unless the server has a model; the mark legend says which one it is.
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ArtLayer, DesignVersion, Fact, Provenance, Stub } from "../types";
 import { currentVersion } from "../types";
 import { askAgent, remixArt } from "../research/client";
+import { MarkLegend, PaperButton, SourceMark, Tag, Tags } from "@/customer/desk/Desk";
+import { haptic, play } from "@/customer/studio/feedback";
 import styles from "./AgentChat.module.css";
 
 type Msg =
@@ -48,7 +50,7 @@ function readPhoto(file: File, max = 1200): Promise<string> {
   });
 }
 
-export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; onClose?: () => void }) {
+export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** A line typed into a margin note: sent as the first message. */ initial?: string }) {
   const { stub } = props;
   const inputId = useId();
   const [messages, setMessages] = useState<Msg[]>(() => [{ id: "facts", role: "agent", kind: "facts" }]);
@@ -56,6 +58,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; onCl
   const [busy, setBusy] = useState<string | undefined>();
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const sentInitial = useRef(false);
 
   // Latest stub/onChange for async handlers.
   const stubRef = useRef(stub);
@@ -170,22 +173,21 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; onCl
     return remix(text);
   };
 
+  useEffect(() => {
+    if (sentInitial.current || !props.initial) return;
+    sentInitial.current = true;
+    void handle(props.initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const facts = stub.event.facts;
   const keptCount = facts.filter((f) => f.kept).length;
 
+  const live = messages.some((m) => m.role === "agent" && m.kind === "text" && m.by === "live");
+  const marks: (Provenance | "sandbox")[] = [...new Set<Provenance | "sandbox">([...facts.map((f) => f.provenance), live ? "live" : "simulated"])];
+
   return (
     <div className={styles.root}>
-      <div className={styles.header}>
-        <span className={styles.headerTitle}>
-          Research agent <span className="provenance">{messages.some((m) => m.role === "agent" && m.kind === "text" && m.by === "live") ? "rules + live model" : "simulated agent"}</span>
-        </span>
-        {props.onClose ? (
-          <button type="button" className={styles.close} onClick={props.onClose} aria-label="Close the chat">
-            ×
-          </button>
-        ) : null}
-      </div>
-
       <div className={styles.list} ref={listRef} aria-live="polite">
         {messages.map((m) => {
           if (m.role === "user") {
@@ -207,18 +209,15 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; onCl
                   {facts.map((f, i) => {
                     const unsure = f.confidence < 0.8 && f.provenance !== "pending";
                     return (
-                      <li key={`${f.id}-${i}`} className={`${styles.fact} ${unsure ? styles.factUnsure : ""}`}>
+                      <li key={`${f.id}-${i}`} className={styles.fact} data-unsure={unsure || undefined}>
                         <div className={styles.factRow}>
-                          <span className={styles.factLabel}>{f.label}</span>
-                          <button
-                            type="button"
-                            className="chip"
-                            aria-pressed={!!f.kept}
-                            disabled={f.provenance === "pending"}
-                            onClick={() => updateFact(i, { kept: !f.kept })}
-                          >
-                            {f.kept ? "Kept ✓" : "Keep on stub"}
-                          </button>
+                          <span className={styles.factLabel}>
+                            {f.label}
+                            <SourceMark p={f.provenance} />
+                          </span>
+                          <Tag pressed={!!f.kept} disabled={f.provenance === "pending"} onClick={() => updateFact(i, { kept: !f.kept })}>
+                            {f.kept ? "Kept" : "Keep on stub"}
+                          </Tag>
                         </div>
                         <div className={styles.meta}>
                           {f.sourceUrl ? (
@@ -228,28 +227,25 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; onCl
                           ) : (
                             <span>{f.source}</span>
                           )}
-                          <span className="provenance">{f.provenance}</span>
                         </div>
                         {unsure ? (
                           <>
                             <span className={styles.ask}>Is this right?</span>
                             {f.alternatives?.length ? (
-                              <div className={styles.alts}>
+                              <Tags label="Alternatives">
                                 {f.alternatives.map((alt) => {
                                   const isDate = /^\d{4}-\d{2}-\d{2}$/.test(alt);
                                   return (
-                                    <button key={alt} type="button" className="chip" aria-pressed={f.value === alt && f.confidence >= 1} onClick={() => pickAlternative(i, alt)}>
+                                    <Tag key={alt} pressed={f.value === alt && f.confidence >= 1} onClick={() => pickAlternative(i, alt)}>
                                       {isDate ? shortDate(alt) : alt}
-                                    </button>
+                                    </Tag>
                                   );
                                 })}
-                              </div>
+                              </Tags>
                             ) : (
-                              <div className={styles.alts}>
-                                <button type="button" className="chip" onClick={() => updateFact(i, { confidence: 1, kept: true })}>
-                                  Yes, keep it
-                                </button>
-                              </div>
+                              <Tags>
+                                <Tag onClick={() => updateFact(i, { confidence: 1, kept: true })}>Yes, keep it</Tag>
+                              </Tags>
                             )}
                           </>
                         ) : null}
@@ -265,62 +261,67 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; onCl
           }
           return (
             <div key={m.id} className={`${styles.msg} ${styles.agent}`}>
-              <p>{m.text}</p>
-              <div className={styles.meta}>
-                {m.provenance ? <span className="provenance">art: {m.provenance}</span> : null}
-                <span className="provenance">{m.by === "live" ? "agent: live" : "simulated agent"}</span>
-              </div>
+              <p>
+                {m.text}
+                {m.provenance ? <SourceMark p={m.provenance} /> : null}
+              </p>
             </div>
           );
         })}
         {busy ? <div className={`${styles.msg} ${styles.agent} ${styles.typing}`}>{busy}</div> : null}
       </div>
 
-      <div className={styles.suggest}>
-        {SUGGESTIONS.map((s) => (
-          <button key={s} type="button" className="chip" disabled={!!busy} onClick={() => void handle(s)}>
-            {s}
-          </button>
-        ))}
-      </div>
+      <div className={styles.foot}>
+        <Tags label="Suggestions">
+          {SUGGESTIONS.map((s) => (
+            <Tag key={s} disabled={!!busy} onClick={() => void handle(s)}>
+              {s}
+            </Tag>
+          ))}
+        </Tags>
 
-      <form
-        className={styles.composer}
-        onSubmit={(e) => {
-          e.preventDefault();
-          const t = draft;
-          setDraft("");
-          void handle(t);
-        }}
-      >
-        <label htmlFor={inputId} className="label">
-          Ask for a change
-        </label>
-        <div className={styles.composerRow}>
-          <input
-            id={inputId}
-            className={styles.input}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Make it feel like a summer night"
-            autoComplete="off"
-            enterKeyHint="send"
-          />
-          <button type="submit" className="btn btn-primary" disabled={!draft.trim() || !!busy}>
-            Send
-          </button>
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            void onPhoto(e.target.files?.[0]);
-            e.target.value = "";
+        <form
+          className={styles.composer}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const t = draft;
+            if (!t.trim()) return;
+            setDraft("");
+            play("tap", { emphasis: "subtle" });
+            haptic(6);
+            void handle(t);
           }}
-        />
-      </form>
+        >
+          <label htmlFor={inputId} className="desk-label">
+            Ask for a change
+          </label>
+          <div className={styles.composerRow}>
+            <input
+              id={inputId}
+              className={styles.input}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Make it feel like a summer night"
+              autoComplete="off"
+              enterKeyHint="send"
+            />
+            <PaperButton type="submit" disabled={!draft.trim() || !!busy}>
+              Send
+            </PaperButton>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void onPhoto(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </form>
+        <MarkLegend marks={marks} />
+      </div>
     </div>
   );
 }
