@@ -21,6 +21,7 @@ export type SourceIdentityCompositionErrorCode =
   | "NO_IDENTITY_CANDIDATES"
   | "EVIDENCE_POSITION_MISSING"
   | "EVIDENCE_POSITION_AMBIGUOUS"
+  | "STORED_SOURCE_MISMATCH"
   | "EVIDENCE_EXPIRED"
   | "EVIDENCE_DENIED"
   | "EVIDENCE_UNAVAILABLE"
@@ -44,12 +45,30 @@ export interface SourceIdentityEvidenceSummary {
   /** Full-source SHA-256 hex digest, distinct from every selected-position digest. */
   readonly contentHash: string;
   readonly duplicateGroupId: string;
+  /** Original stored retrieval time; idempotent replay never refreshes it. */
+  readonly retrievedAt: string;
   readonly expiresAt: string;
   readonly positionCount: number;
 }
 
+export interface StoredSourceSummary {
+  readonly sourceUrl: string;
+  readonly canonicalUrl: string;
+  readonly redirectChain: readonly string[];
+  readonly contentType: string;
+  readonly sourceKind: "external";
+  readonly retrievedAt: string;
+  readonly retrievedAtMs: number;
+  /** Full-source SHA-256, distinct from every selected-position digest. */
+  readonly contentHash: string;
+}
+
 export interface ComposedSourceIdentitySource {
   readonly evidence: SourceIdentityEvidenceSummary | null;
+  /** Stored descriptor after an aggregate check; null when this source had no eligible claims. */
+  readonly storedSource: StoredSourceSummary | null;
+  /** Timestamp on the current completed-retrieval input, separate from the stored descriptor. */
+  readonly observedRetrievedAt: string;
   readonly extraction: ExtractionResult;
 }
 

@@ -22,7 +22,9 @@ const result: Promise<SourceIdentityCompositionResult> = composeSourceIdentity(i
 void result.then((composition) => {
   const authority: "not_evaluated" = composition.sourceAuthority;
   const hash: string | undefined = composition.sources[0]?.evidence?.contentHash;
+  const storedAt: string | undefined = composition.sources[0]?.storedSource?.retrievedAt;
+  const observedAt: string | undefined = composition.sources[0]?.observedRetrievedAt;
   const occurrenceCount: number = composition.occurrenceCandidates.length;
   const transitionCount: number = composition.transitionLinks.length;
-  void [authority, hash, occurrenceCount, transitionCount];
+  void [authority, hash, storedAt, observedAt, occurrenceCount, transitionCount];
 });
