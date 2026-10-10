@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { access, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash, createHmac } from 'node:crypto';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { createCorrectionHistoryStore, ReviewHistoryError } from '../../../src/review/history/store.mjs';
 
 const EPOCH = Date.parse('2026-10-10T15:00:00.000Z');
@@ -136,6 +137,26 @@ async function waitFor(filePath, timeoutMs = 10_000) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error('worker did not reach its synchronization point');
+}
+
+async function inspectDatabase(root, tenantId = 'tenant-a') {
+  const tenantHash = createHash('sha256').update(`event-intelligence:review-tenant:v1:${tenantId}`).digest('hex');
+  const database = new DatabaseSync(path.join(root, tenantHash, 'history.sqlite'));
+  try {
+    return {
+      heads: database.prepare('SELECT * FROM heads ORDER BY event_key').all(),
+      versions: database.prepare('SELECT event_key, revision, version_id, parent_version_id, content_hash, sealed, state FROM versions ORDER BY event_key, revision').all(),
+      versionSealedLengths: database.prepare('SELECT length(sealed) AS length FROM versions WHERE sealed IS NOT NULL ORDER BY event_key, revision').all()
+        .map((row) => row.length),
+      idempotencyCount: database.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count,
+      references: database.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count,
+      invalidations: database.prepare('SELECT COUNT(*) AS count FROM invalidations').get().count,
+      sealedBytes: database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS count FROM versions WHERE sealed IS NOT NULL").get().count
+        + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS count FROM downstream_references').get().count,
+    };
+  } finally {
+    database.close();
+  }
 }
 
 test('creates targeted typed questions and keeps customer corrections beside source disagreements', async (t) => {
@@ -453,4 +474,585 @@ test('private encrypted files have restrictive modes and retention expiry remove
   const expiredDisk = (await readFile(path.join(shortTenantPath, 'history.sqlite'))).toString('utf8');
   assert.equal(expiredDisk.includes('Moon Night'), false);
   assert.equal(expiredDisk.includes('Civic Hall'), false);
+});
+
+test('malformed arrays and hostile error codes become fixed typed failures without mutation', async (t) => {
+  const harness = await createHarness(t);
+  const revoked = Proxy.revocable([], {});
+  revoked.revoke();
+  const unsafeLength = new Proxy([], {
+    getOwnPropertyDescriptor(target, key) {
+      if (key === 'length') throw new Error('SYNTHETIC_PRIVATE_SECRET_LENGTH');
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+  });
+  const unsafeIndex = new Proxy([evidence('safe-id', 'safe')], {
+    getOwnPropertyDescriptor(target, key) {
+      if (key === '0') throw new Error('SYNTHETIC_PRIVATE_SECRET_INDEX');
+      return Reflect.getOwnPropertyDescriptor(target, key);
+    },
+  });
+  const unsafeKeys = new Proxy([], {
+    ownKeys() { throw new Error('SYNTHETIC_PRIVATE_SECRET_KEYS'); },
+  });
+  const symbolArray = [evidence('symbol-id', 'symbol')];
+  symbolArray[Symbol('unexpected')] = 'private';
+  const sparseArray = Array(1);
+  const accessorArray = [];
+  Object.defineProperty(accessorArray, '0', {
+    enumerable: true,
+    configurable: true,
+    get() { throw new Error('SYNTHETIC_PRIVATE_SECRET_GETTER'); },
+  });
+
+  const badArrays = [revoked.proxy, unsafeLength, unsafeIndex, unsafeKeys, symbolArray, sparseArray, accessorArray];
+  for (const [index, sourceEvidence] of badArrays.entries()) {
+    const facts = initialFacts();
+    facts.event_name.sourceEvidence = sourceEvidence;
+    await assert.rejects(harness.store.createHistory(harness.scope, {
+      eventId: EVENT_ID,
+      sourceFacts: facts,
+      idempotencyKey: `malformed-array-${index}`,
+      retentionHandle: harness.createPermit(),
+    }, harness.request), assertReviewError('REVIEW_INVALID'));
+  }
+  const coerciveCode = {
+    [Symbol.toPrimitive]() { throw new Error('SYNTHETIC_ERROR_CODE_SECRET'); },
+  };
+  const safeError = new ReviewHistoryError(coerciveCode);
+  assert.equal(safeError.code, 'REVIEW_STORAGE');
+  assert.equal(safeError.message, 'correction history storage failed');
+  assert.equal(new ReviewHistoryError(Symbol('invalid-code')).code, 'REVIEW_STORAGE');
+  await assert.rejects(access(path.join(harness.root,
+    createHash('sha256').update('event-intelligence:review-tenant:v1:tenant-a').digest('hex'),
+    'history.sqlite')));
+});
+
+test('local date-time rejects DST gaps and preserves fold ambiguity without choosing an instant', async (t) => {
+  const harness = await createHarness(t);
+  let current = (await createSeed(harness)).snapshot;
+  await assert.rejects(correction(harness, current, 'event_date', {
+    precision: 'local_datetime', value: '2027-03-14T02:30', timeZone: 'America/New_York',
+  }, 'dst-gap'), assertReviewError('REVIEW_INVALID'));
+  await assert.rejects(correction(harness, current, 'event_date', {
+    precision: 'local_datetime', value: '2027-06-20T09:15', timeZone: 'No/Such_Zone',
+  }, 'bad-zone'), assertReviewError('REVIEW_INVALID'));
+
+  const validLocal = await correction(harness, current, 'event_date', {
+    precision: 'local_datetime', value: '2027-06-20T09:15', timeZone: 'America/New_York',
+  }, 'valid-local');
+  current = validLocal.snapshot;
+  assert.deepEqual(current.fields.event_date.value, {
+    precision: 'local_datetime', value: '2027-06-20T09:15', timeZone: 'America/New_York',
+  });
+  const folded = await correction(harness, current, 'event_date', {
+    precision: 'local_datetime', value: '2027-11-07T01:30', timeZone: 'America/New_York',
+  }, 'dst-fold');
+  current = folded.snapshot;
+  assert.deepEqual(current.fields.event_date.value, {
+    precision: 'local_datetime', value: '2027-11-07T01:30', timeZone: 'America/New_York',
+  });
+  const leap = await correction(harness, current, 'event_date', { precision: 'date', value: '2028-02-29' }, 'leap-date');
+  current = leap.snapshot;
+  assert.deepEqual(current.fields.event_date.value, { precision: 'date', value: '2028-02-29' });
+  await assert.rejects(correction(harness, current, 'event_date', {
+    precision: 'instant', value: '2027-06-20T24:00:00Z',
+  }, 'invalid-end-of-day'), assertReviewError('REVIEW_INVALID'));
+  const instant = await correction(harness, current, 'event_date', {
+    precision: 'instant', value: '2027-06-20T23:59:59Z',
+  }, 'valid-instant');
+  assert.deepEqual(instant.snapshot.fields.event_date.value, {
+    precision: 'instant', value: '2027-06-20T23:59:59Z',
+  });
+});
+
+test('event status conflicts and refresh disagreements create review questions for cancellation and reschedule', async (t) => {
+  const harness = await createHarness(t, { lockedFields: [] });
+  const facts = initialFacts();
+  facts.event_status = {
+    status: 'conflicting',
+    candidates: [
+      { originStatus: 'sourced', value: 'scheduled', sourceEvidence: [evidence('status-scheduled', 'scheduled')] },
+      { originStatus: 'sourced', value: 'postponed', sourceEvidence: [evidence('status-postponed', 'postponed')] },
+    ],
+  };
+  const first = (await createSeed(harness, facts)).snapshot;
+  const firstStatusQuestion = first.questions.find((question) => question.field === 'event_status');
+  assert.equal(firstStatusQuestion.code, 'CONFLICTING_SOURCE_FACTS');
+  assert.equal(firstStatusQuestion.state, 'open');
+  await assert.rejects(harness.store.createHistory(harness.scope, {
+    eventId: 'event-customer-origin-blocked',
+    sourceFacts: { event_status: { status: 'customer_supplied', value: 'cancelled' } },
+    idempotencyKey: 'initial-customer-origin',
+    retentionHandle: harness.createPermit(),
+  }, harness.request), assertReviewError('REVIEW_INVALID'));
+
+  const scheduled = (await correction(harness, first, 'event_status', 'scheduled', 'answer-status-conflict')).snapshot;
+  assert.equal(scheduled.questions.find((question) => question.field === 'event_status').state, 'answered_customer_supplied');
+  const cancelledRefresh = await harness.store.refreshSources(harness.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: scheduled.versionId,
+    baseContentHash: scheduled.contentHash,
+    sourceFacts: { event_status: { status: 'sourced', value: 'cancelled', sourceEvidence: [evidence('status-cancelled-refresh', 'cancelled')] } },
+    idempotencyKey: 'status-cancelled-refresh',
+    retentionHandle: harness.createPermit(),
+  }, harness.request);
+  const cancelledQuestion = cancelledRefresh.snapshot.questions.find((question) => question.field === 'event_status'
+    && question.code === 'SOURCE_REFRESH_REVIEW');
+  assert.equal(cancelledQuestion.state, 'open');
+  assert.equal(cancelledQuestion.candidates[0].value, 'cancelled');
+  const cancelledAnswer = (await correction(harness, cancelledRefresh.snapshot, 'event_status', 'cancelled', 'answer-cancelled')).snapshot;
+  assert.equal(cancelledAnswer.fields.event_status.status, 'customer_supplied');
+  assert.equal(cancelledAnswer.fields.event_status.sourceClaims.length, 3);
+  assert.equal(cancelledAnswer.questions.some((question) => question.code === 'SOURCE_REFRESH_REVIEW'), false);
+
+  const rescheduledRefresh = await harness.store.refreshSources(harness.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: cancelledAnswer.versionId,
+    baseContentHash: cancelledAnswer.contentHash,
+    sourceFacts: { event_status: { status: 'sourced', value: 'rescheduled', sourceEvidence: [evidence('status-rescheduled-refresh', 'rescheduled')] } },
+    idempotencyKey: 'status-rescheduled-refresh',
+    retentionHandle: harness.createPermit(),
+  }, harness.request);
+  const rescheduleQuestion = rescheduledRefresh.snapshot.questions.find((question) => question.field === 'event_status'
+    && question.code === 'SOURCE_REFRESH_REVIEW');
+  assert.equal(rescheduleQuestion.state, 'open');
+  assert.equal(rescheduleQuestion.candidates[0].value, 'rescheduled');
+  const rescheduledAnswer = (await correction(harness, rescheduledRefresh.snapshot, 'event_status', 'rescheduled', 'answer-rescheduled')).snapshot;
+  assert.equal(rescheduledAnswer.fields.event_status.value, 'rescheduled');
+  assert.equal(rescheduledAnswer.questions.some((question) => question.code === 'SOURCE_REFRESH_REVIEW'), false);
+});
+
+test('revocation or principal changes at asynchronous key, retention, and reference boundaries deny and roll back', async (t) => {
+  for (const boundary of ['key', 'retention', 'reference_decryption']) {
+    for (const change of ['revocation', 'principal_change']) {
+      await t.test(`${boundary} with ${change}`, async (subtest) => {
+        let permissionGranted = true;
+        let actorNow = 'customer-a';
+        let armed = false;
+        let retentionCalls = 0;
+        let payloadReadCalls = 0;
+        const request = {
+          principal: { tenantId: 'tenant-a', get actorId() { return actorNow; } },
+          serverContextToken: TRUSTED_SERVER_CONTEXT,
+        };
+        const changePrincipal = () => {
+          if (change === 'revocation') permissionGranted = false;
+          else actorNow = 'reviewer-b';
+        };
+        const harness = await createHarness(subtest, {
+          authorize({ tenantId, actorId, request: authRequest }) {
+            return permissionGranted
+              && authRequest?.serverContextToken === TRUSTED_SERVER_CONTEXT
+              && authRequest?.principal?.tenantId === tenantId
+              && authRequest?.principal?.actorId === actorId
+              && actorId !== 'outsider';
+          },
+          resolveKey({ tenantId, purpose, keyId }) {
+            const resolvedId = `${purpose}-v1`;
+            if (keyId && keyId !== resolvedId) throw new Error('SYNTHETIC_KEY_ERROR');
+            if (armed && boundary === 'key' && purpose === 'correction_index') changePrincipal();
+            if (armed && boundary === 'reference_decryption' && purpose === 'correction_payload' && keyId) {
+              payloadReadCalls += 1;
+              if (payloadReadCalls === 2) changePrincipal();
+            }
+            return {
+              keyId: resolvedId,
+              key: createHash('sha256').update(`${tenantId}:${purpose}:test-only-key-material`).digest(),
+            };
+          },
+          resolveRetention({ nowMs, sourceExpiresAtMs }) {
+            retentionCalls += 1;
+            if (armed && boundary === 'retention' && retentionCalls === 2) changePrincipal();
+            return {
+              expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+              policyId: 'synthetic-private-history',
+              policyVersion: '1',
+              accessPolicy: 'tenant_private',
+            };
+          },
+        });
+        const first = (await createSeed(harness)).snapshot;
+        const dynamicScope = await harness.store.scopeForAuthenticatedRequest(request);
+        if (boundary === 'reference_decryption') {
+          await harness.store.registerDownstreamReference(dynamicScope, {
+            eventId: EVENT_ID,
+            versionId: first.versionId,
+            contentHash: first.contentHash,
+            referenceId: 'retained-reference-for-revocation',
+            kind: 'handoff_reference',
+          }, request);
+          payloadReadCalls = 0;
+        }
+        retentionCalls = 0;
+        armed = true;
+        await assert.rejects(harness.store.applyCorrection(dynamicScope, {
+          eventId: EVENT_ID,
+          baseVersionId: first.versionId,
+          baseContentHash: first.contentHash,
+          field: 'event_date',
+          value: { precision: 'date', value: '2027-06-20' },
+          idempotencyKey: `denied-${boundary}-${change}`,
+          retentionHandle: harness.createPermit(),
+        }, request), assertReviewError('REVIEW_DENIED'));
+
+        permissionGranted = true;
+        actorNow = 'customer-a';
+        armed = false;
+        const disk = await inspectDatabase(harness.root);
+        assert.equal(disk.heads.length, 1);
+        assert.equal(disk.heads[0].version_id, first.versionId);
+        assert.equal(disk.heads[0].content_hash, first.contentHash);
+        assert.equal(disk.versions.length, 1);
+        assert.equal(disk.idempotencyCount, 1);
+        assert.equal(disk.invalidations, 0);
+        assert.equal(disk.references, boundary === 'reference_decryption' ? 1 : 0);
+        assert.equal((await harness.store.getHistory(harness.scope, EVENT_ID, harness.request)).versionId, first.versionId);
+        if (boundary === 'reference_decryption') {
+          const references = await harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request);
+          assert.equal(references.length, 1);
+          assert.equal(references[0].state, 'bound_to_version');
+        }
+      });
+    }
+  }
+});
+
+test('persisted expiry survives a later moving retention decision for initialize, correction, and refresh', async (t) => {
+  for (const operation of ['initialize', 'correction', 'refresh']) {
+    await t.test(operation, async (subtest) => {
+      let currentTime = EPOCH;
+      let armed = operation === 'initialize';
+      let retentionCalls = 0;
+      const harness = await createHarness(subtest, {
+        now: () => currentTime,
+        resolveRetention({ nowMs, sourceExpiresAtMs }) {
+          retentionCalls += 1;
+          let expiresAtMs;
+          if (!armed) expiresAtMs = Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER);
+          else if (retentionCalls === 1) expiresAtMs = EPOCH + 1_000;
+          else {
+            currentTime = EPOCH + 1_000; // Equality at the immutable snapshot boundary must fail.
+            expiresAtMs = EPOCH + 3_000;
+          }
+          return {
+            expiresAtMs: Math.min(expiresAtMs, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+            policyId: 'synthetic-private-history',
+            policyVersion: '1',
+            accessPolicy: 'tenant_private',
+          };
+        },
+      });
+
+      if (operation === 'initialize') {
+        const facts = initialFacts();
+        await assert.rejects(harness.store.createHistory(harness.scope, {
+          eventId: EVENT_ID,
+          sourceFacts: facts,
+          idempotencyKey: 'moving-initialize-expiry',
+          retentionHandle: harness.createPermit(),
+        }, harness.request), assertReviewError('REVIEW_EXPIRED'));
+        const disk = await inspectDatabase(harness.root);
+        assert.equal(disk.heads.length, 0);
+        assert.equal(disk.idempotencyCount, 0);
+        assert.equal(disk.versions.length, 0);
+      } else {
+        const first = (await createSeed(harness)).snapshot;
+        armed = true;
+        retentionCalls = 0;
+        if (operation === 'correction') {
+          await assert.rejects(correction(harness, first, 'event_date', {
+            precision: 'date', value: '2027-06-20',
+          }, 'moving-correction-expiry'), assertReviewError('REVIEW_EXPIRED'));
+        } else {
+          await assert.rejects(harness.store.refreshSources(harness.scope, {
+            eventId: EVENT_ID,
+            baseVersionId: first.versionId,
+            baseContentHash: first.contentHash,
+            sourceFacts: { event_name: { status: 'sourced', value: 'Updated Moon Night', sourceEvidence: [evidence('moving-refresh', 'Updated Moon Night')] } },
+            idempotencyKey: 'moving-refresh-expiry',
+            retentionHandle: harness.createPermit(),
+          }, harness.request), assertReviewError('REVIEW_EXPIRED'));
+        }
+        const disk = await inspectDatabase(harness.root);
+        assert.equal(disk.heads[0].version_id, first.versionId);
+        assert.equal(disk.versions.length, 1);
+        assert.equal(disk.idempotencyCount, 1);
+        assert.equal(disk.invalidations, 0);
+      }
+    });
+  }
+});
+
+test('reads and idempotent replay reject expiry reached during decryption and commit the purge', async (t) => {
+  for (const operation of ['head', 'version', 'history_list', 'reference_list', 'replay']) {
+    await t.test(operation, async (subtest) => {
+      let currentTime = EPOCH;
+      let expireDuringPayloadRead = false;
+      const expiresAtMs = EPOCH + 1_000;
+      const harness = await createHarness(subtest, {
+        now: () => currentTime,
+        resolveKey({ tenantId, purpose, keyId }) {
+          const resolvedId = `${purpose}-v1`;
+          if (keyId && keyId !== resolvedId) throw new Error('SYNTHETIC_KEY_ERROR');
+          if (expireDuringPayloadRead && purpose === 'correction_payload' && keyId) currentTime = expiresAtMs;
+          return {
+            keyId: resolvedId,
+            key: createHash('sha256').update(`${tenantId}:${purpose}:test-only-key-material`).digest(),
+          };
+        },
+        resolveRetention({ sourceExpiresAtMs }) {
+          return {
+            expiresAtMs: Math.min(expiresAtMs, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+            policyId: 'synthetic-short-retention',
+            policyVersion: '1',
+            accessPolicy: 'tenant_private',
+          };
+        },
+      });
+      const first = (await createSeed(harness)).snapshot;
+      let committedCorrection;
+      let correctionInput;
+      if (operation === 'reference_list') {
+        await harness.store.registerDownstreamReference(harness.scope, {
+          eventId: EVENT_ID,
+          versionId: first.versionId,
+          contentHash: first.contentHash,
+          referenceId: 'expiry-reference',
+          kind: 'handoff_reference',
+        }, harness.request);
+      }
+      if (operation === 'replay') {
+        correctionInput = {
+          eventId: EVENT_ID,
+          baseVersionId: first.versionId,
+          baseContentHash: first.contentHash,
+          field: 'event_date',
+          value: { precision: 'date', value: '2027-06-20' },
+          idempotencyKey: 'expiry-replay',
+          retentionHandle: harness.createPermit(),
+        };
+        committedCorrection = await harness.store.applyCorrection(harness.scope, correctionInput, harness.request);
+      }
+      currentTime = expiresAtMs - 1;
+      expireDuringPayloadRead = true;
+      let operationPromise;
+      if (operation === 'head') operationPromise = harness.store.getHistory(harness.scope, EVENT_ID, harness.request);
+      if (operation === 'version') operationPromise = harness.store.getHistoryVersion(harness.scope, EVENT_ID, first.versionId, harness.request);
+      if (operation === 'history_list') operationPromise = harness.store.listHistory(harness.scope, EVENT_ID, harness.request);
+      if (operation === 'reference_list') operationPromise = harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request);
+      if (operation === 'replay') operationPromise = harness.store.applyCorrection(harness.scope, correctionInput, harness.request);
+      await assert.rejects(operationPromise, (error) => error instanceof ReviewHistoryError
+        && ['REVIEW_EXPIRED', 'REVIEW_NOT_FOUND'].includes(error.code));
+      const disk = await inspectDatabase(harness.root);
+      assert.equal(disk.heads[0].state, 'expired');
+      assert.equal(disk.versions.every((row) => row.state === 'expired' && row.version_id === null && row.sealed === null), true);
+      assert.equal(disk.idempotencyCount, 0);
+      assert.equal(disk.references, 0);
+      assert.equal(disk.invalidations, 0);
+      assert.equal(disk.sealedBytes, 0);
+      if (committedCorrection) assert.equal(committedCorrection.snapshot.revision, 2);
+    });
+  }
+});
+
+test('any denied expired operation commits ciphertext, idempotency, reference, and invalidation cleanup', async (t) => {
+  for (const operation of ['get', 'version', 'list', 'references', 'replay', 'failed_write']) {
+    await t.test(operation, async (subtest) => {
+      let currentTime = EPOCH;
+      const expiresAtMs = EPOCH + 1_000;
+      const harness = await createHarness(subtest, {
+        now: () => currentTime,
+        resolveRetention({ sourceExpiresAtMs }) {
+          return {
+            expiresAtMs: Math.min(expiresAtMs, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+            policyId: 'synthetic-short-retention',
+            policyVersion: '1',
+            accessPolicy: 'tenant_private',
+          };
+        },
+      });
+      const first = (await createSeed(harness)).snapshot;
+      await harness.store.registerDownstreamReference(harness.scope, {
+        eventId: EVENT_ID,
+        versionId: first.versionId,
+        contentHash: first.contentHash,
+        referenceId: `expiry-cleanup-${operation}`,
+        kind: 'approval_reference',
+      }, harness.request);
+      const correctionInput = {
+        eventId: EVENT_ID,
+        baseVersionId: first.versionId,
+        baseContentHash: first.contentHash,
+        field: 'event_date',
+        value: { precision: 'date', value: '2027-06-20' },
+        idempotencyKey: `expiry-cleanup-correction-${operation}`,
+        retentionHandle: harness.createPermit(),
+      };
+      const second = (await harness.store.applyCorrection(harness.scope, correctionInput, harness.request)).snapshot;
+      assert.equal(second.invalidations.length, 1);
+      currentTime = expiresAtMs + 1;
+      let expiredOperation;
+      if (operation === 'get') expiredOperation = harness.store.getHistory(harness.scope, EVENT_ID, harness.request);
+      if (operation === 'version') expiredOperation = harness.store.getHistoryVersion(harness.scope, EVENT_ID, first.versionId, harness.request);
+      if (operation === 'list') expiredOperation = harness.store.listHistory(harness.scope, EVENT_ID, harness.request);
+      if (operation === 'references') expiredOperation = harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request);
+      if (operation === 'replay') expiredOperation = harness.store.applyCorrection(harness.scope, correctionInput, harness.request);
+      if (operation === 'failed_write') expiredOperation = harness.store.applyCorrection(harness.scope, {
+        ...correctionInput,
+        baseVersionId: second.versionId,
+        baseContentHash: second.contentHash,
+        value: { precision: 'date', value: '2027-06-21' },
+        idempotencyKey: `expiry-cleanup-failed-${operation}`,
+      }, harness.request);
+      await assert.rejects(expiredOperation, (error) => error instanceof ReviewHistoryError
+        && ['REVIEW_EXPIRED', 'REVIEW_NOT_FOUND'].includes(error.code));
+      const disk = await inspectDatabase(harness.root);
+      assert.equal(disk.heads.length, 1);
+      assert.equal(disk.heads[0].state, 'expired');
+      assert.equal(disk.heads[0].version_id, null);
+      assert.equal(disk.versions.length, 2);
+      assert.equal(disk.versions.every((row) => row.state === 'expired' && row.version_id === null
+        && row.parent_version_id === null && row.content_hash === null && row.sealed === null), true);
+      assert.equal(disk.idempotencyCount, 0);
+      assert.equal(disk.references, 0);
+      assert.equal(disk.invalidations, 0);
+      assert.equal(disk.sealedBytes, 0);
+    });
+  }
+});
+
+test('512 KiB ceiling measures the sealed envelope and rejected refresh preserves the whole base', async (t) => {
+  const candidates = (prefix, count) => Array.from({ length: count }, (_, candidateIndex) => ({
+    originStatus: 'sourced',
+    value: `Venue ${prefix} ${candidateIndex}`,
+    sourceEvidence: Array.from({ length: 32 }, (_, referenceIndex) => {
+      const suffix = `${prefix}-${candidateIndex}-${referenceIndex}`;
+      const evidenceId = `${suffix}-${'x'.repeat(179 - suffix.length)}`;
+      return evidence(evidenceId, `${prefix}:${candidateIndex}:${referenceIndex}`);
+    }),
+  }));
+  const nearHarness = await createHarness(t);
+  const nearSnapshot = (await nearHarness.store.createHistory(nearHarness.scope, {
+    eventId: EVENT_ID,
+    sourceFacts: {
+      event_name: { status: 'sourced', value: 'Near Limit', sourceEvidence: [evidence('near-limit-name', 'near')] },
+      event_date: { status: 'missing' },
+      venue: { status: 'conflicting', candidates: candidates('near', 10) },
+    },
+    idempotencyKey: 'near-envelope-limit',
+    retentionHandle: nearHarness.createPermit(),
+  }, nearHarness.request)).snapshot;
+  const nearDisk = await inspectDatabase(nearHarness.root);
+  const nearEnvelopeLength = nearDisk.versionSealedLengths[0];
+  assert.equal(nearSnapshot.revision, 1);
+  assert.ok(nearEnvelopeLength > 450_000, `expected a near-limit envelope, got ${nearEnvelopeLength}`);
+  assert.ok(nearEnvelopeLength <= 512 * 1024, `envelope exceeded its ceiling: ${nearEnvelopeLength}`);
+
+  const rejectHarness = await createHarness(t);
+  const baseFacts = initialFacts();
+  baseFacts.venue = { status: 'missing' };
+  const first = (await createSeed(rejectHarness, baseFacts)).snapshot;
+  await rejectHarness.store.registerDownstreamReference(rejectHarness.scope, {
+    eventId: EVENT_ID,
+    versionId: first.versionId,
+    contentHash: first.contentHash,
+    referenceId: 'size-rejection-bound-reference',
+    kind: 'approval_reference',
+  }, rejectHarness.request);
+  await assert.rejects(rejectHarness.store.refreshSources(rejectHarness.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: first.versionId,
+    baseContentHash: first.contentHash,
+    sourceFacts: { venue: { status: 'conflicting', candidates: candidates('over', 12) } },
+    idempotencyKey: 'over-envelope-limit',
+    retentionHandle: rejectHarness.createPermit(),
+  }, rejectHarness.request), assertReviewError('REVIEW_STORAGE_LIMIT'));
+  const rejectedDisk = await inspectDatabase(rejectHarness.root);
+  assert.equal(rejectedDisk.heads[0].version_id, first.versionId);
+  assert.equal(rejectedDisk.versions.length, 1);
+  assert.equal(rejectedDisk.idempotencyCount, 1);
+  assert.equal(rejectedDisk.invalidations, 0);
+  assert.equal(rejectedDisk.references, 1);
+  assert.equal((await rejectHarness.store.listDownstreamReferences(rejectHarness.scope, EVENT_ID, rejectHarness.request))[0].state, 'bound_to_version');
+});
+
+test('expiry cleanup migrates prior non-null version tombstones and clears linked private rows', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'ei-review-history-migration-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const tenantId = 'tenant-a';
+  const actorId = 'customer-a';
+  const eventId = 'legacy-event';
+  const tenantHash = createHash('sha256').update(`event-intelligence:review-tenant:v1:${tenantId}`).digest('hex');
+  const tenantDirectory = path.join(root, tenantHash);
+  await mkdir(tenantDirectory, { mode: 0o700 });
+  const databasePath = path.join(tenantDirectory, 'history.sqlite');
+  const database = new DatabaseSync(databasePath);
+  const eventKey = createHmac('sha256', createHash('sha256').update(`${tenantId}:correction_index:test-only-key-material`).digest())
+    .update(`event-intelligence:review-index:v1:${tenantHash}:event:${eventId}`).digest('hex');
+  const oldVersionId = 'prior-schema-version';
+  database.exec(`
+    CREATE TABLE versions (
+      event_key TEXT NOT NULL, revision INTEGER NOT NULL, version_id TEXT NOT NULL, parent_version_id TEXT,
+      content_hash TEXT, material_hash TEXT, expires_at_ms INTEGER, encryption_key_id TEXT, sealed BLOB,
+      state TEXT NOT NULL CHECK (state IN ('available', 'expired')),
+      PRIMARY KEY (event_key, revision), UNIQUE (event_key, version_id)
+    ) STRICT;
+    CREATE TABLE heads (
+      event_key TEXT PRIMARY KEY NOT NULL, revision INTEGER, version_id TEXT, content_hash TEXT,
+      material_hash TEXT, expires_at_ms INTEGER,
+      state TEXT NOT NULL CHECK (state IN ('available', 'expired'))
+    ) STRICT;
+    CREATE TABLE idempotency (
+      event_key TEXT NOT NULL, key_hash TEXT NOT NULL, fingerprint TEXT NOT NULL, version_id TEXT NOT NULL,
+      PRIMARY KEY (event_key, key_hash)
+    ) STRICT;
+    CREATE TABLE downstream_references (
+      event_key TEXT NOT NULL, reference_hash TEXT NOT NULL, bound_version_id TEXT NOT NULL,
+      bound_content_hash TEXT NOT NULL, encryption_key_id TEXT NOT NULL, sealed BLOB NOT NULL,
+      PRIMARY KEY (event_key, reference_hash)
+    ) STRICT;
+    CREATE TABLE invalidations (
+      event_key TEXT NOT NULL, reference_hash TEXT NOT NULL, prior_version_id TEXT NOT NULL,
+      prior_content_hash TEXT NOT NULL, next_version_id TEXT NOT NULL,
+      material_change INTEGER NOT NULL CHECK (material_change IN (0, 1)), reason TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (event_key, reference_hash, prior_version_id, prior_content_hash)
+    ) STRICT;
+  `);
+  database.prepare(`INSERT INTO versions VALUES (?, 1, ?, NULL, ?, ?, ?, ?, ?, 'available')`)
+    .run(eventKey, oldVersionId, 'a'.repeat(64), 'b'.repeat(64), EPOCH - 1, 'payload-key-v1', Buffer.from('synthetic-ciphertext'));
+  database.prepare(`INSERT INTO heads VALUES (?, 1, ?, ?, ?, ?, 'available')`)
+    .run(eventKey, oldVersionId, 'a'.repeat(64), 'b'.repeat(64), EPOCH - 1);
+  database.prepare('INSERT INTO idempotency VALUES (?, ?, ?, ?)')
+    .run(eventKey, 'synthetic-key-hash', 'synthetic-fingerprint', oldVersionId);
+  database.prepare('INSERT INTO downstream_references VALUES (?, ?, ?, ?, ?, ?)')
+    .run(eventKey, 'synthetic-reference-hash', oldVersionId, 'a'.repeat(64), 'payload-key-v1', Buffer.from('synthetic-reference-ciphertext'));
+  database.prepare('INSERT INTO invalidations VALUES (?, ?, ?, ?, ?, 1, ?, ?)')
+    .run(eventKey, 'synthetic-reference-hash', oldVersionId, 'a'.repeat(64), 'next-version', 'material_projection_changed', new Date(EPOCH - 2).toISOString());
+  database.close();
+
+  const request = { tenantId, actorId };
+  const store = createCorrectionHistoryStore({
+    directory: root,
+    resolveTenant: (context) => context.tenantId,
+    resolveActor: (context) => context.actorId,
+    authorize: ({ tenantId: authorizedTenant, actorId: authorizedActor, request: context }) =>
+      context.tenantId === authorizedTenant && context.actorId === authorizedActor,
+    resolveKey: () => ({ keyId: 'unused-test-key', key: Buffer.alloc(32) }),
+    resolveRetention: () => ({ expiresAtMs: EPOCH + 1_000, policyId: 'unused', policyVersion: '1', accessPolicy: 'tenant_private' }),
+    now: () => EPOCH,
+    lockedFields: [],
+  });
+  const scope = await store.scopeForAuthenticatedRequest(request);
+  assert.equal(await store.purgeExpired(scope, request), 1);
+  const disk = await inspectDatabase(root, tenantId);
+  assert.equal(disk.heads[0].state, 'expired');
+  assert.equal(disk.versions.length, 1);
+  assert.equal(disk.versions[0].version_id, null);
+  assert.equal(disk.versions[0].sealed, null);
+  assert.equal(disk.idempotencyCount, 0);
+  assert.equal(disk.references, 0);
+  assert.equal(disk.invalidations, 0);
+  assert.equal(disk.sealedBytes, 0);
 });

@@ -14,6 +14,9 @@ declare const request: AuthenticatedRequest;
 declare const permit: RetentionPermit;
 declare const directory: string;
 declare const inputFacts: ReviewInitialFacts;
+const customerOriginFact = { status: 'customer_supplied', value: 'cancelled' } as const;
+// @ts-expect-error initial history facts accept source claims only; customers use the correction operation
+const invalidInitialFacts: ReviewInitialFacts = { event_status: customerOriginFact };
 declare const store: CorrectionHistoryStore<AuthenticatedRequest, RetentionPermit>;
 declare const scope: CorrectionTenantScope;
 
@@ -72,3 +75,4 @@ const forgedApproval = store.applyCorrection(scope, {
 void forgedScope;
 void invalidStatus;
 void forgedApproval;
+void invalidInitialFacts;

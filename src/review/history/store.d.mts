@@ -4,6 +4,7 @@ declare const correctionTenantScopeBrand: unique symbol;
 export type CorrectionTenantScope = { readonly [correctionTenantScopeBrand]: true };
 
 export type ReviewFactField = 'event_name' | 'event_date' | 'venue' | 'event_status';
+/** Zoned wall times reject gaps and preserve folds without selecting an instant. */
 export type ReviewDateValue =
   | Readonly<{ precision: 'date'; value: string }>
   | Readonly<{ precision: 'local_datetime'; value: string; timeZone: string }>
@@ -31,8 +32,8 @@ export type ReviewSourceFact<Value> =
   | Readonly<{ status: 'sourced' | 'inferred'; value: Value; sourceEvidence: readonly ReviewEvidenceReference[] }>
   | Readonly<{ status: 'conflicting'; candidates: readonly [ReviewSourceCandidate<Value>, ReviewSourceCandidate<Value>, ...ReviewSourceCandidate<Value>[]] }>;
 
-export type ReviewInitialFact<Value> = ReviewSourceFact<Value>
-  | Readonly<{ status: 'customer_supplied'; value: Value }>;
+/** Initial values are source or inferred facts; customer values use a correction action. */
+export type ReviewInitialFact<Value> = ReviewSourceFact<Value>;
 
 export interface ReviewInitialFacts {
   readonly event_name?: ReviewInitialFact<string>;

@@ -17,7 +17,7 @@ const FIELD_TYPES = Object.freeze({
   event_status: 'event_status',
 });
 const REQUIRED_FIELDS = Object.freeze(['event_name', 'event_date', 'venue']);
-const FACT_STATES = new Set(['sourced', 'inferred', 'customer_supplied', 'missing', 'conflicting']);
+const FACT_STATES = new Set(['sourced', 'inferred', 'missing', 'conflicting']);
 const SOURCE_STATES = new Set(['sourced', 'inferred']);
 const EVENT_STATUSES = new Set(['scheduled', 'cancelled', 'postponed', 'rescheduled', 'completed']);
 const ERROR_MESSAGES = Object.freeze({
@@ -43,12 +43,15 @@ const TYPED_ARRAY_TAG_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTO
 const TYPED_ARRAY_LENGTH_GETTER = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTOTYPE, 'length').get;
 const TYPED_ARRAY_SET = Uint8Array.prototype.set;
 const TYPED_ARRAY_FILL = Uint8Array.prototype.fill;
+const MAX_VERSION_PLAINTEXT_BYTES = 512 * 1024;
+const MAX_VERSION_SEALED_BYTES = 512 * 1024;
 
 export class ReviewHistoryError extends Error {
   constructor(code = 'REVIEW_STORAGE') {
-    super(ERROR_MESSAGES[code] ?? ERROR_MESSAGES.REVIEW_STORAGE);
+    const validCode = typeof code === 'string' && Object.hasOwn(ERROR_MESSAGES, code);
+    super(validCode ? ERROR_MESSAGES[code] : ERROR_MESSAGES.REVIEW_STORAGE);
     this.name = 'ReviewHistoryError';
-    this.code = Object.hasOwn(ERROR_MESSAGES, code) ? code : 'REVIEW_STORAGE';
+    this.code = validCode ? code : 'REVIEW_STORAGE';
   }
 }
 
@@ -85,14 +88,18 @@ function ownDataRecord(value, allowedKeys) {
 }
 
 function safeArray(value, maximumLength) {
-  if (!Array.isArray(value) || value.length > maximumLength) return null;
   try {
+    if (!Array.isArray(value)) return null;
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+    if (!lengthDescriptor || !Object.hasOwn(lengthDescriptor, 'value')) return null;
+    const length = lengthDescriptor.value;
+    if (!Number.isSafeInteger(length) || length < 0 || length > maximumLength) return null;
     const keys = Reflect.ownKeys(value);
-    if (keys.length !== value.length + 1 || keys.some((key) => key !== 'length'
+    if (keys.length !== length + 1 || !keys.includes('length') || keys.some((key) => key !== 'length'
       && (!Number.isSafeInteger(Number(key)) || String(Number(key)) !== key
-        || Number(key) < 0 || Number(key) >= value.length))) return null;
+        || Number(key) < 0 || Number(key) >= length))) return null;
     const output = [];
-    for (let index = 0; index < value.length; index += 1) {
+    for (let index = 0; index < length; index += 1) {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
       if (!descriptor || !Object.hasOwn(descriptor, 'value')) return null;
       output.push(descriptor.value);
@@ -176,6 +183,64 @@ function validDate(value) {
   return year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1];
 }
 
+function utcMilliseconds(year, month, day, hour, minute, second = 0) {
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, 0);
+  return date.getTime();
+}
+
+function localParts(formatter, epochMs) {
+  const values = Object.create(null);
+  for (const part of formatter.formatToParts(new Date(epochMs))) {
+    if (part.type !== 'literal') values[part.type] = Number(part.value);
+  }
+  return values;
+}
+
+function localDateTimeExists(value, timeZone) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const target = {
+    year: Number(yearText), month: Number(monthText), day: Number(dayText),
+    hour: Number(hourText), minute: Number(minuteText), second: 0,
+  };
+  const naiveEpoch = utcMilliseconds(target.year, target.month, target.day, target.hour, target.minute);
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US-u-ca-gregory-nu-latn', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    const offsets = new Set();
+    // Sample both sides of nearby transitions. Candidate instants are accepted
+    // only when the zone formats them back to the exact requested wall time.
+    for (let offsetHours = -48; offsetHours <= 48; offsetHours += 3) {
+      const sampleEpoch = naiveEpoch + offsetHours * 60 * 60 * 1000;
+      const parts = localParts(formatter, sampleEpoch);
+      if (!Number.isInteger(parts.year) || !Number.isInteger(parts.month) || !Number.isInteger(parts.day)
+        || !Number.isInteger(parts.hour) || !Number.isInteger(parts.minute) || !Number.isInteger(parts.second)) return false;
+      const renderedEpoch = utcMilliseconds(parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second);
+      offsets.add(renderedEpoch - sampleEpoch);
+    }
+    for (const offset of offsets) {
+      const candidateEpoch = naiveEpoch - offset;
+      const parts = localParts(formatter, candidateEpoch);
+      if (parts.year === target.year && parts.month === target.month && parts.day === target.day
+        && parts.hour === target.hour && parts.minute === target.minute && parts.second === 0) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function validateDateValue(value) {
   const input = ownDataRecord(value, new Set(['precision', 'value', 'timeZone']));
   if (!input || typeof input.precision !== 'string' || typeof input.value !== 'string') fail();
@@ -186,13 +251,13 @@ function validateDateValue(value) {
   if (input.precision === 'local_datetime') {
     const match = /^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)$/.exec(input.value);
     if (!match || !validDate(match[1]) || typeof input.timeZone !== 'string'
-      || input.timeZone.length > 100 || !isWellFormed(input.timeZone)) fail();
-    try { new Intl.DateTimeFormat('en', { timeZone: input.timeZone }).format(0); } catch { fail(); }
+      || input.timeZone.length > 100 || !isWellFormed(input.timeZone)
+      || !localDateTimeExists(input.value, input.timeZone)) fail();
     return Object.freeze({ precision: 'local_datetime', value: input.value, timeZone: input.timeZone });
   }
   if (input.precision === 'instant') {
     if (Object.hasOwn(input, 'timeZone')
-      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(input.value)
+      || !/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?Z$/.test(input.value)
       || !Number.isFinite(Date.parse(input.value))) fail();
     const datePart = input.value.slice(0, 10);
     if (!validDate(datePart)) fail();
@@ -244,17 +309,12 @@ function evidenceReferences(value) {
     || left.contentHash.localeCompare(right.contentHash));
 }
 
-function sourceFact(value, field, allowCustomer) {
+function sourceFact(value, field) {
   const input = ownDataRecord(value, new Set(['status', 'value', 'sourceEvidence', 'candidates']));
   if (!input || typeof input.status !== 'string' || !FACT_STATES.has(input.status)) fail();
   if (input.status === 'missing') {
     if (Object.keys(input).length !== 1) fail();
     return { status: 'missing', claims: [] };
-  }
-  if (input.status === 'customer_supplied') {
-    if (!allowCustomer || !Object.hasOwn(input, 'value') || Object.hasOwn(input, 'sourceEvidence')
-      || Object.hasOwn(input, 'candidates')) fail();
-    return { status: 'customer_supplied', value: validateFieldValue(field, input.value), claims: [] };
   }
   if (input.status === 'conflicting') {
     if (Object.keys(input).length !== 2 || !Object.hasOwn(input, 'candidates')) fail();
@@ -288,12 +348,12 @@ function sourceFact(value, field, allowCustomer) {
   };
 }
 
-function sourceFacts(value, allowedFields, allowCustomer) {
+function sourceFacts(value, allowedFields) {
   const input = ownDataRecord(value, new Set(Object.keys(FIELD_TYPES)));
   if (!input) fail();
   const output = Object.create(null);
   for (const field of Object.keys(FIELD_TYPES)) {
-    if (Object.hasOwn(input, field)) output[field] = sourceFact(input[field], field, allowCustomer);
+    if (Object.hasOwn(input, field)) output[field] = sourceFact(input[field], field);
   }
   for (const field of Object.keys(output)) fieldKey(field, allowedFields);
   return output;
@@ -363,8 +423,15 @@ function openSealed(info, id, kind, expectedKeyId, keyBytes, sealedBytes) {
 }
 
 function mapStorageError(error) {
-  if (error instanceof ReviewHistoryError) return error;
-  if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') return new ReviewHistoryError('REVIEW_BUSY');
+  try {
+    if (error instanceof ReviewHistoryError) return error;
+    const errcode = error && (typeof error === 'object' || typeof error === 'function')
+      ? Object.getOwnPropertyDescriptor(error, 'errcode') : undefined;
+    const code = error && (typeof error === 'object' || typeof error === 'function')
+      ? Object.getOwnPropertyDescriptor(error, 'code') : undefined;
+    if ((errcode && Object.hasOwn(errcode, 'value') && (errcode.value === 5 || errcode.value === 6))
+      || (code && Object.hasOwn(code, 'value') && code.value === 'ERR_SQLITE_BUSY')) return new ReviewHistoryError('REVIEW_BUSY');
+  } catch { /* Untrusted thrown values are converted to the fixed public storage error. */ }
   return new ReviewHistoryError('REVIEW_STORAGE');
 }
 
@@ -450,6 +517,9 @@ function buildQuestions(eventKey, fieldViews, indexKey) {
         sourceEvidence: [],
       });
     }
+  }
+  for (const field of Object.keys(FIELD_TYPES)) {
+    const view = fieldViews[field];
     if (view.status === 'conflicting') {
       const signature = view.candidates.map(({ value, originStatus, sourceEvidence }) => ({ value, originStatus, sourceEvidence }));
       const latestSourceRevision = Math.max(...view.candidates.map((candidate) => candidate.latestSourceRevision));
@@ -540,11 +610,11 @@ function buildSnapshot({ eventId, eventKey, revision, parentVersionId, createdAt
     materialHash,
   };
   snapshot.contentHash = sha256(canonical(snapshot));
-  if (Buffer.byteLength(canonical(snapshot), 'utf8') > 512 * 1024) fail('REVIEW_STORAGE_LIMIT');
+  if (Buffer.byteLength(canonical(snapshot), 'utf8') > MAX_VERSION_PLAINTEXT_BYTES) fail('REVIEW_STORAGE_LIMIT');
   return deepFreeze(snapshot);
 }
 
-function sourceStateFromFacts(facts, actorFingerprint, revision, createdAt) {
+function sourceStateFromFacts(facts, revision) {
   const fields = Object.create(null);
   for (const field of Object.keys(FIELD_TYPES)) {
     const input = facts[field] ?? { status: 'missing', claims: [] };
@@ -554,20 +624,7 @@ function sourceStateFromFacts(facts, actorFingerprint, revision, createdAt) {
       sourceEvidence: claim.sourceEvidence,
       sourceRevision: revision,
     }));
-    const correctionHistory = [];
-    let currentCorrection;
-    if (input.status === 'customer_supplied') {
-      currentCorrection = {
-        origin: 'customer_supplied',
-        field,
-        value: input.value,
-        actorFingerprint,
-        revision,
-        createdAt,
-      };
-      correctionHistory.push({ field, ...currentCorrection });
-    }
-    fields[field] = { sourceClaims, correctionHistory, ...(currentCorrection ? { currentCorrection } : {}) };
+    fields[field] = { sourceClaims, correctionHistory: [] };
   }
   return { fields };
 }
@@ -693,6 +750,45 @@ export function createCorrectionHistoryStore(options) {
     return actorId;
   }
 
+  async function reauthorizeRequest(info, request, eventId, action, expectedActorId, field) {
+    let tenantId;
+    let actorId;
+    try {
+      tenantId = await config.resolveTenant(request);
+      actorId = await config.resolveActor(request);
+    } catch {
+      fail('REVIEW_DENIED');
+    }
+    if (tenantId !== info.tenantId || actorId !== expectedActorId || !validSafeString(actorId, 1, 180)) fail('REVIEW_DENIED');
+    const authorization = () => Object.freeze({
+      tenantId,
+      actorId,
+      eventId: eventId ?? null,
+      action,
+      ...(field ? { field } : {}),
+      request,
+    });
+    let firstDecision;
+    try { firstDecision = await config.authorize(authorization()); } catch { fail('REVIEW_DENIED'); }
+    if (firstDecision !== true) fail('REVIEW_DENIED');
+    let finalTenantId;
+    let finalActorId;
+    try {
+      finalTenantId = await config.resolveTenant(request);
+      finalActorId = await config.resolveActor(request);
+    } catch {
+      fail('REVIEW_DENIED');
+    }
+    if (finalTenantId !== tenantId || finalActorId !== actorId) fail('REVIEW_DENIED');
+    let finalDecision;
+    try { finalDecision = await config.authorize(authorization()); } catch { fail('REVIEW_DENIED'); }
+    if (finalDecision !== true) fail('REVIEW_DENIED');
+  }
+
+  function assertNotExpired(expiresAtMs) {
+    if (!Number.isSafeInteger(expiresAtMs) || nowMs() >= expiresAtMs) fail('REVIEW_EXPIRED');
+  }
+
   async function resolveKey(info, purpose, keyId) {
     try {
       const value = await config.resolveKey(Object.freeze({
@@ -741,9 +837,10 @@ export function createCorrectionHistoryStore(options) {
     }
   }
 
-  async function withTransaction(info, directory, operation, signal) {
+  async function withTransaction(info, directory, operation, signal, finalBoundary) {
     let database;
     let open = false;
+    let schemaReady = false;
     try {
       const databasePath = path.join(directory, 'history.sqlite');
       let priorStats = null;
@@ -765,7 +862,7 @@ export function createCorrectionHistoryStore(options) {
         CREATE TABLE IF NOT EXISTS versions (
           event_key TEXT NOT NULL,
           revision INTEGER NOT NULL,
-          version_id TEXT NOT NULL,
+          version_id TEXT,
           parent_version_id TEXT,
           content_hash TEXT,
           material_hash TEXT,
@@ -813,19 +910,71 @@ export function createCorrectionHistoryStore(options) {
           PRIMARY KEY (event_key, reference_hash, prior_version_id, prior_content_hash)
         ) STRICT;
       `);
+      const versionIdColumn = database.prepare('PRAGMA table_info(versions)').all()
+        .find((column) => column.name === 'version_id');
+      if (versionIdColumn?.notnull) {
+        database.exec('BEGIN IMMEDIATE');
+        try {
+          database.exec(`
+            CREATE TABLE versions_expiry_migration (
+              event_key TEXT NOT NULL,
+              revision INTEGER NOT NULL,
+              version_id TEXT,
+              parent_version_id TEXT,
+              content_hash TEXT,
+              material_hash TEXT,
+              expires_at_ms INTEGER,
+              encryption_key_id TEXT,
+              sealed BLOB,
+              state TEXT NOT NULL CHECK (state IN ('available', 'expired')),
+              PRIMARY KEY (event_key, revision),
+              UNIQUE (event_key, version_id)
+            ) STRICT;
+            INSERT INTO versions_expiry_migration SELECT * FROM versions;
+            DROP TABLE versions;
+            ALTER TABLE versions_expiry_migration RENAME TO versions;
+          `);
+          database.exec('COMMIT');
+        } catch (error) {
+          try { database.exec('ROLLBACK'); } catch { /* The connection is closed by the outer transaction guard. */ }
+          throw error;
+        }
+      }
+      schemaReady = true;
       await chmod(databasePath, 0o600);
       database.exec('BEGIN IMMEDIATE');
       open = true;
       const result = await operation(database);
+      if (finalBoundary) await finalBoundary(result);
       throwIfAborted(signal);
       database.exec('COMMIT');
       open = false;
       return result;
     } catch (error) {
+      const publicError = mapStorageError(error);
       if (open) {
         try { database.exec('ROLLBACK'); } catch { /* Closing an interrupted connection also rolls back its transaction. */ }
+        open = false;
       }
-      throw mapStorageError(error);
+      if (schemaReady && database) {
+        try {
+          database.exec('BEGIN IMMEDIATE');
+          open = true;
+          const now = nowMs();
+          const expiredEvents = database.prepare("SELECT event_key FROM heads WHERE state = 'available' AND expires_at_ms <= ? LIMIT ?")
+            .all(now, limits.maxHistories);
+          for (const row of expiredEvents) expireHistory(database, row.event_key, now);
+          database.exec('COMMIT');
+          open = false;
+        } catch (cleanupError) {
+          if (open) {
+            try { database.exec('ROLLBACK'); } catch { /* Cleanup connection is closed below. */ }
+            open = false;
+          }
+          throw mapStorageError(cleanupError);
+        }
+      }
+      throw publicError;
     } finally {
       database?.close();
     }
@@ -848,7 +997,7 @@ export function createCorrectionHistoryStore(options) {
   function expireHistory(database, eventKey, now) {
     const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
     if (!head || head.state === 'expired' || head.expires_at_ms > now) return false;
-    database.prepare(`UPDATE versions SET parent_version_id = NULL, content_hash = NULL, material_hash = NULL,
+    database.prepare(`UPDATE versions SET version_id = NULL, parent_version_id = NULL, content_hash = NULL, material_hash = NULL,
       expires_at_ms = NULL, encryption_key_id = NULL, sealed = NULL, state = 'expired' WHERE event_key = ?`).run(eventKey);
     database.prepare(`UPDATE heads SET revision = NULL, version_id = NULL, content_hash = NULL,
       material_hash = NULL, expires_at_ms = NULL, state = 'expired' WHERE event_key = ?`).run(eventKey);
@@ -892,6 +1041,7 @@ export function createCorrectionHistoryStore(options) {
     const row = rowForVersion(database, eventKey, existing.version_id);
     if (!row) fail('REVIEW_EXPIRED');
     const snapshot = await decryptVersion(info, row);
+    assertNotExpired(row.expires_at_ms);
     return Object.freeze({ snapshot, replayed: true, invalidations: snapshot.invalidations });
   }
 
@@ -906,7 +1056,8 @@ export function createCorrectionHistoryStore(options) {
     }));
   }
 
-  async function findCommittedReplay(info, eventKey, actorId, operation, idempotencyKey, normalizedInput, indexKey) {
+  async function findCommittedReplay(info, eventId, eventKey, actorId, operation, idempotencyKey, normalizedInput, indexKey,
+    request, action, field) {
     const directory = await tenantDirectory(info);
     const keyHash = keyed(info, indexKey, 'idempotency-key', idempotencyKey);
     const fingerprintValue = fingerprint(indexKey, info, eventKey, actorId, operation, normalizedInput);
@@ -914,6 +1065,9 @@ export function createCorrectionHistoryStore(options) {
       return await withTransaction(info, directory, async (database) => {
         expireHistory(database, eventKey, nowMs());
         return idempotentReplay(info, database, eventKey, keyHash, fingerprintValue);
+      }, undefined, async (replay) => {
+        await reauthorizeRequest(info, request, eventId, action, actorId, field);
+        if (replay) assertNotExpired(Date.parse(replay.snapshot.expiresAt));
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -921,12 +1075,13 @@ export function createCorrectionHistoryStore(options) {
   }
 
   async function persistVersion({ info, directory, eventId, eventKey, actorId, operation, idempotencyKey,
-    normalizedInput, state, parent, retentionHandle, signal, baseVersion, indexKey }) {
+    normalizedInput, state, parent, retentionHandle, signal, baseVersion, indexKey, request, action, field }) {
     const upperBoundMs = parent?.expires_at_ms;
     const firstRetention = await resolveRetention(info, retentionHandle, upperBoundMs);
     throwIfAborted(signal);
     const expiresAtMs = Math.min(firstRetention.expiresAtMs, upperBoundMs ?? firstRetention.expiresAtMs);
     const retention = Object.freeze({ ...firstRetention, expiresAtMs });
+    let finalRetentionExpiresAtMs = retention.expiresAtMs;
     const key = await payloadKeyFor(info);
     const keyHash = keyed(info, indexKey, 'idempotency-key', idempotencyKey);
     const fingerprintValue = fingerprint(indexKey, info, eventKey, actorId, operation, normalizedInput);
@@ -990,6 +1145,7 @@ export function createCorrectionHistoryStore(options) {
           indexKey,
         });
         const sealed = seal(info, `${eventKey}:${snapshot.versionId}`, 'version', key.keyId, key.key, snapshot);
+        if (sealed.byteLength > MAX_VERSION_SEALED_BYTES) fail('REVIEW_STORAGE_LIMIT');
         const priorBytes = database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = \'available\'').get().bytes
           + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes;
         if (priorBytes + sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
@@ -1044,19 +1200,27 @@ export function createCorrectionHistoryStore(options) {
         // Recheck the trusted retention decision after staging the new immutable
         // version. An abort or an expired permit here rolls the complete write back.
         const finalRetention = await resolveRetention(info, retentionHandle, upperBoundMs);
+        finalRetentionExpiresAtMs = finalRetention.expiresAtMs;
         throwIfAborted(signal);
         if (finalRetention.policyId !== retention.policyId || finalRetention.policyVersion !== retention.policyVersion
           || finalRetention.accessPolicy !== retention.accessPolicy) fail('REVIEW_DENIED');
-        if (finalRetention.expiresAtMs < retention.expiresAtMs || nowMs() >= finalRetention.expiresAtMs) fail('REVIEW_EXPIRED');
+        if (finalRetention.expiresAtMs < retention.expiresAtMs) fail('REVIEW_DENIED');
         return Object.freeze({ snapshot, replayed: false, invalidations: snapshot.invalidations });
-      }, signal);
+      }, signal, async (result) => {
+        await reauthorizeRequest(info, request, eventId, action, actorId, field);
+        if (result?.snapshot?.expiresAt) assertNotExpired(Date.parse(result.snapshot.expiresAt));
+        if (result?.replayed !== true) {
+          assertNotExpired(retention.expiresAtMs);
+          assertNotExpired(finalRetentionExpiresAtMs);
+        }
+      });
     } finally {
       key.key.fill(0);
     }
   }
 
   async function readHead(info, eventId, request, action = 'read_history') {
-    await authorizeRequest(info, request, eventId, action);
+    const actorId = await authorizeRequest(info, request, eventId, action);
     const indexKey = await indexKeyFor(info);
     try {
       const eventKey = keyed(info, indexKey, 'event', eventId);
@@ -1069,6 +1233,9 @@ export function createCorrectionHistoryStore(options) {
         if (head.state !== 'available') fail('REVIEW_EXPIRED');
         const row = rowForVersion(database, eventKey, head.version_id);
         return decryptVersion(info, row);
+      }, undefined, async (snapshot) => {
+        await reauthorizeRequest(info, request, eventId, action, actorId);
+        assertNotExpired(Date.parse(snapshot.expiresAt));
       });
       return snapshot;
     } catch (error) {
@@ -1084,7 +1251,7 @@ export function createCorrectionHistoryStore(options) {
     if (!input || typeof input.eventId !== 'string' || !Object.hasOwn(input, 'sourceFacts')) fail();
     const eventId = validateEventId(input.eventId);
     const actorId = await authorizeRequest(info, request, eventId, 'initialize_history');
-    const facts = sourceFacts(input.sourceFacts, allowedFields, true);
+    const facts = sourceFacts(input.sourceFacts, allowedFields);
     const idempotencyKey = validateIdentifier(input.idempotencyKey, 180);
     const signal = readSignal(operationOptions);
     throwIfAborted(signal);
@@ -1092,10 +1259,9 @@ export function createCorrectionHistoryStore(options) {
     try {
       const eventKey = keyed(info, indexKey, 'event', eventId);
       const directory = await tenantDirectory(info);
-      const createdAt = new Date(nowMs()).toISOString();
-      const actorFingerprint = keyed(info, indexKey, 'actor', actorId);
       const normalizedInput = { eventId, sourceFacts: facts };
-      const replay = await findCommittedReplay(info, eventKey, actorId, 'initialize', idempotencyKey, normalizedInput, indexKey);
+      const replay = await findCommittedReplay(info, eventId, eventKey, actorId, 'initialize', idempotencyKey,
+        normalizedInput, indexKey, request, 'initialize_history');
       throwIfAborted(signal);
       if (replay) return replay;
       const result = await persistVersion({
@@ -1109,15 +1275,16 @@ export function createCorrectionHistoryStore(options) {
         normalizedInput,
         state: {
           materialChanged: true,
-          build(revision, resolvedActorHash, timestamp) {
-            void resolvedActorHash;
-            return sourceStateFromFacts(facts, actorFingerprint, revision, timestamp ?? createdAt);
+          build(revision) {
+            return sourceStateFromFacts(facts, revision);
           },
         },
         parent: null,
         retentionHandle: input.retentionHandle,
         signal,
         indexKey,
+        request,
+        action: 'initialize_history',
       });
       return result;
     } finally {
@@ -1125,7 +1292,7 @@ export function createCorrectionHistoryStore(options) {
     }
   }
 
-  async function loadBase(info, eventId, baseVersionId, baseContentHash, indexKey) {
+  async function loadBase(info, eventId, baseVersionId, baseContentHash, indexKey, request, action, actorId, field) {
     const eventKey = keyed(info, indexKey, 'event', eventId);
     const directory = await tenantDirectory(info);
     try {
@@ -1137,6 +1304,9 @@ export function createCorrectionHistoryStore(options) {
         const row = rowForVersion(database, eventKey, baseVersionId);
         if (!row || row.content_hash !== baseContentHash) fail('REVIEW_VERSION_CONFLICT');
         return { row, snapshot: await decryptVersion(info, row), directory, eventKey };
+      }, undefined, async (base) => {
+        await reauthorizeRequest(info, request, eventId, action, actorId, field);
+        assertNotExpired(base.row.expires_at_ms);
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1164,10 +1334,12 @@ export function createCorrectionHistoryStore(options) {
     const eventKey = keyed(info, indexKey, 'event', eventId);
     try {
       const normalizedInput = { eventId, baseVersionId, baseContentHash: input.baseContentHash, field, value };
-      const replay = await findCommittedReplay(info, eventKey, actorId, 'correction', idempotencyKey, normalizedInput, indexKey);
+      const replay = await findCommittedReplay(info, eventId, eventKey, actorId, 'correction', idempotencyKey,
+        normalizedInput, indexKey, request, 'apply_correction', field);
       throwIfAborted(signal);
       if (replay) return replay;
-      const base = await loadBase(info, eventId, baseVersionId, input.baseContentHash, indexKey);
+      const base = await loadBase(info, eventId, baseVersionId, input.baseContentHash, indexKey,
+        request, 'apply_correction', actorId, field);
       const fields = base.snapshot.fields;
       const nextFieldState = Object.create(null);
       for (const currentField of Object.keys(FIELD_TYPES)) {
@@ -1229,6 +1401,9 @@ export function createCorrectionHistoryStore(options) {
         retentionHandle: input.retentionHandle,
         signal,
         indexKey,
+        request,
+        action: 'apply_correction',
+        field,
       });
     } finally {
       indexKey.fill(0);
@@ -1246,7 +1421,7 @@ export function createCorrectionHistoryStore(options) {
     const actorId = await authorizeRequest(info, request, eventId, 'refresh_source_facts');
     const baseVersionId = validateIdentifier(input.baseVersionId);
     if (typeof input.baseContentHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.baseContentHash)) fail();
-    const facts = sourceFacts(input.sourceFacts, allowedFields, false);
+    const facts = sourceFacts(input.sourceFacts, allowedFields);
     const idempotencyKey = validateIdentifier(input.idempotencyKey, 180);
     const signal = readSignal(operationOptions);
     throwIfAborted(signal);
@@ -1254,10 +1429,12 @@ export function createCorrectionHistoryStore(options) {
     const eventKey = keyed(info, indexKey, 'event', eventId);
     try {
       const normalizedInput = { eventId, baseVersionId, baseContentHash: input.baseContentHash, sourceFacts: facts };
-      const replay = await findCommittedReplay(info, eventKey, actorId, 'source_refresh', idempotencyKey, normalizedInput, indexKey);
+      const replay = await findCommittedReplay(info, eventId, eventKey, actorId, 'source_refresh', idempotencyKey,
+        normalizedInput, indexKey, request, 'refresh_source_facts');
       throwIfAborted(signal);
       if (replay) return replay;
-      const base = await loadBase(info, eventId, baseVersionId, input.baseContentHash, indexKey);
+      const base = await loadBase(info, eventId, baseVersionId, input.baseContentHash, indexKey,
+        request, 'refresh_source_facts', actorId);
       const nextFieldState = Object.create(null);
       for (const field of Object.keys(FIELD_TYPES)) {
         const current = base.snapshot.fields[field];
@@ -1303,6 +1480,8 @@ export function createCorrectionHistoryStore(options) {
         retentionHandle: input.retentionHandle,
         signal,
         indexKey,
+        request,
+        action: 'refresh_source_facts',
       });
     } finally {
       indexKey.fill(0);
@@ -1319,7 +1498,7 @@ export function createCorrectionHistoryStore(options) {
     const info = scopeInfo(scope);
     const eventId = validateEventId(eventIdValue);
     const versionId = validateIdentifier(versionIdValue);
-    await authorizeRequest(info, request, eventId, 'read_history_version');
+    const actorId = await authorizeRequest(info, request, eventId, 'read_history_version');
     const indexKey = await indexKeyFor(info);
     try {
       const eventKey = keyed(info, indexKey, 'event', eventId);
@@ -1329,6 +1508,9 @@ export function createCorrectionHistoryStore(options) {
         const row = rowForVersion(database, eventKey, versionId);
         if (!row) fail('REVIEW_NOT_FOUND');
         return decryptVersion(info, row);
+      }, undefined, async (snapshot) => {
+        await reauthorizeRequest(info, request, eventId, 'read_history_version', actorId);
+        assertNotExpired(Date.parse(snapshot.expiresAt));
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1340,7 +1522,7 @@ export function createCorrectionHistoryStore(options) {
   async function listHistory(scope, eventIdValue, request) {
     const info = scopeInfo(scope);
     const eventId = validateEventId(eventIdValue);
-    await authorizeRequest(info, request, eventId, 'list_history');
+    const actorId = await authorizeRequest(info, request, eventId, 'list_history');
     const indexKey = await indexKeyFor(info);
     try {
       const eventKey = keyed(info, indexKey, 'event', eventId);
@@ -1355,6 +1537,9 @@ export function createCorrectionHistoryStore(options) {
         const snapshots = [];
         for (const row of rows) snapshots.push(await decryptVersion(info, row));
         return Object.freeze(snapshots);
+      }, undefined, async (snapshots) => {
+        await reauthorizeRequest(info, request, eventId, 'list_history', actorId);
+        for (const snapshot of snapshots) assertNotExpired(Date.parse(snapshot.expiresAt));
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1369,7 +1554,7 @@ export function createCorrectionHistoryStore(options) {
     if (!input || !Object.hasOwn(input, 'eventId') || !Object.hasOwn(input, 'versionId')
       || !Object.hasOwn(input, 'contentHash') || !Object.hasOwn(input, 'referenceId') || !Object.hasOwn(input, 'kind')) fail();
     const eventId = validateEventId(input.eventId);
-    await authorizeRequest(info, request, eventId, 'record_downstream_reference');
+    const actorId = await authorizeRequest(info, request, eventId, 'record_downstream_reference');
     const versionId = validateIdentifier(input.versionId);
     if (typeof input.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.contentHash)) fail();
     const referenceId = validateIdentifier(input.referenceId);
@@ -1377,6 +1562,7 @@ export function createCorrectionHistoryStore(options) {
     const indexKey = await indexKeyFor(info);
     let payloadKey;
     try {
+      let headExpiryMs;
       const eventKey = keyed(info, indexKey, 'event', eventId);
       const referenceHash = keyed(info, indexKey, 'reference', referenceId);
       const directory = await tenantDirectory(info);
@@ -1387,6 +1573,7 @@ export function createCorrectionHistoryStore(options) {
         if (!head) fail('REVIEW_NOT_FOUND');
         if (head.state !== 'available') fail('REVIEW_EXPIRED');
         if (head.version_id !== versionId || head.content_hash !== input.contentHash) fail('REVIEW_VERSION_CONFLICT');
+        headExpiryMs = head.expires_at_ms;
         const existing = database.prepare('SELECT * FROM downstream_references WHERE event_key = ? AND reference_hash = ?').get(eventKey, referenceHash);
         if (existing) {
           const prior = await decryptReference(info, existing);
@@ -1411,6 +1598,9 @@ export function createCorrectionHistoryStore(options) {
           (event_key, reference_hash, bound_version_id, bound_content_hash, encryption_key_id, sealed)
           VALUES (?, ?, ?, ?, ?, ?)`).run(eventKey, referenceHash, versionId, input.contentHash, payloadKey.keyId, sealed);
         return Object.freeze({ referenceId, kind: input.kind, versionId, contentHash: input.contentHash, replayed: false });
+      }, undefined, async () => {
+        await reauthorizeRequest(info, request, eventId, 'record_downstream_reference', actorId);
+        assertNotExpired(headExpiryMs);
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1423,9 +1613,10 @@ export function createCorrectionHistoryStore(options) {
   async function listDownstreamReferences(scope, eventIdValue, request) {
     const info = scopeInfo(scope);
     const eventId = validateEventId(eventIdValue);
-    await authorizeRequest(info, request, eventId, 'read_downstream_references');
+    const actorId = await authorizeRequest(info, request, eventId, 'read_downstream_references');
     const indexKey = await indexKeyFor(info);
     try {
+      let headExpiryMs;
       const eventKey = keyed(info, indexKey, 'event', eventId);
       const directory = await tenantDirectory(info);
       return await withTransaction(info, directory, async (database) => {
@@ -1433,6 +1624,7 @@ export function createCorrectionHistoryStore(options) {
         const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
         if (!head) fail('REVIEW_NOT_FOUND');
         if (head.state !== 'available') fail('REVIEW_EXPIRED');
+        headExpiryMs = head.expires_at_ms;
         const rows = database.prepare('SELECT * FROM downstream_references WHERE event_key = ? LIMIT 129').all(eventKey);
         if (rows.length > 128) fail('REVIEW_INTEGRITY');
         const output = [];
@@ -1457,6 +1649,9 @@ export function createCorrectionHistoryStore(options) {
         }
         output.sort((left, right) => left.referenceId.localeCompare(right.referenceId));
         return Object.freeze(output);
+      }, undefined, async () => {
+        await reauthorizeRequest(info, request, eventId, 'read_downstream_references', actorId);
+        assertNotExpired(headExpiryMs);
       });
     } catch (error) {
       throw mapStorageError(error);
@@ -1467,7 +1662,7 @@ export function createCorrectionHistoryStore(options) {
 
   async function purgeExpired(scope, request) {
     const info = scopeInfo(scope);
-    await authorizeRequest(info, request, null, 'purge_correction_history');
+    const actorId = await authorizeRequest(info, request, null, 'purge_correction_history');
     const directory = await tenantDirectory(info);
     try {
       return await withTransaction(info, directory, async (database) => {
@@ -1477,6 +1672,8 @@ export function createCorrectionHistoryStore(options) {
         let purged = 0;
         for (const row of expiredEvents) if (expireHistory(database, row.event_key, now)) purged += 1;
         return purged;
+      }, undefined, async () => {
+        await reauthorizeRequest(info, request, null, 'purge_correction_history', actorId);
       });
     } catch (error) {
       throw mapStorageError(error);
