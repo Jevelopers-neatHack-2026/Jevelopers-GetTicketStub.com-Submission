@@ -74,7 +74,7 @@ export function NewStub() {
   }, [already, router]);
 
   useEffect(() => {
-    if (ready && !input) router.replace("/");
+    if (ready && !input) router.replace("/make");
   }, [ready, input, router]);
 
   if (error) {
@@ -84,7 +84,7 @@ export function NewStub() {
           <h1 className={styles.errorTitle}>We couldn&apos;t read that link.</h1>
           <p className={styles.muted}>{error}</p>
           <div className={styles.actions}>
-            <Stamp onClick={() => router.push("/")}>
+            <Stamp onClick={() => router.push("/make")}>
               Paste another link
               <LeavesMark />
             </Stamp>

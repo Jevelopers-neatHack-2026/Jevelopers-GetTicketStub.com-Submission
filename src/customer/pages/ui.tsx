@@ -287,7 +287,7 @@ export function EmptyState({ kind, title, body, children }: { kind: EmptyKind; t
 export function FriendlyError({ title, body }: { title: string; body: string }) {
   return (
     <EmptyState kind="stub" title={title} body={body}>
-      <StampLink href="/">Make your own stub</StampLink>
+      <StampLink href="/make">Make your own stub</StampLink>
     </EmptyState>
   );
 }

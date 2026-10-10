@@ -46,6 +46,8 @@ export function locate(path: string, stubs: StubRow[], shareStubId?: string): st
   const seg = path.split("/").filter(Boolean);
   const id = seg[1] ? decodeURIComponent(seg[1]) : "";
   switch (seg[0]) {
+    case "make":
+      return ["make"];
     case "search":
       return ["make", "search"];
     case "new":
@@ -130,7 +132,7 @@ export function buildTree({ keys, stubs, cartCount, path, unsaved }: TreeInput):
   ];
 
   return [
-    { key: "make", label: "Make", href: "/", icon: "make", children: makeKids },
+    { key: "make", label: "Make", href: "/make", icon: "make", children: makeKids },
     { key: "wall", label: "Wall", href: "/wall", icon: "wall", children: wallKids },
     { key: "cart", label: "Cart", href: "/cart", icon: "cart", count: cartCount, children: cartKids },
     { key: "map", label: "Desk map", href: "/map", icon: "map" },

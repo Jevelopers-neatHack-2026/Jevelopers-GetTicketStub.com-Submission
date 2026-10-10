@@ -359,7 +359,7 @@ function EditorLoaded({ id }: { id: string }) {
         <h1>We couldn&apos;t find that stub on this device.</h1>
         <p>Stubs are saved in this browser. Make a new one from your ticket, or open your wall.</p>
         <div className={styles.missingActions}>
-          <Stamp onClick={() => window.setTimeout(() => router.push("/"), 200)}>
+          <Stamp onClick={() => window.setTimeout(() => router.push("/make"), 200)}>
             Paste a new link
             <LeavesMark />
           </Stamp>

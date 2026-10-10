@@ -164,7 +164,7 @@ export function SearchShows() {
 
         {shown.length > 0 ? <MarkLegend marks={["simulated"]} /> : null}
 
-        <TearLink type="button" className={styles.fallback} onClick={() => router.push("/")}>
+        <TearLink type="button" className={styles.fallback} onClick={() => router.push("/make")}>
           Can&apos;t find it? Paste the link instead
           <LeavesMark />
         </TearLink>

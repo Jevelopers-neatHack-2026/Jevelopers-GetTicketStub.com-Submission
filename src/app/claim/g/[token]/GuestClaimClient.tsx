@@ -137,7 +137,7 @@ export default function GuestClaimClient({ token }: { token: string }) {
               <Stamp type="button" block onClick={() => openSignIn({ reason: "claim", returnTo: `/claim/g/${encodeURIComponent(token)}` })}>
                 Email me a link
               </Stamp>
-              <TearLink type="button" onClick={() => router.push("/")}>
+              <TearLink type="button" onClick={() => router.push("/make")}>
                 Make a stub of my own
                 <LeavesMark />
               </TearLink>

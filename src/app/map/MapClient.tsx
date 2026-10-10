@@ -22,7 +22,7 @@ interface Place {
 }
 
 const FLOW: Place[] = [
-  { id: "make", name: "Make", does: "Paste your ticket link and start a stub.", Icon: MakeIcon, to: () => "/" },
+  { id: "make", name: "Make", does: "Paste your ticket link and start a stub.", Icon: MakeIcon, to: () => "/make" },
   { id: "style", name: "Style", does: "Pick a look, a finish and your words.", Icon: StyleIcon, to: (s) => `/studio/${s.id}`, needsStub: true },
   { id: "tear", name: "Tear", does: "Tear the stub off to finish it.", Icon: TearIcon, to: (s) => `/studio/${s.id}`, needsStub: true },
   { id: "wall", name: "Wall", does: "Pin your stubs and open any one up close.", Icon: WallIcon, to: () => "/wall" },
@@ -43,7 +43,7 @@ const ALWAYS: Place[] = [
 
 function Card({ place, stub, index }: { place: Place; stub: Stub | undefined; index: number }) {
   const blocked = place.needsStub && !stub;
-  const href = blocked ? "/" : place.to(stub as Stub);
+  const href = blocked ? "/make" : place.to(stub as Stub);
   return (
     <li className={m.node} style={{ ["--i" as string]: index }}>
       <Link

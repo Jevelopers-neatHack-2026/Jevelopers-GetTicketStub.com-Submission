@@ -280,7 +280,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
           <div className={s.empty}>
             <div className={s.emptySlot} aria-hidden="true" />
             <p className={s.emptyText}>Your first stub goes here.</p>
-            <Stamp type="button" onClick={() => router.push("/")}>
+            <Stamp type="button" onClick={() => router.push("/make")}>
               Make your first stub
               <LeavesMark />
             </Stamp>
