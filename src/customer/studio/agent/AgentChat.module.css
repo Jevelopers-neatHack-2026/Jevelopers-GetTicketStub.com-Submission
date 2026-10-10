@@ -1,0 +1,165 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--ts-bg);
+  color: var(--ts-text);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ts-text) 15%, transparent);
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.close {
+  min-height: 44px;
+  min-width: 44px;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: var(--ts-radius-control);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.msg {
+  max-width: 92%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.agent {
+  align-self: flex-start;
+  background: var(--ts-surface);
+  border-bottom-left-radius: 4px;
+}
+
+.user {
+  align-self: flex-end;
+  background: var(--ts-text);
+  color: var(--ts-bg);
+  border-bottom-right-radius: 4px;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ts-text-muted);
+}
+
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--ts-bg);
+  border: 1px solid color-mix(in srgb, var(--ts-text) 14%, transparent);
+}
+
+.factUnsure {
+  border-style: dashed;
+  border-color: var(--ts-orange);
+}
+
+.factRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.factLabel {
+  font-weight: 600;
+}
+
+.ask {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.alts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.suggest {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 16px 0;
+  scrollbar-width: none;
+}
+
+.suggest > * {
+  flex: none;
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px max(12px, env(safe-area-inset-bottom));
+}
+
+.composerRow {
+  display: flex;
+  gap: 8px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--ts-radius-control);
+  border: 1.5px solid color-mix(in srgb, var(--ts-text) 30%, transparent);
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font: inherit;
+}
+
+.typing {
+  color: var(--ts-text-muted);
+  font-style: italic;
+}

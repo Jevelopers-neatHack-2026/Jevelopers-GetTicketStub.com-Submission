@@ -1,0 +1,158 @@
+@import "../brand/tokens.css";
+
+/* TicketStub studio base. Paper by day (default), stage by night (.ts-night, prefers-color-scheme: dark). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font-family: var(--font-ui), var(--ts-font-ui);
+  font-size: var(--ts-step-0);
+  line-height: var(--ts-lh-body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), var(--ts-font-display);
+  font-weight: 560;
+  font-variation-settings: "SOFT" 30, "WONK" 0;
+  letter-spacing: var(--ts-track-display);
+  line-height: var(--ts-lh-heading);
+  text-wrap: balance;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ts-focus);
+  outline-offset: 3px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-size: var(--ts-step--1);
+  font-weight: 600;
+  letter-spacing: var(--ts-track-label);
+  text-transform: uppercase;
+  color: var(--ts-text-muted);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--ts-radius-control);
+  border: 1.5px solid var(--ts-text);
+  background: transparent;
+  font-weight: 500;
+  text-decoration: none;
+  transition: transform var(--ts-dur-quick) var(--ts-ease-standard), background var(--ts-dur-quick) var(--ts-ease-standard);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn-primary {
+  background: var(--ts-cta-bg);
+  color: var(--ts-cta-label);
+  border-color: transparent;
+  font-weight: 600;
+}
+.btn-quiet {
+  border-color: transparent;
+  background: var(--ts-surface);
+}
+.btn-block {
+  width: 100%;
+}
+.btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--ts-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--ts-text) 25%, transparent);
+  background: transparent;
+  font-size: 13px;
+}
+.chip[aria-pressed="true"] {
+  background: var(--ts-text);
+  color: var(--ts-bg);
+  border-color: transparent;
+}
+
+.sheet {
+  background: var(--ts-bg);
+  border-top: 1.5px solid var(--ts-text);
+  border-radius: var(--ts-radius-sheet) var(--ts-radius-sheet) 0 0;
+  box-shadow: 0 -12px 30px -18px rgb(0 0 0 / 0.5);
+}
+
+.provenance {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--ts-radius-pill);
+  border: 1px dashed color-mix(in srgb, var(--ts-text) 40%, transparent);
+  color: var(--ts-text-muted);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

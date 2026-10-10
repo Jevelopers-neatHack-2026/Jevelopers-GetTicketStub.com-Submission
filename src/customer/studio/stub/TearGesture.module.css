@@ -1,0 +1,138 @@
+/* Tear to finish: the signature move. Night stage (#17140F) so the foil glows. */
+.wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 28px 16px 32px;
+  background: #17140f;
+  color: #f4ecdd;
+  border-radius: var(--ts-radius-sheet, 20px);
+  overflow: hidden;
+  isolation: isolate;
+  width: 100%;
+}
+.heading {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 560;
+  font-size: var(--ts-step-3, 1.953rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-align: center;
+}
+.hint {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgb(244 236 221 / 0.66);
+  text-align: center;
+}
+.stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 120px;
+}
+.mover {
+  transform-origin: 100% 100%;
+  will-change: transform;
+}
+.dragging {
+  transition: transform 80ms linear;
+}
+.settling {
+  transition: transform 380ms cubic-bezier(0.45, 0, 0.55, 1);
+}
+.flyAway {
+  transition:
+    transform 600ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 600ms cubic-bezier(0.4, 0, 1, 1);
+  opacity: 0;
+}
+
+.track {
+  position: relative;
+  width: min(100%, 440px);
+  height: 44px;
+  margin-top: -6px;
+}
+.line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  background: radial-gradient(circle, rgb(244 236 221 / 0.55) 0 2px, transparent 2.5px) 0 50% / 12px 6px repeat-x;
+}
+.torn {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 10px;
+  margin-top: -5px;
+  background:
+    conic-gradient(from 135deg at 50% 0, #e4572e 90deg, transparent 0) 0 0 / 8px 5px repeat-x,
+    conic-gradient(from -45deg at 50% 100%, #e4572e 90deg, transparent 0) 4px 100% / 8px 5px repeat-x;
+  opacity: 0.85;
+  border-radius: 2px;
+}
+.settlingBar {
+  transition:
+    width 380ms cubic-bezier(0.45, 0, 0.55, 1),
+    left 380ms cubic-bezier(0.45, 0, 0.55, 1);
+}
+.handle {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  border: 0;
+  background: #e4572e;
+  color: #17140f;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  box-shadow:
+    0 0 0 4px rgb(228 87 46 / 0.22),
+    0 8px 18px -6px rgb(0 0 0 / 0.6);
+}
+.handle:active {
+  cursor: grabbing;
+}
+.handle:focus-visible {
+  outline: 2px solid #7cc6d2;
+  outline-offset: 4px;
+}
+.grip {
+  width: 16px;
+  height: 12px;
+  background: repeating-linear-gradient(90deg, #17140f 0 2px, transparent 2px 5px);
+  border-radius: 1px;
+}
+.pct {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgb(244 236 221 / 0.5);
+  min-height: 1.2em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dragging,
+  .settling,
+  .settlingBar {
+    transition: none;
+  }
+  .flyAway {
+    transition: opacity 200ms linear;
+    transform: none !important;
+  }
+}

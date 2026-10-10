@@ -1,0 +1,120 @@
+/* Foil + glare layers. Values come from brand-kit material-foil.md "foil must never pop".
+   All motion comes from the smoothed CSS vars written by useTilt (--lx --ly --px --py --glow);
+   nothing here transitions, so there is one motion model. Never color-dodge. */
+
+/* display: contents so the blend layers are direct participants of the face's isolation group.
+   (A positioned wrapper with z-index would form its own stacking context, and the overlay / screen
+   modes would blend against transparency instead of the stub.) The parent must be positioned,
+   overflow: hidden and isolation: isolate. */
+.layers {
+  display: contents;
+}
+.sheen,
+.glare,
+.holo {
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Brand foil sheen: copper -> orange -> cyan band, ~40% of the gradient length,
+   travelling 90% across with the light. overlay, max 0.5 at glow 1. */
+.sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    transparent 30%,
+    #b4693e 38%,
+    #e4572e 50%,
+    #7cc6d2 62%,
+    transparent 70%,
+    transparent 100%
+  );
+  background-size: 250% 250%;
+  background-position: calc(5% + var(--lx, 50%) * 0.9) calc(5% + var(--ly, 35%) * 0.9);
+  mix-blend-mode: overlay;
+  opacity: calc(var(--glow, 0.1) * 0.5);
+}
+
+/* Glare: white radial at the light, overlay, max 0.3 at the centre. */
+.glare {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--lx, 50%) var(--ly, 35%),
+    rgb(255 255 255 / 1) 0%,
+    rgb(255 255 255 / 0.35) 22%,
+    rgb(255 255 255 / 0) 55%
+  );
+  mix-blend-mode: overlay;
+  opacity: calc(var(--glow, 0.1) * 0.3);
+}
+.matte .glare {
+  opacity: calc(var(--glow, 0.1) * 0.16);
+}
+
+/* Holographic stock: halftone plate (white = foil) multiplied by the spectrum,
+   screened onto the stub at 0.42 + 0.52 * glow. */
+.holo {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  mix-blend-mode: screen;
+  opacity: calc(0.42 + 0.52 * var(--glow, 0.1));
+  overflow: hidden;
+}
+.plate {
+  position: absolute;
+  inset: -50%;
+  background-color: #000;
+  background-image: radial-gradient(circle, #fff 0 var(--dot), #000 calc(var(--dot) + 0.35px));
+  background-size: var(--cell) var(--cell);
+  background-position: var(--off) var(--off);
+  transform: rotate(var(--angle));
+}
+.spectrum {
+  position: absolute;
+  inset: -40%;
+  background: var(
+    --ts-holo-spectrum,
+    repeating-linear-gradient(
+      118deg,
+      hsl(348 92% 58%) 0,
+      hsl(34 94% 60%) 26px,
+      hsl(58 90% 62%) 50px,
+      hsl(150 82% 58%) 76px,
+      hsl(200 92% 60%) 102px,
+      hsl(280 88% 62%) 128px,
+      hsl(348 92% 58%) 152px
+    )
+  );
+  mix-blend-mode: multiply;
+  transform: translate(calc(var(--px, 0) * 14%), calc(var(--py, 0) * 10%));
+}
+
+/* Foil title text: the gradient is fixed ink, only its position follows the light. */
+.foilText {
+  background-image: linear-gradient(
+    115deg,
+    #8a4a28 0%,
+    #b4693e 22%,
+    #e4572e 40%,
+    #d9734a 50%,
+    #3f8e9b 64%,
+    #b4693e 82%,
+    #8a4a28 100%
+  );
+  background-size: 250% 100%;
+  background-position: calc(5% + var(--lx, 50%) * 0.9) 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spectrum {
+    transform: none;
+  }
+}
