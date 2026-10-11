@@ -17,8 +17,8 @@ import { Breadcrumbs } from "@/customer/nav/Breadcrumbs";
 import { LeavesMark } from "@/customer/pages/ui";
 import { HandleIcon } from "@/customer/nav/icons";
 import { PathTrack } from "@/customer/wayfinding/PathTrack";
-import { PaperButton, PaperSheet, Stamp, Switch, Tag, Tags, Tool, Tools } from "@/customer/desk/Desk";
-import { AskIcon, FlipIcon, FriendsIcon, RemixIcon } from "@/customer/desk/icons";
+import { PaperButton, PaperSheet, Stamp, Tag, Tags, Tool, Tools } from "@/customer/desk/Desk";
+import { AskIcon, FlipIcon, FriendsIcon, PreviewIcon, RemixIcon } from "@/customer/desk/icons";
 import { formatDate, hiddenLabel, setEdition, setHidden, stepEdition, type Selectable } from "./ops";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { DockedToolbar } from "./Dock";
@@ -102,10 +102,6 @@ function editionLabel(ed: Edition): string {
 /** The stub's printed width in inches, for the camera's grid and rulers. */
 function inchesWide(ed: string): number {
   return INCHES[ed as Edition]?.[0] ?? 2;
-}
-
-function fmtIn(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
 /** The studio editor: one stub, edited in place. Every change is saved to the wall right away. */
@@ -471,8 +467,6 @@ function EditorLoaded({ id }: { id: string }) {
   const edition = version.edition;
   const ev = stub.event;
   const crumb = [ev.subtitle, ev.venue, formatDate(ev.dateISO)].filter(Boolean).join(" · ");
-  const [inW, inH] = INCHES[edition];
-  const sizeLabel = `${fmtIn(inW)} × ${fmtIn(inH)} in`;
   const index = EDITIONS.indexOf(edition);
 
   const stageVars = { "--ar": ASPECT[edition], "--mat": `${MAT[stub.material]}px` } as CSSProperties;
@@ -599,13 +593,13 @@ function EditorLoaded({ id }: { id: string }) {
       <div className={`${styles.root} desk-surface`}>
         <div className={styles.desk}>
           <header className={styles.deskHeader}>
+            <Breadcrumbs className={styles.crumbs} />
             <div className={styles.crumb}>
-              <Breadcrumbs className={styles.crumbs} />
               <h1 className={styles.crumbTitle}>{ev.title}</h1>
               {crumb && <p className={styles.crumbSub}>{crumb}</p>}
             </div>
-            <PathTrack current="style" stubId={stub.id} className={styles.track} />
             <div className={styles.headerActions}>
+              <PathTrack current="style" stubId={stub.id} className={styles.track} />
               <PaperButton onClick={() => router.push(`/s/${shareToken}`)}>
                 Share page
                 <LeavesMark />
@@ -634,24 +628,6 @@ function EditorLoaded({ id }: { id: string }) {
             </aside>
 
             <main className={styles.deskCentre}>
-              <div className={styles.matBar}>
-                <div className={styles.matSwitch}>
-                  <Switch
-                    checked={preview}
-                    onChange={setPreview}
-                    hint={preview ? "Safe area and bleed stay on" : zoomed ? "Comes on by itself while zoomed in" : "Shows the safe area and the bleed"}
-                  >
-                    Print preview
-                    <span className={styles.auto} data-on={(zoomed && !preview) || undefined}>
-                      Auto
-                    </span>
-                  </Switch>
-                </div>
-                <span className={`desk-label ${styles.size}`}>
-                  {editionLabel(edition)} · {sizeLabel}
-                </span>
-              </div>
-
               <div ref={matRef} className={styles.mat}>
                 <div className={styles.rulerTop} data-cam-top aria-hidden="true">
                   <span className={styles.band} data-cam-band-t />
@@ -714,6 +690,17 @@ function EditorLoaded({ id }: { id: string }) {
                   </PaperButton>
                   <PaperButton aria-label="Fit the stub to the mat" data-cam-fit className={styles.fit} onClick={camera.fit}>
                     Fit
+                  </PaperButton>
+                  <PaperButton
+                    className={styles.previewToggle}
+                    aria-pressed={preview}
+                    data-auto={(zoomed && !preview) || undefined}
+                    aria-label="Print preview"
+                    title={preview ? "Print preview on: safe area and bleed stay on" : zoomed ? "Print preview: on by itself while zoomed in" : "Print preview: show the safe area and the bleed"}
+                    onClick={() => setPreview(!preview)}
+                  >
+                    <PreviewIcon />
+                    Preview
                   </PaperButton>
                 </div>
                 <p className={styles.keys}>

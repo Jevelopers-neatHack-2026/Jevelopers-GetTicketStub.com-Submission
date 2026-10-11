@@ -23,6 +23,16 @@ export function RemixIcon() {
 }
 
 /** Flip: a stub turning over. */
+/** Print preview: crop marks around a dashed safe area. */
+export function PreviewIcon() {
+  return (
+    <svg {...base}>
+      <path d="M7 3v4H3M17 3v4h4M7 21v-4H3M17 21v-4h4" />
+      <rect x="9.5" y="9.5" width="5" height="5" rx="0.6" strokeDasharray="1.4 1.8" />
+    </svg>
+  );
+}
+
 export function FlipIcon() {
   return (
     <svg {...base}>

@@ -3,7 +3,7 @@
    (see overlays.module.css, .frame), so the stage can be sized to it before it renders. */
 
 .root {
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--demo-reserve, 0px));
   /* nothing highlights while a stub is dragged; fields stay selectable */
   user-select: none;
   -webkit-user-select: none;
@@ -15,7 +15,7 @@
 }
 
 .loading {
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--demo-reserve, 0px));
 }
 
 .missing {
@@ -280,13 +280,15 @@
 .desk {
   display: grid;
   grid-template-rows: auto 1fr;
-  height: 100dvh;
+  height: calc(100dvh - var(--demo-reserve, 0px));
   overflow: hidden;
   /* the desk answers to the room it has beside the nav, not to the viewport. Fixed overlays are siblings of this element. */
   container: desk / inline-size;
 }
+/* one compact row: where you are on the left, the stub's name in the middle, the path and Share on the right */
 .deskHeader {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
   gap: 16px;
   padding: 10px max(20px, var(--corner-reserve, 0px)) 10px 20px;
@@ -301,26 +303,35 @@
   padding: 0;
 }
 .crumb {
-  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
   min-width: 0;
+  white-space: nowrap;
 }
 .crumbTitle {
-  font: var(--type-h2);
+  flex: none;
+  font: var(--type-h3);
   font-variation-settings: "SOFT" 30, "opsz" 36;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: -0.015em;
 }
 .crumbSub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font: var(--type-label);
   font-variant-numeric: tabular-nums;
   color: var(--desk-ink-soft);
 }
+.crumbSub::before {
+  content: "· ";
+}
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 16px;
 }
 .deskGrid {
   --rail-w: 240px;
@@ -462,28 +473,13 @@
 .deskCentre {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
   min-height: 0;
   min-width: 0;
   padding: 10px 16px 14px;
   container: centre / inline-size;
 }
-.matBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.matSwitch {
-  flex: 0 1 290px;
-  min-width: 0;
-}
-.size {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 /* The cutting mat: muted green, self-healing, inch grid, lit from the top left. Still paper family. */
 .mat {
   --mat-base: #93ab90;
@@ -708,6 +704,26 @@
 .zoom > .fit[data-fit="true"] {
   opacity: 0.55;
 }
+/* print preview as a toggle button beside the zoom: sunk and inked while it is on */
+.zoom > .previewToggle {
+  gap: 6px;
+  padding: 0 14px 0 10px;
+}
+.previewToggle svg {
+  width: 18px;
+  height: 18px;
+}
+.zoom > .previewToggle[aria-pressed="true"] {
+  background: var(--desk-ink);
+  color: var(--desk-paper);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+/* zoomed in, the guides come on by themselves: the button says so with a dashed edge */
+.zoom > .previewToggle[data-auto] {
+  outline: 1.5px dashed var(--desk-edge, var(--desk-rule-strong));
+  outline-offset: 2px;
+}
+
 .zoomValue {
   min-width: 48px;
   text-align: center;
@@ -742,6 +758,12 @@
   }
   .deskGrid[data-insp="folded"] {
     --insp-w: 44px;
+  }
+}
+/* too narrow for the subtitle beside the title: the title keeps the row to itself */
+@container desk (max-width: 1179.98px) {
+  .crumbSub {
+    display: none;
   }
 }
 @container desk (max-width: 959.98px) {
@@ -860,32 +882,11 @@
   opacity: 0.94;
 }
 
-/* the small "Auto" mark on the Print preview switch while zooming brings the guides on by itself */
-.auto {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
-  font: var(--type-label);
-  font-size: 0.62rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--desk-ink-soft);
-  vertical-align: 1px;
-  opacity: 0;
-  transition: opacity 240ms var(--ts-ease-standard);
-}
-.auto[data-on] {
-  opacity: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .mini,
   .hairX,
   .hairY,
   .read,
-  .auto,
   .safety,
   .bleed,
   .deskGrid,

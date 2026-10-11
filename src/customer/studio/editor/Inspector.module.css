@@ -66,6 +66,8 @@
 .panelInner {
   min-height: 0;
   overflow: hidden;
+  /* paint containment too: a folded panel's 3D stub thumbnails otherwise still stretch the page's scroll height */
+  contain: paint;
   padding: 0 14px;
 }
 .panel[data-open="true"] .panelInner {

@@ -18,9 +18,11 @@
   line-height: 1;
 }
 
-/* while the pill is up, the page can scroll its last line clear of it */
+/* while the pill is up, the page can scroll its last line clear of it; a screen-high view (the studio)
+   shrinks by --demo-reserve instead, so it never scrolls */
 :global(#content):has(> .pill) {
-  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  --demo-reserve: calc(48px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--demo-reserve);
 }
 
 .tag {
