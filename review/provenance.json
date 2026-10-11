@@ -6616,7 +6616,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "docs/collateral-inventory.json",
-        "revision": "sha256:bab461d6fb6059075b713cd852fef4081bef1e94f6140e97ff47aa08d9b1e3e8",
+        "revision": "sha256:20eeefcd1bff79f383ec7fd49a896975676d5318bb29e094b4bbe924ef424a18",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
@@ -6674,7 +6674,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "bab461d6fb6059075b713cd852fef4081bef1e94f6140e97ff47aa08d9b1e3e8",
+        "value": "20eeefcd1bff79f383ec7fd49a896975676d5318bb29e094b4bbe924ef424a18",
         "status": "Exact SHA-256 content digest of current inventory bytes; the register is external to this source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -8724,7 +8724,7 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "release/v0.1.0-rehearsal/manifest.json",
-        "revision": "sha256:3618ec3addd926846835da9e83af80647821ff2d6323af8dd5f23ec2c26c27ce",
+        "revision": "sha256:0b42efca9c95756e1859205f80f3149c06a5314c0a4de460f822ce6830e5c872",
         "revisionKind": "git_commit",
         "url": null,
         "restrictedOriginalReference": null
@@ -8782,7 +8782,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "3618ec3addd926846835da9e83af80647821ff2d6323af8dd5f23ec2c26c27ce",
+        "value": "0b42efca9c95756e1859205f80f3149c06a5314c0a4de460f822ce6830e5c872",
         "status": "Computed from exact current bytes; source pin is the immutable commit containing these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
