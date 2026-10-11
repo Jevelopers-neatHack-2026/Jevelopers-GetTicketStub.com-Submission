@@ -336,6 +336,90 @@ function digestJson(value) {
   return createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
 }
 
+function stableTextCompare(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function suggestionSortKey(suggestion) {
+  const references = Array.isArray(suggestion?.sourceRefs) ? suggestion.sourceRefs.map((reference) => {
+    const locator = reference?.locator;
+    return JSON.stringify([
+      reference?.evidenceId ?? '', reference?.contentHash ?? '', locator?.kind ?? '',
+      locator?.startByte ?? null, locator?.endByte ?? null, locator?.pointer ?? null,
+      reference?.field ?? '', reference?.value ?? '',
+    ]);
+  }).sort(stableTextCompare) : [];
+  return JSON.stringify([suggestion?.url ?? '', references, suggestion?.label ?? null]);
+}
+
+function boundCompletionSuggestions(suggestions, maximum) {
+  const ordered = [...suggestions].sort((left, right) =>
+    stableTextCompare(suggestionSortKey(left), suggestionSortKey(right)));
+  return { suggestions: ordered.slice(0, maximum), omittedSuggestions: ordered.slice(maximum) };
+}
+
+function completionObservations(snapshot, candidateId, outcome) {
+  return snapshot.observations.filter((observation) => observation.kind === 'link'
+    && observation.parentCandidateId === candidateId && observation.outcome === outcome);
+}
+
+function observationsMatchSuggestions(observations, suggestions) {
+  if (observations.length !== suggestions.length) return false;
+  const counts = new Map();
+  for (const suggestion of suggestions) {
+    const key = suggestionSortKey(suggestion);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const observation of observations) {
+    const key = suggestionSortKey({
+      url: observation.suppliedUrl,
+      sourceRefs: observation.sourceRefs,
+      label: observation.untrustedLabel ?? null,
+    });
+    const count = counts.get(key) ?? 0;
+    if (count < 1) return false;
+    if (count === 1) counts.delete(key);
+    else counts.set(key, count - 1);
+  }
+  return counts.size === 0;
+}
+
+function completionPayloadHashFromObservations(observations, outcome, truncatedCount) {
+  const suggestions = observations.map((observation) => ({
+    suppliedUrl: observation.suppliedUrl,
+    canonicalUrl: observation.canonicalUrl,
+    label: observation.untrustedLabel ?? null,
+    sourceRefs: observation.sourceRefs,
+  })).sort((left, right) => stableTextCompare(JSON.stringify(left), JSON.stringify(right)));
+  return digestJson({ outcome, suggestions, truncatedCount });
+}
+
+function completionPayloadMatches(receipt, snapshot, candidateId, completion, truncatedCount) {
+  if (!completion || typeof completion.payloadHash !== 'string') return false;
+  const observations = completionObservations(snapshot, candidateId, receipt.outcome);
+  return observationsMatchSuggestions(observations, receipt.suggestions)
+    && completionPayloadHashFromObservations(observations, receipt.outcome, truncatedCount) === completion.payloadHash;
+}
+
+function reconstructCompletedLegacyReceipt(receipt, snapshot, candidateId, completion, maximum) {
+  const full = boundCompletionSuggestions(receipt.suggestions, receipt.suggestions.length);
+  if (completionPayloadMatches({ ...receipt, suggestions: full.suggestions }, snapshot, candidateId, completion, 0)) {
+    return { ...receipt, suggestions: full.suggestions, truncatedCount: 0, omittedSuggestions: [] };
+  }
+  const bounded = boundCompletionSuggestions(receipt.suggestions, maximum);
+  if (bounded.omittedSuggestions.length > 0
+    && completionPayloadMatches({ ...receipt, suggestions: bounded.suggestions }, snapshot, candidateId,
+      completion, bounded.omittedSuggestions.length)) {
+    return {
+      ...receipt,
+      suggestions: bounded.suggestions,
+      truncatedCount: bounded.omittedSuggestions.length,
+      omittedSuggestions: bounded.omittedSuggestions,
+    };
+  }
+  return null;
+}
+
 function receiptCandidate(candidate, bindSuppliedUrl = false) {
   if (bindSuppliedUrl && (typeof candidate.suppliedUrl !== 'string' || candidate.suppliedUrl.length < 1
     || candidate.suppliedUrl.length > 8_192 || urlHasSensitiveMaterial(candidate.suppliedUrl))) {
@@ -389,7 +473,8 @@ function aggregateIdentity(candidateResults) {
   });
 }
 
-function projection(identity, selectedEvidence, selectedFacts, progress, limitations) {
+function projection(identity, selectedEvidence, selectedFacts, progress, limitations, omittedLinkCandidates,
+  truncatedSuggestionCount, sourceLinkCandidateOmittedCount) {
   const facts = selectedFacts;
   const evidenceById = new Map(selectedEvidence.map((item) => [item.metadata.evidenceId, item]));
   const sources = [...evidenceById.values()].map((item) => Object.freeze({
@@ -471,6 +556,11 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
     unresolvedTransitions: identity.unresolvedTransitions,
     sources: Object.freeze(sources),
     linkCandidates: Object.freeze(linkCandidates),
+    omittedLinkCandidates: Object.freeze(omittedLinkCandidates.map((suggestion) => Object.freeze({
+      url: suggestion.url,
+      sourceRefs: suggestion.sourceRefs,
+      reason: 'completion_suggestion_limit',
+    }))),
     conflicts,
     sourceAuthority: 'not_evaluated',
     rights: 'not_evaluated',
@@ -483,6 +573,8 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
       completedCandidates: progress.candidates.filter((candidate) => candidate.state === 'completed').length,
       remainingCandidates: progress.candidates.filter((candidate) => candidate.state === 'queued' || candidate.state === 'leased').length,
       transportAttemptAdmissions: progress.counters.transportAttemptAdmissions,
+      truncatedSuggestionCount,
+      sourceLinkCandidateOmittedCount,
     }),
   });
 }
@@ -500,6 +592,9 @@ export async function runPrivateRetrieval(value) {
   const candidateResults = [];
   const outputFacts = new Map();
   const evidenceIds = new Set();
+  const omittedLinkCandidates = [];
+  let truncatedSuggestionCount = 0;
+  let sourceLinkCandidateOmittedCount = 0;
   const activeHops = new Map();
   const controller = new AbortController();
   const runStartedAt = performance.now();
@@ -587,6 +682,11 @@ export async function runPrivateRetrieval(value) {
       }, () => {});
       return creating;
     });
+    const maxSuggestionsPerCompletion = initial.limits?.maxSuggestionsPerCompletion;
+    if (!Number.isSafeInteger(maxSuggestionsPerCompletion)
+      || maxSuggestionsPerCompletion < 1 || maxSuggestionsPerCompletion > 16) {
+      throw new RetrievalError('FRONTIER_UNAVAILABLE');
+    }
     if (!Number.isSafeInteger(initial.deadlineAtMs)) throw new RetrievalError('FRONTIER_UNAVAILABLE');
     deadlineAtMonotonic = Math.min(deadlineAtMonotonic,
       performance.now() + Math.max(0, initial.deadlineAtMs - Date.now()));
@@ -629,6 +729,9 @@ export async function runPrivateRetrieval(value) {
     const retainReceipt = (receipt) => {
       for (const evidenceId of receipt.evidenceIds) evidenceIds.add(evidenceId);
       for (const fact of receipt.facts) outputFacts.set(fact.factId, fact);
+      omittedLinkCandidates.push(...(receipt.omittedSuggestions ?? []));
+      truncatedSuggestionCount += receipt.truncatedCount ?? receipt.omittedSuggestions?.length ?? 0;
+      sourceLinkCandidateOmittedCount += receipt.sourceLinkCandidatesOmittedCount ?? 0;
       for (const limitation of receipt.limitations) limitations.add(limitation);
       const identity = receipt.identity;
       if (identity.entityCandidates.length > 0 || identity.occurrenceCandidates.length > 0
@@ -715,6 +818,54 @@ export async function runPrivateRetrieval(value) {
           runFailure = 'private_receipt_unavailable';
           return;
         }
+        let replayReceipt = receipt;
+        if (candidate.state === 'completed') {
+          if (receipt.omissionMetadataVersion === 1) {
+            const completionObservationsForReceipt = completionObservations(
+              snapshot, candidate.candidateId, receipt.outcome,
+            );
+            if (!observationsMatchSuggestions(completionObservationsForReceipt, receipt.suggestions)) {
+              limitations.add('private_receipt_mismatch');
+              runFailure = 'private_receipt_unavailable';
+              return;
+            }
+            if (!completionPayloadMatches(receipt, snapshot, candidate.candidateId,
+              frontierBinding.completion, receipt.truncatedCount)) {
+              limitations.add('private_receipt_completion_mismatch');
+              runFailure = 'private_receipt_unavailable';
+              return;
+            }
+          } else {
+            const reconstructed = reconstructCompletedLegacyReceipt(receipt, snapshot, candidate.candidateId,
+              frontierBinding.completion, maxSuggestionsPerCompletion);
+            if (!reconstructed) {
+              limitations.add('legacy_receipt_fanout_recovery_unverified');
+              limitations.add('private_receipt_completion_mismatch');
+              runFailure = 'private_receipt_unavailable';
+              return;
+            }
+            replayReceipt = reconstructed;
+          }
+        } else if (candidate.state === 'leased') {
+          if (receipt.omissionMetadataVersion === 1 && receipt.suggestions.length > maxSuggestionsPerCompletion) {
+            limitations.add('private_receipt_completion_mismatch');
+            runFailure = 'private_receipt_unavailable';
+            return;
+          }
+          const bounded = boundCompletionSuggestions(receipt.suggestions, maxSuggestionsPerCompletion);
+          if (receipt.omissionMetadataVersion === 1 && bounded.omittedSuggestions.length > 0) {
+            limitations.add('private_receipt_completion_mismatch');
+            runFailure = 'private_receipt_unavailable';
+            return;
+          }
+          replayReceipt = {
+            ...receipt,
+            suggestions: bounded.suggestions,
+            truncatedCount: (receipt.truncatedCount ?? 0) + bounded.omittedSuggestions.length,
+            omittedSuggestions: [...(receipt.omittedSuggestions ?? []), ...bounded.omittedSuggestions],
+            sourceLinkCandidatesOmittedCount: receipt.sourceLinkCandidatesOmittedCount ?? 0,
+          };
+        }
         if (candidate.state === 'completed'
           && (candidate.completionOutcome !== receipt.outcome
             || !frontierBinding.completion
@@ -746,28 +897,34 @@ export async function runPrivateRetrieval(value) {
           }
           if (priorClaim.state === 'claimed') {
             await awaitOperation(() => input.frontier.completeCandidate(scope, input.runId, {
-              leaseToken: receipt.claim.leaseToken,
-              completionKey: receipt.completionKey,
-              outcome: receipt.outcome,
-              suggestions: receipt.suggestions,
+              leaseToken: replayReceipt.claim.leaseToken,
+              completionKey: replayReceipt.completionKey,
+              outcome: replayReceipt.outcome,
+              suggestions: replayReceipt.suggestions,
+              truncatedCount: replayReceipt.truncatedCount ?? 0,
             }, controller.signal));
           } else {
             const completedBinding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
               scope, input.runId, candidate.candidateId, controller.signal,
+            ));
+            const completedSnapshot = await awaitOperation(() => input.frontier.getSnapshot(
+              scope, input.runId, controller.signal,
             ));
             if (!completedBinding || completedBinding.claim.state !== 'completed'
               || completedBinding.claim.claimKey !== receipt.claim.claimKey
               || completedBinding.claim.workerId !== receipt.claim.workerId
               || completedBinding.claim.leaseToken !== receipt.claim.leaseToken
               || completedBinding.completion?.completionKey !== receipt.completionKey
-              || completedBinding.completion?.outcome !== receipt.outcome) {
+              || completedBinding.completion?.outcome !== replayReceipt.outcome
+              || !completionPayloadMatches(replayReceipt, completedSnapshot, candidate.candidateId,
+                completedBinding.completion, replayReceipt.truncatedCount ?? 0)) {
               limitations.add('private_receipt_completion_mismatch');
               runFailure = 'private_receipt_unavailable';
               return;
             }
           }
         }
-        retainReceipt(receipt);
+        retainReceipt(replayReceipt);
       }
     };
 
@@ -778,6 +935,7 @@ export async function runPrivateRetrieval(value) {
       const priorLimitations = new Set(limitations);
       const candidateEvidenceIds = new Set();
       const candidateFacts = [];
+      let selectedSourceLinkCandidatesOmittedCount = 0;
       const claimBinding = Object.freeze({
         claimKey: claim.claimKey,
         workerId: claim.workerId,
@@ -1014,7 +1172,10 @@ export async function runPrivateRetrieval(value) {
               value: link.url,
             }],
           }));
-          if (selectedResult.linkCandidatesOmitted > 0) limitations.add('some_link_candidates_omitted_by_policy_or_parser_limit');
+          selectedSourceLinkCandidatesOmittedCount = selectedResult.linkCandidatesOmitted;
+          if (selectedSourceLinkCandidatesOmittedCount > 0) {
+            limitations.add('some_link_candidates_omitted_by_policy_or_parser_limit');
+          }
           const extraction = composedSource?.extraction;
           if (extraction?.jsRequired === true) limitations.add('dynamic_rendering_required');
           if (extraction?.status === 'PARTIAL' && extraction?.termination !== null) limitations.add('extraction_incomplete');
@@ -1126,6 +1287,12 @@ export async function runPrivateRetrieval(value) {
         })
         : emptyIdentityResult();
       const candidateSuggestions = failure ? [] : selectedSuggestions;
+      const boundedSuggestions = boundCompletionSuggestions(candidateSuggestions, maxSuggestionsPerCompletion);
+      const acceptedSuggestions = boundedSuggestions.suggestions;
+      const omittedSuggestions = boundedSuggestions.omittedSuggestions;
+      const truncatedCount = omittedSuggestions.length;
+      const candidateSourceLinkCandidatesOmittedCount = failure ? 0 : selectedSourceLinkCandidatesOmittedCount;
+      if (truncatedCount > 0) limitations.add('completion_suggestion_limit');
       const evidenceHandles = [];
       for (const evidenceId of candidateEvidenceIds) {
         evidenceHandles.push(await awaitOperation(() => input.evidenceStore.lookupEvidence(evidenceScope, evidenceId, controller.signal)));
@@ -1141,7 +1308,10 @@ export async function runPrivateRetrieval(value) {
         completion: {
           completionKey,
           outcome,
-          suggestions: candidateSuggestions,
+          suggestions: acceptedSuggestions,
+          truncatedCount,
+          omittedSuggestions,
+          sourceLinkCandidatesOmittedCount: candidateSourceLinkCandidatesOmittedCount,
           limitations: candidateLimitations,
           identity: candidateIdentity,
         },
@@ -1149,12 +1319,16 @@ export async function runPrivateRetrieval(value) {
       }, input.request, controller.signal));
       for (const evidenceId of candidateEvidenceIds) evidenceIds.add(evidenceId);
       for (const fact of candidateFacts) outputFacts.set(fact.factId, fact);
+      omittedLinkCandidates.push(...omittedSuggestions);
+      truncatedSuggestionCount += truncatedCount;
+      sourceLinkCandidateOmittedCount += candidateSourceLinkCandidatesOmittedCount;
       if (selectedResult?.sources[0]?.evidence?.evidenceId) candidateResults.push(candidateIdentity);
       await awaitOperation(() => input.frontier.completeCandidate(scope, input.runId, {
         leaseToken: claim.leaseToken,
         completionKey,
         outcome,
-        suggestions: candidateSuggestions,
+        suggestions: acceptedSuggestions,
+        truncatedCount,
       }, controller.signal));
     };
 
@@ -1281,7 +1455,8 @@ export async function runPrivateRetrieval(value) {
       limitations.add('final_selected_snapshot_mismatch');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
-    const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations);
+    const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations,
+      omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount);
     return draft;
   } catch (error) {
     const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);

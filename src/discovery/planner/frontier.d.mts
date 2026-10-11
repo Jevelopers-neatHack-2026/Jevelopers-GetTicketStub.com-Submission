@@ -170,6 +170,8 @@ export interface FrontierCandidateReceiptBinding {
   readonly completion: null | {
     readonly completionKey: string;
     readonly outcome: 'links_observed' | 'no_links' | 'failed' | 'access_restricted';
+    /** SHA-256 of the exact normalized suggestions and truncation count committed by the completion. */
+    readonly payloadHash: string;
   };
 }
 

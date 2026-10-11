@@ -540,6 +540,193 @@ test('private receipt plaintext and JSON hash buffers are wiped after successful
     'the temporary JSON hash buffer is zeroed after receipt verification');
 });
 
+test('original baseline v1 no-links receipt keeps its exact hash and finalize-idempotency shape', async (t) => {
+  const fixtureBytes = await readFile(new URL('./fixtures/private-run-receipt-v1-legacy.json', import.meta.url));
+  assert.equal(createHash('sha256').update(fixtureBytes).digest('hex'),
+    '6e48ff85e930aa2046719d338e79018748279446d4191ed7948b71103ac66ec5',
+  'the original captured v1 ciphertext remains immutable');
+  const fixture = JSON.parse(fixtureBytes.toString('utf8'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'ei-legacy-v1-receipt-test-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const authenticatedRequest = request(fixture.tenantId, true);
+  const store = createEvidenceStore({
+    directory,
+    resolveTenant: (value) => value?.principal?.tenantId,
+    resolveKey({ tenantId, purpose, keyId }) {
+      assert.equal(tenantId, fixture.tenantId);
+      const selectedId = 'payload-legacy-fixture-v1';
+      if (keyId) assert.equal(keyId, selectedId);
+      return {
+        keyId: selectedId,
+        key: createHash('sha256').update(`${tenantId}:${purpose}:legacy-receipt-v1`).digest(),
+      };
+    },
+    resolveRetention: ({ nowMs, sourceExpiresAtMs }) => ({
+      expiresAtMs: sourceExpiresAtMs ?? nowMs + 60_000,
+      policyId: 'legacy-v1-fixture', policyVersion: '1', accessPolicy: 'tenant_private',
+    }),
+    authorizePrivateAccess: ({ tenantId, request: value }) => tenantId === fixture.tenantId
+      && value?.principal?.tenantId === tenantId && value.allowPrivate === true,
+    authorizePrivateAccessCurrent: ({ tenantId, request: value }) => tenantId === fixture.tenantId
+      && value?.principal?.tenantId === tenantId && value.allowPrivate === true,
+    now: () => Date.now(),
+  });
+  const scope = await store.scopeForAuthenticatedRequest(authenticatedRequest);
+  await store.integritySnapshot(scope);
+  const database = new DatabaseSync(path.join(directory, fixture.tenantHash, 'evidence.sqlite'));
+  const sealed = Buffer.from(fixture.sealedBase64, 'base64');
+  const expiresAtMs = Date.now() + 60_000;
+  try {
+    database.prepare(`INSERT INTO private_retrieval_receipts
+      (tenant_hash, receipt_key, schema_version, state, key_id, payload_hash, payload_bytes,
+        expires_at_ms, sealed, updated_at_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(fixture.tenantHash, fixture.receiptKey, fixture.schemaVersion, fixture.state, fixture.keyId,
+        fixture.payloadHash, fixture.payloadBytes, expiresAtMs, sealed, Date.now());
+  } finally {
+    database.close();
+  }
+  const binding = {
+    runId: fixture.runId,
+    configHash: fixture.configHash,
+    candidate: fixture.candidate,
+  };
+  const opened = await store.readPrivateRunReceipt(scope, binding, authenticatedRequest);
+  assert.equal(opened.state, 'complete');
+  assert.equal(opened.omissionMetadataVersion, 0);
+  assert.deepEqual(opened.suggestions, fixture.completion.suggestions);
+  assert.equal(opened.truncatedCount, 0);
+  assert.deepEqual(opened.omittedSuggestions, []);
+  assert.equal(opened.sourceLinkCandidatesOmittedCount, 0);
+  assert.deepEqual(await store.finalizePrivateRunReceipt(scope, {
+    ...binding,
+    candidate: fixture.candidate,
+    claim: fixture.claim,
+    completion: fixture.completion,
+    selection: { evidence: [], facts: [] },
+  }, authenticatedRequest), { state: 'already_complete' },
+  'adding read-time defaults does not change the exact old v1 completion hash during finalize replay');
+  const afterReplay = new DatabaseSync(path.join(directory, fixture.tenantHash, 'evidence.sqlite'), { readOnly: true });
+  try {
+    const row = afterReplay.prepare(`SELECT state, payload_hash, payload_bytes, sealed
+      FROM private_retrieval_receipts WHERE tenant_hash = ? AND receipt_key = ?`)
+      .get(fixture.tenantHash, fixture.receiptKey);
+    assert.equal(row.state, 'complete');
+    assert.equal(row.payload_hash, fixture.payloadHash);
+    assert.equal(row.payload_bytes, fixture.payloadBytes);
+    assert.ok(Buffer.from(row.sealed).equals(sealed), 'old receipt ciphertext stays byte-for-byte immutable');
+  } finally {
+    afterReplay.close();
+  }
+});
+
+test('fanout receipt omission metadata retains bounded multi-position refs and rejects inconsistent counts', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const acceptedUrl = 'https://links.example.org/a-event';
+  const omittedUrl = 'https://links.example.org/z-event';
+  const content = `${acceptedUrl}\n${acceptedUrl}\n${omittedUrl}\n`;
+  const positions = [];
+  let cursor = 0;
+  for (const value of [acceptedUrl, acceptedUrl, omittedUrl]) {
+    const startByte = Buffer.byteLength(content.slice(0, cursor), 'utf8');
+    const endByte = startByte + Buffer.byteLength(value, 'utf8');
+    positions.push({ locator: { kind: 'text-range', startByte, endByte }, content: value });
+    cursor = content.indexOf(value, cursor) + value.length + 1;
+  }
+  const evidence = await harness.store.ingestEvidence(scope, {
+    sourceUrl: 'https://events.example.test/receipt-links',
+    canonicalUrl: 'https://events.example.test/receipt-links',
+    redirectChain: [],
+    content,
+    contentType: 'text/plain',
+    retrievedAt: '2026-10-10T15:00:00.000Z',
+    sourceKind: 'external',
+    retentionHandle: harness.createPermit('tenant-a'),
+    positions,
+  });
+  const makeReference = (positionIndex, value) => ({
+    evidenceId: evidence.metadata.evidenceId,
+    contentHash: evidence.metadata.contentHash,
+    locator: positions[positionIndex].locator,
+    field: 'canonical.url',
+    value,
+  });
+  const acceptedRefs = [makeReference(1, acceptedUrl), makeReference(0, acceptedUrl)];
+  const omittedRefs = [makeReference(2, omittedUrl)];
+  const binding = privateReceiptBinding('receipt-fanout-omissions');
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scope, binding, request('tenant-a')),
+    { state: 'pending', created: true });
+  const completion = {
+    completionKey: 'receipt-fanout-omissions-complete',
+    outcome: 'links_observed',
+    suggestions: [{ url: acceptedUrl, sourceRefs: acceptedRefs }],
+    truncatedCount: 1,
+    omittedSuggestions: [{ url: omittedUrl, sourceRefs: omittedRefs }],
+    sourceLinkCandidatesOmittedCount: 0,
+    limitations: ['completion_suggestion_limit'],
+    identity: { entityCandidates: [], occurrenceCandidates: [], transitionLinks: [], unresolvedTransitions: [] },
+  };
+  assert.deepEqual(await harness.store.finalizePrivateRunReceipt(scope, {
+    ...binding, completion, selection: { evidence: [evidence.evidence], facts: [] },
+  }, request('tenant-a')), { state: 'complete' });
+  const opened = await harness.store.readPrivateRunReceipt(scope, {
+    runId: binding.runId, configHash: binding.configHash, candidate: binding.candidate,
+  }, request('tenant-a'));
+  assert.equal(opened.omissionMetadataVersion, 1);
+  assert.equal(opened.truncatedCount, 1);
+  assert.deepEqual(opened.suggestions[0].sourceRefs.map((ref) => ref.locator.startByte), [0, acceptedUrl.length + 1],
+    'provenance references sort with a runtime-independent code-unit order');
+  assert.deepEqual(opened.omittedSuggestions, [{ url: omittedUrl, sourceRefs: omittedRefs }]);
+  assert.equal(opened.sourceLinkCandidatesOmittedCount, 0);
+  assert.deepEqual(await harness.store.finalizePrivateRunReceipt(scope, {
+    ...binding, completion, selection: { evidence: [evidence.evidence], facts: [] },
+  }, request('tenant-a')), { state: 'already_complete' });
+
+  const baseCompletion = {
+    completionKey: 'invalid-fanout-counts',
+    outcome: 'links_observed',
+    suggestions: [{ url: acceptedUrl, sourceRefs: [makeReference(0, acceptedUrl)] }],
+    truncatedCount: 1,
+    omittedSuggestions: [{ url: omittedUrl, sourceRefs: omittedRefs }],
+    sourceLinkCandidatesOmittedCount: 0,
+    limitations: [],
+    identity: { entityCandidates: [], occurrenceCandidates: [], transitionLinks: [], unresolvedTransitions: [] },
+  };
+  const invalidCompletions = [
+    { ...baseCompletion, truncatedCount: 0 },
+    { ...baseCompletion, truncatedCount: Number.MAX_SAFE_INTEGER },
+    { ...baseCompletion, sourceLinkCandidatesOmittedCount: -1 },
+    { ...baseCompletion, omittedSuggestions: [] },
+    { ...baseCompletion, omittedSuggestions: Array(16).fill(baseCompletion.omittedSuggestions[0]) },
+    { ...baseCompletion, omittedSuggestions: undefined },
+  ];
+  const invalidBinding = privateReceiptBinding('receipt-fanout-invalid-metadata');
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scope, invalidBinding, request('tenant-a')),
+    { state: 'pending', created: true });
+  for (const invalidCompletion of invalidCompletions) {
+    await assert.rejects(harness.store.finalizePrivateRunReceipt(scope, {
+      ...invalidBinding, completion: invalidCompletion, selection: { evidence: [evidence.evidence], facts: [] },
+    }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  }
+  const wrongEvidenceHash = {
+    ...baseCompletion,
+    completionKey: 'wrong-omitted-evidence-hash',
+    omittedSuggestions: [{
+      url: omittedUrl,
+      sourceRefs: [{ ...omittedRefs[0], contentHash: 'f'.repeat(64) }],
+    }],
+  };
+  await assert.rejects(harness.store.finalizePrivateRunReceipt(scope, {
+    ...invalidBinding,
+    completion: wrongEvidenceHash,
+    selection: { evidence: [evidence.evidence], facts: [] },
+  }, request('tenant-a')),
+  (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID',
+  'otherwise bounded omitted refs must resolve to the retained evidence hash and position');
+});
+
 test('new receipt supplied URLs use frontier canonicalization and sensitive-key policy', async (t) => {
   const harness = await createHarness(t);
   const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
