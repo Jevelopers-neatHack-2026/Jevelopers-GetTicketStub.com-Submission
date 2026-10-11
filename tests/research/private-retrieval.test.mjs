@@ -443,6 +443,38 @@ function reassignCandidateDepth({ databasePath, tenantHash, runId, candidateId, 
   }
 }
 
+function reassignCandidateAndIncomingLinkDepth({
+  databasePath, tenantHash, runId, candidateId, depth, disposition, candidateState,
+}) {
+  const database = new DatabaseSync(databasePath);
+  try {
+    const candidate = database.prepare(`SELECT best_depth FROM frontier_candidates
+      WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`).get(tenantHash, runId, candidateId);
+    assert.ok(candidate, 'the selected candidate exists in this run');
+    const changedCandidate = candidateState === undefined
+      ? database.prepare(`UPDATE frontier_candidates SET best_depth = ?
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+        .run(depth, tenantHash, runId, candidateId)
+      : database.prepare(`UPDATE frontier_candidates SET best_depth = ?, state = ?
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+        .run(depth, candidateState, tenantHash, runId, candidateId);
+    assert.equal(changedCandidate.changes, 1);
+    const changedObservations = disposition === undefined
+      ? database.prepare(`UPDATE frontier_observations SET depth = ?
+        WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND target_candidate_id = ?`)
+        .run(depth, tenantHash, runId, candidateId)
+      : database.prepare(`UPDATE frontier_observations SET depth = ?, disposition = ?
+        WHERE tenant_hash = ? AND run_id = ? AND kind = 'link' AND target_candidate_id = ?`)
+        .run(depth, disposition, tenantHash, runId, candidateId);
+    assert.ok(changedObservations.changes > 0, 'the selected candidate has an incoming link observation');
+    assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [],
+      'the coordinated depth mutation preserves same-run foreign keys');
+    return candidate.best_depth;
+  } finally {
+    database.close();
+  }
+}
+
 function insertUnobservedCandidate({ databasePath, tenantHash, runId, canonicalUrl, depth = 1 }) {
   const candidateId = createHash('sha256')
     .update(`event-intelligence:frontier-candidate:v1\0${tenantHash}\0${runId}\0${canonicalUrl}`)
@@ -1721,6 +1753,172 @@ test('repeated out-of-depth links retain both verified parent references across 
     'restart preserves transport counters and settled bytes');
 });
 
+test('receipt recovery accepts a claim-depth parent link at its later shallower best depth', async (t) => {
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-claim-depth-shallower-rediscovery';
+  const firstSeedUrl = sourceUrl('/a-r8-root');
+  const laterSeedUrl = sourceUrl('/z-r8-late-parent');
+  const intermediateUrl = new URL(sourceUrl('/r8-intermediate')).href;
+  const targetUrl = new URL(sourceUrl('/r8-shallower-target')).href;
+  const childUrl = new URL(sourceUrl('/r8-shallower-edge-child')).href;
+  const seeds = [{ url: firstSeedUrl }, { url: laterSeedUrl }];
+  const limits = {
+    maxDepth: 2,
+    maxTransportAttemptAdmissions: 4,
+    maxInFlightLeases: 2,
+    durationMs: 30_000,
+    maxSuggestionsPerCompletion: 1,
+  };
+  const configHash = createHash('sha256').update(JSON.stringify({ runId, seeds, limits })).digest('hex');
+  const scope = await h.frontier.scopeForAuthenticatedRequest(request());
+  const evidenceScope = await h.evidenceStore.scopeForAuthenticatedRequest(request());
+  await h.frontier.createRun(scope, { runId, seeds, limits });
+
+  const evidenceText = `${intermediateUrl}\n${targetUrl}\n${childUrl}\n`;
+  const intermediateStart = 0;
+  const targetStart = Buffer.byteLength(`${intermediateUrl}\n`, 'utf8');
+  const childStart = targetStart + Buffer.byteLength(`${targetUrl}\n`, 'utf8');
+  const evidence = await h.evidenceStore.ingestEvidence(evidenceScope, {
+    sourceUrl: new URL(sourceUrl('/r8-synthetic-link-evidence')).href,
+    canonicalUrl: new URL(sourceUrl('/r8-synthetic-link-evidence')).href,
+    redirectChain: [],
+    content: Buffer.from(evidenceText, 'utf8'),
+    contentType: 'text/plain; charset=utf-8',
+    retrievedAt: '2026-10-11T12:00:00.000Z',
+    sourceKind: 'external',
+    positions: [
+      { locator: { kind: 'text-range', startByte: intermediateStart, endByte: Buffer.byteLength(intermediateUrl, 'utf8') },
+        content: intermediateUrl },
+      { locator: { kind: 'text-range', startByte: targetStart, endByte: targetStart + Buffer.byteLength(targetUrl, 'utf8') },
+        content: targetUrl },
+      { locator: { kind: 'text-range', startByte: childStart, endByte: childStart + Buffer.byteLength(childUrl, 'utf8') },
+        content: childUrl },
+    ],
+    retentionHandle: h.createRetention(),
+  });
+  const evidenceHandle = await h.evidenceStore.lookupEvidence(evidenceScope, evidence.metadata.evidenceId);
+  const referenceFor = (url, startByte) => ({
+    evidenceId: evidence.metadata.evidenceId,
+    contentHash: evidence.metadata.contentHash,
+    locator: { kind: 'text-range', startByte, endByte: startByte + Buffer.byteLength(url, 'utf8') },
+    field: 'link.href',
+    value: url,
+  });
+  const intermediateRef = referenceFor(intermediateUrl, intermediateStart);
+  const targetRef = referenceFor(targetUrl, targetStart);
+  const childRef = referenceFor(childUrl, childStart);
+
+  let completionSerial = 0;
+  const writeReceipt = async (claim, outcome, suggestions) => {
+    const binding = await h.frontier.getCandidateReceiptBinding(scope, runId, claim.candidate.candidateId);
+    assert.equal(binding.claim.state, 'leased');
+    const attemptKey = `r8-attempt-${++completionSerial}`;
+    const admission = await h.frontier.admitTransportHop(scope, runId, {
+      leaseToken: binding.claim.leaseToken,
+      attemptKey,
+      kind: 'initial',
+      url: binding.candidate.suppliedUrl,
+    });
+    assert.equal(admission.state, 'admitted');
+    await h.frontier.settleTransportHopKnownZero(scope, runId, {
+      leaseToken: binding.claim.leaseToken, attemptKey,
+    });
+    const completionKey = `r8-completion-${completionSerial}`;
+    const claimBinding = {
+      claimKey: binding.claim.claimKey,
+      workerId: binding.claim.workerId,
+      leaseToken: binding.claim.leaseToken,
+    };
+    const receiptBinding = { runId, configHash, candidate: binding.candidate, claim: claimBinding };
+    assert.deepEqual(await h.evidenceStore.beginPrivateRunReceipt(evidenceScope, receiptBinding, request()),
+      { state: 'pending', created: true });
+    const completion = {
+      completionKey,
+      outcome,
+      suggestions,
+      truncatedCount: 0,
+      omittedSuggestions: [],
+      sourceLinkCandidatesOmittedCount: 0,
+      limitations: [],
+      identity: { entityCandidates: [], occurrenceCandidates: [], transitionLinks: [], unresolvedTransitions: [] },
+    };
+    await h.evidenceStore.finalizePrivateRunReceipt(evidenceScope, {
+      ...receiptBinding,
+      completion,
+      selection: { evidence: suggestions.length > 0 ? [evidenceHandle] : [], facts: [] },
+    }, request());
+    return { binding, completionKey, outcome, suggestions };
+  };
+  const complete = async (claim, outcome, suggestions) => {
+    const written = await writeReceipt(claim, outcome, suggestions);
+    await h.frontier.completeCandidate(scope, runId, {
+      leaseToken: written.binding.claim.leaseToken,
+      completionKey: written.completionKey,
+      outcome: written.outcome,
+      suggestions: written.suggestions,
+      truncatedCount: 0,
+    });
+    return written;
+  };
+  const claim = async (workerId) => {
+    const result = await h.frontier.claimNext(scope, runId, { workerId, claimKey: `${workerId}-claim` });
+    assert.equal(result.state, 'claimed', JSON.stringify(result));
+    return result;
+  };
+
+  const firstSeed = await claim('r8-first-seed');
+  assert.equal(firstSeed.candidate.canonicalUrl, new URL(firstSeedUrl).href);
+  await complete(firstSeed, 'links_observed', [{ url: intermediateUrl, sourceRefs: [intermediateRef] }]);
+
+  // Hold the second seed claim while the first branch creates and claims the target at depth 2.
+  const laterSeed = await claim('r8-later-seed');
+  assert.equal(laterSeed.candidate.canonicalUrl, new URL(laterSeedUrl).href);
+  const intermediate = await claim('r8-intermediate');
+  assert.equal(intermediate.candidate.canonicalUrl, new URL(intermediateUrl).href);
+  await complete(intermediate, 'links_observed', [{ url: targetUrl, sourceRefs: [targetRef] }]);
+  const target = await claim('r8-target');
+  assert.equal(target.candidate.canonicalUrl, new URL(targetUrl).href);
+  assert.equal(target.candidate.depth, 2);
+  const targetBindingBeforeRediscovery = await h.frontier.getCandidateReceiptBinding(scope, runId,
+    target.candidate.candidateId);
+  assert.equal(targetBindingBeforeRediscovery.candidate.depth, 2);
+
+  // This completed seed receipt is finalized after the target's claim prefix and lowers its current best depth.
+  await complete(laterSeed, 'links_observed', [{ url: targetUrl, sourceRefs: [targetRef] }]);
+  const afterRediscovery = await h.frontier.getSnapshot(scope, runId);
+  assert.equal(afterRediscovery.candidates.find((candidate) => candidate.candidateId === target.candidate.candidateId).depth, 1);
+  const targetBindingAfterRediscovery = await h.frontier.getCandidateReceiptBinding(scope, runId,
+    target.candidate.candidateId);
+  assert.equal(targetBindingAfterRediscovery.candidate.depth, 2,
+    'the persisted claim prefix remains at depth 2 after the current best depth becomes 1');
+  await complete(target, 'links_observed', [{ url: childUrl, sourceRefs: [childRef] }]);
+  const beforeReplay = await h.frontier.getSnapshot(scope, runId);
+  assert.equal(beforeReplay.candidates.find((candidate) => candidate.canonicalUrl === new URL(childUrl).href).depth, 2);
+  const transportBeforeReplay = await h.frontier.getTransportProgress(scope, runId);
+
+  const replayFrontier = h.openFrontier();
+  const replayStore = createEvidenceStore(h.evidenceConfig);
+  const replay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: replayFrontier, store: replayStore,
+  }));
+  assert.equal(replay.schema, 'ei-private-retrieval-draft/v1', JSON.stringify(replay));
+  assert.ok(!replay.limitations.includes('private_receipt_completion_mismatch'), JSON.stringify(replay));
+  assert.equal(replay.linkCandidates.find((candidate) => candidate.url === targetUrl).depth, 1);
+  const retainedChild = replay.linkCandidates.find((candidate) => candidate.url === childUrl);
+  assert.equal(retainedChild.depth, 2,
+    'a claim-depth-2 receipt may emit the lawful outgoing edge at current best depth 1 plus one');
+  assert.deepEqual(retainedChild.sourceRefs, [childRef]);
+  assert.equal(requestCount, 0, 'completed authenticated receipts replay without private transport');
+  assert.deepEqual(await replayFrontier.getTransportProgress(await replayFrontier.scopeForAuthenticatedRequest(request()), runId),
+    transportBeforeReplay, 'valid shallower rediscovery does not change settled transport counters');
+});
+
 test('modern and baseline receipts reject link provenance reassigned to another candidate', async (t) => {
   let requestCount = 0;
   const firstUrl = 'https://links.example.org/a-first';
@@ -1973,6 +2171,57 @@ test('a candidate depth must equal its earliest authenticated frontier observati
   assert.deepEqual(await replayFrontier.getTransportProgress(replayScope, runId), transportBefore);
 });
 
+test('restart rejects coordinated child and observation depth inflation beyond the authenticated parent claim', async (t) => {
+  let requestCount = 0;
+  const targetUrl = 'https://links.example.org/coordinated-depth-child';
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtmlWithCanonicalLinks([targetUrl]));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-coordinated-depth-inflation';
+  const seeds = [{ url: sourceUrl('/coordinated-depth-parent') }];
+  const limits = { maxDepth: 2, maxTransportAttemptAdmissions: 1, maxSuggestionsPerCompletion: 1 };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  assert.equal(first.status, 'draft', JSON.stringify(first));
+  assert.equal(requestCount, 1);
+
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const databasePath = path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite');
+  const evidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  const immutableReceiptRows = readPrivateReceiptRows(evidencePath, tenantHash);
+  const scope = await h.frontier.scopeForAuthenticatedRequest(request());
+  const before = await h.frontier.getSnapshot(scope, runId);
+  const observation = before.observations.find((item) => item.kind === 'link' && item.canonicalUrl === targetUrl);
+  assert.ok(observation);
+  const child = before.candidates.find((candidate) => candidate.candidateId === observation.targetCandidateId);
+  assert.equal(child.depth, 1);
+  assert.equal(child.state, 'queued');
+  const transportBefore = await h.frontier.getTransportProgress(scope, runId);
+
+  reassignCandidateAndIncomingLinkDepth({ databasePath, tenantHash, runId, candidateId: child.candidateId, depth: 2 });
+  const tampered = await h.frontier.getSnapshot(scope, runId);
+  assert.equal(tampered.candidates.find((candidate) => candidate.candidateId === child.candidateId).depth, 2);
+  assert.equal(tampered.observations.find((item) => item.sequence === observation.sequence).depth, 2);
+
+  h.frontier.close();
+  const reopenedFrontier = h.openFrontier();
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const replay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+  }));
+  assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+  assert.equal(replay.draft, null);
+  assert.ok(replay.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'coordinated depth inflation never dispatches the queued child');
+  assert.deepEqual(readPrivateReceiptRows(evidencePath, tenantHash), immutableReceiptRows,
+    'recovery leaves the authenticated receipt bytes unchanged');
+  const reopenedScope = await reopenedFrontier.scopeForAuthenticatedRequest(request());
+  assert.deepEqual(await reopenedFrontier.getTransportProgress(reopenedScope, runId), transportBefore,
+    'recovery preserves the settled transport counters and bytes');
+});
+
 test('the completion boundary rejects a reassigned target before receipt proof', async (t) => {
   let requestCount = 0;
   const firstUrl = 'https://links.example.org/concurrent-a-first';
@@ -2209,6 +2458,85 @@ test('the final projection rejects a changed link target after receipt proof', a
   assert.equal(requestCount, 1, 'late projection rejection causes no additional private request');
 });
 
+test('the final projection rejects coordinated child and observation depth inflation after receipt proof', async (t) => {
+  let requestCount = 0;
+  const targetUrl = 'https://links.example.org/final-coordinated-depth-child';
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtmlWithCanonicalLinks([targetUrl]));
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-final-coordinated-depth-inflation';
+  const seeds = [{ url: sourceUrl('/final-coordinated-depth-parent') }];
+  const limits = { maxDepth: 2, maxTransportAttemptAdmissions: 1, maxSuggestionsPerCompletion: 1 };
+  let completionFinished = false;
+  let receiptReadAfterCompletion = false;
+  let proofSnapshotPending = false;
+  let proofSnapshotSeen = false;
+  let attemptLimitObserved = false;
+  let finalDepthTamperingApplied = false;
+  const observedStore = Object.create(null);
+  for (const method of [
+    'scopeForAuthenticatedRequest', 'appendFact', 'ingestDerivedPdfEvidence', 'lookupEvidence', 'lookupFact',
+    'materializeSelected', 'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+    'ingestEvidence', 'ingestAssetSourceEvidence',
+  ]) observedStore[method] = h.evidenceStore[method].bind(h.evidenceStore);
+  observedStore.readPrivateRunReceipt = async (...args) => {
+    const receipt = await h.evidenceStore.readPrivateRunReceipt(...args);
+    if (completionFinished && receipt.state === 'complete') receiptReadAfterCompletion = true;
+    return receipt;
+  };
+  const instrumentedFrontier = frontierWithMethodOverrides(h.frontier, {
+    completeCandidate: async (...args) => {
+      const result = await h.frontier.completeCandidate(...args);
+      completionFinished = true;
+      return result;
+    },
+    getCandidateReceiptBinding: async (...args) => {
+      if (receiptReadAfterCompletion) {
+        receiptReadAfterCompletion = false;
+        proofSnapshotPending = true;
+      }
+      return h.frontier.getCandidateReceiptBinding(...args);
+    },
+    claimNext: async (...args) => {
+      const result = await h.frontier.claimNext(...args);
+      if (result.state === 'stopped' && result.reason === 'attempt_limit') attemptLimitObserved = true;
+      return result;
+    },
+    getSnapshot: async (...args) => {
+      const snapshot = await h.frontier.getSnapshot(...args);
+      if (proofSnapshotPending) {
+        proofSnapshotPending = false;
+        proofSnapshotSeen = true;
+        return snapshot;
+      }
+      if (!attemptLimitObserved || !proofSnapshotSeen) return snapshot;
+      const link = snapshot.observations.find((item) => item.kind === 'link' && item.canonicalUrl === targetUrl);
+      assert.ok(link);
+      finalDepthTamperingApplied = true;
+      return {
+        ...snapshot,
+        candidates: snapshot.candidates.map((candidate) => candidate.candidateId === link.targetCandidateId
+          ? { ...candidate, depth: 2 } : candidate),
+        observations: snapshot.observations.map((observation) => observation.sequence === link.sequence
+          ? { ...observation, depth: 2 } : observation),
+      };
+    },
+  });
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: instrumentedFrontier, store: observedStore,
+  }));
+  assert.equal(proofSnapshotSeen, true, 'the unmodified authenticated receipt payload is proved first');
+  assert.equal(attemptLimitObserved, true, 'the projection reaches its final gate without admitting the child');
+  assert.equal(finalDepthTamperingApplied, true, 'the final snapshot carries the coordinated depth mutation');
+  assert.equal(result.status, 'incomplete', JSON.stringify(result));
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('private_receipt_completion_mismatch'));
+  assert.equal(requestCount, 1, 'the final proof rejection does not dispatch the child');
+});
+
 test('metadata-v1 replay rejects a link observation attributed to an unverified queued parent', async (t) => {
   let requestCount = 0;
   const server = await startFixture((_request, response) => {
@@ -2348,6 +2676,53 @@ test('baseline v1 overcap receipt recovers once and reconstructs identical omiss
   assert.equal(afterSecondRecovery.counters.transportAttemptAdmissions, before.counters.transportAttemptAdmissions);
   assert.deepEqual(await frontier.getTransportProgress(replayScope, h.runId), transportBefore);
   assert.deepEqual(h.readLegacyReceiptRow(), immutableReceiptRow);
+});
+
+test('baseline overcap recovery rejects coordinated depth inflation without rewriting the legacy receipt', async (t) => {
+  const requests = { count: 0 };
+  const h = await legacyOvercapWorkspace(t, requests);
+  let frontier = h.openFrontier();
+  let evidenceStore = h.openEvidenceStore();
+  const recovered = await h.run(frontier, evidenceStore);
+  assert.equal(recovered.status, 'draft', JSON.stringify(recovered));
+  assert.equal(requests.count, 0);
+
+  const immutableReceiptRow = h.readLegacyReceiptRow();
+  const scope = await frontier.scopeForAuthenticatedRequest(h.request);
+  const before = await frontier.getSnapshot(scope, h.runId);
+  const child = before.candidates.find((candidate) => candidate.canonicalUrl === 'https://links.example.org/a-first');
+  assert.ok(child);
+  assert.equal(child.depth, 1);
+  assert.equal(child.state, 'queued');
+  const transportBefore = await frontier.getTransportProgress(scope, h.runId);
+  reassignCandidateAndIncomingLinkDepth({
+    databasePath: path.join(h.frontierDirectory, h.fixture.tenantHash, 'frontier.sqlite'),
+    tenantHash: h.fixture.tenantHash,
+    runId: h.runId,
+    candidateId: child.candidateId,
+    depth: 2,
+    disposition: 'depth_limit',
+    candidateState: 'depth_limited',
+  });
+  const tampered = await frontier.getSnapshot(scope, h.runId);
+  assert.equal(tampered.candidates.find((candidate) => candidate.candidateId === child.candidateId).depth, 2);
+  assert.equal(tampered.observations.find((item) => item.targetCandidateId === child.candidateId).depth, 2);
+  assert.equal(tampered.observations.find((item) => item.targetCandidateId === child.candidateId).disposition, 'depth_limit');
+
+  frontier.close();
+  frontier = h.openFrontier();
+  evidenceStore = h.openEvidenceStore();
+  const replay = await h.run(frontier, evidenceStore);
+  assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+  assert.equal(replay.draft, null);
+  assert.ok(replay.limitations.includes('private_receipt_completion_mismatch'));
+  assert.ok(replay.limitations.includes('legacy_receipt_fanout_recovery_unverified'));
+  assert.equal(requests.count, 0, 'legacy depth validation never dispatches the retained child');
+  assert.deepEqual(h.readLegacyReceiptRow(), immutableReceiptRow,
+    'legacy recovery leaves its original encrypted receipt row byte-for-byte unchanged');
+  const replayScope = await frontier.scopeForAuthenticatedRequest(h.request);
+  assert.deepEqual(await frontier.getTransportProgress(replayScope, h.runId), transportBefore,
+    'legacy depth rejection preserves the original transport settlement');
 });
 
 test('legacy overcap recovery refuses missing or conflicting observations and a changed frontier payload hash', async (t) => {

@@ -562,18 +562,21 @@ function projectionSnapshotReferencesMatch(snapshot, seeds) {
   return true;
 }
 
-function projectionObservationTargetsMatch(snapshot, parentCandidateId, observations) {
+function projectionObservationTargetsMatch(snapshot, parentCandidateId, observations, authenticatedClaimDepth) {
   if (!Array.isArray(snapshot?.candidates) || !Array.isArray(snapshot.observations)
-    || !Number.isSafeInteger(snapshot.limits?.maxDepth)) return false;
+    || !Number.isSafeInteger(snapshot.limits?.maxDepth)
+    || !Number.isSafeInteger(authenticatedClaimDepth) || authenticatedClaimDepth < 0) return false;
   const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
   const parent = candidatesById.get(parentCandidateId);
-  if (!parent || !Number.isSafeInteger(parent.depth) || parent.depth < 0) return false;
+  if (!parent || !Number.isSafeInteger(parent.depth) || parent.depth < 0
+    || parent.depth > authenticatedClaimDepth) return false;
   const maximumDepth = snapshot.limits.maxDepth;
   for (const observation of observations) {
     if (observation.parentCandidateId !== parentCandidateId
       || typeof observation.targetCandidateId !== 'string'
       || typeof observation.canonicalUrl !== 'string'
       || !Number.isSafeInteger(observation.depth) || observation.depth < parent.depth + 1
+      || observation.depth > authenticatedClaimDepth + 1
       || observation.depth > maximumDepth + 1 && observation.disposition !== 'cycle') return false;
     const target = candidatesById.get(observation.targetCandidateId);
     if (!target || target.canonicalUrl !== observation.canonicalUrl
@@ -588,10 +591,12 @@ function projectionObservationTargetsMatch(snapshot, parentCandidateId, observat
 }
 
 function completionPayloadMatches(receipt, snapshot, candidateId, completion, truncatedCount) {
-  if (!completion || typeof completion.payloadHash !== 'string') return false;
+  if (!completion || typeof completion.payloadHash !== 'string'
+    || receipt?.candidate?.candidateId !== candidateId
+    || !Number.isSafeInteger(receipt.candidate.depth) || receipt.candidate.depth < 0) return false;
   const observations = completionObservations(snapshot, candidateId);
   return observationsMatchSuggestions(observations, receipt.suggestions, receipt.outcome)
-    && projectionObservationTargetsMatch(snapshot, candidateId, observations)
+    && projectionObservationTargetsMatch(snapshot, candidateId, observations, receipt.candidate.depth)
     && completionPayloadHashFromObservations(observations, receipt.outcome, truncatedCount) === completion.payloadHash;
 }
 
@@ -956,6 +961,10 @@ export async function runPrivateRetrieval(value) {
         },
         legacyReceipt: receipt.omissionMetadataVersion !== 1,
         receipt: {
+          candidate: {
+            candidateId: receipt.candidate.candidateId,
+            depth: receipt.candidate.depth,
+          },
           outcome: receipt.outcome,
           suggestions: receipt.suggestions,
           truncatedCount,
