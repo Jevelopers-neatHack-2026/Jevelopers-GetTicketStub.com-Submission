@@ -5,6 +5,7 @@ import path from "node:path";
 let allSharedShapes = [];
 let contractOwnership = {};
 let catalogAvailable = false;
+let catalogApiAvailable = false;
 let providerEnvironmentMatrix = null;
 try {
   const catalog = await import("../dist/index.js");
@@ -12,6 +13,10 @@ try {
   contractOwnership = catalog.CONTRACT_OWNERSHIP;
   providerEnvironmentMatrix = catalog.PROVIDER_ENVIRONMENT_MATRIX ?? null;
   catalogAvailable = Array.isArray(allSharedShapes) && contractOwnership !== undefined;
+  catalogApiAvailable = typeof catalog.normalizeCatalogSnapshot === "function"
+    && typeof catalog.discoverCatalogSnapshot === "function"
+    && typeof catalog.evaluateCatalogSelection === "function"
+    && typeof catalog.validateCatalogSnapshotBoundary === "function";
 } catch {
   // Keep argument and missing-build failures machine-readable even before a build.
 }
@@ -36,7 +41,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 const startedAt = new Date().toISOString();
 const missingAcceptedPins = allSharedShapes.map((shape) => ({
@@ -61,6 +66,11 @@ const securityBlockers = [
   "sandbox account access, a selected adapter, and genuine private provider fixtures are unavailable",
   "producer/consumer conformance and genuine release evidence remain missing"
 ];
+const catalogBlockers = [
+  "shared-contracts #4 has not accepted and published the canonical capability/print-spec shape, schema version, source revision, and fixture digest",
+  "print-production #6 has not reviewed or acknowledged the catalog snapshot mapping and expected results",
+  "the exact provider SKU/specification, destination, and shipping choice remain owner review inputs"
+];
 
 let checks = [];
 let meteringReport = null;
@@ -76,6 +86,7 @@ if (args["evidence-dir"] === undefined) failureReasons.push("evidence_dir_requir
 if (process.version !== "v24.15.0") failureReasons.push("runtime_version_mismatch");
 if (args.suite === "provider-matrix" && args.mode !== "simulated") failureReasons.push("provider_matrix_requires_simulated_mode");
 if (args.suite === "security" && args.mode !== "simulated") failureReasons.push("security_suite_requires_simulated_mode");
+if (args.suite === "catalog" && args.mode !== "simulated" && allowedModes.has(args.mode)) failureReasons.push("catalog_suite_requires_simulated_mode");
 if (args.suite === "metering" && args.mode !== "simulated") failureReasons.push("metering_fixture_suite_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
@@ -125,6 +136,21 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("security_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "catalog" && args.mode === "simulated") {
+  if (!catalogAvailable || !catalogApiAvailable) failureReasons.push("catalog_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runCatalogSuite } = await import("../tests/catalog-suite.mjs");
+      checks = await runCatalogSuite();
+      if (checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_local_catalog_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("catalog_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
   try {
@@ -167,14 +193,17 @@ const result = {
       ? "local_private_provider_matrix_suite"
       : args.suite === "security"
         ? "local_private_security_policy_suite"
-        : args.suite === "metering"
-          ? "local_private_metering_fixture_suite"
-          : "local_private_fixture_contract_suite"
+        : args.suite === "catalog"
+          ? "local_private_catalog_fixture_suite"
+          : args.suite === "metering"
+            ? "local_private_metering_fixture_suite"
+            : "local_private_fixture_contract_suite"
     : "argument_or_prerequisite_check",
   checks,
   failureReasons,
   blockers: [
     ...blockers,
+    ...(args.suite === "catalog" ? catalogBlockers : []),
     ...(args.suite === "provider-matrix" ? [
       "print-production has not selected and approved an actual Prodigi SKU and print specification",
       "destination and shipping method have not been selected or approved",
@@ -197,6 +226,52 @@ const result = {
     expectedResultsMatch: false
   },
   providerMatrix: args.suite === "provider-matrix" ? providerEnvironmentMatrix : null,
+  ...(args.suite === "catalog" ? {
+    catalogAssessment: {
+      schemaVersion: "fulfillment-catalog-assessment/1",
+      evidenceScope: "private_offline_normalization_and_synthetic_fixtures_only",
+      completion: "partial",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      fc03_1: "partial_private_capability_and_print_spec_normalization",
+      fc03_2: "partial_private_versioned_snapshots_freshness_and_revalidation",
+      fc03_3: "partial_incompatible_synthetic_fixtures; selected_provider_product_and_consumer_review_pending",
+      privateInputFormat: "connector-development-catalog/1",
+      privateSnapshotFormat: "connector-development-catalog-snapshot/1",
+      acceptedSharedContract: {
+        ownerRepository: "shared-contracts",
+        upstreamIssue: "#4",
+        state: "pending",
+        schemaVersion: null,
+        sourceRevision: null,
+        fixtureDigest: null
+      },
+      consumerReview: {
+        repository: "print-production",
+        issue: "#6",
+        state: "pending",
+        sourceRevision: null,
+        expectedResultsMatch: false
+      },
+      sandbox: {
+        selectedProviderSku: null,
+        selectedDestination: null,
+        selectedShippingMethod: null,
+        accountAccess: "unknown",
+        adapter: "not_implemented",
+        sandboxReady: false
+      },
+      liveEnabled: false,
+      releaseReady: false,
+      artifactConstruction: "not_performed",
+      externalProviderCalls: 0,
+      blockers: catalogBlockers
+    }
+  } : {}),
   providerMatrixAssessment: args.suite === "provider-matrix" ? {
     schemaVersion: "fulfillment-provider-matrix-assessment/1",
     evidenceScope: "documented_metadata_and_private_policy_fixtures_only",
@@ -279,7 +354,13 @@ if (args["evidence-dir"] !== undefined) {
     result.scope = "argument_or_prerequisite_check";
     failureReasons.push("evidence_write_failed");
     result.failureReasons = failureReasons;
-    result.blockers = [...blockers, ...(args.suite === "security" ? securityBlockers : []), ...failureReasons];
+    result.blockers = [
+      ...blockers,
+      ...(args.suite === "security" ? securityBlockers : []),
+      ...(args.suite === "catalog" ? catalogBlockers : []),
+      ...failureReasons
+    ];
+    if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";
   }
 }
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

@@ -12,6 +12,8 @@ See [runtime design, evidence scope, and exact verification commands](docs/runti
 
 The [FC-02 provider and environment matrix](docs/provider-matrix.md) records official Prodigi v4 documentation observations separately from local fixtures, account access, selected-product decisions, and implemented support. The simulator remains offline; sandbox and release checks remain blocked until owner evidence and an adapter exist.
 
+The private FC-03 catalog normalizer is exported from the package root and covered by `npm test` / `npm run test:catalog`. Its simulated evidence command is `npm run verify:catalog`; it reports local fixture results while keeping canonical schema pins, print-production review, sandbox readiness, and release readiness separate. See [catalog field semantics and evidence limits](docs/catalog.md).
+
 ## Architecture and delivery
 
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)

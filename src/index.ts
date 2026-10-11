@@ -3,6 +3,7 @@ export { ConnectorError } from "./errors.js";
 export type { ConnectorErrorCode, SideEffectState } from "./errors.js";
 export { FulfillmentConnectorRuntime } from "./runtime.js";
 export type * from "./types.js";
+export * from "./catalog.js";
 export { createRuntimeMeteringResolver, FulfillmentMetering } from "./metering.js";
 export type {
   AmountBasis,
