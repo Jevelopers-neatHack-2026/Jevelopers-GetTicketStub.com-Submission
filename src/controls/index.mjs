@@ -4,4 +4,4 @@ export { controlContractReference, assertControlContractBinding } from './contra
 export { CreativeControlsAdapter } from './integration.mjs';
 export { prepareInspectionRequest, projectInspectionPresentation } from './inspection-consumer.mjs';
 export { InspectionControlsAdapter } from './inspection-integration.mjs';
-export { projectInspectionView, projectRepairResult } from './inspection-view.mjs';
+export { projectInspectionSource, projectInspectionView, projectRepairResult } from './inspection-view.mjs';

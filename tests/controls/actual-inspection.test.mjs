@@ -22,6 +22,33 @@ function edit(host, action_id = 'actual-inspection-apply') {
 async function saved(host) { const r = await host.adapter.apply(principal, edit(host)); assert.equal(r.ok, true, JSON.stringify(r)); return r; }
 const begin = (host, apply, id = 'actual-inspection-review') => host.inspection.start(principal, { source_operation_id: apply.operation_id, inspection_action_id: id });
 async function waitFor(check) { for (let i=0;i<500;i++) { if (check()) return; await new Promise(r=>setTimeout(r,5)); } throw new Error('Fixture barrier timeout'); }
+test('current source recovery is scoped, read-only and exact before the first inspection across reopen',async t=>{
+ const system=await setup(t);let host=system.host;assert.equal(await host.inspection.currentSource(principal),null);
+ const apply=await saved(host),design=apply.result.design_version,before=host.counts();
+ const expected={source_operation_id:apply.operation_id,design_version_id:design.design_version_id,artifact_hash:design.artifact.content_hash};
+ const source=await host.inspection.currentSource(principal);assert.deepEqual(source,expected);assert.ok(Object.isFrozen(source));assert.equal(await host.inspection.latest(principal),null);assert.deepEqual(host.counts(),before);
+ assert.equal(await host.inspection.currentSource({...principal,actor_id:'foreign'}),null);host.policy.can_read=false;assert.equal(await host.inspection.currentSource(principal),null);assert.deepEqual(host.counts(),before);
+ host=await system.reopen();const reopened=host.counts();assert.deepEqual(await host.inspection.currentSource(principal),expected);assert.deepEqual(host.counts(),reopened);
+ for(const tx of ['BEGIN IMMEDIATE','SAVEPOINT caller']){host.adapter.db.exec(tx);assert.equal(await host.inspection.currentSource(principal),null);assert.equal(host.adapter.db.isTransaction,true);host.adapter.db.exec('ROLLBACK');assert.deepEqual(host.counts(),reopened);}
+ const job=host.inspection.db.prepare('SELECT job_id FROM control_api_bindings_v1 WHERE operation_id=?').get(apply.operation_id).job_id;host.store.db.prepare("UPDATE creative_jobs SET status='running' WHERE job_id=?").run(job);assert.equal(await host.inspection.currentSource(principal),null);assert.deepEqual(host.counts(),reopened);
+});
+test('current source recovery follows selected history rather than newest Apply and rejects selection changes during reads',async t=>{
+ const {host}=await setup(t),first=await saved(host),input=edit(host,'second-source-apply');input.draft.selections.c04='calm';input.draft_hash=hash(input.draft);const second=await host.adapter.apply(principal,input);assert.equal(second.ok,true);
+ assert.equal((await host.inspection.currentSource(principal)).source_operation_id,second.operation_id);
+ assert.equal((await host.restore(first.result.design_version.design_version_id,host.selection().revision,'restore-source-first')).ok,true);
+ const before=host.counts();assert.equal((await host.inspection.currentSource(principal)).source_operation_id,first.operation_id);assert.deepEqual(host.counts(),before);
+ const get=host.ports.storage.getDesignVersion;let arrived,release,gated=false;const reached=new Promise(r=>arrived=r),barrier=new Promise(r=>release=r);
+ host.ports.storage.getDesignVersion=async input=>{const design=await get(input);if(!gated){gated=true;arrived();await barrier;}return design;};
+ const pending=host.inspection.currentSource(principal);await reached;assert.equal((await host.restore(second.result.design_version.design_version_id,host.selection().revision,'restore-source-second')).ok,true);release();assert.equal(await pending,null);assert.deepEqual(host.counts(),before);
+});
+test('fractional fixture units preserve actual completed child report and cumulative root usage',async t=>{
+ const {host}=await setup(t),apply=await saved(host);host.policy.recommend_repair=true;host.policy.repair_units=0.5;
+ const first=await begin(host,apply),repair=await host.inspection.repair(principal,{inspection_action_id:first.references.inspection_action_id,repair_action_id:'fractional-repair',repair_action:'image.edit'});assert.equal(repair.ok,true,JSON.stringify(repair));
+ const before=host.counts();assert.deepEqual(await host.inspection.currentSource(principal),{source_operation_id:repair.action_id,design_version_id:repair.design_version_id,artifact_hash:repair.artifact_hash});assert.deepEqual(host.counts(),before);
+ const child=await host.inspection.start(principal,{source_operation_id:repair.action_id,inspection_action_id:'fractional-child-inspection'});assert.equal(child.status,'completed',JSON.stringify(child));assert.equal(child.outcome,'bounded_repair_recommended');assert.equal(child.limits.remaining_simulated_units,2.5);assert.equal(child.limits.remaining_repairs,1);assert.equal(child.repair_available,true);
+ const state=host.store.db.prepare('SELECT repairs_used,simulated_units_milli FROM creative_inspection_state_v1').get();assert.deepEqual({...state},{repairs_used:1,simulated_units_milli:500});
+ const counts=host.counts();assert.deepEqual(await host.inspection.lookup(principal,child.references.inspection_action_id),child);assert.deepEqual(host.counts(),counts);
+});
 for (const nativeFormat of ['png', 'jpeg', 'webp']) test(`actual Apply→inspect ${nativeFormat}: exact shared-store report, stages, usage and no automatic repair`, async t => {
  const { host } = await setup(t, { nativeFormat });
  assert.deepEqual([host.counts().image_calls,host.counts().observer_calls,host.counts().jev_calls,host.counts().reservations],[0,0,0,0]);

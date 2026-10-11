@@ -13,12 +13,14 @@ export interface ActualInspectionView {
 }
 export interface InspectionConsumerFailure {readonly ok:false;readonly code:string;readonly status:'unknown'}
 export interface InspectionRepairCompletion {readonly ok:true;readonly status:'completed';readonly code:'completed';readonly action_id:string;readonly design_version_id:string;readonly artifact_hash:string;readonly replayed:boolean;readonly approval:false;readonly purchase:false}
+export interface ActualInspectionSource {readonly source_operation_id:string;readonly design_version_id:string;readonly artifact_hash:string}
 /** Stable request bookkeeping only; report/stages/limits and recovery remain public API authority. */
 export declare class InspectionControlsAdapter {
  constructor(input:{controls:CreativeControlsAdapter;ports:CreativeRuntimePorts & {jobs:NonNullable<CreativeRuntimePorts['jobs']>;storage:NonNullable<CreativeRuntimePorts['storage']>};now?:()=>number});
  start(principal:TrustedPrincipal,input:unknown):Promise<ActualInspectionView|InspectionConsumerFailure>;
  lookup(principal:TrustedPrincipal,inspectionActionId:string):Promise<ActualInspectionView|InspectionConsumerFailure>;
  latest(principal:TrustedPrincipal):Promise<ActualInspectionView|InspectionConsumerFailure|null>;
+ currentSource(principal:TrustedPrincipal):Promise<Readonly<ActualInspectionSource>|null>;
  latestRepair(principal:TrustedPrincipal):Promise<InspectionRepairCompletion|Readonly<{ok:false;code:"pending";status:"pending";action_id:string;inspection_action_id:string}>|null>;
  cancel(principal:TrustedPrincipal,inspectionActionId:string):Promise<ActualInspectionView|InspectionConsumerFailure>;
  repair(principal:TrustedPrincipal,input:{inspection_action_id:string;repair_action_id:string;repair_action:'image.edit'}):Promise<InspectionRepairCompletion|InspectionConsumerFailure>;

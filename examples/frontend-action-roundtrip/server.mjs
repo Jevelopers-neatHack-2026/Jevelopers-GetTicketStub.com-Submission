@@ -24,7 +24,7 @@ const server = createServer(async (req, res) => {
         'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
       return res.end(await readFile(new URL(file, import.meta.url)));
     }
-    if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), counters: host.counts() });
+    if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), source: await host.inspection.currentSource(fixturePrincipal), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
     if (req.method === 'GET' && path === '/__fixture/native-evidence') {
@@ -63,6 +63,7 @@ const server = createServer(async (req, res) => {
       if (payload.inspection_usage) host.policy.inspection_usage = payload.inspection_usage;
       if (payload.inspection_bucket) host.policy.inspection_bucket = payload.inspection_bucket;
       if (payload.recommend_repair) host.policy.recommend_repair = true;
+      if (typeof payload.repair_units === 'number') host.policy.repair_units = payload.repair_units;
       if (payload.revoke_inspect) host.policy.can_inspect = false;
       if (payload.actor_expired) host.policy.actor_expired = true;
       if (payload.advance_ms) host.advance(payload.advance_ms);

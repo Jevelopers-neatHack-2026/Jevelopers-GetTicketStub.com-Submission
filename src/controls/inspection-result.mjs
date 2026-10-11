@@ -35,7 +35,8 @@ export function projectActualInspection(input) {
         !['tenant_id', 'project_id', 'brief_id', 'brief_hash', 'design_version_id', 'design_hash', 'artifact_hash'].every(k => value[k] === binding[k]) ||
         !['complete', 'partial', 'unknown'].includes(value.limits?.usage_completeness) ||
         value.limits.max_repairs !== 2 || value.limits.max_elapsed_ms !== 60000 || value.limits.max_simulated_units !== 3 ||
-        ![['remaining_repairs', 2], ['remaining_elapsed_ms', 60000], ['remaining_simulated_units', 3]].every(([k, max]) => Number.isSafeInteger(value.limits[k]) && value.limits[k] >= 0 && value.limits[k] <= max) ||
+        ![['remaining_repairs', 2], ['remaining_elapsed_ms', 60000]].every(([k, max]) => Number.isSafeInteger(value.limits[k]) && value.limits[k] >= 0 && value.limits[k] <= max) ||
+        !Number.isFinite(value.limits.remaining_simulated_units) || value.limits.remaining_simulated_units < 0 || value.limits.remaining_simulated_units > 3 ||
         !Array.isArray(value.eligible_repair_actions)) throw new TypeError();
       for (const k of ['first_request_ref', 'route_request_ref', 'decision_ref']) if (value[k] !== null && !digest(value[k])) throw new TypeError();
       status = 'completed'; report = value;

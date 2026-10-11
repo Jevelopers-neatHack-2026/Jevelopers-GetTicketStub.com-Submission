@@ -164,6 +164,26 @@ export class InspectionControlsAdapter {
       return row ? this.lookup(principal, row.action_id) : null;
     } catch { return rejected('unavailable'); }
   }
+  async currentSource(principal) {
+    try {
+      principal = snapshotControlJson(principal);
+      if (this.db.isTransaction) return null;
+      const current = this.context(principal).design;
+      const apply = this.db.prepare(`SELECT b.operation_id FROM control_api_bindings_v1 b
+        JOIN control_jobs c ON c.operation_id=b.operation_id JOIN control_completions cc ON cc.operation_id=c.operation_id
+        WHERE c.tenant_id=? AND c.project_id=? AND c.actor_id=? AND b.design_hash=? ORDER BY b.rowid DESC LIMIT 1`)
+        .get(principal.tenant_id, principal.project_id, principal.actor_id, current.design_hash);
+      const repair = !apply && this.row(principal, current.logical_operation_id);
+      const sourceId = apply?.operation_id ?? (repair?.kind === 'repair' ? repair.action_id : null);
+      if (!sourceId) return null;
+      // Source recovery only reads durable jobs and immutable versions. It must
+      // never invoke Apply/repair to reconstruct a missing or pending result.
+      const design = await this.saved(principal, sourceId), context = this.context(principal);
+      if (context.design.design_version_id !== design.design_version_id || context.design.design_hash !== design.design_hash ||
+        context.design.artifact.content_hash !== design.artifact.content_hash || canonicalHash(context.brief) !== design.brief_hash) return null;
+      return Object.freeze({ source_operation_id: sourceId, design_version_id: design.design_version_id, artifact_hash: design.artifact.content_hash });
+    } catch { return null; }
+  }
   async latestRepair(principal) {
     try {
       principal=snapshotControlJson(principal);this.context(principal);

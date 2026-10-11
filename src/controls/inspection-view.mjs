@@ -2,6 +2,13 @@
  * enter the view. This does not confer backend repair or Finance authority. */
 import { isRecord, snapshotControlJson, validId } from './schema.mjs';
 const hash = x => typeof x === 'string' && /^sha256:[a-f0-9]{64}$/.test(x);
+export function projectInspectionSource(input) {
+ try {
+  const source = snapshotControlJson(input);
+  if (!isRecord(source) || !validId(source.source_operation_id) || !validId(source.design_version_id) || !hash(source.artifact_hash)) return null;
+  return Object.freeze({source_operation_id:source.source_operation_id,design_version_id:source.design_version_id,artifact_hash:source.artifact_hash});
+ } catch { return null; }
+}
 const outcomes = ['acceptable_for_review', 'bounded_repair_recommended', 'needs_human_review', 'refusal', 'failure'];
 const messages = Object.freeze({ pending: 'Inspection pending. The saved artwork remains available.',
  unknown: 'Inspection outcome is unknown. Recover the existing inspection; do not regenerate the saved edit.',
@@ -24,7 +31,8 @@ export function projectInspectionView(value) {
   const completed = v.status === 'completed';
   if (completed ? !outcomes.includes(v.outcome) || !hash(v.report_hash) || !isRecord(v.provenance) || !isRecord(v.limits) ||
     v.limits.max_repairs !== 2 || v.limits.max_elapsed_ms !== 60000 || v.limits.max_simulated_units !== 3 ||
-    ![['remaining_repairs',2],['remaining_elapsed_ms',60000],['remaining_simulated_units',3]].every(([k,max])=>Number.isSafeInteger(v.limits[k])&&v.limits[k]>=0&&v.limits[k]<=max) ||
+    ![['remaining_repairs',2],['remaining_elapsed_ms',60000]].every(([k,max])=>Number.isSafeInteger(v.limits[k])&&v.limits[k]>=0&&v.limits[k]<=max) ||
+    !Number.isFinite(v.limits.remaining_simulated_units) || v.limits.remaining_simulated_units<0 || v.limits.remaining_simulated_units>3 ||
     !['first_request_ref','route_request_ref','decision_ref'].every(k=>v.provenance[k]===null||hash(v.provenance[k])) ||
     !['fixture','recorded','sandbox','live'].includes(v.evidence_mode) : v.outcome !== null || v.report_hash !== null || v.limits !== null || v.provenance !== null) throw new TypeError();
   if (v.repair_available && (!completed || v.outcome !== 'bounded_repair_recommended' || v.usage_completeness !== 'complete' ||
