@@ -86,6 +86,11 @@ duplicate row IDs and retains equal content under distinct row IDs. Raw row IDs
 are hashed in storage and traces. Private plan framing is not a wire contract.
 Version 1 database metadata and exact immutable limit settings are required on
 restart; unsupported versions/settings fail, without guessing migrations.
+First admission requires a new batch operation. A general-storage binding with
+the same scope/key is rejected with IDEMPOTENCY_CONFLICT, even with identical
+plan bytes and no stages. Existing stages, publications, denial and terminal
+storage remain untouched; no job, row or event is added. Repeating an already
+admitted job with the same plan remains idempotent in every lifecycle state.
 
 Claims are serialized across processes. Per-row fences, attempt IDs, stage IDs
 and lease deadlines guard completion and renewal. Storage itself also checks
@@ -105,6 +110,15 @@ the row is queued after exponential backoff, and a new claim creates a new local
 execution attempt. Retryable failures stop at maxAttempts. Permanent failures
 never retry. Terminal row counts and total attempts provide monotonic progress;
 inventory and results are paged under fixed limits.
+Recovery commits one verified expired row at a time, including its attempt,
+publication join and outbox event. Before changing a row, it reserves capacity
+for its event and any terminal batch publication/job events (up to three events
+in total). Earlier checkpoints survive a later capacity limit or fault. A call
+processes at most pageSize rows; when recovery or a new claim cannot fit, claim
+returns null. Drain the outbox and call claim again, including after restart,
+to continue. Committed output is reused without rendering or republishing;
+unpublished stages are abandoned and retries retain the configured backoff.
+Integrity and storage faults still propagate and roll back the affected row.
 Failure classification first verifies any committed publication. Actual success
 then wins over permanent, retryable or exhausted failure, retaining the original
 attempt and immutable source observations. Internal reconciliation verifies

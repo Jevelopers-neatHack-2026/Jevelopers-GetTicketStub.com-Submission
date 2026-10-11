@@ -16,7 +16,7 @@ import {
 	type Scope,
 } from "../internal/durability.js";
 import { LocalArtifactStore, type OutputFile } from "../storage/local-store.js";
-import { observe } from "../telemetry/observations.js";
+import { observe, eventCapacity } from "../telemetry/observations.js";
 import { publishBatchInventory } from "../internal/batch-finalization.js";
 
 const policySchema = z.enum(["atomic", "allow_partial"]);
@@ -157,6 +157,15 @@ export class DurableBatchEngine {
 		);
 		const planDigest = hash(planBytes);
 		return this.db.transaction(() => {
+			check(
+				this.db.sql
+					.prepare(
+						"SELECT 1 FROM operations o WHERE o.scope=? AND o.key=? AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.operation=o.id)",
+					)
+					.get(scopeKey(scope), identity(["private-batch", plan.key])) ===
+					undefined,
+				"IDEMPOTENCY_CONFLICT",
+			);
 			const operation = this.store.bindInTransaction(
 				scope,
 				"private-batch",
@@ -290,53 +299,86 @@ export class DurableBatchEngine {
 				: {},
 		);
 	}
-	private recover(scope: Scope): void {
+	private recoverRowInTransaction(
+		scope: Scope,
+	): "recovered" | "blocked" | "done" {
+		this.db.requireTransaction();
 		const expired = this.db.sql
 			.prepare(
-				"SELECT r.* FROM rows r JOIN jobs j ON j.id=r.job JOIN operations o ON o.id=j.operation WHERE o.scope=? AND r.status='running' AND r.lease<=?",
+				"SELECT r.* FROM rows r JOIN jobs j ON j.id=r.job JOIN operations o ON o.id=j.operation WHERE o.scope=? AND r.status='running' AND r.lease<=? ORDER BY j.rowid,r.ordinal LIMIT 1",
 			)
-			.all(scopeKey(scope), this.db.now())
-			.map((row) => parse(rowSchema, row));
-		for (const row of expired) {
-			const publication = this.store.reconcilePublicationInTransaction(
-				scope,
-				row.operation,
-			);
-			if (publication) {
-				this.db.sql
-					.prepare(
-						"UPDATE rows SET status='succeeded',publication=?,lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
-					)
-					.run(publication.id, row.job, row.ordinal);
-				this.endAttempt(
-					{ ...row, publication: publication.id },
-					"succeeded",
-					null,
-					false,
-				);
-			} else {
-				this.endAttempt(row, "interrupted", "INTERRUPTED", false);
-				if (row.stage) {
-					this.store.abandonInTransaction(scope, row.stage);
-				}
-				const exhausted = row.attempts >= this.db.limits.maxAttempts;
-				this.db.sql
-					.prepare(
-						"UPDATE rows SET status=?,code='INTERRUPTED',lease=NULL,fence=fence+1,due=? WHERE job=? AND ordinal=?",
-					)
-					.run(
-						exhausted ? "failed" : "queued",
-						this.db.now() + this.db.limits.backoffMs * 2 ** (row.attempts - 1),
-						row.job,
-						row.ordinal,
-					);
-				if (exhausted)
-					this.db.sql
-						.prepare("UPDATE operations SET status='failed' WHERE id=?")
-						.run(row.operation);
-			}
-			this.finish(scope, row.job);
+			.get(scopeKey(scope), this.db.now());
+		if (!expired) return "done";
+		const row = parse(rowSchema, expired);
+		const publication = this.store.reconcilePublicationInTransaction(
+			scope,
+			row.operation,
+		);
+		const exhausted = row.attempts >= this.db.limits.maxAttempts;
+		const peers = this.db.sql
+			.prepare(
+				"SELECT COUNT(*) AS total,COALESCE(SUM(status IN('queued','running')),0) AS pending,COALESCE(SUM(status='succeeded'),0) AS succeeded FROM rows WHERE job=? AND ordinal!=?",
+			)
+			.get(row.job, row.ordinal);
+		check(
+			typeof peers?.["total"] === "number" &&
+				typeof peers["pending"] === "number" &&
+				typeof peers["succeeded"] === "number",
+			"INTEGRITY",
+		);
+		let required = 1;
+		if ((publication || exhausted) && peers["pending"] === 0) {
+			const job = this.job(scope, row.job);
+			const publishes =
+				(publication !== null && peers["succeeded"] === peers["total"]) ||
+				(job.policy === "allow_partial" &&
+					(publication !== null || peers["succeeded"] > 0));
+			required += publishes ? 2 : 1;
 		}
+		if (eventCapacity(this.db) < required) return "blocked";
+		if (publication) {
+			this.db.sql
+				.prepare(
+					"UPDATE rows SET status='succeeded',publication=?,lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
+				)
+				.run(publication.id, row.job, row.ordinal);
+			this.endAttempt(
+				{ ...row, publication: publication.id },
+				"succeeded",
+				null,
+				false,
+			);
+		} else {
+			this.endAttempt(row, "interrupted", "INTERRUPTED", false);
+			if (row.stage) {
+				this.store.abandonInTransaction(scope, row.stage);
+			}
+			this.db.sql
+				.prepare(
+					"UPDATE rows SET status=?,code='INTERRUPTED',lease=NULL,fence=fence+1,due=? WHERE job=? AND ordinal=?",
+				)
+				.run(
+					exhausted ? "failed" : "queued",
+					this.db.now() + this.db.limits.backoffMs * 2 ** (row.attempts - 1),
+					row.job,
+					row.ordinal,
+				);
+			if (exhausted)
+				this.db.sql
+					.prepare("UPDATE operations SET status='failed' WHERE id=?")
+					.run(row.operation);
+		}
+		this.finish(scope, row.job);
+		return "recovered";
+	}
+	private recover(scope: Scope): boolean {
+		for (let recovered = 0; recovered < this.db.limits.pageSize; recovered++) {
+			const result = this.db.transaction(() =>
+				this.recoverRowInTransaction(scope),
+			);
+			if (result !== "recovered") return result === "done";
+		}
+		return false;
 	}
 	claim(scope: Scope): RowClaim | null {
 		this.db.transaction(() => {
@@ -357,8 +399,9 @@ export class DurableBatchEngine {
 			for (const job of pending)
 				this.cancelInTransaction(scope, parse(idSchema, job["job"]));
 		});
+		if (!this.recover(scope)) return null;
 		return this.db.transaction(() => {
-			this.recover(scope);
+			if (eventCapacity(this.db) < 1) return null;
 			const active = this.db.sql
 				.prepare(
 					"SELECT COUNT(*) AS n FROM rows WHERE status='running' AND lease>?",
@@ -562,11 +605,7 @@ export class DurableBatchEngine {
 		const job = this.job(scope, id);
 		if (!this.db.sql.prepare("SELECT 1 FROM cancellations WHERE job=?").get(id))
 			return;
-		const count = this.db.sql
-			.prepare("SELECT COUNT(*) AS n FROM outbox WHERE status!='delivered'")
-			.get();
-		check(typeof count?.["n"] === "number", "INTEGRITY");
-		const capacity = this.db.limits.maxPendingEvents - count["n"];
+		const capacity = eventCapacity(this.db);
 		if (capacity <= 0) return;
 		const rows = this.db.sql
 			.prepare(
