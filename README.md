@@ -1,37 +1,101 @@
+<a href="https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-night.svg">
+    <img alt="fulfillment-connectors — Supplier quotes, submissions and status. TicketStub banner showing a route line linking a stub, a parcel and a status node." src="docs/assets/readme/banner-day.svg" width="100%">
+  </picture>
+</a>
+
 # fulfillment-connectors
 
-Supplier quote normalization, external submission attempts, and status observations.
+Provider-neutral TypeScript runtime for TicketStub supplier quotes, order submission attempts and status observations.
 
-## Implementation status
+<p>
+  <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: local foundation candidate, simulated mode only" src="https://img.shields.io/badge/status-local%20foundation-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href=".node-version"><img alt="Node.js 24.15.0" src="https://img.shields.io/badge/node-24.15.0-26302A?style=flat-square&labelColor=17140F"></a>
+  <a href="package.json"><img alt="TypeScript 6.0.3" src="https://img.shields.io/badge/typescript-6.0.3-7CC6D2?style=flat-square&labelColor=17140F"></a>
+</p>
 
-This branch contains a local worker-runtime foundation candidate with deterministic private fixtures. It has no selected production provider adapter, accepted upstream schema pins, cross-repository conformance reports, or live mode. Sandbox and release verification therefore remain blocked; the candidate does not establish completion of FC-01.
+[Status](#status) · [Quickstart](#quickstart) · [Checks](#checks) · [Docs](#docs) · [Related](#related-repositories)
 
-The provider-neutral FC-11 security helpers and synthetic policy fixtures are exported and run by the local security verifier. They cover scoped reference access, payload minimization, diagnostics, injected secret and asset ports, tombstone creation, and callback hints. They do not supply production encryption, a secret manager, a pinned network transport, provider callback authentication, persistent replay storage, or accepted upstream SC8; sandbox and release security evidence remain pending. See [security boundary and limits](docs/security.md).
+## Status
 
-See [runtime design, evidence scope, and exact verification commands](docs/runtime.md).
+`main` holds a **local worker-runtime foundation candidate** tested with deterministic private fixtures. It does not complete [FC-01](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/3) or close any other FC issue.
 
-The [FC-02 provider and environment matrix](docs/provider-matrix.md) records official Prodigi v4 documentation observations separately from local fixtures, account access, selected-product decisions, and implemented support. The simulator remains offline; sandbox and release checks remain blocked until owner evidence and an adapter exist.
+Implemented locally and exported from the package root:
 
-The private FC-03 catalog normalizer is exported from the package root and covered by `npm test` / `npm run test:catalog`. Its simulated evidence command is `npm run verify:catalog`; it reports local fixture results while keeping canonical schema pins, print-production review, sandbox readiness, and release readiness separate. See [catalog field semantics and evidence limits](docs/catalog.md).
+- **Runtime (FC-01).** `FulfillmentConnectorRuntime` with typed adapter operations, injected ports and typed `ConnectorError` side-effect states. Modes are `simulated` (default) and `sandbox` (disabled until accepted pins exist); `liveModeSupported` is always false. See [runtime](docs/runtime.md).
+- **Security helpers (FC-11).** Provider-neutral helpers for scoped reference access, payload minimization, safe diagnostics, injected secret and asset ports, tombstones and callback hints, with synthetic policy fixtures. They are not wired to an adapter or the submit path. See [security](docs/security.md).
+- **Private fixture slices.** Offline provider matrix (FC-02, [provider matrix](docs/provider-matrix.md)), catalog normalizer (FC-03, [catalog](docs/catalog.md)), quote normalizer (FC-04, [quotes](docs/quotes.md)), local JSON attempt store (partial FC-06, [attempt store](docs/attempt-store.md)) and metering outbox (FC-10, [metering](docs/metering.md)). Their formats are private development shapes, not shared contracts.
+- **Prodigi Product Details wire decoder.** The package exports a pure private response projection and relative path helper, covered by synthetic offline fixtures. It performs no HTTP request, product selection, or orderability decision; issue 15's full acceptance still includes the supported cancellation outcome. See [Product Details](docs/prodigi-product-details.md).
+- **Status inbox (FC-07, partial).** `LocalStatusStore` records scoped status observations, a derived projection, conflicts, poll work and an at-least-once outbox in the private `fc-status-store/2` format (format 1 is rejected). Its mapping, polling and correction policies, trusted-lookup port and outbox are development fixtures. The local commit marker detects some inconsistent loss but cannot authenticate a coordinated rollback or complete directory loss. [Issue 13](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/13) stays open: the shared-contracts #27 mapping, authenticated provider lookup and callbacks, application consumer conformance, and finance, sandbox and release acceptance are pending. See [status](docs/status.md).
+- **Quote comparison (FC-09, partial).** `comparePrivateQuotes` projects two or more private quote snapshots, preserves exact source terms and reports unknown or incompatible bases. It does not rank, choose a provider or submit an order. Currentness uses one captured trusted clock value, so a consumer must recheck at use time. [Issue 14](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/14) stays open: the shared-contracts #25 mapping and application consumer review are pending. See [comparison](docs/comparison.md).
 
-The deterministic FC-02 mock adapter is compiled for local runtime tests and covered by `npm test` / `npm run verify:mock`. It exercises simulated provider behavior, restart snapshots, and runtime observations through the local durable metering outbox; its synthetic authorization, budget, and contract fixtures do not establish provider sandbox, finance, or release readiness. See [simulator behavior and evidence limits](docs/simulator.md).
+Compiled for local tests but not exported: the deterministic simulator (FC-02-MOCK), which drives simulated provider behavior, restart snapshots and the durable metering outbox with synthetic ports. See [simulator](docs/simulator.md).
 
-The private FC-04 quote normalizer is exported from the package root and covered by `npm test` / `npm run test:quote`; its offline evidence command is `npm run verify:quote`. It obtains estimates only through an injected bounded quote port. It does not authorize submission, reserve a budget, or record an actual expense, and this repository includes no live provider adapter or network transport. The canonical shared-contracts #25 mapping, consumer conformance, and scoped persistence remain pending; sandbox and release readiness remain false. See [quote semantics and evidence limits](docs/quotes.md).
+Blocked, and not claimed here:
 
-The private FC-07 status inbox is exported from the package root and covered by `npm test` / `npm run test:status`; its simulated fixture command is `npm run verify:status`. The local mapping, polling and correction policies, trusted-lookup port, and outbox remain development fixtures. Issue 13 remains open; canonical shared-contracts #27 mapping, authenticated provider lookup and callbacks, application consumer conformance, and finance, sandbox, and release acceptance remain pending. Format `fc-status-store/2` rejects the previous unsupported format; its local marker detects some inconsistent loss but does not authenticate coordinated rollback or complete directory loss. See [status evidence limits](docs/status.md).
+- **No production provider adapter.** Prodigi v4 is a documented candidate only; no SKU, destination, shipping method or sandbox account has been selected or tested ([FC-02-SANDBOX](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/15)).
+- **No accepted upstream schema pins.** Every cross-repository payload is owned by shared-contracts, which has not yet accepted or published a schema version ([ownership table](docs/runtime.md#cross-repository-payload-ownership)).
+- **No conformance reports.** Producer and consumer conformance with the application, print-production and cost-intelligence is missing.
+- **No live mode.** No live endpoint is allowlisted and live-class credentials are rejected. FC-11 has no production encryption, secret manager, pinned transport, callback authentication or durable replay store.
 
-The FC-06 attempt persistence implementation is exported from the package root for local development, exercised by `npm test` / `npm run test:attempt-store`, and reported by `npm run verify:attempt-store`. Its private JSON store supplies restart-safe local claims through the existing `AttemptPersistence` port and is tested with the deterministic simulator and synthetic authorization and budget ports. This is partial issue 11 evidence only: the issue remains open, with no canonical shared schema, issuer or finance authority, provider reconciliation or retry authority, transport-intent/CAS protocol, or production encrypted storage. Sandbox, live, and release readiness remain false. See [local attempt store semantics and limits](docs/attempt-store.md).
+Sandbox, live and release readiness are false for every slice, and sandbox and release verification fail closed. Acceptance criteria FUL-01 to FUL-04 and LIVE-03 stay planned in [integration-evals](docs/architecture/ACCEPTANCE.md).
 
-The private FC-09 quote comparison projection is exported from the package root and covered by `npm test` / `npm run test:comparison`; `npm run verify:comparison` writes its simulated evidence result. It preserves exact source quote terms and reports unknown or incompatible bases without ranking, choosing a provider, or submitting an order. Currentness uses one captured trusted clock value, so a consumer must recheck at use time. The shared-contracts #25 mapping and application consumer review remain pending; issue 14 stays partial/open, and sandbox, live, and release readiness remain false. See [comparison field semantics and evidence limits](docs/comparison.md).
+## Quickstart
 
-The private Prodigi Product Details wire decoder and relative path helper are exported from the package root and covered by `npm test` / `npm run test:prodigi-product-details`; `npm run verify:prodigi-product-details` records the simulated synthetic-fixture result. They make no provider request and do not select a product, establish orderability, or add HTTP or runtime behavior. Issue 15's full acceptance still includes cancellation outcomes; this parser implements no order lifecycle operation. Sandbox, live, and release readiness remain false. See [Product Details wire fields and evidence limits](docs/prodigi-product-details.md).
+Requires Node.js 24.15.0 ([`.node-version`](.node-version), `engines`) and npm 11.12.1 (`packageManager`). Dev dependencies are TypeScript 6.0.3 and `@types/node`; there are no runtime dependencies.
 
-## Architecture and delivery
+```sh
+npm ci      # locked install; may need registry access
+npm test    # builds dist/ and runs all 11 local fixture suites
+```
 
-- [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
-- [Relevant acceptance criteria](docs/architecture/ACCEPTANCE.md)
-- [Architecture reference](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md)
-- [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
-- [Contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md)
+No test calls a provider or another repository.
 
-The CI workflow builds and tests only the local foundation and records no provider activity. Architecture integration documents the intended boundaries; it does not establish connected sponsor tools or live financial activity.
+## Checks
+
+Each `verify:*` script runs `scripts/verify-fulfillment` in simulated mode against the built package, prints a JSON result and writes `result.json` to the listed (git-ignored) evidence directory. Run `npm run build` or `npm test` first. The verifier exits nonzero on any failure, including a Node version other than 24.15.0.
+
+| Command | Suite | Evidence directory |
+| --- | --- | --- |
+| `npm run verify:contract` | Runtime contract fixtures (FC-01) | `evidence/FC-01` |
+| `npm run verify:provider-matrix` | Offline provider matrix policy (FC-02) | `evidence/FC-02` |
+| `npm run verify:mock` | Deterministic simulator and outbox | `evidence/FC-02-MOCK` |
+| `npm run verify:catalog` | Catalog normalization (FC-03) | `evidence/FC-03` |
+| `npm run verify:quote` | Quote normalization (FC-04) | `evidence/FC-04` |
+| `npm run verify:attempt-store` | Local attempt store (FC-06, partial) | `evidence/FC-06-ATTEMPT-STORE` |
+| `npm run verify:metering` | Metering and outbox (FC-10) | `evidence/FC-10` |
+| `npm run verify:security` | Security policy helpers (FC-11) | `evidence/FC-11` |
+| `npm run verify:status` | Status inbox (FC-07, partial) | `evidence/FC-07-STATUS` |
+| `npm run verify:comparison` | Quote comparison (FC-09, partial) | `evidence/FC-09-COMPARISON` |
+| `npm run verify:prodigi-product-details` | Private Product Details wire fixtures | `evidence/FC-PRODIGI-PRODUCT-DETAILS` |
+
+Single suites: `npm run test:catalog` (needs an existing build); `test:quote`, `test:attempt-store`, `test:status`, `test:comparison` and `test:prodigi-product-details` build first. `--suite sandbox` and `--suite release` always fail until an adapter, accepted pins and conformance evidence exist. The [`foundation-ci`](.github/workflows/ci.yml) workflow runs the pinned toolchain check, `npm ci`, `npm test` and all 11 `verify:*` commands with read-only permissions and no secrets. Result fields and blockers: [runtime](docs/runtime.md#runtime-and-commands).
+
+## Docs
+
+| Doc | Covers |
+| --- | --- |
+| [Runtime](docs/runtime.md) | FC-01 boundary, ports, payload ownership, criterion audit, verification commands |
+| [Security](docs/security.md) | FC-11 helpers and what they do not provide |
+| [Provider matrix](docs/provider-matrix.md) | FC-02 Prodigi observations versus local fixtures |
+| [Simulator](docs/simulator.md) · [Catalog](docs/catalog.md) · [Quotes](docs/quotes.md) | Private fixture shapes and evidence limits |
+| [Attempt store](docs/attempt-store.md) · [Metering](docs/metering.md) | Local persistence, outbox and finance boundaries |
+| [Status](docs/status.md) · [Comparison](docs/comparison.md) | FC-07 status inbox and FC-09 quote comparison: private shapes and evidence limits |
+| [Product Details](docs/prodigi-product-details.md) | Prodigi private wire fields, decoder behavior and evidence limits |
+| [Ownership](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md) | Repository responsibilities and selected master criteria |
+
+Architecture: [architecture kit v1.0](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) and the [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). They describe intended boundaries; they do not establish completed product functionality, passing implementation tests, connected sponsor tools or live financial activity.
+
+## Related repositories
+
+- [shared-contracts](https://github.com/Jevelopers-neatHack-2026/shared-contracts): owns every cross-repository payload schema this runtime validates against.
+- [print-production](https://github.com/Jevelopers-neatHack-2026/print-production): print specifications and production bundles.
+- [cost-intelligence](https://github.com/Jevelopers-neatHack-2026/cost-intelligence): usage intake and the budget reservation authority.
+- [getticketstub.com](https://github.com/Jevelopers-neatHack-2026/getticketstub.com): customer authorization and the order lifecycle.
+- [integration-evals](https://github.com/Jevelopers-neatHack-2026/integration-evals): master acceptance checklist and cross-component evidence.
+
+## Contributing
+
+Follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Commit only synthetic fixtures and no provider credentials or delivery addresses; verifier output under `evidence/` is git-ignored. No license file is present in this repository.
