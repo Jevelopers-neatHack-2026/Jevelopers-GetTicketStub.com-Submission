@@ -617,6 +617,204 @@
       "producer_version": "2.0.0",
       "consumer_version": "1.0.0",
       "accept": false
+    },
+    {
+      "contract": "ApprovalReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalReference",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalReference",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalReference",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvaluationEvidence",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "EvaluationEvidence",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "EvaluationEvidence",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "OrderAuthorization",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "OrderAuthorization",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "OrderAuthorization",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
     }
   ],
   "profile_compatibility": {

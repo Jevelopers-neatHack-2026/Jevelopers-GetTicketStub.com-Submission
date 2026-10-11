@@ -82,6 +82,7 @@ export async function outputs() {
   }
   exports.DefinitionVersionedReference = 'https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference';
   exports.DefinitionDecisionQuestion = 'https://schemas.jevelopers.org/DecisionPortRequest/1.0.0#/properties/questions/additionalProperties';
+  exports.DefinitionApprovalBinding = 'https://schemas.jevelopers.org/ApprovalReceipt/1.0.0#/$defs/ApprovalBinding';
   const bundled = await build({ stdin: { contents: standalone.default(ajv, exports), resolveDir: root, sourcefile: 'validators.mjs' }, bundle: true, write: false, metafile: true, format: 'esm', platform: 'node', target: 'node22', legalComments: 'none' });
   const validation = bundled.outputFiles[0].text;
   if (Object.values(bundled.metafile.outputs).some(output => output.imports.length)) throw new Error('Standalone validators require a runtime dependency');
@@ -95,9 +96,10 @@ export async function outputs() {
   result.set('schema-manifest.json', JSON.stringify({ package_version: packageManifest.version, source_revision: null, status: 'unreleased_candidates', toolchain: { ajv: '8.17.1', esbuild: '0.25.12', typescript: '5.9.3', json_schema_to_typescript: '15.0.4', node: '22.23.3' }, schemas: manifest }, null, 2) + '\n');
   result.set('brands.d.ts', 'declare const brand: unique symbol;\nexport type Brand<T, Name extends string> = T & { readonly [brand]: Name };\n');
   const names = Object.keys(versions);
-  result.set('index.mjs', "export { validateContract, parseContract, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport * from '../tooling/research-creative.mjs';\nexport { versions } from './registry.mjs';\n");
+  result.set('index.mjs', "export { validateContract, parseContract, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport * from '../tooling/research-creative.mjs';\nexport * from '../tooling/commerce-evidence.mjs';\nexport { versions } from './registry.mjs';\n");
   result.set('operations.d.ts', (await readFile(root + 'tooling/operations-api.d.ts', 'utf8')).replace('../generated/index.js', './index.js'));
   result.set('research-creative.d.ts', (await readFile(root + 'tooling/research-creative-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
+  result.set('commerce-evidence.d.ts', (await readFile(root + 'tooling/commerce-evidence-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   const details = localSchemas.get('https://schemas.jevelopers.org/ErrorEnvelope/1.0.0').$defs.ErrorDetail.oneOf;
   const errorRegistry = Object.fromEntries(details.map(detail => [detail.properties.code.const, { category: detail.properties.category.const, safe_message: detail.properties.safe_message.const }]));
   result.set('error-registry.mjs', 'const records = ' + JSON.stringify(errorRegistry, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const errorRegistry = Object.freeze(records);\n');
@@ -105,6 +107,7 @@ export async function outputs() {
 export type { Brand } from './brands.js';
 export * from './operations.js';
 export * from './research-creative.js';
+export * from './commerce-evidence.js';
 export type * from './primitives.js';
 import type * as Primitives from './primitives.js';
 export type PrimitiveName = keyof PrimitiveMap;

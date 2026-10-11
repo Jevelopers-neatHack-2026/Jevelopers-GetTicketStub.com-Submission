@@ -1,0 +1,1434 @@
+{
+  "contract": "FulfillmentStatus",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "FulfillmentStatus",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000008000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "order_id": "123e4567-e89b-42d3-a456-000000000151",
+    "provider": "synthetic_supplier",
+    "supplier_order_id": "supplier_order_1",
+    "bundle_ref": {
+      "contract": "ProductionBundle",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000120",
+      "revision": 1,
+      "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+    },
+    "authorization_ref": {
+      "contract": "OrderAuthorization",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000150",
+      "revision": 1,
+      "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+    },
+    "external_idempotency_key": "external_purchase_1",
+    "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+    "revision": 1,
+    "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+    "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+    "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+    "normalized_status": "accepted",
+    "provider_status": "ACCEPTED",
+    "last_known_status": "accepted",
+    "submission_outcome": "accepted",
+    "execution_uncertainty": "known",
+    "cancellation": "not_requested",
+    "effective_at": "2026-10-10T12:00:00Z",
+    "error_ref": null,
+    "usage_refs": []
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "trace_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "type",
+      "category": "type",
+      "set": {
+        "billing_mode": 0
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "approved": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-scope",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "project_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/project_id"
+      }
+    },
+    {
+      "id": "duplicate-observation",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": "supplier_order_1",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "accepted",
+          "provider_status": "ACCEPTED",
+          "last_known_status": "accepted",
+          "submission_outcome": "accepted",
+          "execution_uncertainty": "known",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "altered-duplicate",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "supplier_order_id": "different"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": "supplier_order_1",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "accepted",
+          "provider_status": "ACCEPTED",
+          "last_known_status": "accepted",
+          "submission_outcome": "accepted",
+          "execution_uncertainty": "known",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": false,
+        "code": "IDENTITY_COLLISION",
+        "path": "/supplier_order_id"
+      }
+    },
+    {
+      "id": "out-of-order",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "revision": 3,
+        "event_id": "123e4567-e89b-42d3-a456-000000008200",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000008201"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": "supplier_order_1",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "accepted",
+          "provider_status": "ACCEPTED",
+          "last_known_status": "accepted",
+          "submission_outcome": "accepted",
+          "execution_uncertainty": "known",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_REVISION",
+        "path": "/revision"
+      }
+    },
+    {
+      "id": "unknown-provider-status",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "provider_status": "NEW_OPAQUE_STATUS",
+        "normalized_status": "unknown",
+        "execution_uncertainty": "unknown",
+        "submission_outcome": "unknown",
+        "supplier_order_id": null
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": null
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "ambiguous-submission",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "provider_status": "TIMEOUT",
+        "normalized_status": "unknown",
+        "execution_uncertainty": "unknown",
+        "submission_outcome": "unknown",
+        "supplier_order_id": null
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": null
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "timeout-cannot-be-rejection",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "provider_status": "REJECTED",
+        "normalized_status": "rejected",
+        "execution_uncertainty": "known",
+        "submission_outcome": "unknown"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNCERTAIN_EXECUTION",
+        "path": "/submission_outcome"
+      }
+    },
+    {
+      "id": "cancel-request-is-not-confirmed",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "provider_status": "CANCELLED",
+        "normalized_status": "cancelled",
+        "cancellation": "requested"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_TRANSITION",
+        "path": "/cancellation"
+      }
+    },
+    {
+      "id": "confirmed-cancellation",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "provider_status": "CANCELLED",
+        "normalized_status": "cancelled",
+        "cancellation": "confirmed"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "rejected-cancellation",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "provider_status": "CANCEL_REJECTED",
+        "normalized_status": "cancel_rejected",
+        "cancellation": "rejected"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "delayed-regression",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "revision": 2,
+        "event_id": "123e4567-e89b-42d3-a456-000000008200",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000008201",
+        "provider_status": "PRODUCTION",
+        "normalized_status": "in_production"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": "supplier_order_1",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "shipped",
+          "provider_status": "SHIPPED",
+          "last_known_status": "accepted",
+          "submission_outcome": "accepted",
+          "execution_uncertainty": "known",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        },
+        "expected_supplier_order_id": "supplier_order_1"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_TRANSITION",
+        "path": "/normalized_status"
+      }
+    },
+    {
+      "id": "known_supplier_cannot_switch",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "revision": 2,
+        "event_id": "123e4567-e89b-42d3-a456-000000009000",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000009001",
+        "supplier_order_id": "other_supplier_order"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "other_supplier_order",
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": "supplier_order_1",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "accepted",
+          "provider_status": "ACCEPTED",
+          "last_known_status": "accepted",
+          "submission_outcome": "accepted",
+          "execution_uncertainty": "known",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "IDENTITY_COLLISION",
+        "path": "/supplier_order_id"
+      }
+    },
+    {
+      "id": "same_execution_wrong_bundle_ref",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "revision": 2,
+        "event_id": "123e4567-e89b-42d3-a456-000000009000",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000009001",
+        "bundle_ref": {
+          "contract": "ProductionBundle",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000999",
+          "revision": 1,
+          "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000999",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1",
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": "supplier_order_1",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "accepted",
+          "provider_status": "ACCEPTED",
+          "last_known_status": "accepted",
+          "submission_outcome": "accepted",
+          "execution_uncertainty": "known",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "IDENTITY_COLLISION",
+        "path": "/bundle_ref"
+      }
+    },
+    {
+      "id": "same_execution_wrong_authorization_ref",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "revision": 2,
+        "event_id": "123e4567-e89b-42d3-a456-000000009000",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000009001",
+        "authorization_ref": {
+          "contract": "OrderAuthorization",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000999",
+          "revision": 1,
+          "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000999",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1",
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": "supplier_order_1",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "accepted",
+          "provider_status": "ACCEPTED",
+          "last_known_status": "accepted",
+          "submission_outcome": "accepted",
+          "execution_uncertainty": "known",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "IDENTITY_COLLISION",
+        "path": "/authorization_ref"
+      }
+    },
+    {
+      "id": "trusted_null_to_known_supplier",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "revision": 2,
+        "event_id": "123e4567-e89b-42d3-a456-000000009000",
+        "source_observation_id": "123e4567-e89b-42d3-a456-000000009001"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          }
+        },
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151",
+        "provider": "synthetic_supplier",
+        "external_idempotency_key": "external_purchase_1",
+        "status_mapping": {
+          "ACCEPTED": "accepted",
+          "REJECTED": "rejected",
+          "PRODUCTION": "in_production",
+          "SHIPPED": "shipped",
+          "FULFILLED": "fulfilled",
+          "CANCEL_REQUESTED": "cancel_requested",
+          "CANCELLED": "cancelled",
+          "CANCEL_REJECTED": "cancel_rejected",
+          "TIMEOUT": "unknown"
+        },
+        "expected_supplier_order_id": "supplier_order_1",
+        "prior_status": {
+          "contract": "FulfillmentStatus",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "order_id": "123e4567-e89b-42d3-a456-000000000151",
+          "provider": "synthetic_supplier",
+          "supplier_order_id": null,
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "authorization_ref": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000150",
+            "revision": 1,
+            "content_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c"
+          },
+          "external_idempotency_key": "external_purchase_1",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000160",
+          "revision": 1,
+          "provider_attempt_id": "123e4567-e89b-42d3-a456-000000000161",
+          "billable_attempt_id": "123e4567-e89b-42d3-a456-000000000162",
+          "transport_attempt_id": "123e4567-e89b-42d3-a456-000000000163",
+          "normalized_status": "unknown",
+          "provider_status": "TIMEOUT",
+          "last_known_status": "accepted",
+          "submission_outcome": "unknown",
+          "execution_uncertainty": "unknown",
+          "cancellation": "not_requested",
+          "effective_at": "2026-10-10T12:00:00Z",
+          "error_ref": null,
+          "usage_refs": []
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    }
+  ]
+}

@@ -232,18 +232,30 @@ test('field-classification audit finds unclassified nested fields', () => {
   assert.deepEqual(classifications(schema, ['public', 'internal', 'restricted', 'secret']), [{ code: 'UNCLASSIFIED_FIELD', path: '/data/*/token' }]);
 });
 
-test('full catalog schema checks fail for each absent named domain export', async () => {
-  // Given the foundation-only baseline, when the full gate runs, then no missing leaf passes.
+test('full catalog schema checks cover every now-implemented named export', async () => {
+  // Given all locally implemented candidates, when the full gate runs, then no export is omitted.
   const result = await execute('check', {});
-  assert.equal(result.status, 'failed_or_blocked');
-  assert.ok(result.failures.some(entry => entry.contract === 'ApprovalReceipt' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
-  assert.ok(result.failures.some(entry => entry.contract === 'ProductionBundle' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
+  assert.equal(result.status, 'passed');
+  assert.equal(result.checked, (await catalog()).length);
+  assert.deepEqual(result.failures, []);
 });
 
-for (const [flag, code] of [['require-owner', 'BLOCKED_OWNER_ACCEPTANCE'], ['require-fixtures', 'MISSING_FIXTURES'], ['require-docs', 'MISSING_DISCOVERABLE_ARTIFACT'], ['require-consumer-pins', 'BLOCKED_CONSUMER_PIN'], ['require-field-classification', 'MISSING_CLASSIFIED_SCHEMA']]) test('inventory flag ' + flag + ' fails on missing release evidence', async () => {
+for (const [flag, code] of [['require-owner', 'BLOCKED_OWNER_ACCEPTANCE'], ['require-consumer-pins', 'BLOCKED_CONSUMER_PIN']]) test('inventory flag ' + flag + ' fails on missing release evidence', async () => {
   // Given an explicitly incomplete release, when the named requirement is enabled, then failure is explicit.
   const result = await execute('inventory', { [flag]: true });
   assert.ok(result.failures.some(entry => entry.code === code));
+});
+
+for (const flag of ['require-fixtures', 'require-docs', 'require-field-classification']) test('inventory ' + flag + ' covers every implemented candidate', async () => {
+  // Given real local schema/type/fixture artifacts, when checked, then complete coverage passes.
+  const result = await execute('inventory', { [flag]: true });
+  assert.deepEqual(result.failures, []);
+  assert.equal(result.checked, (await catalog()).length);
+});
+
+test('missing fixture source still fails closed after all planned exports exist', async () => {
+  // Given an absent artifact, when the fixture gate reads it, then no default/skipped pass replaces it.
+  assert.deepEqual(await runFixtures({ name: 'NoSuchContract', fixtures: 'fixtures/NoSuchContract.json' }), [{ code: 'MISSING_FIXTURES', contract: 'NoSuchContract' }]);
 });
 
 test('policy-only classification gate does not claim domain coverage', async () => {

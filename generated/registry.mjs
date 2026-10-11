@@ -1,4 +1,22 @@
 const records = {
+  "ApprovalReceipt": {
+    "1.0.0": "ApprovalReceipt_1_0_0"
+  },
+  "ApprovalReference": {
+    "1.0.0": "ApprovalReference_1_0_0"
+  },
+  "ApprovalVerificationOutcome": {
+    "1.0.0": "ApprovalVerificationOutcome_1_0_0"
+  },
+  "ApprovalVerificationRequest": {
+    "1.0.0": "ApprovalVerificationRequest_1_0_0"
+  },
+  "ArtifactConsumptionReceipt": {
+    "1.0.0": "ArtifactConsumptionReceipt_1_0_0"
+  },
+  "ArtifactHandoffManifest": {
+    "1.0.0": "ArtifactHandoffManifest_1_0_0"
+  },
   "BudgetReservation": {
     "1.0.0": "BudgetReservation_1_0_0"
   },
@@ -29,6 +47,9 @@ const records = {
   "ErrorEnvelope": {
     "1.0.0": "ErrorEnvelope_1_0_0"
   },
+  "EvaluationEvidence": {
+    "1.0.0": "EvaluationEvidence_1_0_0"
+  },
   "EventIntelligencePackage": {
     "1.0.0": "EventIntelligencePackage_1_0_0"
   },
@@ -37,6 +58,12 @@ const records = {
   },
   "FinancialSummary": {
     "1.0.0": "FinancialSummary_1_0_0"
+  },
+  "FulfillmentQuote": {
+    "1.0.0": "FulfillmentQuote_1_0_0"
+  },
+  "FulfillmentStatus": {
+    "1.0.0": "FulfillmentStatus_1_0_0"
   },
   "JobCommandAcknowledgement": {
     "1.0.0": "JobCommandAcknowledgement_1_0_0"
@@ -47,8 +74,14 @@ const records = {
   "JobStatus": {
     "1.0.0": "JobStatus_1_0_0"
   },
+  "OrderAuthorization": {
+    "1.0.0": "OrderAuthorization_1_0_0"
+  },
   "PartialFailure": {
     "1.0.0": "PartialFailure_1_0_0"
+  },
+  "ProductionBundle": {
+    "1.0.0": "ProductionBundle_1_0_0"
   },
   "ProjectRequest": {
     "1.0.0": "ProjectRequest_1_0_0"
@@ -105,6 +138,7 @@ const records = {
 for (const record of Object.values(records)) Object.freeze(record);
 export const versions = Object.freeze(records);
 export const primitiveValidators = Object.freeze({
+  "ApprovalId": "PrimitiveApprovalId",
   "TenantId": "PrimitiveTenantId",
   "ProjectId": "PrimitiveProjectId",
   "EventId": "PrimitiveEventId",

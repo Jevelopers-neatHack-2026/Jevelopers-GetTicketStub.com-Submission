@@ -1,6 +1,6 @@
 # Contract Catalog
 
-This is the maintained inventory. The JSON record below is consumed by `contracts:inventory`. Foundation candidates are implemented locally and await owner review. Operations leaves #9-14 now have local candidates; domain leaves #22-28 remain unimplemented. Paths and versions remain null until artifacts exist; no planned export counts as an implementation.
+This is the maintained inventory. The JSON record below is consumed by `contracts:inventory`. Foundation candidates are implemented locally and await owner review. Operations leaves #9-14 now have local candidates; all planned domain leaves now have local candidates. Paths and versions remain null until artifacts exist; no planned export counts as an implementation.
 
 | Export | Leaf | Producers | Consumers | State |
 | --- | --- | --- | --- | --- |
@@ -35,14 +35,14 @@ This is the maintained inventory. The JSON record below is consumed by `contract
 | CreativeBrief | #19 SC-02.BRIEF | creative-engine | agent-harness, creative-engine | research_creative_candidate |
 | DesignControlSchema | #20 SC-02.CONTROLS | creative-engine | getticketstub.com | research_creative_candidate |
 | DesignVersion | #21 SC-02.DESIGN | creative-engine | getticketstub.com, print-production, agent-harness, integration-evals | research_creative_candidate |
-| ApprovalReference | #22 SC-07.APPROVAL | getticketstub.com | creative-engine, print-production, event-intelligence, agent-harness, integration-evals | unimplemented |
-| ApprovalReceipt | #22 SC-07.APPROVAL | getticketstub.com | creative-engine, print-production, event-intelligence, agent-harness, integration-evals | unimplemented |
-| ArtifactHandoffManifest | #23 SC-07.HANDOFF | creative-engine | print-production, getticketstub.com, agent-harness, integration-evals | unimplemented |
-| ProductionBundle | #24 SC-07.PRODUCTION | print-production | getticketstub.com, fulfillment-connectors, agent-harness, integration-evals | unimplemented |
-| FulfillmentQuote | #25 SC-07.QUOTE | fulfillment-connectors | getticketstub.com, agent-harness | unimplemented |
-| OrderAuthorization | #26 SC-07.ORDER-AUTH | getticketstub.com | agent-harness, fulfillment-connectors | unimplemented |
-| FulfillmentStatus | #27 SC-08.FULFILLMENT | fulfillment-connectors | getticketstub.com, agent-harness, team-dashboard, integration-evals | unimplemented |
-| EvaluationEvidence | #28 SC-02.EVIDENCE | integration-evals | team-dashboard, getticketstub.com | unimplemented |
+| ApprovalReference | #22 SC-07.APPROVAL | getticketstub.com | creative-engine, print-production, event-intelligence, agent-harness, integration-evals | commerce_evidence_candidate |
+| ApprovalReceipt | #22 SC-07.APPROVAL | getticketstub.com | creative-engine, print-production, event-intelligence, agent-harness, integration-evals | commerce_evidence_candidate |
+| ArtifactHandoffManifest | #23 SC-07.HANDOFF | creative-engine | print-production, getticketstub.com, agent-harness, integration-evals | commerce_evidence_candidate |
+| ProductionBundle | #24 SC-07.PRODUCTION | print-production | getticketstub.com, fulfillment-connectors, agent-harness, integration-evals | commerce_evidence_candidate |
+| FulfillmentQuote | #25 SC-07.QUOTE | fulfillment-connectors | getticketstub.com, agent-harness | commerce_evidence_candidate |
+| OrderAuthorization | #26 SC-07.ORDER-AUTH | getticketstub.com | agent-harness, fulfillment-connectors | commerce_evidence_candidate |
+| FulfillmentStatus | #27 SC-08.FULFILLMENT | fulfillment-connectors | getticketstub.com, agent-harness, team-dashboard, integration-evals | commerce_evidence_candidate |
+| EvaluationEvidence | #28 SC-02.EVIDENCE | integration-evals | team-dashboard, getticketstub.com | commerce_evidence_candidate |
 
 ```json catalog
 {
@@ -1170,15 +1170,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "application authenticates current approval and revocation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "getticketstub.com",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/ApprovalReference/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ApprovalReference_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/ApprovalReference.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1205,15 +1205,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "application authenticates current approval and revocation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "getticketstub.com",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/ApprovalReceipt/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ApprovalReceipt_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/ApprovalReceipt.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1239,15 +1239,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "approved artwork inputs; consumption receipt naming pending",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "creative-engine",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/ArtifactHandoffManifest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ArtifactHandoffManifest_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/ArtifactHandoffManifest.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1273,15 +1273,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "final print composition and preflight remain production authority",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "print-production",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/ProductionBundle/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ProductionBundle_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/ProductionBundle.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1305,15 +1305,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "quote terms without purchase authority",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "fulfillment-connectors",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/FulfillmentQuote/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/FulfillmentQuote_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/FulfillmentQuote.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1337,15 +1337,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "purchase authorization separate from art approval and budget",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "getticketstub.com",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/OrderAuthorization/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/OrderAuthorization_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/OrderAuthorization.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1371,15 +1371,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "normalized supplier observations",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "fulfillment-connectors",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/FulfillmentStatus/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/FulfillmentStatus_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/FulfillmentStatus.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1403,15 +1403,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "sanitized proof with simulated/live separation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "integration-evals",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/EvaluationEvidence/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/EvaluationEvidence_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/EvaluationEvidence.json",
+      "docs": "docs/commerce-evidence-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1515,6 +1515,113 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null,
       "naming_status": "proposed_from_EI_handoff_pending_owner_review"
+    },
+    {
+      "name": "ApprovalVerificationRequest",
+      "group": "ApprovalVerificationRequest",
+      "issue": 22,
+      "requirement": "SC-07.APPROVAL",
+      "owner_role": "Agent and research (shared-contracts maintainer)",
+      "domain_steward": "getticketstub.com",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "getticketstub.com"
+      ],
+      "consumers": [
+        "creative-engine",
+        "print-production",
+        "event-intelligence",
+        "agent-harness",
+        "integration-evals"
+      ],
+      "trust_boundary": "Comparison against externally authenticated current records; never issuer/service authority",
+      "semantic_authority": "application authenticates current approval and revocation",
+      "lifecycle": "versioned immutable wire record; domain owner controls transitions",
+      "field_steward": "getticketstub.com",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/ApprovalVerificationRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ApprovalVerificationRequest_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/ApprovalVerificationRequest.json",
+      "docs": "docs/commerce-evidence-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
+      "acceptance": null,
+      "naming_status": "proposed_from_creative_interface_pending_owner_review"
+    },
+    {
+      "name": "ApprovalVerificationOutcome",
+      "group": "ApprovalVerificationOutcome",
+      "issue": 22,
+      "requirement": "SC-07.APPROVAL",
+      "owner_role": "Agent and research (shared-contracts maintainer)",
+      "domain_steward": "getticketstub.com",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "getticketstub.com"
+      ],
+      "consumers": [
+        "creative-engine",
+        "print-production",
+        "event-intelligence",
+        "agent-harness",
+        "integration-evals"
+      ],
+      "trust_boundary": "Comparison against externally authenticated current records; never issuer/service authority",
+      "semantic_authority": "application authenticates current approval and revocation",
+      "lifecycle": "versioned immutable wire record; domain owner controls transitions",
+      "field_steward": "getticketstub.com",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/ApprovalVerificationOutcome/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ApprovalVerificationOutcome_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/ApprovalVerificationOutcome.json",
+      "docs": "docs/commerce-evidence-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
+      "acceptance": null,
+      "naming_status": "proposed_from_creative_interface_pending_owner_review"
+    },
+    {
+      "name": "ArtifactConsumptionReceipt",
+      "group": "ArtifactConsumptionReceipt",
+      "issue": 23,
+      "requirement": "SC-07.HANDOFF",
+      "owner_role": "Agent and research (shared-contracts maintainer)",
+      "domain_steward": "creative-engine",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "creative-engine"
+      ],
+      "consumers": [
+        "print-production",
+        "getticketstub.com",
+        "agent-harness",
+        "integration-evals"
+      ],
+      "trust_boundary": "Comparison against externally authenticated current records; never issuer/service authority",
+      "semantic_authority": "approved artwork inputs; consumption receipt naming pending",
+      "lifecycle": "versioned immutable wire record; domain owner controls transitions",
+      "field_steward": "creative-engine",
+      "state": "commerce_evidence_candidate",
+      "schema_path": "schemas/ArtifactConsumptionReceipt/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ArtifactConsumptionReceipt_1_0_0.d.ts",
+      "helper": "tooling/commerce-evidence.mjs",
+      "fixtures": "fixtures/ArtifactConsumptionReceipt.json",
+      "docs": "docs/commerce-evidence-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
+      "acceptance": null,
+      "naming_status": "proposed_from_creative_interface_pending_owner_review"
     }
   ],
   "unresolved_export_slots": [
@@ -1543,8 +1650,11 @@ This is the maintained inventory. The JSON record below is consumed by `contract
         "authenticated approval verifier input",
         "verification outcome"
       ],
-      "export_names": null,
-      "state": "pending_application_authority_interface",
+      "export_names": [
+        "ApprovalVerificationRequest",
+        "ApprovalVerificationOutcome"
+      ],
+      "state": "locally_implemented_proposal_pending_owner_review",
       "producer": "getticketstub.com",
       "consumers": [
         "creative-engine",
@@ -1556,8 +1666,10 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "slots": [
         "handoff consumption receipt reference"
       ],
-      "export_names": null,
-      "state": "pending_owner_naming",
+      "export_names": [
+        "ArtifactConsumptionReceipt"
+      ],
+      "state": "locally_implemented_proposal_pending_owner_review",
       "producer": "print-production",
       "consumers": [
         "creative-engine",
@@ -1595,3 +1707,5 @@ Foundation navigation: [CommonEnvelope schema](../schemas/CommonEnvelope/1.0.0.j
 Operations navigation: [contracts and helper guide](operations-contracts.md), [installed consumer example](../examples/operations-consumer.mjs), [generated port API](../generated/operations.d.ts). Each operations entry above has a real schema, declaration and fixture path; owner acknowledgement remains null.
 
 Research and creative navigation: [contract and migration guide](research-creative-contracts.md), [installed consumer](../examples/research-creative-consumer.mjs), [generated context API](../generated/research-creative.d.ts). ResearchRequestReceipt, ResearchAnswerReceipt and ResearchBatchReceipt are separately indexed proposals grounded in EI's receipt handoff; final names and acceptance remain pending.
+
+Commerce/evidence navigation: [guide](commerce-evidence-contracts.md), [installed consumer](../examples/commerce-evidence-consumer.mjs), [generated context API](../generated/commerce-evidence.d.ts). Canonical wire exports now exist for every catalog slot; genuine owner/naming/consumer acceptance remains pending.

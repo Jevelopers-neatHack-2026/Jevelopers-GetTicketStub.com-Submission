@@ -144,6 +144,39 @@
     ],
     "DesignVersion": [
       "1.0.0"
+    ],
+    "ApprovalReceipt": [
+      "1.0.0"
+    ],
+    "ApprovalReference": [
+      "1.0.0"
+    ],
+    "ApprovalVerificationRequest": [
+      "1.0.0"
+    ],
+    "ApprovalVerificationOutcome": [
+      "1.0.0"
+    ],
+    "ArtifactHandoffManifest": [
+      "1.0.0"
+    ],
+    "ArtifactConsumptionReceipt": [
+      "1.0.0"
+    ],
+    "ProductionBundle": [
+      "1.0.0"
+    ],
+    "FulfillmentQuote": [
+      "1.0.0"
+    ],
+    "OrderAuthorization": [
+      "1.0.0"
+    ],
+    "FulfillmentStatus": [
+      "1.0.0"
+    ],
+    "EvaluationEvidence": [
+      "1.0.0"
     ]
   },
   "previous_accepted_major": null

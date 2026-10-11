@@ -1,4 +1,5 @@
 import type { Brand } from './brands.js';
+export type ApprovalId = Brand<string, "ApprovalId">;
 export type TenantId = Brand<string, "TenantId">;
 export type ProjectId = Brand<string, "ProjectId">;
 export type EventId = Brand<string, "EventId">;

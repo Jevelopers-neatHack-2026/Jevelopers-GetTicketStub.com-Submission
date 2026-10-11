@@ -1,0 +1,3203 @@
+{
+  "contract": "OrderAuthorization",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "OrderAuthorization",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000008000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+    "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+    "issuer": "getticketstub.com",
+    "actor_id": "actor_1",
+    "audience": "fulfillment-connectors",
+    "order_id": "123e4567-e89b-42d3-a456-000000000151",
+    "quote_ref": {
+      "contract": "FulfillmentQuote",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000141",
+      "revision": 1,
+      "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+    },
+    "bundle_ref": {
+      "contract": "ProductionBundle",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000120",
+      "revision": 1,
+      "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+    },
+    "terms": {
+      "product_id": "poster",
+      "variant_id": "standard",
+      "quantity": 2,
+      "destination_ref": {
+        "contract": "Destination",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000140",
+        "revision": 1,
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "shipping_method": "standard"
+    },
+    "maximum": {
+      "amount": "1.500000",
+      "currency": "USD",
+      "scale": 6
+    },
+    "issued_at": "2026-10-10T11:00:00Z",
+    "expires_at": "2026-10-10T13:00:00Z",
+    "status_ref": {
+      "contract": "AuthorizationStatus",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000152",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "idempotency_key": "purchase_1",
+    "purpose": "purchase_only"
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "trace_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "missing",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "type",
+      "category": "type",
+      "set": {
+        "billing_mode": 0
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "unsupported-version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "category": "unknown_field",
+      "set": {
+        "approved": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "date",
+      "category": "format",
+      "set": {
+        "observed_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/observed_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-scope",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "project_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/project_id"
+      }
+    },
+    {
+      "id": "expired",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "expired",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/status_ref"
+      }
+    },
+    {
+      "id": "revoked",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "revoked",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/status_ref"
+      }
+    },
+    {
+      "id": "unavailable",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {},
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "unavailable",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/status_ref"
+      }
+    },
+    {
+      "id": "forged-issuer",
+      "category": "structural",
+      "set": {
+        "issuer": "creative-engine"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/issuer"
+      }
+    },
+    {
+      "id": "changed-quantity",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 3,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/terms"
+      }
+    },
+    {
+      "id": "changed-shipping_method",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "express"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/terms"
+      }
+    },
+    {
+      "id": "changed-product_id",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "terms": {
+          "product_id": "other",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/terms"
+      }
+    },
+    {
+      "id": "changed-maximum",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "maximum": {
+          "amount": "2.000000",
+          "currency": "USD",
+          "scale": 6
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/terms"
+      }
+    },
+    {
+      "id": "changed-currency",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "maximum": {
+          "amount": "1.500000",
+          "currency": "EUR",
+          "scale": 6
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/terms"
+      }
+    },
+    {
+      "id": "changed-destination",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000999",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/terms/destination_ref"
+      }
+    },
+    {
+      "id": "changed-bundle",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "bundle_ref": {
+          "contract": "ProductionBundle",
+          "schema_version": "1.0.0",
+          "id": "123e4567-e89b-42d3-a456-000000000120",
+          "revision": 1,
+          "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "REFERENCE_MISMATCH",
+        "path": "/bundle_ref"
+      }
+    },
+    {
+      "id": "different-order",
+      "category": "semantic",
+      "mode": "commerce_evidence",
+      "set": {
+        "order_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "references": {
+          "quote_ref": {
+            "contract": "FulfillmentQuote",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000141",
+            "revision": 1,
+            "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+          },
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "terms/destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "status_ref": {
+            "contract": "AuthorizationStatus",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000152",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "expected_terms": {
+          "product_id": "poster",
+          "variant_id": "standard",
+          "quantity": 2,
+          "destination_ref": {
+            "contract": "Destination",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000140",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "shipping_method": "standard"
+        },
+        "currency": "USD",
+        "provider": "synthetic_supplier",
+        "current_authorization": {
+          "status": "valid",
+          "authorization": {
+            "contract": "OrderAuthorization",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000008000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "authorization_id": "123e4567-e89b-42d3-a456-000000000150",
+            "authorization_hash": "sha256:cab470888b15d80e348bbcaed41db3bdd2fe481c24b98b29e4564cd8247df84c",
+            "issuer": "getticketstub.com",
+            "actor_id": "actor_1",
+            "audience": "fulfillment-connectors",
+            "order_id": "123e4567-e89b-42d3-a456-000000000151",
+            "quote_ref": {
+              "contract": "FulfillmentQuote",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000141",
+              "revision": 1,
+              "content_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20"
+            },
+            "bundle_ref": {
+              "contract": "ProductionBundle",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000120",
+              "revision": 1,
+              "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+            },
+            "terms": {
+              "product_id": "poster",
+              "variant_id": "standard",
+              "quantity": 2,
+              "destination_ref": {
+                "contract": "Destination",
+                "schema_version": "1.0.0",
+                "id": "123e4567-e89b-42d3-a456-000000000140",
+                "revision": 1,
+                "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "shipping_method": "standard"
+            },
+            "maximum": {
+              "amount": "1.500000",
+              "currency": "USD",
+              "scale": 6
+            },
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status_ref": {
+              "contract": "AuthorizationStatus",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000152",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "idempotency_key": "purchase_1",
+            "purpose": "purchase_only"
+          },
+          "checked_at": "2026-10-10T12:00:00Z"
+        },
+        "quote": {
+          "contract": "FulfillmentQuote",
+          "schema_version": "1.0.0",
+          "policy_version": "1.0.0",
+          "event_id": "123e4567-e89b-42d3-a456-000000008000",
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000",
+          "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+          "producer": {
+            "module": "shared-contracts",
+            "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+            "build_revision": "fixture-1"
+          },
+          "occurred_at": "2026-10-10T12:00:00Z",
+          "observed_at": "2026-10-10T12:00:01Z",
+          "ingested_at": "2026-10-10T12:00:02Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [],
+          "quote_id": "123e4567-e89b-42d3-a456-000000000141",
+          "quote_version": 1,
+          "quote_hash": "sha256:f82c8672bdabdce551f2abc9250dab19c108ecec8d490a23f9e3b77f6e2e7a20",
+          "provider": "synthetic_supplier",
+          "bundle_ref": {
+            "contract": "ProductionBundle",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000120",
+            "revision": 1,
+            "content_hash": "sha256:ab49052cfe6f8c353be9131f73e6b202ac72df670593514b8b516673f4ff3bbd"
+          },
+          "spec_ref": {
+            "contract": "PrintSpec",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000112",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "terms": {
+            "product_id": "poster",
+            "variant_id": "standard",
+            "quantity": 2,
+            "destination_ref": {
+              "contract": "Destination",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000140",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "shipping_method": "standard"
+          },
+          "valuation_basis": "quoted",
+          "currency": "USD",
+          "charges": [
+            {
+              "kind": "product",
+              "money": {
+                "amount": "1.000000",
+                "currency": "USD",
+                "scale": 6
+              }
+            },
+            {
+              "kind": "shipping",
+              "money": {
+                "amount": "0.200000",
+                "currency": "USD",
+                "scale": 6
+              }
+            }
+          ],
+          "total": {
+            "amount": "1.200000",
+            "currency": "USD",
+            "scale": 6
+          },
+          "issued_at": "2026-10-10T11:00:00Z",
+          "expires_at": "2026-10-10T13:00:00Z",
+          "source_observation_id": "123e4567-e89b-42d3-a456-000000000142"
+        },
+        "actor_id": "actor_1",
+        "audience": "fulfillment-connectors",
+        "expected_order_id": "123e4567-e89b-42d3-a456-000000000151"
+      },
+      "expected": {
+        "ok": false,
+        "code": "STALE_APPROVAL",
+        "path": "/terms"
+      }
+    }
+  ]
+}

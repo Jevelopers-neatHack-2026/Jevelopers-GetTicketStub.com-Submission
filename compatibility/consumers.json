@@ -1,7 +1,7 @@
 {
-  "mode": "discovery_only_local_research_creative_candidates",
+  "mode": "discovery_only_local_all_domain_candidates",
   "shared_source_revision": null,
-  "package_version": "0.3.0",
+  "package_version": "0.4.0",
   "repositories": [
     {
       "repository": "agent-harness",
@@ -208,6 +208,21 @@
           "contract": "ResearchBatchReceipt",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
         }
       ]
     },
@@ -376,6 +391,16 @@
           "contract": "ResearchBatchReceipt",
           "producer": true,
           "consumer": false
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
         }
       ]
     },
@@ -559,6 +584,21 @@
           "contract": "ResearchBatchReceipt",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": true,
+          "consumer": false
         }
       ]
     },
@@ -622,6 +662,21 @@
           "contract": "ProductionBundle",
           "producer": true,
           "consumer": false
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
         }
       ]
     },
@@ -994,6 +1049,21 @@
           "contract": "ResearchBatchReceipt",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
         }
       ]
     },
@@ -1130,6 +1200,21 @@
         },
         {
           "contract": "EvaluationEvidence",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ApprovalVerificationRequest",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ApprovalVerificationOutcome",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ArtifactConsumptionReceipt",
           "producer": false,
           "consumer": true
         }

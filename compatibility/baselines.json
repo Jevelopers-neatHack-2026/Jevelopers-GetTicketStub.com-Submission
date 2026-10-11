@@ -2,6 +2,54 @@
   "status": "candidate_immutability_guard_not_owner_acceptance",
   "schemas": [
     {
+      "contract": "ApprovalReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalReceipt/1.0.0",
+      "path": "schemas/ApprovalReceipt/1.0.0.json",
+      "sha256": "e931682224c8239bf65f5aa74d3e8e66564870cf84b95695de0557af36d6a63b",
+      "accepted": false
+    },
+    {
+      "contract": "ApprovalReference",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalReference/1.0.0",
+      "path": "schemas/ApprovalReference/1.0.0.json",
+      "sha256": "6d84c310e0a866c9fff4e8990a6e1c0bf508cb069e92769c54861769c8b5ef30",
+      "accepted": false
+    },
+    {
+      "contract": "ApprovalVerificationOutcome",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalVerificationOutcome/1.0.0",
+      "path": "schemas/ApprovalVerificationOutcome/1.0.0.json",
+      "sha256": "2ec93908f85321d836f926ecefb968276673f1f779b7237abbba4a6307bbee19",
+      "accepted": false
+    },
+    {
+      "contract": "ApprovalVerificationRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ApprovalVerificationRequest/1.0.0",
+      "path": "schemas/ApprovalVerificationRequest/1.0.0.json",
+      "sha256": "35767f5d3271d36415b978c89320a8029a110665a6cad79ba07dc2e11d4c4989",
+      "accepted": false
+    },
+    {
+      "contract": "ArtifactConsumptionReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactConsumptionReceipt/1.0.0",
+      "path": "schemas/ArtifactConsumptionReceipt/1.0.0.json",
+      "sha256": "208a95fde5392b7e94ef5fa993a39d7399b9c7b6520146fe3c5df7c4a2816f64",
+      "accepted": false
+    },
+    {
+      "contract": "ArtifactHandoffManifest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ArtifactHandoffManifest/1.0.0",
+      "path": "schemas/ArtifactHandoffManifest/1.0.0.json",
+      "sha256": "696f0399c6962d2f3ac40a372164e093fd588cf2547ece0eb760f8993631a463",
+      "accepted": false
+    },
+    {
       "contract": "BudgetReservation",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/BudgetReservation/1.0.0",
@@ -82,6 +130,14 @@
       "accepted": false
     },
     {
+      "contract": "EvaluationEvidence",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/EvaluationEvidence/1.0.0",
+      "path": "schemas/EvaluationEvidence/1.0.0.json",
+      "sha256": "2febfa8c6dea15ebf2fe36c41547af197c3bd170b1cf8b2be6b3d467911013da",
+      "accepted": false
+    },
+    {
       "contract": "EventIntelligencePackage",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/EventIntelligencePackage/1.0.0",
@@ -103,6 +159,22 @@
       "schema_id": "https://schemas.jevelopers.org/FinancialSummary/1.0.0",
       "path": "schemas/FinancialSummary/1.0.0.json",
       "sha256": "8d73d97e86d0684ccbb84fc1838de9d7802438966be60bd1f2da3347833067d9",
+      "accepted": false
+    },
+    {
+      "contract": "FulfillmentQuote",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FulfillmentQuote/1.0.0",
+      "path": "schemas/FulfillmentQuote/1.0.0.json",
+      "sha256": "67dbe2b536123794619183ec25b9c85e492b2b15c1d2e4cc707e4fc0378d862b",
+      "accepted": false
+    },
+    {
+      "contract": "FulfillmentStatus",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FulfillmentStatus/1.0.0",
+      "path": "schemas/FulfillmentStatus/1.0.0.json",
+      "sha256": "54b35183983aedde2ff6ecef4d93eaa91c45016d89c478207571e88e413df811",
       "accepted": false
     },
     {
@@ -130,11 +202,27 @@
       "accepted": false
     },
     {
+      "contract": "OrderAuthorization",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/OrderAuthorization/1.0.0",
+      "path": "schemas/OrderAuthorization/1.0.0.json",
+      "sha256": "035e2a84ba8157c04e04be9d1312471942d3baaeee16fb2d08376506db66bb77",
+      "accepted": false
+    },
+    {
       "contract": "PartialFailure",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/PartialFailure/1.0.0",
       "path": "schemas/PartialFailure/1.0.0.json",
       "sha256": "ffbc017416dec37983be87bcfab5e4275d3f72cd80b6edbeb67d88c0257ad6c2",
+      "accepted": false
+    },
+    {
+      "contract": "ProductionBundle",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProductionBundle/1.0.0",
+      "path": "schemas/ProductionBundle/1.0.0.json",
+      "sha256": "9cf5bd738b0d528d647219eafa11309e1e126e21de4e4f7d06da8fa8e46b91b9",
       "accepted": false
     },
     {

@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/ApprovalReceipt/1.0.0",
+  "title": "ApprovalReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "ApprovalReceipt",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "event_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId",
+      "x-classification": "internal"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "workflow_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/WorkflowId",
+      "x-classification": "internal"
+    },
+    "run_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/RunId",
+      "x-classification": "internal"
+    },
+    "job_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/JobId",
+      "x-classification": "internal"
+    },
+    "artifact_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ArtifactId",
+      "x-classification": "restricted"
+    },
+    "design_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignId",
+      "x-classification": "restricted"
+    },
+    "design_version_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignVersionId",
+      "x-classification": "restricted"
+    },
+    "order_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/OrderId",
+      "x-classification": "restricted"
+    },
+    "trace_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TraceId",
+      "x-classification": "internal"
+    },
+    "correlation_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId",
+      "x-classification": "internal"
+    },
+    "evidence_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EvidenceId",
+      "x-classification": "internal"
+    },
+    "usage_event_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UsageEventId",
+      "x-classification": "internal"
+    },
+    "logical_operation_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/LogicalOperationId",
+      "x-classification": "internal"
+    },
+    "provider_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderAttemptId",
+      "x-classification": "internal"
+    },
+    "billable_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/BillableAttemptId",
+      "x-classification": "internal"
+    },
+    "transport_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TransportAttemptId",
+      "x-classification": "internal"
+    },
+    "provider_request_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderRequestId",
+      "x-classification": "restricted"
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "source_revision",
+        "build_revision"
+      ],
+      "x-classification": "internal",
+      "properties": {
+        "module": {
+          "type": "string",
+          "enum": [
+            "getticketstub.com",
+            "agent-harness",
+            "event-intelligence",
+            "creative-engine",
+            "print-production",
+            "fulfillment-connectors",
+            "cost-intelligence",
+            "team-dashboard",
+            "integration-evals",
+            "shared-contracts"
+          ],
+          "x-classification": "public"
+        },
+        "source_revision": {
+          "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/SourceRevision",
+          "x-classification": "public"
+        },
+        "build_revision": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+          "x-classification": "internal"
+        }
+      }
+    },
+    "occurred_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal"
+    },
+    "observed_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal"
+    },
+    "ingested_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "development",
+        "test",
+        "production"
+      ],
+      "x-classification": "public"
+    },
+    "billing_mode": {
+      "type": "string",
+      "enum": [
+        "live",
+        "sandbox",
+        "simulated"
+      ],
+      "x-classification": "public"
+    },
+    "source_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "x-classification": "restricted",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artifact",
+              "evidence",
+              "source_observation",
+              "provider_request",
+              "manifest"
+            ],
+            "x-classification": "internal"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,256}$",
+            "x-classification": "restricted"
+          },
+          "content_hash": {
+            "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+            "x-classification": "restricted"
+          }
+        }
+      }
+    },
+    "approval_id": {
+      "$ref": "https://schemas.jevelopers.org/ApprovalReceipt/1.0.0#/$defs/ApprovalId",
+      "x-classification": "restricted"
+    },
+    "receipt_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted"
+    },
+    "issuer": {
+      "const": "getticketstub.com",
+      "x-classification": "restricted"
+    },
+    "audience": {
+      "type": "string",
+      "enum": [
+        "creative-engine",
+        "print-production",
+        "getticketstub.com",
+        "agent-harness",
+        "event-intelligence"
+      ],
+      "x-classification": "restricted"
+    },
+    "actor_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$",
+      "x-classification": "restricted"
+    },
+    "binding": {
+      "$ref": "https://schemas.jevelopers.org/ApprovalReceipt/1.0.0#/$defs/ApprovalBinding",
+      "x-classification": "restricted"
+    },
+    "issued_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "restricted"
+    },
+    "expires_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "restricted"
+    },
+    "status_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "policy_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "event_id",
+    "tenant_id",
+    "project_id",
+    "correlation_id",
+    "producer",
+    "occurred_at",
+    "observed_at",
+    "ingested_at",
+    "environment",
+    "billing_mode",
+    "source_refs",
+    "approval_id",
+    "receipt_hash",
+    "issuer",
+    "audience",
+    "actor_id",
+    "binding",
+    "issued_at",
+    "expires_at",
+    "status_ref",
+    "policy_ref"
+  ],
+  "$defs": {
+    "ApprovalId": {
+      "type": "string",
+      "format": "uuid",
+      "tsType": "Brand<string, 'ApprovalId'>"
+    },
+    "ApprovalBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subject_type": {
+          "type": "string",
+          "enum": [
+            "design",
+            "artwork",
+            "asset",
+            "research_package",
+            "composition",
+            "production_bundle"
+          ],
+          "x-classification": "restricted"
+        },
+        "subject_ref": {
+          "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+          "x-classification": "restricted"
+        },
+        "intended_use": {
+          "type": "string",
+          "enum": [
+            "asset_display",
+            "asset_reproduce",
+            "asset_modify",
+            "asset_publish",
+            "design_preview",
+            "production"
+          ],
+          "x-classification": "restricted"
+        },
+        "preview_ref": {
+          "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+          "x-classification": "restricted"
+        },
+        "facts_hash": {
+          "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+          "x-classification": "restricted"
+        },
+        "composition_hash": {
+          "anyOf": [
+            {
+              "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-classification": "restricted"
+        },
+        "asset_hashes": {
+          "type": "array",
+          "items": {
+            "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256"
+          },
+          "maxItems": 100,
+          "minItems": 0,
+          "x-classification": "restricted"
+        },
+        "facts_ref": {
+          "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+          "x-classification": "restricted"
+        },
+        "composition_ref": {
+          "anyOf": [
+            {
+              "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+              "x-classification": "restricted"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-classification": "restricted"
+        }
+      },
+      "required": [
+        "subject_type",
+        "subject_ref",
+        "intended_use",
+        "preview_ref",
+        "facts_hash",
+        "composition_hash",
+        "asset_hashes",
+        "facts_ref",
+        "composition_ref"
+      ]
+    },
+    "ArtifactFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ArtifactId",
+          "x-classification": "restricted"
+        },
+        "filename": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+          "x-classification": "restricted"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "source_artwork",
+            "display_preview",
+            "composed_preview",
+            "print_output"
+          ],
+          "x-classification": "restricted"
+        },
+        "byte_hash": {
+          "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+          "x-classification": "restricted"
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-classification": "restricted"
+        },
+        "media_type": {
+          "type": "string",
+          "enum": [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "application/pdf"
+          ],
+          "x-classification": "restricted"
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "x-classification": "restricted"
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "x-classification": "restricted"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "pixels",
+            "mm",
+            "inches"
+          ],
+          "x-classification": "restricted"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "filename",
+        "role",
+        "byte_hash",
+        "byte_size",
+        "media_type",
+        "width",
+        "height",
+        "unit"
+      ]
+    }
+  }
+}

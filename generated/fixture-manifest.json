@@ -1,5 +1,11 @@
 {
   "files": {
+    "fixtures/ApprovalReceipt.json": "sha256:0b44643b2dd358c393a31f244fb7e4a21397a4ff09a3d6d18d6fd1cd8ca72eed",
+    "fixtures/ApprovalReference.json": "sha256:91e6631b129bfb4f9e0c2718342e7de8387415f99ca3351654335eb7d70cb205",
+    "fixtures/ApprovalVerificationOutcome.json": "sha256:f6635108181d2ace1cf081517a9cb4647dce1e477a87e18332fffdf8d58c8096",
+    "fixtures/ApprovalVerificationRequest.json": "sha256:7dbd725e8bd0c6abf8c7d0c914b4180b7af82467579716c5b97c9e3f293832b9",
+    "fixtures/ArtifactConsumptionReceipt.json": "sha256:2061985b08c4f8a99bc38253e7ce0da4d42af33a15a63cd918ddb8b2216ea474",
+    "fixtures/ArtifactHandoffManifest.json": "sha256:1fcad44189b0a2e9fb4c3483e0decae9d38719ac53be5b7e7180d69214abd4ee",
     "fixtures/BudgetReservation.json": "sha256:3f560759bf93265f732490366a7e0c85696875c122830e19394deb52ae74eb93",
     "fixtures/Cancellation.json": "sha256:90df772982a35a4bf6af5d82cb3b37f861c5e2e2538553fce55b89f8516b244f",
     "fixtures/CommonEnvelope.json": "sha256:e67c1cb4abdbad4dfeccca3870bf414227b2540fa45f494b959def2395248dac",
@@ -10,13 +16,19 @@
     "fixtures/DesignControlSchema.json": "sha256:e294bb9c1466e35da1764f19e6e78f0962991a9b784859e6709b3473e54b9cb8",
     "fixtures/DesignVersion.json": "sha256:0091b85c3480b52488c5397427661d21db5e273a3dd59541e57923114fad0407",
     "fixtures/ErrorEnvelope.json": "sha256:02e549419655094434b3d50dcdd8b0424f2b8d04a7fb6ac21192569c1332de70",
+    "fixtures/EvaluationEvidence.json": "sha256:021ad76357fd5faf870ffb798c1b9af58655755ed0a1d6bfcd89a86f5b1c68c2",
     "fixtures/EventIntelligencePackage.json": "sha256:1295df56c095c8911fc8ed44025a5e85d35394386546df2a3d87c8e0e7675ce8",
     "fixtures/EvidenceProjection.json": "sha256:801584ea9641e4bf5ed24bc11a1c5b9d12011136e3854fec7e24caab223a0ba4",
     "fixtures/FinancialSummary.json": "sha256:fc979b3afee9ae2bda810dc899e5a0c64e29030e13fdc4049aa80b61f8f854e9",
+    "fixtures/FulfillmentQuote.json": "sha256:28c561c17fa661d7d5b2d57fa229c86e10198a7fcbe5ab6b6d915f4b9a8cb316",
+    "fixtures/FulfillmentStatus.json": "sha256:02cf886fa0ffe1638589ed3d714988a4fe81a312848baad77bfa00a133f2246b",
     "fixtures/JobCommandAcknowledgement.json": "sha256:7069d27ff9503d0c6ded16203b7996ecdefe758cd793aa63e14ace30c75a77cc",
     "fixtures/JobProgress.json": "sha256:0632d135643cad31b8699b83055f1e325d7325910253d54daf9c05d5d2d87b33",
     "fixtures/JobStatus.json": "sha256:d2517cfe44961199fb228b363fbcb0dd79120d37e874d55d905d53d88265e0bb",
+    "fixtures/OrderAuthorization.json": "sha256:7a8ee6b9d7940a9fb6b64a41c3e49f188644f2e54a29ebc413f3e079804858c9",
     "fixtures/PartialFailure.json": "sha256:144cfb2ae0482a552362b28a817cf21dac57146d7d83e665d164d49ef7fb3d84",
+    "fixtures/ProductionApproval.example.json": "sha256:085bd9eb87444b3c0699cac1c840f181be239fbfa2553b2330bbcd672963cd15",
+    "fixtures/ProductionBundle.json": "sha256:8de18903a77bf9a4763be8d1403207d991701e7c4a4cefea340b4cc2ab9d4cc2",
     "fixtures/ProjectRequest.json": "sha256:0979e1be23a47916ad9f1dc22ccccc86f0a69378862da42cd6c0e58875723274",
     "fixtures/QueryRequest.json": "sha256:36908cdece33ef81273bc95ba8768d3dcaa9837a306cb944fe1a33c0c6f1d36b",
     "fixtures/QueryResult.json": "sha256:53701a0dc52a36b47020cc079782e090a304a68fbdb3193b4b140308d7ca4bbf",
@@ -35,6 +47,6 @@
     "fixtures/SettleResult.json": "sha256:c544828632d87de21743f7efd5266ca03f2b24dcb807e1ea95afb7ba3760595b",
     "fixtures/UsageEvent.json": "sha256:18545509313076b0d7b18819e41aeb9f7dd6bcf5e5ab697c73f96145893d6b0c"
   },
-  "digest": "sha256:9d5b71ba9ed22cff9816f3ee00b8896334fe438d5512218fd1a4cb08a46ff8a7",
+  "digest": "sha256:136f9843a8a85df0c9f7dd67c69d8840df1d008dae8eef877914e22c33215228",
   "status": "synthetic_candidates_only"
 }
