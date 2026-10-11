@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { newStub } from "../fixtures";
 import type { EventData, Fact } from "../types";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { haptic, play, stopPrint } from "@/customer/studio/feedback";
+import { haptic, play, stopPrint, type PrintBurst } from "@/customer/studio/feedback";
 import { MarkLegend, SourceMark, Stamped, TearLink } from "@/customer/desk/Desk";
 import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { researchEvent } from "./client";
@@ -35,6 +35,46 @@ function usePrefersReducedMotion(): boolean {
 }
 
 const keyOf = (f: Fact, i: number) => `${f.id}-${i}`;
+
+/** The paper leaves a thermal printer in runs, one per printed band, with short rests between. */
+function feedSchedule(seed: string): PrintBurst[] {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  const rand = () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+  const out: PrintBurst[] = [];
+  let at = 0.18;
+  for (let i = 0; i < 6; i++) {
+    const dur = 0.2 + rand() * 0.2;
+    out.push({ at, dur });
+    at += dur + 0.1 + rand() * 0.16;
+  }
+  return out;
+}
+
+/** Keyframes for the feed: the paper rises out of the slot top edge first, at one steady speed during
+ *  each run, holding in the rests. Halfway out it bows towards you off the rollers, then lies flat once cut. */
+function feedKeyframes(schedule: PrintBurst[]): { keyframes: Keyframe[]; duration: number } {
+  const last = schedule[schedule.length - 1];
+  const total = last.at + last.dur;
+  const travel = schedule.reduce((n, b) => n + b.dur, 0);
+  const frame = (t: number, p: number, easing = "linear"): Keyframe => ({
+    offset: Math.min(1, t / total),
+    transform: `translateY(${(100 - p * 100).toFixed(2)}%) rotateX(${(-11 * Math.sin(Math.PI * p)).toFixed(2)}deg)`,
+    easing,
+  });
+  const keyframes: Keyframe[] = [frame(0, 0)];
+  let done = 0;
+  for (const b of schedule) {
+    keyframes.push(frame(b.at, done / travel));
+    done += b.dur;
+    keyframes.push(frame(b.at + b.dur, done / travel));
+  }
+  return { keyframes, duration: total * 1000 };
+}
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -93,13 +133,15 @@ export function Printing(props: {
   const deadlineRef = useRef(0);
   const skipRef = useRef(false);
   const finishingRef = useRef(false);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const schedule = useMemo(() => feedSchedule(props.stubId ?? input.url ?? input.query ?? "stub"), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Printer sound, skip link, finish checker.
   useEffect(() => {
     startRef.current = Date.now();
     finishingRef.current = false;
     try {
-      play("print");
+      play("print", { schedule });
     } catch {
       /* sound is optional */
     }
@@ -147,7 +189,17 @@ export function Printing(props: {
         /* ignore */
       }
     };
-  }, []);
+  }, [schedule]); // schedule is fixed for the life of the print
+
+  // Feed the paper out in runs, in step with the printer's ticks. One feed: the blank paper and the
+  // printed stub share it, so the stub never jumps back into the slot when the research lands.
+  useEffect(() => {
+    const el = feedRef.current;
+    if (!el || reduced || typeof el.animate !== "function") return;
+    const { keyframes, duration } = feedKeyframes(schedule);
+    const anim = el.animate(keyframes, { duration, fill: "forwards" });
+    return () => anim.cancel();
+  }, [reduced, schedule]);
 
   // Research when no event was handed in.
   const url = input.url;
@@ -230,13 +282,16 @@ export function Printing(props: {
 
       <div className={styles.layout}>
         <div className={styles.printer}>
-          <div className={styles.slot} aria-hidden="true" />
           <div className={styles.feedWindow}>
-            <div className={`${styles.feed} ${reduced ? styles.reduced : ""}`} key={preview ? "stub" : "placeholder"}>
+            <div ref={feedRef} className={`${styles.feed} ${reduced ? styles.reduced : ""}`}>
               <div className={`${styles.ink} ${settling ? styles.settling : ""}`}>
                 {preview ? <StubView stub={preview} size="md" /> : <div className={styles.placeholder} aria-hidden="true" />}
               </div>
             </div>
+          </div>
+          <div className={styles.slot} aria-hidden="true" />
+          <div className={`${styles.body} ${settling ? styles.bodyDone : ""}`} aria-hidden="true">
+            <span className={styles.led} />
           </div>
         </div>
 

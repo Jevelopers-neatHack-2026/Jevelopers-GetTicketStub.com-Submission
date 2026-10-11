@@ -28,6 +28,14 @@ export interface PlayOptions {
   /** select: a later option sits a little higher. toggle: "back" is switching off. */
   direction?: "forward" | "back";
   volume?: number;
+  /** print: the feed bursts (seconds from now) the stub animates with, so the ticks match the paper. */
+  schedule?: PrintBurst[];
+}
+
+/** One run of the paper feed: it starts at `at` and steps the paper through for `dur` seconds. */
+export interface PrintBurst {
+  at: number;
+  dur: number;
 }
 
 const MUTE_KEY = "ticketstub.muted";
@@ -270,13 +278,10 @@ const RECIPES: Record<Exclude<Cue, "tick" | "done" | "tear">, Recipe> = {
     layers: [...struck(2093, 0.05, 0.007, BAR), knock(170, 0.04, 0.04), noise("lowpass", 500, 0.003, 0.05, 0.18, { q: FLAT }), knock(95, 0.06, 0.02, { from: "strong" })],
     vary: { pitch: 0.015, level: 0.1 },
   },
-  /** The printer starting up: one low note that swells in. The paper feed bed is added by startPrint. */
+  /** The printer waking: one soft motor click. The feed itself is the tick run in startPrint. */
   print: {
-    gain: 0.12,
-    layers: [
-      { kind: "tone", frequency: 196, attack: 0.35, decay: 0.8, peak: 0.03 },
-      { kind: "tone", frequency: 392, attack: 0.35, decay: 0.6, peak: 0.01 },
-    ],
+    gain: 0.18,
+    layers: [knock(150, 0.03, 0.05), noise("lowpass", 900, 0.002, 0.03, 0.08, { q: FLAT })],
   },
 };
 
@@ -481,54 +486,107 @@ function render(c: AudioContext, cue: Cue, opts: PlayOptions) {
   }, end * 1000);
 }
 
-// ---------- printer: a soft paper-feed bed under the swelling note ----------
+// ---------- printer: a thermal head stepping the paper through ----------
+// A real receipt printer is not a drone: it is a run of tiny stepper ticks, fed in short bursts (one per
+// printed band) with pauses between, over a faint whisper of paper. No hum, no tone, nothing steady.
 let printNodes: { gain: GainNode; stop: (t: number) => void } | null = null;
+const PRINT_LEVEL = 0.035;
 
-function startPrint(c: AudioContext) {
+function startPrint(c: AudioContext, schedule?: PrintBurst[]) {
   if (printNodes) return;
-  const t = c.currentTime;
+  const t0 = c.currentTime;
   const gain = c.createGain();
-  gain.gain.setValueAtTime(0, t);
-  gain.gain.linearRampToValueAtTime(0.05, t + 0.4);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(PRINT_LEVEL, t0 + 0.25);
   gain.connect(output!);
   const send = c.createGain();
-  send.gain.value = ROOM_SEND;
+  send.gain.value = ROOM_SEND * 0.6;
   gain.connect(send).connect(room!);
 
-  // paper sliding over rollers: band-limited noise, gently rocked at the roller speed
+  // the paper whisper: quiet, band-limited, and only while a band is feeding
   const src = c.createBufferSource();
   src.buffer = noiseBuf;
   src.loop = true;
   const f = c.createBiquadFilter();
   f.type = "bandpass";
-  f.frequency.value = 750;
-  f.Q.value = 0.8;
-  const rock = c.createGain();
-  rock.gain.value = 0.75;
-  const lfo = c.createOscillator();
-  lfo.frequency.value = 6.5;
-  const depth = c.createGain();
-  depth.gain.value = 0.25;
-  lfo.connect(depth).connect(rock.gain);
-  src.connect(f).connect(rock).connect(gain);
+  f.frequency.value = 2200;
+  f.Q.value = 0.7;
+  const whisper = c.createGain();
+  whisper.gain.value = 0;
+  src.connect(f).connect(whisper).connect(gain);
+  src.start(t0, Math.random() * NOISE_SECONDS);
 
-  // the roller's soft hum, an octave below the start note
-  const hum = c.createOscillator();
-  hum.frequency.value = 98;
-  const humG = c.createGain();
-  humG.gain.value = 0.12;
-  hum.connect(humG).connect(gain);
+  // the step: a 2-3 ms tick from the head plus the faintest knock from the motor
+  const step = (t: number, force: number) => {
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5 * force, t + 0.0015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.012);
+    const n = c.createBufferSource();
+    n.buffer = noiseBuf;
+    const bp = c.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1700 + Math.random() * 900;
+    bp.Q.value = 2.2;
+    n.connect(bp).connect(g).connect(gain);
+    n.start(t, Math.random() * NOISE_SECONDS);
+    n.stop(t + 0.02);
+    const k = c.createOscillator();
+    k.frequency.setValueAtTime(260, t);
+    k.frequency.exponentialRampToValueAtTime(160, t + 0.008);
+    const kg = c.createGain();
+    kg.gain.setValueAtTime(0, t);
+    kg.gain.linearRampToValueAtTime(0.12 * force, t + 0.001);
+    kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.018);
+    k.connect(kg).connect(gain);
+    k.start(t);
+    k.stop(t + 0.025);
+  };
 
-  src.start(t, Math.random() * NOISE_SECONDS);
-  lfo.start(t);
-  hum.start(t);
+  // a whisper that rises with each run of the feed and falls in the rest between
+  const run = (at: number, dur: number) => {
+    whisper.gain.setValueAtTime(0, at);
+    whisper.gain.linearRampToValueAtTime(0.06, at + 0.04);
+    whisper.gain.setValueAtTime(0.06, at + dur);
+    whisper.gain.linearRampToValueAtTime(0, at + dur + 0.05);
+  };
+
+  // Given the stub's own feed bursts, tick exactly with the paper; otherwise feed in loose bursts
+  // (30-44 steps a second for 0.25-0.7 s, then a 0.12-0.4 s rest) until stopPrint.
+  let timer = 0;
+  if (schedule?.length) {
+    for (const b of schedule) {
+      const at = t0 + b.at;
+      run(at, b.dur);
+      const rate = 34 + Math.random() * 8;
+      for (let t = at; t < at + b.dur; t += (1 / rate) * (0.94 + Math.random() * 0.12)) step(t, 0.75 + Math.random() * 0.25);
+    }
+  } else {
+    let next = t0 + 0.12;
+    let burstEnd = next + 0.25 + Math.random() * 0.45;
+    let rate = 30 + Math.random() * 14;
+    run(next, burstEnd - next);
+    timer = window.setInterval(() => {
+      const horizon = c.currentTime + 0.12;
+      while (next < horizon) {
+        if (next >= burstEnd) {
+          next += 0.12 + Math.random() * 0.28;
+          burstEnd = next + 0.25 + Math.random() * 0.45;
+          rate = 30 + Math.random() * 14;
+          run(next, burstEnd - next);
+        }
+        step(next, 0.75 + Math.random() * 0.25);
+        next += (1 / rate) * (0.94 + Math.random() * 0.12);
+      }
+    }, 30);
+  }
+
   printNodes = {
     gain,
     stop: (at) => {
+      window.clearInterval(timer);
       try {
         src.stop(at);
-        lfo.stop(at);
-        hum.stop(at);
       } catch {
         /* already stopped */
       }
@@ -562,7 +620,7 @@ export function play(cue: Cue, opts: PlayOptions = {}): void {
     const go = () => {
       if (muted || c.state !== "running") return;
       render(c, name, opts);
-      if (name === "print") startPrint(c);
+      if (name === "print") startPrint(c, opts.schedule);
     };
     if (c.state === "running") go();
     else if (userActive()) c.resume().then(go, () => {});

@@ -6,7 +6,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: max(24px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+  /* clear the corner cart button on narrow screens */
+  padding: max(24px, env(safe-area-inset-top), calc(var(--corner-reserve, 0px) * 0.62)) 16px max(28px, env(safe-area-inset-bottom));
   color: var(--desk-ink);
 }
 
@@ -80,62 +81,92 @@
   align-items: center;
 }
 
+/* The slot is the printer's mouth: the paper rises out of it, so it sits over the paper's foot. */
 .slot {
   position: relative;
   z-index: 2;
   width: 100%;
   height: 22px;
-  border-radius: 11px;
-  background: linear-gradient(#2a251d, #0c0a07);
-  box-shadow: inset 0 -3px 0 #000, 0 6px 18px -6px rgb(0 0 0 / 0.8);
+  margin-top: -10px;
+  border-radius: 11px 11px 4px 4px;
+  background: linear-gradient(#3a3328, #14110c 70%);
+  box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.06), 0 -1px 0 rgb(0 0 0 / 0.6);
 }
 .slot::after {
   content: "";
   position: absolute;
-  left: 8%;
-  right: 8%;
-  top: 9px;
+  left: 7%;
+  right: 7%;
+  top: 7px;
   height: 4px;
   border-radius: 2px;
   background: #000;
-  box-shadow: 0 0 10px 1px rgb(228 87 46 / 0.35);
+  box-shadow: 0 0 10px 1px rgb(228 87 46 / 0.3);
+}
+/* the printer's body below the mouth, with a status light that breathes while it feeds */
+.body {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 46px;
+  border-radius: 4px 4px 14px 14px;
+  background: linear-gradient(#1d1912, #0d0b08);
+  box-shadow: 0 18px 30px -14px rgb(0 0 0 / 0.85), inset 0 -2px 0 rgb(0 0 0 / 0.7);
+}
+.led {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: #e4572e;
+  box-shadow: 0 0 8px 1px rgb(228 87 46 / 0.6);
+  animation: led 1.1s ease-in-out infinite;
+}
+.bodyDone .led {
+  animation: none;
+  background: #9bc28a;
+  box-shadow: 0 0 8px 1px rgb(155 194 138 / 0.55);
+  transition: background 300ms ease;
+}
+@keyframes led {
+  50% {
+    opacity: 0.35;
+  }
 }
 
+/* the window the paper rises into: it clips the paper still inside the printer */
 .feedWindow {
   position: relative;
   width: 86%;
-  margin-top: -8px;
   overflow: hidden;
-  padding-bottom: 14px;
+  padding-top: 18px; /* room for the bow off the rollers */
   perspective: 900px;
-  perspective-origin: 50% 0;
+  perspective-origin: 50% 100%;
+}
+/* the slot's lip shades the paper where it leaves the rollers */
+.feedWindow::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30px;
+  pointer-events: none;
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.2) 55%, rgb(0 0 0 / 0.6));
 }
 
-/* The stub feeds out of the slot with a slight curl: it leaves the rollers bowed, then lays flat. */
 .feed {
   position: relative;
-  transform-origin: 50% 0;
-  transform: translateY(-100%);
-  animation: feed var(--ts-dur-print-sweep, 2600ms) var(--ts-ease-enter) forwards;
+  transform-origin: 50% 100%;
+  transform: translateY(100%); /* the feed itself is a Web Animation, timed with the printer's ticks */
 }
 .feed.reduced {
   animation: none;
   transform: none;
-}
-
-@keyframes feed {
-  0% {
-    transform: translateY(-100%) rotateX(-14deg) skewX(0.8deg);
-  }
-  55% {
-    transform: translateY(-22%) rotateX(-9deg) skewX(-0.5deg);
-  }
-  80% {
-    transform: translateY(-3%) rotateX(-3deg) skewX(0.2deg);
-  }
-  100% {
-    transform: translateY(0) rotateX(0) skewX(0);
-  }
 }
 
 /* The ink arrives a touch heavy and settles into the paper. */
@@ -320,6 +351,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .led,
   .feed {
     animation: none;
     transform: none;
