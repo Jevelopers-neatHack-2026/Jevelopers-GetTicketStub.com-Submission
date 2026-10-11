@@ -496,7 +496,11 @@ test('every new version invalidates exact prior references, including explicit n
   assert.equal(second.invalidations[0].priorContentHash, first.contentHash);
   assert.equal(second.invalidations.every((item) => item.materialChange), true);
   assert.equal(second.invalidations.every((item) => item.reason === 'material_projection_changed'), true);
-  assert.equal((await harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request)).every((item) => item.state === 'invalidated'), true);
+  const invalidatedReferences = await harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request);
+  assert.equal(invalidatedReferences.every((item) => item.state === 'invalidated'), true);
+  assert.equal(invalidatedReferences.every((item) => item.invalidatedByVersionId === second.versionId), true);
+  assert.equal(invalidatedReferences.every((item) => item.reason === 'material_projection_changed'), true);
+  assert.equal(invalidatedReferences.every((item) => item.materialChange === true), true);
   await assert.rejects(harness.store.registerDownstreamReference(harness.scope, {
     eventId: EVENT_ID,
     versionId: first.versionId,
@@ -512,6 +516,12 @@ test('every new version invalidates exact prior references, including explicit n
     referenceId: 'handoff-ref-002',
     kind: 'handoff_reference',
   }, harness.request);
+  const currentReference = (await harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request))
+    .find((item) => item.referenceId === 'handoff-ref-002');
+  assert.equal(currentReference.state, 'bound_to_version');
+  assert.equal(Object.hasOwn(currentReference, 'invalidatedByVersionId'), false);
+  assert.equal(Object.hasOwn(currentReference, 'reason'), false);
+  assert.equal(Object.hasOwn(currentReference, 'materialChange'), false);
   const third = (await correction(harness, second, 'event_date', { precision: 'date', value: '2027-06-20' }, 'reaffirm-date')).snapshot;
   assert.equal(third.materialHash, second.materialHash);
   assert.equal(third.invalidations.length, 1);
@@ -519,6 +529,106 @@ test('every new version invalidates exact prior references, including explicit n
   assert.equal(third.invalidations[0].reason, 'new_version_requires_new_binding');
   assert.equal(third.invalidations[0].priorVersionId, second.versionId);
   assert.equal(third.invalidations[0].priorContentHash, second.contentHash);
+});
+
+test('listDownstreamReferences rechecks every captured invalidation field after reference decryption', async (t) => {
+  let harness;
+  let armed = false;
+  let tampered = false;
+  let changedRows = 0;
+  harness = await createHarness(t, {
+    async resolveKey({ tenantId, purpose, keyId }) {
+      const resolvedId = `${purpose}-v1`;
+      if (keyId && keyId !== resolvedId) throw new Error('SYNTHETIC_KEY_ERROR');
+      if (armed && purpose === 'correction_payload' && !tampered) {
+        tampered = true;
+        const database = new DatabaseSync(historyDatabasePath(harness.root));
+        try {
+          changedRows = database.prepare(`UPDATE invalidations SET material_change = 0
+            WHERE reason = 'material_projection_changed'`).run().changes;
+        } finally { database.close(); }
+      }
+      return { keyId: resolvedId,
+        key: createHash('sha256').update(`${tenantId}:${purpose}:test-only-key-material`).digest() };
+    },
+  });
+  const first = (await createSeed(harness)).snapshot;
+  await harness.store.registerDownstreamReference(harness.scope, {
+    eventId: EVENT_ID,
+    versionId: first.versionId,
+    contentHash: first.contentHash,
+    referenceId: 'invalidation-revalidation-ref',
+    kind: 'handoff_reference',
+  }, harness.request);
+  const revised = (await correction(harness, first, 'event_date', { precision: 'date', value: '2027-06-20' },
+    'invalidation-revalidation-correction')).snapshot;
+  const positive = await harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request);
+  assert.deepEqual(positive.map(({ state, invalidatedByVersionId, reason, materialChange }) =>
+    ({ state, invalidatedByVersionId, reason, materialChange })), [{
+    state: 'invalidated', invalidatedByVersionId: revised.versionId,
+    reason: 'material_projection_changed', materialChange: true,
+  }]);
+
+  armed = true;
+  await assert.rejects(harness.store.listDownstreamReferences(harness.scope, EVENT_ID, harness.request),
+    assertReviewError('REVIEW_VERSION_CONFLICT'));
+  assert.equal(tampered, true, 'the trusted asynchronous key resolver reached the post-read hook');
+  assert.equal(changedRows, 1, 'the actual SQLite invalidation row changed after the initial read');
+});
+
+test('history snapshot disclosure rechecks monotonic expiry after COMMIT', async (t) => {
+  let harness;
+  let readGuardCalls = 0;
+  let readGuardReached = false;
+  let armed = false;
+  harness = await createHarness(t, {
+    authorizeBoundary(input) {
+      if (input.action === 'private_profile.read' && input.details.sourceAction === 'read_history') {
+        readGuardCalls += 1;
+        if (armed) readGuardReached = true;
+      }
+      const allowed = input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: harness.clock.value }) : false;
+    },
+  });
+  const seeded = await createSeed(harness);
+  assert.equal((await harness.store.getHistory(harness.scope, EVENT_ID, harness.request)).versionId, seeded.snapshot.versionId);
+  harness.clock.value = EPOCH + 59_900;
+  armed = true;
+
+  const descriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'exec');
+  let reached = false;
+  let restored = false;
+  Object.defineProperty(DatabaseSync.prototype, 'exec', {
+    ...descriptor,
+    value(sql, ...args) {
+      if (armed && readGuardReached && !reached && sql === 'COMMIT'
+        && new Error().stack.includes('withTransactionUnlocked')) {
+        reached = true;
+        const deadline = process.hrtime.bigint() + 160_000_000n;
+        while (process.hrtime.bigint() < deadline) { /* Let the authorized history head expire at result disclosure. */ }
+      }
+      return Reflect.apply(descriptor.value, this, [sql, ...args]);
+    },
+  });
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    Object.defineProperty(DatabaseSync.prototype, 'exec', descriptor);
+  };
+  t.after(restore);
+  try {
+    let caught;
+    try { await harness.store.getHistory(harness.scope, EVENT_ID, harness.request); }
+    catch (error) { caught = error; }
+    assert.equal(reached, true, 'the delay ran after the history transaction reached COMMIT');
+    assert.equal(caught?.code, 'REVIEW_EXPIRED', `unexpected history disclosure result ${caught?.code ?? 'success'}`);
+  } finally { restore(); }
+  assert.equal(readGuardCalls >= 2, true, 'both positive control and expiring disclosure passed the synchronous guard');
+  assert.equal(readGuardReached, true, 'the expiring disclosure crossed its final guard before COMMIT');
 });
 
 test('two processes cannot both commit from one base revision', async (t) => {

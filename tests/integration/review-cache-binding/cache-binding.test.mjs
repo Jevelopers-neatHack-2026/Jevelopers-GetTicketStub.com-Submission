@@ -236,6 +236,31 @@ async function withPhase(label, operation) {
   catch (error) { throw new Error(`${label}: ${error?.code ?? error?.message ?? error}`, { cause: error }); }
 }
 
+function interceptFinalBoundRead(onEntry) {
+  const descriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'prepare');
+  let reached = false;
+  let restored = false;
+  Object.defineProperty(DatabaseSync.prototype, 'prepare', {
+    ...descriptor,
+    value(sql, ...args) {
+      if (!reached && String(sql).includes('SELECT * FROM reuse_entries WHERE entry_id')
+        && new Error().stack.includes('finalBoundRead')) {
+        reached = true;
+        onEntry();
+      }
+      return Reflect.apply(descriptor.value, this, [sql, ...args]);
+    },
+  });
+  return Object.freeze({
+    reached: () => reached,
+    restore() {
+      if (restored) return;
+      restored = true;
+      Object.defineProperty(DatabaseSync.prototype, 'prepare', descriptor);
+    },
+  });
+}
+
 test('composed correction binds exact history provenance, invalidates cache locally, and keeps ACK status separate', async (t) => {
   const f = await fixture(t);
   const seeded = await createSeed(f);
@@ -1075,6 +1100,101 @@ test('outbox capacity refusal leaves the binding barred and exact retry succeeds
   assert.equal((await reopened.getPrivateProfile(scope, EVENT_ID, f.authRequest, lookup())).status, 'hit');
 });
 
+test('pending bind fence checks history expiry after the paired cache commit and exact retry reconciles', async (t) => {
+  let f;
+  let armed = false;
+  let cacheBoundaryReached = false;
+  let cacheCommitCompleted = false;
+  let historyCommitAttempted = false;
+  f = await fixture(t, { cache: {
+    authorizeBoundary(input) {
+      if (armed && input.action === 'cache.private_profile.bind') cacheBoundaryReached = true;
+      const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+    },
+  } });
+  await createSeed(f);
+  f.clock.value = EPOCH + 59_000;
+  const bindingInput = { idempotencyKey: 'pending-bind-fence-expiry',
+    profile: cacheProfile({ expiresAtMs: EPOCH + 120_000, freshnessTtlMs: 500 }) };
+
+  const databaseKinds = new WeakMap();
+  const prepareDescriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'prepare');
+  const execDescriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'exec');
+  let restored = false;
+  Object.defineProperty(DatabaseSync.prototype, 'prepare', {
+    ...prepareDescriptor,
+    value(sql, ...args) {
+      const statement = Reflect.apply(prepareDescriptor.value, this, [sql, ...args]);
+      const query = String(sql);
+      if (/correction_cache_(?:state|meta|bindings)|\bFROM heads\b/.test(query)) databaseKinds.set(this, 'history');
+      else if (/\breuse_(?:meta|entries|bound_writes|correction_reservations)\b/.test(query)) databaseKinds.set(this, 'cache');
+      return statement;
+    },
+  });
+  Object.defineProperty(DatabaseSync.prototype, 'exec', {
+    ...execDescriptor,
+    value(sql, ...args) {
+      if (armed && sql === 'COMMIT' && databaseKinds.get(this) === 'cache'
+        && cacheBoundaryReached && !cacheCommitCompleted) {
+        const result = Reflect.apply(execDescriptor.value, this, [sql, ...args]);
+        cacheCommitCompleted = true;
+        const deadline = process.hrtime.bigint() + 1_100_000_000n;
+        while (process.hrtime.bigint() < deadline) { /* Cache committed; let the pending history head expire before its paired COMMIT. */ }
+        return result;
+      }
+      if (armed && sql === 'COMMIT' && databaseKinds.get(this) === 'history' && cacheCommitCompleted) {
+        historyCommitAttempted = true;
+      }
+      return Reflect.apply(execDescriptor.value, this, [sql, ...args]);
+    },
+  });
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    Object.defineProperty(DatabaseSync.prototype, 'prepare', prepareDescriptor);
+    Object.defineProperty(DatabaseSync.prototype, 'exec', execDescriptor);
+  };
+  t.after(restore);
+  armed = true;
+  let firstAttemptError;
+  try {
+    try { await f.store.bindPrivateProfile(f.scope, EVENT_ID, bindingInput, f.authRequest); }
+    catch (error) { firstAttemptError = error; }
+  } finally { restore(); }
+
+  assert.equal(cacheBoundaryReached, true,
+    `the exact cache participant guard ran; first error ${firstAttemptError?.code ?? 'success'}`);
+  assert.equal(cacheCommitCompleted, true, 'the paired cache transaction committed before history fence validation');
+  assert.equal(historyCommitAttempted, false, 'pending-bind expiry prevented the paired history COMMIT');
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  const cache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(history.prepare("SELECT phase FROM correction_cache_state WHERE kind = 'bind'").get().phase, 'pending_bind');
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+    assert.equal(cache.prepare("SELECT COUNT(*) AS count FROM reuse_entries WHERE scope_kind = 'tenant_private'").get().count, 1);
+    assert.equal(cache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count, 1);
+  } finally { history.close(); cache.close(); }
+  await assert.rejects(f.store.getHistory(f.scope, EVENT_ID, f.authRequest),
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_BUSY');
+
+  const retried = await f.store.bindPrivateProfile(f.scope, EVENT_ID, bindingInput, f.authRequest);
+  assert.equal(retried.status, 'bound');
+  assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup())).status, 'hit');
+  const finalHistory = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(finalHistory.prepare('SELECT phase FROM correction_cache_state WHERE kind = \'bind\'').get().phase, 'complete');
+    assert.equal(finalHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations').get().count, 1);
+    assert.equal(finalHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 1);
+  } finally { finalHistory.close(); }
+  const finalCache = new DatabaseSync(cacheDatabasePath(f.root));
+  try { assert.equal(finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 1); }
+  finally { finalCache.close(); }
+});
+
 test('timed-out binding callback cannot commit after an exact retry advances the fence', async (t) => {
   let observationCalls = 0;
   let initialRequest;
@@ -1229,6 +1349,57 @@ test('final synchronous boundary permit is current and permission expiry is resa
   await assert.rejects(f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup()),
     (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
   void seeded;
+});
+
+test('final composed cache read denies disclosure when permission expires during synchronous SQLite work', async (t) => {
+  let readGuardReached = false;
+  const f = await fixture(t, {
+    authorizeBoundary(input) {
+      if (input.action === 'private_profile.read') readGuardReached = true;
+      return input.tenantId === 'tenant-binding'
+        && input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider'
+        ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+          eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH }) : false;
+    },
+    cache: { verifyPermission({ reference, contentHash, version, use }) {
+      return { status: 'valid', reference, contentHash, version, use, validUntilMs: EPOCH + 60 };
+    } },
+  });
+  await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID, { idempotencyKey: 'bind-final-read-expiry', profile: cacheProfile() }, f.authRequest);
+
+  const interception = interceptFinalBoundRead(() => {
+    const deadline = process.hrtime.bigint() + 160_000_000n;
+    while (process.hrtime.bigint() < deadline) { /* Exercise the real synchronous SQLite read boundary. */ }
+  });
+  t.after(interception.restore);
+  let result;
+  let error;
+  try {
+    result = await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup());
+  } catch (caught) { error = caught; }
+  finally { interception.restore(); }
+  assert.equal(readGuardReached, true, 'the required final synchronous boundary guard ran');
+  assert.equal(interception.reached(), true, 'the delay occurred inside finalBoundRead after the guard');
+  assert.notEqual(result?.status, 'hit', `expired permission must not disclose a profile (error ${error?.code ?? 'none'})`);
+});
+
+test('final composed cache read honors a genuine abort during synchronous SQLite work', async (t) => {
+  const f = await fixture(t);
+  await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID, { idempotencyKey: 'bind-final-read-abort', profile: cacheProfile() }, f.authRequest);
+  const controller = new AbortController();
+  const interception = interceptFinalBoundRead(() => controller.abort());
+  t.after(interception.restore);
+  let error;
+  try {
+    await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup(), 'cache_read', { signal: controller.signal });
+  } catch (caught) { error = caught; }
+  finally { interception.restore(); }
+  assert.equal(interception.reached(), true, 'abort occurred during the final cache read, not during setup');
+  assert.equal(error?.code, 'REVIEW_ABORTED');
 });
 
 test('revoked current permission fails closed before a bound profile can be disclosed', async (t) => {

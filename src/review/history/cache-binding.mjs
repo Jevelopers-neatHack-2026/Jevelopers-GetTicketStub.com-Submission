@@ -359,7 +359,8 @@ export function createCorrectionCacheBinding(options) {
           const stored = await cachePort.putProfile(scopes.cacheScope, request,
             Object.freeze({ ...effectiveProfile, facts: projection }),
             binding, operation, (commit, time) => fence.run(operation.operationId, operation.fence,
-              ['pending_bind'], commit, time.now, time.effectiveNow, signal), signal, capability, preflightToken);
+              ['pending_bind'], commit, time.now, time.effectiveNow, signal, time.boundaryToken),
+            signal, capability, preflightToken);
           if (signal.aborted) fail('REVIEW_ABORTED');
           if (stored.status !== 'stored' || stored.scopeKind !== 'tenant_private'
             || stored.cacheSourceContentHash !== profile.contentHash
@@ -446,7 +447,8 @@ export function createCorrectionCacheBinding(options) {
             const cacheBinding = bindingForCache(binding);
             const localResult = await cachePort.invalidate(scopes.cacheScope, request, cacheBinding, targetOperation,
               (commit, time) => fence.run(operation.operationId, operation.fence,
-                ['history_committed', 'cache_invalidating'], commit, time.now, time.effectiveNow, signal), signal, capability);
+                ['history_committed', 'cache_invalidating'], commit, time.now, time.effectiveNow, signal,
+                time.boundaryToken), signal, capability);
             if (!localResult.locallyIneligible || localResult.profileRef !== binding.profileRef
               || !Array.isArray(localResult.eventIds) || localResult.eventIds.length < 1) fail('REVIEW_INTEGRITY');
             await historyPort.markInvalidated(historyContext, targetOperation, binding);
@@ -528,11 +530,21 @@ export function createCorrectionCacheBinding(options) {
               contentHash: binding.historyContentHash,
               nowMs,
               effectiveNowMs,
+              permissionValidUntilMs: candidate.permissionState.validUntilMs ?? null,
+              boundaryToken,
               signal,
             });
             try {
-              return historyFence.read(expected,
-                () => cachePort.finalRead(cacheDatabase, candidate, nowMs, effectiveNowMs, capability));
+              const result = historyFence.read(expected,
+                () => cachePort.finalRead(cacheDatabase, candidate, nowMs, effectiveNowMs, capability, boundaryToken));
+              if (signal.aborted) fail('REVIEW_ABORTED');
+              const finalDisclosureNow = localBoundaryEffectiveNow(boundaryToken);
+              if (!Number.isSafeInteger(finalDisclosureNow) || finalDisclosureNow < effectiveNowMs) fail('REVIEW_DENIED');
+              if (finalDisclosureNow >= binding.expiresAtMs || (candidate.permissionState.validUntilMs !== undefined
+                && finalDisclosureNow >= candidate.permissionState.validUntilMs)) {
+                return Object.freeze({ status: 'unavailable', reason: 'expired' });
+              }
+              return result;
             } catch (error) {
               if (!isBusy(error) || attempt >= delays.length) throw error;
             }

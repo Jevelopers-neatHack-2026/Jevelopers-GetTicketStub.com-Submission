@@ -760,7 +760,7 @@ export function createScopedReuseStore(options) {
                 database.exec('COMMIT');
                 transactionOpen = false;
                 return result;
-              }, Object.freeze({ now }));
+              }, Object.freeze({ now, effectiveNow, boundaryToken }));
             } catch (error) {
               // The private history participant fence may rethrow a cache error after
               // rolling back its paired transaction. Recreate only the fixed cache
@@ -2161,9 +2161,15 @@ export function createScopedReuseStore(options) {
     return openStoreDatabase(0);
   }
 
-  function finalBoundRead(database, candidate, now, effectiveNow, capability) {
+  function finalBoundRead(database, candidate, now, effectiveNow, capability, boundaryToken) {
     if (!isCorrectionCacheBindingCapability(capability) || !database || signalAborted(candidate?.signal)
-      || !Number.isSafeInteger(now) || !Number.isSafeInteger(effectiveNow) || effectiveNow < now) fail('REUSE_DENIED');
+      || !Number.isSafeInteger(now) || !Number.isSafeInteger(effectiveNow) || effectiveNow < now
+      || !boundaryToken) fail('REUSE_DENIED');
+    const boundaryNow = () => {
+      const current = localBoundaryEffectiveNow(boundaryToken);
+      if (!Number.isSafeInteger(current) || current < effectiveNow || current > MAX_TIME) fail('REUSE_DENIED');
+      return current;
+    };
     let transactionOpen = false;
     try {
       database.exec('BEGIN IMMEDIATE');
@@ -2177,22 +2183,24 @@ export function createScopedReuseStore(options) {
         .get(candidate.row.entry_id, candidate.keys.partitionHash);
       const latest = database.prepare('SELECT * FROM reuse_observations WHERE entry_id = ? ORDER BY sequence DESC LIMIT 1')
         .get(candidate.row.entry_id);
-      const isCurrent = sameStoredEntry(current, candidate.row)
+      const remainsCurrent = (at) => sameStoredEntry(current, candidate.row)
         && sameStoredObservation(latest, candidate.observationRow)
         && current?.eligible === 1 && current?.binding_hash === candidate.binding.cacheBindingHash
         && current?.version === candidate.binding.cacheVersion && current?.payload_purged !== 1
         && current?.expires_at_ms === candidate.binding.cacheExpiresAtMs
-        && effectiveNow < candidate.binding.expiresAtMs
-        && (candidate.permissionState.validUntilMs === undefined || effectiveNow < candidate.permissionState.validUntilMs)
-        && eligibility(current, candidate.payload, candidate.observation, effectiveNow, false, true).status === 'fresh';
-      if (!isCurrent || signalAborted(candidate.signal)) fail('REUSE_DENIED');
+        && at < candidate.binding.expiresAtMs
+        && (candidate.permissionState.validUntilMs === undefined || at < candidate.permissionState.validUntilMs)
+        && eligibility(current, candidate.payload, candidate.observation, at, false, true).status === 'fresh';
+      if (!remainsCurrent(boundaryNow()) || signalAborted(candidate.signal)) fail('REUSE_DENIED');
       const result = Object.freeze({ status: 'hit', profileRef: current.entry_id, version: current.version,
         facts: candidate.payload.facts, trust: 'tenant_private', permissionStatus: candidate.permissionState.status,
         retrievedAt: iso(effectiveRetrievedAt(candidate.payload, candidate.observation)),
         validatedAt: iso(candidate.observation.validatedAtMs), expiresAt: iso(current.expires_at_ms),
         originalLineageStatus: candidate.payload.lineage?.status ?? 'unknown' });
+      if (signalAborted(candidate.signal) || !remainsCurrent(boundaryNow())) fail('REUSE_DENIED');
       database.exec('COMMIT');
       transactionOpen = false;
+      if (signalAborted(candidate.signal) || !remainsCurrent(boundaryNow())) fail('REUSE_DENIED');
       return result;
     } catch (error) {
       if (transactionOpen) {
@@ -2996,7 +3004,8 @@ export function createScopedReuseStore(options) {
     loadCandidate: (scope, request, binding, use, signal, capability) =>
       loadBoundCandidate(scope, request, binding, use, signal, capability),
     prepareReadDatabase: (capability) => prepareBoundReadDatabase(capability),
-    finalRead: (database, candidate, now, effectiveNow, capability) => finalBoundRead(database, candidate, now, effectiveNow, capability),
+    finalRead: (database, candidate, now, effectiveNow, capability, boundaryToken) =>
+      finalBoundRead(database, candidate, now, effectiveNow, capability, boundaryToken),
     invalidate: (scope, request, binding, operation, gate, signal, capability) =>
       invalidateBoundProfile(scope, request, binding, operation, gate, signal, capability),
     now: currentTime,

@@ -932,18 +932,20 @@ export function createCorrectionHistoryStore(options) {
         sync: transactionOptions?.sync === true,
         beforeBegin: transactionOptions?.beforeBegin,
         boundary: transactionOptions?.boundary,
+        checkBoundaryAfterCommit: transactionOptions?.checkBoundaryAfterCommit === true,
       }),
       signal);
   }
 
-  async function withBindingTransaction(info, directory, operation, signal, beforeBegin, boundary) {
+  async function withBindingTransaction(info, directory, operation, signal, beforeBegin, boundary,
+    checkBoundaryAfterCommit = false) {
     const delays = [2, 4, 8, 12, 20, 30, 40];
     const startedAt = monotonicTimestampNs();
     for (let attempt = 0; ; attempt += 1) {
       throwIfAborted(signal);
       try {
         return await withTransaction(info, directory, operation, signal, undefined,
-          { timeoutMs: 0, sync: true, beforeBegin, boundary });
+          { timeoutMs: 0, sync: true, beforeBegin, boundary, checkBoundaryAfterCommit });
       } catch (error) {
         if (!(error instanceof ReviewHistoryError) || error.code !== 'REVIEW_BUSY' || attempt >= delays.length) throw error;
         const elapsed = monotonicTimestampNs() - startedAt;
@@ -1009,7 +1011,7 @@ export function createCorrectionHistoryStore(options) {
       }
       verify(database, time);
       return value;
-    }, signal, () => reauthorizeRequest(info, request, eventId, action, actorId, field), boundary);
+    }, signal, () => reauthorizeRequest(info, request, eventId, action, actorId, field), boundary, true);
   }
 
   async function withTransactionUnlocked(info, directory, operation, signal, finalBoundary, transactionOptions) {
@@ -1212,6 +1214,14 @@ export function createCorrectionHistoryStore(options) {
       }
       database.exec('COMMIT');
       open = false;
+      if (boundaryToken && transactionOptions.checkBoundaryAfterCommit) {
+        throwIfAborted(signal);
+        const effectiveDisclosureNow = localBoundaryEffectiveNow(boundaryToken);
+        if (!Number.isSafeInteger(effectiveDisclosureNow) || effectiveDisclosureNow < guardedTransactionNow
+          || effectiveDisclosureNow > MAX_TIME
+          || (transactionOptions.boundary?.mustBeBeforeMs !== undefined
+            && effectiveDisclosureNow >= transactionOptions.boundary.mustBeBeforeMs)) fail('REVIEW_EXPIRED');
+      }
       return result;
     } catch (error) {
       const publicError = mapStorageError(error);
@@ -2191,7 +2201,7 @@ export function createCorrectionHistoryStore(options) {
           const invalidation = current ? null : database.prepare(`SELECT * FROM invalidations WHERE event_key = ? AND reference_hash = ?
             AND prior_version_id = ? AND prior_content_hash = ?`).get(eventKey, row.reference_hash, row.bound_version_id, row.bound_content_hash);
           if (!current && !invalidation) fail('REVIEW_INTEGRITY');
-          return { row, current, invalidation };
+          return { row, current, invalidationRow: invalidation };
         });
         return { head, references };
       }, undefined, undefined, { sync: true });
@@ -2232,7 +2242,8 @@ export function createCorrectionHistoryStore(options) {
               const invalidation = database.prepare(`SELECT * FROM invalidations WHERE event_key = ? AND reference_hash = ?
                 AND prior_version_id = ? AND prior_content_hash = ?`).get(eventKey, row.reference_hash, row.bound_version_id, row.bound_content_hash);
               if (!invalidation || invalidation.next_version_id !== invalidationRow.next_version_id
-                || invalidation.reason !== invalidationRow.reason) fail('REVIEW_VERSION_CONFLICT');
+                || invalidation.reason !== invalidationRow.reason
+                || invalidation.material_change !== invalidationRow.material_change) fail('REVIEW_VERSION_CONFLICT');
             }
           }
         } });
@@ -2865,22 +2876,30 @@ export function createCorrectionHistoryStore(options) {
     }
     let closed = false;
     return Object.freeze({
-      run(operationId, fence, allowedPhases, callback, observedNow, effectiveNow = observedNow, signal = undefined) {
+      run(operationId, fence, allowedPhases, callback, observedNow, effectiveNow = observedNow, signal = undefined,
+        boundaryToken = undefined) {
         if (closed || typeof callback !== 'function' || !Number.isSafeInteger(observedNow)
-          || !Number.isSafeInteger(effectiveNow) || effectiveNow < observedNow) fail('REVIEW_STORAGE');
+          || !Number.isSafeInteger(effectiveNow) || effectiveNow < observedNow || !boundaryToken) fail('REVIEW_STORAGE');
         try {
           throwIfAborted(signal);
+          const startEffectiveNow = localBoundaryEffectiveNow(boundaryToken);
+          if (!Number.isSafeInteger(startEffectiveNow) || startEffectiveNow < effectiveNow) fail('REVIEW_EXPIRED');
           database.exec('BEGIN IMMEDIATE');
           advanceHistoryClock(database, observedNow);
           const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
           if (!state || state.operation_id !== operationId || state.fence !== fence || !allowedPhases.includes(state.phase)) fail('REVIEW_BUSY');
+          let pendingBindExpiry;
           if (state.phase === 'pending_bind') {
             const head = database.prepare('SELECT state, expires_at_ms FROM heads WHERE event_key = ?').get(context.eventKey);
-            if (!head || head.state !== 'available' || head.expires_at_ms <= effectiveNow) fail('REVIEW_EXPIRED');
+            if (!head || head.state !== 'available' || head.expires_at_ms <= startEffectiveNow) fail('REVIEW_EXPIRED');
+            pendingBindExpiry = head.expires_at_ms;
           }
           const result = callback(database);
           if (result && typeof result.then === 'function') fail('REVIEW_STORAGE');
           throwIfAborted(signal);
+          const commitEffectiveNow = localBoundaryEffectiveNow(boundaryToken);
+          if (!Number.isSafeInteger(commitEffectiveNow) || commitEffectiveNow < startEffectiveNow
+            || (pendingBindExpiry !== undefined && commitEffectiveNow >= pendingBindExpiry)) fail('REVIEW_EXPIRED');
           database.exec('COMMIT');
           return result;
         } catch (error) {
@@ -2895,9 +2914,13 @@ export function createCorrectionHistoryStore(options) {
           || !validSafeString(expected.versionId, 1, 180)
           || !/^[a-f0-9]{64}$/.test(expected.contentHash)
           || !Buffer.isBuffer(expected.sealed) || !Number.isSafeInteger(expected.nowMs)
-          || !Number.isSafeInteger(expected.effectiveNowMs) || expected.effectiveNowMs < expected.nowMs) fail('REVIEW_STORAGE');
+          || !Number.isSafeInteger(expected.effectiveNowMs) || expected.effectiveNowMs < expected.nowMs
+          || !expected.boundaryToken
+          || (expected.permissionValidUntilMs !== null && !Number.isSafeInteger(expected.permissionValidUntilMs))) fail('REVIEW_STORAGE');
         try {
           throwIfAborted(expected.signal);
+          const startEffectiveNow = localBoundaryEffectiveNow(expected.boundaryToken);
+          if (!Number.isSafeInteger(startEffectiveNow) || startEffectiveNow < expected.effectiveNowMs) fail('REVIEW_EXPIRED');
           database.exec('BEGIN IMMEDIATE');
           advanceHistoryClock(database, expected.nowMs);
           const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
@@ -2907,16 +2930,26 @@ export function createCorrectionHistoryStore(options) {
           const reference = database.prepare(`SELECT * FROM downstream_references WHERE event_key = ? AND reference_hash = ?`)
             .get(context.eventKey, expected.referenceHash);
           if (!head || head.state !== 'available' || head.version_id !== expected.versionId
-            || head.content_hash !== expected.contentHash || head.expires_at_ms <= expected.effectiveNowMs
+            || head.content_hash !== expected.contentHash || head.expires_at_ms <= startEffectiveNow
             || (state && state.phase !== 'complete') || !binding
             || binding.bound_version_id !== expected.versionId || binding.bound_content_hash !== expected.contentHash
-            || binding.expires_at_ms <= expected.effectiveNowMs || !Buffer.from(binding.sealed).equals(expected.sealed)
+            || binding.expires_at_ms <= startEffectiveNow || !Buffer.from(binding.sealed).equals(expected.sealed)
+            || (expected.permissionValidUntilMs !== null && startEffectiveNow >= expected.permissionValidUntilMs)
             || !reference || reference.bound_version_id !== expected.versionId
             || reference.bound_content_hash !== expected.contentHash) fail('REVIEW_BUSY');
           const result = callback();
           if (result && typeof result.then === 'function') fail('REVIEW_STORAGE');
           throwIfAborted(expected.signal);
+          const commitEffectiveNow = localBoundaryEffectiveNow(expected.boundaryToken);
+          if (!Number.isSafeInteger(commitEffectiveNow) || commitEffectiveNow < startEffectiveNow
+            || head.expires_at_ms <= commitEffectiveNow || binding.expires_at_ms <= commitEffectiveNow
+            || (expected.permissionValidUntilMs !== null && commitEffectiveNow >= expected.permissionValidUntilMs)) fail('REVIEW_EXPIRED');
           database.exec('COMMIT');
+          const disclosureEffectiveNow = localBoundaryEffectiveNow(expected.boundaryToken);
+          if (!Number.isSafeInteger(disclosureEffectiveNow) || disclosureEffectiveNow < commitEffectiveNow
+            || head.expires_at_ms <= disclosureEffectiveNow || binding.expires_at_ms <= disclosureEffectiveNow
+            || (expected.permissionValidUntilMs !== null && disclosureEffectiveNow >= expected.permissionValidUntilMs)) fail('REVIEW_EXPIRED');
+          throwIfAborted(expected.signal);
           return result;
         } catch (error) {
           try { database.exec('ROLLBACK'); } catch { /* Closing the handle also rolls back. */ }
