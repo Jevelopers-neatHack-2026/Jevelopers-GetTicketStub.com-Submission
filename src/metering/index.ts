@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { errorEnvelope, failure, TrustedScopeSchema, validateRequest, type ApiResult, type RuntimePorts, type Validation } from '../shared/contracts.js';
+import { authorizeFinanceOperation, errorEnvelope, failure, TrustedScopeSchema, validateRequest, type ApiResult, type RuntimePorts, type Validation } from '../shared/contracts.js';
 import { validateCanonical, type SharedUsageEvent } from '../shared/canonical.js';
 
 export const UsageObservationSchema = Type.Object({
@@ -51,13 +51,11 @@ export async function ingestUsage(request: UsageObservation, ports: RuntimePorts
   if (event.tenant_id !== requested.tenantId || event.project_id !== requested.projectId || event.environment !== requested.environment || event.billing_mode !== requested.billingMode) {
     return failure(errorEnvelope('metering', 'ingestUsage', 'FORBIDDEN_SCOPE', observation.requestId, 'The usage event does not match the authenticated financial scope.'));
   }
-  try {
-    const trusted = await ports.trustedContext.resolve(requested);
-    if (!trusted || trusted.tenantId !== requested.tenantId || trusted.projectId !== requested.projectId || trusted.environment !== requested.environment || trusted.billingMode !== requested.billingMode || trusted.actorId !== requested.actorId) {
-      return failure(errorEnvelope('metering', 'ingestUsage', 'FORBIDDEN_SCOPE', observation.requestId, 'The requested financial scope is not authorized.'));
-    }
-  } catch {
-    return failure(errorEnvelope('metering', 'ingestUsage', 'SOURCE_UNAVAILABLE', observation.requestId, 'Trusted authorization context is temporarily unavailable.', true));
-  }
+  const authorization = await authorizeFinanceOperation({
+    module: 'metering', requestOperation: 'ingestUsage', operation: 'metering.ingestUsage',
+    scope: requested, requestId: observation.requestId, clock: ports.clock,
+    financeAuthority: ports.financeAuthority,
+  });
+  if (!authorization.ok) return failure(authorization.error);
   return failure(errorEnvelope('metering', 'ingestUsage', 'SOURCE_UNAVAILABLE', observation.requestId, 'Usage ingestion is not available until the metering implementation is delivered.', true));
 }

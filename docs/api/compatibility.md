@@ -18,7 +18,7 @@ Pricing v2 consumes the unchanged shared `UsageEvent@1.0.0` and uses finance-own
 
 ## Runtime boundary
 
-The package targets the Node.js 22 backend line (`>=22.23.3 <23`); the current acceptance run is pinned to Node 22.23.3. The financial ledger and v2 pricing are backend specialist modules. Hosts inject existing PostgreSQL-compatible transaction ports and clocks; v2 pricing also requires a current, action-specific scope decision before database access. The modules open no hidden pool, and callers cannot authorize a wider tenant, project, environment, or billing-mode scope by changing request fields. Browser-safe execution is not supported or claimed, and Node 24 compatibility has not been tested or claimed.
+The package targets the Node.js 22 backend line (`>=22.23.3 <23`); the current acceptance run is pinned to Node 22.23.3. The financial ledger and v2 pricing are backend specialist modules. Hosts inject existing PostgreSQL-compatible transaction ports, clocks, and an operation-scoped current finance authority. The modules open no hidden pool, and callers cannot authorize a wider tenant, project, environment, or billing-mode scope by changing request fields. Browser-safe execution is not supported or claimed, and Node 24 compatibility has not been tested or claimed.
 
 ## Finance handoff blockers
 

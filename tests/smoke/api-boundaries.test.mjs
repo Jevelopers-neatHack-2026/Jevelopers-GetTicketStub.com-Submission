@@ -12,6 +12,23 @@ const ports = {
   storage: { isAvailable: async () => true },
   providerSource: { isAvailable: async () => true },
   trustedContext: { resolve: async value => value },
+  financeAuthority: { authorizeCurrent: async request => {
+    const recognizedSmokeScopes = [scope, {
+      tenantId: 'tenant-a', projectId: 'project-a', environment: 'test', billingMode: 'simulated', actorId: 'actor-a',
+    }];
+    if (!recognizedSmokeScopes.some(value => JSON.stringify(request.requestedScope) === JSON.stringify(value))) {
+      return { status: 'denied', operation: request.operation, permission: request.permission };
+    }
+    const principalKind = api.FINANCE_OPERATION_POLICY[request.operation].principalKinds[0];
+    const principal = principalKind === 'user'
+      ? { kind: 'user', actorId: request.requestedScope.actorId, membershipStatus: 'active', membershipRevision: 'smoke-membership-1' }
+      : { kind: 'service', actorId: request.requestedScope.actorId, serviceStatus: 'active', serviceGrantRevision: 'smoke-service-grant-1' };
+    return {
+      status: 'allowed', decisionId: `smoke:${request.operation}`, operation: request.operation,
+      permission: request.permission, scope: request.requestedScope, principal,
+      verifiedAt: '2026-10-10T12:00:00Z', expiresAt: '2026-10-10T12:01:00Z',
+    };
+  } },
 };
 const hash = `sha256:${'b'.repeat(64)}`;
 const ref = (contract, id = 'ref-1') => ({ contract, schema_version: '1.0.0', id, revision: 1, content_hash: hash });
@@ -219,7 +236,9 @@ test('negative scope, version, pagination, and malformed cases fail before unava
   const crossMode = { ...invalidQuery, period: { start: '2026-10-01T00:00:00Z', end: '2026-10-02T00:00:00Z' }, filters: { environments: ['test'], billingModes: ['live'] } };
   assertError(await api.querySummary(crossMode, ports), 'FORBIDDEN_SCOPE', 'cross billing mode filter');
 
-  const wrongTrust = { ...ports, trustedContext: { resolve: async () => ({ ...scope, actorId: 'different-actor' }) } };
+  const wrongAuthority = { ...ports, financeAuthority: { authorizeCurrent: async request => ({
+    status: 'denied', operation: request.operation, permission: request.permission,
+  }) } };
   const validQuery = { ...invalidQuery, period: { start: '2026-10-01T00:00:00Z', end: '2026-10-02T00:00:00Z' }, filters: { environments: ['test'], billingModes: ['simulated'] } };
-  assertError(await api.querySummary(validQuery, wrongTrust), 'FORBIDDEN_SCOPE', 'unauthorized actor');
+  assertError(await api.querySummary(validQuery, wrongAuthority), 'FORBIDDEN_SCOPE', 'current authority denied actor');
 });

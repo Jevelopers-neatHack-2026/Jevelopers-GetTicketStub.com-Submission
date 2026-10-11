@@ -1,11 +1,16 @@
 import { Value } from '@sinclair/typebox/value';
 import {
+  authorizeFinanceOperation,
   errorEnvelope,
   failure,
+  FINANCE_OPERATION_POLICY,
   sameScope,
   success,
   type ApiResult,
   type ErrorEnvelope,
+  type FinanceAuthorizationPort,
+  type FinanceOperation,
+  type PricingAuthorizationCompatibilityDecision,
   type TrustedContextPort,
   type TrustedScope,
   type Validation,
@@ -26,6 +31,7 @@ import {
   type SourceReference,
   type VersionedReference,
 } from './schemas.js';
+import { bindFinancialDatabaseScope } from '../shared/database-scope.js';
 
 export interface PricingQueryResult {
   readonly rows: readonly Record<string, unknown>[];
@@ -74,6 +80,8 @@ export interface PricingRuntimePorts {
   readonly database: PricingDatabasePort;
   readonly trustedContext: TrustedContextPort;
   readonly clock: { now(): Date };
+  /** Current host authorization shared with every other finance boundary. */
+  readonly financeAuthority?: FinanceAuthorizationPort;
   /** Missing authority fails closed before any durable access. */
   readonly actionAuthority?: PricingActionAuthorityPort;
   readonly dimensionEvidenceAuthority?: PricingDimensionEvidencePort;
@@ -207,37 +215,42 @@ export async function authorizePricingOperation(
   ports: PricingRuntimePorts,
   action: PricingAction,
   requestId: string,
+  authorityOperation?: FinanceOperation,
 ): Promise<ErrorEnvelope | null> {
-  const operation = action;
-  let now: Date;
-  try {
-    now = ports.clock.now();
-    if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error('invalid clock');
-  } catch {
-    return safeError(operation, 'SOURCE_UNAVAILABLE', requestId, 'The trusted pricing clock is temporarily unavailable.', true);
-  }
-  try {
+  const operation = authorityOperation ?? ({
+    estimate: 'pricing.estimateV2',
+    registerPricingRule: 'pricing.registerPricingRuleV2',
+    registerRateCard: 'pricing.registerRateCardV2',
+    registerFxRate: 'pricing.registerFxRateV2',
+  } satisfies Record<PricingAction, FinanceOperation>)[action];
+  const permission = FINANCE_OPERATION_POLICY[operation].permission;
+  const pricingCompatibility = ports.financeAuthority || !ports.actionAuthority ? undefined : async (): Promise<PricingAuthorizationCompatibilityDecision | null> => {
     const resolved = await ports.trustedContext.resolve(scope);
     if (!resolved || !sameScope(resolved, scope)) {
-      return safeError(operation, 'FORBIDDEN_SCOPE', requestId, 'The requested financial scope is not authorized.');
+      return {
+        status: 'denied', decisionId: 'scope-denied', operation, permission, scope,
+        actorId: scope.actorId, verifiedAt: '', expiresAt: '',
+      };
     }
-    if (!ports.actionAuthority) {
-      return safeError(operation, 'SOURCE_UNAVAILABLE', requestId, 'Current pricing operation authority is temporarily unavailable.', true);
-    }
-    const decision = await ports.actionAuthority.authorize({ scope: resolved, action, requestId });
-    const issuedAt = decision ? utcMicros(decision.issuedAt) : null;
-    const expiresAt = decision ? utcMicros(decision.expiresAt) : null;
-    const nowMicros = BigInt(now.getTime()) * 1000n;
-    if (!decision || decision.allowed !== true || decision.action !== action
-      || decision.actorId !== resolved.actorId || !sameScope(decision.scope, resolved)
-      || typeof decision.decisionId !== 'string' || decision.decisionId.length === 0
-      || issuedAt === null || expiresAt === null || issuedAt > nowMicros || expiresAt <= nowMicros) {
-      return safeError(operation, 'FORBIDDEN_SCOPE', requestId, 'Current pricing operation authority does not grant this scoped action.');
-    }
-    return null;
-  } catch {
-    return safeError(operation, 'SOURCE_UNAVAILABLE', requestId, 'Trusted pricing action authority is temporarily unavailable.', true);
-  }
+    const decision = await ports.actionAuthority!.authorize({ scope: resolved, action, requestId });
+    if (!decision) return null;
+    return {
+      status: decision.allowed === true && decision.action === action ? 'allowed' : 'denied',
+      decisionId: decision.decisionId,
+      operation,
+      permission,
+      scope: decision.scope,
+      actorId: decision.actorId,
+      verifiedAt: decision.issuedAt,
+      expiresAt: decision.expiresAt,
+    };
+  };
+  const authorization = await authorizeFinanceOperation({
+    module: 'pricing', requestOperation: action, operation, scope, requestId,
+    clock: ports.clock, financeAuthority: ports.financeAuthority, pricingCompatibility,
+  });
+  return authorization.ok ? null : safeError(action, authorization.error.code, requestId,
+    authorization.error.safe_message, authorization.error.retryable);
 }
 
 function timestampRangeIsValid(from: string, to: string | null): boolean {
@@ -254,7 +267,18 @@ function decimalParts(value: string): { numerator: bigint; denominator: bigint }
   return { numerator: BigInt(match[1] ?? '0') * denominator + BigInt(fraction || '0'), denominator };
 }
 
+function safeSourceUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.username.length === 0 && url.password.length === 0
+      && url.search.length === 0 && url.hash.length === 0;
+  } catch {
+    return false;
+  }
+}
+
 export function rateCardSemanticError(card: RateCard): string | null {
+  if (!safeSourceUrl(card.sourceUrl)) return 'A source URL must use HTTPS and contain no credentials, query string, or fragment.';
   if (!timestampRangeIsValid(card.effectiveFrom, card.effectiveTo) || utcMicros(card.retrievedAt) === null) {
     return 'Rate-card timestamps must be valid UTC instants with a nonempty effective interval.';
   }
@@ -280,6 +304,7 @@ export function rateCardSemanticError(card: RateCard): string | null {
 }
 
 export function pricingRuleSemanticError(rule: PricingRule): string | null {
+  if (!safeSourceUrl(rule.sourceUrl)) return 'A source URL must use HTTPS and contain no credentials, query string, or fragment.';
   if (!timestampRangeIsValid(rule.effectiveFrom, rule.effectiveTo) || utcMicros(rule.retrievedAt) === null) {
     return 'Pricing-rule timestamps must be valid UTC instants with a nonempty effective interval.';
   }
@@ -368,6 +393,7 @@ export function pricingGraphSemanticError(rule: PricingRule, card: RateCard): st
 }
 
 function fxSemanticError(fx: FxRate): string | null {
+  if (!safeSourceUrl(fx.sourceUrl)) return 'A source URL must use HTTPS and contain no credentials, query string, or fragment.';
   if (!timestampRangeIsValid(fx.effectiveFrom, fx.effectiveTo) || utcMicros(fx.retrievedAt) === null) {
     return 'FX timestamps must be valid UTC instants with a nonempty effective interval.';
   }
@@ -494,7 +520,7 @@ async function revisionRows(
   const result = await client.query(
     "SELECT record_revision, to_char(effective_from AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS effective_from,"
       + " to_char(effective_to AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS effective_to FROM cost_intelligence." + table
-      + ' WHERE ' + scopeSql() + ' AND ' + idColumn + ' = $5 ORDER BY record_revision FOR UPDATE',
+      + ' WHERE ' + scopeSql() + ' AND ' + idColumn + ' = $5 ORDER BY record_revision',
     [...scopeValues(scope), id],
   );
   return [...result.rows];
@@ -704,6 +730,7 @@ async function runInsert<T extends { id: string; revision: number; retrievedAt: 
     client = await args.ports.database.connect();
     await client.query('BEGIN');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, args.scope);
     const idempotencyLock = JSON.stringify([
       ...scopeValues(args.scope), args.scope.actorId, 'pricing-idempotency', args.operation, args.idempotencyKey,
     ]);
@@ -838,7 +865,7 @@ export function validatePricingRuleBoundary(value: unknown): Validation<Register
 async function validatePricingRuleAppend(client: PricingTransactionPort, request: RegisterPricingRuleRequest): Promise<string | null> {
   const rows = await client.query(
     'SELECT rule_payload FROM cost_intelligence.pricing_rule_versions WHERE ' + scopeSql()
-      + ' AND rule_id = $5 ORDER BY record_revision DESC LIMIT 1 FOR UPDATE',
+      + ' AND rule_id = $5 ORDER BY record_revision DESC LIMIT 1',
     [...scopeValues(request.scope), request.rule.id],
   );
   if (rows.rowCount === 1) {
@@ -1008,7 +1035,7 @@ export async function registerRateCard(value: RegisterRateCardRequest, ports: Pr
 async function validateFxRateAppend(client: PricingTransactionPort, scope: TrustedScope, rate: FxRate): Promise<string | null> {
   const identityRows = await client.query(
     'SELECT fx_rate_payload FROM cost_intelligence.pricing_fx_rate_versions WHERE ' + scopeSql()
-      + ' AND fx_rate_id = $5 ORDER BY record_revision DESC LIMIT 1 FOR UPDATE',
+      + ' AND fx_rate_id = $5 ORDER BY record_revision DESC LIMIT 1',
     [...scopeValues(scope), rate.id],
   );
   if (identityRows.rowCount === 1) {
@@ -1075,6 +1102,7 @@ export async function loadPricingCatalog(
   try {
     await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, scope);
     const params = scopeValues(scope);
     const cards = await client.query(
       'SELECT card_id AS record_id, record_revision, content_hash, published_at::text AS published_at, rate_card_payload'
@@ -1142,6 +1170,7 @@ async function accessPricingEstimateSnapshot(
     client = await args.ports.database.connect();
     await client.query('BEGIN');
     inTransaction = true;
+    await bindFinancialDatabaseScope(client, args.scope);
     const idempotencyLock = JSON.stringify([
       ...scopeValues(args.scope), args.scope.actorId, 'pricing-idempotency', 'estimate', args.idempotencyKey,
     ]);

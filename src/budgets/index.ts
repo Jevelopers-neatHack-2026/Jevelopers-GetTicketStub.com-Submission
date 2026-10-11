@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { blockedBoundary, CurrencySchema, NonNegativeDecimalAmountSchema, errorEnvelope, failure, TrustedScopeSchema, validateRequest, type ApiResult, type RuntimePorts, type Validation } from '../shared/contracts.js';
+import { authorizeFinanceOperation, blockedBoundary, CurrencySchema, NonNegativeDecimalAmountSchema, errorEnvelope, failure, TrustedScopeSchema, validateRequest, type ApiResult, type FinanceOperation, type RuntimePorts, type Validation } from '../shared/contracts.js';
 import { validateCanonical, type SharedBudgetReservation, type SharedReleaseRequest, type SharedReserveRequest, type SharedSettleRequest } from '../shared/canonical.js';
 
 const VersionedReferenceSchema = Type.Object({
@@ -193,13 +193,15 @@ export async function authorize(request: ReservationRequest, ports: RuntimePorts
   const validation = validateReservationRequestBoundary(request);
   if (!validation.ok) return failure(validation.error);
   const parsed = validation.value as ReservationRequest;
-  try {
-    const trusted = await ports.trustedContext.resolve(parsed.scope);
-    if (!trusted || trusted.tenantId !== parsed.scope.tenantId || trusted.projectId !== parsed.scope.projectId || trusted.environment !== parsed.scope.environment || trusted.billingMode !== parsed.scope.billingMode || trusted.actorId !== parsed.scope.actorId) {
-      return failure(errorEnvelope('budgets', 'authorize', 'FORBIDDEN_SCOPE', parsed.requestId, 'The requested financial scope is not authorized.'));
-    }
-  } catch {
-    return failure(errorEnvelope('budgets', 'authorize', 'SOURCE_UNAVAILABLE', parsed.requestId, 'Trusted authorization context is temporarily unavailable.', true));
+  const authorization = await authorizeFinanceOperation({
+    module: 'budgets', requestOperation: 'authorize', operation: 'budgets.authorize',
+    scope: parsed.scope, requestId: parsed.requestId, clock: ports.clock,
+    financeAuthority: ports.financeAuthority,
+  });
+  if (!authorization.ok) {
+    if (authorization.error.code !== 'SOURCE_UNAVAILABLE') return failure(authorization.error);
+    return failure(errorEnvelope('budgets', 'authorize', 'BUDGET_UNAVAILABLE', parsed.requestId,
+      'Budget authorization is unavailable until current financial authority is configured.', true));
   }
   return failure(errorEnvelope('budgets', 'authorize', 'BUDGET_UNAVAILABLE', parsed.requestId, 'Atomic reservation is not available until the budget enforcement leaf is delivered.', true));
 }
@@ -208,6 +210,7 @@ async function reservationCommand(args: {
   request: ReservationCommand;
   ports: RuntimePorts;
   operation: string;
+  authorityOperation: FinanceOperation;
   expectedAction: ReservationCommand['action'];
   schema: typeof MarkDispatchedCommandSchema | typeof SettleReservationCommandSchema | typeof ReleaseReservationCommandSchema;
   validate(value: unknown): Validation<ReservationCommand>;
@@ -217,24 +220,24 @@ async function reservationCommand(args: {
   if (!validation.ok) return failure(validation.error);
   const parsed = validation.value as ReservationCommand;
   if (parsed.action !== expectedAction) return failure(errorEnvelope('budgets', operation, 'VALIDATION_ERROR', parsed.requestId, 'The command action does not match this lifecycle operation.'));
-  return blockedBoundary<ReservationCommand, ReservationSnapshot>({ module: 'budgets', operation, schema, request: parsed, ports, unavailableCode: 'BUDGET_UNAVAILABLE', safeMessage: `Reservation ${operation} is not available until the budget lifecycle leaf is delivered.`, retryable: true });
+  return blockedBoundary<ReservationCommand, ReservationSnapshot>({ module: 'budgets', operation, authorityOperation: args.authorityOperation, schema, request: parsed, ports, unavailableCode: 'BUDGET_UNAVAILABLE', safeMessage: `Reservation ${operation} is not available until the budget lifecycle leaf is delivered.`, retryable: true });
 }
 
 export async function markDispatched(request: MarkDispatchedCommand, ports: RuntimePorts): Promise<ApiResult<ReservationSnapshot>> {
-  return reservationCommand({ request, ports, operation: 'markDispatched', expectedAction: 'mark_dispatched', schema: MarkDispatchedCommandSchema, validate: value => {
+  return reservationCommand({ request, ports, operation: 'markDispatched', authorityOperation: 'budgets.markDispatched', expectedAction: 'mark_dispatched', schema: MarkDispatchedCommandSchema, validate: value => {
     const result = validateRequest(MarkDispatchedCommandSchema, value, 'budgets', 'markDispatched');
     return result.ok ? { ok: true, value: result.value } : result;
   } });
 }
 export async function settle(request: SettleReservationCommand, ports: RuntimePorts): Promise<ApiResult<ReservationSnapshot>> {
-  return reservationCommand({ request, ports, operation: 'settle', expectedAction: 'settle', schema: SettleReservationCommandSchema, validate: value => validateSettleReservationCommandBoundary(value) });
+  return reservationCommand({ request, ports, operation: 'settle', authorityOperation: 'budgets.settle', expectedAction: 'settle', schema: SettleReservationCommandSchema, validate: value => validateSettleReservationCommandBoundary(value) });
 }
 export async function release(request: ReleaseReservationCommand, ports: RuntimePorts): Promise<ApiResult<ReservationSnapshot>> {
-  return reservationCommand({ request, ports, operation: 'release', expectedAction: 'release', schema: ReleaseReservationCommandSchema, validate: value => validateReleaseReservationCommandBoundary(value) });
+  return reservationCommand({ request, ports, operation: 'release', authorityOperation: 'budgets.release', expectedAction: 'release', schema: ReleaseReservationCommandSchema, validate: value => validateReleaseReservationCommandBoundary(value) });
 }
 export async function changeBudget(request: BudgetChangeRequest, ports: RuntimePorts): Promise<ApiResult<BudgetChangeReceipt>> {
-  return blockedBoundary<BudgetChangeRequest, BudgetChangeReceipt>({ module: 'budgets', operation: 'changeBudget', schema: BudgetChangeRequestSchema, request, ports, unavailableCode: 'BUDGET_UNAVAILABLE', safeMessage: 'Budget policy evaluation is not available until the budget enforcement leaf is delivered.', retryable: true });
+  return blockedBoundary<BudgetChangeRequest, BudgetChangeReceipt>({ module: 'budgets', operation: 'changeBudget', authorityOperation: 'budgets.changeBudget', schema: BudgetChangeRequestSchema, request, ports, unavailableCode: 'BUDGET_UNAVAILABLE', safeMessage: 'Budget policy evaluation is not available until the budget enforcement leaf is delivered.', retryable: true });
 }
 export async function recordExpenseAdjustment(request: ExpenseAdjustmentRequest, ports: RuntimePorts): Promise<ApiResult<PostingReceipt>> {
-  return blockedBoundary<ExpenseAdjustmentRequest, PostingReceipt>({ module: 'budgets', operation: 'recordExpenseAdjustment', schema: ExpenseAdjustmentRequestSchema, request, ports, unavailableCode: 'SOURCE_UNAVAILABLE', safeMessage: 'Expense adjustment posting is not available until the accounting leaf is delivered.', retryable: true });
+  return blockedBoundary<ExpenseAdjustmentRequest, PostingReceipt>({ module: 'budgets', operation: 'recordExpenseAdjustment', authorityOperation: 'budgets.recordExpenseAdjustment', schema: ExpenseAdjustmentRequestSchema, request, ports, unavailableCode: 'SOURCE_UNAVAILABLE', safeMessage: 'Expense adjustment posting is not available until the accounting leaf is delivered.', retryable: true });
 }

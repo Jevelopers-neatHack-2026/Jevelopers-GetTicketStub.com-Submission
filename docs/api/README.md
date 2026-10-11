@@ -14,7 +14,7 @@ Finance API request/response objects use camel case. Nested shared contracts ret
 
 ## Scope and boundary coverage
 
-`TrustedScope` binds tenant, project, environment, billing mode, and actor. The current query boundary limits environment and billing-mode filters to that authenticated scope. A multi-environment or multi-mode query requires a future authorization grant model; callers cannot widen scope by adding filter values.
+`TrustedScope` binds tenant, project, environment, billing mode, and actor. The current query boundary limits environment and billing-mode filters to the exact scope authorized for the operation; callers cannot widen scope by adding filter values. `TrustedContextPort` supplies no permission by itself.
 
 The usage observation wrapper contains the shared `UsageEvent` plus evidence mode, verification status, and source provenance. The generated event preserves logical-operation, transport-attempt, provider request/attempt, billable-attempt, and source-observation identities. Unknown completeness stays explicit, with `usage_units: null`; it is never converted to zero. An unknown financial-event valuation likewise requires `amount: null`; estimated or provider-confirmed valuation requires an exact decimal amount.
 
@@ -22,7 +22,7 @@ Budget wrappers express authorized, denied, partial, and unavailable outcomes, h
 
 The financial ledger API is documented in [ledger.md](./ledger.md). It persists immutable versioned events, binds operational identities independently, records corrections and reversals by reference, and rebuilds deterministic as-of projections with exact decimal arithmetic. Reservation authorization remains a non-financial memo; linked cumulative consumption contributes its full effective amount, including an observed overrun.
 
-The pricing implementation and host-authority boundary are documented in [pricing.md](./pricing.md). Its real issuer adapter remains pending; current operation decisions and evidence resolvers are host-injected ports exercised with synthetic fixtures.
+The pricing implementation and host-authority boundary are documented in [pricing.md](./pricing.md). The shared operation matrix, least-privilege rules, safe field projection, and current host integration gaps are documented in [security.md](./security.md). The real issuer adapter remains pending; current operation decisions and evidence resolvers are host-injected ports exercised with synthetic fixtures.
 
 ## Summary and export identity
 

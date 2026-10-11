@@ -109,7 +109,7 @@ export async function querySummary(request: FinancialSummaryQuery, ports: Runtim
     return failure(errorEnvelope('reporting', 'querySummary', 'FORBIDDEN_SCOPE', requestId, 'The requested filters exceed the authenticated environment or billing-mode scope.'));
   }
   return blockedBoundary<FinancialSummaryQuery, FinancialSummaryPage>({
-    module: 'reporting', operation: 'querySummary', schema: FinancialSummaryQuerySchema, request: parsed, ports,
+    module: 'reporting', operation: 'querySummary', authorityOperation: 'reporting.querySummary', schema: FinancialSummaryQuerySchema, request: parsed, ports,
     unavailableCode: 'SOURCE_UNAVAILABLE',
     safeMessage: 'Summary query execution is unavailable until the reporting and accounting leaves are delivered.',
     retryable: true,
