@@ -67,7 +67,7 @@ is rejected before the protected endpoint, the actual redirect-limit error, and
 all injected resolver-input redirect checks described below.
 `resource_limits_enforced` is limited to declared wire length, chunked identity
 and gzip encoded-body bytes, actual gzip decoded bytes, cumulative decoded bytes,
-and per-instance request count, each with
+per-instance request count, and the bounded concurrency/cancellation checks, each with
 the required typed error and fixture counters. It is not a claim about all resource
 limits.
 
@@ -109,8 +109,30 @@ Sanitized profiles and address/alias counts identify the injected metadata; raw
 hostnames/addresses are not retained. A safe alias is validated as metadata; it is
 not followed by another DNS query. No public address is remapped onto local transport.
 
+`concurrency` has three event-gated scenarios. Eight tiny known-body fetches share
+one instance. A synchronous resolver-hook admission snapshot after one Promise
+microtask depends on the pinned owner's synchronous acquire path. The fixture then
+waits for that entire admitted wave to reach actual HTTP before releasing any
+response. All eight bodies must match their known length/hash and HTTP peak must
+be four. `peak_http` counts outstanding server responses until finish/close;
+resolver admissions and TCP connections/closures have separate counters.
+
+Queued cancellation first holds four actual HTTP requests before response headers.
+A fifth call starts with a live native signal and passes the admission checkpoint
+while all four remain held. Its queue residency follows from that pinned synchronous
+enqueue path; there is no public queue-enter event or private-state observation.
+Native abort must yield `CANCELED` before any held response is released, with no
+fifth resolver admission or HTTP request. A survivor then completes after one slot
+is released, before the other held responses are ended. Active cancellation uses
+a fresh instance and an actual received HTTP request with headers withheld; native
+abort must yield `CANCELED` and natural peer closure before a normal recovery fetch.
+This covers active HTTP awaiting headers, not body-read, resolver, connect or TLS
+cancellation. All event ordering, outcomes and natural closure precede forced cleanup.
+No fixed sleeps, fake clock, private state changes or timeout increases are used.
+
 Uncovered obligations remain explicit in every artifact: wire DNS, TTL rebinding,
-actual CNAME following and mixed wire-DNS answers; deadlines and concurrency;
+actual CNAME following and mixed wire-DNS answers; deadlines and cancellation during
+body reads/resolution/connect/TLS, plus real job cancellation;
 TLS/production networking; image/PDF and downstream parser limits; real rejection
 handoff into research, JEV or creative; and authoritative external egress capture.
 IE-11A.AC3 content-authority containment is a separate unchanged case. A passing
@@ -121,7 +143,7 @@ blocked. All unselected original cases remain planned, not implicitly passed.
 
 The separately invoked `component_tests` suite uses actual `execute` and `save_run`
 with clean owned snapshots and all 42 original cases. It compares a real baseline
-with nine deliberately weakened owned copies: an always-reject fetcher, unchecked
+with ten deliberately weakened owned copies: an always-reject fetcher, unchecked
 loopback fetching, and removal of only the identity-body streaming wire counter.
 The positive control detects always-reject behavior; incoming protected server
 counters detect unchecked loopback fetching. The wire-counter mutation must accept
@@ -137,6 +159,12 @@ Two further copies disable only the gzip encoded-body guard or only the cumulati
 decoded-byte check. The corresponding overflow must then return its exact body and
 make the new resource observation/component fail. The per-request decoded limit,
 other byte guard, request budget and existing controls remain in place.
+The concurrency copy changes only the semaphore admission comparison from `<` to
+`<=`. The adaptive HTTP gate must expose five actual held requests and peak five.
+If the fifth queued-cancellation request is admitted, the probe waits for its HTTP
+arrival before aborting so an early abort cannot hide the defect; its peer must
+close before launching the survivor. The cap remains declared as four, and both
+observations/component must fail while all outcomes and cleanup are retained.
 Original producer checkouts stay unchanged.
 
 ```sh

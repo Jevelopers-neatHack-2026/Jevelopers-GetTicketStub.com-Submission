@@ -8,7 +8,7 @@ type ResolverMutation = Literal[
 ]
 type BudgetMutation = Literal["unchecked-gzip-wire", "unchecked-aggregate"]
 type Mutation = (
-    Literal["baseline", "always-reject", "unchecked-private", "unchecked-wire"]
+    Literal["baseline", "always-reject", "unchecked-private", "unchecked-wire", "extra-slot"]
     | ResolverMutation
     | BudgetMutation
 )
@@ -130,6 +130,7 @@ def assert_resolver_inputs(capture: ResolverCapture, mutation: Mutation) -> None
             | "unchecked-wire"
             | "unchecked-gzip-wire"
             | "unchecked-aggregate"
+            | "extra-slot"
         ):
             affected = ()
         case _:

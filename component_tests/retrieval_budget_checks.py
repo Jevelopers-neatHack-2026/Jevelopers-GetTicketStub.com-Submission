@@ -116,6 +116,7 @@ def assert_byte_budgets(capture: BudgetCapture, mutation: Mutation) -> None:
             | "first-answer-only"
             | "unchecked-alias"
             | "unchecked-ip-alias"
+            | "extra-slot"
         ):
             escaped = None
         case _:

@@ -3,6 +3,7 @@ from typing import ClassVar, Literal, assert_never
 from pydantic import ConfigDict
 
 from component_tests.retrieval_budget_checks import BudgetCapture
+from component_tests.retrieval_concurrency_checks import ConcurrencyCapture
 from component_tests.retrieval_resolver_checks import Mutation, ResolverCapture
 from integration_evals.artifacts import digest
 from integration_evals.models import CaseResult, Digest, Outcome, Record
@@ -53,6 +54,7 @@ class Capture(Record):
     chunked_wire: WireCapture
     resolver_inputs: ResolverCapture
     resource_budgets: BudgetCapture
+    concurrency: ConcurrencyCapture
 
 
 def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mutation) -> None:
@@ -91,6 +93,7 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
             | "unchecked-ip-alias"
             | "unchecked-gzip-wire"
             | "unchecked-aggregate"
+            | "extra-slot"
         ):
             assert selected.outcome is Outcome.FAILED
         case _:
@@ -123,6 +126,7 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
             | "unchecked-ip-alias"
             | "unchecked-gzip-wire"
             | "unchecked-aggregate"
+            | "extra-slot"
         ):
             assert wire.passed is True
             assert over_limit.code == "RESOURCE_LIMIT"

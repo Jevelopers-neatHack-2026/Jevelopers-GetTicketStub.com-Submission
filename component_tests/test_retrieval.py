@@ -8,6 +8,7 @@ from typing import assert_never
 import pytest
 
 from component_tests.retrieval_budget_checks import assert_byte_budgets, mutate_budget
+from component_tests.retrieval_concurrency_checks import assert_concurrency
 from component_tests.retrieval_resolver_checks import (
     Mutation,
     assert_resolver_inputs,
@@ -115,6 +116,10 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
             changed = mutate_resolver(original, mutation)
         case "unchecked-gzip-wire" | "unchecked-aggregate":
             changed = mutate_budget(original, mutation)
+        case "extra-slot":
+            guard = "if (this.#active < DEFAULT_RUN_LIMITS.concurrentFetches)"
+            assert original.count(guard) == 1
+            changed = original.replace(guard, guard.replace(" < ", " <= "), 1)
         case _:
             assert_never(mutation)
     if changed != original:
@@ -144,6 +149,7 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
         "unchecked-ip-alias",
         "unchecked-gzip-wire",
         "unchecked-aggregate",
+        "extra-slot",
     ],
 )
 def test_real_retrieval_component_archives_observed_boundary(
@@ -181,6 +187,7 @@ def test_real_retrieval_component_archives_observed_boundary(
     assert_observed_outcome(selected, capture, mutation)
     assert_resolver_inputs(capture.resolver_inputs, mutation)
     assert_byte_budgets(capture.resource_budgets, mutation)
+    assert_concurrency(capture.concurrency, mutation)
     original_archive = read_bytes(archive / "run.json")
     with pytest.raises(FileExistsError):
         _ = save_run(run, retrieval_workspace / "reports", tracker, suite, settings.artifacts)
