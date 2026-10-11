@@ -1,0 +1,36 @@
+{
+  "baselineCommit": "c887d88afb9665ea92129b89d685b2a75ae482ea",
+  "baselineSourceHashes": {
+    "src/research/private-retrieval.mjs": "fed7dc96f069b5e626f34a8d7e708c85708adf66edfcd422df11df3fe27dc79e",
+    "src/evidence/store.mjs": "0d910b9dedd97f6130202a300ba171cbe6e4870fc898445ea6d7900454db9070",
+    "src/discovery/planner/frontier.mjs": "d09902b2756dd57433b71143cbc12845d3422937f17f08bc0cd26973b4526bc3"
+  },
+  "tenantId": "legacy-overcap-fixture-tenant",
+  "tenantHash": "7d21184c858bf8e32141bcab4ef67cbffa32ad0170eb7275f0d610c005ff907e",
+  "runId": "private-receipt-v1-overcap-fixture",
+  "configHash": "6c126612cc4b18d778d502d0381a24ea462eeb2d52250d4dd9baa7f9bbefc6c4",
+  "seeds": [
+    {
+      "url": "http://fixture.example.org:80/legacy-overcap"
+    }
+  ],
+  "limits": {
+    "maxDepth": 1,
+    "maxTransportAttemptAdmissions": 1,
+    "maxInFlightLeases": 4,
+    "durationMs": 30000,
+    "maxSuggestionsPerCompletion": 1
+  },
+  "requestCount": 1,
+  "retentionWindowMs": 3153600000000,
+  "expectedState": "leased",
+  "expectedOutcome": "links_observed",
+  "legacySuggestionUrls": [
+    "https://links.example.org/a-first",
+    "https://links.example.org/z-last"
+  ],
+  "keyIdPattern": "`${purpose}-legacy-fixture-v1`",
+  "keyRecipe": "SHA-256 of `${tenantId}:${purpose}:legacy-receipt-v1`",
+  "evidenceDatabaseSha256": "265e01d378f56697a355863140e19387ffbf10bc7b8e672ede8b185adc3b9e77",
+  "frontierDatabaseSha256": "c6d9d0e4f24d3e3433d9c50e82fa579f7e935f311aa1a4c7438e7dfa98b13bc0"
+}

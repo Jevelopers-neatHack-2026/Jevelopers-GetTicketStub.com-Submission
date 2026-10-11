@@ -51,7 +51,7 @@ test("evidence-facts mock case runs only local durable-store and provenance fixt
   assert.equal(summary.case, "evidence-facts");
   assert.equal(summary.mode, "mock");
   assert.equal(summary.status, "passed");
-  assert.equal(summary.test_files, 2);
+  assert.equal(summary.test_files, 3);
   assert.ok(summary.expected_cases > 0);
   assert.equal(summary.expected_cases, summary.terminal_cases);
   assert.equal(summary.failed_cases, 0);

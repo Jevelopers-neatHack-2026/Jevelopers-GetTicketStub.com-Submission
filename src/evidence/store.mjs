@@ -1606,6 +1606,7 @@ export function createEvidenceStore(options) {
   function normalizePrivateReceiptCompletion(value) {
     const input = ownDataRecord(value, new Set([
       'completionKey', 'outcome', 'suggestions', 'limitations', 'identity',
+      'truncatedCount', 'omittedSuggestions', 'sourceLinkCandidatesOmittedCount',
     ]));
     if (!input || typeof input.completionKey !== 'string' || input.completionKey.length < 1
       || input.completionKey.length > 192 || !/^[A-Za-z0-9._:-]+$/.test(input.completionKey)
@@ -1613,7 +1614,13 @@ export function createEvidenceStore(options) {
     const budget = { nodes: 0, bytes: 0, maximumBytes: PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES - 8_192 };
     const suggestionsInput = safeArray(input.suggestions, 16);
     if (!suggestionsInput) fail('EVIDENCE_INVALID');
-    const suggestions = suggestionsInput.map((suggestion) => cloneJsonValue(suggestion, 0, budget));
+    const metadataKeys = ['truncatedCount', 'omittedSuggestions', 'sourceLinkCandidatesOmittedCount'];
+    const metadataCount = metadataKeys.filter((key) => Object.hasOwn(input, key)).length;
+    if (metadataCount !== 0 && metadataCount !== metadataKeys.length) fail('EVIDENCE_INVALID');
+    const hasOmissionMetadata = metadataCount === metadataKeys.length;
+    const suggestions = suggestionsInput.map((suggestion) => hasOmissionMetadata
+      ? normalizePrivateReceiptLinkSuggestion(suggestion, budget)
+      : cloneJsonValue(suggestion, 0, budget));
     const limitationsInput = safeArray(input.limitations, 64);
     if (!limitationsInput || limitationsInput.some((item) => typeof item !== 'string'
       || item.length < 1 || item.length > 120 || !/^[a-z0-9_:-]+$/.test(item))) fail('EVIDENCE_INVALID');
@@ -1632,13 +1639,78 @@ export function createEvidenceStore(options) {
       unresolvedTransitions: unresolvedTransitions.map((item) => cloneJsonValue(item, 0, budget)),
     };
     if ((input.outcome === 'links_observed') !== (suggestions.length > 0)) fail('EVIDENCE_INVALID');
-    return {
+    const completion = {
       completionKey: input.completionKey,
       outcome: input.outcome,
       suggestions,
       limitations: [...limitationsInput],
       identity,
     };
+    if (!hasOmissionMetadata) return completion;
+    const truncatedCount = input.truncatedCount;
+    const omittedSuggestionsInput = safeArray(input.omittedSuggestions, 16);
+    const sourceLinkCandidatesOmittedCount = input.sourceLinkCandidatesOmittedCount;
+    if (!Number.isSafeInteger(truncatedCount) || truncatedCount < 0 || truncatedCount > 16
+      || !omittedSuggestionsInput || truncatedCount !== omittedSuggestionsInput.length
+      || !Number.isSafeInteger(sourceLinkCandidatesOmittedCount)
+      || sourceLinkCandidatesOmittedCount < 0 || sourceLinkCandidatesOmittedCount > 1_000_000
+      || suggestions.length + omittedSuggestionsInput.length > 16
+      || (input.outcome !== 'links_observed' && truncatedCount > 0)) {
+      fail('EVIDENCE_INVALID');
+    }
+    completion.truncatedCount = truncatedCount;
+    completion.omittedSuggestions = omittedSuggestionsInput.map((suggestion) =>
+      normalizePrivateReceiptLinkSuggestion(suggestion, budget));
+    completion.sourceLinkCandidatesOmittedCount = sourceLinkCandidatesOmittedCount;
+    return completion;
+  }
+
+  function normalizePrivateReceiptLinkSuggestion(value, budget) {
+    const input = ownDataRecord(value, new Set(['url', 'sourceRefs']));
+    if (!input || typeof input.url !== 'string' || input.url.length < 1 || input.url.length > 2_048
+      || !isWellFormed(input.url)) fail('EVIDENCE_INVALID');
+    const url = validateUrl(input.url);
+    if (hasSensitiveUrlMaterial(url) || url.href !== input.url) fail('EVIDENCE_INVALID');
+    const sourceRefsInput = safeArray(input.sourceRefs, 4);
+    if (!sourceRefsInput || sourceRefsInput.length < 1) fail('EVIDENCE_INVALID');
+    const sourceRefs = sourceRefsInput.map((referenceValue) => {
+      const reference = ownDataRecord(referenceValue,
+        new Set(['evidenceId', 'contentHash', 'locator', 'field', 'value']));
+      if (!reference || !validUuid(reference.evidenceId) || !isDigest(reference.contentHash)
+        || typeof reference.field !== 'string' || reference.field.length < 1 || reference.field.length > 120
+        || !isWellFormed(reference.field) || reference.value !== input.url) fail('EVIDENCE_INVALID');
+      return {
+        evidenceId: reference.evidenceId,
+        contentHash: reference.contentHash,
+        locator: { ...copyLocator(reference.locator) },
+        field: reference.field,
+        value: reference.value,
+      };
+    });
+    sourceRefs.sort((left, right) => {
+      const leftValue = JSON.stringify(left);
+      const rightValue = JSON.stringify(right);
+      return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0;
+    });
+    const unique = new Set(sourceRefs.map((reference) => JSON.stringify(reference)));
+    if (unique.size !== sourceRefs.length) fail('EVIDENCE_INVALID');
+    budget.nodes += sourceRefs.length * 6 + 2;
+    budget.bytes += Buffer.byteLength(JSON.stringify({ url: input.url, sourceRefs }), 'utf8');
+    if (budget.nodes > 20_000 || budget.bytes > budget.maximumBytes) fail('EVIDENCE_INVALID');
+    return { url: input.url, sourceRefs };
+  }
+
+  function validatePrivateReceiptSuggestionEvidence(completion, evidenceRefs, code = 'EVIDENCE_INVALID') {
+    if (!Object.hasOwn(completion, 'omittedSuggestions')) return;
+    const referencesByEvidence = new Map(evidenceRefs.map((reference) => [reference.evidenceId, reference]));
+    for (const suggestion of [...completion.suggestions, ...completion.omittedSuggestions]) {
+      for (const sourceRef of suggestion.sourceRefs) {
+        const evidence = referencesByEvidence.get(sourceRef.evidenceId);
+        const locatorKey = JSON.stringify(sourceRef.locator);
+        if (!evidence || evidence.contentHash !== sourceRef.contentHash
+          || !evidence.positions.some((position) => JSON.stringify(position.locator) === locatorKey)) fail(code);
+      }
+    }
   }
 
   function validatePrivateReceiptReferences(value) {
@@ -1663,7 +1735,7 @@ export function createEvidenceStore(options) {
       const positions = positionsInput.map((positionValue) => {
         const position = ownDataRecord(positionValue, new Set(['locator', 'contentHash']));
         if (!position || !isDigest(position.contentHash)) fail('EVIDENCE_INTEGRITY');
-        return { locator: copyLocator(position.locator), contentHash: position.contentHash };
+        return { locator: copyStoredLocator(position.locator, reference.representation), contentHash: position.contentHash };
       });
       return {
         evidenceId: reference.evidenceId,
@@ -4439,6 +4511,7 @@ export function createEvidenceStore(options) {
       checkCancellation(signal);
 
       const { evidenceRefs, factRefs } = receiptReferencesForMaterialized(info, materialized);
+      validatePrivateReceiptSuggestionEvidence(completion, evidenceRefs);
       const evidenceIds = evidenceRefs.map((reference) => reference.evidenceId);
       const factIds = factRefs.map((reference) => reference.factId);
       if (evidenceRefs.length > 8 || factRefs.length > 128
@@ -4594,6 +4667,7 @@ export function createEvidenceStore(options) {
         evidenceRefs: body.evidenceRefs,
         factRefs: body.factRefs,
       });
+      validatePrivateReceiptSuggestionEvidence(completion, evidenceRefs, 'EVIDENCE_INTEGRITY');
       if (evidenceRefs.length === 0 && factRefs.length === 0
         && (completion.identity.entityCandidates.length > 0 || completion.identity.occurrenceCandidates.length > 0
           || completion.identity.transitionLinks.length > 0 || completion.identity.unresolvedTransitions.length > 0
@@ -4650,6 +4724,10 @@ export function createEvidenceStore(options) {
         completionKey: completion.completionKey,
         outcome: completion.outcome,
         suggestions: completion.suggestions,
+        omissionMetadataVersion: Object.hasOwn(completion, 'omittedSuggestions') ? 1 : 0,
+        truncatedCount: completion.truncatedCount ?? 0,
+        omittedSuggestions: completion.omittedSuggestions ?? Object.freeze([]),
+        sourceLinkCandidatesOmittedCount: completion.sourceLinkCandidatesOmittedCount ?? 0,
         limitations: completion.limitations,
         identity: completion.identity,
         evidenceIds: Object.freeze(evidenceIds),
