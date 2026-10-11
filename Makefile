@@ -56,7 +56,7 @@ typecheck-models:
 	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 tests/models/public-consumer.mts
 
 typecheck-inspection:
-	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 tests/inspection/package-consumer.mts
+	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 tests/inspection/package-consumer.mts tests/inspection/adapter-invocation-consumer.mts
 
 check:
 	@case "$(TARGET):$(MODE)" in \

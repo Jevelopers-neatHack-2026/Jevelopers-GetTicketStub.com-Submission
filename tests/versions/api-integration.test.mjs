@@ -6,7 +6,7 @@ import { cp, readFile, unlink } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { createCreativeApi } from "../../src/api/v1.mjs";
 import { canonicalHash, canonicalSerialize } from "../../src/contracts/index.mjs";
@@ -197,7 +197,8 @@ function attachInspectionPorts(ports, counters, { recommendRepair = false, estim
               probabilities, confidence: 0.95 } };
         } else {
           const choice = recommendRepair && question.eligible_candidate_ids.includes("repair_image_edit")
-            ? "repair_image_edit" : "acceptable_for_review";
+            ? "repair_image_edit" : (question.eligible_candidate_ids.includes("acceptable_for_review")
+              ? "acceptable_for_review" : question.eligible_candidate_ids[0]);
           answers[key] = { status: "answered", question_schema_version: question.question_schema_version,
             policy_version: question.policy_version, answer: { type: "choice", choice,
               probabilities: Object.fromEntries(question.eligible_candidate_ids.map((item) => [item, item === choice ? 1 : 0])),
@@ -651,6 +652,110 @@ test("terminal inspection graphs reopen with exact reports and zero redispatch",
   }
 });
 
+test("completed inspection replay uses its validated historical eligibility and still fails closed on persisted tampering", async (t) => {
+  const system = await setupInspectionSystem(t, { recommendRepair: true });
+  const generated = await system.api.invoke(actor(), request("historical-replay-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const inspectBody = inspectionRequest("historical-replay-inspect", generated.result.design_version.design_version_id);
+  const inspected = await system.api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  assert.deepEqual(inspected.result.report.eligible_repair_actions, ["image.edit"]);
+  const before = { provider: system.counters.provider, reserved: system.counters.reserved,
+    inspection: system.counters.inspection, decision: system.counters.decision };
+
+  const databasePath = join(system.root, "versions.sqlite");
+  const objectRoot = join(system.root, "objects");
+  system.store.close();
+  const store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => store.close());
+  let id = 0;
+  const ports = attachInspectionPorts(portsFor(store, system.counters, () => `historical-replay-port-${++id}`),
+    system.counters, { recommendRepair: true });
+  const edit = ports.provider.edit;
+  delete ports.provider.edit;
+  const api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `historical-replay-api-${++id}` });
+
+  const replayWithoutEdit = await api.invoke(actor(), inspectBody);
+  assert.equal(replayWithoutEdit.ok, true, JSON.stringify(replayWithoutEdit));
+  assert.equal(replayWithoutEdit.replayed, true);
+  assert.deepEqual(replayWithoutEdit.result, inspected.result,
+    "stored deterministic provenance reconstructs the original report without current edit capability");
+  assert.deepEqual({ provider: system.counters.provider, reserved: system.counters.reserved,
+    inspection: system.counters.inspection, decision: system.counters.decision }, before);
+
+  ports.provider.edit = edit;
+  const replayAfterRestore = await api.invoke(actor(), inspectBody);
+  assert.equal(replayAfterRestore.ok, true, JSON.stringify(replayAfterRestore));
+  assert.deepEqual(replayAfterRestore.result, inspected.result);
+  assert.deepEqual({ provider: system.counters.provider, reserved: system.counters.reserved,
+    inspection: system.counters.inspection, decision: system.counters.decision }, before);
+
+  const denied = await api.invoke({ ...actor(), permissions: actor().permissions.filter((permission) => permission !== "creative.read") },
+    { ...inspectBody, action_id: "historical-replay-current-read-denied" });
+  assert.equal(denied.ok, false);
+  assert.equal(denied.error.code, "permission_denied", "historical eligibility never bypasses present read authority");
+
+  const observer = store.db.prepare(`SELECT result_json FROM creative_inspection_stages_v1
+    WHERE action_id=? AND stage='observer'`).get(inspectBody.action_id);
+  const tamperedResult = JSON.parse(observer.result_json);
+  tamperedResult.usage_completeness = "unknown";
+  store.db.prepare(`UPDATE creative_inspection_stages_v1 SET result_json=?,result_hash=?
+    WHERE action_id=? AND stage='observer'`).run(canonicalSerialize(tamperedResult), canonicalHash(tamperedResult),
+    inspectBody.action_id);
+  const tamperedReplay = await api.invoke(actor(), inspectBody);
+  assert.equal(tamperedReplay.ok, false, "coherently rehashed stage mutation cannot rewrite historical owner provenance");
+  assert.equal(tamperedReplay.error.code, "unavailable");
+  assert.deepEqual({ provider: system.counters.provider, reserved: system.counters.reserved,
+    inspection: system.counters.inspection, decision: system.counters.decision }, before,
+  "tampered replay fails closed without fresh metering or dispatch");
+});
+
+test("compiled public inspection and decision adapters invoke the real dispatch revalidation callback at every stage", async (t) => {
+  const buildRoot = await mkdtemp(join(tmpdir(), "creative-inspection-typed-adapter-"));
+  t.after(async () => rm(buildRoot, { recursive: true, force: true }));
+  const compiler = fileURLToPath(new URL("../../examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc", import.meta.url));
+  const consumer = fileURLToPath(new URL("../../tests/inspection/adapter-invocation-consumer.mts", import.meta.url));
+  const compile = spawnSync(process.execPath, [compiler, "--strict", "--skipLibCheck", "false", "--module", "NodeNext",
+    "--moduleResolution", "NodeNext", "--target", "ES2022", "--rootDir", fileURLToPath(new URL("../../tests/inspection", import.meta.url)),
+    "--outDir", buildRoot, consumer], { encoding: "utf8" });
+  assert.equal(compile.status, 0, `${compile.stdout}\n${compile.stderr}`);
+  const typed = await import(pathToFileURL(join(buildRoot, "adapter-invocation-consumer.mjs")).href);
+
+  const system = await setupInspectionSystem(t);
+  const invoked = [];
+  const observer = system.ports.inspection.inspect;
+  system.ports.inspection.inspect = async (input) => {
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    const permit = await typed.revalidateInspection(input, canonicalHash(input.deterministic));
+    assert.equal(permit, input.dispatch_intent_ref);
+    invoked.push("observer");
+    return observer({ ...input, recordTransportAttempt: async () => {} });
+  };
+  const decision = system.ports.decisionPort.execute;
+  system.ports.decisionPort.execute = async (input) => {
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    const permit = await typed.revalidateDecision(input, canonicalHash(input.request));
+    assert.equal(permit, input.dispatch_intent_ref);
+    const keys = Object.keys(input.request.questions);
+    invoked.push(keys.includes("next_step") ? "decision_route"
+      : keys.includes("layout_choice") ? "generic_decision" : "decision_evidence");
+    return decision({ ...input, recordTransportAttempt: async () => {} });
+  };
+
+  const generate = request("typed-adapter-generate", await fixture("generate-plan"));
+  generate.payload.decision_request = { execution_mode: "independent_batch", state: { text: "Choose the clearest layout." },
+    questions: { layout_choice: { type: "choice", question_schema_version: "1.0", policy_version: "layout/1",
+      instructions: "Choose one eligible layout.", criteria: { compact: "Compact", wide: "Wide" },
+      eligible_candidate_ids: ["compact", "wide"],
+      policy: { minimum_confidence: 0.5, low_confidence_action: "review" } } } };
+  const generated = await system.api.invoke(actor(), generate);
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const inspected = await system.api.invoke(actor(), inspectionRequest("typed-adapter-inspect",
+    generated.result.design_version.design_version_id));
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  assert.deepEqual(invoked.sort(), ["decision_evidence", "decision_route", "generic_decision", "observer"]);
+});
+
 test("inspection repair remains review-gated when trusted owner usage evidence is unavailable", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-inspection-unknown-owner-usage-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
@@ -807,6 +912,91 @@ test("a repair claim's root deadline prevents a reservation after an awaited rou
   const state = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
     design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
   assert.equal(state.repairs_used, 1, "the serialized root claim remains counted after the stopped attempt");
+});
+
+test("a repair claim's root deadline blocks the final send permit after the awaited post-ACK authorization", async (t) => {
+  let currentNow = NOW;
+  const system = await setupInspectionSystem(t, { now: () => currentNow, recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("repair-send-deadline-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("repair-send-deadline-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+
+  const before = { provider: counters.provider, reserved: counters.reserved,
+    acknowledgments: counters.financeTransportIds.length };
+  const authorize = ports.jobs.authorizeDispatch.bind(ports.jobs);
+  const acknowledge = ports.metering.recordTransportAttempt.bind(ports.metering);
+  const markUnknown = ports.metering.markOutcomeUnknown.bind(ports.metering);
+  const release = ports.metering.releaseBeforeDispatch.bind(ports.metering);
+  const edit = ports.provider.edit;
+  let repairing = false;
+  let acknowledged = false;
+  let postAckAuthorizations = 0;
+  let expiredAfterFinalAuthorization = false;
+  let sendPermits = 0;
+  let unknownHolds = 0;
+  let releases = 0;
+  ports.jobs.authorizeDispatch = async (input) => {
+    const result = await authorize(input);
+    if (repairing && acknowledged && input.context_fence?.inspection_repair) {
+      postAckAuthorizations += 1;
+      if (postAckAuthorizations === 3) {
+        assert.equal(result.status, "authorized", "the real same-database authorization is valid at T+59s");
+        currentNow = NOW + 61_000;
+        expiredAfterFinalAuthorization = true;
+      }
+    }
+    return result;
+  };
+  ports.metering.recordTransportAttempt = async (input) => {
+    const result = await acknowledge(input);
+    if (repairing) acknowledged = true;
+    return result;
+  };
+  ports.metering.markOutcomeUnknown = async (...args) => {
+    unknownHolds += 1;
+    return markUnknown(...args);
+  };
+  ports.metering.releaseBeforeDispatch = async (...args) => {
+    releases += 1;
+    return release(...args);
+  };
+  ports.provider.edit = async (input) => {
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    sendPermits += 1;
+    return edit({ ...input, recordTransportAttempt: async () => {} });
+  };
+
+  currentNow = NOW + 59_000;
+  repairing = true;
+  const body = await repairEditRequest("repair-send-deadline-edit", design,
+    canonicalHash(inspected.result.report), inspectBody.action_id);
+  const result = await api.invoke(actor(), body);
+  assert.equal(expiredAfterFinalAuthorization, true);
+  assert.equal(postAckAuthorizations, 3);
+  assert.equal(acknowledged, true, "C03 ACK remains recorded before the final root check");
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.equal(result.error.code, "review_required");
+  assert.equal(sendPermits, 0, "expired cumulative root authority never reaches the provider send permit");
+  assert.equal(counters.provider, before.provider);
+  assert.equal(counters.reserved, before.reserved + 1, "the single already-authorized repair reservation is retained");
+  assert.equal(counters.financeTransportIds.length, before.acknowledgments + 1);
+  assert.ok(unknownHolds >= 1, "the already-ACKed attempt remains held for reconciliation");
+  assert.equal(releases, 0, "an ACKed attempt is never released as pre-dispatch work");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count, 1);
+  assert.equal(store.getCurrentDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id }).design_version_id,
+    design.design_version_id, "the source design remains selected");
+  const job = store.db.prepare("SELECT status,result_json FROM creative_jobs WHERE action_id=?").get(body.action_id);
+  assert.notEqual(job.status, "completed");
+  assert.equal(job.result_json, null);
+  const claim = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+    design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
+  assert.equal(claim.repairs_used, 1, "the failed attempt remains included in cumulative root accounting");
+  assert.equal(store.db.prepare(`SELECT status,result_hash FROM creative_inspection_action_v2 WHERE action_id=?`)
+    .get(body.action_id).status, "claimed");
 });
 
 test("repair outcome, immutable child, selection, and job result roll back when publication crosses the root deadline", async (t) => {

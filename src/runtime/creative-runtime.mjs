@@ -1792,6 +1792,23 @@ export function createCreativeApi(options = {}) {
       if (currentPermissionProofs.some((proof) => proof.expires_at <= currentTime)) {
         throw new CreativeApiError("permission_denied", request.operation, "asset_permission_evidence");
       }
+      // A C03 ACK and the awaited same-database job authorization are not
+      // enough to extend an inspection repair's cumulative root lease. Re-read
+      // the durable claim synchronously after that final await, immediately
+      // before returning a permit to the adapter. An ACK already issued stays
+      // attributable and is held for reconciliation when this fence expires.
+      const repairProof = currentContextFence()?.inspection_repair;
+      if (repairProof !== undefined) {
+        const repairScope = { ...started.scope, brief_id: request.payload.brief_id,
+          design_version_id: repairProof.root_design_version_id };
+        if (!Number.isSafeInteger(repairProof.deadline_at_ms) || currentTime < repairProof.started_at_ms ||
+            currentTime >= repairProof.deadline_at_ms ||
+            !isRecord(ports.storage?.inspectionRepair) ||
+            typeof ports.storage.inspectionRepair.isClaimCurrent !== "function" ||
+            !ports.storage.inspectionRepair.isClaimCurrent({ scope: repairScope, proof: repairProof })) {
+          throw new CreativeApiError("review_required", request.operation, "inspection_repair.limit");
+        }
+      }
     };
     const revalidateMappedDispatch = async (dispatchContext) => {
       const transportAttemptId = dispatchContext.transport_attempt_id;
@@ -2065,7 +2082,8 @@ export function createCreativeApi(options = {}) {
       return Object.freeze([]);
     };
     const result = await runMetered(principal, request, started, "jev_decision", route, "decisionPort.execute",
-      async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest }) => {
+      async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref,
+        recordTransportAttempt, revalidateDispatch, setDecisionRequest }) => {
         const timestamp = new Date(now()).toISOString();
         const boundRequest = {
           contract: "DecisionPortRequest",
@@ -2107,7 +2125,7 @@ export function createCreativeApi(options = {}) {
         setDecisionRequest(validated);
         const raw = await method(Object.freeze({ scope: started.scope, actor_id: principal.actor_id,
           request: validated, attempt, reservation_ref, transport_attempt_id: transportAttemptId,
-          dispatch_intent_ref, recordTransportAttempt, signal, deadline_at }));
+          dispatch_intent_ref, recordTransportAttempt, revalidateDispatch, signal, deadline_at }));
         return { value: raw, usage: raw?.usage, provider_outcome: raw?.status === "complete" || raw?.status === "review" ? "succeeded" : "failed" };
       }, assertDecisionContext,
       creativeContextFence(brief, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash,
@@ -2775,7 +2793,8 @@ export function createCreativeApi(options = {}) {
                 target_binding_sha256: subjectHash, signal });
               const raw = await inspect(Object.freeze({ scope, actor_id: principal.actor_id, job_id: started.job_id,
                 attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
-                recordTransportAttempt, signal, deadline_at, route, brief, design_version: design, parent_design: parent,
+                recordTransportAttempt, revalidateDispatch, signal, deadline_at, route, brief,
+                design_version: design, parent_design: parent,
                 deterministic, artifact_bytes: copyInspectionArtifactBytes(deterministic), used_assets: Object.freeze(usedAssets) }));
               if (!isRecord(raw) || !["complete", "refused", "unavailable", "timeout", "cancelled"].includes(raw.status)) {
                 throw new CreativeApiError("failed", operation, "inspection.observer_result");
@@ -2934,7 +2953,7 @@ export function createCreativeApi(options = {}) {
                   target_binding_sha256: canonicalHash(decisionRequest), signal });
                 const raw = await method(Object.freeze({ scope, actor_id: principal.actor_id, request: decisionRequest,
                   attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
-                  recordTransportAttempt, signal, deadline_at }));
+                  recordTransportAttempt, revalidateDispatch, signal, deadline_at }));
                 let checked;
                 try { checked = validateDecisionResult(decisionRequest, raw, { trustedScope: { ...trustedInspectionScope,
                   job_id: started.job_id } }); }
@@ -3040,7 +3059,7 @@ export function createCreativeApi(options = {}) {
                     target_binding_sha256: canonicalHash(builtRouteRequest), signal });
                   const raw = await method(Object.freeze({ scope, actor_id: principal.actor_id, request: builtRouteRequest,
                     attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
-                    recordTransportAttempt, signal, deadline_at }));
+                    recordTransportAttempt, revalidateDispatch, signal, deadline_at }));
                   let checked;
                   try { checked = validateDecisionResult(builtRouteRequest, raw, { trustedScope: { ...trustedInspectionScope,
                     job_id: started.job_id } }); }
@@ -3509,6 +3528,14 @@ export function createCreativeApi(options = {}) {
           !Array.isArray(job.result.telemetry_evidence) || job.result.telemetry_evidence.length !== job.result.attempt_ids.length) {
           throw new CreativeApiError("unavailable", request.operation, "stored_inspection.session");
         }
+        // Capabilities describe what can be dispatched now. Replay instead
+        // reconstructs the exact completed report from its persisted,
+        // hash-bound historical eligibility; current read rights are checked
+        // below and no provider or metering work is reopened.
+        const reportInput = job.result.report;
+        if (!isRecord(reportInput) || !Array.isArray(reportInput.eligible_repair_actions)) {
+          throw new CreativeApiError("unavailable", request.operation, "stored_inspection.report");
+        }
         const brief = await loadBrief(started.scope, request.payload.brief_id, request.operation);
         if (canonicalHash(brief) !== session.brief_hash) {
           throw new CreativeApiError("unavailable", request.operation, "stored_inspection.brief");
@@ -3555,7 +3582,7 @@ export function createCreativeApi(options = {}) {
           design_version: design, ...(parent ? { parent_design: parent, parent_design_hash: parent.design_hash } : {}),
           artifact_bytes: artifactBytes, used_assets: usedAssets, asset_use_evidence_status: assetUse.status,
           decoder_result: decoderResult,
-          eligible_repair_actions: ports.provider?.edit && ports.metering ? ["image.edit"] : [] });
+          eligible_repair_actions: reportInput.eligible_repair_actions });
         const subjectHash = canonicalInspectionSubjectHash(deterministic);
         const stageByName = new Map();
         for (const stage of session.stages) {
@@ -3677,7 +3704,6 @@ export function createCreativeApi(options = {}) {
             if (checkedRouteResult.status !== "complete") decisionAbstained = true;
           }
         }
-        const reportInput = job.result.report;
         if (!isRecord(reportInput) || reportInput.contract !== "CreativeInspectionReport" || reportInput.schema_version !== "1.0" ||
           !isRecord(reportInput.limits) || reportInput.subject_hash !== subjectHash) {
           throw new CreativeApiError("unavailable", request.operation, "stored_inspection.report");
