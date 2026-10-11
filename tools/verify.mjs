@@ -13,6 +13,8 @@ const CASES = Object.freeze({
   "content-privacy": ["tests/privacy", "tests/security/injection"],
   "evidence-facts": ["tests/evidence"],
   "pdf-derived-evidence": ["tests/evidence", "tests/extraction/pdf", "tests/integration/pdf-evidence"],
+  "asset-source-discovery": ["tests/brand-research", "tests/integration/asset-source/core"],
+  "asset-source-discovery-linux": ["tests/integration/asset-source/linux"],
   "deterministic-extraction": ["tests/extraction"],
   evals: ["tests/evals"],
   "research-api": ["tests/api"],
@@ -275,7 +277,7 @@ async function main() {
   const { caseName, mode } = selected;
   const modeAllowed = caseName === "eval-policy-unit"
     ? mode === "unit"
-    : caseName === "pdf-derived-evidence"
+    : caseName === "pdf-derived-evidence" || caseName === "asset-source-discovery-linux"
       ? mode === "linux-integration"
       : ["mock", "live"].includes(mode);
   if (!caseName || !Object.hasOwn(CASES, caseName) || !modeAllowed) {
@@ -294,7 +296,7 @@ async function main() {
     });
     return;
   }
-  if (caseName === "pdf-derived-evidence" && process.platform !== "linux") {
+  if (["pdf-derived-evidence", "asset-source-discovery-linux"].includes(caseName) && process.platform !== "linux") {
     printSummary({
       case: caseName,
       mode,
@@ -307,7 +309,7 @@ async function main() {
       terminal_cases: 0,
       skipped_cases: 0,
       provider_activity: "none",
-      reason: "the real isolated PDF-to-store integration requires Linux and cannot be counted as passed on another platform",
+      reason: "this actual legacy SQLite/PDF compatibility integration requires Linux and cannot be counted as passed on another platform",
     });
     return;
   }
@@ -334,6 +336,10 @@ async function main() {
   }
   if (caseName === "pdf-derived-evidence") {
     await executeMock(caseName, CASES[caseName], mode, "local PDF fixtures through the actual isolated reader and synthetic store adapters");
+    return;
+  }
+  if (caseName === "asset-source-discovery-linux") {
+    await executeMock(caseName, CASES[caseName], mode, "pinned merged-v2 evidence-store binary with real PDF bytes and the actual v3 SQLite migration path");
     return;
   }
   await executeMock(caseName, CASES[caseName]);

@@ -16,6 +16,13 @@ const ORGANIZATION_TYPES = new Set([
   "SportsOrganization",
   "WorkersUnion",
 ]);
+const decodedScalarValues = new WeakMap();
+
+export function decodedJsonLdScalarValue(candidate) {
+  return candidate !== null && typeof candidate === "object"
+    ? decodedScalarValues.get(candidate)
+    : undefined;
+}
 
 export function indexJsonDocument(source, { maxDepth, maxNodes }) {
   let value;
@@ -276,7 +283,10 @@ function collectScalarCandidates({
         property: leafName,
         suggestionOnly: ["@id", "url", "sameas", "mainentityofpage"].includes(leafName),
       });
-      if (candidate) candidates.push(candidate);
+      if (candidate) {
+        if (typeof item === "string") decodedScalarValues.set(candidate, item);
+        candidates.push(candidate);
+      }
       continue;
     }
 

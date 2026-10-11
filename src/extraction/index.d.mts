@@ -14,7 +14,7 @@ export type ExtractionStatus =
 
 export type ExtractionTermination = "CANCELED" | "RESOURCE_LIMIT" | "PARSER_DEADLINE" | null;
 export type CandidateValue = string | number | boolean | null;
-export type ExtractionSourceKind = "canonical" | "open-graph" | "jsonld" | "visible-text" | "noscript-signal";
+export type ExtractionSourceKind = "canonical" | "open-graph" | "jsonld" | "asset-source" | "visible-text" | "noscript-signal";
 
 export interface ExtractionTextRange {
   readonly kind: "text-range";
@@ -55,6 +55,31 @@ export interface ExtractionEntity {
     jsonPointer: string;
   }> | null;
   readonly candidates: readonly ExtractionCandidate[];
+}
+
+export type AssetSourceForm = "html-img-src" | "html-icon-link" | "open-graph-image" | "jsonld-image" | "jsonld-logo";
+
+export interface AssetSourceCandidate {
+  readonly candidate: ExtractionCandidate;
+  readonly sourceForm: AssetSourceForm;
+  readonly association:
+    | Readonly<{ kind: "unassigned-page" }>
+    | Readonly<{
+      kind: "entity-source-claim";
+      entityKind: "event" | "organization";
+      entityId: string;
+      blockIndex: number;
+      entityPointer: string;
+      assetPointer: string;
+    }>
+    | Readonly<{
+      kind: "nested-entity-source-claim";
+      parentEntityKind: "event";
+      parentEntityId: string;
+      roleHint: "organizer";
+      parentPointer: string;
+      assetPointer: string;
+    }>;
 }
 
 export interface ExtractionSource {
@@ -102,6 +127,7 @@ export interface ExtractionLimits {
   readonly maxVisibleTextBytes: number;
   readonly maxStatusSignalCandidates: number;
   readonly maxPageMetadataCandidates: number;
+  readonly maxAssetSources: number;
   readonly maxCanonicalSuggestions: number;
   readonly maxNoscriptNodes: number;
   readonly maxNoscriptSignals: number;
@@ -130,6 +156,9 @@ export interface ExtractionResult {
   readonly sourceHash: string | null;
   readonly canonicalSuggestions: readonly (ExtractionCandidate & { readonly urlSuggestion: string | null })[];
   readonly pageMetadata: readonly (ExtractionCandidate & { readonly property: string })[];
+  /** Static image URL claims found by the existing HTML/XHTML/JSON-LD parser. No assets are fetched. */
+  readonly assetSources: readonly AssetSourceCandidate[];
+  readonly assetSourcesTruncated: boolean;
   readonly events: readonly ExtractionEntity[];
   readonly organizations: readonly ExtractionEntity[];
   readonly visibleText: readonly ExtractionCandidate[];

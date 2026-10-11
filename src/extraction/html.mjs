@@ -29,6 +29,7 @@ const OPEN_GRAPH_FIELDS = new Map([
 const STATUS_TEXT = /\b(cancel(?:led|ed|lation)?|postpon(?:ed|ement)?|reschedul(?:ed|e|ing)|new date|date changed|moved to)\b/i;
 const ACCESS_TEXT = /\b(access denied|request blocked|you (?:have been|are) blocked|verify (?:that )?you are human|security challenge|unusual traffic|captcha)\b/i;
 const JS_REQUIRED_TEXT = /\b(?:javascript|js) (?:is )?(?:required|disabled|not enabled)|enable (?:javascript|js) to continue\b/i;
+const HTML_ASCII_WHITESPACE = /[\t\n\f\r ]/;
 const MOUNT_IDS = new Set(["root", "app", "__next", "__nuxt", "svelte"]);
 
 export function declaredCharsetFromHtmlDocument(htmlDocument, byteOffsetMap, maximumByteOffset = 2048) {
@@ -148,6 +149,7 @@ export async function collectHtmlEvidence({
 }) {
   const canonicalSuggestions = [];
   const pageMetadata = [];
+  const assetSources = [];
   const visibleText = [];
   const statusMentions = [];
   const accessSignals = [];
@@ -162,6 +164,7 @@ export async function collectHtmlEvidence({
   let resourceLimited = false;
   let visibleTextTruncated = false;
   let metadataTruncated = false;
+  let assetSourcesTruncated = false;
   let canonicalTruncated = false;
   let statusSignalsTruncated = false;
   let accessSignalsTruncated = false;
@@ -233,8 +236,9 @@ export async function collectHtmlEvidence({
     if (tagName === "link" && !insideTemplate) {
       const rel = attributeValue(node, "rel");
       if (rel && rel.toLowerCase().split(/\s+/).includes("canonical")) {
-        const href = attributeValue(node, "href");
-        const range = attributeValueRange(text, location, "href");
+        const hrefAttribute = attributeRecord(node, "href");
+        const href = hrefAttribute?.value;
+        const range = attributeValueRange(text, location, "href", href, attributeSourceName(hrefAttribute));
         if (href !== undefined && range) {
           const candidate = makeHtmlAttributeCandidate({
             field: "canonical.url",
@@ -265,8 +269,9 @@ export async function collectHtmlEvidence({
     } else if (tagName === "meta" && !insideTemplate) {
       const property = (attributeValue(node, "property") ?? attributeValue(node, "name") ?? "").trim().toLowerCase();
       const field = OPEN_GRAPH_FIELDS.get(property);
-      const content = attributeValue(node, "content");
-      const range = attributeValueRange(text, location, "content");
+      const contentAttribute = attributeRecord(node, "content");
+      const content = contentAttribute?.value;
+      const range = attributeValueRange(text, location, "content", content, attributeSourceName(contentAttribute));
       if (field && content !== undefined && range) {
         const candidate = makeHtmlAttributeCandidate({
           field: "openGraph." + field,
@@ -280,13 +285,31 @@ export async function collectHtmlEvidence({
           suggestionOnly: ["og:url", "og:image", "og:image:url", "og:image:secure_url"].includes(property),
         });
         if (candidate && pageMetadata.length < limits.maxPageMetadataCandidates) {
-          pageMetadata.push(Object.freeze({
+          const pageCandidate = Object.freeze({
             ...candidate,
             property,
             ...(field === "url" || field === "image"
               ? { urlSuggestion: resolveUrlSuggestion(content, document.url) }
               : {}),
-          }));
+          });
+          pageMetadata.push(pageCandidate);
+          if (field === "image") {
+            if (assetSources.length < limits.maxAssetSources) {
+              assetSources.push(makeHtmlAssetSource(
+                pageCandidate,
+                "open-graph-image",
+                content,
+                Object.freeze({ kind: "unassigned-page" }),
+                htmlEmptyAttributeToken({
+                  text, sourceBytes, byteOffsetMap, range, attributeName: "content", decodedValue: content,
+                }),
+              ));
+            } else if (!assetSourcesTruncated) {
+              addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
+              assetSourcesTruncated = true;
+              resourceLimited = true;
+            }
+          }
         } else if (candidate && !metadataTruncated) {
           addDiagnostic(diagnostics, limits, "PAGE_METADATA_LIMIT", null);
           metadataTruncated = true;
@@ -310,6 +333,82 @@ export async function collectHtmlEvidence({
           }));
         }
         else if (!span) addDiagnostic(diagnostics, limits, "JSONLD_SCRIPT_POSITION_UNAVAILABLE", null);
+      }
+    }
+
+    if (tagName === "img" && !insideTemplate) {
+      const srcAttribute = attributeRecord(node, "src");
+      const src = srcAttribute?.value;
+      const range = attributeValueRange(text, location, "src", src, attributeSourceName(srcAttribute));
+      if (src !== undefined && range) {
+        const candidate = makeHtmlAttributeCandidate({
+          field: "img.src",
+          kind: "asset-source",
+          text,
+          sourceBytes,
+          byteOffsetMap,
+          range,
+          decodedValue: src,
+          property: "src",
+          suggestionOnly: true,
+        });
+        if (candidate && assetSources.length < limits.maxAssetSources) {
+          assetSources.push(makeHtmlAssetSource(
+            Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(src, document.url) }),
+            "html-img-src",
+            src,
+            Object.freeze({ kind: "unassigned-page" }),
+            htmlEmptyAttributeToken({
+              text, sourceBytes, byteOffsetMap, range, attributeName: "src", decodedValue: src,
+            }),
+          ));
+        } else if (candidate && !assetSourcesTruncated) {
+          addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
+          assetSourcesTruncated = true;
+          resourceLimited = true;
+        } else if (!candidate) {
+          addDiagnostic(diagnostics, limits, "SOURCE_POSITION_UNAVAILABLE", null);
+        }
+      }
+    }
+
+    if (tagName === "link" && !insideTemplate) {
+      const relTokens = (attributeValue(node, "rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+      const iconRelation = ["icon", "apple-touch-icon", "mask-icon"].find((value) => relTokens.includes(value));
+      const isShortcutIcon = relTokens.includes("shortcut") && relTokens.includes("icon");
+      const hrefAttribute = attributeRecord(node, "href");
+      const href = hrefAttribute?.value;
+      const range = attributeValueRange(text, location, "href", href, attributeSourceName(hrefAttribute));
+      if ((iconRelation || isShortcutIcon) && href !== undefined && range) {
+        const relation = iconRelation ?? "shortcut-icon";
+        const candidate = makeHtmlAttributeCandidate({
+          field: "link.icon.href",
+          kind: "asset-source",
+          text,
+          sourceBytes,
+          byteOffsetMap,
+          range,
+          decodedValue: href,
+          property: relation,
+          suggestionOnly: true,
+        });
+        if (candidate && assetSources.length < limits.maxAssetSources) {
+          assetSources.push(makeHtmlAssetSource(
+            Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(href, document.url) }),
+            "html-icon-link",
+            href,
+            Object.freeze({ kind: "unassigned-page" }),
+            htmlEmptyAttributeToken({
+              text, sourceBytes, byteOffsetMap, range, attributeName: "href", decodedValue: href,
+            }),
+          ));
+        } else if (candidate && !assetSourcesTruncated) {
+          addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
+          assetSourcesTruncated = true;
+          resourceLimited = true;
+        } else if (!candidate) {
+          addDiagnostic(diagnostics, limits, "SOURCE_POSITION_UNAVAILABLE", null);
+        }
       }
     }
 
@@ -390,6 +489,8 @@ export async function collectHtmlEvidence({
   return {
     canonicalSuggestions,
     pageMetadata,
+    assetSources,
+    assetSourcesTruncated,
     visibleText,
     statusMentions,
     accessSignals,
@@ -427,6 +528,15 @@ function makeHtmlAttributeCandidate({
   });
 }
 
+function makeHtmlAssetSource(candidate, sourceForm, urlPolicyValue, association, emptyAttributeToken = null) {
+  const source = { candidate, sourceForm, association };
+  Object.defineProperty(source, "urlPolicyValue", { value: urlPolicyValue, enumerable: false });
+  if (emptyAttributeToken) {
+    Object.defineProperty(source, "emptyAttributeToken", { value: emptyAttributeToken, enumerable: false });
+  }
+  return Object.freeze(source);
+}
+
 function makeHtmlTextCandidate({
   field,
   text,
@@ -448,33 +558,105 @@ function makeHtmlTextCandidate({
   });
 }
 
-function attributeValue(node, name) {
-  return node.attrs?.find((attribute) => attribute.name.toLowerCase() === name)?.value;
+function attributeRecord(node, name) {
+  const attributes = node?.attrs ?? [];
+  // XHTML keeps the original case-sensitive XML name in `sourceName`. Prefer
+  // the standardized lowercase name when both it and a case variant exist;
+  // if only a case variant exists, keep the historical compatibility alias.
+  // HTML parser attributes have no sourceName and retain parse5's first match.
+  return attributes.find((attribute) => attribute.sourceName === name)
+    ?? attributes.find((attribute) => attribute.name.toLowerCase() === name);
 }
 
-function attributeValueRange(text, elementLocation, attributeName) {
-  const location = elementLocation?.attrs?.[attributeName];
+function attributeValue(node, name) {
+  return attributeRecord(node, name)?.value;
+}
+
+function attributeSourceName(attribute) {
+  return attribute?.sourceName ?? attribute?.name;
+}
+
+function attributeValueRange(text, elementLocation, attributeName, decodedValue, sourceAttributeName = attributeName) {
+  const location = elementLocation?.attrs?.[sourceAttributeName];
   if (!location || !Number.isInteger(location.startOffset) || !Number.isInteger(location.endOffset)) return null;
   const startOffset = location.startOffset;
   const raw = text.slice(startOffset, location.endOffset);
   let cursor = 0;
-  while (cursor < raw.length && !/[\s=/>]/.test(raw[cursor])) cursor += 1;
+  while (cursor < raw.length && !/[\t\n\f\r =/>]/.test(raw[cursor])) cursor += 1;
   if (raw.slice(0, cursor).toLowerCase() !== attributeName.toLowerCase()) return null;
-  while (/\s/.test(raw[cursor] ?? "")) cursor += 1;
-  if (raw[cursor] !== "=") return { startOffset: location.endOffset, endOffset: location.endOffset };
+  while (HTML_ASCII_WHITESPACE.test(raw[cursor] ?? "")) cursor += 1;
+  if (raw[cursor] !== "=") {
+    // parse5 may end the attribute source location at its name for an
+    // unquoted empty value (`src=`). Inspect only the adjacent attribute
+    // syntax so the empty value point follows `=` and the token includes it.
+    let equalsOffset = location.endOffset;
+    while (/[\t\n\f\r ]/.test(text[equalsOffset] ?? "")) equalsOffset += 1;
+    if (decodedValue === "" && text[equalsOffset] === "="
+      && Number.isInteger(elementLocation.endOffset) && equalsOffset < elementLocation.endOffset) {
+      const valueOffset = equalsOffset + 1;
+      return {
+        startOffset: valueOffset,
+        endOffset: valueOffset,
+        tokenStartOffset: location.startOffset,
+        tokenEndOffset: equalsOffset + 1,
+        valueState: "empty",
+      };
+    }
+    return {
+      startOffset: location.endOffset,
+      endOffset: location.endOffset,
+      tokenStartOffset: location.startOffset,
+      tokenEndOffset: location.endOffset,
+      valueState: "missing",
+    };
+  }
+  const equalsOffset = startOffset + cursor;
   cursor += 1;
-  while (/\s/.test(raw[cursor] ?? "")) cursor += 1;
+  while (HTML_ASCII_WHITESPACE.test(raw[cursor] ?? "")) cursor += 1;
   const quote = raw[cursor] === '"' || raw[cursor] === "'" ? raw[cursor] : null;
   if (quote !== null) {
     cursor += 1;
     const valueStart = cursor;
     while (cursor < raw.length && raw[cursor] !== quote) cursor += 1;
     if (cursor >= raw.length) return null;
-    return { startOffset: startOffset + valueStart, endOffset: startOffset + cursor };
+    return {
+      startOffset: startOffset + valueStart,
+      endOffset: startOffset + cursor,
+      tokenStartOffset: location.startOffset,
+      tokenEndOffset: location.endOffset,
+      valueState: valueStart === cursor ? "empty" : "value",
+    };
   }
   const valueStart = cursor;
-  while (cursor < raw.length && !/[\s>]/.test(raw[cursor])) cursor += 1;
-  return { startOffset: startOffset + valueStart, endOffset: startOffset + cursor };
+  while (cursor < raw.length && !/[\t\n\f\r >]/.test(raw[cursor])) cursor += 1;
+  if (valueStart === cursor) {
+    return {
+      startOffset: equalsOffset + 1,
+      endOffset: equalsOffset + 1,
+      tokenStartOffset: location.startOffset,
+      tokenEndOffset: equalsOffset + 1,
+      valueState: "empty",
+    };
+  }
+  return {
+    startOffset: startOffset + valueStart,
+    endOffset: startOffset + cursor,
+    tokenStartOffset: location.startOffset,
+    tokenEndOffset: location.endOffset,
+    valueState: valueStart === cursor ? "empty" : "value",
+  };
+}
+
+function htmlEmptyAttributeToken({ text, sourceBytes, byteOffsetMap, range, attributeName, decodedValue }) {
+  if (!range || decodedValue !== "" || range.startOffset !== range.endOffset
+    || !["missing", "empty"].includes(range.valueState)) return null;
+  const token = exactRange(text, sourceBytes, byteOffsetMap, range.tokenStartOffset, range.tokenEndOffset);
+  if (!token) return null;
+  return Object.freeze({
+    attributeName,
+    valueState: range.valueState,
+    locator: token.locator,
+  });
 }
 
 function scriptContentSpan(location) {
