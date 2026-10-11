@@ -7,7 +7,12 @@ from typing import assert_never
 
 import pytest
 
-from component_tests.retrieval_wire_checks import Capture, Mutation, assert_observed_outcome
+from component_tests.retrieval_resolver_checks import (
+    Mutation,
+    assert_resolver_inputs,
+    mutate_resolver,
+)
+from component_tests.retrieval_wire_checks import Capture, assert_observed_outcome
 from integration_evals.artifacts import digest, load_record, read_bytes
 from integration_evals.errors import fail
 from integration_evals.execution import Settings
@@ -105,6 +110,8 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
             guard = '        if (encoded > wireMaximum) throw new RetrievalError("RESOURCE_LIMIT");'
             assert original.count(guard) == 1
             changed = original.replace(guard, "", 1)
+        case "cached-resolution" | "first-answer-only" | "unchecked-alias" | "unchecked-ip-alias":
+            changed = mutate_resolver(original, mutation)
         case _:
             assert_never(mutation)
     if changed != original:
@@ -122,7 +129,17 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
 
 
 @pytest.mark.parametrize(
-    "mutation", ["baseline", "always-reject", "unchecked-private", "unchecked-wire"]
+    "mutation",
+    [
+        "baseline",
+        "always-reject",
+        "unchecked-private",
+        "unchecked-wire",
+        "cached-resolution",
+        "first-answer-only",
+        "unchecked-alias",
+        "unchecked-ip-alias",
+    ],
 )
 def test_real_retrieval_component_archives_observed_boundary(
     retrieval_workspace: Path, mutation: Mutation
@@ -157,6 +174,7 @@ def test_real_retrieval_component_archives_observed_boundary(
     assert capture.network_namespace != str(Path("/proc/self/ns/net").readlink())
     assert capture.uncovered
     assert_observed_outcome(selected, capture, mutation)
+    assert_resolver_inputs(capture.resolver_inputs, mutation)
     original_archive = read_bytes(archive / "run.json")
     with pytest.raises(FileExistsError):
         _ = save_run(run, retrieval_workspace / "reports", tracker, suite, settings.artifacts)

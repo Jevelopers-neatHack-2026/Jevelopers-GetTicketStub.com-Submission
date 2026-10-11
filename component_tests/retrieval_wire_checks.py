@@ -2,10 +2,9 @@ from typing import ClassVar, Literal, assert_never
 
 from pydantic import ConfigDict
 
+from component_tests.retrieval_resolver_checks import Mutation, ResolverCapture
 from integration_evals.artifacts import digest
 from integration_evals.models import CaseResult, Digest, Outcome, Record
-
-type Mutation = Literal["baseline", "always-reject", "unchecked-private", "unchecked-wire"]
 
 
 class Attempt(Record):
@@ -51,6 +50,7 @@ class Capture(Record):
     rows: tuple[Attempt, ...]
     uncovered: tuple[str, ...]
     chunked_wire: WireCapture
+    resolver_inputs: ResolverCapture
 
 
 def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mutation) -> None:
@@ -81,7 +81,13 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
         case "unchecked-private":
             assert selected.outcome is Outcome.FAILED
             assert any(row.protected_connections > 0 for row in capture.rows)
-        case "unchecked-wire":
+        case (
+            "unchecked-wire"
+            | "cached-resolution"
+            | "first-answer-only"
+            | "unchecked-alias"
+            | "unchecked-ip-alias"
+        ):
             assert selected.outcome is Outcome.FAILED
         case _:
             assert_never(mutation)
@@ -104,7 +110,14 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
             assert over_limit.code == "accepted"
             assert over_limit.returned_bytes == limit + 1
             assert over_limit.returned_sha256 == over_limit.fixture_sha256
-        case "baseline" | "unchecked-private":
+        case (
+            "baseline"
+            | "unchecked-private"
+            | "cached-resolution"
+            | "first-answer-only"
+            | "unchecked-alias"
+            | "unchecked-ip-alias"
+        ):
             assert wire.passed is True
             assert over_limit.code == "RESOURCE_LIMIT"
             assert over_limit.returned_bytes is None

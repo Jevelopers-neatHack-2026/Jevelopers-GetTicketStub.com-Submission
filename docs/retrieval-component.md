@@ -63,7 +63,8 @@ transport containment.
 
 `redirects_checked` requires a successful positive transport control, rejected
 negative calls, no protected fixture connection, a received redirect response that
-is rejected before the protected endpoint, and the actual redirect-limit error.
+is rejected before the protected endpoint, the actual redirect-limit error, and
+all injected resolver-input redirect checks described below.
 `resource_limits_enforced` is limited to declared wire length, chunked identity
 body bytes, actual gzip decoded bytes, and per-instance request count, each with
 the required typed error and fixture counters. It is not a claim about all resource
@@ -78,8 +79,21 @@ are observed before forced fixture cleanup. These counts cover only those fixtur
 servers. The wire cap counts encoded body bytes, excluding HTTP framing; it does
 not establish packet-level byte counts, wire DNS/TLS behavior or external egress.
 
-Uncovered obligations remain explicit in every artifact: DNS wire/rebinding/CNAME
-and mixed answers; deadlines, concurrency, gzip encoded-body and aggregate byte caps;
+`resolver_inputs` exercises same-host relative redirects through the owner's
+`localTestSeam` resolver hook. The safe-alias control requires two resolver calls,
+two incoming HTTP requests/connections, and exact returned bytes/SHA256. Four
+negative cases change only the second injected result: private address, mixed
+fixture/private addresses, metadata alias, or IP-shaped alias. They require the
+actual typed rejection, two resolver calls, one received redirect request and no
+final-hop request/connection. Every accepted connection must close naturally before
+forced fixture cleanup. Counts cover each dedicated task-local server only.
+Sanitized profiles and address/alias counts identify the injected metadata; raw
+hostnames/addresses are not retained. A safe alias is validated as metadata; it is
+not followed by another DNS query. No public address is remapped onto local transport.
+
+Uncovered obligations remain explicit in every artifact: wire DNS, TTL rebinding,
+actual CNAME following and mixed wire-DNS answers; deadlines, concurrency,
+gzip encoded-body and aggregate byte caps;
 TLS/production networking; image/PDF and downstream parser limits; real rejection
 handoff into research, JEV or creative; and authoritative external egress capture.
 IE-11A.AC3 content-authority containment is a separate unchanged case. A passing
@@ -90,12 +104,18 @@ blocked. All unselected original cases remain planned, not implicitly passed.
 
 The separately invoked `component_tests` suite uses actual `execute` and `save_run`
 with clean owned snapshots and all 42 original cases. It compares a real baseline
-with three deliberately weakened owned copies: an always-reject fetcher, unchecked
+with seven deliberately weakened owned copies: an always-reject fetcher, unchecked
 loopback fetching, and removal of only the identity-body streaming wire counter.
 The positive control detects always-reject behavior; incoming protected server
 counters detect unchecked loopback fetching. The wire-counter mutation must accept
 the oversized body with its exact bytes/hash and fail the resource observation.
 The Content-Length, gzip, decoded and aggregate guards remain intact in that copy.
+Four resolver mutations independently reuse the first resolution across redirects,
+validate only the first answer, remove the alias hostname guard, or remove the
+IP-alias guard. The first reuses the safe fixture answer; the others expose failures
+by reaching the local final-hop fixture. Injected private/alias addresses are never
+used as replacement transport destinations. Each mutation must fail its resolver
+observation and the component while retaining the other controls.
 Original producer checkouts stay unchanged.
 
 ```sh
