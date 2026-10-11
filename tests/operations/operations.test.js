@@ -114,6 +114,10 @@ const CI1_PARENT_PHASE_STAGES = new Set([
 ]);
 const CI1_MAX_PHASE_RECORDS = 256;
 const CI1_MAX_PHASE_BYTES = 24_576;
+const CI1_TEMP_CUSTODY_SCHEMA = 'ops-ci1-temp-custody.v1';
+const CI1_TEMP_CUSTODY_MAX_BYTES = 8_192;
+const CI1_TEMP_CUSTODY_MAX_LAUNCHES = 16;
+const CI1_TEMP_CUSTODY_GROUP_PROBE_MS = 300;
 const CI1_LOCAL_WATCHDOG_POLL_MS = 20;
 const CI1_LOCAL_WATCHDOG_SIGNAL_PHASE_MS = 500;
 const CI1_LOCAL_WATCHDOG_RESULT_CLOSE_MARGIN_MS = 1_000;
@@ -379,11 +383,197 @@ async function executeCi1ChildWithFinalization(execute, finalize, state = METRIC
   return { execution, finalization };
 }
 
-function tempDirectory(prefix = 'ah11-ops-') {
+function ci1TemporaryCustody(directory) {
+  return { directory, launches: new Map(), sidecarPath: null };
+}
+
+function ci1TemporaryCustodyPath(custody) {
+  const registryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+  if (typeof registryPath !== 'string' || registryPath.length === 0 || !custody) return null;
+  const directoryTag = createHash('sha256').update(custody.directory).digest('hex').slice(0, 16);
+  return `${registryPath}.temp-custody.${process.pid}.${directoryTag}.json`;
+}
+
+function writeCi1TemporaryCustody(custody) {
+  if (!custody) return true;
+  const sidecarPath = custody.sidecarPath ?? ci1TemporaryCustodyPath(custody);
+  if (!sidecarPath) return false;
+  custody.sidecarPath = sidecarPath;
+  const launches = [...custody.launches.values()].map(launch => ({
+    launchToken: launch.launchToken,
+    status: launch.status,
+    spawnAttempted: launch.spawnAttempted === true,
+    directPid: Number.isSafeInteger(launch.directPid) ? launch.directPid : null,
+    groupId: Number.isSafeInteger(launch.groupId) ? launch.groupId : null,
+    registryRegistered: launch.registryRegistered === true,
+    registryCleared: launch.registryCleared === true,
+    groupAbsent: launch.groupAbsent === true
+  })).sort((left, right) => left.launchToken.localeCompare(right.launchToken));
+  if (launches.length > CI1_TEMP_CUSTODY_MAX_LAUNCHES) return false;
+  if (launches.length === 0) {
+    try { rmSync(sidecarPath, { force: true }); return true; } catch { return false; }
+  }
+  const bytes = Buffer.from(`${JSON.stringify({
+    schema: CI1_TEMP_CUSTODY_SCHEMA,
+    ownerPid: process.pid,
+    directory: custody.directory,
+    launches
+  })}\n`, 'utf8');
+  if (bytes.byteLength > CI1_TEMP_CUSTODY_MAX_BYTES) return false;
+  const temporaryPath = `${sidecarPath}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, bytes, { flag: 'wx', mode: 0o600 });
+    renameSync(temporaryPath, sidecarPath);
+    return true;
+  } catch {
+    try { rmSync(temporaryPath, { force: true }); } catch {}
+    return false;
+  }
+}
+
+function markCi1OwnedGroupSpawnAttempt(custody, launchToken, persist = writeCi1TemporaryCustody) {
+  const launch = custody?.launches.get(launchToken);
+  if (!launch) return false;
+  const previousStatus = launch.status;
+  launch.spawnAttempted = true;
+  launch.status = 'spawn_attempted';
+  let written = false;
+  try { written = persist(custody) === true; } catch {}
+  if (written) return true;
+  launch.spawnAttempted = false;
+  launch.status = previousStatus;
+  return false;
+}
+
+function rememberCi1OwnedGroupChild(custody, launchToken, child, closed) {
+  const launch = custody?.launches.get(launchToken);
+  if (!launch || !Number.isSafeInteger(child?.pid) || child.pid < 2) return false;
+  launch.directPid = child.pid;
+  launch.child = child;
+  launch.closed = closed;
+  launch.status = 'child_spawned';
+  return writeCi1TemporaryCustody(custody);
+}
+
+function finishCi1OwnedGroupAfterAbsence(groupId, launchToken, custody = null) {
+  if (!updateCi1OwnedGroupRegistry(groupId, false, launchToken)) return false;
+  const launch = custody?.launches.get(launchToken);
+  if (!launch) return true;
+  launch.groupAbsent = true;
+  launch.registryCleared = true;
+  launch.status = 'group_absent';
+  return writeCi1TemporaryCustody(custody);
+}
+
+function removeCi1TemporarySidecar(custody) {
+  if (!custody?.sidecarPath) return true;
+  try { rmSync(custody.sidecarPath, { force: true }); return true; } catch { return false; }
+}
+
+async function cleanupCi1OwnedTemporaryDirectory(temporary, overrides = {}) {
+  const custody = temporary?.ci1Custody;
+  const state = overrides.state ?? METRICS;
+  if (!custody) {
+    try { rmSync(temporary.directory, { recursive: true, force: true }); return true; }
+    catch { state.ci1PhaseCaptureIncomplete = true; return false; }
+  }
+  const probeGroupEmpty = overrides.probeGroupEmpty
+    ?? (groupId => waitForOwnedProcessGroupEmpty(groupId, CI1_TEMP_CUSTODY_GROUP_PROBE_MS));
+  const removeDirectory = overrides.removeDirectory
+    ?? (directory => rmSync(directory, { recursive: true, force: true }));
+  const removeRegistryLaunch = overrides.removeRegistryLaunch
+    ?? ((groupId, launchToken) => updateCi1OwnedGroupRegistry(groupId, false, launchToken));
+  const cancelPendingLaunch = overrides.cancelPendingLaunch ?? cancelCi1OwnedGroupLaunch;
+  const persist = overrides.persist ?? writeCi1TemporaryCustody;
+  let incomplete = false;
+  for (const launch of [...custody.launches.values()]) {
+    if (launch.groupId === null && launch.spawnAttempted !== true) {
+      let cancelled = launch.registryCleared === true;
+      if (!cancelled) {
+        try { cancelled = cancelPendingLaunch(launch.launchToken); } catch {}
+      }
+      if (!cancelled) {
+        launch.status = 'pending_removal_unconfirmed';
+        incomplete = true;
+        continue;
+      }
+      launch.registryCleared = true;
+      launch.status = 'launch_cancelled';
+      custody.launches.delete(launch.launchToken);
+      if (!persist(custody)) {
+        launch.status = 'cancelled_custody_removal_unconfirmed';
+        custody.launches.set(launch.launchToken, launch);
+        incomplete = true;
+      }
+      continue;
+    }
+    if (!Number.isSafeInteger(launch.groupId) || launch.groupId < 2) {
+      let verifiedGroupId = null;
+      if (launch.child && launch.directPid === launch.child.pid) {
+        try { verifiedGroupId = await verifyOwnedProcessGroup(launch.child, CI1_TEMP_CUSTODY_GROUP_PROBE_MS); } catch {}
+      }
+      if (verifiedGroupId === launch.directPid) {
+        launch.groupId = verifiedGroupId;
+        launch.status = 'group_verified_during_cleanup';
+        if (!persist(custody)) {
+          incomplete = true;
+          continue;
+        }
+      } else {
+        launch.status = 'group_unverified';
+        incomplete = true;
+        continue;
+      }
+    }
+    let groupEmpty = false;
+    try { groupEmpty = await probeGroupEmpty(launch.groupId); } catch { groupEmpty = false; }
+    if (!groupEmpty) {
+      launch.status = 'group_unconfirmed';
+      incomplete = true;
+      continue;
+    }
+    launch.groupAbsent = true;
+    if (!launch.registryCleared) {
+      let removed = false;
+      try { removed = removeRegistryLaunch(launch.groupId, launch.launchToken); } catch {}
+      if (!removed) {
+        launch.status = 'registry_removal_unconfirmed';
+        incomplete = true;
+        continue;
+      }
+      launch.registryCleared = true;
+    }
+    launch.status = 'group_absent';
+    if (!persist(custody)) incomplete = true;
+    else custody.launches.delete(launch.launchToken);
+  }
+  if (custody.launches.size > 0) {
+    state.ci1PhaseCaptureIncomplete = true;
+    state.ci1PhaseCaptureOwnedGroupCloseUnconfirmed = true;
+    try { persist(custody); } catch {}
+    return false;
+  }
+  if (incomplete) state.ci1PhaseCaptureIncomplete = true;
+  try { removeDirectory(temporary.directory); }
+  catch {
+    state.ci1PhaseCaptureIncomplete = true;
+    state.ci1PhaseCaptureOwnedGroupCloseUnconfirmed = true;
+    return false;
+  }
+  if (!removeCi1TemporarySidecar(custody)) {
+    state.ci1PhaseCaptureIncomplete = true;
+    return false;
+  }
+  return !incomplete;
+}
+
+function tempDirectory(prefix = 'ah11-ops-', options = {}) {
   const directory = mkdtempSync(join(tmpdir(), prefix));
+  const custody = options.ci1OwnedGroups === true ? ci1TemporaryCustody(directory) : null;
   return {
     directory,
     databasePath: join(directory, 'workflow.sqlite'),
+    ci1Custody: custody,
     cleanup() { rmSync(directory, { recursive: true, force: true }); }
   };
 }
@@ -1068,20 +1258,56 @@ function writeCi1OwnedGroupRegistry(registryPath, registry) {
   }
 }
 
-function beginCi1OwnedGroupLaunch(launchToken) {
+function beginCi1OwnedGroupLaunch(launchToken, custody = null) {
   const registryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
-  if (!registryPath) return true;
+  if (!registryPath) return false;
   if (typeof launchToken !== 'string'
       || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(launchToken)) return false;
   const registry = readCi1OwnedGroupRegistry(registryPath);
   if (!registry || registry.pendingLaunches.length >= 16) return false;
   if (!registry.pendingLaunches.includes(launchToken)) registry.pendingLaunches.push(launchToken);
+  if (custody) {
+    if (custody.launches.size >= CI1_TEMP_CUSTODY_MAX_LAUNCHES || custody.launches.has(launchToken)) return false;
+    custody.launches.set(launchToken, {
+      launchToken, status: 'launch_intent', spawnAttempted: false,
+      directPid: null, groupId: null, registryRegistered: false,
+      registryCleared: false, groupAbsent: false
+    });
+    if (!writeCi1TemporaryCustody(custody)) {
+      custody.launches.delete(launchToken);
+      return false;
+    }
+  }
+  if (!writeCi1OwnedGroupRegistry(registryPath, registry)) {
+    if (custody) {
+      custody.launches.delete(launchToken);
+      writeCi1TemporaryCustody(custody);
+    }
+    return false;
+  }
+  return true;
+}
+
+function cancelCi1OwnedGroupLaunch(launchToken) {
+  const registryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+  if (!registryPath || typeof launchToken !== 'string') return false;
+  const registry = readCi1OwnedGroupRegistry(registryPath);
+  if (!registry || !registry.pendingLaunches.includes(launchToken)) return false;
+  registry.pendingLaunches = registry.pendingLaunches.filter(token => token !== launchToken);
   return writeCi1OwnedGroupRegistry(registryPath, registry);
+}
+
+function markCi1OwnedGroupRegistered(custody, launchToken, groupId) {
+  const launch = custody?.launches.get(launchToken);
+  if (!launch || launch.groupId !== groupId) return false;
+  launch.registryRegistered = true;
+  launch.status = 'group_registered';
+  return writeCi1TemporaryCustody(custody);
 }
 
 function updateCi1OwnedGroupRegistry(groupId, register, launchToken = null) {
   const registryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
-  if (!registryPath) return true;
+  if (!registryPath) return false;
   if (!Number.isSafeInteger(groupId) || groupId < 2) return false;
   const registry = readCi1OwnedGroupRegistry(registryPath);
   if (!registry) return false;
@@ -1106,12 +1332,37 @@ async function verifyRegisterCi1OwnedGroupBeforeReady({
   child, launchToken, readyPath,
   verifyGroup = verifyOwnedProcessGroup,
   registerGroup = updateCi1OwnedGroupRegistry,
-  releaseReady = (path, ready) => writeFileSync(path, JSON.stringify(ready), { flag: 'wx', mode: 0o600 })
+  releaseReady = (path, ready) => writeFileSync(path, JSON.stringify(ready), { flag: 'wx', mode: 0o600 }),
+  custody = null,
+  closed = null
 }) {
+  const launch = custody?.launches.get(launchToken);
+  if (custody) {
+    if (!launch || launch.spawnAttempted !== true) {
+      return { groupId: null, registered: false, readyReleased: false, stage: 'custody_missing' };
+    }
+    launch.child = child;
+    launch.closed = closed;
+    launch.directPid = child.pid;
+    launch.status = 'child_spawned';
+    if (!writeCi1TemporaryCustody(custody)) {
+      return { groupId: null, registered: false, readyReleased: false, stage: 'custody_record_failed' };
+    }
+  }
   const groupId = await verifyGroup(child);
   if (groupId !== child.pid) return { groupId: null, registered: false, readyReleased: false, stage: 'group_unverified' };
+  if (launch) {
+    launch.groupId = groupId;
+    launch.status = 'group_verified';
+    if (!writeCi1TemporaryCustody(custody)) {
+      return { groupId, registered: false, readyReleased: false, stage: 'custody_record_failed' };
+    }
+  }
   const registered = registerGroup(groupId, true, launchToken);
   if (!registered) return { groupId, registered: false, readyReleased: false, stage: 'registration_failed' };
+  if (launch && !markCi1OwnedGroupRegistered(custody, launchToken, groupId)) {
+    return { groupId, registered: true, readyReleased: false, stage: 'custody_record_failed' };
+  }
   try {
     await releaseReady(readyPath, {
       schema: 'ops-ci1-group-ready.v1', pid: child.pid,
@@ -1119,6 +1370,12 @@ async function verifyRegisterCi1OwnedGroupBeforeReady({
     });
   } catch {
     return { groupId, registered: true, readyReleased: false, stage: 'ready_release_failed' };
+  }
+  if (launch) {
+    launch.status = 'ready_released';
+    if (!writeCi1TemporaryCustody(custody)) {
+      return { groupId, registered: true, readyReleased: true, stage: 'custody_record_failed' };
+    }
   }
   return { groupId, registered: true, readyReleased: true, stage: 'ready' };
 }
@@ -2465,8 +2722,8 @@ test('OPS03_FAIRNESS_BACKPRESSURE protects a second tenant and persists hierarch
 });
 
 test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport boundary without a second transport', async t => {
-  const temporary = tempDirectory('ah11-jev-sigterm-');
-  t.after(() => temporary.cleanup());
+  const temporary = tempDirectory('ah11-jev-sigterm-', { ci1OwnedGroups: true });
+  t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(temporary); });
   const store = openStore(temporary.databasePath);
   store.close();
   const phases = [
@@ -2519,7 +2776,10 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const phaseCapturePath = `${metricsPath}.${role}.phases.jsonl`;
     const groupReadyPath = `${metricsPath}.${role}.group-ready.json`;
     const launchToken = randomUUID();
-    assert.equal(beginCi1OwnedGroupLaunch(launchToken), true, `${phase}/${role} launch intent is recorded before spawn`);
+    assert.equal(beginCi1OwnedGroupLaunch(launchToken, temporary.ci1Custody), true,
+      `${phase}/${role} launch intent and exact temp directory are recorded before spawn`);
+    assert.equal(markCi1OwnedGroupSpawnAttempt(temporary.ci1Custody, launchToken), true,
+      `${phase}/${role} spawn attempt is recorded before detached launch`);
     const child = spawn(process.execPath, [
       join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
       temporary.databasePath, phase, marker, resultPath, metricsPath, role,
@@ -2542,6 +2802,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       closeResult = { code, signal };
       resolvePromise(closeResult);
     }));
+    rememberCi1OwnedGroupChild(temporary.ci1Custody, launchToken, child, closed);
     let durationMs = null;
     let childResult;
     let ownedGroupId = null;
@@ -2549,13 +2810,15 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       const cleanup = await cleanupVerifiedCi1ProcessGroup(
         child, closed, ownedGroupId, stage => captureParentPhase(phase, role, stage)
       );
-      if (cleanup.groupEmpty && !updateCi1OwnedGroupRegistry(child.pid, false, launchToken)) {
+      if (cleanup.groupEmpty && !finishCi1OwnedGroupAfterAbsence(child.pid, launchToken, temporary.ci1Custody)) {
         METRICS.ci1PhaseCaptureIncomplete = true;
       }
       return cleanup;
     };
     const lifecycle = await executeCi1ChildWithFinalization(async () => {
-      const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({ child, launchToken, readyPath: groupReadyPath });
+      const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({
+        child, launchToken, readyPath: groupReadyPath, custody: temporary.ci1Custody, closed
+      });
       ownedGroupId = ownership.groupId;
       assert.equal(ownership.stage, 'ready', `${phase}/${role} group verification, registration, or gate release failed`);
       captureParentPhase(phase, role, `${role}_spawned`);
@@ -2703,15 +2966,18 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     }
   });
   await t.test('OPS04.C02 fixture assertion failure after pausing the owned runner executes bounded finally cleanup', async t => {
-    const failureDir = tempDirectory('ah11-jev-fixture-failure-');
-    t.after(() => failureDir.cleanup());
+    const failureDir = tempDirectory('ah11-jev-fixture-failure-', { ci1OwnedGroups: true });
+    t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(failureDir); });
     const markerDirectory = join(failureDir.directory, 'marker-is-a-directory');
     mkdirSync(markerDirectory);
     const resultPath = join(failureDir.directory, 'failure-result.json');
     const metricsPath = join(failureDir.directory, 'failure-metrics.json');
     const groupReadyPath = `${metricsPath}.group-ready.json`;
     const launchToken = randomUUID();
-    assert.equal(beginCi1OwnedGroupLaunch(launchToken), true, 'the failure fixture launch intent is recorded before spawn');
+    assert.equal(beginCi1OwnedGroupLaunch(launchToken, failureDir.ci1Custody), true,
+      'the failure launch intent and exact temp directory are recorded before spawn');
+    assert.equal(markCi1OwnedGroupSpawnAttempt(failureDir.ci1Custody, launchToken), true,
+      'the failure fixture spawn attempt is recorded before detached launch');
     const child = spawn(process.execPath, [
       join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
       join(failureDir.directory, 'failure.sqlite'), 'failure-after-runner-pause',
@@ -2728,11 +2994,14 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', chunk => { stderr += chunk; });
     const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+    rememberCi1OwnedGroupChild(failureDir.ci1Custody, launchToken, child, closed);
     let runnerPid = null;
     let ownedGroupId = null;
     let ownedGroupEmpty = false;
     try {
-      const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({ child, launchToken, readyPath: groupReadyPath });
+      const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({
+        child, launchToken, readyPath: groupReadyPath, custody: failureDir.ci1Custody, closed
+      });
       ownedGroupId = ownership.groupId;
       assert.equal(ownership.stage, 'ready', 'the failure fixture process group was verified and registered before release');
       const runnerMarker = `${metricsPath}.runner`;
@@ -2759,26 +3028,29 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       raw.close();
       ownedGroupEmpty = await waitForOwnedProcessGroupEmpty(child.pid);
       assert.equal(ownedGroupEmpty, true, 'the fixture group is empty before outer cleanup');
-      if (ownedGroupEmpty) assert.equal(updateCi1OwnedGroupRegistry(child.pid, false, launchToken), true);
+      if (ownedGroupEmpty) assert.equal(finishCi1OwnedGroupAfterAbsence(child.pid, launchToken, failureDir.ci1Custody), true);
     } finally {
       if (!ownedGroupEmpty) {
         const cleanup = await cleanupVerifiedCi1ProcessGroup(child, closed, ownedGroupId);
         ownedGroupEmpty = cleanup.groupEmpty;
-        if (ownedGroupEmpty) updateCi1OwnedGroupRegistry(child.pid, false, launchToken);
+        if (ownedGroupEmpty) finishCi1OwnedGroupAfterAbsence(child.pid, launchToken, failureDir.ci1Custody);
       }
     }
 
     for (const markerMode of ['missing', 'partial']) {
       const mode = `failure-runner-marker-${markerMode}`;
-      const markerDir = tempDirectory(`ah11-jev-marker-${markerMode}-`);
-      t.after(() => markerDir.cleanup());
+      const markerDir = tempDirectory(`ah11-jev-marker-${markerMode}-`, { ci1OwnedGroups: true });
+      t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(markerDir); });
       const databasePath = join(markerDir.directory, 'marker-control.sqlite');
       const markerPath = join(markerDir.directory, 'marker-control.json');
       const resultPath = join(markerDir.directory, 'marker-result.json');
       const metricsPath = join(markerDir.directory, 'marker-metrics.json');
       const groupReadyPath = `${metricsPath}.group-ready.json`;
       const launchToken = randomUUID();
-      assert.equal(beginCi1OwnedGroupLaunch(launchToken), true, 'the marker-control launch intent is recorded before spawn');
+      assert.equal(beginCi1OwnedGroupLaunch(launchToken, markerDir.ci1Custody), true,
+        'the marker-control launch intent and exact temp directory are recorded before spawn');
+      assert.equal(markCi1OwnedGroupSpawnAttempt(markerDir.ci1Custody, launchToken), true,
+        'the marker-control spawn attempt is recorded before detached launch');
       const child = spawn(process.execPath, [
         join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
         databasePath, mode, markerPath, resultPath, metricsPath
@@ -2794,11 +3066,14 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       child.stderr.setEncoding('utf8');
       child.stderr.on('data', chunk => { stderr += chunk; });
       const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+      rememberCi1OwnedGroupChild(markerDir.ci1Custody, launchToken, child, closed);
       let runnerPid = null;
       let ownedGroupId = null;
       let ownedGroupEmpty = false;
       try {
-        const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({ child, launchToken, readyPath: groupReadyPath });
+        const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({
+          child, launchToken, readyPath: groupReadyPath, custody: markerDir.ci1Custody, closed
+        });
         ownedGroupId = ownership.groupId;
         assert.equal(ownership.stage, 'ready', 'the marker-control group was verified and registered before release');
         await waitForPath(markerPath, child, 5_000);
@@ -2823,7 +3098,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         assert.equal(await waitForPidExit(runnerPid), true, 'fixture finally reaps the exact durable runner PID');
         ownedGroupEmpty = await waitForOwnedProcessGroupEmpty(child.pid);
         assert.equal(ownedGroupEmpty, true, 'no owned descendants remain before outer cleanup');
-        if (ownedGroupEmpty) assert.equal(updateCi1OwnedGroupRegistry(child.pid, false, launchToken), true);
+        if (ownedGroupEmpty) assert.equal(finishCi1OwnedGroupAfterAbsence(child.pid, launchToken, markerDir.ci1Custody), true);
 
         const reopened = new DatabaseSync(databasePath, { readOnly: true });
         const job = reopened.prepare(
@@ -2844,7 +3119,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         if (!ownedGroupEmpty) {
           const cleanup = await cleanupVerifiedCi1ProcessGroup(child, closed, ownedGroupId);
           ownedGroupEmpty = cleanup.groupEmpty;
-          if (ownedGroupEmpty) updateCi1OwnedGroupRegistry(child.pid, false, launchToken);
+          if (ownedGroupEmpty) finishCi1OwnedGroupAfterAbsence(child.pid, launchToken, markerDir.ci1Custody);
         }
       }
     }
@@ -2858,6 +3133,11 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const simulatedToken = randomUUID();
     const simulatedRegistryPath = join(failureDir.directory, 'registry-protocol-control.json');
     const savedRegistryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+    delete process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+    assert.equal(beginCi1OwnedGroupLaunch(randomUUID()), false,
+      'detached CI1 launch fails closed when the outer registry handoff is absent');
+    assert.equal(updateCi1OwnedGroupRegistry(812_345, true, randomUUID()), false,
+      'CI1 registration cannot silently succeed without the outer registry');
     process.env.OPS_CI1_OWNED_GROUP_REGISTRY = simulatedRegistryPath;
     try {
     writeFileSync(simulatedRegistryPath, JSON.stringify({
@@ -3277,16 +3557,19 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     assert.equal(unconfirmedState.ci1PhaseCaptureIncomplete, true,
       'unconfirmed close is explicit rather than a zero-survivor claim');
 
-    const inertGroupDir = tempDirectory('ah11-jev-owned-group-finalizer-');
-    t.after(() => inertGroupDir.cleanup());
+    const inertGroupDir = tempDirectory('ah11-jev-owned-group-finalizer-', { ci1OwnedGroups: true });
+    t.after(async () => { await cleanupCi1OwnedTemporaryDirectory(inertGroupDir); });
     const watchdogControlPath = join(inertGroupDir.directory, 'watchdog-control.json');
     writeFileSync(watchdogControlPath, JSON.stringify({ state: 'armed' }), { mode: 0o600 });
     const watchdogStartedAt = performance.now();
     const watchdogLaunchToken = randomUUID();
-    assert.equal(beginCi1OwnedGroupLaunch(watchdogLaunchToken), true,
+    assert.equal(beginCi1OwnedGroupLaunch(watchdogLaunchToken, inertGroupDir.ci1Custody), true,
       'the local watchdog launch intent is registered before spawn');
+    assert.equal(markCi1OwnedGroupSpawnAttempt(inertGroupDir.ci1Custody, watchdogLaunchToken), true,
+      'the local watchdog spawn attempt is recorded before detached launch');
     const watchdog = startPrelaunchedOwnedGroupWatchdog(watchdogControlPath, 15_000);
     await watchdog.spawned;
+    rememberCi1OwnedGroupChild(inertGroupDir.ci1Custody, watchdogLaunchToken, watchdog.child, watchdog.closed);
     const watchdogSpawnedAt = performance.now();
     await waitForPath(watchdog.readyPath, watchdog.child, 2_000);
     const watchdogReady = JSON.parse(readFileSync(watchdog.readyPath, 'utf8'));
@@ -3298,8 +3581,15 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const watchdogGroupId = await verifyOwnedProcessGroup(watchdog.child);
     assert.equal(watchdogGroupId, watchdog.child.pid,
       'the independent watchdog is itself in a separate owned group');
+    const watchdogCustody = inertGroupDir.ci1Custody.launches.get(watchdogLaunchToken);
+    watchdogCustody.groupId = watchdogGroupId;
+    watchdogCustody.status = 'group_verified';
+    assert.equal(writeCi1TemporaryCustody(inertGroupDir.ci1Custody), true,
+      'the watchdog group identity is persisted before registry registration');
     assert.equal(updateCi1OwnedGroupRegistry(watchdogGroupId, true, watchdogLaunchToken), true,
       'the ready local watchdog group is registered before inert descendants can be created');
+    assert.equal(markCi1OwnedGroupRegistered(inertGroupDir.ci1Custody, watchdogLaunchToken, watchdogGroupId), true,
+      'the watchdog registration is persisted before an inert descendant can be created');
 
     const inertMarkerPath = join(inertGroupDir.directory, 'paused-descendant.json');
     const inertReadyPath = join(inertGroupDir.directory, 'inert-group-ready.json');
@@ -3322,12 +3612,15 @@ descendant.once('spawn', () => {
 `;
     const inertChildLaunchAt = performance.now();
     const inertLaunchToken = randomUUID();
-    assert.equal(beginCi1OwnedGroupLaunch(inertLaunchToken), true,
+    assert.equal(beginCi1OwnedGroupLaunch(inertLaunchToken, inertGroupDir.ci1Custody), true,
       'the inert parent launch intent is registered before spawn');
+    assert.equal(markCi1OwnedGroupSpawnAttempt(inertGroupDir.ci1Custody, inertLaunchToken), true,
+      'the inert parent spawn attempt is recorded before detached launch');
     const inertParent = spawn(process.execPath, ['--input-type=module', '--eval', inertParentSource, inertMarkerPath, inertReadyPath], {
       cwd: ROOT, env: baseEnvironment(), stdio: 'ignore', detached: true
     });
     const inertClosed = new Promise(resolvePromise => inertParent.once('close', (code, signal) => resolvePromise({ code, signal })));
+    rememberCi1OwnedGroupChild(inertGroupDir.ci1Custody, inertLaunchToken, inertParent, inertClosed);
     let inertGroupId = null;
     let inertGroupEmpty = false;
     let watchdogGroupEmpty = false;
@@ -3339,6 +3632,7 @@ descendant.once('spawn', () => {
     try {
       const inertOwnership = await verifyRegisterCi1OwnedGroupBeforeReady({
         child: inertParent, launchToken: inertLaunchToken, readyPath: inertReadyPath,
+        custody: inertGroupDir.ci1Custody, closed: inertClosed,
         releaseReady: async (readyPath, ready) => {
           writeFileSync(watchdogControlPath, JSON.stringify({ state: 'watch', groupId: ready.groupId }), { mode: 0o600 });
           await waitForPath(watchdog.watchAckPath, watchdog.child, 2_000);
@@ -3389,7 +3683,9 @@ descendant.once('spawn', () => {
                   inertParentCapture, inertState
                 );
                 inertGroupEmpty = result.groupEmpty;
-                if (result.groupEmpty && !updateCi1OwnedGroupRegistry(inertParent.pid, false, inertLaunchToken)) {
+                if (result.groupEmpty && !finishCi1OwnedGroupAfterAbsence(
+                  inertParent.pid, inertLaunchToken, inertGroupDir.ci1Custody
+                )) {
                   inertState.ci1PhaseCaptureIncomplete = true;
                 }
                 return result;
@@ -3427,7 +3723,7 @@ descendant.once('spawn', () => {
       } catch { inertState.ci1PhaseCaptureIncomplete = true; }
       if (inertGroupEmpty && inertGroupId === inertParent.pid) {
         try {
-          if (!updateCi1OwnedGroupRegistry(inertParent.pid, false, inertLaunchToken)) {
+          if (!finishCi1OwnedGroupAfterAbsence(inertParent.pid, inertLaunchToken, inertGroupDir.ci1Custody)) {
             inertState.ci1PhaseCaptureIncomplete = true;
           }
         } catch { inertState.ci1PhaseCaptureIncomplete = true; }
@@ -3452,7 +3748,7 @@ descendant.once('spawn', () => {
       }
       if (watchdogGroupEmpty && watchdogGroupId === watchdog.child.pid) {
         try {
-          if (!updateCi1OwnedGroupRegistry(watchdogGroupId, false, watchdogLaunchToken)) {
+          if (!finishCi1OwnedGroupAfterAbsence(watchdogGroupId, watchdogLaunchToken, inertGroupDir.ci1Custody)) {
             inertState.ci1PhaseCaptureIncomplete = true;
           }
         } catch { inertState.ci1PhaseCaptureIncomplete = true; }
@@ -6317,9 +6613,12 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
   }
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
-  await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', () => {
+  await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', async () => {
     assert.match(evidenceVerifier, /REQUIRED_LOCAL_CASES/u);
     assert.match(evidenceVerifier, /missingLocalCases/u);
+    assert.match(evidenceVerifier, /OPS_CI1_OWNED_GROUP_REGISTRY/u);
+    assert.match(evidenceVerifier, /validatedCi1RegistryPathFromEnvironment/u);
+    assert.match(evidenceVerifier, /childEnvironment\[OPS_CI1_OWNED_GROUP_REGISTRY\]/u);
     assert.match(evidenceVerifier, /processCloseElapsedMs/u);
     assert.match(evidenceVerifier, /runnerDeadlineCloseElapsedMsMax/u);
     assert.match(evidenceVerifier, /resourceHighWaterSamples/u);
@@ -6341,6 +6640,151 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     assert.match(evidenceVerifier, /ops07Capture: ops07CaptureResult\.valid\s*\?\s*\{ valid: true, capture: ops07CaptureResult\.capture \}\s*:\s*\{ valid: false, reason: ops07CaptureResult\.reason \}/u);
     assert.match(evidenceVerifier, /&& ops07CaptureResult\.valid && ops07CaptureResult\.capture\.flags\.complete/u,
       'invalid or incomplete capture prevents fixture acceptance');
+    const registryProbeDirectory = tempDirectory('ah11-ops-registry-forward-control-');
+    t.after(() => registryProbeDirectory.cleanup());
+    const registryProbePath = join(registryProbeDirectory.directory, 'owned-groups.json');
+    writeFileSync(registryProbePath, JSON.stringify({
+      schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: []
+    }), { mode: 0o600 });
+    const verifierPath = join(ROOT, 'tests/operations/verify-fixture.js');
+    const forwardedRegistry = spawnSync(process.execPath, [verifierPath, '--registry-propagation-probe'], {
+      cwd: ROOT, encoding: 'utf8', timeout: 5_000, maxBuffer: 4_096,
+      env: { ...baseEnvironment(), OPS_CI1_OWNED_GROUP_REGISTRY: registryProbePath }
+    });
+    assert.equal(forwardedRegistry.status, 0, forwardedRegistry.stderr);
+    assert.equal(forwardedRegistry.signal, null);
+    assert.equal(forwardedRegistry.stdout, 'forwarded',
+      'the validated registry path reaches the verifier child through its explicit allowlist without printing the path');
+    const missingRegistry = spawnSync(process.execPath, [verifierPath, '--registry-propagation-probe'], {
+      cwd: ROOT, encoding: 'utf8', timeout: 5_000, maxBuffer: 4_096,
+      env: baseEnvironment()
+    });
+    assert.equal(missingRegistry.status, 1);
+    assert.match(missingRegistry.stderr, /ownership registry is missing or invalid/u);
+    const malformedRegistryPath = join(registryProbeDirectory.directory, 'malformed-owned-groups.json');
+    writeFileSync(malformedRegistryPath, '{truncated', { mode: 0o600 });
+    const malformedRegistry = spawnSync(process.execPath, [verifierPath, '--registry-propagation-probe'], {
+      cwd: ROOT, encoding: 'utf8', timeout: 5_000, maxBuffer: 4_096,
+      env: { ...baseEnvironment(), OPS_CI1_OWNED_GROUP_REGISTRY: malformedRegistryPath }
+    });
+    assert.equal(malformedRegistry.status, 1);
+    assert.match(malformedRegistry.stderr, /ownership registry is missing or invalid/u);
+
+    const custodyState = () => ({
+      ci1PhaseCaptureIncomplete: false,
+      ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+    });
+    const custodyRecord = (directory, overrides = {}) => ({
+      directory,
+      ci1Custody: {
+        directory,
+        sidecarPath: null,
+        launches: new Map([['synthetic-token', {
+          launchToken: 'synthetic-token', status: 'group_registered', spawnAttempted: true,
+          directPid: 81_234, groupId: 81_234, registryRegistered: true,
+          registryCleared: false, groupAbsent: false, ...overrides
+        }]])
+      }
+    });
+    const spawnAttemptControl = custodyRecord('/synthetic/ops-temp-spawn-attempt', {
+      status: 'launch_intent', spawnAttempted: false, groupId: null, directPid: null,
+      registryRegistered: false, registryCleared: false, groupAbsent: false
+    });
+    assert.equal(markCi1OwnedGroupSpawnAttempt(
+      spawnAttemptControl.ci1Custody, 'synthetic-token', () => false
+    ), false);
+    assert.equal(spawnAttemptControl.ci1Custody.launches.get('synthetic-token').spawnAttempted, false,
+      'a failed pre-spawn custody write does not misclassify an unstarted child as possibly spawned');
+    assert.equal(spawnAttemptControl.ci1Custody.launches.get('synthetic-token').status, 'launch_intent');
+    const cleanupOrder = [];
+    const allAbsentState = custodyState();
+    const allAbsent = custodyRecord('/synthetic/ops-temp-clean');
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(allAbsent, {
+      state: allAbsentState,
+      probeGroupEmpty: async groupId => { cleanupOrder.push(`probe:${groupId}`); return true; },
+      removeRegistryLaunch: (groupId, token) => {
+        cleanupOrder.push(`unregister:${groupId}:${token}`); return true;
+      },
+      persist: () => true,
+      removeDirectory: directory => cleanupOrder.push(`remove:${directory}`)
+    }), true);
+    assert.deepEqual(cleanupOrder, [
+      'probe:81234', 'unregister:81234:synthetic-token', 'remove:/synthetic/ops-temp-clean'
+    ], 'the directory is removed only after group absence and registry removal are confirmed');
+    const retainedState = custodyState();
+    const retained = custodyRecord('/synthetic/ops-temp-retained');
+    let retainedRemoved = false;
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(retained, {
+      state: retainedState, probeGroupEmpty: async () => false,
+      persist: () => true, removeDirectory: () => { retainedRemoved = true; }
+    }), false);
+    assert.equal(retainedRemoved, false);
+    assert.equal(retainedState.ci1PhaseCaptureIncomplete, true);
+    assert.equal(retainedState.ci1PhaseCaptureOwnedGroupCloseUnconfirmed, true);
+    assert.equal(retained.ci1Custody.launches.get('synthetic-token').status, 'group_unconfirmed');
+    const unknownState = custodyState();
+    const unknown = custodyRecord('/synthetic/ops-temp-unknown');
+    let unknownRemoved = false;
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(unknown, {
+      state: unknownState, probeGroupEmpty: async () => { throw new Error('unreadable process table'); },
+      persist: () => true, removeDirectory: () => { unknownRemoved = true; }
+    }), false);
+    assert.equal(unknownRemoved, false);
+    assert.equal(unknownState.ci1PhaseCaptureOwnedGroupCloseUnconfirmed, true,
+      'an unreadable group probe remains unknown and retains the exact directory');
+    const pendingState = custodyState();
+    const pending = custodyRecord('/synthetic/ops-temp-pending', {
+      status: 'launch_intent', spawnAttempted: false, directPid: null, groupId: null,
+      registryRegistered: false, registryCleared: false, groupAbsent: false
+    });
+    let pendingRemoved = false;
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(pending, {
+      state: pendingState, cancelPendingLaunch: token => token === 'synthetic-token',
+      persist: () => true, removeDirectory: () => { pendingRemoved = true; }
+    }), true);
+    assert.equal(pendingRemoved, true, 'a launch proven not to have spawned can be cancelled before directory removal');
+    const pendingPersistFailureState = custodyState();
+    const pendingPersistFailure = custodyRecord('/synthetic/ops-temp-pending-persist-failure', {
+      status: 'launch_intent', spawnAttempted: false, directPid: null, groupId: null,
+      registryRegistered: false, registryCleared: false, groupAbsent: false
+    });
+    let pendingPersistFailureRemoved = false;
+    let pendingCancelCalls = 0;
+    let pendingPersistCalls = 0;
+    const pendingCleanupOverrides = {
+      state: pendingPersistFailureState,
+      cancelPendingLaunch: token => { pendingCancelCalls += 1; return token === 'synthetic-token'; },
+      persist: () => { pendingPersistCalls += 1; return pendingPersistCalls !== 1; },
+      removeDirectory: () => { pendingPersistFailureRemoved = true; }
+    };
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(pendingPersistFailure, pendingCleanupOverrides), false);
+    assert.equal(pendingPersistFailureRemoved, false,
+      'a failed custody update after pending-token cancellation retains the exact directory');
+    assert.equal(pendingPersistFailure.ci1Custody.launches.get('synthetic-token').registryCleared, true,
+      'a retry knows the pending token was already cancelled');
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(pendingPersistFailure, pendingCleanupOverrides), true);
+    assert.equal(pendingPersistFailureRemoved, true, 'retry removes the directory after the custody update succeeds');
+    assert.equal(pendingCancelCalls, 1, 'the same pending launch is not cancelled twice on retry');
+    const registryFailureState = custodyState();
+    const registryFailure = custodyRecord('/synthetic/ops-temp-registry-failure');
+    let registryFailureRemoved = false;
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(registryFailure, {
+      state: registryFailureState, probeGroupEmpty: async () => true,
+      removeRegistryLaunch: () => false, persist: () => true,
+      removeDirectory: () => { registryFailureRemoved = true; }
+    }), false);
+    assert.equal(registryFailureRemoved, false,
+      'confirmed group absence alone does not discard a directory while registry ownership remains unresolved');
+    const persistFailureState = custodyState();
+    const persistFailure = custodyRecord('/synthetic/ops-temp-persist-failure');
+    let persistFailureRemoved = false;
+    assert.equal(await cleanupCi1OwnedTemporaryDirectory(persistFailure, {
+      state: persistFailureState, probeGroupEmpty: async () => true,
+      removeRegistryLaunch: () => true, persist: () => false,
+      removeDirectory: () => { persistFailureRemoved = true; }
+    }), false);
+    assert.equal(persistFailureRemoved, false,
+      'failed bounded handoff persistence retains the directory for the outer owner');
     const controls = [
       ['assertion', 'ASSERTION_FAILURE'],
       ['busy', 'SQLITE_BUSY'],

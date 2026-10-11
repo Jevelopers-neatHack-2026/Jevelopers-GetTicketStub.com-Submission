@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
@@ -49,6 +49,10 @@ const EXPECTED_UPLOAD_MEMBERS = Object.freeze([
   '.runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl'
 ]);
 const OPS07_INVALID_REASONS = new Set(['invalid_input', 'missing', 'duplicate', 'malformed', 'oversize', 'invalid_shape']);
+const OPS_CI1_OWNED_GROUP_REGISTRY = 'OPS_CI1_OWNED_GROUP_REGISTRY';
+const OPS_CI1_OWNED_GROUP_SCHEMA = 'ops-ci1-owned-groups.v1';
+const OPS_CI1_OWNED_GROUP_REGISTRY_MAX_BYTES = 8_192;
+let validatedCi1OwnedGroupRegistryPath = null;
 
 function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -73,18 +77,50 @@ function currentBaseRevision() {
 }
 
 function child(args, env = {}) {
+  const childEnvironment = {
+    PATH: process.env.PATH ?? '/usr/bin:/bin',
+    TMPDIR: process.env.TMPDIR ?? tmpdir(),
+    NODE_NO_WARNINGS: '1',
+    ...env
+  };
+  if (validatedCi1OwnedGroupRegistryPath) {
+    childEnvironment[OPS_CI1_OWNED_GROUP_REGISTRY] = validatedCi1OwnedGroupRegistryPath;
+  } else {
+    delete childEnvironment[OPS_CI1_OWNED_GROUP_REGISTRY];
+  }
   return spawnSync(process.execPath, args, {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 2 * 1024 * 1024,
     timeout: 120_000,
-    env: {
-      PATH: process.env.PATH ?? '/usr/bin:/bin',
-      TMPDIR: process.env.TMPDIR ?? tmpdir(),
-      NODE_NO_WARNINGS: '1',
-      ...env
-    }
+    env: childEnvironment
   });
+}
+
+function validCi1OwnedGroupRegistry(registry) {
+  return Boolean(registry && registry.schema === OPS_CI1_OWNED_GROUP_SCHEMA
+    && Object.keys(registry).sort().join(',') === 'groups,pendingLaunches,schema'
+    && Array.isArray(registry.groups) && Array.isArray(registry.pendingLaunches)
+    && registry.groups.length <= 16 && registry.pendingLaunches.length <= 16
+    && registry.groups.every(value => Number.isSafeInteger(value) && value >= 2)
+    && new Set(registry.groups).size === registry.groups.length
+    && registry.pendingLaunches.every(value => typeof value === 'string'
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value))
+    && new Set(registry.pendingLaunches).size === registry.pendingLaunches.length);
+}
+
+function validatedCi1RegistryPathFromEnvironment() {
+  const registryPath = process.env[OPS_CI1_OWNED_GROUP_REGISTRY];
+  if (typeof registryPath !== 'string' || registryPath.length === 0 || registryPath.length > 4_096
+      || !isAbsolute(registryPath) || /[\u0000-\u001f\u007f]/u.test(registryPath)) return null;
+  try {
+    const metadata = lstatSync(registryPath);
+    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > OPS_CI1_OWNED_GROUP_REGISTRY_MAX_BYTES) return null;
+    const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
+    return validCi1OwnedGroupRegistry(registry) ? registryPath : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseTAP(text) {
@@ -165,9 +201,22 @@ function fail(message) {
 }
 
 const [caseId, mode, fixture] = process.argv.slice(2);
+if (process.argv[2] === '--registry-propagation-probe') {
+  validatedCi1OwnedGroupRegistryPath = validatedCi1RegistryPathFromEnvironment();
+  if (!validatedCi1OwnedGroupRegistryPath) fail('AH-11-OPS ownership registry is missing or invalid.');
+  const probe = child(['--input-type=module', '--eval',
+    `process.stdout.write(process.env.${OPS_CI1_OWNED_GROUP_REGISTRY} === ${JSON.stringify(validatedCi1OwnedGroupRegistryPath)} ? 'forwarded' : 'missing')`]);
+  if (probe.status !== 0 || probe.signal !== null || probe.error
+      || probe.stdout !== 'forwarded') {
+    fail('AH-11-OPS ownership registry propagation failed.');
+  }
+  process.exit(0);
+}
 if (caseId !== 'AH-11-OPS' || mode !== 'mock' || !FIXTURES.has(fixture)) {
   fail('Usage: node tests/operations/verify-fixture.js AH-11-OPS mock quota-shutdown-restart|runbook-clean-start');
 }
+validatedCi1OwnedGroupRegistryPath = validatedCi1RegistryPathFromEnvironment();
+if (!validatedCi1OwnedGroupRegistryPath) fail('AH-11-OPS ownership registry is missing or invalid.');
 const nodeVersion = process.versions.node;
 if (!/^v22\.23\.3$/u.test(`v${nodeVersion}`)) fail('AH-11-OPS evidence requires the pinned Node v22.23.3 toolchain.');
 
@@ -351,6 +400,10 @@ const diagnosticsIncludedInUpload = diagnosticMembers.every(artifact =>
   && EXPECTED_UPLOAD_MEMBERS.includes(`.runtime-artifacts/${basename(artifact.path)}`))
   && uploadUsesExactAllowlist && hiddenArtifactUploadConfigured && requiredEvidenceSetComplete;
 const resourceMetricsComplete = metrics !== null
+  && metrics.ci1PhaseCaptureOverflow === false
+  && metrics.ci1PhaseCaptureIncomplete === false
+  && metrics.ci1PhaseCaptureChildCloseUnconfirmed === false
+  && metrics.ci1PhaseCaptureOwnedGroupCloseUnconfirmed === false
   && metrics.ownedRunnerStarts >= 1
   && metrics.ownedRunnerTermSignals >= 1
   && metrics.ownedRunnerKillSignals >= 1
