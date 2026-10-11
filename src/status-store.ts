@@ -125,6 +125,8 @@ export interface StatusProjection {
   readonly scope: StatusScope;
   readonly providerRequestId: string;
   readonly state: ProjectedStatusState;
+  /** Latest accepted root fact, retained while `state` summarizes unresolved conflicts. */
+  readonly rootState: StatusState;
   readonly cancellationRequested: boolean;
   readonly shipments: readonly ProjectedShipment[];
   readonly observationIds: readonly string[];
@@ -136,6 +138,11 @@ export interface StatusProjection {
 
 export type ConflictKind = "source_id_collision" | "terminal_contradiction" | "tracking_contradiction" | "quantity_contradiction";
 
+export type ConflictLocation =
+  | { readonly level: "root" }
+  | { readonly level: "shipment"; readonly shipmentId: string }
+  | { readonly level: "item"; readonly shipmentId: string; readonly itemId: string };
+
 export interface StatusConflict {
   readonly conflictId: string;
   readonly providerId: string;
@@ -143,6 +150,7 @@ export interface StatusConflict {
   readonly scope: StatusScope;
   readonly providerRequestId: string;
   readonly kind: ConflictKind;
+  readonly location: ConflictLocation;
   readonly observationIds: readonly string[];
   readonly state: "unresolved" | "resolved";
   readonly createdAt: number;
@@ -248,6 +256,7 @@ interface PollTargetRecord {
   readonly attempts: number;
   readonly reconciliationAttempts: number;
   readonly nextReconciliationAt?: number;
+  readonly trustedNotBeforeAt?: number;
   readonly lastLookupFailure?: "lookup_unavailable" | "lookup_ambiguous" | "invalid_observation" | "rate_limited";
   readonly leaseFence: number;
   readonly lease?: PollLeaseRecord;
@@ -265,7 +274,7 @@ interface StateBinding {
 }
 
 interface StatusStoreState {
-  readonly format: "fc-status-store/1";
+  readonly format: "fc-status-store/2";
   readonly binding: StateBinding;
   readonly observations: readonly StatusObservationRecord[];
   readonly projections: readonly StatusProjection[];
@@ -277,7 +286,7 @@ interface StatusStoreState {
   readonly effectIds: readonly string[];
 }
 
-const STORE_FORMAT = "fc-status-store/1" as const;
+const STORE_FORMAT = "fc-status-store/2" as const;
 const MARKER_FORMAT = "fc-status-commit/1";
 const STATE_DIRECTORY = ".status-store-v1";
 const COMMIT_MARKER = ".status-store-committed.json";
@@ -285,6 +294,10 @@ const MAX_STATE_ROWS = 100_000;
 const MAX_SCOPE = 128;
 const MAX_LEASE_MS = 300_000;
 const MAX_RETRY_AFTER_MS = 86_400_000;
+const MAX_PROJECTED_SHIPMENTS = 200;
+const MAX_PROJECTED_ITEMS = 2_000;
+const MAX_PROJECTED_QUANTITIES = 4_000;
+const MAX_PROJECTED_CONTRIBUTIONS = 10_000;
 const TERMINAL_STATES = new Set<StatusState>(["delivered", "cancelled", "rejected", "failed"]);
 
 function fail(code: StatusStoreErrorCode): never {
@@ -490,18 +503,50 @@ function rehydrateObservation(
 }
 
 function isProjectedQuantity(value: unknown): boolean {
-  return exactKeys(value, ["kind", "unit", "basis", "total", "contributions"]) &&
-    (value.kind === "fulfilled" || value.kind === "failed") && safeToken(value.unit, 32) &&
-    (value.basis === "cumulative" || value.basis === "delta") &&
-    Number.isSafeInteger(value.total) && (value.total as number) >= 1 &&
-    Array.isArray(value.contributions) && snapshotDenseArray(value.contributions, 10_000).every((item) =>
-      exactKeys(item, ["id", "amount"]) && safeToken(item.id) && Number.isSafeInteger(item.amount) && (item.amount as number) > 0);
+  if (!exactKeys(value, ["kind", "unit", "basis", "total", "contributions"]) ||
+    (value.kind !== "fulfilled" && value.kind !== "failed") || !safeToken(value.unit, 32) ||
+    (value.basis !== "cumulative" && value.basis !== "delta") || !Number.isSafeInteger(value.total) ||
+    (value.total as number) < 1) return false;
+  try {
+    const contributions = snapshotDenseArray(value.contributions, MAX_PROJECTED_CONTRIBUTIONS);
+    if (value.basis === "cumulative") return contributions.length === 0 && (value.total as number) <= 1_000_000;
+    if (contributions.length === 0) return false;
+    let total = 0;
+    const ids = new Set<string>();
+    for (const item of contributions) {
+      if (!exactKeys(item, ["id", "amount"]) || !safeToken(item.id) ||
+        !Number.isSafeInteger(item.amount) || (item.amount as number) < 1 || (item.amount as number) > 1_000_000 ||
+        ids.has(item.id as string)) return false;
+      ids.add(item.id as string);
+      total += item.amount as number;
+      if (!Number.isSafeInteger(total)) return false;
+    }
+    return total === value.total;
+  } catch {
+    return false;
+  }
 }
 
 function isProjectedItem(value: unknown): boolean {
   if (!exactKeys(value, ["itemId", "state", "quantities"]) || !safeToken(value.itemId) || !isProjectedStatusState(value.state)) return false;
   try {
-    return snapshotDenseArray(value.quantities, 4_000).every(isProjectedQuantity);
+    const quantities = snapshotDenseArray(value.quantities, MAX_PROJECTED_QUANTITIES);
+    if (!quantities.every(isProjectedQuantity)) return false;
+    const bucketKeys = new Set<string>();
+    const units = new Map<string, string>();
+    const bases = new Map<string, string>();
+    for (const quantity of quantities as ProjectedQuantity[]) {
+      const kindUnit = `${quantity.kind}:${quantity.unit}`;
+      const priorUnit = units.get(quantity.kind);
+      const priorBasis = bases.get(kindUnit);
+      const key = `${kindUnit}:${quantity.basis}`;
+      if (bucketKeys.has(key) || priorUnit !== undefined && priorUnit !== quantity.unit ||
+        priorBasis !== undefined && priorBasis !== quantity.basis) return false;
+      bucketKeys.add(key);
+      units.set(quantity.kind, quantity.unit);
+      bases.set(kindUnit, quantity.basis);
+    }
+    return true;
   } catch {
     return false;
   }
@@ -514,7 +559,7 @@ function isProjectedShipment(value: unknown, trackingPolicy: TrackingHostPolicy)
     (value.trackingNumber !== undefined && !safeToken(value.trackingNumber, 80)) ||
     (value.trackingUrl !== undefined && !isApprovedTrackingUrl(value.trackingUrl, trackingPolicy))) return false;
   try {
-    const items = snapshotDenseArray(value.items, 2_000);
+    const items = snapshotDenseArray(value.items, MAX_PROJECTED_ITEMS);
     return items.every(isProjectedItem) && new Set(items.map((item) => (item as Record<string, unknown>).itemId)).size === items.length;
   } catch {
     return false;
@@ -522,18 +567,19 @@ function isProjectedShipment(value: unknown, trackingPolicy: TrackingHostPolicy)
 }
 
 function isProjection(value: unknown, trackingPolicy: TrackingHostPolicy): value is StatusProjection {
-  if (!exactKeys(value, ["providerId", "mode", "scope", "providerRequestId", "state", "cancellationRequested", "shipments", "observationIds", "conflictIds", "revision", "updatedAt"]) ||
+  if (!exactKeys(value, ["providerId", "mode", "scope", "providerRequestId", "state", "rootState", "cancellationRequested", "shipments", "observationIds", "conflictIds", "revision", "updatedAt"]) ||
     !safeToken(value.providerId) || !isMode(value.mode) || !isScope(value.scope) ||
-    !safeToken(value.providerRequestId) || !isProjectedStatusState(value.state) || typeof value.cancellationRequested !== "boolean" ||
+    !safeToken(value.providerRequestId) || !isProjectedStatusState(value.state) || !isStatusState(value.rootState) ||
+    typeof value.cancellationRequested !== "boolean" ||
     !Number.isSafeInteger(value.revision) || (value.revision as number) < 0 || !validTime(value.updatedAt)) return false;
   try {
-    const shipments = snapshotDenseArray(value.shipments, 200);
+    const shipments = snapshotDenseArray(value.shipments, MAX_PROJECTED_SHIPMENTS);
     const observations = snapshotDenseArray(value.observationIds, 100_000);
     const conflicts = snapshotDenseArray(value.conflictIds, 100_000);
     return shipments.every((item) => isProjectedShipment(item, trackingPolicy)) && observations.every((item) => safeToken(item)) &&
       conflicts.every((item) => safeToken(item)) && new Set(shipments.map((item) => (item as Record<string, unknown>).shipmentId)).size === shipments.length &&
       new Set(observations).size === observations.length && new Set(conflicts).size === conflicts.length &&
-      (value.state === "conflict" ? conflicts.length > 0 : conflicts.length === 0);
+      (value.state === "conflict" ? conflicts.length > 0 : conflicts.length === 0 && value.state === value.rootState);
   } catch {
     return false;
   }
@@ -558,30 +604,46 @@ function isPollPolicy(value: unknown): value is PollPolicy {
 function isPollTarget(value: unknown): boolean {
   if (!exactKeys(value,
     ["providerRequestId", "scope", "policy", "state", "nextPollAt", "attempts", "reconciliationAttempts", "leaseFence"],
-    ["nextReconciliationAt", "lastLookupFailure", "lease"])) return false;
+    ["nextReconciliationAt", "trustedNotBeforeAt", "lastLookupFailure", "lease"])) return false;
   if (!safeToken(value.providerRequestId) || !isScope(value.scope) || !isPollPolicy(value.policy) ||
     (value.state !== "active" && value.state !== "stopped_terminal" && value.state !== "exhausted") ||
     !validTime(value.nextPollAt) || !Number.isSafeInteger(value.attempts) || (value.attempts as number) < 0 ||
     !Number.isSafeInteger(value.reconciliationAttempts) || (value.reconciliationAttempts as number) < 0 ||
     !Number.isSafeInteger(value.leaseFence) || (value.leaseFence as number) < 0 ||
     (value.nextReconciliationAt !== undefined && !validTime(value.nextReconciliationAt)) ||
+    (value.trustedNotBeforeAt !== undefined && !validTime(value.trustedNotBeforeAt)) ||
+    (value.trustedNotBeforeAt !== undefined && value.state === "active" &&
+      (value.nextPollAt as number) < (value.trustedNotBeforeAt as number)) ||
+    (value.nextReconciliationAt !== undefined && value.trustedNotBeforeAt !== undefined &&
+      (value.nextReconciliationAt as number) < (value.trustedNotBeforeAt as number)) ||
     (value.lastLookupFailure !== undefined && !["lookup_unavailable", "lookup_ambiguous", "invalid_observation", "rate_limited"].includes(value.lastLookupFailure as string))) return false;
   if (value.lease !== undefined) {
     const lease = value.lease;
     if (!exactKeys(lease, ["kind", "token", "fence", "expiresAt"]) ||
       (lease.kind !== "scheduled_poll" && lease.kind !== "canonical_reconciliation") || !safeToken(lease.token) ||
-      !Number.isSafeInteger(lease.fence) || (lease.fence as number) < 1 || !validTime(lease.expiresAt)) return false;
+      !Number.isSafeInteger(lease.fence) || (lease.fence as number) < 1 || lease.fence !== value.leaseFence ||
+      !validTime(lease.expiresAt)) return false;
   }
   return true;
 }
 
+function isConflictLocation(value: unknown): value is ConflictLocation {
+  if (!plainRecord(value)) return false;
+  if (value.level === "root") return exactKeys(value, ["level"]);
+  if (value.level === "shipment") return exactKeys(value, ["level", "shipmentId"]) && safeToken(value.shipmentId);
+  if (value.level === "item") return exactKeys(value, ["level", "shipmentId", "itemId"]) &&
+    safeToken(value.shipmentId) && safeToken(value.itemId);
+  return false;
+}
+
 function isConflict(value: unknown): boolean {
   if (!exactKeys(value,
-    ["conflictId", "providerId", "mode", "scope", "providerRequestId", "kind", "observationIds", "state", "createdAt"],
+    ["conflictId", "providerId", "mode", "scope", "providerRequestId", "kind", "location", "observationIds", "state", "createdAt"],
     ["resolutionId"])) return false;
   return safeToken(value.conflictId) && safeToken(value.providerId) && isMode(value.mode) &&
     isScope(value.scope) && safeToken(value.providerRequestId) &&
     ["source_id_collision", "terminal_contradiction", "tracking_contradiction", "quantity_contradiction"].includes(value.kind as string) &&
+    isConflictLocation(value.location) &&
     Array.isArray(value.observationIds) && snapshotDenseArray(value.observationIds, 4).length >= 2 &&
     snapshotDenseArray(value.observationIds, 4).every((item) => safeToken(item)) &&
     (value.state === "unresolved" || value.state === "resolved") && validTime(value.createdAt) &&
@@ -621,22 +683,31 @@ function isOutboxEvent(value: unknown, trackingPolicy: TrackingHostPolicy): bool
   if (!exactKeys(value,
     ["eventId", "providerId", "mode", "scope", "providerRequestId", "causalEffectId", "payload", "status", "leaseFence", "createdAt"],
     ["leaseToken", "leaseUntil", "leaseConsumer", "ackToken", "ackFence", "ackConsumer"])) return false;
-  const hasLease = value.leaseToken !== undefined && value.leaseUntil !== undefined && value.leaseConsumer !== undefined;
-  const hasAck = value.ackToken !== undefined && value.ackFence !== undefined && value.ackConsumer !== undefined;
+  const leaseKeys = ["leaseToken", "leaseUntil", "leaseConsumer"] as const;
+  const ackKeys = ["ackToken", "ackFence", "ackConsumer"] as const;
+  const hasAnyLease = leaseKeys.some((key) => Object.hasOwn(value, key));
+  const hasAllLease = leaseKeys.every((key) => Object.hasOwn(value, key));
+  const hasAnyAck = ackKeys.some((key) => Object.hasOwn(value, key));
+  const hasAllAck = ackKeys.every((key) => Object.hasOwn(value, key));
   return safeToken(value.eventId) && safeToken(value.providerId) && isMode(value.mode) && isScope(value.scope) &&
     safeToken(value.providerRequestId) && safeToken(value.causalEffectId) && isProjection(value.payload, trackingPolicy) &&
     (value.status === "pending" || value.status === "leased" || value.status === "acked") &&
     Number.isSafeInteger(value.leaseFence) && (value.leaseFence as number) >= 0 && validTime(value.createdAt) &&
-    (value.leaseToken === undefined || safeToken(value.leaseToken)) && (value.leaseUntil === undefined || validTime(value.leaseUntil)) &&
-    (value.leaseConsumer === undefined || safeToken(value.leaseConsumer)) &&
-    (value.ackToken === undefined || safeToken(value.ackToken)) &&
-    (value.ackFence === undefined || (Number.isSafeInteger(value.ackFence) && (value.ackFence as number) >= 1)) &&
-    (value.ackConsumer === undefined || safeToken(value.ackConsumer)) &&
-    (value.status === "pending" ? !hasLease && !hasAck && value.leaseFence === 0 :
-      value.status === "leased" ? hasLease && !hasAck && (value.leaseFence as number) >= 1 : hasAck && !hasLease);
+    (value.status === "pending" ? !hasAnyLease && !hasAnyAck && value.leaseFence === 0 :
+      value.status === "leased" ? hasAllLease && !hasAnyAck && (value.leaseFence as number) >= 1 &&
+        safeToken(value.leaseToken) && validTime(value.leaseUntil) && safeToken(value.leaseConsumer) :
+        hasAllAck && !hasAnyLease && (value.leaseFence as number) >= 1 && value.ackFence === value.leaseFence &&
+          safeToken(value.ackToken) && Number.isSafeInteger(value.ackFence) && (value.ackFence as number) >= 1 &&
+          safeToken(value.ackConsumer));
 }
 
-function decodeState(value: unknown, binding: StateBinding, mapping: ProviderStatusMapping, trackingPolicy: TrackingHostPolicy): StatusStoreState {
+function decodeState(
+  value: unknown,
+  binding: StateBinding,
+  mapping: ProviderStatusMapping,
+  trackingPolicy: TrackingHostPolicy,
+  requireCommittedState = false
+): StatusStoreState {
   if (!plainRecord(value)) fail("corrupt_state");
   if (typeof value.format === "string" && value.format.startsWith("fc-status-store/") && value.format !== STORE_FORMAT) {
     fail("unsupported_version");
@@ -666,6 +737,7 @@ function decodeState(value: unknown, binding: StateBinding, mapping: ProviderSta
     const callbackHints = snapshotDenseArray(value.callbackHints, MAX_STATE_ROWS);
     const outbox = snapshotDenseArray(value.outbox, MAX_STATE_ROWS);
     const effectIds = snapshotDenseArray(value.effectIds, MAX_STATE_ROWS);
+    if (requireCommittedState && pollTargets.length === 0) fail("corrupt_state");
     if (!observations.every((item) => isObservation(item, trackingPolicy)) ||
       !projections.every((item) => isProjection(item, trackingPolicy)) || !conflicts.every(isConflict) ||
       !resolutions.every(isResolution) || !pollTargets.every(isPollTarget) || !callbackHints.every(isCallbackHint) ||
@@ -802,15 +874,18 @@ function decodeState(value: unknown, binding: StateBinding, mapping: ProviderSta
       const lookup = state.observations.find((observation) => observation.observationId === resolution.lookupObservationId &&
         observation.sourceKind === "trusted_lookup" && sameBinding(resolution, observation));
       const conflictObservations = conflict.observationIds.map((id) => state.observations.find((observation) => observation.observationId === id));
-      if (lookup === undefined || lookup.state !== resolution.correctedState || !TERMINAL_STATES.has(lookup.state) ||
-        !resolution.correctionPolicy.allowedTo.includes(lookup.state) || conflictObservations.some((observation) =>
-          observation === undefined || !TERMINAL_STATES.has(observation.state) ||
-          !resolution.correctionPolicy.allowedFrom.includes(observation.state))) fail("corrupt_state");
+      const lookupState = lookup === undefined ? undefined : observationStateAtLocation(lookup, conflict.location);
+      if (lookup === undefined || lookupState !== resolution.correctedState || !isStatusState(lookupState) || !TERMINAL_STATES.has(lookupState) ||
+        !resolution.correctionPolicy.allowedTo.includes(lookupState) || conflictObservations.some((observation) => {
+          if (observation === undefined) return true;
+          const observed = observationStateAtLocation(observation, conflict.location);
+          return !isStatusState(observed) || !TERMINAL_STATES.has(observed) || !resolution.correctionPolicy.allowedFrom.includes(observed);
+        })) fail("corrupt_state");
       const expectedResolutionId = `resolution-${stableDigest({
         scopeKey: scopeKey(binding.providerId, binding.mode, resolution.scope, resolution.providerRequestId),
         conflictId: conflict.conflictId,
         lookupObservationId: lookup.observationId,
-        correctedState: lookup.state,
+        correctedState: lookupState,
         policy: resolution.correctionPolicy
       }).slice(0, 48)}`;
       if (resolution.resolutionId !== expectedResolutionId) fail("corrupt_state");
@@ -821,13 +896,18 @@ function decodeState(value: unknown, binding: StateBinding, mapping: ProviderSta
       const projectionIndex = state.projections.findIndex((item) => sameBinding(item, resolution));
       if (projectionIndex < 0) fail("corrupt_state");
       const projection = state.projections[projectionIndex]!;
+      const locationUpdated = withProjectionLocationState(projection, conflict.location, lookupState);
+      if (locationUpdated === undefined) fail("corrupt_state");
+      const unresolvedIds = conflicts.filter((item) => item.providerId === binding.providerId && item.mode === binding.mode &&
+        item.providerRequestId === resolution.providerRequestId && scopeMatches(item.scope, resolution.scope) && item.state === "unresolved")
+        .map((item) => item.conflictId);
       const updatedProjection: StatusProjection = {
-        ...projection,
-        state: unresolved ? "conflict" : lookup.state,
-        cancellationRequested: lookup.state === "cancelled" ? false : projection.cancellationRequested,
-        conflictIds: conflicts.filter((item) => item.providerId === binding.providerId && item.mode === binding.mode &&
-          item.providerRequestId === resolution.providerRequestId && scopeMatches(item.scope, resolution.scope) && item.state === "unresolved")
-          .map((item) => item.conflictId),
+        ...locationUpdated,
+        state: unresolved ? "conflict" : locationUpdated.rootState,
+        cancellationRequested: conflict.location.level === "root" && lookupState === "cancelled"
+          ? false
+          : projection.cancellationRequested,
+        conflictIds: unresolvedIds,
         revision: projection.revision + 1,
         updatedAt: resolution.recordedAt
       };
@@ -841,7 +921,7 @@ function decodeState(value: unknown, binding: StateBinding, mapping: ProviderSta
     let rebuilt = initialState(binding);
     let nextObservation = 0;
     const replayObservationsThrough = (lastIndex: number): void => {
-      if (lastIndex < nextObservation) fail("corrupt_state");
+      if (lastIndex < nextObservation) return;
       for (; nextObservation <= lastIndex; nextObservation += 1) {
         const record = observationRows[nextObservation]!;
         const normalized = rehydrateObservation(record, mapping, trackingPolicy);
@@ -1054,6 +1134,35 @@ function pushBounded<T>(rows: readonly T[], item: T): readonly T[] {
   return [...rows, item];
 }
 
+function assertProposedStateCapacity(state: StatusStoreState): void {
+  const rows: readonly (readonly unknown[])[] = [
+    state.observations, state.projections, state.conflicts, state.resolutions, state.pollTargets,
+    state.callbackHints, state.outbox, state.effectIds
+  ];
+  if (rows.some((items) => items.length > MAX_STATE_ROWS)) fail("capacity_exceeded");
+  for (const projection of state.projections) {
+    if (projection.shipments.length > MAX_PROJECTED_SHIPMENTS) fail("capacity_exceeded");
+    for (const shipment of projection.shipments) {
+      if (shipment.items.length > MAX_PROJECTED_ITEMS) fail("capacity_exceeded");
+      for (const item of shipment.items) {
+        if (item.quantities.length > MAX_PROJECTED_QUANTITIES) fail("capacity_exceeded");
+        for (const quantity of item.quantities) {
+          if (quantity.contributions.length > MAX_PROJECTED_CONTRIBUTIONS) fail("capacity_exceeded");
+        }
+      }
+    }
+  }
+  for (const observation of state.observations) {
+    if (observation.shipments.length > MAX_PROJECTED_SHIPMENTS) fail("capacity_exceeded");
+    for (const shipment of observation.shipments) {
+      if (shipment.items.length > MAX_PROJECTED_ITEMS) fail("capacity_exceeded");
+      for (const item of shipment.items) {
+        if (item.quantities.length > MAX_PROJECTED_QUANTITIES) fail("capacity_exceeded");
+      }
+    }
+  }
+}
+
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -1149,6 +1258,7 @@ function emptyProjection(
     scope,
     providerRequestId,
     state: "unknown",
+    rootState: "unknown",
     cancellationRequested: false,
     shipments: [],
     observationIds: [],
@@ -1189,13 +1299,14 @@ function recordConflict(
   scope: StatusScope,
   providerRequestId: string,
   kind: ConflictKind,
+  location: ConflictLocation,
   observationIds: readonly string[],
   now: number
 ): { readonly state: StatusStoreState; readonly conflict: StatusConflict } {
   const ids = [...new Set(observationIds)].sort();
   if (ids.length < 2 || ids.length > 4) fail("corrupt_state");
   const conflictId = `conflict-${stableDigest({
-    key: scopeKey(binding.providerId, binding.mode, scope, providerRequestId), kind, observationIds: ids
+    key: scopeKey(binding.providerId, binding.mode, scope, providerRequestId), kind, location, observationIds: ids
   }).slice(0, 48)}`;
   const existing = state.conflicts.find((conflict) => conflict.conflictId === conflictId);
   if (existing !== undefined) return { state, conflict: existing };
@@ -1206,6 +1317,7 @@ function recordConflict(
     scope,
     providerRequestId,
     kind,
+    location,
     observationIds: ids,
     state: "unresolved",
     createdAt: now
@@ -1213,22 +1325,52 @@ function recordConflict(
   return { state: { ...state, conflicts: pushBounded(state.conflicts, conflict) }, conflict };
 }
 
-function priorObservationId(projection: StatusProjection, incomingId: string): string {
-  const previous = [...projection.observationIds].reverse().find((id) => id !== incomingId);
-  if (previous === undefined) fail("corrupt_state");
-  return previous;
+function observationStateAtLocation(
+  observation: Pick<StatusObservationRecord, "state" | "shipments">,
+  location: ConflictLocation
+): StatusState | undefined {
+  if (location.level === "root") return observation.state;
+  const shipment = observation.shipments.find((item) => item.shipmentId === location.shipmentId);
+  if (shipment === undefined) return undefined;
+  if (location.level === "shipment") return shipment.state;
+  return shipment.items.find((item) => item.itemId === location.itemId)?.state;
 }
 
-function priorRootTerminalObservationId(
+function withProjectionLocationState(
+  projection: StatusProjection,
+  location: ConflictLocation,
+  state: StatusState
+): StatusProjection | undefined {
+  if (location.level === "root") return { ...projection, rootState: state };
+  const shipmentIndex = projection.shipments.findIndex((item) => item.shipmentId === location.shipmentId);
+  if (shipmentIndex < 0) return undefined;
+  const shipments = projection.shipments.slice();
+  const shipment = shipments[shipmentIndex]!;
+  if (location.level === "shipment") {
+    shipments[shipmentIndex] = { ...shipment, state };
+    return { ...projection, shipments };
+  }
+  const itemIndex = shipment.items.findIndex((item) => item.itemId === location.itemId);
+  if (itemIndex < 0) return undefined;
+  const items = shipment.items.slice();
+  items[itemIndex] = { ...items[itemIndex]!, state };
+  shipments[shipmentIndex] = { ...shipment, items };
+  return { ...projection, shipments };
+}
+
+function priorLocationObservationId(
   state: StatusStoreState,
   projection: StatusProjection,
   incomingId: string,
-  stateValue: StatusState
+  location: ConflictLocation,
+  matchingState?: StatusState
 ): string | undefined {
   return [...projection.observationIds].reverse().find((id) => {
     if (id === incomingId) return false;
     const observation = state.observations.find((item) => item.observationId === id);
-    return observation !== undefined && observation.state === stateValue && isTerminalState(observation.state);
+    if (observation === undefined) return false;
+    const value = observationStateAtLocation(observation, location);
+    return value !== undefined && (matchingState === undefined || value === matchingState);
   });
 }
 
@@ -1240,6 +1382,14 @@ function mergeQuantities(
     ...quantity,
     contributions: [...quantity.contributions]
   }));
+  const bucketIndex = new Map<string, number>();
+  const contributionIndex = new Map<string, Map<string, number>>();
+  const keyFor = (kind: string, unit: string, basis: string): string => `${kind}:${unit}:${basis}`;
+  for (const [index, quantity] of quantities.entries()) {
+    const key = keyFor(quantity.kind, quantity.unit, quantity.basis);
+    bucketIndex.set(key, index);
+    contributionIndex.set(key, new Map(quantity.contributions.map((item) => [item.id, item.amount])));
+  }
   let conflict = false;
   for (const fact of incoming) {
     const sameKindUnit = quantities.filter((quantity) => quantity.kind === fact.kind && quantity.unit === fact.unit);
@@ -1251,36 +1401,55 @@ function mergeQuantities(
       conflict = true;
       continue;
     }
-    const index = quantities.findIndex((quantity) => quantity.kind === fact.kind && quantity.unit === fact.unit && quantity.basis === fact.basis);
+    const key = keyFor(fact.kind, fact.unit, fact.basis);
+    const index = bucketIndex.get(key) ?? -1;
     if (fact.basis === "cumulative") {
       if (index < 0) {
         quantities.push({ kind: fact.kind, unit: fact.unit, basis: fact.basis, total: fact.value, contributions: [] });
-      } else if (quantities[index]!.total !== fact.value) {
+        bucketIndex.set(key, quantities.length - 1);
+        contributionIndex.set(key, new Map());
+      } else if (fact.value < quantities[index]!.total) {
         conflict = true;
+      } else if (fact.value > quantities[index]!.total) {
+        quantities[index] = { ...quantities[index]!, total: fact.value };
       }
       continue;
     }
     if (fact.contributionId === undefined) fail("invalid_record");
-    const quantity = index < 0
-      ? { kind: fact.kind, unit: fact.unit, basis: fact.basis, total: 0, contributions: [] as { id: string; amount: number }[] }
-      : quantities[index]!;
-    const contribution = quantity.contributions.find((item) => item.id === fact.contributionId);
-    if (contribution !== undefined) {
-      if (contribution.amount !== fact.value) conflict = true;
+    if (index < 0) {
+      quantities.push({ kind: fact.kind, unit: fact.unit, basis: fact.basis, total: 0, contributions: [] });
+      bucketIndex.set(key, quantities.length - 1);
+      contributionIndex.set(key, new Map());
+    }
+    const quantityIndex = bucketIndex.get(key)!;
+    const quantity = quantities[quantityIndex]!;
+    const contributions = contributionIndex.get(key)!;
+    const priorAmount = contributions.get(fact.contributionId);
+    if (priorAmount !== undefined) {
+      if (priorAmount !== fact.value) conflict = true;
       continue;
     }
     const total = quantity.total + fact.value;
-    if (!Number.isSafeInteger(total) || total > 1_000_000_000) fail("capacity_exceeded");
+    if (!Number.isSafeInteger(total)) fail("capacity_exceeded");
+    if (quantity.contributions.length >= MAX_PROJECTED_CONTRIBUTIONS) fail("capacity_exceeded");
+    contributions.set(fact.contributionId, fact.value);
     const updated: ProjectedQuantity = {
       kind: fact.kind,
       unit: fact.unit,
       basis: fact.basis,
       total,
       contributions: [...quantity.contributions, { id: fact.contributionId, amount: fact.value }]
-        .sort((left, right) => left.id.localeCompare(right.id))
     };
-    if (index < 0) quantities.push(updated);
-    else quantities[index] = updated;
+    quantities[quantityIndex] = updated;
+  }
+  for (let index = 0; index < quantities.length; index += 1) {
+    const quantity = quantities[index]!;
+    if (quantity.basis === "delta") {
+      quantities[index] = {
+        ...quantity,
+        contributions: [...quantity.contributions].sort((left, right) => left.id.localeCompare(right.id))
+      };
+    }
   }
   quantities.sort((left, right) => `${left.kind}:${left.unit}:${left.basis}`.localeCompare(`${right.kind}:${right.unit}:${right.basis}`));
   return { quantities, conflict };
@@ -1359,7 +1528,7 @@ function applyStatusObservation(
     const conflictingObservation: StatusObservationRecord = { ...observation, disposition: "source_id_conflict" };
     let state: StatusStoreState = { ...original, observations: pushBounded(original.observations, conflictingObservation) };
     const conflictResult = recordConflict(state, binding, scope, normalized.providerRequestId, "source_id_collision",
-      [sourcePrior.observationId, conflictingObservation.observationId], normalized.ingestedAt);
+      { level: "root" }, [sourcePrior.observationId, conflictingObservation.observationId], normalized.ingestedAt);
     state = conflictResult.state;
     const conflictIds = state.conflicts.filter((item) => item.providerId === binding.providerId && item.mode === binding.mode &&
       item.providerRequestId === normalized.providerRequestId && scopeMatches(item.scope, scope) && item.state === "unresolved")
@@ -1399,31 +1568,33 @@ function applyStatusObservation(
   const storedObservation = observation;
   let state: StatusStoreState = { ...original, observations: pushBounded(original.observations, storedObservation) };
   const projection = cloneJson(previousProjection);
-  const newConflictIds: string[] = [];
-  let rootState = projection.state;
+  let rootState = projection.rootState;
   let cancellationRequested = projection.cancellationRequested;
   let topConflict = false;
   if (normalized.state === "cancel_requested") cancellationRequested = true;
   else if (normalized.state === "cancel_rejected") cancellationRequested = false;
   else if (normalized.state !== "unknown") {
-    if (rootState === "conflict") {
-      topConflict = true;
-    } else {
-      const merged = mergeState(rootState, normalized.state);
-      rootState = merged.state;
-      topConflict = merged.terminalConflict;
-    }
+    const merged = mergeState(rootState, normalized.state);
+    topConflict = merged.terminalConflict;
+    if (!merged.terminalConflict && isStatusState(merged.state)) rootState = merged.state;
   }
 
-  const previousId = projection.observationIds.length === 0 ? undefined : priorObservationId(projection, observationId);
-  if (topConflict && isStatusState(projection.state) && isTerminalState(projection.state)) {
-    const priorTerminalId = priorRootTerminalObservationId(state, projection, observationId, projection.state);
-    if (priorTerminalId === undefined) fail("corrupt_state");
-    const conflict = recordConflict(state, binding, scope, normalized.providerRequestId, "terminal_contradiction",
-      [priorTerminalId, observationId], normalized.ingestedAt);
-    state = conflict.state;
-    newConflictIds.push(conflict.conflict.conflictId);
-    rootState = "conflict";
+  if (topConflict && isTerminalState(projection.rootState)) {
+    const rootLocation: ConflictLocation = { level: "root" };
+    const unresolvedRoot = state.conflicts.find((item) => item.providerId === binding.providerId && item.mode === binding.mode &&
+      item.providerRequestId === normalized.providerRequestId && scopeMatches(item.scope, scope) &&
+      item.kind === "terminal_contradiction" && item.state === "unresolved" && stableDigest(item.location) === stableDigest(rootLocation));
+    const incomingStateAlreadyCaptured = unresolvedRoot?.observationIds.some((id) => {
+      const prior = state.observations.find((item) => item.observationId === id);
+      return prior !== undefined && observationStateAtLocation(prior, rootLocation) === normalized.state;
+    }) ?? false;
+    if (!incomingStateAlreadyCaptured) {
+      const priorTerminalId = priorLocationObservationId(state, projection, observationId, rootLocation, projection.rootState);
+      if (priorTerminalId === undefined) fail("corrupt_state");
+      const conflict = recordConflict(state, binding, scope, normalized.providerRequestId, "terminal_contradiction",
+        rootLocation, [priorTerminalId, observationId], normalized.ingestedAt);
+      state = conflict.state;
+    }
   }
 
   const existingShipments = new Map(projection.shipments.map((shipment) => [shipment.shipmentId, shipment]));
@@ -1440,15 +1611,7 @@ function applyStatusObservation(
         items: incomingShipment.items.map((item) => ({
           itemId: item.itemId,
           state: item.state,
-          quantities: item.quantities.map((quantity): ProjectedQuantity => ({
-            kind: quantity.kind,
-            unit: quantity.unit,
-            basis: quantity.basis,
-            total: quantity.value,
-            contributions: quantity.basis === "delta" && quantity.contributionId !== undefined
-              ? [{ id: quantity.contributionId, amount: quantity.value }]
-              : []
-          }))
+          quantities: mergeQuantities([], item.quantities).quantities
         }))
       });
       existingShipments.delete(incomingShipment.shipmentId);
@@ -1460,23 +1623,25 @@ function applyStatusObservation(
       incomingShipment.state
     );
     let shipmentState: ProjectedStatusState = previousShipment.state === "conflict" ? "conflict" : mergedShipmentState.state;
-    if (mergedShipmentState.terminalConflict && previousId !== undefined) {
+    if (mergedShipmentState.terminalConflict) {
+      const location: ConflictLocation = { level: "shipment", shipmentId: incomingShipment.shipmentId };
+      const priorId = priorLocationObservationId(state, projection, observationId, location,
+        isStatusState(previousShipment.state) ? previousShipment.state : undefined);
+      if (priorId === undefined) fail("corrupt_state");
       const conflict = recordConflict(state, binding, scope, normalized.providerRequestId, "terminal_contradiction",
-        [previousId, observationId], normalized.ingestedAt);
+        location, [priorId, observationId], normalized.ingestedAt);
       state = conflict.state;
-      newConflictIds.push(conflict.conflict.conflictId);
       shipmentState = "conflict";
-      rootState = "conflict";
     }
     const mergeTracking = (oldValue: string | undefined, newValue: string | undefined): string | undefined => {
       if (newValue === undefined) return oldValue;
       if (oldValue === undefined || oldValue === newValue) return newValue;
-      if (previousId === undefined) fail("corrupt_state");
+      const location: ConflictLocation = { level: "shipment", shipmentId: incomingShipment.shipmentId };
+      const priorId = priorLocationObservationId(state, projection, observationId, location);
+      if (priorId === undefined) fail("corrupt_state");
       const conflict = recordConflict(state, binding, scope, normalized.providerRequestId, "tracking_contradiction",
-        [previousId, observationId], normalized.ingestedAt);
+        location, [priorId, observationId], normalized.ingestedAt);
       state = conflict.state;
-      newConflictIds.push(conflict.conflict.conflictId);
-      rootState = "conflict";
       return oldValue;
     };
     const carrierCode = mergeTracking(previousShipment.carrierCode, incomingShipment.carrierCode);
@@ -1490,37 +1655,35 @@ function applyStatusObservation(
         mergedItems.push({
           itemId: incomingItem.itemId,
           state: incomingItem.state,
-          quantities: incomingItem.quantities.map((quantity): ProjectedQuantity => ({
-            kind: quantity.kind,
-            unit: quantity.unit,
-            basis: quantity.basis,
-            total: quantity.value,
-            contributions: quantity.basis === "delta" && quantity.contributionId !== undefined
-              ? [{ id: quantity.contributionId, amount: quantity.value }]
-              : []
-          }))
+          quantities: mergeQuantities([], incomingItem.quantities).quantities
         });
         itemsById.delete(incomingItem.itemId);
         continue;
       }
       const mergedItemState = mergeState(previousItem.state === "conflict" ? "unknown" : previousItem.state, incomingItem.state);
       let itemState: ProjectedStatusState = previousItem.state === "conflict" ? "conflict" : mergedItemState.state;
-      if (mergedItemState.terminalConflict && previousId !== undefined) {
+      if (mergedItemState.terminalConflict) {
+        const location: ConflictLocation = {
+          level: "item", shipmentId: incomingShipment.shipmentId, itemId: incomingItem.itemId
+        };
+        const priorId = priorLocationObservationId(state, projection, observationId, location,
+          isStatusState(previousItem.state) ? previousItem.state : undefined);
+        if (priorId === undefined) fail("corrupt_state");
         const conflict = recordConflict(state, binding, scope, normalized.providerRequestId, "terminal_contradiction",
-          [previousId, observationId], normalized.ingestedAt);
+          location, [priorId, observationId], normalized.ingestedAt);
         state = conflict.state;
-        newConflictIds.push(conflict.conflict.conflictId);
         itemState = "conflict";
-        rootState = "conflict";
       }
       const mergedQuantities = mergeQuantities(previousItem.quantities, incomingItem.quantities);
       if (mergedQuantities.conflict) {
-        if (previousId === undefined) fail("corrupt_state");
+        const location: ConflictLocation = {
+          level: "item", shipmentId: incomingShipment.shipmentId, itemId: incomingItem.itemId
+        };
+        const priorId = priorLocationObservationId(state, projection, observationId, location);
+        if (priorId === undefined) fail("corrupt_state");
         const conflict = recordConflict(state, binding, scope, normalized.providerRequestId, "quantity_contradiction",
-          [previousId, observationId], normalized.ingestedAt);
+          location, [priorId, observationId], normalized.ingestedAt);
         state = conflict.state;
-        newConflictIds.push(conflict.conflict.conflictId);
-        rootState = "conflict";
       }
       mergedItems.push({ itemId: incomingItem.itemId, state: itemState, quantities: mergedQuantities.quantities });
       itemsById.delete(incomingItem.itemId);
@@ -1543,11 +1706,10 @@ function applyStatusObservation(
   const unresolvedIds = state.conflicts.filter((conflict) => conflict.providerId === binding.providerId && conflict.mode === binding.mode &&
     conflict.providerRequestId === normalized.providerRequestId && scopeMatches(conflict.scope, scope) && conflict.state === "unresolved")
     .map((conflict) => conflict.conflictId);
-  const hasAnyNewConflict = newConflictIds.length > 0;
-  if (hasAnyNewConflict || unresolvedIds.length > 0 && rootState !== "conflict") rootState = "conflict";
   const updatedProjection: StatusProjection = {
     ...projection,
-    state: rootState,
+    state: unresolvedIds.length > 0 ? "conflict" : rootState,
+    rootState,
     cancellationRequested,
     shipments: updatedShipments,
     observationIds: pushBounded(projection.observationIds, observationId),
@@ -1574,7 +1736,7 @@ function applyStatusObservation(
   if (targets.some((target, index) => target !== state.pollTargets[index])) state = { ...state, pollTargets: targets };
   return {
     state,
-    disposition: hasAnyNewConflict || unresolvedIds.length > 0 ? "conflict" : "applied",
+    disposition: unresolvedIds.length > 0 ? "conflict" : "applied",
     observationId
   };
 }
@@ -1686,7 +1848,7 @@ export class LocalStatusStore {
     try {
       const fresh = await this.checkFilesystem();
       const raw = await this.durable.read();
-      const state = decodeState(raw, this.binding, this.mapping, this.trackingPolicy);
+      const state = decodeState(raw, this.binding, this.mapping, this.trackingPolicy, !fresh);
       if (fresh && state.observations.length + state.pollTargets.length + state.outbox.length !== 0) fail("corrupt_state");
       return state;
     } catch (error) {
@@ -1718,9 +1880,12 @@ export class LocalStatusStore {
       for (let attempt = 0; attempt < 8; attempt += 1) {
         try {
           result = await this.durable.update((raw) => {
-            const current = decodeState(raw, this.binding, this.mapping, this.trackingPolicy);
+            const current = decodeState(raw, this.binding, this.mapping, this.trackingPolicy, !fresh);
             const updated = change(current);
-            return { state: durableValue(updated.state), result: updated.result };
+            assertProposedStateCapacity(updated.state);
+            const candidate = durableValue(updated.state);
+            const validated = decodeState(candidate, this.binding, this.mapping, this.trackingPolicy, true);
+            return { state: durableValue(validated), result: updated.result };
           });
           persisted = true;
           break;
@@ -1844,10 +2009,16 @@ export class LocalStatusStore {
         const { lastLookupFailure: _oldFailure, ...withoutFailure } = updated;
         if (lease.kind === "canonical_reconciliation" && exhausted) {
           const { nextReconciliationAt: _nextRecon, ...withoutRecon } = withoutFailure;
-          updatedTarget = { ...withoutRecon, state: "exhausted", ...(safeFailure === undefined ? {} : { lastLookupFailure: safeFailure }) };
+          updatedTarget = {
+            ...withoutRecon,
+            trustedNotBeforeAt: retryAt,
+            state: "exhausted",
+            ...(safeFailure === undefined ? {} : { lastLookupFailure: safeFailure })
+          };
         } else {
           updatedTarget = {
             ...withoutFailure,
+            trustedNotBeforeAt: retryAt,
             state: exhausted && lease.kind === "scheduled_poll" ? "exhausted" : "active",
             nextPollAt: lease.kind === "scheduled_poll" ? retryAt : Math.max(updated.nextPollAt, retryAt),
             nextReconciliationAt: retryAt,
@@ -1858,6 +2029,7 @@ export class LocalStatusStore {
         const { nextReconciliationAt: _nextRecon, lastLookupFailure: _failure, ...rest } = withoutLease;
         updatedTarget = {
           ...rest,
+          trustedNotBeforeAt: retryAt,
           state: "stopped_terminal",
           ...(lease.kind === "canonical_reconciliation"
             ? { reconciliationAttempts: attemptCount }
@@ -1867,6 +2039,7 @@ export class LocalStatusStore {
         const { nextReconciliationAt: _nextRecon, ...rest } = withoutLease;
         updatedTarget = {
           ...rest,
+          trustedNotBeforeAt: retryAt,
           state: "exhausted",
           ...(lease.kind === "canonical_reconciliation"
             ? { reconciliationAttempts: attemptCount }
@@ -1877,6 +2050,7 @@ export class LocalStatusStore {
         const { nextReconciliationAt: _nextRecon, lastLookupFailure: _oldFailure, ...withoutStaleSchedule } = withoutLease;
         updatedTarget = {
           ...withoutStaleSchedule,
+          trustedNotBeforeAt: retryAt,
           state: "active",
           ...(lease.kind === "canonical_reconciliation"
             ? { reconciliationAttempts: attemptCount, nextPollAt: retryAt }
@@ -2033,14 +2207,17 @@ export class LocalStatusStore {
         const updatedTarget: PollTargetRecord = {
           ...target,
           ...(target.state === "active" ? {
-            nextPollAt: Math.min(target.nextPollAt, receivedAt + target.policy.minimumIntervalMs)
+            nextPollAt: Math.max(target.trustedNotBeforeAt ?? 0,
+              Math.min(target.nextPollAt, receivedAt + target.policy.minimumIntervalMs))
           } : reactivateTerminal ? {
             state: "active" as const,
-            nextPollAt: Math.max(target.nextPollAt, receivedAt + target.policy.minimumIntervalMs)
+            nextPollAt: Math.max(target.nextPollAt, receivedAt + target.policy.minimumIntervalMs,
+              target.trustedNotBeforeAt ?? 0)
           } : {}),
           ...(unresolved
-            ? { nextReconciliationAt: Math.min(target.nextReconciliationAt ?? (receivedAt + target.policy.minimumIntervalMs),
-                receivedAt + target.policy.minimumIntervalMs) }
+            ? { nextReconciliationAt: Math.max(target.trustedNotBeforeAt ?? 0,
+                Math.min(target.nextReconciliationAt ?? (receivedAt + target.policy.minimumIntervalMs),
+                  receivedAt + target.policy.minimumIntervalMs)) }
             : {})
         };
         const targets = state.pollTargets.slice();
@@ -2175,19 +2352,25 @@ export class LocalStatusStore {
           observation.providerId === this.binding.providerId && observation.mode === this.binding.mode &&
           observation.providerRequestId === row.providerRequestId && scopeMatches(observation.scope, scope) &&
           observation.sourceKind === "trusted_lookup");
-        if (lookupObservation === undefined || !TERMINAL_STATES.has(lookupObservation.state) ||
-          !policy.allowedTo.includes(lookupObservation.state)) fail("conflict_unresolved");
+        const lookupState = lookupObservation === undefined ? undefined : observationStateAtLocation(lookupObservation, conflict.location);
+        if (lookupObservation === undefined || !isStatusState(lookupState) || !TERMINAL_STATES.has(lookupState) ||
+          !policy.allowedTo.includes(lookupState)) {
+          fail("conflict_unresolved");
+        }
         const conflictObservations = conflict.observationIds.map((id) => state.observations.find((observation) =>
           observation.observationId === id && observation.providerId === this.binding.providerId &&
           observation.mode === this.binding.mode && observation.providerRequestId === row.providerRequestId &&
           scopeMatches(observation.scope, scope)));
-        if (conflictObservations.some((observation) => observation === undefined || !TERMINAL_STATES.has(observation.state) ||
-          !policy.allowedFrom.includes(observation.state))) fail("conflict_unresolved");
+        if (conflictObservations.some((observation) => {
+          if (observation === undefined) return true;
+          const observed = observationStateAtLocation(observation, conflict.location);
+          return !isStatusState(observed) || !TERMINAL_STATES.has(observed) || !policy.allowedFrom.includes(observed);
+        })) fail("conflict_unresolved");
         const resolutionId = `resolution-${stableDigest({
           scopeKey: scopeKey(this.binding.providerId, this.binding.mode, scope, row.providerRequestId as string),
           conflictId: conflict.conflictId,
           lookupObservationId: lookupObservation.observationId,
-          correctedState: lookupObservation.state,
+          correctedState: lookupState,
           policy
         }).slice(0, 48)}`;
         const existing = state.resolutions.find((resolution) => resolution.resolutionId === resolutionId);
@@ -2200,25 +2383,29 @@ export class LocalStatusStore {
           providerRequestId: row.providerRequestId as string,
           conflictIds: [conflict.conflictId],
           lookupObservationId: lookupObservation.observationId,
-          correctedState: lookupObservation.state,
+          correctedState: lookupState,
           correctionPolicy: policy,
           recordedAt
         };
         const conflicts = state.conflicts.slice();
         conflicts[conflictIndex] = { ...conflict, state: "resolved", resolutionId };
-        const unresolved = conflicts.some((item) => item.providerId === this.binding.providerId && item.mode === this.binding.mode &&
-          item.providerRequestId === row.providerRequestId && scopeMatches(item.scope, scope) && item.state === "unresolved");
+        const unresolvedIds = conflicts.filter((item) => item.providerId === this.binding.providerId && item.mode === this.binding.mode &&
+          item.providerRequestId === row.providerRequestId && scopeMatches(item.scope, scope) && item.state === "unresolved")
+          .map((item) => item.conflictId);
+        const unresolved = unresolvedIds.length > 0;
         const projectionIndex = state.projections.findIndex((item) => item.providerId === this.binding.providerId &&
           item.mode === this.binding.mode && item.providerRequestId === row.providerRequestId && scopeMatches(item.scope, scope));
         if (projectionIndex < 0) fail("corrupt_state");
         const projection = state.projections[projectionIndex]!;
+        const locationUpdated = withProjectionLocationState(projection, conflict.location, lookupState);
+        if (locationUpdated === undefined) fail("conflict_unresolved");
         const updatedProjection: StatusProjection = {
-          ...projection,
-          state: unresolved ? "conflict" : lookupObservation.state,
-          cancellationRequested: lookupObservation.state === "cancelled" ? false : projection.cancellationRequested,
-          conflictIds: conflicts.filter((item) => item.providerId === this.binding.providerId && item.mode === this.binding.mode &&
-            item.providerRequestId === row.providerRequestId && scopeMatches(item.scope, scope) && item.state === "unresolved")
-            .map((item) => item.conflictId),
+          ...locationUpdated,
+          state: unresolved ? "conflict" : locationUpdated.rootState,
+          cancellationRequested: conflict.location.level === "root" && lookupState === "cancelled"
+            ? false
+            : projection.cancellationRequested,
+          conflictIds: unresolvedIds,
           revision: projection.revision + 1,
           updatedAt: recordedAt
         };
@@ -2236,7 +2423,7 @@ export class LocalStatusStore {
           return {
             ...rest,
             leaseFence,
-            state: target.policy.terminalStates.includes(lookupObservation.state)
+            state: target.policy.terminalStates.includes(updatedProjection.rootState)
               ? "stopped_terminal" as const
               : target.state === "exhausted" ? "exhausted" as const : "active" as const
           };
