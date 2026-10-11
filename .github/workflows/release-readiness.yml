@@ -12,12 +12,29 @@ jobs:
           node-version: '22.23.3'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Fail closed on all release obligations
+      - name: Verify local candidate behavior
         env:
           npm_config_offline: 'true'
         run: |
-          npm run contracts:inventory -- --require-owner --require-consumer --require-leaf --require-fixtures --require-docs --require-consumer-pins --require-field-classification --require-version-policy
+          npm ci --ignore-scripts
+          npm run build
+          npm test
           npm run contracts:check
           npm run contracts:fixtures
           npm run contracts:compat
-          npm run contracts:consumers
+          npm run docs:check
+          npm run contracts:coverage -- --human
+          npm run generate -- --check
+          git diff --exit-code -- schemas generated fixtures
+          npm run test:installed
+          npm pack --dry-run
+      - name: Fail closed on owner and immutable pin obligations
+        if: always()
+        env:
+          npm_config_offline: 'true'
+        run: npm run contracts:inventory -- --require-owner --require-consumer --require-leaf --require-fixtures --require-docs --require-consumer-pins --require-field-classification --require-version-policy
+      - name: Fail closed on genuine consumer integration
+        if: always()
+        env:
+          npm_config_offline: 'true'
+        run: npm run contracts:consumers

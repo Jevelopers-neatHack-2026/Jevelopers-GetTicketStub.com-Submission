@@ -115,22 +115,53 @@
       "id": "minimal",
       "category": "minimal",
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:994232152dd79f165f0ed3629ed81291604db4de072fc990ed84295e287d3cb1"
+      },
+      "remove": [
+        "workflow_id",
+        "run_id",
+        "job_id",
+        "artifact_id",
+        "design_id",
+        "design_version_id",
+        "order_id",
+        "trace_id",
+        "evidence_id",
+        "usage_event_id",
+        "logical_operation_id",
+        "provider_attempt_id",
+        "billable_attempt_id",
+        "transport_attempt_id",
+        "provider_request_id"
+      ],
+      "policy_version": "1.0.0"
     },
     {
       "id": "full",
       "category": "full",
       "set": {
-        "artifact_id": "123e4567-e89b-42d3-a456-000000000040",
-        "design_id": "123e4567-e89b-42d3-a456-000000000041",
-        "design_version_id": "123e4567-e89b-42d3-a456-000000000042",
-        "trace_id": "123e4567-e89b-42d3-a456-000000000043",
-        "evidence_id": "123e4567-e89b-42d3-a456-000000000044"
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_version_id": "123e4567-e89b-42d3-a456-426614174000",
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "run_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "order_id": "123e4567-e89b-42d3-a456-426614174000",
+        "usage_event_id": "123e4567-e89b-42d3-a456-426614174000",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "billable_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_request_id": null
       },
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:c0ec7ff938ef8e2a927261daae37a38e0212e2e731bffdbb265488d77cb1030b"
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "missing-policy",
@@ -142,7 +173,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/policy_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "wrong-type",
@@ -154,7 +186,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-enum",
@@ -166,7 +199,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "malformed-json",
@@ -177,7 +211,8 @@
         "ok": false,
         "code": "MALFORMED_JSON",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unsupported-version",
@@ -189,7 +224,8 @@
         "ok": false,
         "code": "UNSUPPORTED_VERSION",
         "path": "/schema_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-field",
@@ -203,7 +239,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "invalid-date",
@@ -215,7 +252,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/observed_at"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "semantic-positive",
@@ -275,7 +313,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "forged-tenant",
@@ -340,7 +379,8 @@
         "ok": false,
         "code": "SCOPE_MISMATCH",
         "path": "/tenant_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-total",
@@ -432,7 +472,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "foreign-currency-without-conversion",
@@ -503,7 +544,8 @@
         "ok": false,
         "code": "CURRENCY_MISMATCH",
         "path": "/conversion_ref"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "invalid-period",
@@ -571,7 +613,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/period/end"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "mode-expansion",
@@ -639,7 +682,8 @@
         "ok": false,
         "code": "SCOPE_MISMATCH",
         "path": "/included_billing_modes"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "sub-cent-retained",
@@ -700,7 +744,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "fake-complete-coverage",
@@ -769,7 +814,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/coverage"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "signed-sub-cent-total",
@@ -857,7 +903,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "bound-currency-conversion",
@@ -940,7 +987,49 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:994232152dd79f165f0ed3629ed81291604db4de072fc990ed84295e287d3cb1"
+      },
+      "policy_version": "1.0.0"
     }
-  ]
+  ],
+  "schema_version": "1.0.0"
 }

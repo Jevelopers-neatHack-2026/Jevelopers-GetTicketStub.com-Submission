@@ -75,7 +75,8 @@ export function checkApprovalVerificationRequest(input, context) {
 export function checkApprovalVerificationOutcome(input, context) {
   const parsed = boundary('ApprovalVerificationOutcome', input, context); if (!parsed.ok) return parsed;
   const current = approvalState(context, false); if (!current.ok) return current;
-  const request = validateContract('ApprovalVerificationRequest', context.verification_request); if (!request.ok) return fail('INVALID_TRUST_CONTEXT', '/verification_request');
+  const request = checkApprovalVerificationRequest(context.verification_request, { ...context, references: context.verification_request_references });
+  if (!request.ok) return fail('INVALID_TRUST_CONTEXT', '/verification_request');
   const v = parsed.value;
   if (v.request_id !== request.value.request_id || v.request_ref.id !== request.value.request_id || v.request_ref.content_hash !== hashManifest(request.value) || v.status !== context.current_approval.status || v.checked_at !== context.current_approval.checked_at) return fail('INVALID_RECEIPT', '/status');
   if (v.status === 'valid') {

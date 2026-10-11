@@ -1,0 +1,40 @@
+{
+  "status": "blocking_producer_correctness_pending_separate_repair",
+  "source": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12#issuecomment-6103878409",
+  "reviewed_shared_source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+  "reviewed_package_version": "0.3.0",
+  "reported_by": "CompleteDotTech",
+  "consumer_revision": "136bafabd7bc8610b268e297668b98dc56a446f5",
+  "consumer_adoption_accepted": false,
+  "review_scope": "narrow_finance_compatibility_not_full_PR_approval",
+  "findings": [
+    {
+      "id": "FC-001",
+      "severity": "high",
+      "issue": 12,
+      "summary": "Observed overrun is rejected as exceeding authorization; actual cost needs separate representation from dispatch capacity",
+      "status": "unresolved"
+    },
+    {
+      "id": "FC-002",
+      "severity": "high",
+      "issue": 12,
+      "summary": "Reservation semantics do not independently bind environment and billing partition across command/prior/result",
+      "status": "unresolved"
+    },
+    {
+      "id": "FC-003",
+      "severity": "high",
+      "issue": 12,
+      "summary": "Successful reserve/settle result amounts can contradict the bound command and prior economics",
+      "status": "unresolved"
+    },
+    {
+      "id": "FC-004",
+      "severity": "medium",
+      "issue": 12,
+      "summary": "Retained-hold acknowledgements rerun transition eligibility and reject authentic held-for-reconciliation outcomes",
+      "status": "unresolved"
+    }
+  ]
+}

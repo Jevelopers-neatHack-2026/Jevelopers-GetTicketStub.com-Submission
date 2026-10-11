@@ -72,22 +72,41 @@
       "id": "minimal",
       "category": "minimal",
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:a2a2edd1293e117ec2254261b5c09049f196cb35c2b609cf1ca0c739dd04eda9"
+      },
+      "remove": [
+        "workflow_id",
+        "run_id",
+        "job_id",
+        "artifact_id",
+        "design_id",
+        "design_version_id",
+        "order_id",
+        "trace_id",
+        "evidence_id"
+      ],
+      "policy_version": "1.0.0"
     },
     {
       "id": "full",
       "category": "full",
       "set": {
-        "artifact_id": "123e4567-e89b-42d3-a456-000000000040",
-        "design_id": "123e4567-e89b-42d3-a456-000000000041",
-        "design_version_id": "123e4567-e89b-42d3-a456-000000000042",
-        "trace_id": "123e4567-e89b-42d3-a456-000000000043",
-        "evidence_id": "123e4567-e89b-42d3-a456-000000000044"
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_version_id": "123e4567-e89b-42d3-a456-426614174000",
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "run_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "order_id": "123e4567-e89b-42d3-a456-426614174000"
       },
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:1eed90d8e291557707e19f39203d6bd547a071d58e53c3dc8e419d3805a32002"
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "missing-policy",
@@ -99,7 +118,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/policy_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "wrong-type",
@@ -111,7 +131,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-enum",
@@ -123,7 +144,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "malformed-json",
@@ -134,7 +156,8 @@
         "ok": false,
         "code": "MALFORMED_JSON",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unsupported-version",
@@ -146,7 +169,8 @@
         "ok": false,
         "code": "UNSUPPORTED_VERSION",
         "path": "/schema_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-field",
@@ -160,7 +184,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "invalid-date",
@@ -172,7 +197,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/observed_at"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "semantic-positive",
@@ -206,7 +232,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "forged-tenant",
@@ -245,7 +272,8 @@
         "ok": false,
         "code": "SCOPE_MISMATCH",
         "path": "/tenant_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "timeout-known-accounting",
@@ -282,7 +310,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "cancelled-known-accounting",
@@ -319,7 +348,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-operation-known-accounting",
@@ -356,7 +386,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-usage",
@@ -403,7 +434,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-is-not-zero",
@@ -450,7 +482,8 @@
         "ok": false,
         "code": "UNKNOWN_USAGE",
         "path": "/usage_units"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "empty-does-not-mean-measured-zero",
@@ -489,7 +522,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/usage_units"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "measured-zero",
@@ -533,7 +567,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "complete-with-missing",
@@ -574,7 +609,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/missing_fields"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "imprecise-scale",
@@ -620,7 +656,8 @@
         "ok": false,
         "code": "INVALID_MONEY",
         "path": "/usage_units/0/quantity"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "wrong-mode",
@@ -659,7 +696,8 @@
         "ok": false,
         "code": "SCOPE_MISMATCH",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-supersession",
@@ -698,7 +736,8 @@
         "ok": false,
         "code": "INVALID_TRUST_CONTEXT",
         "path": "/prior"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "duplicate-observation",
@@ -773,7 +812,8 @@
       "expected": {
         "ok": true,
         "value": "duplicate_observation"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "transport-retry",
@@ -850,7 +890,8 @@
       "expected": {
         "ok": true,
         "value": "duplicate_observation"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "new-observation-same-execution",
@@ -929,7 +970,8 @@
       "expected": {
         "ok": true,
         "value": "same_execution"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "separately-billed",
@@ -1009,7 +1051,8 @@
       "expected": {
         "ok": true,
         "value": "distinct_billable_attempt"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "superseding-valuation",
@@ -1103,7 +1146,8 @@
       "expected": {
         "ok": true,
         "value": "superseding_observation"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "same-observation-new-billed-attempt",
@@ -1181,7 +1225,8 @@
         "ok": false,
         "code": "IDENTITY_COLLISION",
         "path": "/billable_attempt_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "altered-observation",
@@ -1273,7 +1318,49 @@
         "ok": false,
         "code": "OBSERVATION_CONFLICT",
         "path": "/valuation"
-      }
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:a2a2edd1293e117ec2254261b5c09049f196cb35c2b609cf1ca0c739dd04eda9"
+      },
+      "policy_version": "1.0.0"
     }
-  ]
+  ],
+  "schema_version": "1.0.0"
 }

@@ -6,6 +6,7 @@ import { compile } from 'json-schema-to-typescript';
 import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import ts from 'typescript';
+import { packageContentManifest } from './package-content.mjs';
 
 function immutableDeclaration(source) {
   const ast = ts.createSourceFile('contract.d.ts', source, ts.ScriptTarget.Latest, true);
@@ -25,6 +26,11 @@ function immutableDeclaration(source) {
   return result;
 }
 
+export function versionTypeHeader(versions) {
+  const names = Object.keys(versions);
+  const imports = names.flatMap(name => Object.values(versions[name]).map(exportName => `import type { ${name} as ${exportName} } from './${exportName}.js';\nexport type { ${exportName} };`));
+  return imports.join('\n') + '\n' + names.map(name => `export type ${name} = ${Object.values(versions[name]).join(' | ')};`).join('\n');
+}
 export const root = fileURLToPath(new URL('../', import.meta.url));
 export const readJson = async path => JSON.parse(await readFile(root + path, 'utf8'));
 export async function schemaFiles() {
@@ -87,12 +93,32 @@ export async function outputs() {
   const validation = bundled.outputFiles[0].text;
   if (Object.values(bundled.metafile.outputs).some(output => output.imports.length)) throw new Error('Standalone validators require a runtime dependency');
   result.set('validators.mjs', validation.trimEnd() + '\n');
+  const lock = await readJson('package-lock.json');
+  const embedded = [...new Set(Object.keys(bundled.metafile.inputs).filter(path => path.includes('node_modules/')).map(path => path.split('node_modules/').at(-1).split('/')[0]))].sort();
+  const provenance = [];
+  let notices = '# Third-party notices\n\nThese notices apply to bundled dependency code only. They do not license shared-contracts.\n';
+  for (const name of embedded) {
+    const metadata = await readJson('node_modules/' + name + '/package.json');
+    const licenseFile = (await readdir(root + 'node_modules/' + name)).find(path => /^licen[cs]e(?:\\.|$)/i.test(path));
+    if (!licenseFile || !lock.packages['node_modules/' + name]?.integrity) throw new Error('Missing dependency notice or immutable lock: ' + name);
+    const license = await readFile(root + 'node_modules/' + name + '/' + licenseFile, 'utf8');
+    notices += '\n## ' + name + '@' + metadata.version + '\n\n' + license.trimEnd() + '\n';
+    provenance.push({ name, version: metadata.version, license: metadata.license, integrity: lock.packages['node_modules/' + name].integrity, source_files: Object.keys(bundled.metafile.inputs).filter(path => path.includes('node_modules/' + name + '/')).sort(), notice_sha256: 'sha256:' + createHash('sha256').update(license).digest('hex') });
+  }
+  result.set('THIRD_PARTY_NOTICES.md', notices);
+  result.set('dependency-provenance.json', JSON.stringify({ project_license: null, runtime_npm_dependencies: 0, embedded, packages: provenance, build_dependencies: Object.entries(packageManifest.devDependencies).map(([name, version]) => ({ name, version, integrity: lock.packages['node_modules/' + name].integrity, license: lock.packages['node_modules/' + name].license })) }, null, 2) + '\n');
   result.set('registry.mjs', 'const records = ' + JSON.stringify(versions, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const versions = Object.freeze(records);\nexport const primitiveValidators = Object.freeze(' + JSON.stringify(primitiveValidators, null, 2) + ');\n');
   result.set('primitives.d.ts', primitiveDeclarations);
   const fixtureFiles = (await readdir(root + 'fixtures')).filter(name => name.endsWith('.json')).sort();
   const fixtureHashes = {};
   for (const name of fixtureFiles) fixtureHashes['fixtures/' + name] = 'sha256:' + createHash('sha256').update(await readFile(root + 'fixtures/' + name)).digest('hex');
-  result.set('fixture-manifest.json', JSON.stringify({ files: fixtureHashes, digest: 'sha256:' + createHash('sha256').update(JSON.stringify(fixtureHashes)).digest('hex'), status: 'synthetic_candidates_only' }, null, 2) + '\n');
+  const fixtureContracts = [];
+  for (const name of fixtureFiles) {
+    const fixture = await readJson('fixtures/' + name);
+    if (!fixture.cases) continue;
+    fixtureContracts.push({ contract: fixture.contract, version: fixture.schema_version, policy_version: fixture.policy_version, path: 'fixtures/' + name, cases: fixture.cases.map(row => ({ id: row.id, category: row.category, policy_version: row.policy_version, mode: row.mode ?? 'structural', expected: row.expected })) });
+  }
+  result.set('fixture-manifest.json', JSON.stringify({ files: fixtureHashes, digest: 'sha256:' + createHash('sha256').update(JSON.stringify(fixtureHashes)).digest('hex'), status: 'synthetic_candidates_only', contracts: fixtureContracts }, null, 2) + '\n');
   result.set('schema-manifest.json', JSON.stringify({ package_version: packageManifest.version, source_revision: null, status: 'unreleased_candidates', toolchain: { ajv: '8.17.1', esbuild: '0.25.12', typescript: '5.9.3', json_schema_to_typescript: '15.0.4', node: '22.23.3' }, schemas: manifest }, null, 2) + '\n');
   result.set('brands.d.ts', 'declare const brand: unique symbol;\nexport type Brand<T, Name extends string> = T & { readonly [brand]: Name };\n');
   const names = Object.keys(versions);
@@ -103,7 +129,18 @@ export async function outputs() {
   const details = localSchemas.get('https://schemas.jevelopers.org/ErrorEnvelope/1.0.0').$defs.ErrorDetail.oneOf;
   const errorRegistry = Object.fromEntries(details.map(detail => [detail.properties.code.const, { category: detail.properties.category.const, safe_message: detail.properties.safe_message.const }]));
   result.set('error-registry.mjs', 'const records = ' + JSON.stringify(errorRegistry, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const errorRegistry = Object.freeze(records);\n');
-  result.set('index.d.ts', names.map(name => `import type { ${name} } from './${versions[name][Object.keys(versions[name]).at(-1)]}.js';\nexport type { ${name} } from './${versions[name][Object.keys(versions[name]).at(-1)]}.js';`).join('\n') + `
+  result.set('fixture-harness.d.ts', `export type FixtureExpectation = { readonly ok: boolean; readonly code?: string; readonly path?: string; readonly value?: unknown; readonly canonical_sha256?: string };
+export type FixtureCase = { readonly id: string; readonly category: string; readonly policy_version: string; readonly mode?: string; readonly remove?: readonly string[]; readonly set?: Readonly<Record<string, unknown>>; readonly context?: unknown; readonly expected_context?: unknown; readonly prior?: unknown; readonly json?: string; readonly expected: FixtureExpectation };
+export type FixtureManifest = { readonly contract: string; readonly schema_version: string; readonly policy_version: string; readonly valid: unknown; readonly cases: readonly FixtureCase[] };
+export type FixtureIssue = { readonly code: string; readonly contract: string; readonly case?: string | null; readonly category?: string };
+export type FixtureRecord = { readonly contract: string; readonly version: string; readonly case: string; readonly category: string; readonly policy_version: string; readonly mode: string; readonly expected: FixtureExpectation; readonly canonical_sha256: string | null };
+export declare const fixtureCategories: readonly string[];
+export declare function fixturePayload(manifest: FixtureManifest, fixture: FixtureCase): unknown;
+export declare function evaluateFixture(contract: string, manifest: FixtureManifest, fixture: FixtureCase): { readonly ok: boolean; readonly value?: unknown; readonly errors?: readonly { readonly code: string; readonly path: string }[] };
+export declare function assertFixture(result: { readonly ok: boolean; readonly value?: unknown; readonly errors?: readonly { readonly code: string; readonly path: string }[] }, expected: FixtureExpectation): void;
+export declare function runCanonicalFixtures(contract: string, manifest: FixtureManifest): { readonly failures: readonly FixtureIssue[]; readonly records: readonly FixtureRecord[] };
+`);
+  result.set('index.d.ts', versionTypeHeader(versions) + `
 export type { Brand } from './brands.js';
 export * from './operations.js';
 export * from './research-creative.js';
@@ -114,6 +151,7 @@ export type PrimitiveName = keyof PrimitiveMap;
 export type PrimitiveMap = { ${Object.keys(primitiveValidators).map(name => `readonly ${name}: Primitives.${name}`).join('; ')} };
 export type ContractMap = { ${names.map(name => `readonly ${name}: ${name}`).join('; ')} };
 export type ContractName = keyof ContractMap;
+export type ContractVersionMap = { ${names.map(name => `readonly ${name}: { ${Object.entries(versions[name]).map(([version, exportName]) => `readonly '${version}': ${exportName}`).join('; ')} }`).join('; ')} };
 export type ValidationCode = 'UNKNOWN_CONTRACT' | 'INVALID_PAYLOAD' | 'UNSUPPORTED_VERSION' | 'MALFORMED_JSON' | 'INVALID_TRUST_CONTEXT' | 'SCOPE_MISMATCH' | 'NON_CANONICAL_NUMBER' | 'INVALID_UNICODE' | 'NON_JSON_VALUE' | 'CYCLIC_VALUE' | 'INVALID_BYTES';
 export type Issue = { readonly code: ValidationCode; readonly path: string; readonly keyword?: string };
 export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly errors: readonly Issue[] };
@@ -126,9 +164,10 @@ export declare function projectEvidence(value: unknown): Result<EvidenceProjecti
 export declare function canonicalJson(value: unknown): string;
 export declare function hashManifest(value: unknown): string;
 export declare function hashBytes(bytes: Uint8Array): string;
-export declare const versions: Readonly<Record<ContractName, Readonly<Record<string, string>>>>;
+export declare const versions: { ${names.map(name => `readonly ${name}: { ${Object.entries(versions[name]).map(([version, exportName]) => `readonly '${version}': '${exportName}'`).join('; ')} }`).join('; ')} };
 export declare class ContractError extends Error { readonly code: ValidationCode; readonly path: string; constructor(code: ValidationCode, path?: string); }
 `);
+  result.set('package-content-manifest.json', JSON.stringify(await packageContentManifest(root, result), null, 2) + '\n');
   return result;
 }
 

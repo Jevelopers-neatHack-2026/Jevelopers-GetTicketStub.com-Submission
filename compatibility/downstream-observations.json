@@ -1,0 +1,45 @@
+{
+  "status": "supervisor_observed_later_sources_not_tested_or_accepted_by_this_candidate",
+  "checked_in_discovery_pins": "compatibility/consumers.json",
+  "pin_policy": "Keep initial discovery pins immutable. These later observations require separate clean checkout, package adoption, fixture execution and owner acknowledgement before a pin upgrade.",
+  "observations": [
+    {
+      "repository": "event-intelligence",
+      "source_revision": "fdc827d6c0be1508c94666a1cbfc0e5b73b49de7",
+      "integration_tested": false,
+      "acknowledgement": null
+    },
+    {
+      "repository": "creative-engine",
+      "source_revision": "5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74",
+      "integration_tested": false,
+      "acknowledgement": null
+    },
+    {
+      "repository": "fulfillment-connectors",
+      "source_revision": "71d98052f0eecc7d420dda21eec3d7a00a78faeb",
+      "integration_tested": false,
+      "acknowledgement": null
+    },
+    {
+      "repository": "team-dashboard",
+      "source_revision": "72ad0fc4fada5bd334f5bf24d29835d26647a972",
+      "integration_tested": false,
+      "acknowledgement": null
+    },
+    {
+      "repository": "getticketstub.com",
+      "source_revision": "7f59d33922a0585205547d490b288b49eed32419",
+      "integration_tested": false,
+      "acknowledgement": null
+    },
+    {
+      "repository": "cost-intelligence",
+      "source_revision": "136bafabd7bc8610b268e297668b98dc56a446f5",
+      "integration_tested": false,
+      "acknowledgement": null,
+      "proposal_package_version": "0.3.0",
+      "adoption_accepted": false
+    }
+  ]
+}

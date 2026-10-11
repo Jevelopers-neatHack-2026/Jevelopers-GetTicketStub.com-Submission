@@ -1,0 +1,636 @@
+{
+  "source": "private authoritative inventory snapshot; identifiers and requirements preserved",
+  "status": "pending_exact_revision_independent_and_owner_acceptance",
+  "criteria": [
+    {
+      "issue": 1,
+      "id": "SC-EPIC.1",
+      "requirement": "All 27 required leaf issues below have their specified evidence and producer/consumer review."
+    },
+    {
+      "issue": 1,
+      "id": "SC-EPIC.2",
+      "requirement": "Release gate #3 passes every criterion with pinned revisions and actual offline contract results."
+    },
+    {
+      "issue": 1,
+      "id": "SC-EPIC.3",
+      "requirement": "Required interfaces are consumable by the eight requested repositories and the application composition root; no missing consumer, schema, fixture or authority agreement is hidden in an umbrella."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.1",
+      "requirement": "Every required catalog contract has an authoritative domain owner, demonstrated producer/consumer, canonical schema, canonical/generated types, validation helper and explicit version policy."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.2",
+      "requirement": "All schemas and references compile; generation is deterministic; a clean checkout reproduces the distributed package."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.3",
+      "requirement": "Each contract has positive and negative fixtures with expected codes; malformed input, required fields, stale approvals, version mismatch, unknown enums and cross-tenant misuse are covered."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.4",
+      "requirement": "Compatibility, deprecation, field stability, unknown-value and pinned-revision migration policies have producer and consumer review."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.5",
+      "requirement": "Generated type usage, validators, catalog navigation, private evidence rules and offline consumer CI instructions are documented."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.6",
+      "requirement": "Eight downstream repositories have a compatibility/pin handoff record with immutable component revisions, command outputs and reviewer acknowledgement; domain implementation remains owned downstream."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.7",
+      "requirement": "Every leaf in #1 has closure evidence; the contract test execution passes with pre-provisioned locked dependencies and exact consumer checkouts, offline and without provider credentials or financial side effects. Any blocked handoff keeps this gate open."
+    },
+    {
+      "issue": 3,
+      "id": "SC-12.8",
+      "requirement": "The getticketstub.com application composition root provides producer/consumer compatibility review and immutable pin evidence for ProjectRequest, ApprovalReference/ApprovalReceipt authority, OrderAuthorization, artifacts, quotes and status. A known application boundary cannot be omitted because it is outside this run's write scope."
+    },
+    {
+      "issue": 4,
+      "id": "SC-01.1",
+      "requirement": "For every contract record schema path/version, source-of-truth owner, producer, consumers, trust boundary, lifecycle, semantic authority, field steward and leaf issue; no missing contract is hidden in this inventory issue."
+    },
+    {
+      "issue": 4,
+      "id": "SC-01.2",
+      "requirement": "Reconcile ArtifactHandoffManifest (creative artwork to print-production) versus ProductionBundle (print output to app/fulfillment); ApprovalReference/Receipt versus OrderAuthorization (art approval versus purchase)."
+    },
+    {
+      "issue": 4,
+      "id": "SC-01.3",
+      "requirement": "Record live consumer local definitions and source SHAs; flag divergent names/versions and concrete migration owners; preserve ARC-02 ownership and CON-01."
+    },
+    {
+      "issue": 4,
+      "id": "SC-01.4",
+      "requirement": "Maintain requirement -> owner issue -> dependencies -> executable verification -> closure-evidence map, including every SC-01 through SC-12 requirement; no invented consumer or global ID."
+    },
+    {
+      "issue": 5,
+      "id": "SC-02.1",
+      "requirement": "Provide schemas/, generated/, fixtures/, compatibility/ and an explicit package export map; validate schema references/formats and generation completeness. Runtime/type parity is checked using valid and invalid payloads. SC-02 establishes fixture directory/package plumbing and per-contract command hooks only; SC-09 owns canonical fixture manifests, cross-contract coverage and consumer CI behavior."
+    },
+    {
+      "issue": 5,
+      "id": "SC-02.2",
+      "requirement": "Establish npm scripts: generate, contracts:check (supports --contract), contracts:fixtures (supports --contract), contracts:compat, contracts:inventory (supports --require-owner, --require-consumer, --require-leaf, --require-version-policy, --require-field-classification, --policy-only, --require-fixtures, --require-docs and --require-consumer-pins), contracts:consumers and docs:check; generation must be deterministic and leave a clean diff. Implement every command and flag referenced by leaf validation steps; scripts consume local files/checkouts and never fetch implicitly."
+    },
+    {
+      "issue": 5,
+      "id": "SC-02.3",
+      "requirement": "Lock Node/tool versions compatible with live consumers; publish no runtime dependency on harness, creative or research repositories. Shared interfaces stay below their injected ports in the dependency graph."
+    },
+    {
+      "issue": 5,
+      "id": "SC-02.4",
+      "requirement": "Export no-network runtime validation and semantic context-check interfaces; no coercion/default insertion that silently changes signed/hash-bound values. Compile supported versions together and reject unsupported major versions with typed errors."
+    },
+    {
+      "issue": 5,
+      "id": "SC-02.5",
+      "requirement": "Define package contents, schema IDs, schema_version convention, error return shape and type declaration usage; expose an offline clean-checkout test entry point."
+    },
+    {
+      "issue": 6,
+      "id": "SC-03.1",
+      "requirement": "Treat required-field additions, semantic/unit changes, narrowing, removals and unsafe enum additions as breaking unless demonstrated compatible; define handling of unknown additive metadata separately from execution-critical controls."
+    },
+    {
+      "issue": 6,
+      "id": "SC-03.2",
+      "requirement": "Document deprecation notice, replacement, affected consumers, minimum supported window and removal condition. Support current and previous accepted major during migration; no removal until all named v1 consumers have acknowledged and passed migration fixtures."
+    },
+    {
+      "issue": 6,
+      "id": "SC-03.3",
+      "requirement": "Require producer and consumer review plus compatibility impact record before a breaking integration; test current producer/old consumer and old producer/current consumer with supported versions."
+    },
+    {
+      "issue": 6,
+      "id": "SC-03.4",
+      "requirement": "Use immutable shared-contracts SHA or integrity-locked package and record exact schema, toolchain and consumer pins. main/latest is not integration evidence; define coordinated upgrade, rollback and failed-consumer blocking behavior. Preserve CON-01/ARC-01/EVAL-01."
+    },
+    {
+      "issue": 7,
+      "id": "SC-04.1",
+      "requirement": "For every ID specify assigning authority, caller-supplied versus server-assigned status, scope, immutability, uniqueness domain, retry/redelivery behavior and when omission/unknown is valid. Tenant/project scope is authenticated context; an ID or correlation link never grants authorization."
+    },
+    {
+      "issue": 7,
+      "id": "SC-04.2",
+      "requirement": "Define producer/build revision, schema/policy revision, UTC occurred/observed/ingested times, source_refs and provenance references; distinguish event delivery identity from usage and provider attempts."
+    },
+    {
+      "issue": 7,
+      "id": "SC-04.3",
+      "requirement": "Supply context-check helpers/fixtures that reject mismatched expected tenant/project/design scope without claiming schemas perform authentication. Reject forged scope in downstream integration fixtures under CON-02."
+    },
+    {
+      "issue": 7,
+      "id": "SC-04.4",
+      "requirement": "Prove IDs survive a research -> creative -> production -> usage/evidence trace; missing provider IDs remain explicitly unavailable, never fabricated. Cover CON-02, AGT-01, FIN-01/02/03 and EVAL-01."
+    },
+    {
+      "issue": 8,
+      "id": "SC-11.1",
+      "requirement": "Classify identifiers, source URLs/text, prompts, asset locations, approval actors, provider request IDs, destinations and diagnostics; deny credentials, auth headers, signed URLs/query tokens and raw private/customer content in public evidence."
+    },
+    {
+      "issue": 8,
+      "id": "SC-11.2",
+      "requirement": "Define allowlisted public projections with synthetic/sanitized fixture inputs; strip diagnostics and metadata recursively, including unknown/additive fields. A provenance reference must not grant access or reveal sensitive storage locations."
+    },
+    {
+      "issue": 8,
+      "id": "SC-11.3",
+      "requirement": "Specify deterministic hash algorithm, canonical serialization, Unicode/numeric/time rules and byte-hash versus manifest-hash scope. Hashes bind exact artifact content; low-entropy sensitive values must not be exposed through plain stable hashes. Document tenant-scoped keyed pseudonyms where correlation is necessary and key management remains downstream."
+    },
+    {
+      "issue": 8,
+      "id": "SC-11.4",
+      "requirement": "Provide executable positive and negative EvidenceProjection fixtures. SC-09 #29 performs the comprehensive per-contract field-classification completeness audit; keep it outside this issue's closure. Preserve CON-02 and EVAL-04 without claiming public-evidence sanitization proves runtime access control."
+    },
+    {
+      "issue": 9,
+      "id": "SC-08.ERROR.1",
+      "requirement": "Include stable code/category, module/operation, safe message, trace/diagnostic reference, validation paths, retryability hint, blocking condition and schema version; details must be privacy classified."
+    },
+    {
+      "issue": 9,
+      "id": "SC-08.ERROR.2",
+      "requirement": "Distinguish malformed/unsupported versions or enum values, scope mismatch, stale approval, unsupported case, cancellation, timeout, rate limit, partial failure and unknown side effects/usage. Never equate timeout with confirmed failure."
+    },
+    {
+      "issue": 9,
+      "id": "SC-08.ERROR.3",
+      "requirement": "Batch envelopes retain successful item identities and explicit failures; define all-or-nothing versus partial acceptance policy reference and invalid/missing/duplicate item handling."
+    },
+    {
+      "issue": 9,
+      "id": "SC-08.ERROR.4",
+      "requirement": "Retryability cannot authorize spending, reissue a side effect or bypass attempts/budget/approval. Provide deterministic code registry and migration policy; preserve CON-03, AGT-03 and FIN-04."
+    },
+    {
+      "issue": 10,
+      "id": "SC-08.JOB.1",
+      "requirement": "Specify state vocabulary and legal transition/version rules for queued/running/waiting-for-review/blocked/cancel-requested/cancelled/succeeded/failed plus partial/unknown outcome. Preserve task-specific codes and total/progress unknown semantics."
+    },
+    {
+      "issue": 10,
+      "id": "SC-08.JOB.2",
+      "requirement": "Cancellation request is distinct from acknowledged terminal cancellation; after-dispatch cancellation may leave provider side effects or unknown usage. Include request ID, idempotency key, sequence/revision, time, resume/checkpoint reference, and typed rejection."
+    },
+    {
+      "issue": 10,
+      "id": "SC-08.JOB.3",
+      "requirement": "Define duplicate/out-of-order/stale progress handling, terminal result references, partial completion, ownership/lease attempt correlation and safe error links. A contract describes transitions; harness implements execution/recovery."
+    },
+    {
+      "issue": 10,
+      "id": "SC-08.JOB.4",
+      "requirement": "Fixtures include stale sequence, wrong scope, invalid transition, duplicate command, resume after terminal status and cancellation while a provider attempt remains uncertain. Link global AGT-02/03 and FIN-04."
+    },
+    {
+      "issue": 11,
+      "id": "SC-06.USAGE.1",
+      "requirement": "Distinguish one logical operation, each provider execution, transport retry, separately billed attempt and duplicate observation. Provider adapters declare whether a retry reuses provider/idempotency identity or starts a new potentially billable attempt."
+    },
+    {
+      "issue": 11,
+      "id": "SC-06.USAGE.2",
+      "requirement": "Represent usage completeness and valuation separately: unknown/incomplete/complete observations; unknown/estimated/provider-confirmed valuation; never encode unknown as zero. Include units, model/provider, currency/precision, rate-card and policy versions, environment/billing mode, outcome and provider ID when available."
+    },
+    {
+      "issue": 11,
+      "id": "SC-06.USAGE.3",
+      "requirement": "Define duplicate/redelivery/correction identity, linked superseding observations and reconciliation references without implementing deduplication or posting. Estimated and confirmed observations must be joinable without another charge."
+    },
+    {
+      "issue": 11,
+      "id": "SC-06.USAGE.4",
+      "requirement": "Fixtures: two billed attempts under one logical operation remain distinct; duplicate observation is the same observation; transport retry may retain execution identity; timeout with unknown usage is retained; observed zero is explicitly measured; live/sandbox/simulated do not collapse. Preserve FIN-01/02/03/04/05/07 and BUD-03."
+    },
+    {
+      "issue": 12,
+      "id": "SC-06.RESERVATION.1",
+      "requirement": "Carry reservation identity, trusted scope, logical/billed attempt, policy version, currency/exact amounts, held/consumed values, lifecycle and expiry, idempotency/correlation and authoritative issuer/result references."
+    },
+    {
+      "issue": 12,
+      "id": "SC-06.RESERVATION.2",
+      "requirement": "Distinguish granted/denied/unknown/unavailable, consumed/released/expired and uncertain in-flight states; timeout or cancellation cannot justify releasing a hold when execution may still occur."
+    },
+    {
+      "issue": 12,
+      "id": "SC-06.RESERVATION.3",
+      "requirement": "Define settlement evidence, expiry eligibility and retry reconciliation requirements without allowing caller claims to mint budget authority. Unknown usage preserves uncertainty and finance controls the state transition."
+    },
+    {
+      "issue": 12,
+      "id": "SC-06.RESERVATION.4",
+      "requirement": "Fixtures cover scope mismatch, negative/imprecise amounts, currency mismatch, duplicate reserve/settle observation and attempted expiry/release of uncertain work. Preserve BUD-01/02/03/04 and FIN-04."
+    },
+    {
+      "issue": 13,
+      "id": "SC-06.SUMMARY.1",
+      "requirement": "Specify period, currency, exact decimal/scaled-integer representation, scale/rounding boundary, metric definitions, original amounts, policy/rate-card references and source coverage; retain sub-cent precision."
+    },
+    {
+      "issue": 13,
+      "id": "SC-06.SUMMARY.2",
+      "requirement": "Separate estimate/confirmed valuation, payment settlement, reconciliation, reservation lifecycle and reporting completeness; absent/unknown totals are not zero and currencies are not silently combined."
+    },
+    {
+      "issue": 13,
+      "id": "SC-06.SUMMARY.3",
+      "requirement": "Identify included environments and billing modes, project/tenant scope and provenance/revision so totals can be reproduced by the finance owner. Refer to refund/credit/reversal/payment sources without defining new financial authority."
+    },
+    {
+      "issue": 13,
+      "id": "SC-06.SUMMARY.4",
+      "requirement": "Fixtures cover sub-cent aggregation representation, multiple currencies, partial/unknown coverage and isolated simulated/live summaries. Preserve FIN-05/07/08/10; domain arithmetic proof stays in cost-intelligence."
+    },
+    {
+      "issue": 14,
+      "id": "SC-05.1",
+      "requirement": "Define stable question IDs, schema/policy/model references, immutable state/evidence references, scope, eligible actions/candidates, deadline/cancellation, budget/attempt references and bounded batch size. Independent questions may batch; dependent questions require staged input with no sibling-answer reads."
+    },
+    {
+      "issue": 14,
+      "id": "SC-05.2",
+      "requirement": "Define Choice selected value and probability map/confidence, Score numeric result/legend/probabilities/confidence, and Noul numeric probability (no invented confidence field). Specify numeric bounds, distributions/tolerance, missing/extra questions and invalid values; no result expands the caller's allowlist."
+    },
+    {
+      "issue": 14,
+      "id": "SC-05.3",
+      "requirement": "Resolve the real Score criteria/legend conflict with harness, EI and creative owners: EI v1 requires strings, creative uses array/object forms, harness wire accepts structured forms. Pin the discrepancy decision and lossless adapter or versioned migration with fixtures; do not silently normalize it."
+    },
+    {
+      "issue": 14,
+      "id": "SC-05.4",
+      "requirement": "Represent unknown, abstain, low-confidence/review, unavailable, timeout, cancelled and malformed responses; partial batch and all-or-nothing behavior must be explicit. Timeout never asserts no provider charge or authorizes an automatic paid retry."
+    },
+    {
+      "issue": 14,
+      "id": "SC-05.5",
+      "requirement": "DecisionReceipt binds request, question/answer/batch IDs and hashes, schema/policy/model revisions, normalized result, decision time, trace/evidence and usage/attempt references, and review reason. It is evidence of a decision, never approval/purchase authority."
+    },
+    {
+      "issue": 14,
+      "id": "SC-05.6",
+      "requirement": "Fixture suite covers all result variants including Noul-with-confidence rejection, stale policy, invalid distributions, cyclic/dependent questions, extra capabilities, unknown enum, partial batch and timeout. Preserve CON-03 and AGT-03/04."
+    },
+    {
+      "issue": 15,
+      "id": "SC-02.PROJECT.1",
+      "requirement": "Separate untrusted submitted URL/customer content from trusted server scope; caller-supplied tenant/project/permission fields cannot override expected authenticated context."
+    },
+    {
+      "issue": 15,
+      "id": "SC-02.PROJECT.2",
+      "requirement": "Specify required inputs, supported output types and limits, optional values, schema_version/contract discriminator and safe source references; unsupported actions/types produce SC-08 errors."
+    },
+    {
+      "issue": 15,
+      "id": "SC-02.PROJECT.3",
+      "requirement": "Fixtures include minimal/full valid requests, missing fields, wrong tenant/project, unknown output/action, malformed URLs and old-version/additive-field behavior. URL fetch/SSRF execution and identity authentication remain app/harness responsibilities."
+    },
+    {
+      "issue": 15,
+      "id": "SC-02.PROJECT.4",
+      "requirement": "Record producer/consumer reviewer agreement and migration from harness's local public runtime request types; preserve CON-02/03 and AGT-05."
+    },
+    {
+      "issue": 16,
+      "id": "SC-02.RESEARCH.1",
+      "requirement": "Publish a separately identifiable ResearchRequest export and fixture set; ProjectRequest is not a substitute and raw user content cannot grant tools, domains, budget or permission."
+    },
+    {
+      "issue": 16,
+      "id": "SC-02.RESEARCH.2",
+      "requirement": "Define required/optional fields, idempotency and request/schema/policy IDs, deadline/cancel references, result expectation and unsupported-case errors. No request embeds harness implementation objects or provider auth."
+    },
+    {
+      "issue": 16,
+      "id": "SC-02.RESEARCH.3",
+      "requirement": "Fixtures cover missing source/input, mismatched scope, forged capability/budget overrides, stale policy/version and valid minimal/full requests; trusted callbacks/context remain application/harness responsibilities."
+    },
+    {
+      "issue": 16,
+      "id": "SC-02.RESEARCH.4",
+      "requirement": "Record explicit handoff review with event-intelligence and harness using exact shared-contracts SHA; retain local proposal adapters until accepted. Preserve CON-01/02/03."
+    },
+    {
+      "issue": 17,
+      "id": "SC-02.RESEARCH-PACKAGE.1",
+      "requirement": "Represent fact value/unknown/conflicting/review states and confidence basis without erasing source disagreements. Separate event facts from creative interpretation and public discovery from reproduction permission."
+    },
+    {
+      "issue": 17,
+      "id": "SC-02.RESEARCH-PACKAGE.2",
+      "requirement": "Define asset candidates versus permission-bound approved asset references, original/transformed hashes, intended use and source retention/access constraints. Artifacts require an external approval reference; a discovered URL is not permission."
+    },
+    {
+      "issue": 17,
+      "id": "SC-02.RESEARCH-PACKAGE.3",
+      "requirement": "Resolve EventIntelligencePackage versus ResearchPackage alias and creative's proposed v1.0/v1.1 compatibility. Define canonical names and lossless adapters; review exact field changes and additive behavior with the EI producer and creative consumer."
+    },
+    {
+      "issue": 17,
+      "id": "SC-02.RESEARCH-PACKAGE.4",
+      "requirement": "Include request/answer/batch receipt references, schema/policy versions and independent package identity (event_id is delivery identity). Fixtures cover missing provenance, contradictory facts, stale assets, unknown facts, alias drift and wrong scope. Preserve AGT-01, ART-05 and CON-01/02."
+    },
+    {
+      "issue": 18,
+      "id": "SC-02.RESEARCH-EVENTS.1",
+      "requirement": "Bind correction to expected package version/hash, actor/authority reference and trusted scope; represent proposed versus accepted correction, source provenance and new immutable parent-linked package. No in-place mutation or caller boolean approval."
+    },
+    {
+      "issue": 18,
+      "id": "SC-02.RESEARCH-EVENTS.2",
+      "requirement": "Invalidations identify event/source observation, affected package/asset versions, reason (freshness/rights/correction), effective time, monotonic revision and scope; define duplicate/out-of-order/stale behavior."
+    },
+    {
+      "issue": 18,
+      "id": "SC-02.RESEARCH-EVENTS.3",
+      "requirement": "Define acknowledgements and receipt/evidence references while durable delivery/CAS/recomputation remain downstream. Invalidation marks affected approval/use stale and does not silently rewrite a DesignVersion."
+    },
+    {
+      "issue": 18,
+      "id": "SC-02.RESEARCH-EVENTS.4",
+      "requirement": "Fixtures cover forged scope, stale expected version, duplicate and out-of-order invalidation, revoked asset rights and valid parent chain; migrate current EI local correction/cache event APIs with consumer review. Preserve AGT-01, ART-02/05 and CON-02."
+    },
+    {
+      "issue": 19,
+      "id": "SC-02.BRIEF.1",
+      "requirement": "Bind brief identity/version/hash to exact research package/fact/asset versions and provenance. Preserve uncertainty/review blocking; unsupported or unapproved asset references cannot become implicit approval."
+    },
+    {
+      "issue": 19,
+      "id": "SC-02.BRIEF.2",
+      "requirement": "Carry product/output constraints, model policy/schema versions and tenant/project scope without model credentials or executable instructions/capabilities. Separate composition facts from generated image prompts."
+    },
+    {
+      "issue": 19,
+      "id": "SC-02.BRIEF.3",
+      "requirement": "Fixtures cover sourced valid brief, unknown/conflicting facts, stale/revoked asset refs, missing constraints, mixed-tenant evidence and unsupported policy. Preserve AGT-01, ART-05 and CON-02/03."
+    },
+    {
+      "issue": 19,
+      "id": "SC-02.BRIEF.4",
+      "requirement": "Review/migrate current creative local brief validators and EI handoff with explicit old-version fixtures and pinned producer/consumer revisions."
+    },
+    {
+      "issue": 20,
+      "id": "SC-02.CONTROLS.1",
+      "requirement": "Reject executable UI code, scripts, arbitrary actions, privileged capability declarations and unknown execution-critical controls. Labels/descriptions are inert text."
+    },
+    {
+      "issue": 20,
+      "id": "SC-02.CONTROLS.2",
+      "requirement": "Specify required/optional/default behavior, field stability, numeric units/ranges and enum evolution; controls bind an immutable supported design/policy version and trusted scope."
+    },
+    {
+      "issue": 20,
+      "id": "SC-02.CONTROLS.3",
+      "requirement": "Fixtures cover safe controls, range violations, invalid default/enum, unknown control/action, script-bearing field and stale schema version. Preserve CON-03."
+    },
+    {
+      "issue": 20,
+      "id": "SC-02.CONTROLS.4",
+      "requirement": "Document migration of creative's existing local controls while avoiding importing UI/runtime libraries into the shared package."
+    },
+    {
+      "issue": 21,
+      "id": "SC-02.DESIGN.1",
+      "requirement": "An edit creates a new version; parent/design/project scope must agree. No approval binds a mutable latest pointer. Specify exact byte hash and manifest/hash canonicalization rules from SC-11."
+    },
+    {
+      "issue": 21,
+      "id": "SC-02.DESIGN.2",
+      "requirement": "Separate original/generated/transformed artwork identity, displayed preview identity and eventual production output identity; print-production remains exact output composition owner."
+    },
+    {
+      "issue": 21,
+      "id": "SC-02.DESIGN.3",
+      "requirement": "Define cancelled/partial job artifact availability and immutable status references; no successful DesignVersion for missing or unverifiable artifact bytes."
+    },
+    {
+      "issue": 21,
+      "id": "SC-02.DESIGN.4",
+      "requirement": "Fixtures cover branch lineage, missing parent/hash, mixed design/tenant, mismatched preview/artwork and mutated content. Preserve ART-01/02 and CON-02; persistence/concurrency implementations remain creative-owned."
+    },
+    {
+      "issue": 22,
+      "id": "SC-07.APPROVAL.1",
+      "requirement": "Bind trusted issuer/audience/actor, tenant/project, subject type and immutable design/artwork/package/asset versions/hashes, intended use, preview and composition/fact hashes where approval claims cover them, issue/expiry time and revocation/status reference."
+    },
+    {
+      "issue": 22,
+      "id": "SC-07.APPROVAL.2",
+      "requirement": "Distinguish reference, issuer receipt, verification outcome and handoff consumption receipt. Creative's local ConsumptionReceipt is not ApprovalReceipt and boolean approved=true is never authority."
+    },
+    {
+      "issue": 22,
+      "id": "SC-07.APPROVAL.3",
+      "requirement": "Define current authenticated verifier input and stale/expired/revoked/wrong-issuer/wrong-audience handling. Structural schema validates shape; the application verifies authenticity/current authorization and supplies trusted context."
+    },
+    {
+      "issue": 22,
+      "id": "SC-07.APPROVAL.4",
+      "requirement": "Any approved subject mutation or transformed artifact requires revalidation/new approval as appropriate; bind the exact displayed immutable artifact. No mutable URL/latest pointer alone satisfies approval."
+    },
+    {
+      "issue": 22,
+      "id": "SC-07.APPROVAL.5",
+      "requirement": "Fixtures include valid external receipt and forged issuer, wrong tenant/project/hash/version/use, expiry/revocation, changed facts/composition and transformed-byte reuse. Preserve ART-02/05 and CON-02."
+    },
+    {
+      "issue": 23,
+      "id": "SC-07.HANDOFF.1",
+      "requirement": "Include manifest identity/version/hash, tenant/project/design/version, exact artwork bytes/hash/media metadata, approved preview identity, external ApprovalReference, fact/asset permission references, requested product/print constraints and provenance/usage/decision references."
+    },
+    {
+      "issue": 23,
+      "id": "SC-07.HANDOFF.2",
+      "requirement": "Represent artifact locator/access policy separately from stable identity and bytes hash; signed URLs/auth tokens/private storage paths cannot appear in public evidence. Define access expiry versus artifact immutability."
+    },
+    {
+      "issue": 23,
+      "id": "SC-07.HANDOFF.3",
+      "requirement": "Validate agreement among manifest, approved immutable design/artwork and intended production use; stale/revoked approval or mismatched hashes blocks handoff. Do not claim artwork handoff is a finished print-ready bundle."
+    },
+    {
+      "issue": 23,
+      "id": "SC-07.HANDOFF.4",
+      "requirement": "Define idempotent handoff/consumption receipt reference and migration from creative's local manifest/ConsumptionReceipt names. Fixtures cover mutated artwork, latest aliases, expired locator, wrong scope and duplicate handoff. Preserve ART-02/04/05."
+    },
+    {
+      "issue": 24,
+      "id": "SC-07.PRODUCTION.1",
+      "requirement": "Carry bundle ID/version/hash, design/artifact approval refs, renderer/template/font versions, exact composed fact/barcode inputs, product/spec identity, file names/media/dimensions/units/hashes and preflight report/result references."
+    },
+    {
+      "issue": 24,
+      "id": "SC-07.PRODUCTION.2",
+      "requirement": "Specify deterministic manifest hashing and complete file set; separate source-artwork hash, displayed-preview hash and final print-output hash. Final composition changes cannot reuse an unrelated approval or authorization claim."
+    },
+    {
+      "issue": 24,
+      "id": "SC-07.PRODUCTION.3",
+      "requirement": "Represent preflight passed/failed/unsupported/unknown with typed blocking reasons; bundle presence alone is not evidence of successful rendering/preflight."
+    },
+    {
+      "issue": 24,
+      "id": "SC-07.PRODUCTION.4",
+      "requirement": "Fixtures cover valid manifest, missing output, altered file hash, wrong print units/spec, absent/failed preflight and stale approval. Preserve ART-04 and CON-01/02."
+    },
+    {
+      "issue": 25,
+      "id": "SC-07.QUOTE.1",
+      "requirement": "Include provider/quote identity, product/variant, quantity, destination reference, shipping method, currency/exact charge breakdown, issued/expiry time, applicability to specification/bundle revision, source observation and environment/billing mode."
+    },
+    {
+      "issue": 25,
+      "id": "SC-07.QUOTE.2",
+      "requirement": "Distinguish quoted/estimated/unknown charges and quote validity from authorization/payment/settlement. Never leak customer shipping details into public fixtures/evidence."
+    },
+    {
+      "issue": 25,
+      "id": "SC-07.QUOTE.3",
+      "requirement": "Define changed-terms, expired-quote, unsupported product/destination and partial supplier data errors; amount/precision policy matches shared primitives."
+    },
+    {
+      "issue": 25,
+      "id": "SC-07.QUOTE.4",
+      "requirement": "Fixtures cover expiry, currency mismatch, charge total representation, changed quantity/destination/bundle/spec and unknown fields/enums. Preserve FUL-01/02 and FIN-07."
+    },
+    {
+      "issue": 26,
+      "id": "SC-07.ORDER-AUTH.1",
+      "requirement": "Bind issuer/actor/tenant/project/order, quote identity, maximum exact amount/currency, product/quantity, destination/shipping reference, exact ProductionBundle hash, issue/expiry/revocation and idempotency references."
+    },
+    {
+      "issue": 26,
+      "id": "SC-07.ORDER-AUTH.2",
+      "requirement": "Changed purchase terms require renewed authorization, including quantity, destination, bundle, currency or maximum amount. A retryability hint, budget hold, quote or art approval cannot substitute."
+    },
+    {
+      "issue": 26,
+      "id": "SC-07.ORDER-AUTH.3",
+      "requirement": "Define trusted verification context and stale/forged/mismatch/expired errors, without implementing authentication, signing secrets, purchasing or supplier submission."
+    },
+    {
+      "issue": 26,
+      "id": "SC-07.ORDER-AUTH.4",
+      "requirement": "Fixtures cover valid authorization and every changed-term case, cross-tenant order, forged issuer, expired/revoked receipt and duplicate submission reference; preserve FUL-01/02/03 and CON-02."
+    },
+    {
+      "issue": 27,
+      "id": "SC-08.FULFILLMENT.1",
+      "requirement": "Specify provider/supplier-order identity, internal order/bundle/authorization reference, source observation identity/time, normalized status and opaque provider status, last-known state and uncertainty."
+    },
+    {
+      "issue": 27,
+      "id": "SC-08.FULFILLMENT.2",
+      "requirement": "Distinguish submission timeout with unknown outcome from rejected/accepted/cancelled/fulfilled. Cancellation requested differs from supplier-confirmed cancellation; no contract permits automatic new purchase on timeout."
+    },
+    {
+      "issue": 27,
+      "id": "SC-08.FULFILLMENT.3",
+      "requirement": "Define duplicate/out-of-order callback semantics and stable external idempotency reference; repeated observation is not new order/charge, while a truly distinct provider execution retains a distinct attempt."
+    },
+    {
+      "issue": 27,
+      "id": "SC-08.FULFILLMENT.4",
+      "requirement": "Fixtures cover duplicate callback, delayed state regression, ambiguous submission, unknown provider enum, cross-tenant identity and rejected cancellation. Preserve FUL-03/04 and FIN-02/03/04."
+    },
+    {
+      "issue": 28,
+      "id": "SC-02.EVIDENCE.1",
+      "requirement": "Include evidence/run/scenario IDs, unchanged acceptance IDs, exact component/contract/tool revisions, input identity/hash, fixture identity, provider/dependency mode, timestamps, commands, results, metrics/units and comparison/baseline basis."
+    },
+    {
+      "issue": 28,
+      "id": "SC-02.EVIDENCE.2",
+      "requirement": "Distinguish planned, passed, failed, blocked and unmeasured assertions with explicit limitations; store actual evidence artifact hashes/locators and related decision/usage/trace IDs. Unknown measurement is not zero/pass."
+    },
+    {
+      "issue": 28,
+      "id": "SC-02.EVIDENCE.3",
+      "requirement": "Use public-evidence projection from SC-11 and private-access references; prohibit credentials, raw prompts/source/customer details and signed artifact URLs. Versioned input/result hashes must be reproducible."
+    },
+    {
+      "issue": 28,
+      "id": "SC-02.EVIDENCE.4",
+      "requirement": "Fixtures cover missing revision, mismatched input/hash, stale schema, ambiguous mode, forged acceptance claim and sensitive nested fields. Preserve EVAL-01/04, CON-02 and ARC-01; global status changes remain integration-evals work."
+    },
+    {
+      "issue": 29,
+      "id": "SC-09.1",
+      "requirement": "Inventory every required contract/version with valid minimal/full and invalid malformed JSON, missing required fields, wrong types, unknown enums, unsupported major and supported older-version/additive-field cases. Missing fixture/schema/validator/generated export fails CI."
+    },
+    {
+      "issue": 29,
+      "id": "SC-09.2",
+      "requirement": "Include stale/forged approval and altered hash, wrong tenant/project/artifact identity, duplicate versus separately billed attempts, unknown usage, out-of-order progress/invalidation and partial DecisionPort batches. Expected typed code/path and policy version are data in the fixture manifest."
+    },
+    {
+      "issue": 29,
+      "id": "SC-09.3",
+      "requirement": "Round-trip canonical fixtures through generated producer/consumer bindings and compare bytes/hashes where bound; check runtime/type parity, serialization drift and immutable pin compatibility. Prove rejection assertions themselves fail if the validator incorrectly accepts a negative fixture."
+    },
+    {
+      "issue": 29,
+      "id": "SC-09.4",
+      "requirement": "Provide npm run contracts:consumers using a checked-in exact-revision manifest plus pre-provisioned local checkout/artifact paths at the exact SHAs; never clone or fetch implicitly. Cover harness, research, creative, production, fulfillment, finance, dashboard and integration-evals, and the `getticketstub.com` composition root as a mandatory producer/consumer compatibility-review and pin-handoff target. Exercise its `ProjectRequest` and `OrderAuthorization` producer/consumer roles, approval issuer/binding, and `FulfillmentQuote` and normalized fulfillment-status producer/consumer roles; record the composition-root exact SHA in the manifest and evidence. A missing exact-SHA checkout or consumer integration is blocked, never skipped/pass; make no network/provider calls."
+    },
+    {
+      "issue": 29,
+      "id": "SC-09.5",
+      "requirement": "Document copy/import package fixture consumption and exact downstream CI command; execute scope-sensitive integration cases in trusted consumer adapters, not JSON Schema alone. Schemas do not prove authorization, budget atomicity, durable recovery or ledger arithmetic."
+    },
+    {
+      "issue": 29,
+      "id": "SC-09.6",
+      "requirement": "Output sanitized machine-readable and human-readable coverage/evidence keyed by unchanged global IDs and local SC namespaces. Preserve CON-01/02/03, ART-02/04/05, FIN-02/03/04 and EVAL-01/04."
+    },
+    {
+      "issue": 30,
+      "id": "SC-10.1",
+      "requirement": "README links every catalog contract to schema, generated types, helper, fixture examples and owner; docs include copyable supported Node ESM/TypeScript usage, version negotiation, safe errors and context validation examples."
+    },
+    {
+      "issue": 30,
+      "id": "SC-10.2",
+      "requirement": "Document migration from consumer-local definitions, current compatibility disagreements and immutable pin upgrades/rollback. Shared catalog is canonical; architecture snapshot links remain historical context rather than a competing source."
+    },
+    {
+      "issue": 30,
+      "id": "SC-10.3",
+      "requirement": "Provide a per-consumer handoff matrix for all eight downstream repos and the `getticketstub.com` composition root. Include the composition root's `ProjectRequest` and `OrderAuthorization` producer/consumer roles, approval issuer and binding, and `FulfillmentQuote` and normalized fulfillment-status producer/consumer roles. Each row records accountable role, accepted schema/package/source SHA, tested consumer or composition-root SHA, fixture digest, exact command, result/limitations and acknowledgement; unavailable integrations keep release blocked."
+    },
+    {
+      "issue": 30,
+      "id": "SC-10.4",
+      "requirement": "Define package content/export map and reproducible archive, registry/tag/version mapping, changelog/deprecation notes and release evidence checklist. Review artifact privacy, dependency provenance and asset rights; do not invent a license or publish automatically."
+    },
+    {
+      "issue": 30,
+      "id": "SC-10.5",
+      "requirement": "Reconcile stale public/private wording in ownership documentation against inspected repository metadata without changing visibility. Keep documentation and acceptance status honest; preserve ARC-01 and EVAL-01/04."
+    }
+  ]
+}

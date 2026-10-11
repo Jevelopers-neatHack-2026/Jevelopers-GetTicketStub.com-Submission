@@ -9,7 +9,6 @@ import { checkResearchCreative } from '../tooling/research-creative.mjs';
 import { checkCommerceEvidence } from '../tooling/commerce-evidence.mjs';
 import { schemaImpact } from './compatibility.mjs';
 
-const knownConsumers = ['agent-harness', 'event-intelligence', 'creative-engine', 'print-production', 'fulfillment-connectors', 'cost-intelligence', 'team-dashboard', 'integration-evals', 'getticketstub.com'];
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 export async function catalog() {
   const text = await readFile(root + 'docs/contract-catalog.md', 'utf8');
@@ -24,113 +23,45 @@ const exists = async path => {
     throw error;
   }
 };
-export function classifications(schema, taxonomy, path = '') {
-  const issues = [];
-  if (schema.properties) for (const [key, field] of Object.entries(schema.properties)) {
-    const fieldPath = path + '/' + key;
-    if (!taxonomy.includes(field['x-classification'])) issues.push({ code: 'UNCLASSIFIED_FIELD', path: fieldPath });
-    issues.push(...classifications(field, taxonomy, fieldPath));
+export function classifications(schema, taxonomy, path = '', registry = new Map()) {
+  const roots = new Map(registry);
+  if (schema.$id) roots.set(schema.$id, schema);
+  const issues = [], active = new Set();
+  const escape = key => key.replaceAll('~', '~0').replaceAll('/', '~1');
+  function walk(node, current, document) {
+    if (!node || typeof node !== 'object' || active.has(node)) return;
+    active.add(node);
+    if (node.$ref) {
+      const [id, fragment = ''] = node.$ref.split('#');
+      let target = id ? roots.get(id) : document;
+      for (const part of fragment.split('/').filter(Boolean)) target = target?.[part.replaceAll('~1', '/').replaceAll('~0', '~')];
+      if (!target) issues.push({ code: 'UNRESOLVED_CLASSIFICATION_REFERENCE', path: current });
+      else walk(target, current, id ? roots.get(id) : document);
+    }
+    for (const [key, field] of Object.entries(node.properties ?? {})) {
+      const next = current + '/' + escape(key);
+      if (!taxonomy.includes(field['x-classification'])) issues.push({ code: 'UNCLASSIFIED_FIELD', path: next });
+      walk(field, next, document);
+    }
+    for (const field of Object.values(node.patternProperties ?? {})) {
+      if (!taxonomy.includes(field['x-classification'])) issues.push({ code: 'UNCLASSIFIED_FIELD', path: current + '/*' });
+      walk(field, current + '/*', document);
+    }
+    for (const key of ['items', 'contains', 'additionalProperties', 'unevaluatedProperties', 'unevaluatedItems', 'propertyNames', 'not', 'if', 'then', 'else']) {
+      if (key === 'additionalProperties' && node[key] && typeof node[key] === 'object' && !taxonomy.includes(node[key]['x-classification'])) issues.push({ code: 'UNCLASSIFIED_FIELD', path: current + '/*' });
+      walk(node[key], current + (['items', 'contains', 'additionalProperties', 'unevaluatedProperties', 'unevaluatedItems'].includes(key) ? '/*' : ''), document);
+    }
+    for (const key of ['allOf', 'anyOf', 'oneOf', 'prefixItems']) for (const child of node[key] ?? []) walk(child, current + (key === 'prefixItems' ? '/*' : ''), document);
+    for (const key of ['$defs', 'definitions', 'dependentSchemas']) for (const child of Object.values(node[key] ?? {})) walk(child, current, document);
+    active.delete(node);
   }
-  if (schema.items) issues.push(...classifications(schema.items, taxonomy, path + '/*'));
-  for (const field of Object.values(schema.patternProperties ?? {})) {
-    if (!taxonomy.includes(field['x-classification'])) issues.push({ code: 'UNCLASSIFIED_FIELD', path: path + '/*' });
-    issues.push(...classifications(field, taxonomy, path + '/*'));
-  }
-  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
-    if (!taxonomy.includes(schema.additionalProperties['x-classification'])) issues.push({ code: 'UNCLASSIFIED_FIELD', path: path + '/*' });
-    issues.push(...classifications(schema.additionalProperties, taxonomy, path + '/*'));
-  }
-  for (const keyword of ['$defs', 'definitions']) for (const field of Object.values(schema[keyword] ?? {})) issues.push(...classifications(field, taxonomy, path));
-  for (const keyword of ['allOf', 'anyOf', 'oneOf']) for (const field of schema[keyword] ?? []) issues.push(...classifications(field, taxonomy, path));
-  return issues;
+  walk(schema, path, schema);
+  return [...new Map(issues.map(issue => [JSON.stringify(issue), issue])).values()];
 }
-export function assertFixture(result, expected) {
-  if (expected.ok) {
-    if (!result.ok) throw new Error('Positive fixture rejected');
-    if (Object.hasOwn(expected, 'value') && canonicalJson(result.value) !== canonicalJson(expected.value)) throw new Error('Fixture value mismatch');
-  } else if (result.ok || !result.errors.some(error => error.code === expected.code && error.path === expected.path)) throw new Error('Negative fixture did not produce expected code/path');
-}
+export { assertFixture } from '../tooling/fixture-harness.mjs';
 export async function runFixtures(entry) {
   if (!await exists(entry.fixtures)) return [{ code: 'MISSING_FIXTURES', contract: entry.name }];
-  const manifest = await readJson(entry.fixtures);
-  const categories = new Set();
-  const failures = [];
-  for (const fixture of manifest.cases) {
-    categories.add(fixture.category);
-    let result;
-    const payload = structuredClone(manifest.valid);
-    for (const key of fixture.remove ?? []) delete payload[key];
-    Object.assign(payload, fixture.set ?? {});
-    if (fixture.mode === 'commerce_evidence') {
-      const context = structuredClone(fixture.context);
-      if (context.artifact_bytes) context.artifact_bytes = Object.fromEntries(Object.entries(context.artifact_bytes).map(([id, bytes]) => [id, Uint8Array.from(bytes)]));
-      result = checkCommerceEvidence(entry.name, payload, context);
-    }
-    else if (fixture.mode === 'research_creative') {
-      const context = structuredClone(fixture.context);
-      if (context.artifact_bytes) context.artifact_bytes = Object.fromEntries(Object.entries(context.artifact_bytes).map(([id, bytes]) => [id, Uint8Array.from(bytes)]));
-      result = checkResearchCreative(entry.name, payload, context);
-    }
-    else if (fixture.mode === 'semantic') result = checkOperation(entry.name, payload, fixture.context);
-    else if (fixture.mode === 'relationship') result = compareUsageIdentity(fixture.prior, payload);
-    else if (fixture.mode === 'context') result = checkTrustedContext(payload, fixture.expected_context);
-    else if (fixture.mode === 'parse') result = parseContract(entry.name, fixture.json);
-    else result = validateContract(entry.name, payload);
-    try { assertFixture(result, fixture.expected); } catch (error) {
-      if (!(error instanceof Error)) throw error;
-      failures.push({ code: 'FIXTURE_MISMATCH', contract: entry.name, case: fixture.id });
-    }
-  }
-  for (const category of ['minimal', 'full', 'missing', 'type', 'enum', 'malformed_json', 'unsupported_version', 'unknown_field']) if (!categories.has(category)) failures.push({ code: 'MISSING_FIXTURE_CATEGORY', contract: entry.name, category });
-  return failures;
-}
-export function pinsMatch(entry, schemas, fixtureDigest) {
-  return sha(entry.shared_source_revision) && /^sha512-[A-Za-z0-9+/]+={0,2}$/.test(entry.package_integrity ?? '') &&
-    entry.fixture_digest === fixtureDigest && entry.schema_pins?.length > 0 &&
-    entry.schema_pins.every(pin => schemas.some(schema => schema.contract === pin.contract && schema.version === pin.version && schema.sha256 === pin.sha256)) &&
-    entry.acknowledgement?.status === 'accepted' && entry.acknowledgement.consumer_sha === entry.source_sha &&
-    entry.acknowledgement.shared_source_revision === entry.shared_source_revision && entry.acknowledgement.fixture_digest === fixtureDigest &&
-    typeof entry.acknowledgement.record_ref === 'string' && entry.acknowledgement.record_ref.length > 0;
-}
-
-export async function consumerChecks(manifest, paths = {}) {
-  const failures = [];
-  const records = [];
-  const schemaManifest = await readJson('generated/schema-manifest.json');
-  const fixtureManifest = await readJson('generated/fixture-manifest.json');
-  if (hashManifest(fixtureManifest.files) !== fixtureManifest.digest) return { failures: [{ code: 'INVALID_FIXTURE_DIGEST' }], records };
-  for (const [path, digest] of Object.entries(fixtureManifest.files)) if (!await exists(path) || hashBytes(await readFile(root + path)) !== digest) return { failures: [{ code: 'STALE_FIXTURE_DIGEST' }], records };
-  for (const repository of knownConsumers) {
-    const matches = manifest.repositories.filter(entry => entry.repository === repository);
-    if (matches.length !== 1) { failures.push({ code: 'MISSING_OR_DUPLICATE_CONSUMER', repository }); continue; }
-    const entry = matches[0];
-    const path = paths[repository] ?? entry.local_path;
-    const block = code => failures.push({ code, repository });
-    if (!sha(entry.source_sha)) { block('INVALID_SOURCE_PIN'); continue; }
-    if (!path) { block('BLOCKED_MISSING_CHECKOUT'); continue; }
-    const revision = spawnSync('git', ['-C', path, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
-    if (revision.status !== 0 || revision.stdout.trim() !== entry.source_sha) { block('BLOCKED_REVISION_MISMATCH'); continue; }
-    const dirty = spawnSync('git', ['-C', path, 'status', '--porcelain'], { encoding: 'utf8' });
-    if (dirty.status !== 0 || dirty.stdout.trim()) { block('BLOCKED_DIRTY_CHECKOUT'); continue; }
-    if (!pinsMatch(entry, schemaManifest.schemas, fixtureManifest.digest) || entry.dependency_mode !== 'offline') { block('BLOCKED_MISSING_INTEGRATION_PIN'); continue; }
-    const required = (await catalog()).filter(contract => contract.producers.includes(repository) || contract.consumers.includes(repository));
-    if (required.some(contract => !entry.schema_pins.some(pin => pin.contract === contract.name))) { block('BLOCKED_INCOMPLETE_CONSUMER_COVERAGE'); continue; }
-    if (!Array.isArray(entry.command) || entry.command.length !== 2 || entry.command[0] !== 'node' || typeof entry.command[1] !== 'string' || !entry.command[1].endsWith('.mjs')) { block('BLOCKED_MISSING_CONSUMER_COMMAND'); continue; }
-    const script = resolve(path, entry.command[1]);
-    const checkout = await realpath(path);
-    const actualScript = await realpath(script);
-    if (isAbsolute(entry.command[1]) || relative(checkout, actualScript).startsWith('..')) { block('INVALID_CONSUMER_COMMAND'); continue; }
-    const result = spawnSync(process.execPath, [actualScript], { cwd: checkout, encoding: 'utf8', timeout: 120000, env: { PATH: process.env.PATH, SHARED_CONTRACTS_ROOT: root, SHARED_CONTRACTS_OFFLINE: '1' } });
-    if (result.status !== 0) { block('CONSUMER_CHECK_FAILED'); continue; }
-    let receipt;
-    try { receipt = JSON.parse(result.stdout); } catch (error) {
-      if (!(error instanceof SyntaxError)) throw error;
-      block('MISSING_CONSUMER_RECEIPT'); continue;
-    }
-    if (receipt.status !== 'passed' || receipt.consumer_sha !== entry.source_sha || receipt.shared_source_revision !== entry.shared_source_revision || receipt.fixture_digest !== entry.fixture_digest || !Array.isArray(receipt.contracts_tested) || required.some(contract => !receipt.contracts_tested.includes(contract.name))) { block('INVALID_CONSUMER_RECEIPT'); continue; }
-    records.push({ repository, source_sha: entry.source_sha, status: 'passed', command: entry.command });
-  }
-  return { failures, records };
+  return runCanonicalFixtures(entry.name, await readJson(entry.fixtures)).failures;
 }
 
 export async function execute(command, options) {
@@ -141,6 +72,7 @@ export async function execute(command, options) {
   if (!selected.length) add('UNKNOWN_CONTRACT');
   const policy = await readJson('compatibility/version-policy.json');
   const privacy = await readJson('compatibility/privacy-policy.json');
+  const classificationRegistry = new Map(await Promise.all((await schemaFiles()).map(async path => { const schema = await readJson(path); return [schema.$id, schema]; })));
   switch (command) {
     case 'check': {
       const ajv = compiler();
@@ -150,7 +82,7 @@ export async function execute(command, options) {
         if (!await exists(entry.schema_path) || !await exists(entry.generated_export)) { add('MISSING_SCHEMA_OR_EXPORT', entry); continue; }
         const schema = await readJson(entry.schema_path);
         ajv.getSchema(schema.$id);
-        failures.push(...classifications(schema, privacy.classifications).map(issue => ({ ...issue, contract: entry.name })));
+        failures.push(...classifications(schema, privacy.classifications, '', classificationRegistry).map(issue => ({ ...issue, contract: entry.name })));
       }
       for (const [path, content] of await outputs()) if (await readFile(root + 'generated/' + path, 'utf8') !== content) add('GENERATED_DRIFT', null, { path });
       break;
@@ -200,7 +132,7 @@ export async function execute(command, options) {
         if (options['require-version-policy'] && !await exists(entry.version_policy)) add('MISSING_VERSION_POLICY', entry);
         if (options['require-field-classification'] && !options['policy-only']) {
           if (!await exists(entry.schema_path)) add('MISSING_CLASSIFIED_SCHEMA', entry);
-          else failures.push(...classifications(await readJson(entry.schema_path), privacy.classifications).map(issue => ({ ...issue, contract: entry.name })));
+          else failures.push(...classifications(await readJson(entry.schema_path), privacy.classifications, '', classificationRegistry).map(issue => ({ ...issue, contract: entry.name })));
         }
         if (options['require-fixtures']) failures.push(...await runFixtures(entry));
         if (options['require-docs'] && (!await exists(entry.docs) || !await exists(entry.schema_path) || !await exists(entry.generated_export) || !await exists(entry.helper))) add('MISSING_DISCOVERABLE_ARTIFACT', entry);
@@ -216,17 +148,24 @@ export async function execute(command, options) {
           if (!consumer || !sha(consumer.source_sha) || !pinsMatch(consumer, schemas, fixtureDigest) || consumer.result !== 'passed') add('BLOCKED_CONSUMER_PIN', null, { repository });
         }
       }
+      if (options['require-owner']) {
+        const findings = await readJson('compatibility/owner-findings.json');
+        for (const finding of findings.findings.filter(row => row.status !== 'resolved')) add('BLOCKED_PRODUCER_FINDING', null, { finding: finding.id, issue: finding.issue });
+        const proposals = await readJson('compatibility/proposal-intake.json');
+        for (const proposal of proposals.requests) add('BLOCKED_OWNER_PROPOSAL', null, { owner: proposal.owner, source: proposal.source });
+      }
       break;
     }
     case 'consumers': {
-      const manifest = options.manifest ? JSON.parse(await readFile(options.manifest, 'utf8')) : await readJson('compatibility/consumers.json');
+      const manifest = await readJson('compatibility/consumers.json');
       const paths = options.paths ? JSON.parse(await readFile(options.paths, 'utf8')) : {};
       const result = await consumerChecks(manifest, paths);
       failures.push(...result.failures);
+      return { command, scope: 'checked_in_consumer_manifest', status: failures.length ? 'failed_or_blocked' : 'passed', checked: knownConsumers.length, ...result };
       break;
     }
     case 'docs': {
-      for (const path of ['README.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md']) {
+      for (const path of ['README.md', 'CHANGELOG.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md', 'docs/architecture/OWNERSHIP.md', 'docs/architecture/ACCEPTANCE.md']) {
         const text = await readFile(root + path, 'utf8');
         for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
           if (/^(https?:|#)/.test(match[1])) continue;
@@ -237,7 +176,18 @@ export async function execute(command, options) {
           }
         }
       }
+      const readme = await readFile(root + 'README.md', 'utf8');
+      for (const entry of entries) {
+        for (const target of [entry.schema_path, entry.generated_export, entry.helper, entry.fixtures]) if (!await exists(target) || !readme.includes('](' + target + ')')) add('MISSING_README_EXPORT_LINK', entry);
+        if (!readme.includes('/shared-contracts/issues/' + entry.issue + ')')) add('MISSING_README_OWNER_LINK', entry);
+      }
+      const fixtureManifest = await readJson('generated/fixture-manifest.json');
+      const schemaManifest = await readJson('generated/schema-manifest.json');
+      for (const schema of schemaManifest.schemas) if (!fixtureManifest.contracts.some(row => row.contract === schema.contract && row.version === schema.version)) add('MISSING_VERSION_FIXTURE', null, { contract: schema.contract, version: schema.version });
       const requirements = await readJson('docs/requirements.json');
+      const criteria = (await readJson('docs/acceptance-criteria.json')).criteria;
+      const expectedIds = requirements.issues.flatMap(row => row.acceptance_ids).concat(['SC-EPIC.1', 'SC-EPIC.2', 'SC-EPIC.3']);
+      if (new Set(criteria.map(row => row.id)).size !== criteria.length || expectedIds.some(id => !criteria.some(row => row.id === id)) || criteria.some(row => !expectedIds.includes(row.id))) add('INCOMPLETE_ACCEPTANCE_COVERAGE');
       for (let issue = 4; issue <= 30; issue++) if (!requirements.issues.some(row => row.issue === issue)) add('MISSING_REQUIREMENT_MAP', null, { issue });
       break;
     }
@@ -249,8 +199,8 @@ export async function execute(command, options) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [command, ...args] = process.argv.slice(2);
   const flags = ['require-owner', 'require-consumer', 'require-leaf', 'require-version-policy', 'require-field-classification', 'policy-only', 'require-fixtures', 'require-docs', 'require-consumer-pins'];
-  const valued = ['contract', 'manifest', 'paths', 'before', 'after'];
-  const allowed = { check: ['contract', 'foundation', 'implemented'], fixtures: ['contract', 'foundation', 'implemented'], compat: ['foundation', 'implemented', 'before', 'after'], inventory: [...flags, 'foundation', 'implemented'], consumers: ['manifest', 'paths'], docs: [] };
+  const valued = ['contract', 'paths', 'before', 'after'];
+  const allowed = { check: ['contract', 'foundation', 'implemented'], fixtures: ['contract', 'foundation', 'implemented'], compat: ['foundation', 'implemented', 'before', 'after'], inventory: [...flags, 'foundation', 'implemented'], consumers: ['paths'], docs: [] };
   if (!Object.hasOwn(allowed, command)) throw new Error('Unknown command');
   if (args.length === 1 && args[0] === '--help') console.log('contracts ' + command + ' ' + allowed[command].map(flag => '--' + flag + (valued.includes(flag) ? ' VALUE' : '')).join(' '));
   else {
@@ -270,3 +220,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (result.failures.length) process.exitCode = 1;
   }
 }
+import { runCanonicalFixtures, assertFixture } from '../tooling/fixture-harness.mjs';
+import { consumerChecks, pinsMatch, knownConsumers } from './consumer-checks.mjs';
+export { consumerChecks, pinsMatch } from './consumer-checks.mjs';

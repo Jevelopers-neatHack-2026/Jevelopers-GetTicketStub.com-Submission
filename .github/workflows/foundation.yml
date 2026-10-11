@@ -1,4 +1,4 @@
-name: Shared contract foundation
+name: Full local contract candidates
 on: [push, pull_request]
 permissions:
   contents: read
@@ -22,12 +22,13 @@ jobs:
           npm ci --ignore-scripts
           npm run build
           npm test
-          npm run contracts:check -- --implemented
-          npm run contracts:fixtures -- --implemented
-          npm run contracts:compat -- --implemented
-          npm run contracts:inventory -- --require-consumer --require-leaf --require-version-policy
+          npm run contracts:check
+          npm run contracts:fixtures
+          npm run contracts:compat
+          npm run contracts:inventory -- --require-consumer --require-leaf --require-version-policy --require-field-classification --require-fixtures --require-docs
           npm run contracts:inventory -- --require-field-classification --policy-only
           npm run docs:check
+          npm run contracts:coverage -- --human
           npm run generate -- --check
           git diff --exit-code -- schemas generated fixtures
           npm run test:installed

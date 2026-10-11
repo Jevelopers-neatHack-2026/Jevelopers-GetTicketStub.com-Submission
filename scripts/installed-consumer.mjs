@@ -1,4 +1,4 @@
-import { mkdtemp, cp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, cp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -25,6 +25,22 @@ try {
   console.log(run(process.execPath, ['research-creative-consumer.mjs'], directory).trim());
   await cp(root + 'examples/commerce-evidence-consumer.mjs', join(directory, 'commerce-evidence-consumer.mjs'));
   console.log(run(process.execPath, ['commerce-evidence-consumer.mjs'], directory).trim());
+  await cp(root + 'examples/fixture-consumer.mjs', join(directory, 'fixture-consumer.mjs'));
+  console.log(run(process.execPath, ['fixture-consumer.mjs'], directory).trim());
+  await writeFile(join(directory, 'consumer.mts'), `import { parseContract, versions } from '@jevelopers/shared-contracts';
+import type { ContractMap, ContractVersionMap, ContractName, TenantId, ProjectId } from '@jevelopers/shared-contracts';
+import { runCanonicalFixtures } from '@jevelopers/shared-contracts/fixture-harness';
+type Assert<T extends true> = T;
+type EachVersion = Assert<{ [K in ContractName]: ContractMap[K]['schema_version'] extends keyof ContractVersionMap[K] ? true : false }[ContractName]>;
+type Brands = Assert<ProjectId extends TenantId ? false : true>;
+const parsed = parseContract('ProjectRequest', '{}');
+if (parsed.ok) { const version: '1.0.0' = parsed.value.schema_version; }
+const registry: 'ProjectRequest_1_0_0' = versions.ProjectRequest['1.0.0'];
+const result = runCanonicalFixtures('CommonEnvelope', {contract:'CommonEnvelope',schema_version:'1.0.0',policy_version:'1.0.0',valid:{},cases:[]});
+export type Parity = readonly [EachVersion, Brands];
+`);
+  run(process.execPath, [root + 'node_modules/typescript/bin/tsc', '--noEmit', '--strict', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', join(directory, 'consumer.mts')], directory);
+  console.log(JSON.stringify({ installed_types: 'passed', esm_export_map: 'passed' }));
   console.log(JSON.stringify({ archive_hash: digest, reproducible: true, runtime_dependencies: 0 }));
 } finally {
   await rm(directory, { recursive: true, force: true });

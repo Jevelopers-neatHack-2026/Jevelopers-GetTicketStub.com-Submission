@@ -59,18 +59,45 @@
       "id": "minimal",
       "category": "minimal",
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:6375255aedea8f17756eaa3026f025d27614924e699d95306094c226534b29e1"
+      },
+      "remove": [
+        "workflow_id",
+        "run_id",
+        "job_id",
+        "artifact_id",
+        "design_id",
+        "design_version_id",
+        "trace_id",
+        "evidence_id",
+        "usage_event_id",
+        "logical_operation_id",
+        "provider_request_id"
+      ],
+      "policy_version": "1.0.0"
     },
     {
       "id": "full",
       "category": "full",
       "set": {
-        "trace_id": "123e4567-e89b-42d3-a456-000000000999"
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "run_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_version_id": "123e4567-e89b-42d3-a456-426614174000",
+        "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+        "usage_event_id": "123e4567-e89b-42d3-a456-426614174000",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_request_id": null
       },
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:07d30c98d227cf7b0ca9ce1b7c06341721fb81d76058d97b0bf0d5f82527b552"
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "missing",
@@ -82,7 +109,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/policy_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "type",
@@ -94,7 +122,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "enum",
@@ -106,7 +135,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "malformed-json",
@@ -117,7 +147,8 @@
         "ok": false,
         "code": "MALFORMED_JSON",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unsupported-version",
@@ -129,7 +160,8 @@
         "ok": false,
         "code": "UNSUPPORTED_VERSION",
         "path": "/schema_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-field",
@@ -141,7 +173,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "date",
@@ -153,7 +186,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/observed_at"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "semantic-positive",
@@ -200,7 +234,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "forged-scope",
@@ -252,7 +287,8 @@
         "ok": false,
         "code": "SCOPE_MISMATCH",
         "path": "/project_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "duplicate-observation",
@@ -352,7 +388,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "altered-duplicate",
@@ -456,7 +493,8 @@
         "ok": false,
         "code": "IDENTITY_COLLISION",
         "path": "/supplier_order_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "out-of-order",
@@ -562,7 +600,8 @@
         "ok": false,
         "code": "STALE_REVISION",
         "path": "/revision"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-provider-status",
@@ -616,7 +655,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "ambiguous-submission",
@@ -670,7 +710,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "timeout-cannot-be-rejection",
@@ -725,7 +766,8 @@
         "ok": false,
         "code": "UNCERTAIN_EXECUTION",
         "path": "/submission_outcome"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "cancel-request-is-not-confirmed",
@@ -779,7 +821,8 @@
         "ok": false,
         "code": "INVALID_TRANSITION",
         "path": "/cancellation"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "confirmed-cancellation",
@@ -831,7 +874,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "rejected-cancellation",
@@ -883,7 +927,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "delayed-regression",
@@ -991,7 +1036,8 @@
         "ok": false,
         "code": "INVALID_TRANSITION",
         "path": "/normalized_status"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "known_supplier_cannot_switch",
@@ -1098,7 +1144,8 @@
         "ok": false,
         "code": "IDENTITY_COLLISION",
         "path": "/supplier_order_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "same_execution_wrong_bundle_ref",
@@ -1211,7 +1258,8 @@
         "ok": false,
         "code": "IDENTITY_COLLISION",
         "path": "/bundle_ref"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "same_execution_wrong_authorization_ref",
@@ -1324,7 +1372,8 @@
         "ok": false,
         "code": "IDENTITY_COLLISION",
         "path": "/authorization_ref"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "trusted_null_to_known_supplier",
@@ -1428,7 +1477,49 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:6375255aedea8f17756eaa3026f025d27614924e699d95306094c226534b29e1"
+      },
+      "policy_version": "1.0.0"
     }
-  ]
+  ],
+  "schema_version": "1.0.0"
 }

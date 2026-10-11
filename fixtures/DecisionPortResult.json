@@ -98,22 +98,49 @@
       "id": "minimal",
       "category": "minimal",
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:3e0d2a15ff26abfb569340665af437964d82547c21e618e4f3655349341f2389"
+      },
+      "remove": [
+        "workflow_id",
+        "run_id",
+        "job_id",
+        "artifact_id",
+        "design_id",
+        "design_version_id",
+        "order_id",
+        "trace_id",
+        "evidence_id",
+        "usage_event_id",
+        "provider_attempt_id",
+        "transport_attempt_id",
+        "provider_request_id"
+      ],
+      "policy_version": "1.0.0"
     },
     {
       "id": "full",
       "category": "full",
       "set": {
-        "artifact_id": "123e4567-e89b-42d3-a456-000000000040",
-        "design_id": "123e4567-e89b-42d3-a456-000000000041",
-        "design_version_id": "123e4567-e89b-42d3-a456-000000000042",
-        "trace_id": "123e4567-e89b-42d3-a456-000000000043",
-        "evidence_id": "123e4567-e89b-42d3-a456-000000000044"
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_version_id": "123e4567-e89b-42d3-a456-426614174000",
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "run_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "order_id": "123e4567-e89b-42d3-a456-426614174000",
+        "usage_event_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_request_id": null
       },
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:ba7c97fe700c92d473ed6cfa655b5e7b601ce9d09250662b9138fe32321df907"
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "missing-policy",
@@ -125,7 +152,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/policy_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "wrong-type",
@@ -137,7 +165,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-enum",
@@ -149,7 +178,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "malformed-json",
@@ -160,7 +190,8 @@
         "ok": false,
         "code": "MALFORMED_JSON",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unsupported-version",
@@ -172,7 +203,8 @@
         "ok": false,
         "code": "UNSUPPORTED_VERSION",
         "path": "/schema_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unknown-field",
@@ -186,7 +218,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "invalid-date",
@@ -198,7 +231,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/observed_at"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "semantic-positive",
@@ -445,7 +479,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "forged-tenant",
@@ -697,7 +732,8 @@
         "ok": false,
         "code": "SCOPE_MISMATCH",
         "path": "/tenant_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "wrong-choice",
@@ -989,7 +1025,8 @@
         "ok": false,
         "code": "POLICY_MISMATCH",
         "path": "/answers/choice_1/answer/choice"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "non-normalized",
@@ -1281,7 +1318,8 @@
         "ok": false,
         "code": "INVALID_DISTRIBUTION",
         "path": "/answers/choice_1/answer/probabilities"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "incorrect-weighted-score",
@@ -1573,7 +1611,8 @@
         "ok": false,
         "code": "INVALID_DISTRIBUTION",
         "path": "/answers/score_1/answer/score"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "altered-legend",
@@ -1865,7 +1904,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/answers/score_1/answer/legend"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "missing-question",
@@ -2149,7 +2189,8 @@
         "ok": false,
         "code": "INVALID_BATCH",
         "path": "/answers"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "extra-question",
@@ -2449,7 +2490,8 @@
         "ok": false,
         "code": "INVALID_BATCH",
         "path": "/answers"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "wrong-request",
@@ -2701,7 +2743,8 @@
         "ok": false,
         "code": "IDENTITY_COLLISION",
         "path": "/request_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "noul-confidence-forbidden",
@@ -2754,7 +2797,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/answers/noul_1/answer"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "low-confidence-review",
@@ -3045,7 +3089,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "noul-uncertain-review",
@@ -3336,7 +3381,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "partial-batch",
@@ -3623,7 +3669,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "all-or-nothing-partial",
@@ -3913,7 +3960,8 @@
         "ok": false,
         "code": "INVALID_BATCH",
         "path": "/acceptance_policy"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unusable-unknown-known-accounting",
@@ -4180,7 +4228,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unusable-abstain-known-accounting",
@@ -4447,7 +4496,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unusable-unavailable-known-accounting",
@@ -4714,7 +4764,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unusable-timeout-known-accounting",
@@ -4994,7 +5045,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unusable-cancelled-known-accounting",
@@ -5261,7 +5313,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unusable-malformed-known-accounting",
@@ -5528,7 +5581,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "legacy-result-preserved",
@@ -5817,7 +5871,49 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:3e0d2a15ff26abfb569340665af437964d82547c21e618e4f3655349341f2389"
+      },
+      "policy_version": "1.0.0"
     }
-  ]
+  ],
+  "schema_version": "1.0.0"
 }

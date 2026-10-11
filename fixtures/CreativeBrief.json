@@ -115,18 +115,53 @@
       "id": "minimal",
       "category": "minimal",
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:cc0920aec394246eafdce2b0ec33c500e92d0b969a9dcf19e868ef6a1c5f499e"
+      },
+      "remove": [
+        "workflow_id",
+        "run_id",
+        "job_id",
+        "artifact_id",
+        "design_id",
+        "design_version_id",
+        "order_id",
+        "trace_id",
+        "evidence_id",
+        "usage_event_id",
+        "logical_operation_id",
+        "provider_attempt_id",
+        "billable_attempt_id",
+        "transport_attempt_id",
+        "provider_request_id"
+      ],
+      "policy_version": "1.0.0"
     },
     {
       "id": "full",
       "category": "full",
       "set": {
-        "evidence_id": "123e4567-e89b-42d3-a456-000000000199"
+        "evidence_id": "123e4567-e89b-42d3-a456-426614174000",
+        "workflow_id": "123e4567-e89b-42d3-a456-426614174000",
+        "run_id": "123e4567-e89b-42d3-a456-426614174000",
+        "job_id": "123e4567-e89b-42d3-a456-426614174000",
+        "artifact_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_id": "123e4567-e89b-42d3-a456-426614174000",
+        "design_version_id": "123e4567-e89b-42d3-a456-426614174000",
+        "order_id": "123e4567-e89b-42d3-a456-426614174000",
+        "trace_id": "123e4567-e89b-42d3-a456-426614174000",
+        "usage_event_id": "123e4567-e89b-42d3-a456-426614174000",
+        "logical_operation_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "billable_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "transport_attempt_id": "123e4567-e89b-42d3-a456-426614174000",
+        "provider_request_id": null
       },
       "expected": {
-        "ok": true
-      }
+        "ok": true,
+        "canonical_sha256": "sha256:829255bada81f831e22553bf882f4215d5900b4996ecc4356e60037dab27e9f0"
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "required",
@@ -138,7 +173,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/policy_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "type",
@@ -150,7 +186,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/environment"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "enum",
@@ -162,7 +199,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/billing_mode"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "json",
@@ -173,7 +211,8 @@
         "ok": false,
         "code": "MALFORMED_JSON",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "version",
@@ -185,7 +224,8 @@
         "ok": false,
         "code": "UNSUPPORTED_VERSION",
         "path": "/schema_version"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "additive",
@@ -197,7 +237,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": ""
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "date",
@@ -209,7 +250,8 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/occurred_at"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "semantic-positive",
@@ -523,7 +565,8 @@
       },
       "expected": {
         "ok": true
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "forged-scope",
@@ -842,7 +885,8 @@
         "ok": false,
         "code": "SCOPE_MISMATCH",
         "path": "/tenant_id"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "changed-fact",
@@ -1189,7 +1233,8 @@
         "ok": false,
         "code": "REFERENCE_MISMATCH",
         "path": "/composition_facts/0"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "revoked-asset",
@@ -1506,7 +1551,8 @@
         "ok": false,
         "code": "STALE_APPROVAL",
         "path": "/approved_assets/0/approval_ref"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "unsupported-model-policy",
@@ -1831,7 +1877,8 @@
         "ok": false,
         "code": "REFERENCE_MISMATCH",
         "path": "/model_policy_ref"
-      }
+      },
+      "policy_version": "1.0.0"
     },
     {
       "id": "missing-constraints",
@@ -1843,7 +1890,49 @@
         "ok": false,
         "code": "INVALID_PAYLOAD",
         "path": "/output_constraints"
-      }
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "unknown_critical",
+      "category": "unknown_critical",
+      "set": {
+        "authority_override": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "additive_field",
+      "category": "additive_field",
+      "set": {
+        "future_optional_field": null
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      },
+      "policy_version": "1.0.0"
+    },
+    {
+      "id": "retained_encoding",
+      "category": "retained_encoding",
+      "compatibility": {
+        "kind": "retained_exact_candidate_encoding",
+        "version": "1.0.0",
+        "previous_accepted_major": null
+      },
+      "expected": {
+        "ok": true,
+        "canonical_sha256": "sha256:cc0920aec394246eafdce2b0ec33c500e92d0b969a9dcf19e868ef6a1c5f499e"
+      },
+      "policy_version": "1.0.0"
     }
-  ]
+  ],
+  "schema_version": "1.0.0"
 }

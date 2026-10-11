@@ -224,6 +224,14 @@
           "producer": false,
           "consumer": true
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -402,6 +410,14 @@
           "producer": false,
           "consumer": true
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -600,6 +616,14 @@
           "producer": true,
           "consumer": false
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -678,6 +702,14 @@
           "producer": false,
           "consumer": true
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -736,6 +768,14 @@
           "producer": true,
           "consumer": false
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -824,6 +864,14 @@
           "producer": true,
           "consumer": false
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -897,6 +945,14 @@
           "producer": false,
           "consumer": true
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -1065,6 +1121,14 @@
           "producer": false,
           "consumer": true
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     },
     {
@@ -1218,6 +1282,14 @@
           "producer": false,
           "consumer": true
         }
+      ],
+      "package_content_digest": null,
+      "shared_binding": null,
+      "dependency_mode": "offline",
+      "tested_consumer_revision": null,
+      "limitations": [
+        "discovery_checkout_only",
+        "accepted_import_and_owner_acknowledgement_pending"
       ]
     }
   ],
@@ -1287,5 +1359,5 @@
       "acceptance": null
     }
   ],
-  "implementation_note": "Operations candidate package 0.2.0 is local producer work. All actual consumer schema pins, package integrity, results and acknowledgements remain pending."
+  "implementation_note": "Candidate 0.5.0 contains package-owned representative fixture adapters; real adoption and accepted owner/consumer pins remain blocked. Discovery SHAs are immutable historical snapshots; see downstream-observations.json for later sources and owner-findings.json for producer correctness blockers."
 }

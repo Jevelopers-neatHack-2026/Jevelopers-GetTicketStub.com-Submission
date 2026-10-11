@@ -1,0 +1,58 @@
+{
+  "status": "unaccepted_owner_requested_shapes",
+  "catalog_note": "45 implemented named candidates cover assigned shared leaf inventory through #28, not every downstream planned API. No speculative schema or domain service is supplied.",
+  "requests": [
+    {
+      "owner": "print-production",
+      "source": "https://github.com/Jevelopers-neatHack-2026/print-production/issues/5",
+      "coordination_issues": [
+        4,
+        24
+      ],
+      "requested_names": [
+        "ComposeArtifactRequest",
+        "ComposeArtifactResult",
+        "TemplateSpec",
+        "CapabilitySnapshot",
+        "PersonalizationBatch",
+        "PersonalizationRow",
+        "PersonalizationResult",
+        "PersonalizeBatchRequest",
+        "InspectArtifactRequest",
+        "ExportBundleRequest",
+        "CompareTemplateRequest",
+        "ArtifactStatusRequest",
+        "ProductionContext",
+        "ProductionResult",
+        "PreflightReport",
+        "ArtifactManifestStatus"
+      ],
+      "status": "blocked_concrete_owner_proposal_and_agreement"
+    },
+    {
+      "owner": "fulfillment-connectors",
+      "source": "https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/3",
+      "acceptance_id": "FC-01.4",
+      "coordination_issues": [
+        4,
+        24
+      ],
+      "requested_semantics": [
+        "public operation request/result envelopes",
+        "capability and print-spec metadata",
+        "preflight report"
+      ],
+      "status": "blocked_concrete_owner_proposal_and_agreement"
+    },
+    {
+      "owner": "cost-intelligence",
+      "source": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12#issuecomment-6103878409",
+      "requested_semantics": [
+        "CI-01/CI-08/CI-08X reporting query/export request and manifest",
+        "as-of/watermark/timezone/pagination/snapshot fingerprint",
+        "unknown/partial coverage counts"
+      ],
+      "status": "blocked_concrete_owner_proposal_and_agreement"
+    }
+  ]
+}
