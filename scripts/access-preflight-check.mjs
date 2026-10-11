@@ -128,7 +128,7 @@ const KEY_URL = "https://openrouter.ai/api/v1/key";
  * The adapter's observation is relabeled `mock` (a live-labeled observation is refused in a mock run), and the runner
  * still discards its permission and quota.
  */
-function realOpenRouterMockAdapter(fixture) {
+function realOpenRouterMockAdapter(fixture, fixtureNow) {
   const requests = [];
   const catalogUrl = `https://openrouter.ai/api/v1/images/models/${fixture.target.model}/endpoints`;
   const fetchImpl = async (url, init) => {
@@ -147,13 +147,13 @@ function realOpenRouterMockAdapter(fixture) {
         binding: { service: "openrouter", account_ref: input.account_ref, project_ref: input.project_ref,
           target_binding_sha256: digest(Buffer.from(JSON.stringify(input.target_binding), "utf8")) },
         token: SYNTHETIC_TOKEN,
-        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        expires_at: new Date(Date.parse(fixtureNow) + 60_000).toISOString(),
         evidence: { ref: "test:evidence:credential", sha256: digest(Buffer.from("credential")), pinned_revision: "test:revision:credential",
           independent_review: { ref: "test:review:credential", sha256: digest(Buffer.from("review:credential")) } },
       };
     },
   };
-  const real = createOpenRouterImagesAdapter({ credentialPort, fetchImpl });
+  const real = createOpenRouterImagesAdapter({ credentialPort, fetchImpl, now: () => Date.parse(fixtureNow) });
   const adapter = { ...fixture.adapter, evidence_mode: "mock",
     async inspect(input) { return { ...(await real.inspect(input)), evidence_mode: "mock" }; } };
   return { adapter, requests };
@@ -165,10 +165,12 @@ async function createMockEvidence() {
   // Generation and edit are separate cells for each provider target; each scenario selects exactly one cell.
   for (const [provider, cellId] of [["openai", "image_generation"], ["openai", "image_edit"],
     ["openrouter", "image_generation"], ["openrouter", "image_edit"]]) {
-    // The real adapter stamps observations with the current time, so the fixture clock must not be earlier.
+    // The real adapter gets a fixed clock equal to the fixture clock, so its observation time and the credential
+    // expiry never depend on the real clock advancing within a window.
+    const fixtureNow = new Date(Date.now() + 5000).toISOString();
     const fixture = createMockAccessFixture({ cellId, runId, provider,
-      ...(provider === "openrouter" ? { now: new Date(Date.now() + 5000).toISOString() } : {}) });
-    const real = provider === "openrouter" ? realOpenRouterMockAdapter(fixture) : undefined;
+      ...(provider === "openrouter" ? { now: fixtureNow } : {}) });
+    const real = provider === "openrouter" ? realOpenRouterMockAdapter(fixture, fixtureNow) : undefined;
     const report = await runAccessPreflight(real ? { ...fixture.args, adapter: real.adapter } : fixture.args);
     if (report.acceptance_allowed !== false || report.mode !== "mock" || report.required_cell_count !== ACCESS_CELL_DEFINITIONS.length) {
       throw new Error("mock access report failed its fixed-denominator assertions");
