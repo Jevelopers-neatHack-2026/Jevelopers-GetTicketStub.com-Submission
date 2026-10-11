@@ -1586,7 +1586,8 @@ async function runImageDispatch(driver, operation, rawInput) {
   });
 }
 
-async function inspectConceptReferenceBytes(assetPort, { scope, references, maximum_single_reference_bytes, maximum_aggregate_reference_bytes }) {
+async function inspectConceptReferenceBytes(assetPort, { scope, references, maximum_single_reference_bytes, maximum_aggregate_reference_bytes },
+  validateReferenceCount) {
   // Snapshot every caller-owned field before the first read/decode await.
   // The returned metadata and byte checks must remain bound to the exact
   // asset identities the caller authorized at invocation time.
@@ -1601,6 +1602,14 @@ async function inspectConceptReferenceBytes(assetPort, { scope, references, maxi
     fail("asset_unavailable", "Two bounded scoped concept references are required before C03 reservation.", {
       outcome: "failed", field: "concept_reference_manifest",
     });
+  }
+  if (validateReferenceCount !== undefined) {
+    if (typeof validateReferenceCount !== "function") {
+      fail("invalid_provider_input", "The reference-count validator must be a trusted synchronous function.", {
+        outcome: "failed", field: "concept_reference_manifest.references",
+      });
+    }
+    validateReferenceCount(preflightReferences.length);
   }
   const seen = new Set();
   const inspected = [];

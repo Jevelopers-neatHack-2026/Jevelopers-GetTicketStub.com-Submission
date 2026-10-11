@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { types as utilTypes } from "node:util";
 import {
   MAX_PIXELS, OpenAIImagesProviderError, PRIVATE_PROVIDER_REQUEST_IDS, PRIVATE_RETRY_DISPOSITIONS,
   PRIVATE_TARGET_BINDING_SHA256, attachUsageObservation, checkRef, exactUsage, fail, freezeUsageObservation, hashJson,
@@ -106,6 +107,180 @@ function deepFreeze(value) {
   return value;
 }
 
+const INSPECTION_ARGUMENT_KEYS = Object.freeze(["scope", "references", "maximum_single_reference_bytes",
+  "maximum_aggregate_reference_bytes"]);
+const MAX_INSPECTION_SNAPSHOT_DEPTH = 128;
+const MAX_INSPECTION_SNAPSHOT_NODES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_VALUES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_PROPERTIES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_BYTES = 1024 * 1024;
+
+function rejectInspectionInput(field) {
+  fail("invalid_provider_input", "Concept reference inspection accepts bounded plain data without accessors, proxies, or serialization hooks.", {
+    outcome: "failed", field,
+  });
+}
+
+function accountInspectionValue(state, field) {
+  state.values += 1;
+  if (state.values > MAX_INSPECTION_SNAPSHOT_VALUES) rejectInspectionInput(field);
+}
+
+function accountInspectionProperties(state, count, field) {
+  if (count > MAX_INSPECTION_SNAPSHOT_PROPERTIES - state.properties) rejectInspectionInput(field);
+  state.properties += count;
+}
+
+function accountInspectionBytes(state, count, field) {
+  if (!Number.isSafeInteger(count) || count < 0 || count > MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes) {
+    rejectInspectionInput(field);
+  }
+  state.bytes += count;
+}
+
+function encodedJsonStringBytes(value, maximum) {
+  let bytes = 2; // JSON string delimiters.
+  if (bytes > maximum) return undefined;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0x22 || code === 0x5c) bytes += 2;
+    else if (code <= 0x1f) bytes += code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d ? 2 : 6;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else bytes += 6;
+    } else if (code >= 0xdc00 && code <= 0xdfff) bytes += 6;
+    else if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else bytes += 3;
+    if (bytes > maximum) return undefined;
+  }
+  return bytes;
+}
+
+function accountInspectionString(state, value, field) {
+  const bytes = encodedJsonStringBytes(value, MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes);
+  if (bytes === undefined) rejectInspectionInput(field);
+  accountInspectionBytes(state, bytes, field);
+}
+
+function snapshotInspectionValue(value, field, state, depth = 0) {
+  accountInspectionValue(state, field);
+  if (value === null) {
+    accountInspectionBytes(state, 4, field);
+    return value;
+  }
+  if (typeof value === "boolean") {
+    accountInspectionBytes(state, value ? 4 : 5, field);
+    return value;
+  }
+  if (typeof value === "string") {
+    accountInspectionString(state, value, field);
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      accountInspectionBytes(state, 4, field);
+      return null;
+    }
+    accountInspectionBytes(state, String(value === 0 ? 0 : value).length, field);
+    return value;
+  }
+  if (value === undefined) return undefined;
+  if (typeof value === "bigint" || typeof value === "function" || typeof value === "symbol") rejectInspectionInput(field);
+  if (utilTypes.isProxy(value)) rejectInspectionInput(field);
+  state.nodes += 1;
+  if (state.nodes > MAX_INSPECTION_SNAPSHOT_NODES || depth > MAX_INSPECTION_SNAPSHOT_DEPTH || state.active.has(value)) {
+    rejectInspectionInput(field);
+  }
+  state.active.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertyDescriptor(value, "toJSON")) rejectInspectionInput(field);
+      const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
+      if (!Number.isSafeInteger(length) || length > MAX_INSPECTION_SNAPSHOT_NODES) rejectInspectionInput(field);
+      // Every array slot is copied, including sparse holes. Check the minimum
+      // expanded value count and exact JSON delimiters before allocating the copy.
+      if (length > MAX_INSPECTION_SNAPSHOT_VALUES - state.values) rejectInspectionInput(field);
+      const keys = Reflect.ownKeys(value);
+      accountInspectionProperties(state, keys.length, field);
+      for (const key of keys) {
+        if (typeof key !== "string") continue;
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!descriptor || !Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      }
+      accountInspectionBytes(state, 2 + Math.max(0, length - 1), field);
+      const copy = new Array(length);
+      Object.setPrototypeOf(copy, null);
+      for (let index = 0; index < length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor) {
+          copy[index] = snapshotInspectionValue(null, field, state, depth + 1);
+          continue;
+        }
+        if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+        const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
+        if (child === undefined) {
+          accountInspectionBytes(state, 4, field);
+          copy[index] = null;
+        } else copy[index] = child;
+      }
+      return Object.freeze(copy);
+    }
+    if (!isRecord(value) || Object.getOwnPropertyDescriptor(value, "toJSON")) rejectInspectionInput(field);
+    const keys = Reflect.ownKeys(value);
+    accountInspectionProperties(state, keys.length, field);
+    let enumerableCount = 0;
+    let outputCount = 0;
+    let structureBytes = 2; // JSON object delimiters.
+    for (const key of keys) {
+      if (typeof key !== "string") continue;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      if (!descriptor.enumerable) continue;
+      enumerableCount += 1;
+      if (descriptor.value === undefined) continue;
+      const keyBytes = encodedJsonStringBytes(key, MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes - structureBytes);
+      if (keyBytes === undefined) rejectInspectionInput(field);
+      structureBytes += keyBytes + 1 + (outputCount === 0 ? 0 : 1); // key, colon, and comma.
+      if (structureBytes > MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes) rejectInspectionInput(field);
+      outputCount += 1;
+    }
+    if (enumerableCount > MAX_INSPECTION_SNAPSHOT_VALUES - state.values) rejectInspectionInput(field);
+    accountInspectionBytes(state, structureBytes, field);
+    const copy = Object.create(null);
+    for (const key of keys) {
+      if (typeof key !== "string") continue;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      if (!descriptor.enumerable) continue;
+      const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
+      if (child !== undefined) copy[key] = child;
+    }
+    return Object.freeze(copy);
+  } finally {
+    state.active.delete(value);
+  }
+}
+
+function snapshotConceptInspectionArguments(args) {
+  if (utilTypes.isProxy(args) || !isRecord(args)) rejectInspectionInput("concept_reference_request");
+  const state = { active: new WeakSet(), nodes: 0, values: 0, properties: 0, bytes: 0 };
+  const copy = Object.create(null);
+  for (const key of INSPECTION_ARGUMENT_KEYS) {
+    const descriptor = Object.getOwnPropertyDescriptor(args, key);
+    if (!descriptor) {
+      copy[key] = undefined;
+      continue;
+    }
+    if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(`concept_reference_request.${key}`);
+    copy[key] = snapshotInspectionValue(descriptor.value, `concept_reference_request.${key}`, state);
+  }
+  return Object.freeze(copy);
+}
+
 function onlyKeys(value, allowed) {
   return Object.keys(value).every((key) => allowed.includes(key));
 }
@@ -150,26 +325,46 @@ function validateSupportedParameters(value) {
   return deepFreeze(result);
 }
 
-/**
- * Bind the declared capabilities to the catalog range descriptors the host supplied. The adapter always sends n:1 and,
- * for an edit, sends the parent plus the references, so a descriptor that cannot admit that request is a contradictory
- * profile and is refused before any port is touched. Absent descriptors add no constraint.
- */
-function validateDescriptorBinding(capabilities, supported) {
-  const reject = () => fail("unsupported_model_profile", "The declared capabilities contradict the supplied parameter descriptors.", {
-    outcome: "failed", field: "supported_parameters",
-  });
-  const { n, input_references: references } = supported;
-  if (n && !(n.min <= 1 && n.max >= 1)) reject();
-  // Generation sends no references, so a generation-capable profile cannot satisfy a required minimum.
-  if (references && capabilities.generation && references.min >= 1) reject();
-  if (references && capabilities.edit !== false) {
-    // Only inherently contradictory declarations are refused here. A required minimum above one is valid for an
-    // edit-only profile (a parentless concept sends exactly its authorized references), so the per-operation count is
-    // checked against [min, min(max, edit.max_input_references)] when the operation runs, before any port is touched.
-    // No edit request could satisfy a maximum below the required minimum or an upper bound below one reference.
-    if (references.max < 1 || capabilities.edit.max_input_references > references.max ||
-        capabilities.edit.max_input_references < references.min) reject();
+function rangeContains(range, value) {
+  return range === undefined || (value >= range.min && value <= range.max);
+}
+
+function validateCatalogCountCompatibility(capabilities, supported) {
+  if (supported.n && !rangeContains(supported.n, 1)) {
+    fail("unsupported_model_profile", "The declared n range excludes the adapter's fixed single-image request.", {
+      outcome: "failed", field: "supported_parameters",
+    });
+  }
+  const references = supported.input_references;
+  if (!references) return;
+  if (capabilities.generation && !rangeContains(references, 0)) {
+    fail("unsupported_model_profile", "The declared input-reference range excludes generation's zero-reference request.", {
+      outcome: "failed", field: "supported_parameters",
+    });
+  }
+  if (capabilities.edit !== false) {
+    const maximum = capabilities.edit.max_input_references;
+    if (maximum > references.max || maximum < references.min) {
+      fail("unsupported_model_profile", "Edit capability and the declared input-reference range are incompatible.", {
+        outcome: "failed", field: "supported_parameters",
+      });
+    }
+  }
+}
+
+function assertReferenceCount(count, maximum, descriptor) {
+  if (count > maximum || !rangeContains(descriptor, count)) {
+    fail("unsupported_operation", "The actual OpenRouter request reference count is outside the explicit model profile.", {
+      outcome: "failed", field: "input_references",
+    });
+  }
+}
+
+function assertFixedImageCount(supported) {
+  if (!rangeContains(supported.n, 1)) {
+    fail("unsupported_operation", "The actual OpenRouter request image count is outside the explicit model profile.", {
+      outcome: "failed", field: "n",
+    });
   }
 }
 
@@ -430,7 +625,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
     }
     const profileCapabilities = validateCapabilities(capabilities);
     const supported = validateSupportedParameters(supported_parameters);
-    validateDescriptorBinding(profileCapabilities, supported);
+    validateCatalogCountCompatibility(profileCapabilities, supported);
     const pinnedConfiguration = validateConfiguration(configuration, supported);
     if (!capabilityPort || typeof capabilityPort.verify !== "function" || typeof capabilityPort.revalidate !== "function" ||
         !authorizationPort || typeof authorizationPort.revalidate !== "function" ||
@@ -440,15 +635,6 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
     }
     const nodeVersion = process.versions.node;
     const maxReferences = profileCapabilities.edit === false ? 0 : profileCapabilities.edit.max_input_references;
-    const minReferences = supported.input_references?.min ?? 0;
-    // The actual number of input_references an operation would send must lie in this range (generation sends 0).
-    const requireReferenceCount = (count) => {
-      if (!Number.isSafeInteger(count) || count < minReferences || count > maxReferences) {
-        fail("unsupported_operation", "The reference count is outside the explicit OpenRouter profile range.", {
-          outcome: "failed", field: "input_references",
-        });
-      }
-    };
     const routing = deepFreeze({ only: [provider_tag], allow_fallbacks: false });
 
     const requireOperation = (operation) => {
@@ -468,7 +654,11 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       endpointFor: () => ENDPOINT,
       preflight(input, operation, conceptMode) {
         requireOperation(operation);
-        if (operation === "generate") return requireReferenceCount(0);
+        assertFixedImageCount(supported);
+        if (operation === "generate") {
+          assertReferenceCount(0, 0, supported.input_references);
+          return;
+        }
         if (input.plan.steps.some((step) => isRecord(step?.parameters) && step.parameters.mask_source_ref !== undefined)) {
           fail("unsupported_operation", "OpenRouter has no documented mask or inpainting parameter.", {
             outcome: "failed", field: "plan.steps.parameters.mask_source_ref",
@@ -476,7 +666,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
         }
         const referenceCount = conceptMode ? input.concept_reference_manifest.references.length
           : 1 + (input.image_reference_manifest?.references.length ?? 0);
-        requireReferenceCount(referenceCount);
+        assertReferenceCount(referenceCount, maxReferences, supported.input_references);
       },
       validateConfiguration: () => pinnedConfiguration,
       bindingExtras: (operation, attempt) => ({
@@ -542,9 +732,9 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       inspectConceptReferences(args) {
         return guardedAsync(async () => {
           requireOperation("edit");
-          // Concept references are sent without a parent, so their exact count is the input_references count.
-          if (Array.isArray(args?.references)) requireReferenceCount(args.references.length);
-          return inspectConceptReferenceBytes(assetPort, args);
+          const inspectionArgs = snapshotConceptInspectionArguments(args);
+          return inspectConceptReferenceBytes(assetPort, inspectionArgs,
+            (referenceCount) => assertReferenceCount(referenceCount, maxReferences, supported.input_references));
         });
       },
       generate(input) { return guardedAsync(() => runImageDispatch(driver, "generate", input)); },
