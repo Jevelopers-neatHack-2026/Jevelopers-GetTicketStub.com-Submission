@@ -23,7 +23,7 @@ interface Props {
 }
 
 /** The composition the server would bind now: the material's first size (the approve call asks for no other). */
-function compositionNow(stub: Stub): Composition {
+export function compositionNow(stub: Stub): Composition {
   const size: PrintSize = TIER_SIZES[stub.material]?.[0] ?? "classic";
   return { edition: currentVersion(stub).edition, material: stub.material, finish: stub.finish, size };
 }

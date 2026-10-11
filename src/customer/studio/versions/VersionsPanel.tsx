@@ -9,7 +9,9 @@ import { play } from "@/customer/studio/feedback";
 import { api, ApiError, type ApprovalInfo } from "@/customer/account/api";
 import { messageFor } from "@/customer/feedback-messages/messages";
 import { PunchTabs, Tag, Tags, TearLink } from "@/customer/desk/Desk";
-import { ApproveSheet } from "../approval/ApproveSheet";
+import { WALL_SYNCED } from "@/customer/account/sync";
+import { ApproveSheet, compositionNow } from "../approval/ApproveSheet";
+import { printedLines } from "../approval/printed";
 import { atVersion } from "../editor/ops";
 import { whenLabel } from "../facts/FactsReview";
 import { artLabel, compareVersions, howMade, listVersions, restoreVersion, selectedSummary, versionHash } from "./versions";
@@ -53,6 +55,7 @@ function PrintApproval({ stub }: { stub: Stub }) {
   const [live, setLive] = useState<ApprovalInfo | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "off">("loading");
   const [said, setSaid] = useState("");
+  const [wasStale, setWasStale] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -63,6 +66,7 @@ function PrintApproval({ stub }: { stub: Stub }) {
   const show = useCallback(
     (all: ApprovalInfo[] | null) => {
       setLive(all?.find((x) => x.approval.purpose === "print.compose" && x.status === "active" && x.approval.binding.versionId === versionId) ?? null);
+      setWasStale(all?.find((x) => x.approval.purpose === "print.compose")?.status === "stale"); // the newest one no longer matches the stub
       setState(all ? "ready" : "off");
     },
     [versionId],
@@ -77,6 +81,12 @@ function PrintApproval({ stub }: { stub: Stub }) {
       alive = false;
     };
   }, [stubId, show, stub.updatedAt]);
+  // The server only sees an edit once the wall sync lands, so ask again then.
+  useEffect(() => {
+    const again = () => void api.approvals(stubId).then(show, () => show(null));
+    window.addEventListener(WALL_SYNCED, again);
+    return () => window.removeEventListener(WALL_SYNCED, again);
+  }, [stubId, show]);
 
   const act = async (fn: () => Promise<unknown>, done: string) => {
     setBusy(true);
@@ -91,12 +101,15 @@ function PrintApproval({ stub }: { stub: Stub }) {
     setBusy(false);
   };
 
+  // An edit shows here at once, from the same fields the binding covers, before the server has heard of it: an approval that no
+  // longer matches never reads as approved. (Title style, hidden fields and the note are caught when the sync lands.)
+  const outOfDate = !!live && (JSON.stringify(live.approval.binding.composition) !== JSON.stringify(compositionNow(stub)) || (!!live.summary && JSON.stringify(live.summary.printed) !== JSON.stringify(printedLines(stub))));
   if (state === "loading") return null;
   return (
-    <div ref={box} tabIndex={-1} className={styles.approval} data-approved={live ? "true" : undefined}>
+    <div ref={box} tabIndex={-1} className={styles.approval} data-approved={live && !outOfDate ? "true" : undefined}>
       {state === "off" ? (
         <p className={styles.note}>Sign in and save this stub to your wall to approve it for print.</p>
-      ) : live ? (
+      ) : live && !outOfDate ? (
         <>
           <p className={styles.selectedLine}>
             <strong>Approved for print</strong> · <span className={styles.hash}>{live.approval.id.slice(4, 10)}</span>
@@ -110,7 +123,9 @@ function PrintApproval({ stub }: { stub: Stub }) {
         </>
       ) : (
         <>
-          <p className={styles.note}>Not approved for print yet. Approving covers this exact version, its facts and settings for 7 days. It isn&apos;t an order or a payment.</p>
+          <p className={styles.note}>
+            {outOfDate || wasStale ? "Out of date: this stub changed since you approved it. Approve it again to cover the change." : "Not approved for print yet."} Approving covers this exact version, its facts and settings for 7 days. It isn&apos;t an order or a payment.
+          </p>
           <Tags label="Print approval">
             <Tag disabled={busy} onClick={() => setReviewing(true)} aria-haspopup="dialog">
               Approve for print
