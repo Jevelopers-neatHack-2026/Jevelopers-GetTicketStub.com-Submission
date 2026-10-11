@@ -931,10 +931,17 @@
       "title": "Entire use",
       "verification": "Capture actual Entire development provenance through checkpoints or repository graph output.",
       "evidence_required": "Entire artifact linked to relevant component revisions.",
-      "status": "planned",
-      "evidence_refs": [],
-      "tested_revision_refs": [],
-      "notes": "",
+      "status": "verified",
+      "evidence_refs": [
+        "evidence/entire/2026-10-11/README.md",
+        "evidence/entire/2026-10-11/checkpoint.md",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/31"
+      ],
+      "tested_revision_refs": [
+        "integration-evals@3358f0ddf9a3b799924d459375925e603663581b",
+        "integration-evals@a9d68ef0116b1c20f7d70e0161016e21b4bb13b7"
+      ],
+      "notes": "Owner-accepted 2026-10-11 by CompleteDotTech, relayed from chat in merged PR #31; mirrors the accepted Markdown status, not an independent human GitHub review or full-product approval. One Claude checkpoint plus graph snapshots at the component revisions recorded in the evidence README; no Codex checkpoint or entire.io mirror, graph plugin version unpinned. Local capture was removed; future non-local checkpoint capture is not verified.",
       "dependencies": [
         "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
         "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
