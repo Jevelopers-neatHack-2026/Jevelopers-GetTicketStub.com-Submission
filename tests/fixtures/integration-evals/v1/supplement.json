@@ -1,0 +1,51 @@
+{
+	"schema_version": "print-invalid-supplement/v1",
+	"id": "print-invalid-synthetic/v1",
+	"owner": "print-production",
+	"status": "unaccepted-development",
+	"accepted": false,
+	"origin": "synthetic",
+	"modes": ["mock-only"],
+	"case_id": "print-invalid",
+	"original_fixture_id": "asset-negative",
+	"requirements": ["ART-04", "IE-05D.AC1"],
+	"protocol_revision": "e0e1d28400a466fc45ace5962a9e54cb904d7036",
+	"timestamp_clarification_revision": "c0b7fd004028a03267dbbb90e08b4e2de9a00c0a",
+	"adapter_base_revision": "4eed027d838d8829223efbee350640864a564495",
+	"adapter_base_tree": "f63cd734ad238284fab428b6f8206e7cfb9c5b8d",
+	"created_at": "2026-10-11T23:48:00Z",
+	"provenance": "Producer-created supplement for the agreed owner command. Source fixture copied from exact protocol revision with no trailing newline. This timestamp records supplement preparation, independently of request.clock.",
+	"payload": {
+		"path": "asset-negative.txt",
+		"sha256": "969bc670d1540ffce4823ea9ca7b9c9bd5154052c78a0460cf8c235f88cca4de",
+		"media_type": "text/plain",
+		"quarantined": true,
+		"schema": "Original quarantined SVG text; not a rendered artifact",
+		"collected_at": "2026-10-10T00:00:00Z",
+		"original_metadata_path": "original-metadata.json"
+	},
+	"execution": {
+		"case_path": "case.json",
+		"case_projection": "Original pinned Case with Pydantic defaults materialized for dependencies, artifact_producers and required_evidence_kinds; assertions and fixture IDs unchanged.",
+		"schema_path": "OwnerResponse.schema.json",
+		"configuration_schema_path": "configuration.schema.json",
+		"host_path": "../host.ts",
+		"canonical_records_builder": "tests/fixtures/canonical-production/records.ts",
+		"profile_builder": "tests/fixtures/canonical-production/model.ts",
+		"input_builder": "tests/fixtures/composition/corpus.ts:fixtureInput",
+		"mapping": "Host injects original hostile bytes as the synthetic-logo overlay. Canonical asset hash, composition hash, input binding, layout commitment and request joins are recalculated using the unchanged producer helpers. Runtime commitments measure actual installed bytes. mapping.json retains actual executed canonical records and the private profile mapping without executable permission callbacks.",
+		"authority": "Mock-only synthetic permission callbacks and approval fixture records are fictional test input, not authentic approval or finance authority.",
+		"source_receipt": "Post-commit out/integration-owner-report.json supplies exact source commit/tree and supplement payload inventory. Each execution retains actual HEAD/tree separately from payload hashes, avoiding circular self-hashes."
+	},
+	"permission": "Fictional original test input and producer-owned synthetic supplement; no customer or sponsor data. Reserved synthetic identities; offline testing only.",
+	"redaction": "No secrets, credentials or raw private logs. Hashes and typed product results are emitted. Quarantined hostile bytes remain text input and are omitted from response evidence.",
+	"reviewer_access": "Checked-in supplement plus evaluator-retained hash-checked mapping, trace and evaluation JSON derivatives.",
+	"retention": "Immutable versioned fixture; revocation preserves digest tombstone and quarantine.",
+	"limitations": [
+		"Never render the hostile input. Safe counterpart is a separate producer test control.",
+		"Negative-only print-invalid; print-preflight remains blocked/unsupported.",
+		"Synthetic mock-only origin and unknown cost; no provider dispatch, purchases, finance or production infrastructure.",
+		"Logical created_at/original_cutoff=request.clock is only the agreed synthetic-scenario convention.",
+		"Required Linux evaluator execution and independent parent review/consumer receipt remain external."
+	]
+}
