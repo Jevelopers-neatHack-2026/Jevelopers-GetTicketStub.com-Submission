@@ -1,0 +1,259 @@
+{
+  "artifactType": "ei-jev-question-family-inventory",
+  "artifactVersion": "1.0.0",
+  "status": "candidate_pending_owner_review",
+  "ownerRole": "Agent and research",
+  "ownerApprovalAuthenticated": false,
+  "promotionStatus": "unpromoted",
+  "sourcePins": {
+    "eventIntelligenceRevision": "f811af3bf418c58bd8a13ebe16e837920ed93cf4",
+    "revisionPinMethod": "explicit_reviewed_snapshot; does not infer the generated commit Git HEAD",
+    "registry": {
+      "sourcePath": "src/decisions/questions/registry.mjs",
+      "sourceSha256": "a3f83d4c528a399092c11ed8d27670121fff287f0c71ef1c098f64e31d1b0880",
+      "registryVersion": "2.1.0-draft.1",
+      "schemaVersion": "2.0.0",
+      "registryHash": "1712152fd52a657ac93a308771d173fb1e355a02f3a866e505895d95775cf8f8"
+    },
+    "policy": {
+      "sourcePath": "evals/policies/promotion-v1.json",
+      "sourceSha256": "37789e4679067716dd1a40664624bf594eebdf762e96964617afb155b1a841e8",
+      "policyId": "jev-ei-promotion",
+      "policyVersion": "1.0.0",
+      "policyStatus": "proposed_unapproved",
+      "configuredRegistryVersion": "1.0.0",
+      "configuredRegistryVersionStatus": "does_not_match_unreconciled_draft"
+    },
+    "harnessTargetContext": {
+      "repository": "agent-harness",
+      "revision": "f55c409602e6b67008e7462174bb77de97667c85",
+      "path": "evals/jev/promotion-targets.json",
+      "blobSha1": "d05e630b65a9930313c0116a6ee46fb3bd30d3af",
+      "contentSha256": "184d5f4b764b0b26218b5fa03b27e44364514f99e5443b0ea813206f2d9311a1",
+      "familyKeys": [
+        "source_classification",
+        "relevance_ranking",
+        "entity_matching",
+        "factual_conflict_triage",
+        "injection_signal"
+      ],
+      "requiredQuestionIdsState": "empty_in_target",
+      "definitionRevision": null,
+      "use": "context_only; does not imply Harness consumption or acceptance"
+    }
+  },
+  "families": [
+    {
+      "family": "source_classification",
+      "ownerRole": "Agent and research",
+      "status": "candidate_pending_owner_review",
+      "requiredQuestionIds": [
+        "Q-EI-SOURCE-TYPE:v1"
+      ],
+      "definitions": [
+        {
+          "questionId": "Q-EI-SOURCE-TYPE:v1",
+          "definitionSha256": "9bba7e837dd3d91c69666eb25acecd43767c68627f773f0d5426b68faca5d261",
+          "stage": "independent",
+          "primitive": "choice",
+          "approvalStatus": "pending_owner_review",
+          "ownerApprovalAuthenticated": false,
+          "promotionStatus": "unpromoted"
+        }
+      ],
+      "mappingLimits": [
+        "The rubric describes page role; it does not establish source authority, officialness, accuracy, or permission."
+      ]
+    },
+    {
+      "family": "relevance_ranking",
+      "ownerRole": "Agent and research",
+      "status": "candidate_pending_owner_review",
+      "requiredQuestionIds": [
+        "Q-EI-RELEVANCE:v1"
+      ],
+      "definitions": [
+        {
+          "questionId": "Q-EI-RELEVANCE:v1",
+          "definitionSha256": "f9c7bd2fa425d388fe5cc2ffa119992d529787d02bc9c87382f10b09b2fb426f",
+          "stage": "independent",
+          "primitive": "score",
+          "approvalStatus": "pending_owner_review",
+          "ownerApprovalAuthenticated": false,
+          "promotionStatus": "unpromoted"
+        }
+      ],
+      "mappingLimits": [
+        "The four ordered levels include background and critical; mapping to the older policy classes and metrics is unreconciled.",
+        "A relevance score cannot discard evidence; identity, schedule, permission, and contradictory evidence must remain available."
+      ]
+    },
+    {
+      "family": "entity_matching",
+      "ownerRole": "Agent and research",
+      "status": "candidate_pending_owner_review",
+      "requiredQuestionIds": [
+        "Q-EI-IDENTITY:v1"
+      ],
+      "definitions": [
+        {
+          "questionId": "Q-EI-IDENTITY:v1",
+          "definitionSha256": "51e55cc6087d2b421ae1eb4ee130569b7361dc01c210c7c7757b0a8756e7f050",
+          "stage": "independent",
+          "primitive": "choice",
+          "approvalStatus": "pending_owner_review",
+          "ownerApprovalAuthenticated": false,
+          "promotionStatus": "unpromoted"
+        }
+      ],
+      "mappingLimits": [
+        "This compares two scheduled-occurrence candidates; it is not generic entity deduplication and cannot merge records."
+      ]
+    },
+    {
+      "family": "factual_conflict_triage",
+      "ownerRole": "Agent and research",
+      "status": "candidate_pending_owner_review",
+      "requiredQuestionIds": [
+        "Q-EI-FACT-SUPPORT:v1",
+        "Q-EI-CONFLICT:v1"
+      ],
+      "definitions": [
+        {
+          "questionId": "Q-EI-FACT-SUPPORT:v1",
+          "definitionSha256": "c6099d477c5d37110865ac39f630f1a026611f01dfd713509d06a7155a4d457b",
+          "stage": "identity-dependent",
+          "primitive": "choice",
+          "approvalStatus": "pending_owner_review",
+          "ownerApprovalAuthenticated": false,
+          "promotionStatus": "unpromoted"
+        },
+        {
+          "questionId": "Q-EI-CONFLICT:v1",
+          "definitionSha256": "fff29d319dcf3d387a4a4d2220f29b7a6b6e3f103c15697c933b6ae3ef35fb40",
+          "stage": "identity-dependent",
+          "primitive": "choice",
+          "approvalStatus": "pending_owner_review",
+          "ownerApprovalAuthenticated": false,
+          "promotionStatus": "unpromoted"
+        }
+      ],
+      "mappingLimits": [
+        "Both questions are identity-dependent and require a completed identity observation.",
+        "Keep fact support and conflict as separate stages and preserve their separate claim/field target units."
+      ]
+    },
+    {
+      "family": "injection_signal",
+      "ownerRole": "Agent and research",
+      "status": "candidate_pending_owner_review",
+      "requiredQuestionIds": [
+        "Q-EI-INJECTION:v1"
+      ],
+      "definitions": [
+        {
+          "questionId": "Q-EI-INJECTION:v1",
+          "definitionSha256": "e47287b34bf28ed144b1b19fe79ce1020ceb3c4e8f608aeab8b2cae4fbf46e46",
+          "stage": "independent",
+          "primitive": "noul",
+          "approvalStatus": "pending_owner_review",
+          "ownerApprovalAuthenticated": false,
+          "promotionStatus": "unpromoted"
+        }
+      ],
+      "mappingLimits": [
+        "Noul supplies presence probability only; do not add confidence or abstention fields or turn this signal into a capability gate."
+      ]
+    }
+  ],
+  "excludedDefinitions": [
+    {
+      "questionId": "Q-EI-BRAND-ROLE:v1",
+      "family": "brand_asset_classification",
+      "ownerRole": "Creative and fulfillment",
+      "reason": "Creative owns this family; its definition remains in EI registry but is excluded from the five EI family mappings."
+    }
+  ],
+  "acceptanceTrace": [
+    {
+      "requirement": "EI-06",
+      "issue": 16,
+      "acceptanceIds": [
+        "AGT-01",
+        "AGT-04",
+        "EVAL-02",
+        "FIN-01",
+        "FIN-03",
+        "FIN-04"
+      ],
+      "result": "partial_owner_inventory_only"
+    },
+    {
+      "requirement": "EI-07",
+      "issue": 17,
+      "acceptanceIds": [
+        "AGT-01",
+        "AGT-04",
+        "EVAL-02",
+        "FIN-01"
+      ],
+      "result": "partial_owner_inventory_only"
+    },
+    {
+      "requirement": "JEV-EI-01",
+      "issue": null,
+      "acceptanceIds": [
+        "AGT-01",
+        "AGT-04",
+        "AGT-05",
+        "ART-05",
+        "CON-01",
+        "CON-02",
+        "CON-03",
+        "EVAL-02",
+        "FIN-01",
+        "FIN-03",
+        "FIN-04"
+      ],
+      "result": "trace_only_not_acceptance_evidence"
+    }
+  ],
+  "ownerRoleBoundaries": [
+    {
+      "acceptanceIds": [
+        "AGT-01",
+        "AGT-04",
+        "AGT-05"
+      ],
+      "ownerRole": "Agent and research"
+    },
+    {
+      "acceptanceIds": [
+        "ART-05"
+      ],
+      "ownerRole": "Creative and fulfillment"
+    },
+    {
+      "acceptanceIds": [
+        "EVAL-02",
+        "FIN-01",
+        "FIN-03",
+        "FIN-04"
+      ],
+      "ownerRole": "Finance and reliability"
+    },
+    {
+      "acceptanceIds": [
+        "CON-01",
+        "CON-02",
+        "CON-03"
+      ],
+      "ownerRoleStatus": "existing contract and consumer owner roles unchanged"
+    }
+  ],
+  "limitations": [
+    "Candidate mapping only; it is not owner approval, owner acknowledgment, external contract acceptance, active routing, or issue closure.",
+    "Acceptance IDs are trace references only and do not establish any global criterion as complete.",
+    "No approved thresholds, dataset or split hashes, model selection, cost decision, evaluation result, or paid-execution authorization is supplied."
+  ]
+}
