@@ -634,6 +634,9 @@ test("actual Creative API v1.1 concepts.create edits two authorized references a
     assert.deepEqual(candidate.design_version.source_refs, ["page-1", "page-2"]);
     assert.equal(candidate.creative_concept_lineage.source_assets.length, 2);
     assert.equal(Object.isFrozen(candidate.creative_concept_lineage.source_assets[0]), true);
+    assert.equal(candidate.creative_concept_lineage.adapter_snapshot.provider_name, "openai");
+    assert.equal(candidate.creative_concept_lineage.adapter_snapshot.configuration.size, "16x16");
+    assert.equal(Object.hasOwn(candidate.creative_concept_lineage.adapter_snapshot, "provider_tag"), false);
   }
   assert.deepEqual(context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id }), selectionBefore,
     "publishing concepts does not select either sibling");
@@ -2970,6 +2973,29 @@ test("API 1.3 history exposes identity only and fresh revalidation restores curr
   const before = { dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
     posts: context.counters.provider_posts, settlements: context.counters.settlements };
 
+  const foreignActor = { ...authorizedActor(), tenant_id: "tenant-composition-foreign", project_id: "project-composition-foreign" };
+  const foreignUpdatePlan = createCompositionEditPlan({ plan_id: "composition-plan:foreign-action/1",
+    binding: parent.binding, layer_manifest: parent.layer_manifest,
+    target_composition_revision_id: "composition-revision:foreign-action",
+    operations: [{ operation_id: "foreign-action-title/1", kind: "set_text", layer_id: "layer:title", value: "Foreign" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+  const foreignActionAttempts = [
+    compositionRequest("composition-v13-create", "composition.create", {}),
+    compositionRequest("composition-v13-create", "composition.update", { plan: foreignUpdatePlan }),
+    compositionV13Request("composition-v13-create", "composition.revalidate", {
+      design_version_id: design.design_version_id, expected_current_revision_id: parent.revision_id,
+      expected_current_revision_sha256: parent.revision_sha256, candidate_revision_id: "composition-revision:foreign" }),
+  ];
+  for (const foreignRequest of foreignActionAttempts) {
+    const foreignAttempt = await context.api.invoke(foreignActor, foreignRequest);
+    assert.equal(foreignAttempt.ok, false, JSON.stringify(foreignAttempt));
+    assert.equal(foreignAttempt.error.code, "scope_denied");
+  }
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+    "cross-tenant reuse of a create action ID cannot inspect or mutate its composition history");
+  assert.equal(successfulRevalidationCalls, 0);
+  assert.equal(previewCalls, 0);
+
   const getIdentity = context.ports.storage.getCurrentCompositionIdentity;
   context.ports.storage.getCurrentCompositionIdentity = undefined;
   const unavailableHistory = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
@@ -3689,8 +3715,9 @@ test("composition.update applies a typed plan, publishes a child preview once, a
     posts: context.counters.provider_posts, settlements: context.counters.settlements };
   const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-create", "composition.create", {}));
   assert.equal(created.ok, true, JSON.stringify(created));
+  // Both revisions use the fixture clock. Uppercase Z sorts before lowercase a in SQLite BINARY order.
   const plan = createCompositionEditPlan({ plan_id: "composition-plan:update-title/1", binding: initial.binding,
-    layer_manifest: initial.layer_manifest, target_composition_revision_id: "composition-revision:updated-title",
+    layer_manifest: initial.layer_manifest, target_composition_revision_id: "composition-revision:Z",
     operations: [
       { operation_id: "set-title/1", kind: "set_text", layer_id: "layer:title", value: "Updated Festival" },
       { operation_id: "set-title-size/1", kind: "set_text_size", layer_id: "layer:title", size: { value: "20.5", unit: "pt" } },
@@ -3700,6 +3727,12 @@ test("composition.update applies a typed plan, publishes a child preview once, a
         asset_id: "asset-2", layout: { x_milli: 675, y_milli: 720, width_milli: 200, height_milli: 160 } },
     ],
     trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+  const reusedActionId = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-create",
+    "composition.update", { plan }));
+  assert.equal(reusedActionId.ok, false, JSON.stringify(reusedActionId));
+  assert.equal(reusedActionId.error.code, "conflict", "one action ID cannot be reused for a different operation");
+  assert.equal(previewCalls.length, 0, "a conflicting action ID is rejected before preview work");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1);
   const stalePlan = { ...plan, base_composition_revision_id: "composition-revision:obsolete" };
   const stale = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-stale-parent", "composition.update", { plan: stalePlan }));
   assert.equal(stale.ok, false, JSON.stringify(stale));
@@ -3738,7 +3771,32 @@ test("composition.update applies a typed plan, publishes a child preview once, a
   ownerPreviewBytes = Uint8Array.from(persisted.preview_bytes);
   const history = await context.ports.storage.listCompositionRevisions({ scope: SCOPE,
     composition_id: initial.composition_id, limit: 10 });
-  assert.deepEqual(history.items.map((item) => item.revision_id), [initial.revision_id, persisted.revision.revision_id]);
+  assert.deepEqual(history.items.map((item) => item.revision_id), [persisted.revision.revision_id, initial.revision_id]);
+  const publicHistory = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 10 }));
+  assert.equal(publicHistory.ok, true, JSON.stringify(publicHistory));
+  assert.deepEqual(publicHistory.result.revisions.map((revision) => revision.revision_id),
+    [persisted.revision.revision_id, initial.revision_id]);
+  const firstHistoryPage = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 1 }));
+  assert.equal(firstHistoryPage.ok, true, JSON.stringify(firstHistoryPage));
+  assert.equal(firstHistoryPage.result.has_more, true);
+  assert.deepEqual(firstHistoryPage.result.revisions.map((revision) => revision.revision_id), [persisted.revision.revision_id]);
+  const secondHistoryPage = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 1, after_revision_id: persisted.revision.revision_id }));
+  assert.equal(secondHistoryPage.ok, true, JSON.stringify(secondHistoryPage));
+  assert.deepEqual(secondHistoryPage.result.revisions.map((revision) => revision.revision_id), [initial.revision_id]);
+  const listCompositionRevisions = context.ports.storage.listCompositionRevisions;
+  context.ports.storage.listCompositionRevisions = async (input) => {
+    const page = await listCompositionRevisions(input);
+    return { ...page, items: [...page.items].reverse() };
+  };
+  const corruptOrder = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 10 }));
+  assert.equal(corruptOrder.ok, false, JSON.stringify(corruptOrder));
+  assert.equal(corruptOrder.error.code, "failed");
+  assert.equal(corruptOrder.error.field, "composition.history_record");
+  context.ports.storage.listCompositionRevisions = listCompositionRevisions;
   assert.equal(assertions, 5, "create, both rejected plans, update pre-preview currentness, and the synchronous commit fence are checked");
 
   const replay = await context.api.invoke(authorizedActor(), request);
@@ -3750,6 +3808,71 @@ test("composition.update applies a typed plan, publishes a child preview once, a
   assert.deepEqual({ dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
     posts: context.counters.provider_posts, settlements: context.counters.settlements }, before,
   "composition create/update/replay do not call an image provider or billing port");
+});
+
+test("public composition.update cannot edit a locked asset layer or a factual text layer", async (t) => {
+  const context = await setup(t, { compositionLogo: true });
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-policy-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  let ownerRevision = initialComposition(context, design, selection, previewBytes, { includeLogo: true,
+    lockedLayerIds: ["layer:logo"], factualTextLayers: [{ layer_id: "layer:title", fact_id: "fact-api-1",
+      fact_sha256: canonicalHash(context.brief.facts), text_sha256: hash("Example Event") }], titleValue: "Example Event" });
+  let ownerPreviewBytes = previewBytes;
+  let previewCalls = 0;
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: ownerRevision, preview_bytes: Uint8Array.from(ownerPreviewBytes) }; },
+    async readApprovedAssetBytes(input) {
+      const asset = context.research.assets.items.find((item) => item.asset_id === input.asset_id);
+      return { asset_id: asset.asset_id, content_hash: asset.content_hash, mime_type: asset.media_type,
+        bytes: Uint8Array.from(context.referenceAssetBytes.get(input.asset_id)) };
+    },
+    async preparePreview() { previewCalls += 1; throw new Error("denied edits must not prepare previews"); },
+    assertCurrent(input) {
+      const result = compositionCurrentAssertion(input);
+      return { ...result, current_revision_id: input.expected_current_revision_id ?? input.target_revision_id,
+        current_revision_sha256: input.expected_current_revision_sha256 ?? input.target_revision_sha256 };
+    },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-policy-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const current = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  ownerRevision = current.revision;
+  ownerPreviewBytes = current.preview_bytes;
+
+  const attempts = [
+    { action_id: "composition-policy-locked-logo", operation: { operation_id: "move-locked-logo/1",
+      kind: "position_approved_logo", layer_id: "layer:logo", asset_id: "asset-2",
+      layout: { x_milli: 600, y_milli: 700, width_milli: 200, height_milli: 200 } }, field: "plan.locked_layer" },
+    { action_id: "composition-policy-factual-title", operation: { operation_id: "change-factual-title/1",
+      kind: "set_text", layer_id: "layer:title", value: "Unverified replacement" }, field: "plan.factual_text" },
+  ];
+  for (const [index, sample] of attempts.entries()) {
+    const plan = createCompositionEditPlan({ plan_id: `composition-plan:policy/${index}`, binding: current.revision.binding,
+      layer_manifest: current.revision.layer_manifest,
+      target_composition_revision_id: `composition-revision:policy-${index}`,
+      operations: [sample.operation], trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+    const result = await context.api.invoke(authorizedActor(), compositionRequest(sample.action_id, "composition.update", { plan }));
+    assert.equal(result.ok, false, `${sample.action_id}: ${JSON.stringify(result)}`);
+    assert.equal(result.error.code, "permission_denied");
+    assert.equal(result.error.field, sample.field);
+    assert.equal(previewCalls, 0, "locked and factual edits are denied before preview generation");
+    const stillCurrent = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+      design_version_id: design.design_version_id });
+    assert.equal(stillCurrent.revision.revision_sha256, current.revision.revision_sha256);
+    assert.deepEqual(stillCurrent.preview_bytes, previewBytes);
+    assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+      "a denied edit leaves the original immutable revision as the only history entry");
+  }
 });
 
 test("composition.update rolls back when rights are revoked in the final awaited publication gap", async (t) => {

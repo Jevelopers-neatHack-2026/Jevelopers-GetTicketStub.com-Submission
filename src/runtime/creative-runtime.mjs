@@ -74,7 +74,7 @@ import {
   inspectCreativeConceptImageBytes,
   replayCreativeConceptBatch,
 } from "../generation/concepts.mjs";
-import { OPENAI_IMAGES_ENDPOINTS } from "../models/openai-images.mjs";
+import { imageProviderRoute } from "../models/image-routes.mjs";
 
 export const CREATIVE_API_VERSION = "1.0";
 export const CREATIVE_API_VERSIONS = Object.freeze(["1.0", "1.1", "1.2", "1.3"]);
@@ -145,7 +145,6 @@ const ERROR_MESSAGES = Object.freeze({
 });
 const MAX_PORT_WAIT_MS = 30_000;
 const DECISION_POLICY_VERSION = "creative-engine-decision/1";
-const CONCEPT_NATIVE_EDIT_MAPPING_REF = "creative-engine/concepts-to-openai-images-edit/1";
 
 export class CreativeApiError extends Error {
   constructor(code, operation = "unknown", field = "", options = {}) {
@@ -1708,7 +1707,8 @@ export function createCreativeApi(options = {}) {
             !parentPairValid || !isRecord(revision.dependencies) ||
             revision.dependencies.design_version_id !== design.design_version_id ||
             revision.dependencies.design_version_sha256 !== design.design_hash || createdAt === null ||
-            createdAt > previousCreatedAt || createdAt === previousCreatedAt && revision.revision_id.localeCompare(previousRevisionId) < 0) {
+            // Safe public IDs are ASCII, so code-unit order matches SQLite's BINARY collation.
+            createdAt > previousCreatedAt || createdAt === previousCreatedAt && revision.revision_id < previousRevisionId) {
           throw new CreativeApiError("failed", operation, "composition.history_record");
         }
         seenRevisionIds.add(revision.revision_id);
@@ -3285,12 +3285,12 @@ export function createCreativeApi(options = {}) {
     const resolveRoute = requiredPort(ports, "provider.resolveRoute", operation);
     const route = routeFor(await resolveRoute(Object.freeze({ scope: started.scope, actor_id: principal.actor_id, operation, plan })), operation);
     await assertImageContext();
-      const privateAttributionPort = route.provider.name === "openai"
+      const privateAttributionPort = imageProviderRoute(route.provider.name) !== undefined
         ? requiredPort(ports, "jobs.recordPrivateProviderAttribution", operation)
         : ports.jobs?.recordPrivateProviderAttribution;
-      const privateUsageAttributionPort = route.provider.name === "openai"
+      const privateUsageAttributionPort = imageProviderRoute(route.provider.name) !== undefined
         ? requiredPort(ports, "jobs.recordPrivateProviderUsageAttribution", operation) : undefined;
-      const privateAttributionPendingPort = route.provider.name === "openai"
+      const privateAttributionPendingPort = imageProviderRoute(route.provider.name) !== undefined
         ? requiredPort(ports, "jobs.stagePrivateProviderAttribution", operation) : undefined;
       const metered = await runMetered(principal, request, started, operation === "generate" ? "image_generation" : "image_edit", route, method,
       async ({ method: dispatch, scope, actor_id, started: job, route: resolved, attempt, signal, deadline_at,
@@ -3314,7 +3314,7 @@ export function createCreativeApi(options = {}) {
                 action_id: request.action_id,
                 request_hash: started.request_hash,
                 operation,
-                provider: "openai",
+                provider: route.provider.name,
                 model: route.provider.model,
                 reservation_ref,
                 billable_attempt_id: attempt.billable_attempt_id,
@@ -3345,7 +3345,7 @@ export function createCreativeApi(options = {}) {
                 action_id: request.action_id,
                 request_hash: started.request_hash,
                 operation,
-                provider: "openai",
+                provider: route.provider.name,
                 model: route.provider.model,
                 reservation_ref,
                 billable_attempt_id: attempt.billable_attempt_id,
@@ -3377,7 +3377,7 @@ export function createCreativeApi(options = {}) {
                 action_id: request.action_id,
                 request_hash: started.request_hash,
                 operation,
-                provider: "openai",
+                provider: route.provider.name,
                 model: route.provider.model,
                 reservation_ref,
                 billable_attempt_id: attempt.billable_attempt_id,
@@ -3801,10 +3801,11 @@ export function createCreativeApi(options = {}) {
     }
     const policySnapshot = ownerSnapshots.policy_snapshot;
     const adapterSnapshot = ownerSnapshots.adapter_snapshot;
-    if (policySnapshot.budget_scope_id !== principal.budget_scope_id ||
-        adapterSnapshot.operation_mapping_ref !== CONCEPT_NATIVE_EDIT_MAPPING_REF ||
-        adapterSnapshot.provider_name !== "openai" || adapterSnapshot.provider_operation !== "edit" ||
-        adapterSnapshot.endpoint !== OPENAI_IMAGES_ENDPOINTS.edit || adapterSnapshot.operation_kind !== "image_edit" ||
+    const nativeRoute = imageProviderRoute(adapterSnapshot.provider_name);
+    if (policySnapshot.budget_scope_id !== principal.budget_scope_id || !nativeRoute ||
+        adapterSnapshot.operation_mapping_ref !== nativeRoute.concept_mapping_ref ||
+        adapterSnapshot.provider_operation !== "edit" ||
+        adapterSnapshot.endpoint !== nativeRoute.edit_endpoint || adapterSnapshot.operation_kind !== "image_edit" ||
         adapterSnapshot.sdk_name !== "native-fetch" || adapterSnapshot.sdk_version !== process.versions.node) {
       throw new CreativeApiError("unavailable", operation, "concept_policy_or_adapter");
     }
@@ -3831,7 +3832,9 @@ export function createCreativeApi(options = {}) {
     try { configuration = immutableRequestSnapshot(provider.getConceptConfiguration()); }
     catch { throw new CreativeApiError("unavailable", operation, "provider.concept_configuration"); }
     if (!isRecord(configuration) || configuration.model_id !== adapterSnapshot.model ||
-        canonicalSerialize(configuration.configuration) !== canonicalSerialize(adapterSnapshot.configuration)) {
+        canonicalSerialize(configuration.configuration) !== canonicalSerialize(adapterSnapshot.configuration) ||
+        (nativeRoute.name === "openrouter" && (configuration.provider_tag !== adapterSnapshot.provider_tag ||
+          canonicalSerialize(configuration.capabilities) !== canonicalSerialize(adapterSnapshot.capabilities)))) {
       throw new CreativeApiError("unavailable", operation, "concept_adapter_configuration");
     }
     const resolveRoute = requiredPort(ports, "provider.resolveRoute", operation);
@@ -3841,8 +3844,8 @@ export function createCreativeApi(options = {}) {
         parameters: Object.freeze({ variant_count: 1 }) })]) });
     const route = routeFor(await resolveRoute(Object.freeze({ scope, actor_id: principal.actor_id,
       operation: "edit", plan: nativePlan })), operation);
-    if (route.provider.name !== "openai" || route.provider.model !== adapterSnapshot.model ||
-        route.provider.endpoint !== OPENAI_IMAGES_ENDPOINTS.edit || route.provider.sdk.name !== "native-fetch" ||
+    if (route.provider.name !== nativeRoute.name || route.provider.model !== adapterSnapshot.model ||
+        route.provider.endpoint !== nativeRoute.edit_endpoint || route.provider.sdk.name !== "native-fetch" ||
         route.provider.sdk.version !== process.versions.node) {
       throw new CreativeApiError("unavailable", operation, "concept_provider_route");
     }
@@ -4041,7 +4044,7 @@ export function createCreativeApi(options = {}) {
           if (!isRecord(attribution) || typeof attribution.provider_request_id !== "string" ||
               typeof attribution.provider_request_ref !== "string") throw new CreativeApiError("failed", operation, "provider_attribution");
           const ack = await requestIdPort(Object.freeze({ scope, actor_id: principal.actor_id, job_id: started.job_id,
-            action_id: request.action_id, request_hash: started.request_hash, operation, provider: "openai",
+            action_id: request.action_id, request_hash: started.request_hash, operation, provider: route.provider.name,
             model: route.provider.model, reservation_ref: reservation.reservation_id,
             billable_attempt_id: attempt.billable_attempt_id, transport_attempt_id: transportAttemptId,
             dispatch_intent_ref: dispatchIntentRef, provider_request_id: attribution.provider_request_id,
@@ -4058,7 +4061,7 @@ export function createCreativeApi(options = {}) {
           }
           const usage_sha256 = canonicalHash(attribution.usage);
           const ack = await usagePort(Object.freeze({ scope, actor_id: principal.actor_id, job_id: started.job_id,
-            action_id: request.action_id, request_hash: started.request_hash, operation, provider: "openai",
+            action_id: request.action_id, request_hash: started.request_hash, operation, provider: route.provider.name,
             model: route.provider.model, reservation_ref: reservation.reservation_id,
             billable_attempt_id: attempt.billable_attempt_id, transport_attempt_id: transportAttemptId,
             dispatch_intent_ref: dispatchIntentRef, target_binding_sha256: attribution.target_binding_sha256,
@@ -4075,7 +4078,7 @@ export function createCreativeApi(options = {}) {
             throw new CreativeApiError("failed", operation, "provider_attribution_pending");
           }
           const payload = Object.freeze({ scope, actor_id: principal.actor_id, job_id: started.job_id,
-            action_id: request.action_id, request_hash: started.request_hash, operation, provider: "openai",
+            action_id: request.action_id, request_hash: started.request_hash, operation, provider: route.provider.name,
             model: route.provider.model, reservation_ref: reservation.reservation_id,
             billable_attempt_id: attempt.billable_attempt_id, transport_attempt_id: transportAttemptId,
             dispatch_intent_ref: dispatchIntentRef, target_binding_sha256: attribution.target_binding_sha256,

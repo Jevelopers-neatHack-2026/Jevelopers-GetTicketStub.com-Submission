@@ -436,6 +436,57 @@ test("parentless concept edit preflights and posts exactly two authorized image 
   assert.deepEqual(harness.events.slice(-2), ["dispatch.sync-final", "fetch.called"]);
 });
 
+test("concept edit rechecks local deadline and abort after the final same-store dispatch callback", async (t) => {
+  const referenceBytes = [makePng(), makePng({ transparent: true, width: 16, height: 16 })];
+  const references = referenceBytes.map((bytes, index) => ({ source_ref: `source-final-fence-${index + 1}`,
+    asset_id: `asset-final-fence-${index + 1}`, content_hash: HASH(bytes), media_type: "image/png",
+    role_ref: `role-final-fence-${index + 1}`, width: 16, height: 16 }));
+  for (const mode of ["deadline", "proof-expiry", "abort"]) await t.test(mode, async () => {
+    let clock = NOW;
+    let staged = 0;
+    const controller = new AbortController();
+    const ctx = input("edit", {
+      base_design: null,
+      brief: { brief_id: "brief-test", research_package_ref: { package_id: "research-package-01" } },
+      plan: { operation: "concept.generate", plan_id: "plan-final-fence",
+        source_refs: references.map((item) => item.source_ref),
+        steps: [{ step_id: "concept-final-fence", action: "concept.generate",
+          source_refs: references.map((item) => item.source_ref), parameters: { variant_count: 1 } }] },
+      concept_reference_manifest: { contract: "CreativeConceptReferenceManifest", schema_version: "1.0",
+        tenant_id: "tenant-test", project_id: "creative-project-test", brief_id: "brief-test",
+        brief_hash: TEST_HASH, research_package_id: "research-package-01", research_package_hash: TEST_HASH,
+        mapping_ref: "openai-image-edit-native-concepts", mapping_version: "1",
+        prompt_template_ref: "prompt-template-concepts-v1", prompt_template_version: "1",
+        prompt_template_sha256: TEST_HASH, references },
+      concept_batch_id: "batch-final-fence", concept_id: "concept-final-fence",
+      signal: controller.signal, controller,
+      async recordConceptDispatchBinding(binding) { return { status: "recorded", transport_attempt_id: "transport-image-001",
+        target_binding_sha256: binding.target_binding_sha256 }; },
+      async stageConceptResponse(stage) { staged += 1; return { status: "staged", stage_ref: "stage-final-fence",
+        content_hash: stage.content_hash }; },
+      assertDispatchCurrent() {
+        if (mode === "deadline") clock = NOW + 60_000;
+        else if (mode === "proof-expiry") clock = NOW + 15_000;
+        else controller.abort();
+        return "dispatch-image-001";
+      },
+    });
+    const harness = providerHarness({ operation: "edit", now: () => clock, inputOverride: ctx,
+      ports: mode === "proof-expiry" ? { mutateAuthority: (value) => ({ ...value,
+        grant: { ...value.grant, expires_at: new Date(NOW + 15_000).toISOString() } }) } : {},
+      assetPort: { async readReference(args) {
+        return referenceBytes[references.findIndex((item) => item.asset_id === args.asset_id)];
+      } },
+      promptPort: { async render({ prompt_template }) { return { prompt: "A synthetic offline test image.",
+        template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+        template_sha256: prompt_template.template_sha256 }; } } });
+    await assert.rejects(harness.provider.edit(harness.ctx), (error) => error instanceof OpenAIImagesProviderError &&
+      error.code === "dispatch_fence_closed" && error.provider_outcome === "unknown");
+    assert.equal(harness.fetchCount, 0);
+    assert.equal(staged, 0);
+  });
+});
+
 test("concept reference preflight binds reads and returned provenance to an invocation-time snapshot", async () => {
   const referenceBytes = [makePng(), makePng({ transparent: true, width: 16, height: 16 })];
   const references = referenceBytes.map((bytes, index) => ({ source_ref: `source-snapshot-${index + 1}`,

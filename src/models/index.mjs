@@ -7,3 +7,10 @@ export {
   inspectOpenAIImageBytes,
   normalizeOpenAIImageUsage,
 } from "./openai-images.mjs";
+export {
+  OPENROUTER_IMAGES_COST_PROVENANCE,
+  OPENROUTER_IMAGES_ENDPOINT,
+  OpenRouterImagesProviderError,
+  createOpenRouterImagesProvider,
+  normalizeOpenRouterImageUsage,
+} from "./openrouter-images.mjs";
