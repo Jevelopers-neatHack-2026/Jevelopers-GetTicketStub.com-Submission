@@ -1,4 +1,4 @@
-/* The desk map. Small paper cards on the desk, joined by dotted tear lines along the real flow.
+/* The desk map (shown on /help). Small paper cards on the desk, joined by dotted tear lines along the real flow.
    Phone: one column, read top to bottom. Desktop: the main path flows across, then the fork drops below. */
 
 .page {
@@ -10,6 +10,19 @@
   display: grid;
   gap: 8px;
   justify-items: start;
+}
+.title {
+  margin: 0;
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 36;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lede {
+  margin: 0;
+  font: var(--type-lede);
+  color: var(--desk-ink);
+  text-wrap: pretty;
 }
 .opens {
   display: flex;

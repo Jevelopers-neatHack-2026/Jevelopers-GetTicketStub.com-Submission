@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
-import MapClient from "./MapClient";
+import { permanentRedirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Desk map · TicketStub" };
-
+// The desk map now lives at the top of Help.
 export default function MapPage() {
-  return <MapClient />;
+  permanentRedirect("/help");
 }

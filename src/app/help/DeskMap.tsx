@@ -1,15 +1,15 @@
 "use client";
-// The desk map: every place as a small paper card, joined by dotted tear lines along the real flow.
+// The desk map, shown at the top of /help: every place as a small paper card, joined by dotted tear lines along the real flow.
 import Link from "next/link";
 import type { ComponentType } from "react";
 import { FriendsIcon } from "@/customer/desk/icons";
 import { CartIcon, GiftIcon, MakeIcon, OrganizerIcon, PrintIcon, ShareIcon, StyleIcon, TearIcon, WalletIcon, WallIcon } from "@/customer/nav/icons";
-import { LeavesMark, PageShell, ui } from "@/customer/pages/ui";
+import { LeavesMark } from "@/customer/pages/ui";
 import { useMounted } from "@/customer/pages/useMounted";
 import { play, haptic } from "@/customer/studio/feedback";
 import { encodeStub, loadWall } from "@/customer/studio/store";
 import type { Stub } from "@/customer/studio/types";
-import m from "./map.module.css";
+import m from "./deskmap.module.css";
 
 interface Place {
   id: string;
@@ -70,16 +70,15 @@ function Card({ place, stub, index }: { place: Place; stub: Stub | undefined; in
   );
 }
 
-export default function MapClient() {
+export default function DeskMap() {
   const mounted = useMounted();
   // The most recent stub is first: upsertStub puts the one you touched at the front.
   const stub = mounted ? loadWall()[0] : undefined;
   return (
-    <PageShell title="Desk map">
-      <div className={m.page}>
+    <section className={m.page} aria-labelledby="travel">
         <div className={m.head}>
-          <h1 className={ui.h1}>Desk map</h1>
-          <p className={ui.lede}>Every place on your desk, joined along the way a stub travels.</p>
+          <h2 id="travel" className={m.title}>How a stub travels</h2>
+          <p className={m.lede}>Every place on your desk, joined along the way a stub travels.</p>
           {mounted ? (
             <p className={m.opens}>
               {stub ? (
@@ -116,7 +115,6 @@ export default function MapClient() {
             <Card key={p.id} place={p} stub={stub} index={i + FLOW.length + FORK.length} />
           ))}
         </ol>
-      </div>
-    </PageShell>
+    </section>
   );
 }
