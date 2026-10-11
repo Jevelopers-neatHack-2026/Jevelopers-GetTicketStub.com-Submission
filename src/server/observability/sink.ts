@@ -2,9 +2,13 @@
 //
 //   TICKETSTUB_OPS_TELEMETRY=off   (default; also any unknown value) — nothing is built or written
 //   TICKETSTUB_OPS_TELEMETRY=log   — one JSON line per event on stdout, prefixed by nothing, schema ticketstub.ops/1
+//   TICKETSTUB_OPS_TELEMETRY=neatlogs      — one Neatlogs trace per operation (needs NEATLOGS_API_KEY; see neatlogs.ts)
+//   TICKETSTUB_OPS_TELEMETRY=log,neatlogs  — both
 //
-// The log sink relies on the host's log pipeline for retention (see docs/operations/observability.md). Tests
-// install the in-memory collector with setOpsSink; nothing here makes a network call.
+// The log sink relies on the host's log pipeline for retention (see docs/operations/observability.md). The
+// Neatlogs sink is the only network path, and it is off unless both the setting and the key are present. Tests
+// install the in-memory collector with setOpsSink.
+import { neatlogsConfig, neatlogsSink } from "./neatlogs";
 import { OPS_ENVIRONMENTS, type OpsEnvironment, type OpsEvent } from "./schema";
 
 export interface OpsSink {
@@ -42,7 +46,37 @@ export function memoryCollector(limit = 1000): MemoryCollector {
   };
 }
 
-const g = globalThis as unknown as { __ticketstubOpsSink?: OpsSink | null };
+const g = globalThis as unknown as { __ticketstubOpsSink?: OpsSink | null; __ticketstubNeatlogs?: { id: string; sink: OpsSink } };
+
+/** One Neatlogs sink per process and configuration, because it holds each open operation's events until it closes. */
+function neatlogs(): OpsSink | undefined {
+  const config = neatlogsConfig();
+  if (!config) return undefined;
+  const id = `${config.endpoint}|${config.tags.join(",")}|${config.apiKey.length}:${config.apiKey.slice(-4)}`;
+  if (g.__ticketstubNeatlogs?.id !== id) g.__ticketstubNeatlogs = { id, sink: neatlogsSink({ config }) };
+  return g.__ticketstubNeatlogs.sink;
+}
+
+/** Writes to every sink; one sink failing never stops the others (the caller counts the failure). */
+function fanOut(sinks: OpsSink[]): OpsSink {
+  return {
+    name: sinks.map((s) => s.name).join(","),
+    write(event) {
+      let failed: unknown;
+      const pending: Promise<void>[] = [];
+      for (const s of sinks) {
+        try {
+          const r = s.write(event);
+          if (r && typeof (r as Promise<void>).then === "function") pending.push(r as Promise<void>);
+        } catch (e) {
+          failed = e;
+        }
+      }
+      if (failed !== undefined) throw failed;
+      return pending.length ? Promise.all(pending).then(() => undefined) : undefined;
+    },
+  };
+}
 
 /** Replaces the configured sink (tests). `null` forces collection off; `undefined` returns to configuration. */
 export function setOpsSink(sink: OpsSink | null | undefined): void {
@@ -53,7 +87,14 @@ export function setOpsSink(sink: OpsSink | null | undefined): void {
 /** The active sink, or undefined when collection is off. Read per operation so a restart is not needed in tests. */
 export function activeSink(): OpsSink | undefined {
   if (g.__ticketstubOpsSink !== undefined) return g.__ticketstubOpsSink ?? undefined;
-  return process.env.TICKETSTUB_OPS_TELEMETRY?.trim().toLowerCase() === "log" ? logSink : undefined;
+  const wanted = new Set((process.env.TICKETSTUB_OPS_TELEMETRY ?? "").toLowerCase().split(",").map((v) => v.trim()));
+  const sinks: OpsSink[] = [];
+  if (wanted.has("log")) sinks.push(logSink);
+  if (wanted.has("neatlogs")) {
+    const n = neatlogs();
+    if (n) sinks.push(n);
+  }
+  return sinks.length === 0 ? undefined : sinks.length === 1 ? sinks[0] : fanOut(sinks);
 }
 
 export function opsEnvironment(): OpsEnvironment {
