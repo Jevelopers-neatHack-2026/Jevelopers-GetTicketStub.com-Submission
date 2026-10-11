@@ -20,7 +20,10 @@ jobs:
           - 22.23.3
           - 24.15.0
     steps:
+      # The populated CE-05 migration regression reads 4e28839ea8baeb4112a4f12340ef2fe84f5c8efe via git show.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node-version }}

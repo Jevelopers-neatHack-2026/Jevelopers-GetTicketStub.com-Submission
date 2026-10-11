@@ -1,7 +1,8 @@
-.PHONY: bootstrap build check acceptance typecheck-contracts typecheck-boundary-contracts typecheck-api typecheck-preflight typecheck-versions typecheck-telemetry typecheck-brief typecheck-models typecheck-inspection
+.PHONY: bootstrap build check acceptance typecheck-contracts typecheck-boundary-contracts typecheck-api typecheck-preflight typecheck-versions typecheck-telemetry typecheck-brief typecheck-models typecheck-inspection typecheck-controls controls-runtime-prerequisite controls-package-check
 
 TARGET ?= all
 MODE ?= mock
+CONTROLS_PACKAGE_EVIDENCE ?= build/controls-package-evidence
 
 bootstrap:
 	npm ci --ignore-scripts --offline
@@ -14,6 +15,9 @@ build:
 	node --check src/controls/schema.mjs
 	node --check src/controls/contract.mjs
 	node --check src/controls/actions.mjs
+	node --check src/controls/integration.mjs
+	node --check src/controls/public-result.mjs
+	node --check src/controls/inspection-consumer.mjs
 	node --check src/controls/index.mjs
 	node --check src/runtime/creative-runtime.mjs
 	node --check src/api/v1.mjs
@@ -28,6 +32,17 @@ build:
 	$(MAKE) typecheck-telemetry
 	$(MAKE) typecheck-models
 	$(MAKE) typecheck-inspection
+	$(MAKE) controls-runtime-prerequisite
+	$(MAKE) typecheck-controls
+
+typecheck-controls:
+	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc -p tests/controls/types/tsconfig.json
+
+controls-runtime-prerequisite:
+	node tests/controls/package-export-prerequisite.mjs
+
+controls-package-check:
+	node scripts/controls-package-check.mjs --evidence-dir $(CONTROLS_PACKAGE_EVIDENCE)
 
 typecheck-contracts:
 	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc -p tests/contracts/types/tsconfig.json
@@ -75,8 +90,8 @@ check:
 		metering-contract:mock) npm run check:metering-contract && $(MAKE) typecheck-boundary-contracts ;; \
 		handoff-contract:mock) npm run check:handoff-contract && $(MAKE) typecheck-boundary-contracts ;; \
 		api:mock) npm run check:api && $(MAKE) typecheck-api ;; \
-		controls:mock) node fixtures/controls/check.mjs ;; \
-		all:mock) npm test && npm run check:eval-policy && npm run check:metering-contract && npm run check:handoff-contract && npm run check:access-preflight && node scripts/access-preflight-check.mjs --mode mock --out build/access-preflight-evidence.json && npm run check:models && node scripts/image-adapter-check.mjs --mode mock --out build/image-adapter-evidence.json && npm run check:brief && npm run check:versions && npm run check:creative-metering && npm run check:inspection && $(MAKE) typecheck-contracts && $(MAKE) typecheck-api && $(MAKE) typecheck-preflight && $(MAKE) typecheck-brief && $(MAKE) typecheck-telemetry && $(MAKE) typecheck-models && $(MAKE) typecheck-inspection && node fixtures/controls/check.mjs ;; \
+		controls:mock) node fixtures/controls/check.mjs && $(MAKE) controls-runtime-prerequisite && $(MAKE) typecheck-controls && $(MAKE) controls-package-check ;; \
+		all:mock) npm test && npm run check:eval-policy && npm run check:metering-contract && npm run check:handoff-contract && npm run check:access-preflight && node scripts/access-preflight-check.mjs --mode mock --out build/access-preflight-evidence.json && npm run check:models && node scripts/image-adapter-check.mjs --mode mock --out build/image-adapter-evidence.json && npm run check:brief && npm run check:versions && npm run check:creative-metering && npm run check:inspection && $(MAKE) typecheck-contracts && $(MAKE) typecheck-api && $(MAKE) typecheck-preflight && $(MAKE) typecheck-brief && $(MAKE) typecheck-telemetry && $(MAKE) typecheck-models && $(MAKE) typecheck-inspection && $(MAKE) check TARGET=controls MODE=mock ;; \
 		*) echo "Unsupported TARGET=$(TARGET) MODE=$(MODE): only offline mock checks are implemented and no live provider dispatch exists; access-preflight, image-adapter, and inspection live gates are fail-closed." >&2; exit 2 ;; \
 	esac
 

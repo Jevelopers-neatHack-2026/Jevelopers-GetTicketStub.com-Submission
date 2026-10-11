@@ -1,33 +1,35 @@
 import { assertRenderableSchema, defaultDraft, activeQuestions, canonical } from '/schema.mjs';
+import { applyErrorMessage, historyErrorMessage } from './messages.mjs';
+import { projectApplyResult, projectCounters, projectHistoryList, projectHistoryResult } from '/public-result.mjs';
 const $ = id => document.getElementById(id);
-let schema, draft, lastAction, operationId, pending = false;
-const messages = {
-  stale_version: 'These controls are stale. Refresh controls and review the current version before applying.',
-  stale_schema: 'These controls have changed. Refresh controls and review the current options before applying.',
-  permission: 'Permission denied. The application must provide current authorized project access.',
-  invalid_value: 'Unsupported selection. Refresh controls and choose an allowed option.',
-  locked: 'This field is locked. Refresh controls to review the current locks.',
-  unknown_control: 'Unknown control. Refresh controls before applying.',
-  unavailable: 'Handoff unavailable. Required integration or current state is not available; no paid call was made.',
-  action_conflict: 'This Apply identity belongs to a different draft. Make a new selection before applying.',
-  conflict: 'Another operation is pending. Resolve it before applying another draft.',
-  cancelled: 'This operation is cancelled. It cannot be handed off.',
-};
+let schema, draft, lastAction, operationId, operationStatus, historySelection, pending = false;
 async function api(path, body) {
   const response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error('Request unavailable');
   return response.json();
 }
-function counter(data) { if (data.counters) $('counters').textContent = `Jobs: ${data.counters.jobs} · JEV calls: ${data.counters.jev_calls} · Image calls: ${data.counters.image_calls}`; }
+function counter(data) { const counts = projectCounters(data); if (counts) $('counters').textContent = `Jobs: ${counts.jobs} · JEV calls: ${counts.jev_calls} · Image calls: ${counts.image_calls}`; }
 function error(message) { $('error').textContent = message; $('error').hidden = false; $('error').focus(); }
 function result(data) {
-  counter(data); $('error').hidden = true;
-  if (!data.ok) { error(messages[data.code] ?? `Apply rejected (${data.code}). No operation was dispatched.`); return; }
-  if (data.operation_id) operationId = data.operation_id;
-  $('status').textContent = data.code === 'cancelled' ? 'Operation cancelled. No approval or purchase was created.' :
-    `${data.code === 'replayed' ? 'Existing operation returned' : data.code === 'ready' ? 'Typed handoff ready' : 'Apply accepted'}: ${operationId}. No approval or purchase was created.`;
-  $('draft-state').textContent = data.code === 'cancelled' ? 'Operation cancelled. Make a new draft selection to Apply again.' : 'Draft submitted. Retry or cancel the existing operation.';
-  $('cancel').disabled = data.code === 'cancelled'; $('handoff').disabled = data.code === 'cancelled';
+  counter(data);
+  data = projectApplyResult(data);
+  $('error').hidden = true;
+  if (data.operation_id && data.operation_id !== operationId) {
+    operationId = data.operation_id; operationStatus = 'unknown';
+  }
+  if (data.status) operationStatus = data.status;
+  if (!data.ok) $('cancel').disabled = ['completed', 'cancelled'].includes(operationStatus) || (!operationId && !lastAction);
+  if (!data.ok) {
+    $('status').textContent = operationId ? `Apply did not complete. Existing operation: ${operationId}.` : 'Apply did not complete. Operation reference unavailable. Retry last Apply to recover its identity.';
+    error(applyErrorMessage(data)); return;
+  }
+  $('status').textContent = data.acknowledgment_only ? `Existing operation acknowledged: ${operationId}. No approval or purchase was created.` : data.code === 'cancelled' ? 'Operation cancelled. No approval or purchase was created.' :
+    `${data.code === 'replayed' ? 'Existing operation returned' : data.code === 'completed' ? 'Artwork revision saved' : data.code === 'ready' ? 'Typed handoff ready' : 'Apply accepted'}: ${operationId}. No approval or purchase was created.`;
+  if (data.result?.design_version) refreshHistory();
+  $('draft-state').textContent = data.acknowledgment_only ? 'Existing operation acknowledged. Validate handoff to review its current typed handoff.' : data.status === 'completed' ? 'Revision saved. Refresh controls to review the current version before drafting another edit.' : data.code === 'cancelled' ? 'Operation cancelled. Make a new draft selection to Apply again.' : 'Draft submitted. Retry or cancel the existing operation.';
+  $('cancel').disabled = data.code === 'cancelled' || data.status === 'completed'; $('handoff').disabled = data.code === 'cancelled' || data.status === 'completed';
+  if (data.result?.design_version) { const design = data.result.design_version; $('artifact').hidden = false; $('artifact').textContent = `Saved version ${design.design_version_id} · exact artwork ${design.artifact.content_hash} · backend job ${data.backend_job_id}`;
+    $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(design.design_version_id)}`; $('artwork-preview').hidden = false; }
 }
 function dirty() {
   lastAction = undefined; $('retry').disabled = true;
@@ -62,13 +64,15 @@ async function refresh() {
     $('fields').replaceChildren(Object.assign(document.createElement('legend'), { textContent: 'Draft selections' }));
     for (const c of schema.controls) $('fields').append(selectField(c, draft.selections[c.id], value => { draft.selections[c.id] = value; questions(); dirty(); }, c.locked));
     questions(); $('draft-state').textContent = 'No draft changes.'; $('apply').disabled = true;
-    $('retry').disabled = true; $('handoff').disabled = !operationId; $('cancel').disabled = !operationId;
+    $('retry').disabled = true; $('handoff').disabled = !operationId || ['completed', 'cancelled'].includes(operationStatus); $('cancel').disabled = !operationId || ['completed', 'cancelled'].includes(operationStatus);
     $('error').hidden = true; $('status').textContent = operationId ? `Controls refreshed. Existing operation: ${operationId}.` : 'No operation submitted.'; counter(data);
+    refreshHistory();
     $('versions').textContent = `${schema.schema_version} · brief ${schema.expected_versions.brief} · design ${schema.expected_versions.design} · composition ${schema.expected_versions.composition}`;
   } catch { error('Controls unavailable. Try Refresh controls.'); }
 }
 async function apply(retry = false) {
   if (pending) return;
+  const restoreRetryFocus = retry && document.activeElement === $('retry');
   pending = true; $('apply').disabled = true; $('retry').disabled = true;
   $('fields').disabled = true; $('refresh').disabled = true;
   try {
@@ -79,14 +83,37 @@ async function apply(retry = false) {
         expected_versions: schema.expected_versions, intent: 'apply', draft: structuredClone(draft),
         control_schema_hash: `sha256:${await digestHex(schema)}`, draft_hash: await digestHex(draft) };
     }
+    $('cancel').disabled = false;
     result(await api('/api/apply', lastAction));
   } catch { error('Response unavailable. Retry last Apply to recover the same operation identity.'); }
-  finally { pending = false; $('retry').disabled = !lastAction; $('fields').disabled = false; $('refresh').disabled = false; }
+  finally { pending = false; $('retry').disabled = !lastAction; $('fields').disabled = false; $('refresh').disabled = false;
+    if (restoreRetryFocus && $('error').hidden && !$('retry').disabled) $('retry').focus();
+  }
 }
 $('controls').addEventListener('submit', event => { event.preventDefault(); apply(); });
 $('retry').addEventListener('click', () => apply(true));
 $('refresh').addEventListener('click', refresh);
 for (const [id, path] of [['handoff', '/api/dispatch'], ['cancel', '/api/cancel']]) $(id).addEventListener('click', async () => {
-  try { result(await api(path, { operation_id: operationId })); } catch { error('Response unavailable. Operation status remains unknown.'); }
+  try { result(await api(path, id === 'cancel' && lastAction ? { action_id: lastAction.action_id } : { operation_id: operationId })); } catch { error('Response unavailable. Operation status remains unknown.'); }
+});
+async function refreshHistory() {
+  try {
+    const data = projectHistoryList(await api('/api/history'));
+    if (!data) { $('history-section').hidden = true; return; }
+    historySelection = data.selection; $('history-version').replaceChildren();
+    for (const item of data.items) { const option = document.createElement('option'); option.value = item.design_version_id; option.textContent = `${item.design_version_id} · ${item.artifact.content_hash}`; $('history-version').append(option); }
+    $('history-section').hidden = false;
+  } catch { $('history-section').hidden = true; }
+}
+for (const id of ['compare-history', 'restore-history']) $(id).addEventListener('click', async () => {
+  try {
+    const body = { design_version_id: $('history-version').value };
+    if (id === 'restore-history') { body.expected_selection_revision = historySelection.revision; body.action_id = `restore_${crypto.randomUUID()}`; }
+    const response = await api(id === 'restore-history' ? '/api/restore' : '/api/compare', body); counter(response);
+    const data = projectHistoryResult(response, id === 'restore-history');
+    if (!data.ok) return error(historyErrorMessage(data));
+    $('history-result').textContent = id === 'restore-history' ? `Selected saved artwork ${data.result.design_version_id}. No image call or approval created.` : `Compared exact hashes ${data.result.left} and ${data.result.right}.`;
+    if (id === 'restore-history') { $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(data.result.design_version_id)}`; $('artwork-preview').hidden = false; await refresh(); }
+  } catch { error('Version operation unavailable.'); }
 });
 refresh();

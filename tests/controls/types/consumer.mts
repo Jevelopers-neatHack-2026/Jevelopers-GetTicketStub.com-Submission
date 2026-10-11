@@ -1,4 +1,4 @@
-// Import the actual public ESM path, without a shim, allowJs or skipLibCheck.
+// Strict source ESM consumer only. The actual package export remains a separate failing prerequisite.
 import { ApplyStore, createControlSchema, defaultDraft, hash, controlContractReference,
   assertControlContractBinding, SCHEMA_VERSIONS, type ApplyPayload, type TrustedControlState,
   type TrustedPrincipal, type ControlSchema } from '../../../src/controls/index.mjs';
@@ -31,3 +31,29 @@ createControlSchema(state, 'creative-controls/2.0');
 const privilegedAction: ApplyPayload = { ...action, intent: 'purchase' };
 void privilegedAction;
 store.close();
+
+import { CreativeControlsAdapter, snapshotControlJson } from '../../../src/controls/index.mjs';
+function useActualIntegration(adapter: CreativeControlsAdapter, actor: TrustedPrincipal, untrusted: unknown) {
+  const projection = adapter.projection(actor);
+  const durable = adapter.lookup(actor, 'action-fixture');
+  const completion: Promise<import('../../../src/controls/index.mjs').IntegratedApplyResult> = adapter.apply(actor, untrusted);
+  const safeInput: unknown = snapshotControlJson(untrusted);
+  return { projection, durable, completion, safeInput };
+}
+void useActualIntegration;
+
+import type { CurrentCreativeControlContext } from '../../../src/controls/index.mjs';
+function hostReadPolicies(context: CurrentCreativeControlContext) {
+  const denied: CurrentCreativeControlContext['policy'] = {
+    can_apply: false, can_read: false, available_operations: [], permitted_asset_ids: [],
+  };
+  const omitted: CurrentCreativeControlContext['policy'] = {
+    can_apply: true, available_operations: ['artwork.edit'], permitted_asset_ids: [],
+  };
+  const deniedContext: CurrentCreativeControlContext = { ...context, policy: denied };
+  const compatibleContext: CurrentCreativeControlContext = { ...context, policy: omitted };
+  // @ts-expect-error current read authority is a boolean, not caller-issued text.
+  const invalid: CurrentCreativeControlContext['policy'] = { ...denied, can_read: 'granted' };
+  return { deniedContext, compatibleContext, invalid };
+}
+void hostReadPolicies;

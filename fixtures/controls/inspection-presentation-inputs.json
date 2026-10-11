@@ -1,0 +1,179 @@
+{
+  "fixture_version": "controls-inspection-local-inputs/1.0",
+  "mode": "presentation-only",
+  "producer_status": "unqualified; no actual CE09 output",
+  "cases": {
+    "pending": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "pending",
+        "report": null,
+        "usage": {
+          "completeness": "unknown",
+          "hold": "unknown"
+        }
+      }
+    },
+    "acceptable": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "completed",
+        "report": {
+          "contract": "CreativeInspectionReport",
+          "schema_version": "1.0",
+          "outcome": "acceptable_for_review"
+        },
+        "usage": {
+          "completeness": "complete",
+          "hold": "released"
+        }
+      }
+    },
+    "recommended": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "completed",
+        "report": {
+          "contract": "CreativeInspectionReport",
+          "schema_version": "1.0",
+          "outcome": "bounded_repair_recommended"
+        },
+        "usage": {
+          "completeness": "partial",
+          "hold": "held"
+        }
+      }
+    },
+    "human": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "completed",
+        "report": {
+          "contract": "CreativeInspectionReport",
+          "schema_version": "1.0",
+          "outcome": "needs_human_review"
+        },
+        "usage": {
+          "completeness": "unknown",
+          "hold": "held"
+        }
+      }
+    },
+    "refused": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "completed",
+        "report": {
+          "contract": "CreativeInspectionReport",
+          "schema_version": "1.0",
+          "outcome": "refusal"
+        },
+        "usage": {
+          "completeness": "unknown",
+          "hold": "unknown"
+        }
+      }
+    },
+    "failure": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "completed",
+        "report": {
+          "contract": "CreativeInspectionReport",
+          "schema_version": "1.0",
+          "outcome": "failure"
+        },
+        "usage": {
+          "completeness": "partial",
+          "hold": "held"
+        }
+      }
+    },
+    "unavailable": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "unavailable",
+        "report": null,
+        "usage": {
+          "completeness": "unknown",
+          "hold": "held"
+        }
+      }
+    },
+    "failed": {
+      "input": {
+        "schema_version": "controls-inspection-presentation/1.0",
+        "evidence_mode": "local-input-fixture",
+        "references": {
+          "edit_action_id": "fixture-edit-1",
+          "inspection_action_id": "fixture-inspection-1",
+          "brief_id": "fixture-brief-1",
+          "design_version_id": "fixture-design-1",
+          "artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "failed",
+        "report": null,
+        "usage": {
+          "completeness": "partial",
+          "hold": "held"
+        }
+      }
+    }
+  }
+}
