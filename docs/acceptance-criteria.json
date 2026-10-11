@@ -632,5 +632,133 @@
       "id": "SC-10.5",
       "requirement": "Reconcile stale public/private wording in ownership documentation against inspected repository metadata without changing visibility. Keep documentation and acceptance status honest; preserve ARC-01 and EVAL-01/04."
     }
+  ],
+  "followup_criteria": [
+    {
+      "issue": 32,
+      "id": "SC-CAP.1",
+      "requirement": "Concrete wire/version and field mapping; private ports/selection remain private.",
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "scope": "related_followup_not_original_master_criteria"
+    },
+    {
+      "issue": 32,
+      "id": "SC-CAP.2",
+      "requirement": "Explicit field inventory, uncertainty, privacy and independent trusted scope.",
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "scope": "related_followup_not_original_master_criteria"
+    },
+    {
+      "issue": 32,
+      "id": "SC-CAP.3",
+      "requirement": "Exact units, distinct deterministic identities and explicit inclusive expiry/clock semantics.",
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "scope": "related_followup_not_original_master_criteria"
+    },
+    {
+      "issue": 32,
+      "id": "SC-CAP.4",
+      "requirement": "Readonly bindings, offline structural/consistency fixtures grounded in both synthetic sources.",
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "scope": "related_followup_not_original_master_criteria"
+    },
+    {
+      "issue": 32,
+      "id": "SC-CAP.5",
+      "requirement": "Explicit blocked legacy translations; old schema bytes and references retained.",
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "scope": "related_followup_not_original_master_criteria"
+    },
+    {
+      "issue": 32,
+      "id": "SC-CAP.6",
+      "requirement": "Catalog/dependencies/classifications, deterministic installed package and pin handoff.",
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "scope": "related_followup_not_original_master_criteria"
+    },
+    {
+      "issue": 32,
+      "id": "SC-CAP.7",
+      "requirement": "Fresh independent Astra High review, producer receipt, owner/consumer agreement and merged verification.",
+      "status": "pending_independent_and_owner_acceptance",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "scope": "related_followup_not_original_master_criteria"
+    }
   ]
 }

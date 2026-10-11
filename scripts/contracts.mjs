@@ -139,7 +139,7 @@ export async function execute(command, options) {
         if (!entry.requirement || !entry.trust_boundary || !entry.semantic_authority || !entry.field_steward || !entry.lifecycle) add('INCOMPLETE_INVENTORY', entry);
         if (options['require-owner'] && (!entry.named_owner || !entry.reviewer || !entry.owner_acknowledgement)) add('BLOCKED_OWNER_ACCEPTANCE', entry);
         if (options['require-consumer'] && (!entry.producers.length || !entry.consumers.length || entry.consumers.some(name => !knownConsumers.includes(name)))) add('MISSING_CONSUMER', entry);
-        if (options['require-leaf'] && (!Number.isInteger(entry.issue) || entry.issue < 4 || entry.issue > 28)) add('MISSING_LEAF', entry);
+        if (options['require-leaf'] && (!Number.isInteger(entry.issue) || entry.issue < 4 || (entry.issue > 28 && entry.issue !== 32))) add('MISSING_LEAF', entry);
         if (options['require-version-policy'] && !await exists(entry.version_policy)) add('MISSING_VERSION_POLICY', entry);
         if (options['require-field-classification'] && !options['policy-only']) {
           for (const version of contractVersions(entry)) {
@@ -180,7 +180,7 @@ export async function execute(command, options) {
       break;
     }
     case 'docs': {
-      for (const path of ['README.md', 'CHANGELOG.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md', 'docs/finance-v2-contracts.md', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md', 'docs/architecture/OWNERSHIP.md', 'docs/architecture/ACCEPTANCE.md']) {
+      for (const path of ['README.md', 'CHANGELOG.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md', 'docs/commerce-evidence-contracts.md', 'docs/finance-v2-contracts.md', 'docs/capability-contracts.md', 'docs/fixture-harness.md', 'docs/consumer-handoff.md', 'docs/release-guide.md', 'docs/architecture/OWNERSHIP.md', 'docs/architecture/ACCEPTANCE.md']) {
         const text = await readFile(root + path, 'utf8');
         for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
           if (/^(https?:|#)/.test(match[1])) continue;
@@ -205,6 +205,9 @@ export async function execute(command, options) {
       const criteria = (await readJson('docs/acceptance-criteria.json')).criteria;
       const expectedIds = requirements.issues.flatMap(row => row.acceptance_ids).concat(['SC-EPIC.1', 'SC-EPIC.2', 'SC-EPIC.3']);
       if (new Set(criteria.map(row => row.id)).size !== criteria.length || expectedIds.some(id => !criteria.some(row => row.id === id)) || criteria.some(row => !expectedIds.includes(row.id))) add('INCOMPLETE_ACCEPTANCE_COVERAGE');
+      const followups = (await readJson('docs/acceptance-criteria.json')).followup_criteria ?? [];
+      const followupIds = (requirements.followups ?? []).flatMap(row => row.acceptance_ids);
+      if (new Set(followups.map(row => row.id)).size !== followups.length || followupIds.length !== followups.length || followupIds.some(id => !followups.some(row => row.id === id))) add('INCOMPLETE_FOLLOWUP_COVERAGE');
       for (let issue = 4; issue <= 30; issue++) if (!requirements.issues.some(row => row.issue === issue)) add('MISSING_REQUIREMENT_MAP', null, { issue });
       break;
     }

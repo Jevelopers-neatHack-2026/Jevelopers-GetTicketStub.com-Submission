@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/FulfillmentCapabilitySnapshot/1.0.0",
+  "title": "FulfillmentCapabilitySnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "FulfillmentCapabilitySnapshot",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "provider_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$",
+      "x-classification": "restricted"
+    },
+    "api_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$",
+      "x-classification": "restricted"
+    },
+    "catalog_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}$",
+      "x-classification": "restricted"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^[A-Za-z][A-Za-z0-9._+-]{0,31}:[A-Za-z0-9][A-Za-z0-9._:/#-]{0,223}$",
+          "x-classification": "restricted"
+        },
+        "revision": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^[A-Za-z][A-Za-z0-9._+-]{0,31}:[A-Za-z0-9][A-Za-z0-9._:/#-]{0,223}$",
+          "x-classification": "restricted"
+        },
+        "retrieved_at": {
+          "type": "string",
+          "format": "utc-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "minLength": 24,
+          "maxLength": 24,
+          "x-classification": "restricted"
+        },
+        "evidence_mode": {
+          "enum": [
+            "synthetic_fixture",
+            "documentation_reference",
+            "account_observation",
+            "unverified_import"
+          ],
+          "x-classification": "restricted"
+        },
+        "evidence_reference": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^[A-Za-z][A-Za-z0-9._+-]{0,31}:[A-Za-z0-9][A-Za-z0-9._:/#-]{0,223}$",
+          "x-classification": "restricted"
+        },
+        "input_hash": {
+          "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+          "x-classification": "restricted"
+        }
+      },
+      "required": [
+        "reference",
+        "revision",
+        "retrieved_at",
+        "evidence_mode",
+        "evidence_reference",
+        "input_hash"
+      ],
+      "x-classification": "restricted"
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maximum_age_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31536000,
+          "x-classification": "restricted"
+        },
+        "fresh_until": {
+          "type": "string",
+          "format": "utc-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+          "minLength": 24,
+          "maxLength": 24,
+          "x-classification": "restricted"
+        }
+      },
+      "required": [
+        "maximum_age_seconds",
+        "fresh_until"
+      ],
+      "x-classification": "restricted"
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "$ref": "https://schemas.jevelopers.org/PrintSpec/1.0.0"
+      },
+      "minItems": 1,
+      "maxItems": 200,
+      "uniqueItems": true,
+      "x-classification": "restricted"
+    },
+    "content_identity": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted"
+    },
+    "capture_identity": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "tenant_id",
+    "project_id",
+    "provider_id",
+    "api_version",
+    "catalog_version",
+    "source",
+    "freshness",
+    "products",
+    "content_identity",
+    "capture_identity"
+  ]
+}

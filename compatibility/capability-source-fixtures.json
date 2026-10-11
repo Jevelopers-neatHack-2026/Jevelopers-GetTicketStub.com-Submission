@@ -1,0 +1,324 @@
+{
+  "status": "synthetic_producer_input_only",
+  "source_revision": "cfc03caced85256b5d19f35a80d5886bc2171950",
+  "source_receipt": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/4#issuecomment-6104784220",
+  "fixture_source_sha256": "b72f94405efbd201cad9cc039a326482dae9ab939eef45679df2b7337807e55e",
+  "alpha": {
+    "localFormat": "connector-development-catalog/1",
+    "providerId": "fixture-provider-alpha",
+    "apiVersion": "fixture-api-1",
+    "catalogVersion": "alpha-r1",
+    "source": {
+      "reference": "fixture:alpha/catalog",
+      "revision": "revision:fixture-alpha-1",
+      "retrievedAt": "2026-10-10T10:00:00.000Z",
+      "evidenceMode": "synthetic_fixture",
+      "evidenceReference": "fixture:alpha:v1"
+    },
+    "freshness": {
+      "maximumAgeSeconds": 3600
+    },
+    "products": [
+      {
+        "sku": "poster-12x18",
+        "variantId": "matte-white",
+        "availability": "available",
+        "constraints": {
+          "dimensions": {
+            "state": "known",
+            "value": {
+              "width": "304.8",
+              "height": "457.2",
+              "depth": "0.3",
+              "unit": "mm"
+            }
+          },
+          "minimumBleed": {
+            "state": "known",
+            "value": {
+              "top": "3",
+              "right": "3",
+              "bottom": "3",
+              "left": "3",
+              "unit": "mm"
+            }
+          },
+          "minimumSafeArea": {
+            "state": "known",
+            "value": {
+              "top": "5",
+              "right": "5",
+              "bottom": "5",
+              "left": "5",
+              "unit": "mm"
+            }
+          },
+          "minimumResolutionDpi": {
+            "state": "known",
+            "value": 300
+          },
+          "surfaces": {
+            "state": "known",
+            "value": [
+              "front"
+            ]
+          },
+          "files": {
+            "state": "known",
+            "value": {
+              "types": [
+                "image/png",
+                "application/pdf"
+              ],
+              "minimumCount": 1,
+              "maximumCount": 2
+            }
+          },
+          "color": {
+            "state": "known",
+            "value": {
+              "spaces": [
+                "CMYK"
+              ],
+              "profiles": [
+                "fixture-coated-v1"
+              ]
+            }
+          },
+          "options": {
+            "state": "known",
+            "value": [
+              "matte",
+              "gloss"
+            ]
+          },
+          "materials": {
+            "state": "known",
+            "value": [
+              "paper-200gsm"
+            ]
+          },
+          "personalization": {
+            "state": "known",
+            "value": {
+              "modes": [
+                "variable_text"
+              ],
+              "maximumFields": 2,
+              "maximumCharactersPerField": 40
+            }
+          },
+          "destinations": {
+            "state": "known",
+            "value": [
+              {
+                "countryCode": "US",
+                "regions": {
+                  "state": "known",
+                  "value": [
+                    "CA",
+                    "NY"
+                  ]
+                }
+              },
+              {
+                "countryCode": "GB",
+                "regions": {
+                  "state": "known",
+                  "value": []
+                }
+              }
+            ]
+          },
+          "shipping": {
+            "state": "known",
+            "value": [
+              {
+                "countryCode": "US",
+                "regionCode": null,
+                "methods": [
+                  "standard"
+                ]
+              },
+              {
+                "countryCode": "US",
+                "regionCode": "CA",
+                "methods": [
+                  "express",
+                  "standard"
+                ]
+              },
+              {
+                "countryCode": "US",
+                "regionCode": "NY",
+                "methods": [
+                  "standard"
+                ]
+              },
+              {
+                "countryCode": "GB",
+                "regionCode": null,
+                "methods": [
+                  "tracked"
+                ]
+              }
+            ]
+          }
+        },
+        "providerAttributes": {
+          "finishCode": "M-02",
+          "productionLine": "fixture-line-a",
+          "tags": [
+            "paper",
+            "poster"
+          ]
+        }
+      }
+    ]
+  },
+  "beta": {
+    "localFormat": "connector-development-catalog/1",
+    "providerId": "fixture-provider-beta",
+    "apiVersion": "fixture-api-4",
+    "catalogVersion": "beta-r9",
+    "source": {
+      "reference": "fixture:beta/catalog",
+      "revision": "revision:fixture-beta-9",
+      "retrievedAt": "2026-10-10T10:05:00.000Z",
+      "evidenceMode": "synthetic_fixture",
+      "evidenceReference": "fixture:beta:v9"
+    },
+    "freshness": {
+      "maximumAgeSeconds": 1800
+    },
+    "products": [
+      {
+        "sku": "poster-12x18",
+        "variantId": "satin-black",
+        "availability": "available",
+        "constraints": {
+          "dimensions": {
+            "state": "known",
+            "value": {
+              "width": "300",
+              "height": "450",
+              "depth": "0.4",
+              "unit": "mm"
+            }
+          },
+          "minimumBleed": {
+            "state": "known",
+            "value": {
+              "top": "5",
+              "right": "5",
+              "bottom": "5",
+              "left": "5",
+              "unit": "mm"
+            }
+          },
+          "minimumSafeArea": {
+            "state": "known",
+            "value": {
+              "top": "8",
+              "right": "8",
+              "bottom": "8",
+              "left": "8",
+              "unit": "mm"
+            }
+          },
+          "minimumResolutionDpi": {
+            "state": "known",
+            "value": 600
+          },
+          "surfaces": {
+            "state": "known",
+            "value": [
+              "front",
+              "back"
+            ]
+          },
+          "files": {
+            "state": "known",
+            "value": {
+              "types": [
+                "application/pdf"
+              ],
+              "minimumCount": 2,
+              "maximumCount": 4
+            }
+          },
+          "color": {
+            "state": "known",
+            "value": {
+              "spaces": [
+                "RGB"
+              ],
+              "profiles": [
+                "fixture-srgb-v4"
+              ]
+            }
+          },
+          "options": {
+            "state": "known",
+            "value": [
+              "satin"
+            ]
+          },
+          "materials": {
+            "state": "known",
+            "value": [
+              "photo-paper"
+            ]
+          },
+          "personalization": {
+            "state": "unsupported",
+            "reasonCode": "provider_declares_unsupported"
+          },
+          "destinations": {
+            "state": "known",
+            "value": [
+              {
+                "countryCode": "CA",
+                "regions": {
+                  "state": "known",
+                  "value": [
+                    "BC",
+                    "ON"
+                  ]
+                }
+              }
+            ]
+          },
+          "shipping": {
+            "state": "known",
+            "value": [
+              {
+                "countryCode": "CA",
+                "regionCode": null,
+                "methods": [
+                  "economy"
+                ]
+              },
+              {
+                "countryCode": "CA",
+                "regionCode": "BC",
+                "methods": [
+                  "economy",
+                  "tracked"
+                ]
+              }
+            ]
+          }
+        },
+        "providerAttributes": {
+          "finishCode": "S-09",
+          "productionLine": "fixture-line-b",
+          "tags": [
+            "satin",
+            "photo"
+          ]
+        }
+      }
+    ]
+  }
+}

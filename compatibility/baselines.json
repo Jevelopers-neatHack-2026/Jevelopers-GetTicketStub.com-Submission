@@ -405,6 +405,22 @@
       "contract": "QueryResult",
       "version": "2.0.0",
       "sha256": "f8cdf831b26c5dede5440dd24fd1f7a68b60e761d1c0e04542f5d9f77c2ad6ce"
+    },
+    {
+      "contract": "PrintSpec",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PrintSpec/1.0.0",
+      "path": "schemas/PrintSpec/1.0.0.json",
+      "sha256": "451d483739535071ffc4e030fc413cf6a5de247371c3c3ff8c93febd78329d67",
+      "accepted": false
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FulfillmentCapabilitySnapshot/1.0.0",
+      "path": "schemas/FulfillmentCapabilitySnapshot/1.0.0.json",
+      "sha256": "8e3c53eee9f6dfa31237e601993c3501f2c4dc4002df194f2cd82adbd6ec5091",
+      "accepted": false
     }
   ]
 }

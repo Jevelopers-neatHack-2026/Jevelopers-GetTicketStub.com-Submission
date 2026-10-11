@@ -1,6 +1,6 @@
 {
   "name": "@jevelopers/shared-contracts",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,6 +14,11 @@
     "tooling/commerce-evidence.mjs",
     "tooling/fixture-harness.mjs",
     "tooling/finance-v2.mjs",
+    "tooling/capability.mjs",
+    "tooling/capability-data.mjs",
+    "tooling/capability-identity.mjs",
+    "tooling/capability-consistency.mjs",
+    "tooling/capability-adapter.mjs",
     "tooling/historical-finance-fixtures.mjs",
     "schemas",
     "fixtures",
@@ -24,6 +29,10 @@
     "CHANGELOG.md"
   ],
   "exports": {
+    "./capability": {
+      "types": "./generated/capability.d.ts",
+      "import": "./tooling/capability.mjs"
+    },
     ".": {
       "types": "./generated/index.d.ts",
       "import": "./generated/index.mjs"

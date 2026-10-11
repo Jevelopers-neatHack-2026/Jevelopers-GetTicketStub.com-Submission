@@ -60,6 +60,9 @@ const records = {
   "FinancialSummary": {
     "1.0.0": "FinancialSummary_1_0_0"
   },
+  "FulfillmentCapabilitySnapshot": {
+    "1.0.0": "FulfillmentCapabilitySnapshot_1_0_0"
+  },
   "FulfillmentQuote": {
     "1.0.0": "FulfillmentQuote_1_0_0"
   },
@@ -80,6 +83,9 @@ const records = {
   },
   "PartialFailure": {
     "1.0.0": "PartialFailure_1_0_0"
+  },
+  "PrintSpec": {
+    "1.0.0": "PrintSpec_1_0_0"
   },
   "ProductionBundle": {
     "1.0.0": "ProductionBundle_1_0_0"

@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.8.0 (unreleased)
+
+Related #32 adds only FulfillmentCapabilitySnapshot@1.0.0 and PrintSpec@1.0.0 producer proposals, explicit exact source-field migration, immutable pure consistency/hash/binding checks, synthetic fixtures and readonly installed bindings. Actual source dimensions retain unspecified physical basis; missing printable/trim/frame data remain unknown. Legacy bundle/quote/authorization translations block with typed failures. Original schema/fixture encodings, Finance/CI repairs, 126 original criteria and 27 global IDs are preserved; SC-CAP.1..7 are a separate related follow-up. Independent Astra High review, canonical/producer/consumer agreement, genuine provider gates and supervisor publication/merge verification remain pending.
+
 ## 0.7.1 (unreleased)
 
 Finance delta candidate: FC-003 binds query outcomes to the independently supplied current reservation; FC-004 enforces terminal exposure/finality across reusable snapshots, context and result routes. Finished execution or lease expiry cannot erase incomplete usage. Evidence-linked undispatched zero-cost release and complete finality remain supported. GAP-002 returns UNSUPPORTED_CASE at /decision for partial dispatch until a reviewed allowed-work/replan interface exists; monetary partial grants and holds remain reportable. Existing wire/schema/fixture bytes and FC-001/002 controls are retained. The original REQUEST_CHANGES history, reporting GAP-001 and all consumer/adoption obligations remain pending; this candidate requires fresh full independent and finance-owner review.

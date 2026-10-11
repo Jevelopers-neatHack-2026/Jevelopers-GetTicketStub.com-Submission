@@ -27,9 +27,13 @@ try {
   console.log(run(process.execPath, ['commerce-evidence-consumer.mjs'], directory).trim());
   await cp(root + 'examples/fixture-consumer.mjs', join(directory, 'fixture-consumer.mjs'));
   console.log(run(process.execPath, ['fixture-consumer.mjs'], directory).trim());
+  await cp(root + 'examples/capability-consumer.mjs', join(directory, 'capability-consumer.mjs'));
+  console.log(run(process.execPath, ['capability-consumer.mjs'], directory).trim());
   await writeFile(join(directory, 'consumer.mts'), `import { parseContract, versions } from '@jevelopers/shared-contracts';
 import type { ContractMap, ContractVersionMap, ContractName, TenantId, ProjectId } from '@jevelopers/shared-contracts';
 import { runCanonicalFixtures } from '@jevelopers/shared-contracts/fixture-harness';
+import { checkPrintSpec } from '@jevelopers/shared-contracts/capability';
+import type { PrintSpec, CapabilityContext } from '@jevelopers/shared-contracts/capability';
 type Assert<T extends true> = T;
 type EachVersion = Assert<{ [K in ContractName]: ContractMap[K]['schema_version'] extends keyof ContractVersionMap[K] ? true : false }[ContractName]>;
 type Brands = Assert<ProjectId extends TenantId ? false : true>;
@@ -38,6 +42,9 @@ if (parsed.ok) { const version: '1.0.0' = parsed.value.schema_version; }
 const registry: 'ProjectRequest_1_0_0' = versions.ProjectRequest['1.0.0'];
 const result = runCanonicalFixtures('CommonEnvelope', {contract:'CommonEnvelope',schema_version:'1.0.0',policy_version:'1.0.0',valid:{},cases:[]});
 export type Parity = readonly [EachVersion, Brands];
+declare const capabilityContext: CapabilityContext;
+const checkedSpec = checkPrintSpec({}, capabilityContext);
+if (checkedSpec.ok) { const unitState: PrintSpec['constraints']['geometry']['trim']['state'] = checkedSpec.value.constraints.geometry.trim.state; }
 `);
   run(process.execPath, [root + 'node_modules/typescript/bin/tsc', '--noEmit', '--strict', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', join(directory, 'consumer.mts')], directory);
   console.log(JSON.stringify({ installed_types: 'passed', esm_export_map: 'passed' }));

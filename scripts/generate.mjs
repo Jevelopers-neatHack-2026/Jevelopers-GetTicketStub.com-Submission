@@ -83,7 +83,7 @@ export async function outputs() {
     }
     const source = await readFile(root + paths[index]);
     manifest.push({ contract: schema.title, version, schema_id: schema.$id, path: paths[index], sha256: createHash('sha256').update(source).digest('hex') });
-    const declaration = await compile(schema, schema.title, { bannerComment: "import type { Brand } from './brands.js';", cwd: root, $refOptions: refOptions, additionalProperties: false, unknownAny: true });
+    const declaration = await compile(schema, schema.title, { bannerComment: "import type { Brand } from './brands.js';", cwd: root, $refOptions: refOptions, additionalProperties: false, unknownAny: true, ...(['PrintSpec', 'FulfillmentCapabilitySnapshot'].includes(schema.title) ? { ignoreMinAndMaxItems: true } : {}) });
     result.set(exportName + '.d.ts', immutableDeclaration(declaration));
   }
   exports.DefinitionVersionedReference = 'https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference';
@@ -122,11 +122,12 @@ export async function outputs() {
   result.set('schema-manifest.json', JSON.stringify({ package_version: packageManifest.version, source_revision: null, status: 'unreleased_candidates', toolchain: { ajv: '8.17.1', esbuild: '0.25.12', typescript: '5.9.3', json_schema_to_typescript: '15.0.4', node: '22.23.3' }, schemas: manifest }, null, 2) + '\n');
   result.set('brands.d.ts', 'declare const brand: unique symbol;\nexport type Brand<T, Name extends string> = T & { readonly [brand]: Name };\n');
   const names = Object.keys(versions);
-  result.set('index.mjs', "export { validateContract, validateContractVersion, parseContract, parseContractVersion, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport * from '../tooling/research-creative.mjs';\nexport * from '../tooling/commerce-evidence.mjs';\nexport * from '../tooling/finance-v2.mjs';\nexport { versions } from './registry.mjs';\n");
+  result.set('index.mjs', "export { validateContract, validateContractVersion, parseContract, parseContractVersion, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport * from '../tooling/research-creative.mjs';\nexport * from '../tooling/commerce-evidence.mjs';\nexport * from '../tooling/finance-v2.mjs';\nexport * from '../tooling/capability.mjs';\nexport { versions } from './registry.mjs';\n");
   result.set('operations.d.ts', (await readFile(root + 'tooling/operations-api.d.ts', 'utf8')).replace('../generated/index.js', './index.js'));
   result.set('research-creative.d.ts', (await readFile(root + 'tooling/research-creative-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   result.set('commerce-evidence.d.ts', (await readFile(root + 'tooling/commerce-evidence-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   result.set('finance-v2.d.ts', (await readFile(root + 'tooling/finance-v2-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
+  result.set('capability.d.ts', (await readFile(root + 'tooling/capability-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   const details = localSchemas.get('https://schemas.jevelopers.org/ErrorEnvelope/1.0.0').$defs.ErrorDetail.oneOf;
   const errorRegistry = Object.fromEntries(details.map(detail => [detail.properties.code.const, { category: detail.properties.category.const, safe_message: detail.properties.safe_message.const }]));
   result.set('error-registry.mjs', 'const records = ' + JSON.stringify(errorRegistry, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const errorRegistry = Object.freeze(records);\n');
@@ -147,6 +148,7 @@ export * from './operations.js';
 export * from './research-creative.js';
 export * from './commerce-evidence.js';
 export * from './finance-v2.js';
+export * from './capability.js';
 export type * from './primitives.js';
 import type * as Primitives from './primitives.js';
 export type PrimitiveName = keyof PrimitiveMap;

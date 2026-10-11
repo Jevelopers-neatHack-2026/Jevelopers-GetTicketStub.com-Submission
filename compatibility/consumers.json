@@ -223,6 +223,16 @@
           "contract": "ArtifactConsumptionReceipt",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": false,
+          "consumer": true
         }
       ],
       "package_content_digest": null,
@@ -701,6 +711,16 @@
           "contract": "ArtifactConsumptionReceipt",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": false,
+          "consumer": true
         }
       ],
       "package_content_digest": null,
@@ -765,6 +785,16 @@
         },
         {
           "contract": "FulfillmentStatus",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "PrintSpec",
           "producer": true,
           "consumer": false
         }
@@ -1120,6 +1150,16 @@
           "contract": "ArtifactConsumptionReceipt",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
+          "producer": false,
+          "consumer": true
         }
       ],
       "package_content_digest": null,
@@ -1279,6 +1319,16 @@
         },
         {
           "contract": "ArtifactConsumptionReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "FulfillmentCapabilitySnapshot",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "PrintSpec",
           "producer": false,
           "consumer": true
         }

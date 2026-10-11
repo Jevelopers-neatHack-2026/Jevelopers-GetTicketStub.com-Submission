@@ -1142,5 +1142,56 @@
       ],
       "dependency_interpretation": "release waits for every leaf's accepted closure evidence"
     }
+  ],
+  "followups": [
+    {
+      "issue": 32,
+      "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/32",
+      "stable_key": "SC-CAP",
+      "related_issues": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "acceptance_ids": [
+        "SC-CAP.1",
+        "SC-CAP.2",
+        "SC-CAP.3",
+        "SC-CAP.4",
+        "SC-CAP.5",
+        "SC-CAP.6",
+        "SC-CAP.7"
+      ],
+      "artifact_dependencies": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        24,
+        25,
+        29,
+        30
+      ],
+      "closure_dependencies": [],
+      "status": "local_producer_proposal_review_pending",
+      "owner_role": "shared-contracts canonical maintainer",
+      "named_owner": null,
+      "checks": [
+        "npm run contracts:check -- --contract FulfillmentCapabilitySnapshot",
+        "npm run contracts:fixtures -- --contract PrintSpec",
+        "npm run contracts:compat",
+        "npm run typecheck",
+        "node --test tests/capability*.test.mjs",
+        "npm run test:installed"
+      ],
+      "closure_evidence": null
+    }
   ]
 }

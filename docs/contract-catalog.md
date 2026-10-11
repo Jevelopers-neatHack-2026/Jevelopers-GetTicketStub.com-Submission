@@ -44,6 +44,9 @@ This is the maintained inventory. The JSON record below is consumed by `contract
 | FulfillmentStatus | #27 SC-08.FULFILLMENT | fulfillment-connectors | getticketstub.com, agent-harness, team-dashboard, integration-evals | commerce_evidence_candidate |
 | EvaluationEvidence | #28 SC-02.EVIDENCE | integration-evals | team-dashboard, getticketstub.com | commerce_evidence_candidate |
 
+| FulfillmentCapabilitySnapshot | #32 SC-CAP | fulfillment-connectors | print-production, getticketstub.com, agent-harness, integration-evals | producer_proposal_pending_review |
+| PrintSpec | #32 SC-CAP | fulfillment-connectors | print-production, getticketstub.com, agent-harness, integration-evals | producer_proposal_pending_review |
+
 ```json catalog
 {
   "policy_version": "1.0.0",
@@ -1811,6 +1814,74 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null,
       "naming_status": "proposed_from_creative_interface_pending_owner_review"
+    },
+    {
+      "name": "FulfillmentCapabilitySnapshot",
+      "group": "FulfillmentCapabilitySnapshot",
+      "issue": 32,
+      "requirement": "SC-CAP",
+      "owner_role": "shared-contracts canonical maintainer",
+      "domain_steward": "fulfillment-connectors",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "fulfillment-connectors"
+      ],
+      "consumers": [
+        "print-production",
+        "getticketstub.com",
+        "agent-harness",
+        "integration-evals"
+      ],
+      "trust_boundary": "untrusted supplier attribution; authenticated scope supplied separately",
+      "semantic_authority": "supplier capability declarations; geometry requires separate evidence; no eligibility or authority issuance",
+      "lifecycle": "immutable product specification or captured capability value; material changes require domain revalidation",
+      "field_steward": "fulfillment-connectors; print-production reviews geometry",
+      "state": "producer_proposal_pending_review",
+      "schema_path": "schemas/FulfillmentCapabilitySnapshot/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/FulfillmentCapabilitySnapshot_1_0_0.d.ts",
+      "helper": "tooling/capability.mjs",
+      "fixtures": "fixtures/FulfillmentCapabilitySnapshot.json",
+      "docs": "docs/capability-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification",
+      "acceptance": null
+    },
+    {
+      "name": "PrintSpec",
+      "group": "PrintSpec",
+      "issue": 32,
+      "requirement": "SC-CAP",
+      "owner_role": "shared-contracts canonical maintainer",
+      "domain_steward": "fulfillment-connectors",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "fulfillment-connectors"
+      ],
+      "consumers": [
+        "print-production",
+        "getticketstub.com",
+        "agent-harness",
+        "integration-evals"
+      ],
+      "trust_boundary": "untrusted supplier attribution; authenticated scope supplied separately",
+      "semantic_authority": "supplier capability declarations; geometry requires separate evidence; no eligibility or authority issuance",
+      "lifecycle": "immutable product specification or captured capability value; material changes require domain revalidation",
+      "field_steward": "fulfillment-connectors; print-production reviews geometry",
+      "state": "producer_proposal_pending_review",
+      "schema_path": "schemas/PrintSpec/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/PrintSpec_1_0_0.d.ts",
+      "helper": "tooling/capability.mjs",
+      "fixtures": "fixtures/PrintSpec.json",
+      "docs": "docs/capability-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification",
+      "acceptance": null
     }
   ],
   "unresolved_export_slots": [

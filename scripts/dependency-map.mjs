@@ -25,6 +25,10 @@ export function deliverableGraph(requirements) {
   const stage = issue => issue === 4 ? '4:machine-inventory-verification' : issue === 5 ? '5:toolchain-implementation' : issue + ':implementation';
   for (const row of requirements.issues.filter(row => row.issue >= 6)) nodes.push({ id: stage(row.issue), issue: row.issue, requires: row.artifact_dependencies.map(stage) });
   for (const row of requirements.issues.filter(row => row.issue >= 4)) nodes.push({ id: row.issue + ':closure-evidence', issue: row.issue, requires: [stage(row.issue)], acceptance: 'owner_consumer_review_and_merged_revision_pending' });
+  for (const row of requirements.followups ?? []) {
+    nodes.push({ id: row.issue + ':implementation', issue: row.issue, requires: row.artifact_dependencies.map(stage) });
+    nodes.push({ id: row.issue + ':closure-evidence', issue: row.issue, requires: [row.issue + ':implementation'], acceptance: 'independent_owner_consumer_review_and_merged_verification_pending' });
+  }
   nodes.push({ id: '3:release-gate-evidence', issue: 3, requires: requirements.issues.find(row => row.issue === 3).closure_dependencies.map(issue => issue + ':closure-evidence') });
   nodes.push({ id: '1:epic-completion', issue: 1, requires: ['3:release-gate-evidence'] });
   return nodes;

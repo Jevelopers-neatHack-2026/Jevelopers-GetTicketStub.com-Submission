@@ -1,5 +1,5 @@
 {
-  "package_version": "0.7.1",
+  "package_version": "0.8.0",
   "source_revision": null,
   "status": "unreleased_candidates",
   "toolchain": {
@@ -158,6 +158,13 @@
       "sha256": "8d73d97e86d0684ccbb84fc1838de9d7802438966be60bd1f2da3347833067d9"
     },
     {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/FulfillmentCapabilitySnapshot/1.0.0",
+      "path": "schemas/FulfillmentCapabilitySnapshot/1.0.0.json",
+      "sha256": "8e3c53eee9f6dfa31237e601993c3501f2c4dc4002df194f2cd82adbd6ec5091"
+    },
+    {
       "contract": "FulfillmentQuote",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/FulfillmentQuote/1.0.0",
@@ -205,6 +212,13 @@
       "schema_id": "https://schemas.jevelopers.org/PartialFailure/1.0.0",
       "path": "schemas/PartialFailure/1.0.0.json",
       "sha256": "ffbc017416dec37983be87bcfab5e4275d3f72cd80b6edbeb67d88c0257ad6c2"
+    },
+    {
+      "contract": "PrintSpec",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/PrintSpec/1.0.0",
+      "path": "schemas/PrintSpec/1.0.0.json",
+      "sha256": "451d483739535071ffc4e030fc413cf6a5de247371c3c3ff8c93febd78329d67"
     },
     {
       "contract": "ProductionBundle",

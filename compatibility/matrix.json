@@ -1085,6 +1085,42 @@
         "1.0.0",
         "2.0.0"
       ]
+    },
+    {
+      "contract": "PrintSpec",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "PrintSpec",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "PrintSpec",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "producer_version": "1.0.0",
+      "consumer_version": "1.0.0",
+      "accept": true
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "producer_version": "1.1.0",
+      "consumer_version": "1.0.0",
+      "accept": false
+    },
+    {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "producer_version": "2.0.0",
+      "consumer_version": "1.0.0",
+      "accept": false
     }
   ],
   "profile_compatibility": {

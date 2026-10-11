@@ -21,6 +21,7 @@
     "fixtures/EventIntelligencePackage.json": "sha256:0ab1c2710489d7120418b023f92605d46e3d0e4df6371a084bebc3c3aa0cf5a7",
     "fixtures/EvidenceProjection.json": "sha256:b8750bad839c7f4262ef9bcdcb464a50a68bff9ddf1524bc93a88e709ef7912b",
     "fixtures/FinancialSummary.json": "sha256:ac30f110ef9777177feabae9cb00286e946a86caff106d029c65d25bf325d19d",
+    "fixtures/FulfillmentCapabilitySnapshot.json": "sha256:794cfb339feb4d34f8455ea137ce728e7b9f866c9603256bfe32b5483c6b0e9c",
     "fixtures/FulfillmentQuote.json": "sha256:1621415f6ecb241555a38d10549cd927687574598ec1d42639976754c211614f",
     "fixtures/FulfillmentStatus.json": "sha256:b507e4d87b8983ee2118437241fd3581c11473cd6359b02c32f2bef4af55234f",
     "fixtures/JobCommandAcknowledgement.json": "sha256:3105f4820c963dd8ad93f578959d07df5ddd8f80e805ffd6b073fcf7d9161e6c",
@@ -28,6 +29,7 @@
     "fixtures/JobStatus.json": "sha256:1ababacfb0e7b497dc063cf3f65891152e19eef2064e43abc94bc6fa9b911d96",
     "fixtures/OrderAuthorization.json": "sha256:3d5a1023f318fac63063d98c2b1b89eb11e50b7e1e00568b023b688ed3be0d44",
     "fixtures/PartialFailure.json": "sha256:a7ff6f52f4b8bf7a89524d94fd5ebc4134a5bf15ebc587aea62f441fe7b2fbe6",
+    "fixtures/PrintSpec.json": "sha256:f47c8088e85ccdc84b8f219e353b8d3df5786b7669f3fc419b04553c7ec25ccd",
     "fixtures/ProductionApproval.example.json": "sha256:085bd9eb87444b3c0699cac1c840f181be239fbfa2553b2330bbcd672963cd15",
     "fixtures/ProductionBundle.json": "sha256:108048d668254fca9117c7b22a8eeb1cc62d4308a3a005d6bd8c8eea8c968237",
     "fixtures/ProjectRequest.json": "sha256:5ad1e5aa2074e2acd58d3a7eb8246e889321a6e786766d2c30e90e1f877fcc12",
@@ -56,7 +58,7 @@
     "fixtures/SettleResult.json": "sha256:f1727555000cad209b3bcb54d09ec3a3ca66d7c07b6e55882762e44a27d5eeb2",
     "fixtures/UsageEvent.json": "sha256:c3261936892562c1b0dbf57a665d5d460c8c462ac85dce15fbc05846a7b71cdb"
   },
-  "digest": "sha256:04c148dc47b64d76929a9cc01ada24dbca061e9ed5a087a791b75e7a558dc102",
+  "digest": "sha256:d5e47a9dabebf4840c98f1622a52d07ad06991452a8470a78cee1b4fbe478b46",
   "status": "synthetic_candidates_only",
   "contracts": [
     {
@@ -5281,6 +5283,233 @@
       ]
     },
     {
+      "contract": "FulfillmentCapabilitySnapshot",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/FulfillmentCapabilitySnapshot.json",
+      "cases": [
+        {
+          "id": "minimal-explicit-unknown",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full-alpha-source-unknown-geometry",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full-beta-incompatible-source",
+          "category": "producer_source",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "generic-known-print-geometry-control",
+          "category": "geometry_control",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing-scope",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "wrong-provider-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/provider_id"
+          }
+        },
+        {
+          "id": "unknown-evidence-mode",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/source/evidence_mode"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-major",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown-critical-control",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive-unreviewed-field-blocked",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained-exact-version",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "scope-mismatch",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "capture-hash-tamper",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "CAPTURE_HASH_MISMATCH",
+            "path": "/capture_identity"
+          }
+        },
+        {
+          "id": "content-hash-tamper",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "CONTENT_HASH_MISMATCH",
+            "path": "/content_identity"
+          }
+        },
+        {
+          "id": "stale-millisecond",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "STALE_CAPTURE",
+            "path": "/freshness/fresh_until"
+          }
+        },
+        {
+          "id": "before-capture",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "CLOCK_BEFORE_CAPTURE",
+            "path": "/now"
+          }
+        },
+        {
+          "id": "invalid-clock",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_CLOCK",
+            "path": "/now"
+          }
+        },
+        {
+          "id": "inclusive-expiry-equality",
+          "category": "clock",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "expiry-mismatch",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "EXPIRY_MISMATCH",
+            "path": "/freshness/fresh_until"
+          }
+        }
+      ]
+    },
+    {
       "contract": "FulfillmentQuote",
       "version": "1.0.0",
       "policy_version": "1.0.0",
@@ -7174,6 +7403,191 @@
           "expected": {
             "ok": true,
             "canonical_sha256": "sha256:a394d5b0a8e86fa9a93c70fa0d87f1bbcc5afa410d5f6ca01183b71f5898ea12"
+          }
+        }
+      ]
+    },
+    {
+      "contract": "PrintSpec",
+      "version": "1.0.0",
+      "policy_version": "1.0.0",
+      "path": "fixtures/PrintSpec.json",
+      "cases": [
+        {
+          "id": "minimal-explicit-unknown",
+          "category": "minimal",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full-alpha-source-unknown-geometry",
+          "category": "full",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "full-beta-incompatible-source",
+          "category": "producer_source",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "generic-known-print-geometry-control",
+          "category": "geometry_control",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "missing-scope",
+          "category": "missing",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "wrong-provider-type",
+          "category": "type",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/provider_id"
+          }
+        },
+        {
+          "id": "unknown-availability",
+          "category": "enum",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": "/availability"
+          }
+        },
+        {
+          "id": "malformed-json",
+          "category": "malformed_json",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": false,
+            "code": "MALFORMED_JSON",
+            "path": ""
+          }
+        },
+        {
+          "id": "unsupported-major",
+          "category": "unsupported_version",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "UNSUPPORTED_VERSION",
+            "path": "/schema_version"
+          }
+        },
+        {
+          "id": "unknown-field",
+          "category": "unknown_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "unknown-critical-control",
+          "category": "unknown_critical",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "additive-unreviewed-field-blocked",
+          "category": "additive_field",
+          "policy_version": "1.0.0",
+          "mode": "structural",
+          "expected": {
+            "ok": false,
+            "code": "INVALID_PAYLOAD",
+            "path": ""
+          }
+        },
+        {
+          "id": "retained-exact-version",
+          "category": "retained_encoding",
+          "policy_version": "1.0.0",
+          "mode": "parse",
+          "expected": {
+            "ok": true
+          }
+        },
+        {
+          "id": "scope-mismatch",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "SCOPE_MISMATCH",
+            "path": "/tenant_id"
+          }
+        },
+        {
+          "id": "spec-hash-tamper",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "SPEC_HASH_MISMATCH",
+            "path": "/spec_identity"
+          }
+        },
+        {
+          "id": "generic-safe-geometry-equality",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "IMPOSSIBLE_SAFE_GEOMETRY",
+            "path": "/constraints/minimum_safe_area"
+          }
+        },
+        {
+          "id": "physical-product-is-not-trim",
+          "category": "consistency",
+          "policy_version": "1.0.0",
+          "mode": "capability",
+          "expected": {
+            "ok": false,
+            "code": "GEOMETRY_UNCONFIRMED",
+            "path": "/constraints/inset_geometry_basis"
           }
         }
       ]
