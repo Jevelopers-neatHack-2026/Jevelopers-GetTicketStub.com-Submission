@@ -1,7 +1,7 @@
 # `marketing-material`
 
-**Repository status:** Verified existing on GitHub, private, October 10, 2026.
-**Proposed owner:** Product and frontend.
+**Repository status:** Public on GitHub, verified October 11, 2026 UTC from the [repository metadata API](https://api.github.com/repos/Jevelopers-neatHack-2026/marketing-material) (`private=false`, `visibility=public`). This records repository visibility only; it does not authorize publication of any asset.
+**Accountable content/review owner:** Marketing-material supervisor, assigned by the user on October 11, 2026. MM-01 implementation is carried by the Product and frontend — collateral maintainer role; an independent reviewer is pending for the frozen candidate.
 **Delivery state:** Architecture plan; implementation criteria remain planned until evidence is recorded.
 
 ## Responsibility
@@ -17,6 +17,8 @@ This repository consumes brand assets and technical evidence. It does not own vi
 - `launch/`: Landing-page copy, social drafts, and product descriptions.
 - `examples/`: Approved demonstration outputs with permission and attribution notes.
 - `review/`: Content review records and the source behind each measurable claim.
+
+The current file inventory and proposed locations are documented in the [collateral inventory](../collateral-inventory.json) and [organization guide](../collateral-organization.md). These module paths are plans until files are added; empty directories are not deliverables.
 
 ## Dependencies and handoff
 
@@ -38,4 +40,4 @@ Prepare one product explanation, one complete demonstration script, and a compac
 
 ## Acceptance and contributor handoff
 
-Use the [repository acceptance view](ACCEPTANCE.md) and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). Interfaces are specified in the [maintained contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md). Preserve local contributor and agent instructions; follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). Named owner and reviewer assignments remain kickoff decisions.
+Use the [repository acceptance view](ACCEPTANCE.md) and [central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md). Interfaces are specified in the [maintained contract catalog](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/main/docs/contract-catalog.md). Preserve local contributor and agent instructions; follow the [organization contribution guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). For MM-01, the user-assigned supervisor owns marketing content/review; the fresh independent Astra High candidate review is pending. Other issue-specific role assignments remain as recorded in their live issues.

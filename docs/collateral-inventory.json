@@ -1,0 +1,1429 @@
+{
+  "schemaVersion": "1.0",
+  "inventoryKey": "MM-01",
+  "inventoryDate": "2026-10-11",
+  "repository": {
+    "name": "Jevelopers-neatHack-2026/marketing-material",
+    "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material",
+    "visibility": "public",
+    "visibilityCheckedAt": "2026-10-11 UTC",
+    "visibilityEvidence": {
+      "source": "GitHub REST repository metadata",
+      "url": "https://api.github.com/repos/Jevelopers-neatHack-2026/marketing-material",
+      "observedFields": {
+        "private": false,
+        "visibility": "public",
+        "default_branch": "main"
+      },
+      "readCommand": "gh api repos/Jevelopers-neatHack-2026/marketing-material --jq '{full_name,private,visibility,default_branch}'",
+      "scope": "Repository visibility only; this does not grant publication permission for any asset."
+    }
+  },
+  "snapshot": {
+    "baselineRevision": "97c8aa25ac13d9032033f01ddfd6f536f0bb962b",
+    "baselineObservedAt": "2026-10-11 UTC",
+    "baselineTrackedPaths": [
+      "README.md",
+      "docs/architecture/ACCEPTANCE.md",
+      "docs/architecture/OWNERSHIP.md"
+    ],
+    "baselineEvidence": "git ls-files at the assigned starting revision; live issue #4 independently records the same 2026-10-10 snapshot.",
+    "baselineMediaCount": 0,
+    "baselineModuleDirectoriesPresent": [],
+    "baselineTooling": {
+      "scripts": false,
+      "exportTooling": false,
+      "ci": false,
+      "agentsInstructions": false
+    },
+    "candidateAdds": [
+      "docs/collateral-inventory.json",
+      "docs/collateral-organization.md"
+    ],
+    "candidateAddsAreDrafts": true
+  },
+  "execution": {
+    "issue": {
+      "stableKey": "MM-01",
+      "number": 4,
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4"
+    },
+    "executionOwner": "Assigned MM-01 general-worker session, tracked in the supervisor execution record",
+    "accountableMarketingContentAndReviewOwner": "User-assigned marketing-material supervisor, confirmed 2026-10-11",
+    "independentCandidateReview": "Fresh Astra High review to be assigned by the supervisor after candidate freeze; pending.",
+    "contentApprovalState": "The user-assigned supervisor is the accountable marketing content/review owner; this candidate is not yet approved. Upstream brand, product, evidence, privacy, and rights approvals remain with their source owners.",
+    "status": "Draft candidate; issue acceptance is not complete until the frozen candidate is independently reviewed and required evidence is recorded."
+  },
+  "statusDefinitions": {
+    "disposition": {
+      "existing": "A file or asset is present at the stated candidate path; this says nothing about approval.",
+      "planned": "A future deliverable has a proposed path and linked issue but is not present yet.",
+      "missing": "An expected or referenced asset is absent and no accepted delivery path is committed.",
+      "deferred": "A possible deliverable is intentionally postponed with a reason and activation trigger.",
+      "not_applicable": "The format or use does not apply to the stated scope, with a reason."
+    },
+    "pathAvailability": [
+      "tracked_at_baseline",
+      "created_in_candidate",
+      "proposed_not_created",
+      "no_path_required"
+    ],
+    "lifecycleState": {
+      "draft": "Exists but has not completed its required review.",
+      "reviewed": "The named role reviewed this exact revision; reviewer and date must be recorded.",
+      "released": "Destination-specific rights, claims, accessibility, and approval checks passed for the exact revision.",
+      "deprecated": "Retained for history, superseded by a recorded asset/path mapping, and no longer reusable."
+    },
+    "uncreatedAssetLifecycle": "null means no asset exists, so draft/reviewed/released/deprecated cannot yet apply."
+  },
+  "moduleMap": [
+    {
+      "path": "messaging/",
+      "pathAvailability": "proposed_not_created",
+      "purpose": "Positioning, audience/value proposition, approved claims and message source references."
+    },
+    {
+      "path": "demo/",
+      "pathAvailability": "proposed_not_created",
+      "purpose": "Storyboard, narration, recording checklist, submission narrative and evidence-linked support assets."
+    },
+    {
+      "path": "launch/",
+      "pathAvailability": "proposed_not_created",
+      "purpose": "Social/announcement drafts and product descriptions; copy handoff to landing-page-repo, never the primary landing runtime."
+    },
+    {
+      "path": "examples/",
+      "pathAvailability": "proposed_not_created",
+      "purpose": "Approved demonstration outputs with destination-specific permission and attribution records."
+    },
+    {
+      "path": "review/",
+      "pathAvailability": "proposed_not_created",
+      "purpose": "Claim, provenance, brand-consumption, accessibility and review records; not a substitute for upstream evidence."
+    }
+  ],
+  "accountabilityByIssue": {
+    "MM-01": {
+      "number": 4,
+      "ownerRole": "Product and frontend — collateral maintainer",
+      "reviewerRole": "Product and frontend — demo lead",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4"
+    },
+    "MM-02": {
+      "number": 5,
+      "ownerRole": "Product and frontend — messaging owner",
+      "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5"
+    },
+    "MM-03": {
+      "number": 9,
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9"
+    },
+    "MM-04": {
+      "number": 10,
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10"
+    },
+    "MM-05": {
+      "number": 6,
+      "ownerRole": "Product and frontend — asset steward",
+      "reviewerRole": "Finance and reliability — privacy/evidence reviewer",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6"
+    },
+    "MM-06": {
+      "number": 7,
+      "ownerRole": "Product and frontend — collateral designer",
+      "reviewerRole": "Product and frontend — brand-kit and landing consumer reviewers",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7"
+    },
+    "MM-07": {
+      "number": 11,
+      "ownerRole": "Product and frontend — collateral release maintainer",
+      "reviewerRole": "Product and frontend — receiving teammate",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/11"
+    },
+    "MM-08": {
+      "number": 8,
+      "ownerRole": "Product and frontend — content accessibility reviewer",
+      "reviewerRole": "Product and frontend — collateral designer",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/8"
+    },
+    "MM-09": {
+      "number": 3,
+      "ownerRole": "Product and frontend — release coordinator",
+      "reviewerRole": "Product and frontend — receiving reviewer; Finance and reliability/Agent and research for relevant evidence",
+      "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/3"
+    }
+  },
+  "trackedDocumentation": [
+    {
+      "assetId": "DOC-README-001",
+      "type": "repository navigation and status",
+      "disposition": "existing",
+      "path": "README.md",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "baselineRevision": "97c8aa25ac13d9032033f01ddfd6f536f0bb962b",
+      "intendedUse": "Repository entry point and navigation to the current inventory, organization guide, ownership and acceptance references.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-01",
+      "ownerRole": "Product and frontend — collateral maintainer",
+      "reviewerRole": "Product and frontend — demo lead",
+      "editableSourceLocations": [
+        "README.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [],
+      "provenanceReferences": [
+        "Baseline commit 97c8aa25ac13d9032033f01ddfd6f536f0bb962b"
+      ],
+      "v1": true,
+      "intendedAudience": "Repository contributors, collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4",
+      "dependencies": [
+        "MM-01 inventory and navigation acceptance; later revisions require linked review evidence."
+      ]
+    },
+    {
+      "assetId": "DOC-OWNERSHIP-001",
+      "type": "repository responsibility and boundary documentation",
+      "disposition": "existing",
+      "path": "docs/architecture/OWNERSHIP.md",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "baselineRevision": "97c8aa25ac13d9032033f01ddfd6f536f0bb962b",
+      "intendedUse": "Describe responsibility, canonical-source boundaries, proposed module map and evidence rules.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-01",
+      "ownerRole": "Product and frontend — collateral maintainer",
+      "reviewerRole": "Product and frontend — demo lead",
+      "editableSourceLocations": [
+        "docs/architecture/OWNERSHIP.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [],
+      "provenanceReferences": [
+        "Baseline commit 97c8aa25ac13d9032033f01ddfd6f536f0bb962b",
+        "GitHub REST repository metadata verified 2026-10-11 UTC"
+      ],
+      "v1": true,
+      "intendedAudience": "Repository contributors, collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4",
+      "dependencies": [
+        "MM-01 inventory and navigation acceptance; later revisions require linked review evidence."
+      ]
+    },
+    {
+      "assetId": "DOC-ACCEPTANCE-001",
+      "type": "local acceptance navigation",
+      "disposition": "existing",
+      "path": "docs/architecture/ACCEPTANCE.md",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "baselineRevision": "97c8aa25ac13d9032033f01ddfd6f536f0bb962b",
+      "intendedUse": "Point contributors to relevant authoritative master criteria while retaining local acceptance context.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-01",
+      "ownerRole": "Product and frontend — collateral maintainer",
+      "reviewerRole": "Product and frontend — demo lead",
+      "editableSourceLocations": [
+        "docs/architecture/ACCEPTANCE.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [],
+      "provenanceReferences": [
+        "Baseline commit 97c8aa25ac13d9032033f01ddfd6f536f0bb962b"
+      ],
+      "v1": true,
+      "intendedAudience": "Repository contributors, collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4",
+      "dependencies": [
+        "MM-01 inventory and navigation acceptance; later revisions require linked review evidence."
+      ]
+    },
+    {
+      "assetId": "MM01-INVENTORY-001",
+      "type": "machine-readable collateral inventory",
+      "disposition": "existing",
+      "path": "docs/collateral-inventory.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Track baseline docs, six required families, planned deliverables, path availability, evidence references and ownership.",
+      "destination": "Repository contributors, collateral producers and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-01",
+      "ownerRole": "Product and frontend — collateral maintainer",
+      "reviewerRole": "Product and frontend — demo lead",
+      "editableSourceLocations": [
+        "docs/collateral-inventory.json"
+      ],
+      "exportLocations": [],
+      "claimReferences": [],
+      "provenanceReferences": [
+        "Baseline file inventory at 97c8aa25ac13d9032033f01ddfd6f536f0bb962b"
+      ],
+      "v1": true,
+      "intendedAudience": "Repository contributors, collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4",
+      "dependencies": [
+        "MM-01 inventory and navigation acceptance; later revisions require linked review evidence."
+      ]
+    },
+    {
+      "assetId": "MM01-ORGANIZATION-001",
+      "type": "collateral navigation and retention guide",
+      "disposition": "existing",
+      "path": "docs/collateral-organization.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Explain how to navigate the five proposed modules, canonical sources, current status, review, migration and retention.",
+      "destination": "Repository contributors, collateral producers and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-01",
+      "ownerRole": "Product and frontend — collateral maintainer",
+      "reviewerRole": "Product and frontend — demo lead",
+      "editableSourceLocations": [
+        "docs/collateral-organization.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [],
+      "provenanceReferences": [
+        "Baseline file inventory at 97c8aa25ac13d9032033f01ddfd6f536f0bb962b"
+      ],
+      "v1": true,
+      "intendedAudience": "Repository contributors, collateral producers and reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4",
+      "dependencies": [
+        "MM-01 inventory and navigation acceptance; later revisions require linked review evidence."
+      ]
+    }
+  ],
+  "families": [
+    {
+      "familyId": "FAM-DEMO-001",
+      "family": "Hackathon demo assets",
+      "disposition": "planned",
+      "currentAssets": [],
+      "pathAvailability": "proposed_not_created",
+      "proposedPathPrefix": "demo/",
+      "usageNeed": "One truthful journey, timed demo narrative and submission story. The official event page checked 2026-10-11 UTC requires a video of at most three minutes covering neatlogs, Entire and cfo.ai (architecture, implementation, runtime, reasoning and result for each), a public code repository and supporting evidence.",
+      "v1": true,
+      "plannedAssetIds": [
+        "DEMO-EXPLAINER-001",
+        "DEMO-STORYBOARD-001",
+        "DEMO-NARRATION-001",
+        "DEMO-RECORDING-CHECKLIST-001",
+        "DEMO-SUBMISSION-NARRATIVE-001",
+        "DEMO-SUBMISSION-VIDEO-001"
+      ],
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "implementationIssue": "MM-03",
+      "claimReferences": [
+        "MM-02 (#5, pending claim ledger)",
+        "EVAL-03",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "MM-05 (#6, pending provenance and rights records)",
+        "https://neatlogs.com/hackathon, checked 2026-10-11 UTC",
+        "integration-evals evidence index; recheck before final demo"
+      ],
+      "dependencies": [
+        "Approved claims and evidence from MM-02 and upstream owners; no sponsor result is inferred from this plan."
+      ],
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "editableSourceLocations": [
+        "demo/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "familyId": "FAM-SOCIAL-001",
+      "family": "Social posts and cards",
+      "disposition": "planned",
+      "currentAssets": [],
+      "pathAvailability": "proposed_not_created",
+      "proposedPathPrefix": "launch/",
+      "usageNeed": "The official event page checked 2026-10-11 UTC requires an X quote-post of the official submission post with team, name, project, public repository and demo link. Building-in-public evidence is tagged #neatHack. Reuse the same v1 copy/visual/alt-text records as the announcement family; do not create duplicate source assets or imply other-platform cadence.",
+      "v1": true,
+      "plannedAssetIds": [
+        "LAUNCH-X-COPY-001",
+        "LAUNCH-X-KEY-VISUAL-001",
+        "LAUNCH-X-ALT-TEXT-001",
+        "LAUNCH-X-CTA-001"
+      ],
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "implementationIssue": "MM-04",
+      "claimReferences": [
+        "MM-02 (#5, pending)",
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "MM-05 (#6, pending); https://neatlogs.com/hackathon, checked 2026-10-11 UTC; final cutoff is announced on Discord, so recheck before use"
+      ],
+      "dependencies": [
+        "Exact post, final CTA/destination and submitter confirmation; asset-specific permission and review."
+      ],
+      "intendedAudience": "The named event-submission audience and the target social channel audience.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
+      "editableSourceLocations": [
+        "launch/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "familyId": "FAM-EXPLAINER-001",
+      "family": "Product explainers and system diagrams",
+      "disposition": "planned",
+      "currentAssets": [],
+      "pathAvailability": "proposed_not_created",
+      "proposedPathPrefix": "messaging/ and demo/",
+      "usageNeed": "A truthful product explanation is required by MM-03; a separate workflow/system diagram is conditional on the approved storyboard identifying a useful, evidence-backed scene.",
+      "v1": true,
+      "plannedAssetIds": [
+        "DEMO-EXPLAINER-001",
+        "DEMO-WORKFLOW-DIAGRAM-001"
+      ],
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "implementationIssue": "MM-03",
+      "claimReferences": [
+        "MM-02 (#5, pending claim ledger)",
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "Product behavior must be pinned to getticketstub.com evidence; MM-05 (#6) governs asset rights and redaction."
+      ],
+      "dependencies": [
+        "Diagram need remains conditional; no product architecture illustration is claimed present."
+      ],
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "editableSourceLocations": [
+        "messaging/ and demo/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "familyId": "FAM-DECK-001",
+      "family": "Pitch and demo deck support",
+      "disposition": "deferred",
+      "currentAssets": [],
+      "pathAvailability": "proposed_not_created",
+      "proposedPathPrefix": "demo/",
+      "usageNeed": "No current official submission requirement or story-confirmed need for a slide deck is recorded. Activate only if the approved MM-03 storyboard or a refreshed official organizer requirement calls for deck support.",
+      "v1": false,
+      "plannedAssetIds": [
+        "DEMO-DECK-SUPPORT-001"
+      ],
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "implementationIssue": "MM-03",
+      "claimReferences": [
+        "MM-02 (#5, pending, if the deck is activated)"
+      ],
+      "provenanceReferences": [
+        "MM-05 (#6, asset-specific if activated)"
+      ],
+      "dependencies": [
+        "Trigger: approved story or official requirement confirms use; otherwise retain as deferred."
+      ],
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "editableSourceLocations": [
+        "demo/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "familyId": "FAM-SCREENSHOT-001",
+      "family": "Screenshots and mockups",
+      "disposition": "deferred",
+      "currentAssets": [],
+      "pathAvailability": "proposed_not_created",
+      "proposedPathPrefix": "demo/",
+      "usageNeed": "No approved screenshots or mockups exist. Add only if an MM-03 scene needs one; use a sanitized, authorized source or clearly labeled conceptual mockup, with demonstrated/simulated/planned status visible.",
+      "v1": false,
+      "plannedAssetIds": [
+        "DEMO-SCREENSHOT-SET-001"
+      ],
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "implementationIssue": "MM-03",
+      "claimReferences": [
+        "MM-02 (#5, pending, if selected)",
+        "EVAL-03",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "MM-05 (#6) must record source, rights, consent, redaction and destination approval before reuse."
+      ],
+      "dependencies": [
+        "Trigger: storyboard confirms a scene need and source owner supplies reviewable, sanitized material or an approved mockup brief."
+      ],
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "editableSourceLocations": [
+        "demo/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "familyId": "FAM-ANNOUNCEMENT-001",
+      "family": "Launch and update announcements",
+      "disposition": "planned",
+      "currentAssets": [],
+      "pathAvailability": "proposed_not_created",
+      "proposedPathPrefix": "launch/",
+      "usageNeed": "MM-04 requires one reusable announcement set for the official X quote-post use. Include the official post, team, name, project, public repository, demo link and confirmed cutoff. Other launch/update graphics, recaps and feature callouts are deferred until a real use, owner and evidence are recorded.",
+      "v1": true,
+      "plannedAssetIds": [
+        "LAUNCH-X-COPY-001",
+        "LAUNCH-X-KEY-VISUAL-001",
+        "LAUNCH-X-ALT-TEXT-001",
+        "LAUNCH-X-CTA-001",
+        "LAUNCH-UPDATE-RECAP-001"
+      ],
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "implementationIssue": "MM-04",
+      "claimReferences": [
+        "MM-02 (#5, pending)",
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "MM-05 (#6, pending); https://neatlogs.com/hackathon, checked 2026-10-11 UTC; refresh final cutoff and destination before delivery."
+      ],
+      "dependencies": [
+        "Confirm exact destination, CTA, submitter and dimensions/limits; no posting or external submission is part of this inventory."
+      ],
+      "intendedAudience": "The named event-submission audience and the target social channel audience.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
+      "editableSourceLocations": [
+        "launch/"
+      ],
+      "exportLocations": []
+    }
+  ],
+  "plannedDeliverables": [
+    {
+      "assetId": "MSG-POSITIONING-001",
+      "type": "positioning and approved-message guide",
+      "disposition": "planned",
+      "path": "messaging/README.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Approved positioning and message source for collateral.",
+      "destination": "Marketing collateral and landing-page-repo copy handoff",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner",
+      "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
+      "claimReferences": [
+        "MM-02 claims ledger, pending"
+      ],
+      "provenanceReferences": [
+        "brand-kit vocabulary; product/evaluation sources pinned by MM-02"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "familyIds": [],
+      "dependencies": [
+        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+      ],
+      "editableSourceLocations": [
+        "messaging/README.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "MSG-CLAIMS-001",
+      "type": "machine-readable approved-claim ledger",
+      "disposition": "planned",
+      "path": "messaging/claims.json",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Record exact allowed wording, claim state, audience, source revision, evidence, mode, limitations and review trigger.",
+      "destination": "Collateral authors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner",
+      "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
+      "claimReferences": [
+        "EVAL-03",
+        "EVAL-02",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "Pinned product, integration-evals, sponsor and cost-intelligence source records; currently pending"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "familyIds": [],
+      "dependencies": [
+        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+      ],
+      "editableSourceLocations": [
+        "messaging/claims.json"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "MSG-REVIEW-001",
+      "type": "claim review checklist",
+      "disposition": "planned",
+      "path": "review/messaging-checklist.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Reject unsupported automation, live-integration and savings claims; keep simulations labeled.",
+      "destination": "Collateral reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner",
+      "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
+      "claimReferences": [
+        "MM-02 claims ledger, pending"
+      ],
+      "provenanceReferences": [
+        "MM-05 provenance register, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "familyIds": [],
+      "dependencies": [
+        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+      ],
+      "editableSourceLocations": [
+        "review/messaging-checklist.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-EXPLAINER-001",
+      "type": "product explanation",
+      "disposition": "planned",
+      "path": "demo/product-explanation.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Explain one supported journey and clearly distinguish demonstrated from future behavior.",
+      "destination": "Demo and submission narrative",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending",
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "Pinned getticketstub.com and integration-evals evidence, pending source-owner handoff"
+      ],
+      "v1": true,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001",
+        "FAM-EXPLAINER-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/product-explanation.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-STORYBOARD-001",
+      "type": "timed storyboard",
+      "disposition": "planned",
+      "path": "demo/storyboard.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Plan the coherent journey and label each scene with claim/asset/evidence references, duration and fallback.",
+      "destination": "Demo production",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending",
+        "EVAL-03",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "MM-05 provenance register, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/storyboard.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-NARRATION-001",
+      "type": "demo narration",
+      "disposition": "planned",
+      "path": "demo/narration.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Provide a complete timed script aligned with storyboard and approved claims.",
+      "destination": "Demo production and accessible transcript",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending",
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "Pinned evidence references by scene, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/narration.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-RECORDING-CHECKLIST-001",
+      "type": "recording and fallback checklist",
+      "disposition": "planned",
+      "path": "demo/recording-checklist.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Guide safe capture, visible limitations, evidence labels and recovery/fallback.",
+      "destination": "Demo producer and receiving teammate",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending"
+      ],
+      "provenanceReferences": [
+        "MM-05 redaction and permission rules, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/recording-checklist.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-SUBMISSION-NARRATIVE-001",
+      "type": "compact submission narrative",
+      "disposition": "planned",
+      "path": "demo/submission-narrative.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Provide the concise project and journey narrative required for event submission.",
+      "destination": "Official hackathon submission; destination must be reconfirmed",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending",
+        "EVAL-03",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "https://neatlogs.com/hackathon, checked 2026-10-11 UTC; exact post/cutoff and current evidence must be rechecked before submission"
+      ],
+      "v1": true,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/submission-narrative.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-SUBMISSION-VIDEO-001",
+      "type": "demo video export",
+      "disposition": "planned",
+      "path": "demo/exports/v1-demo.mp4",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Produce a video of at most three minutes. The current official page requires explicit coverage of each partner's architecture, implementation, runtime, reasoning and result; authentic evidence and rights review are still required.",
+      "destination": "Official hackathon submission; external submission not authorized by this inventory",
+      "requiredForV1": true,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending",
+        "EVAL-03",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "MM-05 permissions/redaction, pending; https://neatlogs.com/hackathon, checked 2026-10-11 UTC"
+      ],
+      "v1": true,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DEMO-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/production/"
+      ],
+      "exportLocations": [
+        "demo/exports/v1-demo.mp4"
+      ]
+    },
+    {
+      "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "type": "workflow diagram support asset",
+      "disposition": "deferred",
+      "path": "demo/diagrams/demo-workflow.svg",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Only create if approved storyboard confirms a diagram improves the journey explanation.",
+      "destination": "Demo video or deck if selected",
+      "requiredForV1": false,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending"
+      ],
+      "provenanceReferences": [
+        "Product behavior source must be pinned before depiction"
+      ],
+      "v1": false,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-EXPLAINER-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/diagrams/demo-workflow.svg"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-SCREENSHOT-SET-001",
+      "type": "screenshot or labeled mockup set",
+      "disposition": "deferred",
+      "path": "demo/screenshots/",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Only add if an approved scene needs a screenshot/mockup and a sanitized source or clearly conceptual brief is available.",
+      "destination": "Demo video or supporting handoff if selected",
+      "requiredForV1": false,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending",
+        "EVAL-03",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "MM-05 source, rights, consent and redaction review, pending"
+      ],
+      "v1": false,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-SCREENSHOT-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/screenshots/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "DEMO-DECK-SUPPORT-001",
+      "type": "pitch/demo deck support",
+      "disposition": "deferred",
+      "path": "demo/deck/",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "No confirmed deck requirement; activate only when the story or official organizer asks for it.",
+      "destination": "Event demo or teammate handoff if selected",
+      "requiredForV1": false,
+      "implementationIssue": "MM-03",
+      "ownerRole": "Product and frontend — demo producer",
+      "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-02 claims ledger, pending if activated"
+      ],
+      "provenanceReferences": [
+        "MM-05 asset approval, pending if activated"
+      ],
+      "v1": false,
+      "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
+      "familyIds": [
+        "FAM-DECK-001"
+      ],
+      "dependencies": [
+        "MM-02 approved claim records; pinned product/evaluation/sponsor evidence; MM-05 rights/redaction; current organizer format."
+      ],
+      "editableSourceLocations": [
+        "demo/deck/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "LAUNCH-X-COPY-001",
+      "type": "X submission and demo-sharing copy",
+      "disposition": "planned",
+      "path": "launch/announcement-copy.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Prepare accurate copy variants for the official X quote-post, including team, name, project, public repository and demo link; do not publish from this repo task.",
+      "destination": "X quote-post; official post, exact destination and submitter to be confirmed",
+      "requiredForV1": true,
+      "implementationIssue": "MM-04",
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "claimReferences": [
+        "MM-02 claims ledger, pending",
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "https://neatlogs.com/hackathon, checked 2026-10-11 UTC; MM-05 rights/approval pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The named event-submission audience and the target social channel audience.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
+      "familyIds": [
+        "FAM-SOCIAL-001",
+        "FAM-ANNOUNCEMENT-001"
+      ],
+      "dependencies": [
+        "MM-02 approved wording; MM-03 demo link/story; MM-05 asset rights; MM-06 brand review; MM-08 accessibility; current organizer post/cutoff and destination-owner confirmation."
+      ],
+      "editableSourceLocations": [
+        "launch/announcement-copy.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "LAUNCH-X-KEY-VISUAL-001",
+      "type": "editable X key visual and export variants",
+      "disposition": "planned",
+      "path": "launch/assets/x-submission-key-visual.svg",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Provide the key visual required by MM-04 after brand, claim, rights and destination review.",
+      "destination": "X post; no public post is authorized by this inventory",
+      "requiredForV1": true,
+      "implementationIssue": "MM-04",
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "claimReferences": [
+        "MM-02 claims ledger, pending"
+      ],
+      "provenanceReferences": [
+        "MM-05 rights/redaction, pending; MM-06 brand consumption, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The named event-submission audience and the target social channel audience.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
+      "familyIds": [
+        "FAM-SOCIAL-001",
+        "FAM-ANNOUNCEMENT-001"
+      ],
+      "dependencies": [
+        "MM-02 approved wording; MM-03 demo link/story; MM-05 asset rights; MM-06 brand review; MM-08 accessibility; current organizer post/cutoff and destination-owner confirmation."
+      ],
+      "editableSourceLocations": [
+        "launch/assets/x-submission-key-visual.svg"
+      ],
+      "exportLocations": [
+        "launch/exports/x-submission/ (proposed; format and dimensions require current destination check)"
+      ]
+    },
+    {
+      "assetId": "LAUNCH-X-ALT-TEXT-001",
+      "type": "accessible description for X visual",
+      "disposition": "planned",
+      "path": "launch/assets/x-submission-alt-text.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Provide accessible text equivalent for the selected visual.",
+      "destination": "X post and package manifest",
+      "requiredForV1": true,
+      "implementationIssue": "MM-04",
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "claimReferences": [
+        "MM-02 claims ledger, pending"
+      ],
+      "provenanceReferences": [
+        "MM-08 accessibility review, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The named event-submission audience and the target social channel audience.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
+      "familyIds": [
+        "FAM-SOCIAL-001",
+        "FAM-ANNOUNCEMENT-001"
+      ],
+      "dependencies": [
+        "MM-02 approved wording; MM-03 demo link/story; MM-05 asset rights; MM-06 brand review; MM-08 accessibility; current organizer post/cutoff and destination-owner confirmation."
+      ],
+      "editableSourceLocations": [
+        "launch/assets/x-submission-alt-text.md"
+      ],
+      "exportLocations": [
+        "Included with the approved X variant and package manifest; exact destination format to be checked."
+      ]
+    },
+    {
+      "assetId": "LAUNCH-X-CTA-001",
+      "type": "reviewed CTA and destination record",
+      "disposition": "planned",
+      "path": "launch/announcement-copy.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Record exact CTA, intended action, destination class/owner and availability conditions.",
+      "destination": "X post; exact URL and availability require destination-owner confirmation",
+      "requiredForV1": true,
+      "implementationIssue": "MM-04",
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "claimReferences": [
+        "MM-02 CTA/source review, pending"
+      ],
+      "provenanceReferences": [
+        "Destination confirmation and current official post remain pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The named event-submission audience and the target social channel audience.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
+      "familyIds": [
+        "FAM-SOCIAL-001",
+        "FAM-ANNOUNCEMENT-001"
+      ],
+      "dependencies": [
+        "MM-02 approved wording; MM-03 demo link/story; MM-05 asset rights; MM-06 brand review; MM-08 accessibility; current organizer post/cutoff and destination-owner confirmation."
+      ],
+      "editableSourceLocations": [
+        "launch/announcement-copy.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "LAUNCH-UPDATE-RECAP-001",
+      "type": "launch/update, recap and feature-callout variants",
+      "disposition": "deferred",
+      "path": "launch/",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Produce only after an actual usage, owner and supporting evidence are confirmed.",
+      "destination": "A named channel/destination only after confirmation",
+      "requiredForV1": false,
+      "implementationIssue": "MM-04",
+      "ownerRole": "Product and frontend — campaign/content owner",
+      "reviewerRole": "Product and frontend — destination owner",
+      "claimReferences": [
+        "MM-02 claims ledger, pending if activated"
+      ],
+      "provenanceReferences": [
+        "MM-05 publication rights, pending if activated"
+      ],
+      "v1": false,
+      "intendedAudience": "The named event-submission audience and the target social channel audience.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
+      "familyIds": [
+        "FAM-ANNOUNCEMENT-001"
+      ],
+      "dependencies": [
+        "MM-02 approved wording; MM-03 demo link/story; MM-05 asset rights; MM-06 brand review; MM-08 accessibility; current organizer post/cutoff and destination-owner confirmation."
+      ],
+      "editableSourceLocations": [
+        "launch/"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "PROVENANCE-REGISTER-001",
+      "type": "asset provenance and permission register",
+      "disposition": "planned",
+      "path": "review/provenance.json",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Record source revision/URL, creator, date, evidence class, consent, permission, destination, attribution, redaction, reviewer and expiry.",
+      "destination": "Collateral reviewers and release gate",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — asset steward",
+      "reviewerRole": "Finance and reliability — privacy/evidence reviewer",
+      "claimReferences": [
+        "EVAL-04",
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "Sanitized integration-evals evidence references; no restricted original belongs in this repository"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral producers, privacy/evidence reviewers and approved downstream consumers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "familyIds": [],
+      "dependencies": [
+        "Source-owner rights, consent and sanitized source references for each selected asset."
+      ],
+      "editableSourceLocations": [
+        "review/provenance.json"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "PROVENANCE-REDACTION-001",
+      "type": "redaction safety guide and synthetic fixture",
+      "disposition": "planned",
+      "path": "review/redaction-safety.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Define format-aware redaction checks and a synthetic test fixture without real personal or secret data.",
+      "destination": "Asset producers and privacy reviewer",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — asset steward",
+      "reviewerRole": "Finance and reliability — privacy/evidence reviewer",
+      "claimReferences": [
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "Asset lineage and destination-specific permission records, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral producers, privacy/evidence reviewers and approved downstream consumers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "familyIds": [],
+      "dependencies": [
+        "Source-owner rights, consent and sanitized source references for each selected asset."
+      ],
+      "editableSourceLocations": [
+        "review/redaction-safety.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "BRAND-CONSUMPTION-001",
+      "type": "brand consumption contract and reviewed treatments",
+      "disposition": "planned",
+      "path": "review/brand-consumption.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Pin and consume brand-kit guidance without creating a competing identity; review one demo and one announcement treatment.",
+      "destination": "Collateral contributors and brand/landing reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-06",
+      "ownerRole": "Product and frontend — collateral designer",
+      "reviewerRole": "Product and frontend — brand-kit and landing consumer reviewers",
+      "claimReferences": [
+        "EVAL-03, visual/evidence distinction"
+      ],
+      "provenanceReferences": [
+        "Canonical brand-kit source; exact consumed revision and allowlist approval to be recorded by MM-06"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral designers and brand-kit/landing-page consumers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7",
+      "familyIds": [],
+      "dependencies": [
+        "Pinned brand-kit artifacts and the required brand/landing consumer review."
+      ],
+      "editableSourceLocations": [
+        "review/brand-consumption.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "ACCESSIBILITY-GUIDE-001",
+      "type": "collateral readability/accessibility guide",
+      "disposition": "planned",
+      "path": "review/accessibility.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Define measurable size/contrast checks, reading order, plain language and accessible alternatives by format.",
+      "destination": "Collateral authors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-08",
+      "ownerRole": "Product and frontend — content accessibility reviewer",
+      "reviewerRole": "Product and frontend — collateral designer",
+      "claimReferences": [
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "Format-specific export/review records, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/8",
+      "familyIds": [],
+      "dependencies": [
+        "Selected final formats, variants and intended viewing contexts."
+      ],
+      "editableSourceLocations": [
+        "review/accessibility.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "ACCESSIBILITY-CHECKLIST-001",
+      "type": "per-export accessibility checklist",
+      "disposition": "planned",
+      "path": "review/accessibility-checklist.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Record viewing size, contrast, alt text/reading order and captions/transcript checks per export.",
+      "destination": "Collateral package and release gate",
+      "requiredForV1": true,
+      "implementationIssue": "MM-08",
+      "ownerRole": "Product and frontend — content accessibility reviewer",
+      "reviewerRole": "Product and frontend — collateral designer",
+      "claimReferences": [
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "Exact export and review date, to be recorded"
+      ],
+      "v1": true,
+      "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/8",
+      "familyIds": [],
+      "dependencies": [
+        "Selected final formats, variants and intended viewing contexts."
+      ],
+      "editableSourceLocations": [
+        "review/accessibility-checklist.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "HANDOFF-GUIDE-001",
+      "type": "collateral handoff guide",
+      "disposition": "planned",
+      "path": "docs/collateral-handoff.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Help a teammate find the editable source, latest approved variant, checksum and reuse restrictions.",
+      "destination": "Receiving teammate and downstream consumers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-07",
+      "ownerRole": "Product and frontend — collateral release maintainer",
+      "reviewerRole": "Product and frontend — receiving teammate",
+      "claimReferences": [
+        "EVAL-03"
+      ],
+      "provenanceReferences": [
+        "Manifest, source revision, checksum, approvals and destination-specific permissions, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The receiving teammate and approved downstream asset consumers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/11",
+      "familyIds": [],
+      "dependencies": [
+        "Exact approved source/export files and MM-02/MM-05/MM-06/MM-08 review records."
+      ],
+      "editableSourceLocations": [
+        "docs/collateral-handoff.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "HANDOFF-MANIFEST-001",
+      "type": "versioned release manifest and checksums",
+      "disposition": "planned",
+      "path": "release/VERSION/manifest.json",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Map asset IDs to exact sources/exports, checksum, dimensions, claim/provenance, brand, accessibility, approval and destination.",
+      "destination": "Versioned teammate handoff",
+      "requiredForV1": true,
+      "implementationIssue": "MM-07",
+      "ownerRole": "Product and frontend — collateral release maintainer",
+      "reviewerRole": "Product and frontend — receiving teammate",
+      "claimReferences": [
+        "EVAL-03",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "Per-asset source and release approvals, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The receiving teammate and approved downstream asset consumers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/11",
+      "familyIds": [],
+      "dependencies": [
+        "Exact approved source/export files and MM-02/MM-05/MM-06/MM-08 review records."
+      ],
+      "editableSourceLocations": [
+        "release/VERSION/manifest.json"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "RELEASE-CHECKLIST-001",
+      "type": "collateral release checklist",
+      "disposition": "planned",
+      "path": "review/release-checklist.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Gate package readiness separately from external submission/publication readiness.",
+      "destination": "Repository release reviewer",
+      "requiredForV1": true,
+      "implementationIssue": "MM-09",
+      "ownerRole": "Product and frontend — release coordinator",
+      "reviewerRole": "Product and frontend — receiving reviewer; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-01 through MM-08",
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "Exact candidate, leaf evidence, external blockers and source-owner receipts, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The repository release reviewer and stakeholders for the explicitly scoped package.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/3",
+      "familyIds": [],
+      "dependencies": [
+        "Closure evidence for MM-01 through MM-08 plus the exact candidate and versioned manifest."
+      ],
+      "editableSourceLocations": [
+        "review/release-checklist.md"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "RELEASE-RECORD-001",
+      "type": "versioned release decision record",
+      "disposition": "planned",
+      "path": "review/releases/VERSION.md",
+      "pathAvailability": "proposed_not_created",
+      "lifecycleState": null,
+      "intendedUse": "Record PASS/BLOCKED by check, tested revision, commands, limitations and separate collateral/submission decisions.",
+      "destination": "Repository release record",
+      "requiredForV1": true,
+      "implementationIssue": "MM-09",
+      "ownerRole": "Product and frontend — release coordinator",
+      "reviewerRole": "Product and frontend — receiving reviewer; Finance and reliability/Agent and research for relevant evidence",
+      "claimReferences": [
+        "MM-01 through MM-08",
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "Version manifest and exact reviewer/owner decisions, pending"
+      ],
+      "v1": true,
+      "intendedAudience": "The repository release reviewer and stakeholders for the explicitly scoped package.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/3",
+      "familyIds": [],
+      "dependencies": [
+        "Closure evidence for MM-01 through MM-08 plus the exact candidate and versioned manifest."
+      ],
+      "editableSourceLocations": [
+        "review/releases/VERSION.md"
+      ],
+      "exportLocations": []
+    }
+  ],
+  "acceptance": {
+    "MM-01-A": "All tracked candidate documentation files have a record above; each of the six required families has a disposition, usage need or defer reason, and planned asset IDs.",
+    "MM-01-B": "Baseline paths, candidate-created paths and proposed uncreated paths are distinguished. Existing documentation is draft until reviewed; every v1/future record links to its implementation issue and accountable roles.",
+    "MM-01-C": "The linked organization guide documents all five proposed modules, canonical-source boundaries, dated visibility evidence and migration/retention policy.",
+    "masterCriteria": "EVAL-03/EVAL-04 remain owned by integration-evals; this inventory supports classification and safe asset handling but does not verify either criterion."
+  },
+  "links": {
+    "officialEventRequirements": {
+      "url": "https://neatlogs.com/hackathon",
+      "checkedAt": "2026-10-11 UTC",
+      "requirements": [
+        "Submit one public X quote-post of the official neatlogs submission post with team, name, project, public repository and demo link.",
+        "Include a demo video no longer than three minutes; explicitly cover neatlogs, Entire and cfo.ai (architecture, implementation, runtime, reasoning and result for each).",
+        "Include supporting evidence in the repository and a public code repository.",
+        "The final cutoff is announced on Discord; recheck the official post and cutoff before submission."
+      ],
+      "scope": "Verified format reference for future collateral only; no external post, submission or approval is performed here."
+    },
+    "masterAcceptance": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/planning/acceptance-checklist.json",
+    "integrationEvidenceIndex": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/main/evidence/README.md",
+    "brandKit": "https://github.com/Jevelopers-neatHack-2026/brand-kit",
+    "productBehavior": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
+    "landingCopyConsumer": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo",
+    "financialDefinitions": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence"
+  }
+}
