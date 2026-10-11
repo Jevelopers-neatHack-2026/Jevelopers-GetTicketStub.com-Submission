@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RetrievalError } from "../../src/security/errors.mjs";
-import { isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } from "../../src/security/url-policy.mjs";
+import { hasSensitiveUrlMaterial, isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } from "../../src/security/url-policy.mjs";
 
 function denied(operation) {
   assert.throws(operation, (error) => error instanceof RetrievalError && error.code === "POLICY_DENIED");
@@ -11,6 +11,21 @@ test("accepts only canonical public HTTP(S) URL authorities", () => {
   assert.equal(parseAndValidateUrl("https://example.org/news?q=1#section").url.href, "https://example.org/news?q=1");
   assert.equal(parseAndValidateUrl("http://example.org:80/").port, 80);
   assert.equal(parseAndValidateUrl("https://[2001:4860:4860::8888]/").hostname, "2001:4860:4860::8888");
+});
+
+test("rejects sensitive query and fragment names through the shared bounded decoder", () => {
+  let overBoundKey = "token";
+  for (let index = 0; index < 6; index += 1) overBoundKey = encodeURIComponent(overBoundKey);
+  for (const value of [
+    "https://example.org/?access_token=canary",
+    "https://example.org/?%61ccess_%74oken=canary",
+    "https://example.org/#%74oken=canary",
+    `https://example.org/?${overBoundKey}=canary`,
+  ]) {
+    assert.equal(hasSensitiveUrlMaterial(new URL(value)), true, value);
+  }
+  assert.equal(hasSensitiveUrlMaterial(new URL("https://example.org/?source=event#details")), false);
+  assert.equal(hasSensitiveUrlMaterial({ searchParams: new URLSearchParams() }), true);
 });
 
 test("compares peer addresses independent of IPv6 compression and mapped IPv4 spelling", () => {

@@ -197,6 +197,22 @@ function privateReceiptBinding(runId) {
   };
 }
 
+function linkedPrivateReceiptBinding(runId) {
+  const binding = privateReceiptBinding(runId);
+  binding.candidate.canonicalUrl = `https://events.example.org/${runId}`;
+  binding.candidate.suppliedUrl = `https://events.example.org:443/${runId}`;
+  const locator = Object.freeze({ kind: 'text-range', startByte: 16, endByte: 48 });
+  const reference = Object.freeze({
+    evidenceId: '123e4567-e89b-42d3-a456-426614174000',
+    contentHash: 'a'.repeat(64),
+    locator,
+    field: 'canonical.url',
+    value: binding.candidate.canonicalUrl,
+  });
+  binding.candidate.sourceRefs = Object.freeze([reference]);
+  return { binding, locator, reference };
+}
+
 function privateReceiptRowKey(tenantId, binding) {
   const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
   return createHash('sha256')
@@ -471,7 +487,7 @@ test('separate Node processes serialize the first commit and return one immutabl
 test('private receipt plaintext and JSON hash buffers are wiped after successful seal and reopen', async (t) => {
   const harness = await createHarness(t);
   const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
-  const binding = privateReceiptBinding('receipt-owned-buffer-success');
+  const { binding, locator, reference } = linkedPrivateReceiptBinding('receipt-owned-buffer-success');
 
   const sealed = await captureReceiptOwnedBufferAllocations(() =>
     harness.store.beginPrivateRunReceipt(scope, binding, request('tenant-a')));
@@ -480,19 +496,70 @@ test('private receipt plaintext and JSON hash buffers are wiped after successful
   assert.deepEqual(sealed.allocations.map(({ owner }) => owner), ['sealPrivateReceipt']);
   assert.ok(sealed.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
     'the store-owned serialized receipt is zeroed before the successful seal call returns');
+  assert.equal(Object.isFrozen(locator), true);
+  assert.equal(Object.isFrozen(binding.candidate.sourceRefs[0].locator), true);
+  assert.deepEqual(locator, { kind: 'text-range', startByte: 16, endByte: 48 },
+    'normalizing and wiping receipt-owned provenance leaves caller-owned frozen locators intact');
 
+  const completion = {
+    completionKey: 'receipt-owned-buffer-success-complete',
+    outcome: 'failed',
+    suggestions: [],
+    limitations: [],
+    identity: { entityCandidates: [], occurrenceCandidates: [], transitionLinks: [], unresolvedTransitions: [] },
+  };
+  const finalized = await captureReceiptOwnedBufferAllocations(() => harness.store.finalizePrivateRunReceipt(scope, {
+    ...binding, completion, selection: { evidence: [], facts: [] },
+  }, request('tenant-a')));
+  assert.deepEqual(finalized.value, { state: 'complete' });
+  assert.equal(finalized.error, null);
+  assert.deepEqual(finalized.allocations.map(({ owner }) => owner), ['openPrivateReceipt', 'sealPrivateReceipt']);
+  assert.ok(finalized.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'finalization wipes both the opened pending body and newly sealed completion body');
+  assert.deepEqual(binding.candidate.sourceRefs[0], reference);
+
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
   const opened = await captureReceiptOwnedBufferAllocations(() =>
-    harness.store.readPrivateRunReceipt(scope, {
+    reopened.readPrivateRunReceipt(reopenedScope, {
       runId: binding.runId,
       configHash: binding.configHash,
       candidate: binding.candidate,
     }, request('tenant-a')));
   assert.equal(opened.error, null);
-  assert.equal(opened.value.state, 'pending');
+  assert.equal(opened.value.state, 'complete');
   assert.equal(opened.value.claim.claimKey, binding.claim.claimKey);
+  assert.equal(opened.value.candidate.suppliedUrl, binding.candidate.suppliedUrl,
+    'the exact claim-time URL spelling survives encryption and reopen');
+  assert.deepEqual(JSON.parse(JSON.stringify(opened.value.candidate.sourceRefs[0])),
+    JSON.parse(JSON.stringify(reference)),
+    'the actual linked-candidate claim binding survives finalization and store reopen');
+  assert.notStrictEqual(opened.value.candidate.sourceRefs[0].locator, locator);
   assert.deepEqual(opened.allocations.map(({ owner }) => owner), ['openPrivateReceipt']);
   assert.ok(opened.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
     'the temporary JSON hash buffer is zeroed after receipt verification');
+});
+
+test('new receipt supplied URLs use frontier canonicalization and sensitive-key policy', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const invalidCases = [
+    { suppliedUrl: 'https://events.example.org/receipt-invalid-supplied-0?%2574oken=canary',
+      canonicalUrl: 'https://events.example.org/receipt-invalid-supplied-0?%2574oken=canary' },
+    { suppliedUrl: 'https://events.example.org/receipt-invalid-supplied-1#%61ccess_%74oken=canary',
+      canonicalUrl: 'https://events.example.org/receipt-invalid-supplied-1' },
+    { suppliedUrl: 'https://other.example.org/receipt-invalid-supplied-2',
+      canonicalUrl: 'https://events.example.org/receipt-invalid-supplied-2' },
+    { suppliedUrl: 'file:///receipt-invalid-supplied-3',
+      canonicalUrl: 'https://events.example.org/receipt-invalid-supplied-3' },
+  ];
+  for (const [index, invalid] of invalidCases.entries()) {
+    const binding = linkedPrivateReceiptBinding(`receipt-invalid-supplied-${index}`).binding;
+    binding.candidate.canonicalUrl = invalid.canonicalUrl;
+    binding.candidate.suppliedUrl = invalid.suppliedUrl;
+    await assert.rejects(harness.store.beginPrivateRunReceipt(scope, binding, request('tenant-a')),
+      (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  }
 });
 
 test('private receipt plaintext is wiped on key failure, cancellation, and size rejection', { timeout: 5_000 }, async (t) => {
@@ -500,9 +567,10 @@ test('private receipt plaintext is wiped on key failure, cancellation, and size 
     resolveKey() { throw new Error('RECEIPT-KEY-CANARY'); },
   });
   const failedKeyScope = await failedKeyHarness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const failedKeyBinding = linkedPrivateReceiptBinding('receipt-owned-buffer-key-failure').binding;
   const failedKey = await captureReceiptOwnedBufferAllocations(() =>
     failedKeyHarness.store.beginPrivateRunReceipt(
-      failedKeyScope, privateReceiptBinding('receipt-owned-buffer-key-failure'), request('tenant-a')));
+      failedKeyScope, failedKeyBinding, request('tenant-a')));
   assert.ok(failedKey.error instanceof EvidenceStoreError && failedKey.error.code === 'EVIDENCE_KEY_UNAVAILABLE');
   assert.deepEqual(failedKey.allocations.map(({ owner }) => owner), ['sealPrivateReceipt']);
   assert.ok(failedKey.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
@@ -511,11 +579,12 @@ test('private receipt plaintext is wiped on key failure, cancellation, and size 
   const gatedKey = createReceiptKeyGate();
   const cancelledHarness = await createHarness(t, { resolveKey: (args) => gatedKey.resolve(args) });
   const cancelledScope = await cancelledHarness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const cancelledBinding = linkedPrivateReceiptBinding('receipt-owned-buffer-cancel').binding;
   const controller = new AbortController();
   const startedAt = performance.now();
   const cancelledOperation = captureReceiptOwnedBufferAllocations(() => cancelledHarness.store.beginPrivateRunReceipt(
     cancelledScope,
-    privateReceiptBinding('receipt-owned-buffer-cancel'),
+    cancelledBinding,
     request('tenant-a'),
     controller.signal,
   ));
@@ -539,15 +608,9 @@ test('private receipt plaintext is wiped on key failure, cancellation, and size 
   assert.ok(cancelled.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
     'late key callback release cannot restore or retain the store-owned plaintext buffer');
   assert.deepEqual(await cancelledHarness.store.readPrivateRunReceipt(cancelledScope, {
-    runId: 'receipt-owned-buffer-cancel',
-    configHash: createHash('sha256').update('config:receipt-owned-buffer-cancel').digest('hex'),
-    candidate: {
-      candidateId: createHash('sha256').update('candidate:receipt-owned-buffer-cancel').digest('hex'),
-      canonicalUrl: 'https://events.example.test/receipt-owned-buffer-cancel',
-      depth: 0,
-      seed: true,
-      sourceRefs: [],
-    },
+    runId: cancelledBinding.runId,
+    configHash: cancelledBinding.configHash,
+    candidate: cancelledBinding.candidate,
   }, request('tenant-a')), { state: 'missing' }, 'cancelled seal never creates a receipt row after late key completion');
 
   let sizeKeyCalls = 0;

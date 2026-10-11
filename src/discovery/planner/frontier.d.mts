@@ -146,6 +146,33 @@ export type FrontierClaimResult =
     }
   | { readonly state: 'stopped' | 'waiting' | 'empty'; readonly reason: string };
 
+export interface FrontierClaimReceiptCandidate {
+  readonly candidateId: string;
+  readonly canonicalUrl: string;
+  readonly depth: number;
+  readonly seed: boolean;
+  readonly sourceRefs: readonly FrontierSourceReference[];
+  /** Stable representative observation selected from the claim-time prefix. */
+  readonly suppliedUrl: string;
+}
+
+export interface FrontierCandidateReceiptBinding {
+  readonly bindingVersion: 0 | 1;
+  /** Null only for v1/v2 claims whose original observation cutoff was never stored. */
+  readonly candidate: FrontierClaimReceiptCandidate | null;
+  readonly claim: {
+    readonly claimKey: string;
+    readonly workerId: string;
+    readonly leaseToken: string;
+    readonly candidateId: string;
+    readonly state: 'leased' | 'completed' | 'unresolved';
+  };
+  readonly completion: null | {
+    readonly completionKey: string;
+    readonly outcome: 'links_observed' | 'no_links' | 'failed' | 'access_restricted';
+  };
+}
+
 export type FrontierAttemptResult =
   | {
       readonly state: 'admitted';
@@ -195,6 +222,9 @@ export interface DiscoveryFrontierStore<Request = unknown> {
   scopeForAuthenticatedRequest(request: Request): Promise<FrontierTenantScope>;
   createRun(scope: FrontierTenantScope, input: FrontierRunInput, signal?: AbortSignal): Promise<FrontierSnapshot>;
   claimNext(scope: FrontierTenantScope, runId: string, input: { readonly workerId: string; readonly claimKey: string }, signal?: AbortSignal): Promise<FrontierClaimResult>;
+  /** Read the immutable claim-time candidate prefix and its durable claim/completion identity for private receipt replay. */
+  getCandidateReceiptBinding(scope: FrontierTenantScope, runId: string, candidateId: string,
+    signal?: AbortSignal): Promise<FrontierCandidateReceiptBinding | null>;
   /** Persist admission before a future adapter dispatches; replay only returns historical state. */
   admitAttempt(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string;

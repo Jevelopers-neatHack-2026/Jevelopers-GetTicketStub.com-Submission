@@ -187,7 +187,7 @@ function snapshotRunInput(value) {
     || !Number.isSafeInteger(limits.maxSuggestionsPerCompletion) || limits.maxSuggestionsPerCompletion < 1
       || limits.maxSuggestionsPerCompletion > 16) fail();
   const frontier = exactMethods(input.frontier, [
-    'scopeForAuthenticatedRequest', 'createRun', 'claimNext', 'admitTransportHop',
+    'scopeForAuthenticatedRequest', 'createRun', 'claimNext', 'getCandidateReceiptBinding', 'admitTransportHop',
     'markTransportDispatchIntent', 'markTransportResponseReceived', 'settleTransportHopKnownZero',
     'settleTransportHopBodyComplete', 'markTransportHopUnknown', 'getTransportProgress',
     'completeCandidate', 'markUnresolved', 'stopRun', 'sealPrivateDraft', 'getSnapshot',
@@ -336,10 +336,15 @@ function digestJson(value) {
   return createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
 }
 
-function receiptCandidate(candidate) {
+function receiptCandidate(candidate, bindSuppliedUrl = false) {
+  if (bindSuppliedUrl && (typeof candidate.suppliedUrl !== 'string' || candidate.suppliedUrl.length < 1
+    || candidate.suppliedUrl.length > 8_192 || urlHasSensitiveMaterial(candidate.suppliedUrl))) {
+    throw new PrivateRetrievalError('INVALID_INPUT');
+  }
   return Object.freeze({
     candidateId: candidate.candidateId,
     canonicalUrl: candidate.canonicalUrl,
+    ...(bindSuppliedUrl ? { suppliedUrl: candidate.suppliedUrl } : {}),
     depth: candidate.depth,
     seed: candidate.seed,
     sourceRefs: Object.freeze(candidate.sourceRefs.map((reference) => Object.freeze({ ...reference }))),
@@ -642,12 +647,32 @@ export async function runPrivateRetrieval(value) {
           runFailure = 'authorization_revoked';
           return;
         }
+        let frontierBinding;
+        try {
+          frontierBinding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+            scope, input.runId, candidate.candidateId, controller.signal,
+          ));
+        } catch (error) {
+          limitations.add(limitationFor(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error)));
+          limitations.add('private_receipt_unavailable');
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        const expectedClaimState = candidate.state === 'completed' ? 'completed' : 'leased';
+        if (!frontierBinding || frontierBinding.claim.candidateId !== candidate.candidateId
+          || frontierBinding.claim.state !== expectedClaimState
+          || (frontierBinding.bindingVersion === 1 && !frontierBinding.candidate)) {
+          limitations.add('private_receipt_claim_mismatch');
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        const expectedCandidate = frontierBinding.candidate ?? candidate;
         let receipt;
         try {
           receipt = await awaitOperation(() => input.evidenceStore.readPrivateRunReceipt(evidenceScope, {
             runId: input.runId,
             configHash: runConfigHash,
-            candidate: receiptCandidate(candidate),
+            candidate: receiptCandidate(expectedCandidate, frontierBinding.bindingVersion === 1),
           }, input.request, controller.signal));
         } catch (error) {
           const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
@@ -658,41 +683,53 @@ export async function runPrivateRetrieval(value) {
         }
         if (receipt.state !== 'complete') {
           limitations.add(`private_receipt_${receipt.state}`);
-          if (candidate.state === 'leased' && receipt.state !== 'mismatch') {
+          if (candidate.state === 'leased' && receipt.state !== 'mismatch'
+            && frontierBinding.claim.state === 'leased') {
             const reason = candidate.admittedAttemptCount > 0
               ? 'dispatch_state_unknown' : 'cancelled_before_dispatch';
             limitations.add(reason);
-            if (candidate.activeLease?.claimKey && candidate.activeLease?.workerId) {
-              try {
-                const priorClaim = await awaitOperation(() => input.frontier.claimNext(scope, input.runId, {
-                  workerId: candidate.activeLease.workerId,
-                  claimKey: candidate.activeLease.claimKey,
+            try {
+              const priorClaim = await awaitOperation(() => input.frontier.claimNext(scope, input.runId, {
+                workerId: frontierBinding.claim.workerId,
+                claimKey: frontierBinding.claim.claimKey,
+              }, controller.signal));
+              if (priorClaim.state === 'claimed'
+                && priorClaim.leaseToken === frontierBinding.claim.leaseToken
+                && priorClaim.candidate.candidateId === candidate.candidateId) {
+                await awaitOperation(() => input.frontier.markUnresolved(scope, input.runId, {
+                  leaseToken: frontierBinding.claim.leaseToken,
+                  reason,
                 }, controller.signal));
-                if (priorClaim.state === 'claimed') {
-                  await awaitOperation(() => input.frontier.markUnresolved(scope, input.runId, {
-                    leaseToken: priorClaim.leaseToken,
-                    reason,
-                  }, controller.signal));
-                }
-              } catch {
-                // Keep the explicit uncertainty even if the durable lease cannot be resolved now.
               }
+            } catch {
+              // Keep the explicit uncertainty even if the durable lease cannot be resolved now.
             }
           }
           runFailure = 'private_receipt_unavailable';
           return;
         }
-        if (candidate.state === 'completed' && candidate.completionOutcome !== receipt.outcome) {
+        if (receipt.claim.claimKey !== frontierBinding.claim.claimKey
+          || receipt.claim.workerId !== frontierBinding.claim.workerId
+          || receipt.claim.leaseToken !== frontierBinding.claim.leaseToken) {
+          limitations.add('private_receipt_claim_mismatch');
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        if (candidate.state === 'completed'
+          && (candidate.completionOutcome !== receipt.outcome
+            || !frontierBinding.completion
+            || frontierBinding.completion.completionKey !== receipt.completionKey
+            || frontierBinding.completion.outcome !== receipt.outcome)) {
+          limitations.add('private_receipt_completion_mismatch');
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        if (candidate.state === 'leased' && frontierBinding.completion !== null) {
           limitations.add('private_receipt_completion_mismatch');
           runFailure = 'private_receipt_unavailable';
           return;
         }
         if (candidate.state === 'leased') {
-          if (candidate.activeLease?.claimKey !== receipt.claim.claimKey) {
-            limitations.add('private_receipt_claim_mismatch');
-            runFailure = 'private_receipt_unavailable';
-            return;
-          }
           const priorClaim = await awaitOperation(() => input.frontier.claimNext(scope, input.runId, {
             workerId: receipt.claim.workerId,
             claimKey: receipt.claim.claimKey,
@@ -714,6 +751,20 @@ export async function runPrivateRetrieval(value) {
               outcome: receipt.outcome,
               suggestions: receipt.suggestions,
             }, controller.signal));
+          } else {
+            const completedBinding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+              scope, input.runId, candidate.candidateId, controller.signal,
+            ));
+            if (!completedBinding || completedBinding.claim.state !== 'completed'
+              || completedBinding.claim.claimKey !== receipt.claim.claimKey
+              || completedBinding.claim.workerId !== receipt.claim.workerId
+              || completedBinding.claim.leaseToken !== receipt.claim.leaseToken
+              || completedBinding.completion?.completionKey !== receipt.completionKey
+              || completedBinding.completion?.outcome !== receipt.outcome) {
+              limitations.add('private_receipt_completion_mismatch');
+              runFailure = 'private_receipt_unavailable';
+              return;
+            }
           }
         }
         retainReceipt(receipt);
@@ -733,21 +784,28 @@ export async function runPrivateRetrieval(value) {
         leaseToken: claim.leaseToken,
       });
       const completionKey = `complete:${claim.leaseToken}:${randomUUID()}`;
-      let snapshot = await readActiveSnapshot();
-      const candidateSnapshot = snapshot.candidates.find((item) => item.candidateId === candidate.candidateId);
-      if (!candidateSnapshot || candidateSnapshot.canonicalUrl !== candidate.canonicalUrl
-        || candidateSnapshot.depth !== candidate.depth) throw new RetrievalError('TRANSPORT_FAILURE');
-      const candidateBinding = receiptCandidate(candidateSnapshot);
+      const frontierBinding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+        scope, input.runId, candidate.candidateId, controller.signal,
+      ));
+      if (!frontierBinding || frontierBinding.bindingVersion !== 1 || !frontierBinding.candidate
+        || frontierBinding.claim.state !== 'leased'
+        || frontierBinding.claim.claimKey !== claim.claimKey
+        || frontierBinding.claim.workerId !== claim.workerId
+        || frontierBinding.claim.leaseToken !== claim.leaseToken
+        || frontierBinding.claim.candidateId !== candidate.candidateId
+        || frontierBinding.candidate.candidateId !== candidate.candidateId
+        || frontierBinding.candidate.canonicalUrl !== candidate.canonicalUrl
+        || frontierBinding.candidate.depth !== candidate.depth) throw new RetrievalError('TRANSPORT_FAILURE');
+      if (typeof frontierBinding.candidate.suppliedUrl !== 'string' || urlHasSensitiveMaterial(frontierBinding.candidate.suppliedUrl)) {
+        throw new PrivateRetrievalError('INVALID_INPUT');
+      }
+      const candidateBinding = receiptCandidate(frontierBinding.candidate, true);
       const receiptBinding = Object.freeze({
         runId: input.runId,
         configHash: runConfigHash,
         candidate: candidateBinding,
       });
-      const observation = snapshot.observations.find((item) => item.targetCandidateId === candidate.candidateId);
-      const suppliedUrl = observation?.suppliedUrl;
-      if (typeof suppliedUrl !== 'string' || urlHasSensitiveMaterial(suppliedUrl)) {
-        throw new PrivateRetrievalError('INVALID_INPUT');
-      }
+      const suppliedUrl = frontierBinding.candidate.suppliedUrl;
       if (!authorized(input, 'candidate')) {
         abortForStop('access_restricted');
         persistStop('access_restricted');
@@ -758,7 +816,7 @@ export async function runPrivateRetrieval(value) {
         claim: claimBinding,
       }, input.request, controller.signal));
       if (pendingReceipt.state !== 'pending' || pendingReceipt.created !== true) {
-        const reason = candidateSnapshot.admittedAttemptCount > 0
+        const reason = candidate.admittedAttemptCount > 0
           ? 'dispatch_state_unknown' : 'cancelled_before_dispatch';
         limitations.add(pendingReceipt.state === 'pending'
           ? 'private_receipt_pending' : 'private_receipt_already_exists');

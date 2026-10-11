@@ -2,9 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { parseAndValidateUrl } from '../../security/url-policy.mjs';
+import { hasSensitiveUrlMaterial, parseAndValidateUrl } from '../../security/url-policy.mjs';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
+const CLAIM_BINDING_VERSION = 1;
 const MAX_SEEDS = 10;
 const MAX_DEPTH = 2;
 const MAX_ATTEMPT_ADMISSIONS = 30;
@@ -21,7 +22,6 @@ const MAX_JSON_BYTES = 32 * 1024 * 1024;
 const MAX_SQLITE_TIMEOUT_MS = 10_000;
 const HEX_SHA256 = /^[a-f0-9]{64}$/;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
-const SENSITIVE_QUERY_KEY = /(?:token|key|auth|code|signature|sig|secret|session|password|credential|invite|ticket|admission)/i;
 
 const DEFAULT_LIMITS = Object.freeze({
   maxDepth: 2,
@@ -179,45 +179,6 @@ function normalizeUrl(raw) {
   } catch {
     fail();
   }
-}
-
-function repeatedlyDecode(value) {
-  let current = value;
-  for (let depth = 0; depth < 4; depth += 1) {
-    let decoded;
-    try { decoded = decodeURIComponent(current.replaceAll('+', '%20')); }
-    catch { return null; }
-    if (decoded === current) return current;
-    current = decoded;
-  }
-  // Do not accept a partially decoded name. An application behind the URL
-  // parser may decode it again, turning a still-encoded key into a credential.
-  try {
-    return decodeURIComponent(current.replaceAll('+', '%20')) === current ? current : null;
-  } catch {
-    return null;
-  }
-}
-
-function hasSensitiveUrlMaterial(url) {
-  for (const key of url.searchParams.keys()) {
-    const decoded = repeatedlyDecode(key);
-    if (decoded === null || SENSITIVE_QUERY_KEY.test(decoded)) return true;
-  }
-  const fragment = url.hash.slice(1);
-  if (fragment === '') return false;
-  const decodedFragment = repeatedlyDecode(fragment);
-  if (decodedFragment === null) return true;
-  // Treat fragment parameters like query parameters: they are persisted in
-  // plaintext frontier metadata even though they are not sent in HTTP requests.
-  // Also reject sensitive-looking fragment tokens conservatively.
-  if (SENSITIVE_QUERY_KEY.test(decodedFragment)) return true;
-  for (const component of decodedFragment.split(/[&;]/)) {
-    const key = component.split('=', 1)[0];
-    const decodedKey = repeatedlyDecode(key);
-    if (decodedKey === null || SENSITIVE_QUERY_KEY.test(decodedKey)) return true;
-  }
-  return false;
 }
 
 function normalizeLocator(value) {
@@ -431,6 +392,8 @@ function schemaSql() {
       worker_id TEXT NOT NULL,
       state TEXT NOT NULL CHECK (state IN ('leased', 'completed', 'unresolved')),
       resolution_reason TEXT,
+      claim_binding_version INTEGER NOT NULL DEFAULT 0 CHECK (claim_binding_version IN (0, 1)),
+      claim_observation_sequence INTEGER,
       PRIMARY KEY (tenant_hash, run_id, claim_key),
       UNIQUE (tenant_hash, run_id, lease_token),
       FOREIGN KEY (tenant_hash, run_id, candidate_id)
@@ -584,10 +547,25 @@ async function openDatabase(directory, tenantHash, deadline, signal) {
         PRAGMA max_page_count = ${MAX_DATABASE_PAGES};
       `);
       const version = database.prepare('PRAGMA user_version').get().user_version;
-      if (version !== 0 && version !== 1 && version !== SCHEMA_VERSION) fail('FRONTIER_VERSION');
+      if (version !== 0 && version !== 1 && version !== 2 && version !== SCHEMA_VERSION) fail('FRONTIER_VERSION');
       database.exec('BEGIN IMMEDIATE');
       try {
         database.exec(schemaSql());
+        const claimColumns = new Set(database.prepare('PRAGMA table_info(frontier_claims)').all()
+          .map((column) => column.name));
+        if (version < SCHEMA_VERSION) {
+          if (!claimColumns.has('claim_binding_version')) {
+            database.exec(`ALTER TABLE frontier_claims ADD COLUMN claim_binding_version INTEGER NOT NULL DEFAULT 0
+              CHECK (claim_binding_version IN (0, 1))`);
+          }
+          if (!claimColumns.has('claim_observation_sequence')) {
+            database.exec('ALTER TABLE frontier_claims ADD COLUMN claim_observation_sequence INTEGER');
+          }
+        }
+        const migratedClaimColumns = new Set(database.prepare('PRAGMA table_info(frontier_claims)').all()
+          .map((column) => column.name));
+        if (!migratedClaimColumns.has('claim_binding_version')
+          || !migratedClaimColumns.has('claim_observation_sequence')) fail('FRONTIER_VERSION');
         if (version === 1) {
           // V1 recorded planner admissions but had no durable transport or body
           // accounting. Any such admission may have reached the network and
@@ -1015,6 +993,97 @@ function claimResult(database, tenantHash, runId, claim, replayed) {
   });
 }
 
+function candidateClaimBindingInTransaction(database, tenantHash, runId, candidate, claim) {
+  if (!candidate || !claim || candidate.candidate_id !== claim.candidate_id
+    || candidate.canonical_url !== normalizeUrl(candidate.canonical_url).canonicalUrl
+    || candidate.candidate_id !== candidateId(tenantHash, runId, candidate.canonical_url)
+    || !validId(claim.claim_key, 128) || !validId(claim.worker_id, 96) || !validId(claim.lease_token, 64)
+    || !['leased', 'completed', 'unresolved'].includes(claim.state)
+    || ![0, CLAIM_BINDING_VERSION].includes(claim.claim_binding_version)) fail('FRONTIER_STORAGE');
+
+  let claimedCandidate = null;
+  if (claim.claim_binding_version === 0) {
+    if (claim.claim_observation_sequence !== null) fail('FRONTIER_STORAGE');
+  } else {
+    const runRow = getRun(database, tenantHash, runId);
+    const cutoff = claim.claim_observation_sequence;
+    const maxSequence = runRow.next_observation_sequence - 1;
+    if (!Number.isSafeInteger(maxSequence) || maxSequence < 1
+      || !Number.isSafeInteger(cutoff) || cutoff < 1 || cutoff > maxSequence
+      || cutoff > MAX_SEEDS + MAX_ATTEMPT_ADMISSIONS * MAX_SUGGESTIONS) fail('FRONTIER_STORAGE');
+    const prefixStats = database.prepare(`SELECT COUNT(*) AS count, MIN(sequence) AS first_sequence,
+      MAX(sequence) AS last_sequence FROM frontier_observations
+      WHERE tenant_hash = ? AND run_id = ? AND sequence <= ?`).get(tenantHash, runId, cutoff);
+    if (prefixStats.count !== cutoff || prefixStats.first_sequence !== 1 || prefixStats.last_sequence !== cutoff) {
+      fail('FRONTIER_STORAGE');
+    }
+    const rows = database.prepare(`SELECT sequence, kind, parent_candidate_id, supplied_url, canonical_url,
+      depth, label, disposition, outcome, source_refs_json
+      FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ?
+        AND sequence <= ? ORDER BY sequence`).all(tenantHash, runId, candidate.candidate_id, cutoff);
+    if (rows.length === 0 || rows.some((row) => !['seed', 'link'].includes(row.kind)
+      || !Number.isSafeInteger(row.depth) || row.depth < 0
+      || normalizeUrl(row.supplied_url).canonicalUrl !== row.canonical_url
+      || row.canonical_url !== candidate.canonical_url)) fail('FRONTIER_STORAGE');
+    const allReferences = [];
+    for (const row of rows) {
+      allReferences.push(...normalizeReferences(safeJsonParse(row.source_refs_json), row.supplied_url, { required: false }));
+    }
+    const uniqueReferences = [...new Map(allReferences.map((reference) => [stableJson(reference), reference])).values()];
+    uniqueReferences.sort((left, right) => stableCompare(stableJson(left), stableJson(right)));
+    const sourceObservations = [...rows].sort((left, right) => stableCompare(
+      stableJson([left.kind, left.parent_candidate_id ?? '', left.canonical_url, left.supplied_url,
+        stableJson(normalizeReferences(safeJsonParse(left.source_refs_json), left.supplied_url, { required: false })),
+        left.label ?? '', left.disposition, left.outcome ?? '']),
+      stableJson([right.kind, right.parent_candidate_id ?? '', right.canonical_url, right.supplied_url,
+        stableJson(normalizeReferences(safeJsonParse(right.source_refs_json), right.supplied_url, { required: false })),
+        right.label ?? '', right.disposition, right.outcome ?? '']),
+    ));
+    claimedCandidate = {
+      candidateId: candidate.candidate_id,
+      canonicalUrl: candidate.canonical_url,
+      depth: Math.min(...rows.map((row) => row.depth)),
+      seed: rows.some((row) => row.kind === 'seed'),
+      sourceRefs: uniqueReferences,
+      suppliedUrl: sourceObservations[0].supplied_url,
+    };
+  }
+
+  const completionRows = database.prepare(`SELECT completion_key, candidate_id, lease_token, outcome
+    FROM frontier_completions WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+    .all(tenantHash, runId, candidate.candidate_id);
+  if (completionRows.length > 1) fail('FRONTIER_STORAGE');
+  const completionRow = completionRows[0] ?? null;
+  const expectedCandidateState = claim.state === 'leased' ? 'leased' : claim.state;
+  if (candidate.state !== expectedCandidateState
+    || (claim.state === 'leased' && candidate.lease_token !== claim.lease_token)
+    || (claim.state !== 'leased' && candidate.lease_token !== null)) fail('FRONTIER_STORAGE');
+  let completion = null;
+  if (claim.state === 'completed') {
+    if (!completionRow || completionRow.candidate_id !== claim.candidate_id
+      || completionRow.lease_token !== claim.lease_token
+      || !validId(completionRow.completion_key, 128)
+      || !['links_observed', 'no_links', 'failed', 'access_restricted'].includes(completionRow.outcome)) {
+      fail('FRONTIER_STORAGE');
+    }
+    completion = { completionKey: completionRow.completion_key, outcome: completionRow.outcome };
+  } else if (completionRow) {
+    fail('FRONTIER_STORAGE');
+  }
+  return deepFreeze({
+    bindingVersion: claim.claim_binding_version,
+    candidate: claimedCandidate,
+    claim: {
+      claimKey: claim.claim_key,
+      workerId: claim.worker_id,
+      leaseToken: claim.lease_token,
+      candidateId: claim.candidate_id,
+      state: claim.state,
+    },
+    completion,
+  });
+}
+
 function appendStopSnapshot(database, tenantHash, runId, reason, nowMs, halt) {
   recordStop(database, tenantHash, runId, reason, nowMs, halt);
 }
@@ -1136,13 +1205,24 @@ export function createDiscoveryFrontierStore(options) {
       }
       const candidate = eligible[0];
       const token = randomUUID();
+      const observationSequence = run.next_observation_sequence - 1;
+      if (!Number.isSafeInteger(observationSequence) || observationSequence < 1
+        || observationSequence > MAX_SEEDS + MAX_ATTEMPT_ADMISSIONS * MAX_SUGGESTIONS) fail('FRONTIER_STORAGE');
+      const prefixStats = database.prepare(`SELECT COUNT(*) AS count, MIN(sequence) AS first_sequence,
+        MAX(sequence) AS last_sequence FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND sequence <= ?`)
+        .get(tenantHash, runIdValue, observationSequence);
+      if (prefixStats.count !== observationSequence || prefixStats.first_sequence !== 1
+        || prefixStats.last_sequence !== observationSequence) fail('FRONTIER_STORAGE');
       database.prepare(`UPDATE frontier_candidates SET state = 'leased', lease_token = ?, lease_worker_id = ?
         WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ? AND state = 'queued'`)
         .run(token, worker.workerId, tenantHash, runIdValue, candidate.candidate_id);
       database.prepare(`INSERT INTO frontier_claims
-        (tenant_hash, run_id, claim_key, candidate_id, lease_token, worker_id, state)
-        VALUES (?, ?, ?, ?, ?, ?, 'leased')`)
-        .run(tenantHash, runIdValue, worker.claimKey, candidate.candidate_id, token, worker.workerId);
+        (tenant_hash, run_id, claim_key, candidate_id, lease_token, worker_id, state,
+          claim_binding_version, claim_observation_sequence)
+        VALUES (?, ?, ?, ?, ?, ?, 'leased', ?, ?)`)
+        .run(tenantHash, runIdValue, worker.claimKey, candidate.candidate_id, token, worker.workerId,
+          CLAIM_BINDING_VERSION, observationSequence);
       const claim = database.prepare(`SELECT * FROM frontier_claims
         WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).get(tenantHash, runIdValue, worker.claimKey);
       return claimResult(database, tenantHash, runIdValue, claim, false);
@@ -1448,6 +1528,21 @@ export function createDiscoveryFrontierStore(options) {
     }, signal);
   }
 
+  async function getCandidateReceiptBinding(scope, runIdValue, candidateIdValue, signal) {
+    if (!validId(runIdValue, 96) || typeof candidateIdValue !== 'string' || !HEX_SHA256.test(candidateIdValue)) fail();
+    return withScope(scope, (database, { tenantHash }) => {
+      getRun(database, tenantHash, runIdValue);
+      const candidate = candidateRow(database, tenantHash, runIdValue, candidateIdValue);
+      if (!candidate) fail('FRONTIER_NOT_FOUND');
+      const claims = database.prepare(`SELECT * FROM frontier_claims
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+        .all(tenantHash, runIdValue, candidateIdValue);
+      if (claims.length === 0) return null;
+      if (claims.length !== 1) fail('FRONTIER_STORAGE');
+      return candidateClaimBindingInTransaction(database, tenantHash, runIdValue, candidate, claims[0]);
+    }, signal);
+  }
+
   return Object.freeze({
     scopeForAuthenticatedRequest,
     createRun,
@@ -1465,6 +1560,7 @@ export function createDiscoveryFrontierStore(options) {
     stopRun,
     sealPrivateDraft,
     getSnapshot,
+    getCandidateReceiptBinding,
     close() { closed = true; },
   });
 }

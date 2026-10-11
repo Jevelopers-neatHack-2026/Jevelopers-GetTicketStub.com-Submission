@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +16,8 @@ const HASH_B = 'b'.repeat(64);
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const PINNED_V1_FRONTIER_COMMIT = 'd91e08d666abc243ae456a7f9f1bc9c745ca4f8d';
 const PINNED_V1_FRONTIER_SHA256 = '4e6cfbb88e7913984739634a69323c410dbff5ab48128b0ef70eee782de5105e';
+const PINNED_V2_FRONTIER_COMMIT = 'd1731173b5ccb6f5212d6e83c71ebd1a8d4ff66f';
+const PINNED_V2_FRONTIER_SHA256 = 'eec8f1f675258517d5aff384d7fbb5d1ad755899b6513b003d1c24b2c8d97fed';
 
 function sourceRef(url, evidenceId, contentHash = HASH_A) {
   return {
@@ -74,15 +77,23 @@ function codeIs(code) {
 }
 
 async function loadPinnedV1Frontier(t) {
+  return loadPinnedFrontier(t, PINNED_V1_FRONTIER_COMMIT, PINNED_V1_FRONTIER_SHA256, 'd91');
+}
+
+async function loadPinnedV2Frontier(t) {
+  return loadPinnedFrontier(t, PINNED_V2_FRONTIER_COMMIT, PINNED_V2_FRONTIER_SHA256, 'd173');
+}
+
+async function loadPinnedFrontier(t, commit, sourceHash, name) {
   const sourcePath = 'src/discovery/planner/frontier.mjs';
-  const extracted = spawnSync('git', ['show', `${PINNED_V1_FRONTIER_COMMIT}:${sourcePath}`], {
+  const extracted = spawnSync('git', ['show', `${commit}:${sourcePath}`], {
     cwd: REPO_ROOT,
     maxBuffer: 8 * 1024 * 1024,
   });
-  assert.equal(extracted.status, 0, `pinned v1 frontier source must exist at ${PINNED_V1_FRONTIER_COMMIT}`);
-  assert.equal(createHash('sha256').update(extracted.stdout).digest('hex'), PINNED_V1_FRONTIER_SHA256,
-    'legacy frontier bytes must match the audited pinned implementation');
-  const modulePath = path.join(REPO_ROOT, 'src/discovery/planner', `.legacy-d91-frontier-${process.pid}-${randomUUID()}.mjs`);
+  assert.equal(extracted.status, 0, `pinned ${name} frontier source must exist at ${commit}`);
+  assert.equal(createHash('sha256').update(extracted.stdout).digest('hex'), sourceHash,
+    `legacy frontier bytes must match the audited pinned ${name} implementation`);
+  const modulePath = path.join(REPO_ROOT, 'src/discovery/planner', `.legacy-${name}-frontier-${process.pid}-${randomUUID()}.mjs`);
   await writeFile(modulePath, extracted.stdout, { flag: 'wx', mode: 0o600 });
   t.after(() => rm(modulePath, { force: true }));
   return import(pathToFileURL(modulePath).href);
@@ -187,6 +198,23 @@ test('actual pinned v1 frontier migrates unknown admissions without restoring tr
   assert.deepEqual(await current.getSnapshot(scope, attemptedInput.runId), beforeAttemptSnapshot);
   assert.deepEqual(await current.getSnapshot(scope, completedInput.runId), beforeCompletedSnapshot);
   assert.deepEqual(await current.getSnapshot(scope, untouchedInput.runId), beforeUntouchedSnapshot);
+  const legacyClaimBinding = await current.getCandidateReceiptBinding(
+    scope, attemptedInput.runId, beforeAttemptSnapshot.candidates[0].candidateId,
+  );
+  assert.equal(legacyClaimBinding.bindingVersion, 0, 'migrated v1 claims do not receive an inferred observation cutoff');
+  assert.equal(legacyClaimBinding.candidate, null);
+  assert.deepEqual(legacyClaimBinding.claim, {
+    claimKey: 'legacy-claim', workerId: 'legacy-worker', leaseToken: claim.leaseToken,
+    candidateId: beforeAttemptSnapshot.candidates[0].candidateId, state: 'leased',
+  });
+  const legacyCompletedBinding = await current.getCandidateReceiptBinding(
+    scope, completedInput.runId, beforeCompletedSnapshot.candidates[0].candidateId,
+  );
+  assert.equal(legacyCompletedBinding.bindingVersion, 0);
+  assert.equal(legacyCompletedBinding.candidate, null);
+  assert.deepEqual(legacyCompletedBinding.completion, {
+    completionKey: 'legacy-completed-result', outcome: 'no_links',
+  });
 
   const legacyCapacity = await current.getTransportProgress(scope, attemptedInput.runId);
   assert.deepEqual({
@@ -228,6 +256,168 @@ test('actual pinned v1 frontier migrates unknown admissions without restoring tr
   assert.equal((await reopened.getTransportProgress(reopenedScope, completedInput.runId)).reservedBytes, 100 * 1024 * 1024);
   assert.equal((await reopened.getTransportProgress(reopenedScope, untouchedInput.runId)).availableBytes, 100 * 1024 * 1024);
 });
+
+test('actual pinned v2 frontier migrates legacy claims without inventing a claim-time prefix', async (t) => {
+  const h = await harness(t);
+  h.store.close();
+  const legacyModule = await loadPinnedV2Frontier(t);
+  const legacy = legacyModule.createDiscoveryFrontierStore({
+    directory: h.directory,
+    resolveTenant: (request) => request?.principal?.tenantId,
+    now: () => h.clock.value,
+    lockTimeoutMs: 10_000,
+  });
+  const legacyScope = await legacy.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
+  const completedInput = { runId: 'legacy-v2-completed', seeds: [{ url: 'https://events.example.com/v2-completed' }] };
+  const queuedInput = { runId: 'legacy-v2-queued', seeds: [{ url: 'https://events.example.com/v2-queued' }] };
+  await legacy.createRun(legacyScope, completedInput);
+  await legacy.createRun(legacyScope, queuedInput);
+  const claim = await claimAndAdmit(legacy, legacyScope, completedInput.runId, {
+    workerId: 'v2-worker', claimKey: 'v2-complete-claim', attemptKey: 'v2-complete-attempt',
+  });
+  await legacy.completeCandidate(legacyScope, completedInput.runId, {
+    leaseToken: claim.claim.leaseToken, completionKey: 'v2-complete-result', outcome: 'no_links', suggestions: [],
+  });
+  const beforeCompleted = await legacy.getSnapshot(legacyScope, completedInput.runId);
+  const beforeQueued = await legacy.getSnapshot(legacyScope, queuedInput.runId);
+  legacy.close();
+
+  const current = h.openStore();
+  const scope = await current.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
+  assert.deepEqual(await current.createRun(scope, completedInput), beforeCompleted);
+  assert.deepEqual(await current.createRun(scope, queuedInput), beforeQueued);
+  const migrated = await current.getCandidateReceiptBinding(
+    scope, completedInput.runId, beforeCompleted.candidates[0].candidateId,
+  );
+  assert.equal(migrated.bindingVersion, 0);
+  assert.equal(migrated.candidate, null);
+  assert.deepEqual(migrated.claim, {
+    claimKey: 'v2-complete-claim', workerId: 'v2-worker', leaseToken: claim.claim.leaseToken,
+    candidateId: beforeCompleted.candidates[0].candidateId, state: 'completed',
+  });
+  assert.deepEqual(migrated.completion, { completionKey: 'v2-complete-result', outcome: 'no_links' });
+  const fresh = await current.claimNext(scope, queuedInput.runId, {
+    workerId: 'v3-worker', claimKey: 'v3-new-claim',
+  });
+  assert.equal(fresh.state, 'claimed');
+  const freshBinding = await current.getCandidateReceiptBinding(scope, queuedInput.runId, fresh.candidate.candidateId);
+  assert.equal(freshBinding.bindingVersion, 1);
+  assert.equal(freshBinding.candidate.depth, 0);
+  assert.deepEqual(freshBinding.candidate.sourceRefs, []);
+  assert.equal(freshBinding.candidate.suppliedUrl, queuedInput.seeds[0].url);
+});
+
+test('claim receipt binding reconstructs only the immutable observation prefix after later duplicate depth and provenance changes', async (t) => {
+  const h = await harness(t);
+  const { store, scope } = h;
+  const runId = 'claim-binding-prefix-depth';
+  const seeds = ['https://events.example.com/root-a', 'https://events.example.com/root-b'];
+  await seedRun(store, scope, runId, seeds, { maxDepth: 2, maxTransportAttemptAdmissions: 4, maxInFlightLeases: 4 });
+  const target = 'https://events.example.com/target';
+  const intermediate = 'https://events.example.com/intermediate';
+  const completeWithLink = async (workerId, claimKey, attemptKey, parentUrl, targetUrl, evidenceId) => {
+    const claim = await claimAndAdmit(store, scope, runId, { workerId, claimKey, attemptKey });
+    return store.completeCandidate(scope, runId, {
+      leaseToken: claim.claim.leaseToken,
+      completionKey: `${claimKey}-complete`,
+      outcome: 'links_observed',
+      suggestions: [{ url: targetUrl, sourceRefs: [sourceRef(targetUrl, evidenceId)] }],
+    });
+  };
+  await completeWithLink('root-a-worker', 'root-a-claim', 'root-a-attempt', seeds[0], intermediate, 'evidence-root-a');
+  const rootB = await claimAndAdmit(store, scope, runId, {
+    workerId: 'root-b-worker', claimKey: 'root-b-claim', attemptKey: 'root-b-attempt',
+  });
+  const intermediateClaim = await claimAndAdmit(store, scope, runId, {
+    workerId: 'intermediate-worker', claimKey: 'intermediate-claim', attemptKey: 'intermediate-attempt',
+  });
+  await store.completeCandidate(scope, runId, {
+    leaseToken: intermediateClaim.claim.leaseToken,
+    completionKey: 'intermediate-complete', outcome: 'links_observed',
+    suggestions: [{ url: target, sourceRefs: [sourceRef(target, 'evidence-intermediate')] }],
+  });
+  const targetClaim = await claimAndAdmit(store, scope, runId, {
+    workerId: 'target-worker', claimKey: 'target-claim', attemptKey: 'target-attempt',
+  });
+  assert.equal(targetClaim.claim.candidate.canonicalUrl, target);
+  const beforeLaterObservation = await store.getCandidateReceiptBinding(scope, runId, targetClaim.claim.candidate.candidateId);
+  assert.equal(beforeLaterObservation.bindingVersion, 1);
+  assert.equal(beforeLaterObservation.candidate.depth, 2);
+  assert.equal(beforeLaterObservation.candidate.suppliedUrl, target);
+  assert.deepEqual(beforeLaterObservation.candidate.sourceRefs.map((item) => item.evidenceId), ['evidence-intermediate']);
+
+  const laterSuppliedUrl = 'https://events.example.com:443/target';
+  await store.completeCandidate(scope, runId, {
+    leaseToken: rootB.claim.leaseToken,
+    completionKey: 'root-b-complete', outcome: 'links_observed',
+    suggestions: [{ url: laterSuppliedUrl, sourceRefs: [sourceRef(laterSuppliedUrl, 'evidence-root-b')] }],
+  });
+  const repeatedClaim = await store.claimNext(scope, runId, {
+    workerId: 'target-worker', claimKey: 'target-claim',
+  });
+  assert.equal(repeatedClaim.state, 'claimed');
+  assert.equal(repeatedClaim.replayed, true);
+  assert.equal(repeatedClaim.leaseToken, targetClaim.claim.leaseToken);
+  assert.equal(repeatedClaim.candidate.depth, 1, 'the current frontier snapshot still reports the later shallower observation');
+  assert.deepEqual(await store.getCandidateReceiptBinding(scope, runId, targetClaim.claim.candidate.candidateId),
+    beforeLaterObservation, 'an idempotent claim retry does not move its persisted prefix cutoff');
+  await store.completeCandidate(scope, runId, {
+    leaseToken: targetClaim.claim.leaseToken,
+    completionKey: 'target-complete', outcome: 'no_links', suggestions: [],
+  });
+  const snapshot = await store.getSnapshot(scope, runId);
+  const currentTarget = snapshot.candidates.find((item) => item.candidateId === targetClaim.claim.candidate.candidateId);
+  assert.equal(currentTarget.depth, 1);
+  assert.deepEqual(currentTarget.sourceRefs.map((item) => item.evidenceId), ['evidence-intermediate', 'evidence-root-b']);
+  assert.ok(currentTarget.sourceRefs.some((item) => item.value === laterSuppliedUrl));
+  const afterLaterObservation = await store.getCandidateReceiptBinding(scope, runId, targetClaim.claim.candidate.candidateId);
+  assert.equal(afterLaterObservation.candidate.depth, 2);
+  assert.equal(afterLaterObservation.candidate.suppliedUrl, target);
+  assert.deepEqual(afterLaterObservation.candidate.sourceRefs.map((item) => item.evidenceId), ['evidence-intermediate']);
+  assert.deepEqual(afterLaterObservation.completion, { completionKey: 'target-complete', outcome: 'no_links' });
+  assert.equal(afterLaterObservation.claim.state, 'completed');
+  const reopened = h.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
+  assert.deepEqual(await reopened.getCandidateReceiptBinding(reopenedScope, runId, targetClaim.claim.candidate.candidateId),
+    afterLaterObservation, 'the exact claim-time candidate prefix survives a database reopen');
+});
+
+for (const tamper of ['missing-pointer', 'mixed-legacy-marker', 'unknown-version', 'missing-prefix', 'malformed-prefix']) {
+  test(`claim receipt binding fails closed on ${tamper}`, async (t) => {
+    const h = await harness(t);
+    const runId = `claim-binding-${tamper}`;
+    await seedRun(h.store, h.scope, runId, ['https://events.example.com/claim-prefix'], {
+      maxDepth: 0, maxTransportAttemptAdmissions: 1,
+    });
+    const claim = await h.store.claimNext(h.scope, runId, { workerId: 'claim-prefix-worker', claimKey: 'claim-prefix' });
+    assert.equal(claim.state, 'claimed');
+    const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${h.tenantId}`).digest('hex');
+    const database = new DatabaseSync(path.join(h.directory, tenantHash, 'frontier.sqlite'));
+    try {
+      if (tamper === 'missing-pointer') {
+        database.prepare(`UPDATE frontier_claims SET claim_observation_sequence = NULL
+          WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
+      } else if (tamper === 'mixed-legacy-marker') {
+        database.prepare(`UPDATE frontier_claims SET claim_binding_version = 0
+          WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
+      } else if (tamper === 'unknown-version') {
+        database.exec('PRAGMA ignore_check_constraints = ON');
+        database.prepare(`UPDATE frontier_claims SET claim_binding_version = 9
+          WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).run(tenantHash, runId, 'claim-prefix');
+      } else if (tamper === 'missing-prefix') {
+        database.prepare(`DELETE FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND sequence = 1`)
+          .run(tenantHash, runId);
+      } else {
+        database.prepare(`UPDATE frontier_observations SET source_refs_json = '{malformed'
+          WHERE tenant_hash = ? AND run_id = ? AND sequence = 1`).run(tenantHash, runId);
+      }
+    } finally {
+      database.close();
+    }
+    await assert.rejects(h.store.getCandidateReceiptBinding(h.scope, runId, claim.candidate.candidateId),
+      codeIs('FRONTIER_STORAGE'));
+  });
+}
 
 test('canonical seed permutations, cycle suppression, duplicate provenance, depth bounds, and stable URL ties', async (t) => {
   const { store, scope } = await harness(t);

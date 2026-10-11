@@ -493,6 +493,8 @@ export interface EvidenceIntegritySnapshot {
 export interface PrivateRetrievalReceiptCandidate {
   readonly candidateId: string;
   readonly canonicalUrl: string;
+  /** Present on new v3 frontier claims; absent from historical v1/v2 receipt bindings. */
+  readonly suppliedUrl?: string;
   readonly depth: number;
   readonly seed: boolean;
   readonly sourceRefs: readonly Readonly<{

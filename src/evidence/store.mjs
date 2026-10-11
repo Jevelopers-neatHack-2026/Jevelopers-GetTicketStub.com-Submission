@@ -18,7 +18,7 @@ import { types as utilTypes } from 'node:util';
 import { readTextPdf, PDF_TEXT_READER_LIMITS } from '../extraction/pdf/index.mjs';
 import { PDF_DECODER_VERSION, PDF_READER_CONFIG_VERSION } from '../extraction/pdf/constants.mjs';
 import { DETERMINISTIC_EXTRACTION_VERSION, extractDeterministically } from '../extraction/index.mjs';
-import { parseAndValidateUrl } from '../security/url-policy.mjs';
+import { hasSensitiveUrlMaterial, parseAndValidateUrl } from '../security/url-policy.mjs';
 
 const SUPPORTED_SOURCE_KINDS = new Set(['external', 'customer_supplied']);
 const FACT_STATUSES = new Set(['sourced', 'inferred', 'customer_supplied', 'missing', 'conflicting']);
@@ -1546,12 +1546,23 @@ export function createEvidenceStore(options) {
       || !isWellFormed(input.runId) || /[\u0000-\u001f\u007f]/.test(input.runId)
       || !isDigest(input.configHash)) fail('EVIDENCE_INVALID');
     const rawCandidate = ownDataRecord(input.candidate,
-      new Set(['candidateId', 'canonicalUrl', 'depth', 'seed', 'sourceRefs']));
+      new Set(['candidateId', 'canonicalUrl', 'suppliedUrl', 'depth', 'seed', 'sourceRefs']));
     if (!rawCandidate || !isDigest(rawCandidate.candidateId) || typeof rawCandidate.canonicalUrl !== 'string'
       || rawCandidate.canonicalUrl.length > 8_192 || !Number.isSafeInteger(rawCandidate.depth)
       || rawCandidate.depth < 0 || rawCandidate.depth > 2 || typeof rawCandidate.seed !== 'boolean') fail('EVIDENCE_INVALID');
     const canonical = validateUrl(rawCandidate.canonicalUrl).href;
     if (canonical !== rawCandidate.canonicalUrl) fail('EVIDENCE_INVALID');
+    let suppliedUrl;
+    if (Object.hasOwn(rawCandidate, 'suppliedUrl')) {
+      if (typeof rawCandidate.suppliedUrl !== 'string' || rawCandidate.suppliedUrl.length < 1
+        || rawCandidate.suppliedUrl.length > 8_192 || !isWellFormed(rawCandidate.suppliedUrl)) fail('EVIDENCE_INVALID');
+      let validatedSuppliedUrl;
+      try { validatedSuppliedUrl = parseAndValidateUrl(rawCandidate.suppliedUrl); }
+      catch { fail('EVIDENCE_INVALID'); }
+      if (hasSensitiveUrlMaterial(new URL(rawCandidate.suppliedUrl))
+        || validatedSuppliedUrl.url.href !== canonical) fail('EVIDENCE_INVALID');
+      suppliedUrl = rawCandidate.suppliedUrl;
+    }
     const sourceRefsInput = safeArray(rawCandidate.sourceRefs, 250);
     if (!sourceRefsInput) fail('EVIDENCE_INVALID');
     const sourceRefs = sourceRefsInput.map((value) => {
@@ -1563,7 +1574,10 @@ export function createEvidenceStore(options) {
       return {
         evidenceId: reference.evidenceId,
         contentHash: reference.contentHash,
-        locator: copyLocator(reference.locator),
+        // Receipt callers wipe their normalized plaintext tree after sealing or
+        // lookup. Copy the validated frozen locator into owned mutable data so
+        // cleanup never tries to mutate the caller's immutable provenance.
+        locator: { ...copyLocator(reference.locator) },
         field: reference.field,
         value: reference.value,
       };
@@ -1571,6 +1585,7 @@ export function createEvidenceStore(options) {
     const candidate = {
       candidateId: rawCandidate.candidateId,
       canonicalUrl: canonical,
+      ...(suppliedUrl === undefined ? {} : { suppliedUrl }),
       depth: rawCandidate.depth,
       seed: rawCandidate.seed,
       sourceRefs,

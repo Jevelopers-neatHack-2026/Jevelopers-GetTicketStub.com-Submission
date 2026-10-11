@@ -24,7 +24,7 @@ function sourceUrl(pathname = '/') {
 function frontierWithSealHook(frontier, hook) {
   const wrapped = Object.create(null);
   for (const name of [
-    'scopeForAuthenticatedRequest', 'createRun', 'claimNext', 'admitTransportHop',
+    'scopeForAuthenticatedRequest', 'createRun', 'claimNext', 'getCandidateReceiptBinding', 'admitTransportHop',
     'markTransportDispatchIntent', 'markTransportResponseReceived', 'settleTransportHopKnownZero',
     'settleTransportHopBodyComplete', 'markTransportHopUnknown', 'getTransportProgress',
     'completeCandidate', 'markUnresolved', 'stopRun', 'getSnapshot',
@@ -36,7 +36,7 @@ function frontierWithSealHook(frontier, hook) {
 function frontierWithDelayedCreateRun(frontier, gate, onAttempt) {
   const wrapped = Object.create(null);
   for (const name of [
-    'scopeForAuthenticatedRequest', 'claimNext', 'admitTransportHop',
+    'scopeForAuthenticatedRequest', 'claimNext', 'getCandidateReceiptBinding', 'admitTransportHop',
     'markTransportDispatchIntent', 'markTransportResponseReceived', 'settleTransportHopKnownZero',
     'settleTransportHopBodyComplete', 'markTransportHopUnknown', 'getTransportProgress',
     'completeCandidate', 'markUnresolved', 'stopRun', 'sealPrivateDraft', 'getSnapshot',
@@ -52,7 +52,7 @@ function frontierWithDelayedCreateRun(frontier, gate, onAttempt) {
 function frontierWithMethodOverrides(frontier, overrides) {
   const wrapped = Object.create(null);
   for (const name of [
-    'scopeForAuthenticatedRequest', 'createRun', 'claimNext', 'admitTransportHop',
+    'scopeForAuthenticatedRequest', 'createRun', 'claimNext', 'getCandidateReceiptBinding', 'admitTransportHop',
     'markTransportDispatchIntent', 'markTransportResponseReceived', 'settleTransportHopKnownZero',
     'settleTransportHopBodyComplete', 'markTransportHopUnknown', 'getTransportProgress',
     'completeCandidate', 'markUnresolved', 'stopRun', 'sealPrivateDraft', 'getSnapshot',
@@ -646,6 +646,150 @@ test('encrypted receipts recover sealed cross-source identity after same-config 
   assert.equal(requestCount, 3, 'revoked authorization cannot turn receipt replay into a new fetch');
 });
 
+for (const mode of ['self-canonical', 'backlink', 'cycle']) {
+  test(`same-config receipt replay retains claim-time binding after ${mode} observations`, async (t) => {
+    let requestCount = 0;
+    const targetFor = (pathname) => mode === 'self-canonical'
+      ? (pathname === '/self' ? sourceUrl('/self') : null)
+      : mode === 'backlink'
+        ? (pathname === '/b' ? sourceUrl('/a') : null)
+        : (pathname === '/a' ? sourceUrl('/b') : pathname === '/b' ? sourceUrl('/a') : null);
+    const server = await startFixture((requestValue, response) => {
+      requestCount += 1;
+      const canonicalTarget = targetFor(requestValue.url);
+      const canonical = canonicalTarget ? `<link rel="canonical" href="${canonicalTarget}">` : '';
+      respond(response, 200, { 'content-type': 'text/html; charset=utf-8' },
+        Buffer.concat([eventHtml({ name: `Canonical replay ${requestValue.url}` }), Buffer.from(canonical)]));
+    });
+    t.after(() => server.close());
+    const h = await harness(t);
+    const runId = `private-claim-prefix-${mode}`;
+    const seeds = (mode === 'self-canonical' ? ['/self'] : mode === 'backlink' ? ['/a', '/b'] : ['/a'])
+      .map((pathname) => ({ url: sourceUrl(pathname) }));
+    const limits = { maxDepth: 1, maxTransportAttemptAdmissions: mode === 'cycle' ? 2 : seeds.length };
+    const canonicalUrl = (pathname) => new URL(sourceUrl(pathname)).href;
+    const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+    assert.equal(first.status, 'draft', JSON.stringify(first));
+    const firstSnapshot = await h.frontier.getSnapshot(h.scope, runId);
+    if (mode === 'self-canonical') {
+      assert.ok(firstSnapshot.observations.some((item) => ['cycle', 'duplicate'].includes(item.disposition)
+        && item.canonicalUrl === canonicalUrl('/self')));
+    } else if (mode === 'backlink') {
+      const linkedSeed = firstSnapshot.candidates.find((item) => item.canonicalUrl === canonicalUrl('/a'));
+      assert.ok(linkedSeed.sourceRefs.length > 0, 'the later backlink remains in current frontier provenance');
+    } else {
+      assert.ok(firstSnapshot.observations.some((item) => item.disposition === 'cycle'),
+        'the later cyclic observation remains represented');
+    }
+
+    const reopenedFrontier = h.openFrontier();
+    const reopenedStore = createEvidenceStore(h.evidenceConfig);
+    const replay = await runPrivateRetrieval(h.makeInput({
+      runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+    }));
+    assert.equal(requestCount, seeds.length + (mode === 'cycle' ? 1 : 0), 'replay never redispatches a completed candidate');
+    assert.equal(replay.status, 'draft', JSON.stringify(replay));
+    assert.deepEqual(replay.facts, first.facts);
+    const reopenedScope = await reopenedFrontier.scopeForAuthenticatedRequest(request());
+    const replaySnapshot = await reopenedFrontier.getSnapshot(reopenedScope, runId);
+    assert.deepEqual(replaySnapshot.observations, firstSnapshot.observations,
+      'later duplicate/cycle provenance remains available after receipt replay');
+  });
+}
+
+for (const tamper of ['provenance', 'candidate', 'supplied-url', 'claim-key', 'claim-worker', 'claim-lease', 'completion-key', 'completion-outcome']) {
+  test(`receipt replay withholds disclosure when durable ${tamper} no longer matches the sealed claim`, async (t) => {
+    let requestCount = 0;
+    const server = await startFixture((requestValue, response) => {
+      requestCount += 1;
+      const canonical = requestValue.url === '/root'
+        ? `<link rel="canonical" href="${sourceUrl('/target')}">` : '';
+      respond(response, 200, { 'content-type': 'text/html; charset=utf-8' },
+        Buffer.concat([eventHtml({ name: `Tamper check ${requestValue.url}` }), Buffer.from(canonical)]));
+    });
+    t.after(() => server.close());
+    const h = await harness(t);
+    const runId = `private-claim-tamper-${tamper}`;
+    const seeds = [{ url: sourceUrl('/root') }];
+    const limits = { maxDepth: 1, maxTransportAttemptAdmissions: 2 };
+    const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+    assert.equal(first.status, 'draft', JSON.stringify(first));
+    const before = await h.frontier.getSnapshot(h.scope, runId);
+    const candidate = before.candidates.find((item) => item.canonicalUrl === new URL(sourceUrl('/target')).href);
+    assert.ok(candidate);
+    if (tamper === 'provenance') assert.equal(candidate.sourceRefs.length, 1);
+
+    const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+    const database = new DatabaseSync(path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite'));
+    try {
+      if (tamper === 'provenance') {
+        database.prepare(`UPDATE frontier_observations SET source_refs_json = '[]'
+          WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'`)
+          .run(tenantHash, runId, candidate.candidateId);
+      } else if (tamper === 'supplied-url') {
+        const suppliedUrl = 'http://fixture.example.org:80/target';
+        const observations = database.prepare(`SELECT sequence, source_refs_json FROM frontier_observations
+          WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ? AND kind = 'link'`)
+          .all(tenantHash, runId, candidate.candidateId);
+        assert.equal(observations.length, 1);
+        for (const observation of observations) {
+          const sourceRefs = JSON.parse(observation.source_refs_json);
+          for (const reference of sourceRefs) reference.value = suppliedUrl;
+          database.prepare(`UPDATE frontier_observations SET supplied_url = ?, source_refs_json = ?
+            WHERE tenant_hash = ? AND run_id = ? AND sequence = ?`)
+            .run(suppliedUrl, JSON.stringify(sourceRefs), tenantHash, runId, observation.sequence);
+        }
+      } else if (tamper === 'candidate') {
+        database.prepare(`UPDATE frontier_candidates SET canonical_url = 'https://fixture.example.org/tampered-candidate'
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(tenantHash, runId, candidate.candidateId);
+      } else if (tamper === 'claim-key') {
+        database.exec('BEGIN IMMEDIATE');
+        database.exec('PRAGMA defer_foreign_keys = ON');
+        database.prepare(`UPDATE frontier_attempts SET claim_key = 'tampered-claim-key'
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(tenantHash, runId, candidate.candidateId);
+        database.prepare(`UPDATE frontier_claims SET claim_key = 'tampered-claim-key'
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(tenantHash, runId, candidate.candidateId);
+        database.exec('COMMIT');
+      } else if (tamper === 'claim-worker') {
+        database.prepare(`UPDATE frontier_claims SET worker_id = 'tampered-worker'
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(tenantHash, runId, candidate.candidateId);
+      } else if (tamper === 'claim-lease') {
+        database.prepare(`UPDATE frontier_claims SET lease_token = '123e4567-e89b-42d3-a456-426614174001'
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(tenantHash, runId, candidate.candidateId);
+      } else if (tamper === 'completion-key') {
+        database.prepare(`UPDATE frontier_completions SET completion_key = 'tampered-completion'
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(tenantHash, runId, candidate.candidateId);
+      } else {
+        database.prepare(`UPDATE frontier_completions SET outcome = 'failed'
+          WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+          .run(tenantHash, runId, candidate.candidateId);
+      }
+    } finally {
+      database.close();
+    }
+
+    const reopenedFrontier = h.openFrontier();
+    const reopenedStore = createEvidenceStore(h.evidenceConfig);
+    const replay = await runPrivateRetrieval(h.makeInput({
+      runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+    }));
+    assert.equal(replay.status, 'incomplete', JSON.stringify(replay));
+    assert.equal(replay.draft, null);
+    const expectedLimitation = ['provenance', 'supplied-url'].includes(tamper) ? 'private_receipt_mismatch'
+      : ['claim-key', 'claim-worker'].includes(tamper) ? 'private_receipt_claim_mismatch'
+        : ['completion-key', 'completion-outcome'].includes(tamper) ? 'private_receipt_completion_mismatch'
+          : 'private_receipt_unavailable';
+    assert.ok(replay.limitations.includes(expectedLimitation), JSON.stringify(replay));
+    assert.equal(requestCount, 2, 'mismatched durable bindings do not authorize a second request');
+  });
+}
+
 test('a complete receipt recovers evidence committed before a failed frontier completion without redispatch', async (t) => {
   let requestCount = 0;
   const server = await startFixture((_request, response) => {
@@ -813,6 +957,54 @@ test('a durable pending receipt after the pre-dispatch crash boundary remains in
   assert.deepEqual(await reopenedStore.beginPrivateRunReceipt(
     await reopenedStore.scopeForAuthenticatedRequest(request()), receiptBinding, request(),
   ), { state: 'pending', created: false }, 'an existing pending marker cannot become a fresh dispatch grant');
+});
+
+test('a pending receipt that appears before begin returns its existing marker and resolves the lease without redispatch', async (t) => {
+  let requestCount = 0;
+  let receiptBinding;
+  let beginCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-pending-receipt-existing-marker';
+  const seeds = [{ url: sourceUrl('/pending-existing-marker') }];
+  const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1 };
+  const store = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'appendFact', 'ingestEvidence', 'ingestDerivedPdfEvidence',
+    'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+  ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
+  store.beginPrivateRunReceipt = async (scope, binding, authenticated, signal) => {
+    beginCalls += 1;
+    receiptBinding = binding;
+    const concurrentlyCreated = await h.evidenceStore.beginPrivateRunReceipt(scope, binding, authenticated, signal);
+    assert.deepEqual(concurrentlyCreated, { state: 'pending', created: true });
+    // Model a concurrent creator winning immediately before this begin observes
+    // its key: the real store returns its durable existing-marker result.
+    return h.evidenceStore.beginPrivateRunReceipt(scope, binding, authenticated, signal);
+  };
+
+  const result = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits, store }));
+  assert.equal(beginCalls, 1);
+  assert.equal(result.status, 'incomplete', JSON.stringify(result));
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('private_receipt_pending'), JSON.stringify(result));
+  assert.ok(result.limitations.includes('cancelled_before_dispatch'), JSON.stringify(result));
+  assert.ok(!result.limitations.includes('TRANSPORT_FAILURE'), JSON.stringify(result));
+  assert.equal(requestCount, 0, 'an existing pending marker never authorizes another fetch');
+  assert.ok(receiptBinding);
+  const receipt = await h.evidenceStore.readPrivateRunReceipt(h.evidenceScope, {
+    runId, configHash: receiptBinding.configHash, candidate: receiptBinding.candidate,
+  }, request());
+  assert.equal(receipt.state, 'pending');
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.counters.transportAttemptAdmissions, 0);
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].unresolvedReason, 'cancelled_before_dispatch');
 });
 
 test('evidence committed before receipt completion remains explicit uncertainty after restart', async (t) => {
