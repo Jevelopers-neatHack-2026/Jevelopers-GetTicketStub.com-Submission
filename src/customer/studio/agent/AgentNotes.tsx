@@ -13,7 +13,9 @@ import { EDITION_META } from "@/customer/studio/stub/editions";
 import { haptic, play } from "@/customer/studio/feedback";
 import { MarkLegend, SourceMark, Tag, Tags } from "@/customer/desk/Desk";
 import { CloseIcon } from "@/customer/desk/icons";
-import { addArtVersion, altLabel, setFactValue, toggleKept } from "../editor/ops";
+import { addArtVersion, toggleKept } from "../editor/ops";
+import { FactQuestion } from "../facts/FactsReview";
+import { openQuestions } from "../facts/corrections";
 import styles from "./AgentNotes.module.css";
 
 interface Answer {
@@ -26,6 +28,8 @@ interface Note {
   id: string;
   body: ReactNode;
   answers: Answer[];
+  /** A fact question (shared with the Facts panel). It replaces the answer tags. */
+  custom?: ReactNode;
 }
 
 interface Props {
@@ -40,6 +44,8 @@ interface Props {
   folded?: boolean;
   /** The tab was tapped. */
   onUnfold?: () => void;
+  /** The Facts panel is on screen and already asks the open questions, so the notes don't ask them again. */
+  skipQuestions?: boolean;
 }
 
 function FactMark({ f }: { f: Fact }) {
@@ -60,7 +66,7 @@ function list(items: ReactNode[]): ReactNode {
   ));
 }
 
-export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant, folded = false, onUnfold }: Props) {
+export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant, folded = false, onUnfold, skipQuestions = false }: Props) {
   const [gone, setGone] = useState<string[]>([]);
   const [leaving, setLeaving] = useState<{ id: string; dir: 1 | -1 } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -103,7 +109,26 @@ export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant, folded 
   const kept = ev.facts.filter((f) => f.kept && f.confidence >= 0.8).slice(0, 3);
   const notes: Note[] = [];
 
-  // 1. What the agent did.
+  // 1. Facts I need an answer for come first: the same short question the Facts panel asks. It closes everywhere once answered.
+  if (!skipQuestions) {
+    openQuestions(stub).forEach((q) => {
+      const f = ev.facts.find((x) => x.id === q.factId);
+      notes.push({
+        id: `unsure-${q.factId}`,
+        body: f && f.provenance !== "pending" ? (
+          <>
+            I&apos;m not sure about the {q.label}: <FactMark f={f} />. {q.text}
+          </>
+        ) : (
+          <>I couldn&apos;t find the {q.label}. {q.text}</>
+        ),
+        answers: [],
+        custom: <FactQuestion stub={stub} q={q} onChange={commit} />,
+      });
+    });
+  }
+
+  // 2. What the agent did.
   notes.push({
     id: "intro",
     body: (
@@ -117,31 +142,6 @@ export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant, folded 
       { label: "Show the back", run: answer("intro", onShowBack) },
     ],
   });
-
-  // 2. Facts I am not sure of: ask, and fix it with one tap.
-  ev.facts
-    .filter((f) => f.confidence < 0.8 && f.provenance !== "pending")
-    .forEach((f) => {
-      const id = `unsure-${f.id}`;
-      const isDate = f.id === "date" || /^\d{4}-\d{2}-\d{2}$/.test(f.value);
-      notes.push({
-        id,
-        body: (
-          <>
-            I&apos;m not sure about {isDate ? "the date" : "this"}: <FactMark f={f} />. {isDate ? "Which date was it?" : "Which one is right?"}
-          </>
-        ),
-        answers: f.alternatives?.length
-          ? f.alternatives.map((alt) => ({
-              label: altLabel(alt),
-              run: answer(id, () => {
-                commit(setFactValue(stub, f.id, alt));
-                play("stamp");
-              }),
-            }))
-          : [{ label: "Yes, keep it", run: answer(id, () => commit(setFactValue(stub, f.id, f.value))) }],
-      });
-    });
 
   // 3. Things I found for the back.
   const starred = ev.setlist?.find((s) => s.starred)?.title ?? ev.setlist?.[0]?.title;
@@ -383,13 +383,15 @@ function NoteCard({
         </span>
       </header>
       <p className={styles.body}>{note.body}</p>
-      <Tags label="Answers">
-        {note.answers.map((a) => (
-          <Tag key={a.label} pressed={a.pressed} disabled={busy} onClick={a.run}>
-            {a.label}
-          </Tag>
-        ))}
-      </Tags>
+      {note.custom ?? (
+        <Tags label="Answers">
+          {note.answers.map((a) => (
+            <Tag key={a.label} pressed={a.pressed} disabled={busy} onClick={a.run}>
+              {a.label}
+            </Tag>
+          ))}
+        </Tags>
+      )}
       {withReply && (
         <form
           className={styles.reply}

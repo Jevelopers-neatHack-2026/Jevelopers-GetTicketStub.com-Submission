@@ -1,11 +1,12 @@
 "use client";
 import { useRef, useState } from "react";
-import type { Stub } from "../types";
+import type { DesignVersion, Stub } from "../types";
 import { currentVersion } from "../types";
 import { remixArtNoted } from "@/customer/studio/research/client";
 import { play, haptic } from "@/customer/studio/feedback";
 import { PaperButton, PaperSheet, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import { addArtVersion, readImageFile } from "./ops";
+import { listVersions, restoreVersion, sameArt, versionHash } from "../versions/versions";
 import styles from "./overlays.module.css";
 
 export const VIBES = ["Neon", "Risograph", "70s", "Minimal"] as const;
@@ -18,18 +19,27 @@ interface PanelProps {
   onDone?: () => void;
 }
 
-/** Art from the stub's earlier remixes, so a remix can always be undone. One entry per look. */
-function earlierArt(stub: Stub) {
+/** Earlier looks to go back to: one version per distinct art, the current look left out, the same style preferred. Going back selects that version. */
+function earlierVersions(stub: Stub): DesignVersion[] {
   const cur = currentVersion(stub);
-  const seen = new Set<string>([`${cur.art.kind}:${cur.art.src ?? ""}:${cur.art.seed}`]);
-  return stub.versions
-    .map((v) => v.art)
-    .filter((a) => {
-      const key = `${a.kind}:${a.src ?? ""}:${a.seed}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  const byArt: DesignVersion[] = [];
+  for (const v of listVersions(stub)) {
+    if (sameArt(v.art, cur.art)) continue;
+    const i = byArt.findIndex((x) => sameArt(x.art, v.art));
+    if (i < 0) byArt.push(v);
+    else if (v.edition === cur.edition && byArt[i].edition !== cur.edition) byArt[i] = v;
+  }
+  return byArt;
+}
+
+/** One name per chip, told apart when two remixes used the same vibe ("Neon", "Neon 2"). */
+function chipNames(versions: DesignVersion[]): string[] {
+  const seen: Record<string, number> = {};
+  return versions.map((v) => {
+    const base = v.art.vibe === "photo" ? "Your photo" : v.art.vibe ? v.art.vibe : v.parentId ? "Remix" : "First art";
+    seen[base] = (seen[base] ?? 0) + 1;
+    return seen[base] > 1 ? `${base} ${seen[base]}` : base;
+  });
 }
 
 /** Vibe tags, a photo option and one action. Free text lives behind "Describe it instead". */
@@ -38,7 +48,8 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone }: PanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const earlier = earlierArt(stub);
+  const earlier = earlierVersions(stub);
+  const names = chipNames(earlier);
 
   const finish = (s: Stub) => {
     onChange(s);
@@ -117,16 +128,19 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone }: PanelProps) {
         <>
           <span className="desk-label">Go back to</span>
           <Tags label="Earlier art">
-            {earlier.map((a, i) => (
+            {earlier.map((v, i) => (
               <Tag
-                key={`${a.kind}-${a.seed}-${i}`}
+                key={v.id}
                 disabled={busy}
+                aria-label={`Go back to ${names[i]}, version ${versionHash(v)}`}
                 onClick={() => {
-                  onChange(addArtVersion(stub, a));
+                  // Selects the version that already exists. Nothing is made again, and the next edit branches from it.
+                  onChange(restoreVersion(stub, v.id));
+                  play("stamp", { emphasis: "subtle" });
                   onDone?.();
                 }}
               >
-                {a.vibe === "photo" ? "Your photo" : a.vibe ? a.vibe : "First art"}
+                {names[i]}
               </Tag>
             ))}
           </Tags>

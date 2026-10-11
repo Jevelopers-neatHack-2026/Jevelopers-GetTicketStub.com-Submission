@@ -355,3 +355,12 @@
     transition: none;
   }
 }
+
+.groupHead {
+  margin: 10px 0 2px;
+}
+.fixNote {
+  margin: 0 0 10px;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}

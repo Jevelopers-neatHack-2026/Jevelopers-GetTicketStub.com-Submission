@@ -6,8 +6,10 @@ import type { Stub } from "../types";
 import { currentVersion } from "../types";
 import { EDITION_META } from "@/customer/studio/stub/editions";
 import { play } from "@/customer/studio/feedback";
-import { PaperButton, PunchTabs, SourceMark, Switch, Tag, Tags, TearLink } from "@/customer/desk/Desk";
-import { canHide, fontName, hiddenLabel, hideSelection, setFont, setHidden, setTitleColour, swatchLabel, TITLE_SWATCHES, toggleFoil, toggleKept, type Selectable } from "./ops";
+import { PaperButton, PunchTabs, Switch, Tag, Tags, TearLink } from "@/customer/desk/Desk";
+import { canHide, fontName, hiddenLabel, hideSelection, setFont, setHidden, setTitleColour, swatchLabel, TITLE_SWATCHES, toggleFoil, type Selectable } from "./ops";
+import { FactsReview, openCount } from "../facts/FactsReview";
+import { VersionsPanel } from "../versions/VersionsPanel";
 import { MaterialPicker } from "./MaterialPicker";
 import { Memories } from "./Memories";
 import styles from "./Inspector.module.css";
@@ -55,10 +57,9 @@ interface Props {
   onChange: (s: Stub) => void;
   onDeselect: () => void;
   onRemix: () => void;
-  onFixFact: (id: string) => void;
 }
 
-export function Inspector({ stub, selected: sel, onChange, onDeselect, onRemix, onFixFact }: Props) {
+export function Inspector({ stub, selected: sel, onChange, onDeselect, onRemix }: Props) {
   const meta = EDITION_META[currentVersion(stub).edition];
   const ev = stub.event;
   const fonts = (meta?.fontPairs ?? []).map((stack, i) => ({ value: String(i), label: fontName(stack, `Font ${i + 1}`), stack }));
@@ -143,36 +144,19 @@ export function Inspector({ stub, selected: sel, onChange, onDeselect, onRemix, 
         )}
       </DeskPanel>
 
-      <DeskPanel title="Facts" meta={<span className={styles.num}>{ev.facts.filter((f) => f.kept).length} on the stub</span>}>
-        {ev.facts.length === 0 ? (
-          <p className={styles.hint}>No facts found yet. Ask the agent to look again.</p>
-        ) : (
-          <ul className={styles.facts}>
-            {ev.facts.map((f) => {
-              const unsure = f.confidence < 0.8 && f.provenance !== "pending";
-              return (
-                <li key={f.id} className={styles.fact}>
-                  <div className={styles.factText}>
-                    <span className={styles.factLabel}>
-                      {f.label}
-                      <SourceMark p={f.provenance} />
-                    </span>
-                    <span className={styles.hint}>
-                      {f.source}
-                      {unsure && " · not sure yet"}
-                    </span>
-                  </div>
-                  <Tags>
-                    {unsure && <Tag onClick={() => onFixFact(f.id)}>Fix</Tag>}
-                    <Tag pressed={!!f.kept} disabled={f.provenance === "pending"} onClick={() => onChange(toggleKept(stub, f.id))}>
-                      {f.kept ? "On stub" : "Keep"}
-                    </Tag>
-                  </Tags>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <DeskPanel
+        title="Facts"
+        meta={
+          <span className={`${styles.num} ${styles.plain}`}>
+            {ev.facts.filter((f) => f.kept).length} on the stub{openCount(stub) ? ` · ${openCount(stub)} to answer` : ""}
+          </span>
+        }
+      >
+        <FactsReview stub={stub} onChange={onChange} />
+      </DeskPanel>
+
+      <DeskPanel title="Versions" meta={<span className={`${styles.num} ${styles.plain}`}>{stub.versions.filter((v) => !v.id.startsWith("preview-")).length} made</span>} defaultOpen={false}>
+        <VersionsPanel stub={stub} onChange={onChange} layout="side" />
       </DeskPanel>
 
       <DeskPanel title="Material & finish" meta={<span className={styles.num}>{stub.material} · {stub.finish}</span>}>

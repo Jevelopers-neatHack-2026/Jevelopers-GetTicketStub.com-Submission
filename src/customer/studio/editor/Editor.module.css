@@ -269,6 +269,13 @@
   min-height: 320px;
 }
 
+.reviewSheet {
+  max-height: min(68dvh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
+}
+
 /* ---------- Desktop ---------- */
 .desk {
   display: grid;

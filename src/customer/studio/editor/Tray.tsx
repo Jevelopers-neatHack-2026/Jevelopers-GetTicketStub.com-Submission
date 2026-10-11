@@ -2,7 +2,9 @@
 import { useRouter } from "next/navigation";
 import type { Stub } from "../types";
 import { LeavesMark } from "@/customer/pages/ui";
-import { SandboxStrip, Stamp } from "@/customer/desk/Desk";
+import { SandboxStrip, Stamp, Tag, Tags } from "@/customer/desk/Desk";
+import { openCount } from "../facts/FactsReview";
+import { selectedSummary } from "../versions/versions";
 import { MaterialPicker, ctaVerb, totalLabel } from "./MaterialPicker";
 import { TearStrip } from "./TearStrip";
 import styles from "./Tray.module.css";
@@ -13,17 +15,34 @@ interface Props {
   onTear: () => void;
   /** Leave the stock and finish pickers out when another panel on the page already holds them. */
   compact?: boolean;
+  /** Opens the Facts or Versions sheet (phone). Without it the buttons are left out because the inspector holds those panels. */
+  onOpen?: (what: "facts" | "versions") => void;
 }
 
 /** The paper tray under the stub, in order: stock, finish, the stamped main action, then the tear. */
-export function Tray({ stub, onChange, onTear, compact }: Props) {
+export function Tray({ stub, onChange, onTear, compact, onOpen }: Props) {
   const router = useRouter();
+  const selected = selectedSummary(stub);
+  const open = openCount(stub);
   return (
     <section className={styles.tray} aria-label="Print your stub">
       <div className={styles.sandbox}>
         <SandboxStrip />
       </div>
       {!compact && <MaterialPicker stub={stub} onChange={onChange} />}
+      {onOpen && (
+        <Tags label="Review your stub">
+          <Tag count={open || undefined} onClick={() => onOpen("facts")}>
+            Facts
+          </Tag>
+          <Tag count={stub.versions.filter((v) => !v.id.startsWith("preview-")).length} onClick={() => onOpen("versions")}>
+            Versions
+          </Tag>
+        </Tags>
+      )}
+      <p className={styles.note}>
+        Prints version <span className={styles.version}>#{selected.hash}</span>: {selected.text}.
+      </p>
       <Stamp
         block
         price={totalLabel(stub.material, stub.finish)}

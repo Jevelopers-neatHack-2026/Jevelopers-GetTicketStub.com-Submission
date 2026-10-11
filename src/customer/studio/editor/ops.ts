@@ -1,6 +1,8 @@
 // Pure stub edits used by the studio editor. Every function returns a new Stub; callers persist with upsertStub.
 import { EDITIONS, currentVersion } from "../types";
 import type { ArtLayer, DesignVersion, Edition, Finish, Material, Stub } from "../types";
+import { applyCorrection } from "../facts/corrections";
+import { contextOf, sameArt } from "../versions/versions";
 
 export type Selectable = "title" | "subtitle" | "facts" | "art";
 
@@ -22,10 +24,6 @@ export function previewEdition(stub: Stub, edition: Edition): Stub {
   return { ...stub, versions: [...stub.versions, v], currentVersionId: v.id };
 }
 
-function sameArt(a: ArtLayer, b: ArtLayer): boolean {
-  return a.kind === b.kind && a.src === b.src && a.seed === b.seed && a.vibe === b.vibe;
-}
-
 function findVersion(stub: Stub, edition: Edition, art: ArtLayer): DesignVersion | undefined {
   return stub.versions.find((v) => v.edition === edition && sameArt(v.art, art));
 }
@@ -36,7 +34,7 @@ export function setEdition(stub: Stub, edition: Edition): Stub {
   if (cur.edition === edition) return stub;
   const existing = findVersion(stub, edition, cur.art);
   if (existing) return atVersion(stub, existing.id);
-  const v: DesignVersion = { id: uid(), parentId: cur.id, edition, art: cur.art, createdAt: new Date().toISOString() };
+  const v: DesignVersion = { id: uid(), parentId: cur.id, edition, art: cur.art, createdAt: new Date().toISOString(), context: contextOf(stub) };
   return { ...stub, versions: [...stub.versions, v], currentVersionId: v.id };
 }
 
@@ -49,7 +47,7 @@ export function stepEdition(stub: Stub, dir: 1 | -1): Stub {
 /** An art change is always a new design version. */
 export function addArtVersion(stub: Stub, art: ArtLayer): Stub {
   const cur = currentVersion(stub);
-  const v: DesignVersion = { id: uid(), parentId: cur.id, edition: cur.edition, art, createdAt: new Date().toISOString() };
+  const v: DesignVersion = { id: uid(), parentId: cur.id, edition: cur.edition, art, createdAt: new Date().toISOString(), context: contextOf(stub) };
   return { ...stub, versions: [...stub.versions, v], currentVersionId: v.id };
 }
 
@@ -69,17 +67,9 @@ export function altLabel(value: string): string {
   return looksLikeIsoDate(value) ? formatDate(value) : value;
 }
 
-/** Confirm a fact: set its value, mark it certain, and keep the printed label in step. */
-export function setFactValue(stub: Stub, factId: string, value: string): Stub {
-  let dateISO = stub.event.dateISO;
-  const facts = stub.event.facts.map((f) => {
-    if (f.id !== factId) return f;
-    const isDate = looksLikeIsoDate(value);
-    if (isDate) dateISO = value;
-    const label = isDate ? formatDate(value, { day: "numeric", month: "short" }) : value;
-    return { ...f, value, label, confidence: 1, kept: true };
-  });
-  return { ...stub, event: { ...stub.event, facts, dateISO } };
+/** Answer a fact: a new value is recorded as your correction and a repeat as your confirmation, with the research result kept in the stub's history. */
+export function setFactValue(stub: Stub, factId: string, value: string, reason?: string): Stub {
+  return applyCorrection(stub, { factId, value, reason });
 }
 
 export function toggleKept(stub: Stub, factId: string): Stub {

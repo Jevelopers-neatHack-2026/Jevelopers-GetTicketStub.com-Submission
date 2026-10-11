@@ -24,13 +24,30 @@ async function postJson<T>(path: string, body: unknown, fallbackError: string): 
   return data as T;
 }
 
-const EVENT_KEYS: (keyof EventData)[] = ["type", "title", "subtitle", "venue", "city", "dateISO", "seat", "sourceUrl", "setlist", "score", "cast", "programme", "facts"];
+const EVENT_KEYS: (keyof EventData)[] = ["type", "title", "subtitle", "venue", "city", "dateISO", "seat", "sourceUrl", "setlist", "score", "cast", "programme", "facts", "assets"];
 
 /** Only the EventData fields: the route also returns research extras that must not be saved into (and synced with) a stub. */
 export function pickEvent(data: EventData): EventData {
   const out: Record<string, unknown> = {};
   for (const k of EVENT_KEYS) if (data[k] !== undefined) out[k] = data[k];
-  return out as unknown as EventData;
+  const event = out as unknown as EventData;
+  // The route's extras say when a source was read and whether it sent an image. Keep those two things, honestly.
+  const tm = (data as EventData & { ticketmaster?: { retrievedAt?: string; image?: { url?: string } } }).ticketmaster;
+  if (tm?.retrievedAt) {
+    event.facts = event.facts.map((f) => (f.retrievedAt || f.provenance === "pending" || !/ticketmaster/i.test(f.source) ? f : { ...f, retrievedAt: tm.retrievedAt }));
+  }
+  if (tm?.image?.url && !event.assets?.length) {
+    event.assets = [
+      {
+        id: "ticketmaster-image",
+        label: "Event image from Ticketmaster",
+        sourceUrl: tm.image.url,
+        status: "unknown",
+        reason: "We can't confirm we have the right to print Ticketmaster's image, so it stays off your stub. The art is made from your facts instead.",
+      },
+    ];
+  }
+  return event;
 }
 
 /** Research one event from a link (or a demo keyword). Throws Error(message) on failure. */

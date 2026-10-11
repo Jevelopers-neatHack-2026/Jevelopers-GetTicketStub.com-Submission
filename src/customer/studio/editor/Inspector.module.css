@@ -87,6 +87,9 @@
 .num {
   font-variant-numeric: tabular-nums;
 }
+.plain {
+  text-transform: none;
+}
 
 .swatches {
   display: flex;

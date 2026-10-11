@@ -9,6 +9,7 @@ import { currentVersion } from "../types";
 import { ART_LIMIT_NOTE, askAgent, remixArtNoted } from "../research/client";
 import { MarkLegend, PaperButton, SourceMark, Tag, Tags } from "@/customer/desk/Desk";
 import { haptic, play } from "@/customer/studio/feedback";
+import { activeCorrection, applyCorrection } from "../facts/corrections";
 import styles from "./AgentChat.module.css";
 
 type Msg =
@@ -95,7 +96,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
     const f = stubRef.current.event.facts[index];
     if (!f) return;
     const isDate = /^\d{4}-\d{2}-\d{2}$/.test(alt);
-    updateFact(index, { value: alt, label: isDate ? shortDate(alt) : alt, confidence: 1, kept: true });
+    commit(applyCorrection(stubRef.current, { factId: f.id, value: alt }));
     say(`Fixed. ${isDate ? shortDate(alt) : alt} is on your stub.`);
   };
 
@@ -216,7 +217,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
                 </p>
                 <ul className={styles.facts}>
                   {facts.map((f, i) => {
-                    const unsure = f.confidence < 0.8 && f.provenance !== "pending";
+                    const unsure = f.confidence < 0.8 && f.provenance !== "pending" && !activeCorrection(stub, f.id);
                     return (
                       <li key={`${f.id}-${i}`} className={styles.fact} data-unsure={unsure || undefined}>
                         <div className={styles.factRow}>
@@ -245,7 +246,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
                                 {f.alternatives.map((alt) => {
                                   const isDate = /^\d{4}-\d{2}-\d{2}$/.test(alt);
                                   return (
-                                    <Tag key={alt} pressed={f.value === alt && f.confidence >= 1} onClick={() => pickAlternative(i, alt)}>
+                                    <Tag key={alt} pressed={f.value === alt && !!activeCorrection(stub, f.id)} onClick={() => pickAlternative(i, alt)}>
                                       {isDate ? shortDate(alt) : alt}
                                     </Tag>
                                   );
@@ -253,7 +254,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
                               </Tags>
                             ) : (
                               <Tags>
-                                <Tag onClick={() => updateFact(i, { confidence: 1, kept: true })}>Yes, keep it</Tag>
+                                <Tag onClick={() => commit(applyCorrection(stubRef.current, { factId: f.id, value: f.value }))}>Yes, keep it</Tag>
                               </Tags>
                             )}
                           </>

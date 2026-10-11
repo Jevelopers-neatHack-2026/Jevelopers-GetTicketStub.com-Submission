@@ -23,6 +23,8 @@ import { StyleGrid, StyleGridItems } from "./StyleGrid";
 import { RemixSheet } from "./RemixSheet";
 import { MaterialFrame } from "./MaterialFrame";
 import { Inspector } from "./Inspector";
+import { FactsReview } from "../facts/FactsReview";
+import { VersionsPanel } from "../versions/VersionsPanel";
 import { Tray } from "./Tray";
 import { FinishSheet, TearStage } from "./TearFlow";
 import { useIsClient, useMediaQuery } from "./useClient";
@@ -34,7 +36,7 @@ const HINT_KEY = "ticketstub.hint.swipe.v1";
 const PANELS_KEY = "ticketstub.studio.panels.v1";
 /** Print preview comes on by itself past this zoom. */
 const AUTO_PREVIEW = 1.5;
-type SheetName = null | "styles" | "remix" | "agent" | "finish";
+type SheetName = null | "styles" | "remix" | "agent" | "finish" | "facts" | "versions";
 
 /** Width / height of each style, so the stage can be sized to the stub before it renders. */
 const ASPECT: Record<Edition, number> = { researched: 2 / 3, risograph: 2 / 3, minimal: 2 / 3, letterpress: 1.9, classic: 2.4 };
@@ -552,6 +554,16 @@ function EditorLoaded({ id }: { id: string }) {
           <AgentChat key={agentSeed?.n ?? 0} stub={stub} onChange={update} initial={agentSeed?.text} />
         </div>
       </PaperSheet>
+      <PaperSheet title="Facts" open={sheet === "facts"} onClose={() => setSheet(null)}>
+        <div className={styles.reviewSheet}>
+          <FactsReview stub={stub} onChange={update} />
+        </div>
+      </PaperSheet>
+      <PaperSheet title="Versions" open={sheet === "versions"} onClose={() => setSheet(null)}>
+        <div className={styles.reviewSheet}>
+          <VersionsPanel stub={stub} onChange={update} layout="switch" />
+        </div>
+      </PaperSheet>
       <FinishSheet stub={stub} open={sheet === "finish"} onClose={() => setSheet(null)} />
       {tearing && <TearStage stub={stub} onTorn={onTorn} onCancel={() => setTearing(false)} />}
     </>
@@ -646,6 +658,7 @@ function EditorLoaded({ id }: { id: string }) {
                         onAsk={ask}
                         onShowBack={showBack}
                         variant="pin"
+                        skipQuestions={panels.insp}
                         folded={camAway && !peek}
                         onUnfold={() => {
                           play("open", { emphasis: "subtle" });
@@ -701,7 +714,7 @@ function EditorLoaded({ id }: { id: string }) {
               </div>
               <div className={styles.inspBody} inert={!panels.insp}>
                 <div className={styles.inspectorScroll}>
-                  <Inspector stub={stub} selected={selected} onChange={update} onDeselect={() => setSelected(null)} onRemix={() => setSheet("remix")} onFixFact={setChipFact} />
+                  <Inspector stub={stub} selected={selected} onChange={update} onDeselect={() => setSelected(null)} onRemix={() => setSheet("remix")} />
                 </div>
                 <div className={styles.inspectorTray}>
                   <Tray stub={stub} onChange={update} onTear={onTear} compact />
@@ -755,7 +768,7 @@ function EditorLoaded({ id }: { id: string }) {
         <div className={styles.toolsWrap}>{tools}</div>
 
         <div className={styles.trayWrap}>
-          <Tray stub={stub} onChange={update} onTear={onTear} />
+          <Tray stub={stub} onChange={update} onTear={onTear} onOpen={setSheet} />
         </div>
       </div>
       {overlays}

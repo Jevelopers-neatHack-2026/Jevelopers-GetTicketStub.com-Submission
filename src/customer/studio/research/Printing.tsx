@@ -12,6 +12,8 @@ import { haptic, play, stopPrint, type PrintBurst } from "@/customer/studio/feed
 import { MarkLegend, SourceMark, Stamped, TearLink } from "@/customer/desk/Desk";
 import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { researchEvent } from "./client";
+import { factGroup, type FactGroup } from "../facts/corrections";
+import { GROUP_TITLE, whenLabel } from "../facts/FactsReview";
 import styles from "./Printing.module.css";
 
 const MIN_MS = 2500;
@@ -33,6 +35,9 @@ function usePrefersReducedMotion(): boolean {
   }, []);
   return reduced;
 }
+
+/** Verified first, then what is in doubt, then what we could not find. Nothing is corrected yet while the stub is still printing. */
+const RECEIPT_ORDER: FactGroup[] = ["source", "unsure", "missing"];
 
 const keyOf = (f: Fact, i: number) => `${f.id}-${i}`;
 
@@ -269,6 +274,13 @@ export function Printing(props: {
 
   const lines = (event?.facts ?? []).slice(0, shown).map((f, i) => ({ f, i, k: keyOf(f, i) }));
   const marks = [...new Set(lines.map((l) => l.f.provenance))];
+  const grouped = useMemo(() => {
+    const out: Record<string, FactGroup> = {};
+    (event?.facts ?? []).forEach((f, i) => {
+      out[keyOf(f, i)] = factGroup({}, f);
+    });
+    return out;
+  }, [event]);
   const allIn = factCount > 0 && shown >= factCount;
   const headline = settling ? "Letting the ink settle…" : allIn ? `Printing ${event?.title ?? "your stub"}…` : findingLine(event);
 
@@ -297,38 +309,53 @@ export function Printing(props: {
 
         <div className={`${styles.receipt} ${lines.length ? styles.receiptOn : ""}`} aria-hidden={lines.length ? undefined : true}>
           <p className={`desk-label ${styles.receiptHead}`}>What we found</p>
-          <ol className={styles.lines}>
-            {lines.map(({ f, k }) => {
-              const on = !!kept[k];
-              return (
-                <li key={k} className={styles.lineItem}>
-                  <button type="button" className={styles.line} aria-pressed={on} onClick={() => toggle(k)}>
-                    <span className={styles.lineText}>
-                      <span className={styles.lineLabel}>
-                        {f.label}
-                        <SourceMark p={f.provenance} />
-                      </span>
-                      <span className={styles.lineSource}>
-                        {f.source}
-                        {f.confidence < 0.8 && f.provenance !== "pending" ? " · unsure" : ""}
-                      </span>
-                    </span>
-                    <span className={styles.lineAction}>
-                      {on ? (
-                        touched[k] ? (
-                          <Stamped>Kept</Stamped>
-                        ) : (
-                          <span className={styles.keptStatic}>Kept</span>
-                        )
-                      ) : (
-                        <span className={styles.keep}>Keep</span>
-                      )}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+          {RECEIPT_ORDER.map((g) => {
+            const inGroup = lines.filter((l) => grouped[l.k] === g);
+            if (!inGroup.length) return null;
+            return (
+              <section key={g} aria-label={GROUP_TITLE[g]}>
+                <p className={`desk-label ${styles.groupHead}`}>{GROUP_TITLE[g]}</p>
+                <ol className={styles.lines}>
+                  {inGroup.map(({ f, k }) => {
+                    const on = !!kept[k];
+                    const missing = g === "missing";
+                    const when = whenLabel(f.retrievedAt);
+                    return (
+                      <li key={k} className={styles.lineItem}>
+                        <button type="button" className={styles.line} aria-pressed={missing ? undefined : on} aria-disabled={missing || undefined} onClick={() => !missing && toggle(k)}>
+                          <span className={styles.lineText}>
+                            <span className={styles.lineLabel}>
+                              {f.label}
+                              <SourceMark p={f.provenance} />
+                            </span>
+                            <span className={styles.lineSource}>
+                              {missing ? `Not found on ${f.source}` : f.source}
+                              {when ? ` · read ${when}` : ""}
+                              {g === "unsure" ? ` · unsure, ${Number.isFinite(f.confidence) ? `${Math.round(f.confidence * 100)}%` : "unknown confidence"}` : ""}
+                            </span>
+                          </span>
+                          <span className={styles.lineAction}>
+                            {missing ? (
+                              <span className={styles.keep}>Unknown</span>
+                            ) : on ? (
+                              touched[k] ? (
+                                <Stamped>Kept</Stamped>
+                              ) : (
+                                <span className={styles.keptStatic}>Kept</span>
+                              )
+                            ) : (
+                              <span className={styles.keep}>Keep</span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            );
+          })}
+          {lines.some((l) => grouped[l.k] === "unsure" || grouped[l.k] === "missing") ? <p className={styles.fixNote}>Answer what&apos;s unsure or missing in the editor, in Facts.</p> : null}
           {marks.length ? <MarkLegend marks={marks} /> : null}
         </div>
       </div>
