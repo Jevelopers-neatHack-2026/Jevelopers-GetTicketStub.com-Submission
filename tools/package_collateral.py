@@ -36,6 +36,33 @@ TIMESTAMP = re.compile(
     r"(?P<end>(?:\d{2}:)?\d{2}:\d{2}[,.]\d{3})"
 )
 TEXT_FORMATS = {".md", ".txt", ".json", ".html", ".srt", ".vtt"}
+POLICY_HASH_ALGORITHM = "sha256-canonical-json-manifest-self-reference-v1"
+POLICY_JSON_BINDINGS = {
+    "docs/collateral-inventory.json": {
+        "kind": "canonical_json_semantic_field_binding",
+        "algorithm": POLICY_HASH_ALGORITHM,
+        "selectors": [
+            "trackedFiles[path=release/v0.1.0-rehearsal/manifest.json].sha256",
+            "trackedFiles[path=release/v0.1.0-rehearsal/manifest.json].trackedAtRevision",
+        ],
+    },
+    "review/provenance.json": {
+        "kind": "canonical_json_semantic_field_binding",
+        "algorithm": POLICY_HASH_ALGORITHM,
+        "selectors": [
+            "records[assetId=HANDOFF-MANIFEST-001].source.revision",
+            "records[assetId=HANDOFF-MANIFEST-001].source.url",
+            "records[assetId=HANDOFF-MANIFEST-001].checksum.value",
+        ],
+    },
+}
+EXPECTED_POLICY_SELECTABLE_ASSET_IDS = {
+    "DEMO-WORKFLOW-DIAGRAM-001",
+    "DEMO-SCREENSHOT-SET-001",
+    "DEMO-DECK-SUPPORT-001",
+    "LAUNCH-X-KEY-VISUAL-001",
+    "LAUNCH-X-ALT-TEXT-001",
+}
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -1063,15 +1090,63 @@ def _dynamic_video_records(root: Path, spec: Dict[str, Any], context: Dict[str, 
 
 def _support_file(root: Path, relative: str) -> Dict[str, Any]:
     fact = _file_fact(root, relative)
+    binding = POLICY_JSON_BINDINGS.get(relative)
+    digest = fact["sha256"]
+    source_commit_id = fact["sourceCommitId"]
+    source_pin_status = fact["sourcePinStatus"]
+    if binding and fact["exists"]:
+        document = read_json(safe_path(root, relative))
+        digest = projected_policy_digest(relative, document)
+        source_commit_id = None
+        source_pin_status = "self_reference_projection"
     return {
         "path": relative,
         "exists": fact["exists"],
-        "sha256": fact["sha256"],
-        "sourceCommitId": fact["sourceCommitId"],
-        "sourcePinStatus": fact["sourcePinStatus"],
+        "sha256": digest,
+        "sourceCommitId": source_commit_id,
+        "sourcePinStatus": source_pin_status,
         "format": fact.get("format"),
+        **({"binding": json.loads(json.dumps(binding))} if binding else {}),
         "purpose": "manifest validation or source/review evidence; not a reusable campaign asset by itself",
     }
+
+
+def canonical_json_digest(value: Any) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return sha256_bytes(encoded)
+
+
+def project_policy_document(relative: str, document: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the narrowly projected policy JSON used to avoid manifest self-reference cycles."""
+    if relative not in POLICY_JSON_BINDINGS:
+        raise ValueError(f"no approved self-reference projection is defined for {relative}")
+    projected = json.loads(json.dumps(document, ensure_ascii=False))
+    if relative == "docs/collateral-inventory.json":
+        rows = [row for row in projected.get("trackedFiles", []) if row.get("path") == "release/v0.1.0-rehearsal/manifest.json"]
+        if len(rows) != 1:
+            raise ValueError("inventory projection requires exactly one manifest trackedFiles row")
+        if "sha256" not in rows[0] or "trackedAtRevision" not in rows[0]:
+            raise ValueError("inventory manifest self-reference fields are missing")
+        rows[0].pop("sha256", None)
+        rows[0].pop("trackedAtRevision", None)
+    elif relative == "review/provenance.json":
+        rows = [row for row in projected.get("records", []) if row.get("assetId") == "HANDOFF-MANIFEST-001"]
+        if len(rows) != 1:
+            raise ValueError("provenance projection requires exactly one HANDOFF-MANIFEST-001 record")
+        source = rows[0].get("source")
+        checksum = rows[0].get("checksum")
+        if not isinstance(source, dict) or not isinstance(checksum, dict):
+            raise ValueError("provenance manifest self-reference fields are missing")
+        if not {"revision", "url"}.issubset(source) or "value" not in checksum:
+            raise ValueError("provenance manifest self-reference fields are missing")
+        source.pop("revision", None)
+        source.pop("url", None)
+        checksum.pop("value", None)
+    return projected
+
+
+def projected_policy_digest(relative: str, document: Dict[str, Any]) -> str:
+    return canonical_json_digest(project_policy_document(relative, document))
 
 
 def _brand_reference(root: Path, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -1215,7 +1290,15 @@ def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materializ
         [record.get("assetId") for record in all_records if record.get("packageCopy", {}).get("path")]
         + [record.get("assetId") for record in caption_records if record.get("packageCopy", {}).get("path")]
     )
-    canonical_blocks = canonical_readiness_blockers(root, selected_asset_ids)
+    canonical_selected_asset_ids = sorted(set(selected_asset_ids) & EXPECTED_POLICY_SELECTABLE_ASSET_IDS)
+    if not set(canonical_selected_asset_ids).issubset(selected_asset_ids):
+        raise ValueError("Package selection omitted an expected canonical selectable asset")
+    omitted_selectable = sorted(EXPECTED_POLICY_SELECTABLE_ASSET_IDS - set(canonical_selected_asset_ids))
+    if omitted_selectable:
+        message = "Package selection omitted canonical selectable asset(s): " + ", ".join(omitted_selectable)
+        canonical_blocks = {"available": False, "status": "package_selection_incomplete", "selected": [message], "submission": [message], "selectedAssetIds": canonical_selected_asset_ids}
+    else:
+        canonical_blocks = canonical_readiness_blockers(root, canonical_selected_asset_ids)
     rehearsal_evidence = []
     for relative in _find_media(root, spec.get("rehearsalDiscovery", {}).get("reviewRoot", "review/visual/rehearsal"), [".json", ".png", ".jpg", ".jpeg", ".md", ".txt"]):
         fact = _file_fact(root, relative)
@@ -1264,7 +1347,7 @@ def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materializ
         "manifestGenerationTime": "Not self-certified; if needed, record the execution time in the separate release review record after this manifest is committed.",
         "contentAddresses": {
             "algorithm": "SHA-256",
-            "note": "File digests bind the exact bytes. Per-file sourceCommitId binds the commit containing the same bytes; a null pin means the path is missing, untracked, or modified.",
+            "note": "Asset, export, caption and package-copy digests bind exact bytes. The inventory and provenance policy inputs use their declared canonical JSON semantic-field projection; all other support inputs bind exact bytes. Per-file sourceCommitId binds the commit containing the same bytes; a null pin means the path is missing, untracked, modified, or uses an explicitly declared self-reference projection.",
         },
         "packagePurpose": "Internal review package for a synthetic concept rehearsal and draft announcement collateral. It is not a submission-ready, publicly reusable, or approved v1 release.",
         "destinations": {
@@ -1313,6 +1396,7 @@ def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materializ
             "canonicalPolicyApiAvailable": canonical_blocks.get("available", False),
             "canonicalPolicyStatus": canonical_blocks.get("status", "not_run"),
             "selectedAssetIds": selected_asset_ids,
+            "canonicalPolicySelectedAssetIds": canonical_selected_asset_ids,
         },
     }
 
@@ -1454,6 +1538,10 @@ def canonical_readiness_blockers(root: Path, selected_asset_ids: Sequence[str]) 
     if missing:
         message = f"Canonical readiness API is incomplete; missing callable(s): {', '.join(missing)}. Both readiness gates fail closed."
         return {"available": False, "status": "api_incomplete", "selected": [message], "submission": [message]}
+    selectable = getattr(policy, "SELECTABLE_COLLATERAL_ASSET_IDS", None)
+    if not isinstance(selectable, (set, frozenset)) or set(selectable) != EXPECTED_POLICY_SELECTABLE_ASSET_IDS:
+        message = "Canonical selectable-asset policy is missing or differs from the packaged five-asset contract; both readiness gates fail closed."
+        return {"available": False, "status": "selectable_contract_changed", "selected": [message], "submission": [message]}
     selected_fn = getattr(policy, "selected_collateral_blockers")
     submission_fn = getattr(policy, "submission_blockers")
     try:
@@ -1461,14 +1549,15 @@ def canonical_readiness_blockers(root: Path, selected_asset_ids: Sequence[str]) 
         provenance = read_json(safe_path(root, "review/provenance.json"))
         inventory = read_json(safe_path(root, "docs/collateral-inventory.json"))
         fixture = read_json(safe_path(root, "review/fixtures/synthetic-canaries.json"))
-        structural_errors = _normalise_policy_blockers(policy.validate_all(ledger, provenance, fixture))
+        handoff = read_json(safe_path(root, "review/visual/asset-handoff.json"))
+        structural_errors = _normalise_policy_blockers(policy.validate_all(ledger, provenance, fixture, handoff, inventory))
         if structural_errors:
             message = "Canonical global validation failed; selected readiness was not evaluated."
             failures = [message, *structural_errors]
-            return {"available": True, "status": "global_validation_failed", "selected": failures, "submission": failures}
+            return {"available": True, "status": "global_validation_failed", "selected": failures, "submission": failures, "selectedAssetIds": list(selected_asset_ids)}
         selected = _normalise_policy_blockers(selected_fn(ledger, provenance, list(selected_asset_ids)))
         submission = _normalise_policy_blockers(submission_fn(ledger, provenance, list(selected_asset_ids), inventory))
-        return {"available": True, "status": "validated", "selected": selected, "submission": submission}
+        return {"available": True, "status": "validated", "selected": selected, "submission": submission, "selectedAssetIds": list(selected_asset_ids)}
     except Exception as exc:
         fail_closed = f"Canonical selected-collateral validation failed closed: {exc}"
         return {"available": False, "status": "validation_error", "selected": [fail_closed], "submission": [fail_closed]}
@@ -1494,9 +1583,11 @@ def evaluate_gates(
         missing_api = []
         missing_submission_api = []
     collateral: List[str] = []
+    canonical_selected_asset_ids = set((canonical_blockers or {}).get("selectedAssetIds", []))
     for record in records:
         if record.get("packageCopy", {}).get("path") or record.get("requiredForV1", True):
-            collateral.extend(asset_release_blockers(record, check_selected_wording_locally=not canonical_active))
+            use_canonical_wording = canonical_active and record.get("assetId") in canonical_selected_asset_ids
+            collateral.extend(asset_release_blockers(record, check_selected_wording_locally=not use_canonical_wording))
     if canonical_active:
         collateral.extend(canonical_blockers.get("selected", []))
     else:
@@ -1608,6 +1699,37 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
         if commit.get("status") != "pinned" or commit.get("commitId") != expected_commit:
             errors.append(f"{label} {relative}: source commit is missing, stale, or does not contain the exact bytes")
 
+    def verify_bound_input(support: Dict[str, Any], label: str) -> None:
+        relative = support.get("path")
+        declared = support.get("binding")
+        expected = POLICY_JSON_BINDINGS.get(relative)
+        if declared is None:
+            if relative in POLICY_JSON_BINDINGS:
+                errors.append(f"{label} {relative}: required canonical JSON projection binding is missing")
+                return
+            if support.get("exists") and support.get("sha256"):
+                verify_source(relative, support.get("sha256"), support.get("sourceCommitId"), label)
+            return
+        if expected is None or declared != expected:
+            errors.append(f"{label} {relative}: unsupported or altered canonical JSON projection algorithm/selectors")
+            return
+        if support.get("sourcePinStatus") != "self_reference_projection" or support.get("sourceCommitId") is not None:
+            errors.append(f"{label} {relative}: projected input must not claim a full-file source commit pin")
+        if not support.get("exists"):
+            errors.append(f"{label} {relative}: projected policy input is missing")
+            return
+        if not isinstance(support.get("sha256"), str) or not SHA256.fullmatch(support.get("sha256", "")):
+            errors.append(f"{label} {relative}: projected canonical JSON SHA-256 is missing or invalid")
+            return
+        try:
+            current = read_json(safe_path(root, relative))
+            current_digest = projected_policy_digest(relative, current)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"{label} {relative}: canonical JSON projection failed closed ({exc})")
+            return
+        if current_digest != support.get("sha256"):
+            errors.append(f"{label} {relative}: canonical JSON semantic field binding differs from manifest")
+
     for record in manifest.get("assets", []):
         package = record.get("packageCopy", {})
         path_value = package.get("path")
@@ -1663,12 +1785,13 @@ def validate_manifest_files(root: Path, manifest: Dict[str, Any]) -> List[str]:
     for scene in manifest.get("scenes", {}).get("scenes", []):
         if scene.get("assetPath") and scene.get("assetSha256"):
             verify_source(scene.get("assetPath"), scene.get("assetSha256"), scene.get("assetSourceCommitId"), f"scene {scene.get('sceneId')} asset")
-    for support in [*manifest.get("supportFiles", []), *manifest.get("rehearsalEvidenceFiles", [])]:
+    for support in manifest.get("supportFiles", []):
+        verify_bound_input(support, "support file")
+    for support in manifest.get("rehearsalEvidenceFiles", []):
         if support.get("exists", True) and support.get("sha256"):
             verify_source(support.get("path"), support.get("sha256"), support.get("sourceCommitId"), "support/evidence file")
     for support in manifest.get("policyInputHashes", {}).values():
-        if support.get("exists") and support.get("sha256"):
-            verify_source(support.get("path"), support.get("sha256"), support.get("sourceCommitId"), "policy input")
+        verify_bound_input(support, "policy input")
     return errors
 
 

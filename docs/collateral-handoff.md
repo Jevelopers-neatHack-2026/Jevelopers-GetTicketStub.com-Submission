@@ -1,6 +1,6 @@
 # Collateral handoff and receiver procedure
 
-`v0.1.0-rehearsal` is an internal draft package for concept collateral. It does not grant publication rights, constitute an approved release, or meet the neatHack submission demo requirement. The versioned `package-spec.json` is the source list; `tools/package_collateral.py` binds each selected source/export, copy, alt text, scene, selected claim/CTA, provenance record, brand reference, and evidence file to exact SHA-256 hashes and source commits. The tracked generated manifest predates this final narrative/provenance join and is stale; the packaging worker must rebuild/validate it after canonical gate changes and merge. The committed 150-second silent synthetic rehearsal, SRT/VTT, transcript, HTML and exact author receipt are current inputs, but do not satisfy the absent final product demo at `demo/exports/v1-demo.mp4`. Never insert a guessed path, checksum, approval, or source commit.
+`v0.1.0-rehearsal` is an internal draft package for concept collateral. It does not grant publication rights, constitute an approved release, or meet the neatHack submission demo requirement. The versioned `package-spec.json` is the source list; `tools/package_collateral.py` binds each selected source/export, copy, alt text, scene, selected claim/CTA, provenance record, brand reference, and evidence file to exact SHA-256 hashes and source commits. The committed 150-second silent synthetic rehearsal, SRT/VTT, transcript, HTML and exact author receipt are current inputs, but do not satisfy the absent final product demo at `demo/exports/v1-demo.mp4`. Never insert a guessed path, checksum, approval, or source commit.
 
 ## Naming and legacy-file mapping
 
@@ -10,9 +10,9 @@ New package copies use this deterministic form:
 {family}-{assetId}-{revision}-{destination}-{dimensions}-{locale}-{variant}.{extension}
 ```
 
-For example, the existing `demo/recording-checklist.md` source maps to `demo-001-demo-recording-checklist-001-r01-repository-internal-review-text-en-us-rehearsal-recording-plan.md`. A visual source and its export keep the same asset ID but have distinct variants and extensions. A dynamic rehearsal MP4 and its SRT/VTT sidecars receive distinct role and format records, exact hashes, scene references, and receipt checks. The `text` dimension token means dimensions do not apply; raster/video dimensions come from the actual bytes and are never inferred from a filename.
+For example, the existing `demo/recording-checklist.md` source maps to `demo-001-demo-recording-checklist-001-r02-repository-internal-review-text-en-us-rehearsal-recording-plan.md`. A visual source and its export keep the same asset ID but have distinct variants and extensions. A dynamic rehearsal MP4 and its SRT/VTT sidecars receive distinct role and format records, exact hashes, scene references, and receipt checks. The `text` dimension token means dimensions do not apply; raster/video dimensions come from the actual bytes and are never inferred from a filename.
 
-The older working names remain intact and are source paths, not release names:
+The older working names remain intact and are source paths, not release names. Existing r01 package-copy names remain immutable; the current rehearsal rebuild uses r02 after source text changed:
 
 | Existing source path | Stable package asset ID | Package role |
 | --- | --- | --- |
@@ -39,7 +39,11 @@ Compare both digests with the selected manifest row. Open the exact package copy
 
 Reproduce the package from the same committed inputs with `python3 tools/package_collateral.py build --version v0.1.0-rehearsal`. The tool uses Python's standard library plus `ffprobe` to inspect actual video metadata; it makes no network or paid-provider calls. Keep the recorded ffmpeg/ffprobe, Chrome, Node, Python, and Pillow versions with the render receipt. Browser version, OS, font fallback, font rasterization, and glyph metrics can change exported pixels and hashes. Re-rendered bytes are a new revision and require another visual and accessibility inspection; do not treat a matching source SVG or HTML hash as proof that a PNG still matches.
 
-The validator reports integrity separately from readiness. A draft manifest may have matching checksums while its collateral or external submission gate remains `BLOCKED`. Do not override a gate, approve an asset from a model review, upload/post automatically, or treat a rehearsal as product evidence.
+The validator reports integrity separately from readiness. A draft manifest may have matching checksums while its collateral or external submission gate remains `BLOCKED`. Policy support files `docs/collateral-inventory.json` and `review/provenance.json` use the `sha256-canonical-json-manifest-self-reference-v1` canonical JSON semantic-field binding: sorted-key compact UTF-8 JSON is hashed after omitting only `trackedFiles[path=release/v0.1.0-rehearsal/manifest.json].sha256`, `.trackedAtRevision`, `records[assetId=HANDOFF-MANIFEST-001].source.revision`, `.source.url`, and `.checksum.value`. JSON whitespace is not bound. Every other inventory/provenance field remains bound, including the source, rights, claim, copy and evidence joins. The manifest records the exact manifest SHA-256 in its provenance checksum and as its `sha256_content_digest` source revision; canonical policy validation checks that digest against the actual manifest bytes. The projection is not a substitute for that check. The same projection descriptor and digest appear in both `supportFiles` and `policyInputHashes`; unsupported or missing algorithms/selectors fail closed.
+
+For visual rendering reproduction, use Python 3.9.6 with Pillow 11.3.0 and record Chrome, Node, ffmpeg and ffprobe versions alongside the render receipt. The package builder itself uses the Python standard library plus `ffprobe`. Select an interpreter by checking `python3 --version` and `python3 -c 'import PIL; print(PIL.__version__)'`; do not assume a system-default Python has Pillow. No host-specific interpreter path is part of the package.
+
+Do not override a gate, approve an asset from a model review, upload/post automatically, or treat a rehearsal as product evidence.
 
 ## Format and external-use boundary
 

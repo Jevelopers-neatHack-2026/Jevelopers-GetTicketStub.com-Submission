@@ -31,11 +31,19 @@ class PackagePolicyTests(unittest.TestCase):
         self.assertIn("demo/exports/v1-demo.mp4", " ".join(manifest["externalSubmissionReadiness"]["blockers"]))
         self.assertEqual("pending", manifest["brandReferences"]["approvalStatus"])
         all_blockers = " ".join(manifest["collateralPackageReadiness"]["blockers"])
-        self.assertRegex(all_blockers, r"inventory join is (?:stale|missing_join|missing_asset_record)")
+        present_assets = [asset for asset in manifest["assets"] if asset.get("file", {}).get("exists")]
+        self.assertTrue(present_assets)
+        self.assertTrue(all(asset.get("inventoryJoin", {}).get("status") == "current" for asset in present_assets))
         self.assertRegex(all_blockers, r"provenance and rights record is missing or not approved")
+        self.assertRegex(all_blockers, r"selected exact wording review is (?:blocked|pending)")
         video = next(asset for asset in manifest["assets"] if asset["assetId"] == "DEMO-REHEARSAL-VIDEO-001")
         self.assertEqual("exact_current_source_snapshot", video["renderReceipt"]["sourceInputStatus"])
         self.assertEqual([], video["renderReceipt"]["sourceInputErrors"])
+        for relative in package.POLICY_JSON_BINDINGS:
+            support = next(row for row in manifest["supportFiles"] if row.get("path") == relative)
+            policy_input = manifest["policyInputHashes"][relative]
+            self.assertEqual(support["binding"], policy_input["binding"])
+            self.assertEqual(support["sha256"], policy_input["sha256"])
 
     def test_controlled_approved_fixture_can_pass_both_gates(self) -> None:
         # Synthetic policy fixture only: this proves the gate logic, not actual
@@ -99,6 +107,7 @@ class PackagePolicyTests(unittest.TestCase):
     def test_global_validation_errors_stop_before_selected_readiness(self) -> None:
         calls = []
         stub = types.SimpleNamespace(
+            SELECTABLE_COLLATERAL_ASSET_IDS=package.EXPECTED_POLICY_SELECTABLE_ASSET_IDS,
             validate_all=lambda *_: ["fixture structural error"],
             selected_collateral_blockers=lambda *_: calls.append("selected") or [],
             submission_blockers=lambda *_: calls.append("submission") or [],
@@ -113,6 +122,7 @@ class PackagePolicyTests(unittest.TestCase):
     def test_canonical_api_runs_global_checks_before_selected_and_submission_checks(self) -> None:
         calls = []
         stub = types.SimpleNamespace(
+            SELECTABLE_COLLATERAL_ASSET_IDS=package.EXPECTED_POLICY_SELECTABLE_ASSET_IDS,
             validate_all=lambda *_: calls.append("global") or [],
             selected_collateral_blockers=lambda *_: calls.append("selected") or [],
             submission_blockers=lambda *_: calls.append("submission") or [],
@@ -122,14 +132,29 @@ class PackagePolicyTests(unittest.TestCase):
         self.assertEqual("validated", result["status"])
         self.assertEqual(["global", "selected", "submission"], calls)
 
+    def test_changed_canonical_selectable_contract_fails_closed(self) -> None:
+        stub = types.SimpleNamespace(
+            SELECTABLE_COLLATERAL_ASSET_IDS={"DEMO-WORKFLOW-DIAGRAM-001"},
+            validate_all=lambda *_: [],
+            selected_collateral_blockers=lambda *_: [],
+            submission_blockers=lambda *_: [],
+        )
+        with patch.dict(sys.modules, {"validate_collateral": stub}):
+            result = package.canonical_readiness_blockers(ROOT, ["DEMO-WORKFLOW-DIAGRAM-001"])
+        self.assertFalse(result["available"])
+        self.assertEqual("selectable_contract_changed", result["status"])
+        self.assertIn("both readiness gates fail closed", " ".join(result["selected"]))
+
     def test_canonical_policy_exceptions_and_unsupported_returns_fail_closed(self) -> None:
         policy_stubs = (
             types.SimpleNamespace(
+                SELECTABLE_COLLATERAL_ASSET_IDS=package.EXPECTED_POLICY_SELECTABLE_ASSET_IDS,
                 validate_all=lambda *_: (_ for _ in ()).throw(RuntimeError("structural check failed")),
                 selected_collateral_blockers=lambda *_: [],
                 submission_blockers=lambda *_: [],
             ),
             types.SimpleNamespace(
+                SELECTABLE_COLLATERAL_ASSET_IDS=package.EXPECTED_POLICY_SELECTABLE_ASSET_IDS,
                 validate_all=lambda *_: [],
                 selected_collateral_blockers=lambda *_: 7,
                 submission_blockers=lambda *_: [],
@@ -142,6 +167,75 @@ class PackagePolicyTests(unittest.TestCase):
             self.assertEqual("validation_error", result["status"])
             self.assertTrue(result["selected"])
             self.assertTrue(result["submission"])
+
+    def test_canonical_visual_selection_does_not_skip_packaged_narrative_claim_review(self) -> None:
+        narrative = self.approved_record()
+        narrative["assetId"] = "DEMO-SUBMISSION-NARRATIVE-001"
+        narrative["recordId"] = "DEMO-SUBMISSION-NARRATIVE-001-text"
+        narrative["claimReferences"] = [
+            {"id": "CLAIM-NARRATIVE-PENDING", "reviewStatus": "pending", "source": {"revision": "sha256:" + "a" * 64}}
+        ]
+        canonical = {
+            "available": True,
+            "status": "validated",
+            "selected": [],
+            "submission": [],
+            "selectedAssetIds": sorted(package.EXPECTED_POLICY_SELECTABLE_ASSET_IDS),
+        }
+        package_gate, _ = package.evaluate_gates(
+            [narrative],
+            {"status": "draft_rehearsal_only", "rehearsalSatisfiesFinalDemoRequirement": False, "durationSeconds": 120, "maximumSeconds": 180, "scenes": [{"sceneId": "fixture"}]},
+            {"approvalStatus": "approved"}, [], [], {"exists": True}, [{"path": "fixture.md", "exists": True}], canonical,
+        )
+        combined = " ".join(package_gate["blockers"])
+        self.assertEqual("BLOCKED", package_gate["decision"])
+        self.assertIn("CLAIM-NARRATIVE-PENDING: selected exact wording review is pending", combined)
+        self.assertNotIn("CLAIM-UNSELECTED-OPTIONAL", combined)
+
+    def test_canonical_json_projection_binds_only_documented_semantic_fields(self) -> None:
+        cases = (
+            (
+                "docs/collateral-inventory.json",
+                {"trackedFiles": [{"path": "release/v0.1.0-rehearsal/manifest.json", "sha256": "1" * 64, "trackedAtRevision": "a" * 40, "exists": True}]},
+                lambda doc: doc["trackedFiles"][0].update(sha256="2" * 64, trackedAtRevision="b" * 40),
+                lambda doc: doc["trackedFiles"][0].update(exists=False),
+            ),
+            (
+                "review/provenance.json",
+                {"records": [{"assetId": "HANDOFF-MANIFEST-001", "source": {"revision": "a" * 40, "url": "old"}, "checksum": {"value": "1" * 64}, "reviewStatus": "pending"}]},
+                lambda doc: (doc["records"][0]["source"].update(revision="b" * 40, url="new"), doc["records"][0]["checksum"].update(value="2" * 64)),
+                lambda doc: doc["records"][0].update(reviewStatus="approved"),
+            ),
+        )
+        for relative, original, excluded_mutation, included_mutation in cases:
+            with self.subTest(path=relative):
+                original_digest = package.projected_policy_digest(relative, original)
+                excluded_changed = package.json.loads(package.json.dumps(original))
+                excluded_mutation(excluded_changed)
+                self.assertEqual(original_digest, package.projected_policy_digest(relative, excluded_changed))
+                included_changed = package.json.loads(package.json.dumps(original))
+                included_mutation(included_changed)
+                self.assertNotEqual(original_digest, package.projected_policy_digest(relative, included_changed))
+
+    def test_manifest_validator_fails_closed_for_missing_or_altered_projection_binding(self) -> None:
+        relative = "docs/collateral-inventory.json"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / relative
+            path.parent.mkdir(parents=True)
+            source = {"trackedFiles": [{"path": "release/v0.1.0-rehearsal/manifest.json", "sha256": "1" * 64, "trackedAtRevision": "a" * 40, "exists": True}]}
+            path.write_text(package.json.dumps(source), encoding="utf-8")
+            support = package._support_file(root, relative)
+            manifest = {"assets": [], "captionSidecars": [], "supportFiles": [support], "policyInputHashes": {}, "requiredSubmissionArtifact": {"exists": False}}
+            self.assertEqual([], package.validate_manifest_files(root, manifest))
+            path.write_text(package.json.dumps(source, indent=2), encoding="utf-8")
+            self.assertEqual([], package.validate_manifest_files(root, manifest), "JSON whitespace is outside the documented semantic binding")
+            support["binding"]["algorithm"] = "unknown"
+            errors = package.validate_manifest_files(root, manifest)
+            self.assertTrue(any("unsupported or altered canonical JSON projection" in error for error in errors))
+            support.pop("binding")
+            errors = package.validate_manifest_files(root, manifest)
+            self.assertTrue(any("required canonical JSON projection binding is missing" in error for error in errors))
 
     def test_pending_and_superseded_samples_are_rejected(self) -> None:
         for field, value in (("releaseStatus", "pending"), ("status", "superseded")):
@@ -315,7 +409,7 @@ class PackagePolicyTests(unittest.TestCase):
         row = next(item for item in spec["assets"] if item["assetId"] == "DEMO-RECORDING-CHECKLIST-001")
         name = package.package_filename(row, ROOT / row["path"], {"status": "not_applicable"}, spec)
         self.assertEqual(
-            "demo-001-demo-recording-checklist-001-r01-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
+            "demo-001-demo-recording-checklist-001-r02-repository-internal-review-text-en-us-rehearsal-recording-plan.md",
             name,
         )
         self.assertTrue((ROOT / row["path"]).is_file())
