@@ -2886,6 +2886,89 @@ test("API 1.2 composition.get remains null until explicit create publishes exact
   "composition create/get are offline and add no provider or billing effects");
 });
 
+test("composition create and update roll back thenable commit ports and keep synchronous publication", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-sync-commit-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const sourceBytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  const revision = initialComposition(context, design, selection, sourceBytes);
+  const preparedBytes = Uint8Array.from(makePng({ width: 17, height: 16, transparent: true }));
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision, preview_bytes: Uint8Array.from(sourceBytes) }; },
+    async preparePreview(input) {
+      const checked_at = NOW - 500;
+      return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+        preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+          preview_id: `preview:${input.action_id}`, preview_sha256: hash(preparedBytes),
+          byte_length: preparedBytes.byteLength, mime_type: "image/png", width_px: 17, height_px: 16,
+          proof_ref: `preview-proof:${input.action_id}`, state_sha256: input.candidate.state_sha256,
+          checked_at, expires_at: NOW + 60_000 },
+        authority_proof: { proof_ref: `authority-proof:${input.action_id}`,
+          state_sha256: input.candidate.state_sha256, checked_at, expires_at: NOW + 60_000 },
+        preview_bytes: Uint8Array.from(preparedBytes) };
+    },
+    assertCurrent(input) { return compositionCurrentAssertion(input); },
+  };
+
+  const synchronousCommit = context.ports.storage.commitCompositionRevision;
+  context.ports.storage.commitCompositionRevision = (input, transaction) =>
+    Promise.resolve(synchronousCommit(input, transaction));
+  const failedCreate = await context.api.invoke(authorizedActor(), compositionRequest(
+    "composition-async-commit-create", "composition.create", {}));
+  assert.equal(failedCreate.ok, false, JSON.stringify(failedCreate));
+  assert.equal(failedCreate.error.code, "unavailable");
+  assert.equal(failedCreate.error.field, "job_publication");
+  assert.equal(await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id }), null, "a thenable create commit rolls back its staged revision and current pointer");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count,
+    0, "the failed create commit leaves no immutable revision");
+  assert.equal(context.store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?")
+    .get("composition-async-commit-create").status, "failed");
+
+  context.ports.storage.commitCompositionRevision = synchronousCommit;
+  const created = await context.api.invoke(authorizedActor(), compositionRequest(
+    "composition-sync-commit-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const parent = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(parent.revision.revision_sha256, revision.revision_sha256,
+    "the normal synchronous commit remains usable after the rejected adapter contract");
+  const plan = createCompositionEditPlan({ plan_id: "composition-plan:async-commit-update/1",
+    binding: parent.revision.binding, layer_manifest: parent.revision.layer_manifest,
+    target_composition_revision_id: "composition-revision:async-commit-update",
+    operations: [{ operation_id: "set-title/async-commit", kind: "set_text", layer_id: "layer:title",
+      value: "This child must not publish" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+
+  context.ports.storage.commitCompositionRevision = (input, transaction) =>
+    Promise.resolve(synchronousCommit(input, transaction));
+  const failedUpdate = await context.api.invoke(authorizedActor(), compositionRequest(
+    "composition-async-commit-update", "composition.update", { plan }));
+  assert.equal(failedUpdate.ok, false, JSON.stringify(failedUpdate));
+  assert.equal(failedUpdate.error.code, "unavailable");
+  assert.equal(failedUpdate.error.field, "job_publication");
+  const currentAfterUpdate = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(currentAfterUpdate.revision.revision_id, parent.revision.revision_id);
+  assert.equal(currentAfterUpdate.revision.revision_sha256, parent.revision.revision_sha256,
+    "a thenable update commit cannot replace the parent revision");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count,
+    1, "the failed update leaves no child revision");
+  assert.equal(context.store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?")
+    .get("composition-async-commit-update").status, "failed");
+  const action = await context.ports.storage.getCompositionAction({ scope: SCOPE,
+    action_id: "composition-async-commit-update" });
+  assert.notEqual(action.status, "published", "a thenable commit cannot publish its staged composition action");
+});
+
 test("API 1.3 history exposes identity only and fresh revalidation restores current service after expiry and same-design restore", async (t) => {
   const context = await setup(t, { compositionLogo: true });
   const seedPlan = await jsonFixture("generate-plan");

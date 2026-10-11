@@ -522,8 +522,7 @@ export interface CreativeCompositionStoragePort {
     composition_id: string; limit: number; after_revision_id?: string }>): CreativeCompositionStoredPage |
     Promise<CreativeCompositionStoredPage>;
   commitCompositionRevision(input: CreativeCompositionCommitInput,
-    transaction: CreativePublicationTransaction): CreativeCompositionCommitResult |
-    Promise<CreativeCompositionCommitResult>;
+    transaction: CreativePublicationTransaction): CreativeCompositionCommitResult;
 }
 export interface CreativeCompositionVersionStoreMethods extends CreativeCompositionStoragePort {}
 
