@@ -252,6 +252,15 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
     assert.equal(unsupported.status, 'partial');
     assert.ok(unsupported.missingDimensions.includes('unsupported_usage_unit:container_minutes'));
 
+    const duplicatedUnitEvent = makeEvent(sharedEvent, scope, fixture.selection.event_time, {
+      extraUnits: [unit('input_tokens', '100')],
+    });
+    const duplicatedUnit = await callEstimate(requestBase(scope, duplicatedUnitEvent, 'ci03-duplicate-usage-unit'), ports);
+    assert.equal(duplicatedUnit.status, 'partial');
+    assert.ok(duplicatedUnit.missingDimensions.includes('duplicate_usage_unit:input_tokens'));
+    assert.equal(duplicatedUnit.calculation.some(line => line.usageUnit === 'input_tokens'), false,
+      'ambiguous repeated input totals are not included in the known subtotal');
+
     const badPartitionEvent = makeEvent(sharedEvent, scope, fixture.selection.event_time, {
       cached: '50', written: '60',
     });

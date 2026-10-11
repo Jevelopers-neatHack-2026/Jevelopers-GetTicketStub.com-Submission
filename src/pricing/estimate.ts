@@ -186,6 +186,7 @@ function dimensionMatches(card: RateCard, request: EstimateRequest): boolean {
 
 function parseUsageUnits(event: Record<string, unknown>, missing: string[]): Map<string, UsageValue> {
   const values = new Map<string, UsageValue>();
+  const duplicates = new Set<string>();
   const rawUnits = event.usage_units;
   if (!Array.isArray(rawUnits)) {
     missing.push('usage_units_unavailable');
@@ -202,9 +203,11 @@ function parseUsageUnits(event: Record<string, unknown>, missing: string[]): Map
       missing.push('usage_unit_name_missing');
       continue;
     }
+    if (duplicates.has(name)) continue;
     if (values.has(name)) {
       missing.push('duplicate_usage_unit:' + name);
       values.delete(name);
+      duplicates.add(name);
       continue;
     }
     let quantity: ExactRational | null = null;
