@@ -136,3 +136,16 @@ export type {
   PrivateQuoteComparisonDependencies,
   PrivateQuoteComparisonRequest
 } from "./comparison.js";
+export {
+  decodeProdigiProductDetails,
+  prodigiProductDetailsPath,
+  ProdigiProductDetailsError
+} from "./prodigi-product-details.js";
+export type {
+  ProdigiProductDetails,
+  ProdigiProductDetailsErrorCode,
+  ProdigiProductDimensions,
+  ProdigiPrintArea,
+  ProdigiPrintAreaSize,
+  ProdigiProductVariant
+} from "./prodigi-product-details.js";

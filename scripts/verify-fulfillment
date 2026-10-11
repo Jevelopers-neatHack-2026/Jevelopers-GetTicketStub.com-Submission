@@ -2,6 +2,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { STATUS_SUITE_CASE_COUNT } from "./run-status-tests.mjs";
+import { PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT } from "./run-prodigi-product-details-tests.mjs";
 
 let allSharedShapes = [];
 let contractOwnership = {};
@@ -14,6 +15,7 @@ let comparisonApiAvailable = false;
 let privateComparisonFormat = null;
 let attemptStoreApiAvailable = false;
 let statusApiAvailable = false;
+let prodigiProductDetailsApiAvailable = false;
 let providerEnvironmentMatrix = null;
 try {
   const catalog = await import("../dist/index.js");
@@ -38,6 +40,9 @@ try {
   statusApiAvailable = typeof catalog.LocalStatusStore === "function" &&
     typeof catalog.StatusStoreError === "function" && typeof catalog.normalizeProviderObservation === "function" &&
     typeof catalog.fixtureStatusMapping === "function" && typeof catalog.fixtureTrackingHostPolicy === "function";
+  prodigiProductDetailsApiAvailable = typeof catalog.decodeProdigiProductDetails === "function" &&
+    typeof catalog.prodigiProductDetailsPath === "function" &&
+    typeof catalog.ProdigiProductDetailsError === "function";
 } catch {
   // Keep argument and missing-build failures machine-readable even before a build.
 }
@@ -75,7 +80,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "comparison", "status", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "mock", "quote", "attempt-store", "comparison", "status", "prodigi-product-details", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 function validStatusRunnerReport(report) {
   const reportKeys = ["schemaVersion", "suite", "mode", "status", "passed", "failed", "results", "processExitCode",
@@ -103,6 +108,41 @@ function validStatusRunnerReport(report) {
   if (report.failed === 0) {
     return report.results.length === STATUS_SUITE_CASE_COUNT && report.processExitCode === 0 &&
       report.processSignal === null && report.processError === null && report.stderrPresent === false;
+  }
+  return report.status === "failed";
+}
+function validProdigiProductDetailsRunnerReport(report) {
+  const requiredKeys = ["schemaVersion", "suite", "mode", "status", "passed", "failed", "results", "processExitCode",
+    "processSignal", "processError", "stderrPresent", "externalProviderCalls", "orderCalls", "financeCalls",
+    "sandboxReady", "liveEnabled", "releaseReady", "skipped"];
+  if (report === null || typeof report !== "object" || Array.isArray(report) ||
+    requiredKeys.some((key) => !Object.prototype.hasOwnProperty.call(report, key)) ||
+    Object.keys(report).some((key) => !requiredKeys.includes(key) && key !== "processStdout") ||
+    report.schemaVersion !== "fulfillment-prodigi-product-details-suite-result/1" ||
+    report.suite !== "prodigi-product-details" || report.mode !== "simulated" ||
+    !["passed", "failed"].includes(report.status) || !Number.isSafeInteger(report.passed) || !Number.isSafeInteger(report.failed) ||
+    !Array.isArray(report.results) || report.passed < 0 || report.failed < 0 ||
+    report.passed + report.failed !== report.results.length || report.results.length < PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT ||
+    (!Number.isSafeInteger(report.processExitCode) && report.processExitCode !== null) ||
+    (report.processSignal !== null && typeof report.processSignal !== "string") ||
+    (report.processError !== null && typeof report.processError !== "string") || typeof report.stderrPresent !== "boolean" ||
+    report.externalProviderCalls !== 0 || report.orderCalls !== 0 || report.financeCalls !== 0 || report.skipped !== 0 ||
+    report.sandboxReady !== false || report.liveEnabled !== false || report.releaseReady !== false) return false;
+  const names = new Set();
+  for (const check of report.results) {
+    if (check === null || typeof check !== "object" || Array.isArray(check) ||
+      typeof check.name !== "string" || check.name.length === 0 || names.has(check.name) ||
+      !["passed", "failed"].includes(check.status) ||
+      (check.status === "failed" && typeof check.detail !== "string") ||
+      Object.keys(check).some((key) => !["name", "status", "detail"].includes(key))) return false;
+    names.add(check.name);
+  }
+  if (report.passed !== report.results.filter((check) => check.status === "passed").length ||
+    report.failed !== report.results.filter((check) => check.status === "failed").length ||
+    report.status !== (report.failed === 0 ? "passed" : "failed")) return false;
+  if (report.status === "passed") {
+    return report.results.length === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT && report.passed === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT &&
+      report.processExitCode === 0 && report.processSignal === null && report.processError === null && report.stderrPresent === false;
   }
   return report.status === "failed";
 }
@@ -163,6 +203,12 @@ const statusBlockers = [
   "application consumer conformance for the local at-least-once outbox is pending",
   "finance authority, sandbox account evidence, and release acceptance are unavailable"
 ];
+const prodigiProductDetailsBlockers = [
+  "this result covers only a provider-private wire decoder and relative path helper with synthetic offline fixtures",
+  "it does not establish a selected product, orderability, destination eligibility, authenticated sandbox behavior, or application adoption",
+  "issue 15 full acceptance still includes the supported cancellation outcome; this component implements no order lifecycle operation",
+  "canonical schema acceptance and producer/consumer conformance remain pending"
+];
 
 let checks = [];
 let meteringReport = null;
@@ -171,6 +217,7 @@ let quoteReport = null;
 let comparisonReport = null;
 let attemptStoreReport = null;
 let statusReport = null;
+let prodigiProductDetailsReport = null;
 let failureReasons = [];
 let status = "failed";
 
@@ -190,6 +237,7 @@ if (args.suite === "quote" && args.mode !== "simulated") failureReasons.push("qu
 if (args.suite === "attempt-store" && args.mode !== "simulated") failureReasons.push("attempt_store_fixture_suite_requires_simulated_mode");
 if (args.suite === "comparison" && args.mode !== "simulated") failureReasons.push("comparison_fixture_suite_requires_simulated_mode");
 if (args.suite === "status" && args.mode !== "simulated") failureReasons.push("status_fixture_suite_requires_simulated_mode");
+if (args.suite === "prodigi-product-details" && args.mode !== "simulated") failureReasons.push("prodigi_product_details_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -347,6 +395,27 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("status_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "prodigi-product-details" && args.mode === "simulated") {
+  if (!prodigiProductDetailsApiAvailable) failureReasons.push("prodigi_product_details_runtime_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runProdigiProductDetailsTests } = await import("./run-prodigi-product-details-tests.mjs");
+      const report = runProdigiProductDetailsTests();
+      checks = report.results ?? [];
+      if (!validProdigiProductDetailsRunnerReport(report)) {
+        failureReasons.push("prodigi_product_details_runner_report_invalid");
+      } else if (report.status === "passed" && report.passed === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT &&
+        report.failed === 0 && checks.length === PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT &&
+        checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_product_details_fixture_checks_failed");
+      }
+      prodigiProductDetailsReport = report;
+    }
+  } catch {
+    failureReasons.push("prodigi_product_details_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
   try {
@@ -401,6 +470,8 @@ const result = {
           ? "local_private_quote_comparison_projection_suite"
         : args.suite === "status"
           ? "local_private_status_fixture_suite"
+          : args.suite === "prodigi-product-details"
+            ? "local_private_prodigi_product_details_wire_fixture_suite"
           : args.suite === "metering"
             ? "local_private_metering_fixture_suite"
             : "local_private_fixture_contract_suite"
@@ -413,6 +484,7 @@ const result = {
     ...(args.suite === "mock" ? mockBlockers : []),
     ...(args.suite === "quote" ? quoteBlockers : []),
     ...(args.suite === "status" ? statusBlockers : []),
+    ...(args.suite === "prodigi-product-details" ? prodigiProductDetailsBlockers : []),
     ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
     ...(args.suite === "comparison" ? comparisonBlockers : []),
     ...(args.suite === "provider-matrix" ? [
@@ -652,6 +724,34 @@ const result = {
       blockers: statusBlockers
     }
   } : {}),
+  ...(args.suite === "prodigi-product-details" ? {
+    prodigiProductDetailsAssessment: {
+      schemaVersion: "fulfillment-prodigi-product-details-assessment/1",
+      evidenceScope: "provider_private_wire_decoder_and_synthetic_offline_fixtures_only",
+      completion: "partial_private_wire_projection",
+      localFixtureResult: status === "passed" ? "passed" : checks.length === 0 ? "not_run" : "failed",
+      localFixtureCounts: {
+        total: checks.length,
+        passed: checks.filter((check) => check.status === "passed").length,
+        failed: checks.filter((check) => check.status !== "passed").length
+      },
+      capabilities: ["decode_documented_success_response", "build_fixed_relative_product_details_path"],
+      productSelection: "not_performed",
+      orderabilityOrAvailability: "not_established",
+      providerTransport: "not_implemented",
+      orderRetrieveAndCancel: "not_implemented; issue 15 acceptance still includes cancellation outcomes",
+      canonicalAcceptance: "pending",
+      consumerConformance: { state: "pending", expectedResultsMatch: false },
+      sandboxReady: false,
+      liveEnabled: false,
+      releaseReady: false,
+      externalProviderCalls: prodigiProductDetailsReport?.externalProviderCalls ?? 0,
+      orderCalls: prodigiProductDetailsReport?.orderCalls ?? 0,
+      financeCalls: prodigiProductDetailsReport?.financeCalls ?? 0,
+      runner: prodigiProductDetailsReport,
+      blockers: prodigiProductDetailsBlockers
+    }
+  } : {}),
   providerMatrixAssessment: args.suite === "provider-matrix" ? {
     schemaVersion: "fulfillment-provider-matrix-assessment/1",
     evidenceScope: "documented_metadata_and_private_policy_fixtures_only",
@@ -743,6 +843,7 @@ if (args["evidence-dir"] !== undefined) {
       ...(args.suite === "comparison" ? comparisonBlockers : []),
       ...(args.suite === "attempt-store" ? attemptStoreBlockers : []),
       ...(args.suite === "status" ? statusBlockers : []),
+      ...(args.suite === "prodigi-product-details" ? prodigiProductDetailsBlockers : []),
       ...failureReasons
     ];
     if (result.catalogAssessment !== undefined) result.catalogAssessment.localFixtureResult = "failed";
@@ -752,6 +853,10 @@ if (args["evidence-dir"] !== undefined) {
       result.comparisonAssessment.evidenceWriteStatus = "failed";
     }
     if (result.attemptStoreAssessment !== undefined) result.attemptStoreAssessment.localFixtureResult = "failed";
+    if (result.prodigiProductDetailsAssessment !== undefined) {
+      result.prodigiProductDetailsAssessment.localFixtureResult = "failed";
+      result.prodigiProductDetailsAssessment.evidenceWriteStatus = "failed";
+    }
   }
 }
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
