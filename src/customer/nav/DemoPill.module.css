@@ -3,7 +3,7 @@
   position: fixed;
   left: calc(var(--nav-w, 0px) + 12px);
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: 105; /* under the sidebar's phone drawer and the mini cart */
+  z-index: 39; /* over the page, under every sheet, scrim and stage (40 and up) */
   display: inline-flex;
   align-items: center;
   max-width: calc(100vw - var(--nav-w, 0px) - 24px);
@@ -16,6 +16,11 @@
     0 6px 16px -8px rgba(23, 20, 15, 0.35);
   font-size: 12px;
   line-height: 1;
+}
+
+/* while the pill is up, the page can scroll its last line clear of it */
+:global(#content):has(> .pill) {
+  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
 }
 
 .tag {
