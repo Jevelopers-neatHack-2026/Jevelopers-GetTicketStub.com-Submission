@@ -49,25 +49,45 @@ async function quoteOnce({ catalog = copyCatalog(catalogA), response = providerQ
   return { request, harness, result };
 }
 
-function mappedQuoteBoundary(schemaVersion = "0.1.0") {
+function mappedQuotePayload(request) {
+  const quote = request.value;
+  const binding = quote.binding;
+  return {
+    quote_reference: quote.quoteId,
+    provider_reference: quote.providerQuoteReference,
+    sku: binding.sku,
+    catalog: {
+      providerId: binding.providerId,
+      apiVersion: binding.apiVersion,
+      catalogVersion: binding.catalogVersion,
+      snapshotIdentity: binding.catalogSnapshotIdentity,
+      contentIdentity: binding.catalogContentIdentity
+    },
+    selection: {
+      variantId: binding.variantId,
+      options: binding.options,
+      materials: binding.materials,
+      destination: {
+        countryCode: binding.destination.countryCode,
+        ...(binding.destination.regionCode === undefined ? {} : { regionCode: binding.destination.regionCode })
+      },
+      shippingMethod: binding.shippingMethod
+    },
+    scope: { tenantId: binding.tenantId, projectId: binding.projectId },
+    quantity: binding.quantity,
+    destination_reference: binding.destination.reference,
+    created_at: quote.createdAt,
+    valid_until: quote.expiry.effectiveValidUntil,
+    currency: quote.currency,
+    total_amount: quote.breakdown.total.value.decimal,
+    total_minor_units: quote.breakdown.total.value.minorUnits
+  };
+}
+
+function mappedQuoteBoundary(schemaVersion = "0.1.0", additionalFields = () => ({})) {
   return contractValidator({ validateOutbound: async (request) => ({
     ok: true,
-    value: {
-      quote_reference: request.value.quoteId,
-      provider_reference: request.value.providerQuoteReference,
-      sku: request.value.binding.sku,
-      scope: {
-        tenantId: request.value.binding.tenantId,
-        projectId: request.value.binding.projectId
-      },
-      quantity: request.value.binding.quantity,
-      destination_reference: request.value.binding.destination.reference,
-      created_at: request.value.createdAt,
-      valid_until: request.value.expiry.effectiveValidUntil,
-      currency: request.value.currency,
-      total_amount: request.value.breakdown.total.value.decimal,
-      total_minor_units: request.value.breakdown.total.value.minorUnits
-    },
+    value: { ...mappedQuotePayload(request), ...additionalFields(request) },
     receipts: [{ shape: "fulfillment_quote", schemaVersion, ...request.trustedScope }]
   }) });
 }
@@ -679,6 +699,86 @@ add("validated numeric SKU and spaced trusted scope stay current through a subst
     });
     assert.equal(harness.calls.quote, 1);
     assertNoOrder(harness);
+  }
+});
+
+add("all creation-approved numeric catalog identifiers round-trip through mapped output and unchanged currentness", async () => {
+  const identifier = "9781234567897";
+  const cases = [
+    { field: "providerId", update: (catalog) => { catalog.providerId = identifier; } },
+    { field: "catalogVersion", update: (catalog) => { catalog.catalogVersion = identifier; } },
+    { field: "apiVersion", update: (catalog) => { catalog.apiVersion = identifier; } },
+    { field: "dateApiVersion", update: (catalog) => { catalog.apiVersion = "2026-10-10"; }, apiVersion: "2026-10-10" },
+    { field: "sku", update: (catalog) => { catalog.products[0].sku = identifier; } },
+    { field: "variantId", update: (catalog) => { catalog.products[0].variantId = identifier; } },
+    { field: "option", update: (catalog) => { catalog.products[0].constraints.options.value = [identifier]; } },
+    { field: "material", update: (catalog) => { catalog.products[0].constraints.materials.value = [identifier]; } },
+    {
+      field: "destination.regionCode",
+      update: (catalog) => {
+        catalog.products[0].constraints.destinations.value[0].regions.value = [identifier];
+        catalog.products[0].constraints.shipping.value.find((route) => route.regionCode === "CA").regionCode = identifier;
+      },
+      regionCode: identifier
+    },
+    {
+      field: "shippingMethod",
+      update: (catalog) => { catalog.products[0].constraints.shipping.value.find((route) => route.regionCode === "CA").methods = [identifier]; },
+      shippingMethod: identifier
+    }
+  ];
+
+  for (const testCase of cases) {
+    const catalog = copyCatalog(catalogA);
+    testCase.update(catalog);
+    const request = await requestFor(catalog);
+    request.selection = {
+      ...request.selection,
+      destination: { countryCode: "US", regionCode: testCase.regionCode ?? "CA" },
+      shippingMethod: testCase.shippingMethod ?? "express"
+    };
+    const harness = quoteHarness({ contracts: mappedQuoteBoundary() });
+    const result = await executePrivateQuote(request, harness.dependencies);
+    const current = await evaluatePrivateQuoteCurrent(result.quote, request, harness.dependencies);
+
+    assert.equal(result.quote.status, "complete", `${testCase.field} quote should be complete`);
+    assert.equal(current.status, "current", `${testCase.field} should remain current: ${JSON.stringify(current)}`);
+    assert.deepEqual(current.requiredActions, ["obtain_external_authorization"]);
+    assert.equal(current.quoteMayBePresentedForExternalReview, true);
+    assert.equal(result.sharedPayload.catalog.providerId, result.quote.binding.providerId);
+    assert.equal(result.sharedPayload.catalog.apiVersion, testCase.apiVersion ?? result.quote.binding.apiVersion);
+    assert.equal(result.sharedPayload.catalog.catalogVersion, result.quote.binding.catalogVersion);
+    assert.equal(result.sharedPayload.sku, result.quote.binding.sku);
+    assert.equal(result.sharedPayload.selection.variantId, result.quote.binding.variantId);
+    assert.deepEqual(result.sharedPayload.selection.options, result.quote.binding.options);
+    assert.deepEqual(result.sharedPayload.selection.materials, result.quote.binding.materials);
+    assert.equal(result.sharedPayload.selection.destination.regionCode, result.quote.binding.destination.regionCode);
+    assert.equal(result.sharedPayload.selection.shippingMethod, result.quote.binding.shippingMethod);
+    assert.equal(harness.calls.quote, 1);
+    assertNoOrder(harness);
+  }
+});
+
+add("matching numeric identifiers do not exempt phone-like provider notes or unbound boundary fields", async () => {
+  const identifier = "9781234567897";
+  const noteRequest = await requestFor();
+  const noteHarness = quoteHarness({ response: providerQuote({ providerNotes: [`Reference ${identifier}`] }) });
+  await expectQuoteError(executePrivateQuote(noteRequest, noteHarness.dependencies), "provider_response_invalid");
+  assert.equal(noteHarness.calls.quote, 1);
+  assertNoOrder(noteHarness);
+
+  const numericVariant = copyCatalog(catalogA);
+  numericVariant.products[0].variantId = identifier;
+  for (const fields of [
+    { unboundReference: identifier },
+    { note: identifier },
+    { variantId: "9781234567898" }
+  ]) {
+    const mappedRequest = await requestFor(numericVariant);
+    const mappedHarness = quoteHarness({ contracts: mappedQuoteBoundary("0.1.0", () => fields) });
+    await expectQuoteError(executePrivateQuote(mappedRequest, mappedHarness.dependencies), "contract_rejected");
+    assert.equal(mappedHarness.calls.quote, 1);
+    assertNoOrder(mappedHarness);
   }
 });
 

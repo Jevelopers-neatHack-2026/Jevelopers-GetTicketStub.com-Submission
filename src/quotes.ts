@@ -800,12 +800,23 @@ function quoteMoneyScalars(quote: PrivateQuoteSnapshot): ReadonlySet<string> {
   return values;
 }
 
-function quoteOpaqueIdentifiers(quote: PrivateQuoteSnapshot): ReadonlyMap<string, string> {
-  return new Map([
-    ["sku", quote.binding.sku],
-    ["tenantid", quote.binding.tenantId],
-    ["projectid", quote.binding.projectId]
-  ]);
+function quoteOpaqueIdentifiers(quote: PrivateQuoteSnapshot): ReadonlyMap<string, ReadonlySet<string>> {
+  const identifiers = new Map<string, Set<string>>();
+  const add = (field: string, value: string): void => {
+    const fieldName = field.replace(/[^A-Za-z0-9]/gu, "").toLowerCase();
+    const values = identifiers.get(fieldName) ?? new Set<string>();
+    values.add(value);
+    identifiers.set(fieldName, values);
+  };
+  const binding = quote.binding;
+  for (const field of ["tenantId", "projectId", "providerId", "apiVersion", "catalogVersion", "sku", "variantId", "shippingMethod"] as const) {
+    add(field, binding[field]);
+  }
+  for (const value of binding.options) add("options", value);
+  for (const value of binding.materials) add("materials", value);
+  add("countryCode", binding.destination.countryCode);
+  if (binding.destination.regionCode !== undefined) add("regionCode", binding.destination.regionCode);
+  return identifiers;
 }
 
 function isCanonicalTimestampValue(value: string): boolean {
@@ -825,7 +836,7 @@ function isFinancialField(value: string): boolean {
 function ensurePrivacySafe(
   value: unknown,
   moneyScalars: ReadonlySet<string>,
-  opaqueIdentifiers: ReadonlyMap<string, string> = new Map(),
+  opaqueIdentifiers: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
   depth = 0,
   field = "",
   parentField = ""
@@ -839,7 +850,7 @@ function ensurePrivacySafe(
     const financialScalar = isFinancialField(field) || (fieldName === "value" && isFinancialField(parentField));
     const exactMoney = EXACT_MONEY.test(value) || ((fieldName.includes("minorunit") || parentName.includes("minorunit")) && EXACT_MINOR_UNITS.test(value));
     if (financialScalar && exactMoney && moneyScalars.has(value)) return;
-    const validatedOpaqueIdentifier = opaqueIdentifiers.get(fieldName) === value;
+    const validatedOpaqueIdentifier = opaqueIdentifiers.get(fieldName)?.has(value) === true;
     if (EMAIL_OR_URL.test(value) || (!validatedOpaqueIdentifier && PHONE_LIKE.test(value)) || ADDRESS_LIKE.test(value) || SECRET_LIKE.test(value)) return invalid("contract_rejected");
     return;
   }
