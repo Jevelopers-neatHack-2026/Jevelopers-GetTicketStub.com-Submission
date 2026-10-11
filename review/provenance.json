@@ -177,7 +177,8 @@
           "PROV-FILE-CF037D115D82",
           "PROV-FILE-A380F085125A",
           "PROV-FILE-800D4A16A6F4",
-          "PROV-FILE-89AE66BC68BC"
+          "PROV-FILE-89AE66BC68BC",
+          "PROV-FILE-A5E8BBF5FF4A"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -256,7 +257,8 @@
           "DEMO-WORKFLOW-DIAGRAM-001"
         ],
         "derivatives": [
-          "PROV-FILE-749235528AD5"
+          "PROV-FILE-749235528AD5",
+          "PROV-FILE-D4B2B1930956"
         ],
         "transformations": [
           "Raster export of DEMO-WORKFLOW-DIAGRAM-001."
@@ -337,7 +339,8 @@
         "derivatives": [
           "PROV-FILE-A9D8CF2BE2A4",
           "PROV-FILE-5A1E2F886155",
-          "PROV-FILE-ECEB50A5FB3A"
+          "PROV-FILE-ECEB50A5FB3A",
+          "PROV-FILE-DEA6A69EF5BD"
         ],
         "transformations": [
           "Accessible text alternative authored from DEMO-WORKFLOW-DIAGRAM-001."
@@ -419,7 +422,8 @@
           "PROV-PREVIEW-MOCKUP-001",
           "PROV-FILE-DDB2BC496431",
           "PROV-FILE-267E17C53FB6",
-          "PROV-FILE-6680B420C41F"
+          "PROV-FILE-6680B420C41F",
+          "PROV-FILE-B55F1E60FB96"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -498,7 +502,8 @@
           "DEMO-SCREENSHOT-SET-001"
         ],
         "derivatives": [
-          "PROV-FILE-27407AD91D34"
+          "PROV-FILE-27407AD91D34",
+          "PROV-FILE-5070A9FA76FD"
         ],
         "transformations": [
           "Raster export of DEMO-SCREENSHOT-SET-001."
@@ -578,7 +583,8 @@
         ],
         "derivatives": [
           "PROV-FILE-7B20B0799157",
-          "PROV-FILE-BCC33F252B89"
+          "PROV-FILE-BCC33F252B89",
+          "PROV-FILE-B6E7C1F60600"
         ],
         "transformations": [
           "Accessible text alternative authored from DEMO-SCREENSHOT-SET-001."
@@ -672,7 +678,8 @@
           "PROV-PREVIEW-DECK-RESP-1040-001",
           "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
           "PROV-FILE-16A3723BC5F7",
-          "PROV-FILE-A8CDC02FCD45"
+          "PROV-FILE-A8CDC02FCD45",
+          "PROV-FILE-F0C165179525"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -757,7 +764,8 @@
           "PROV-PREVIEW-X-FEED-001",
           "PROV-FILE-767E4CA2260D",
           "PROV-FILE-B7E582F9B754",
-          "PROV-FILE-0F20A529D437"
+          "PROV-FILE-0F20A529D437",
+          "PROV-FILE-BACD07F5D132"
         ],
         "transformations": [
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
@@ -836,7 +844,8 @@
           "LAUNCH-X-KEY-VISUAL-001"
         ],
         "derivatives": [
-          "PROV-FILE-566A3B82406B"
+          "PROV-FILE-566A3B82406B",
+          "PROV-FILE-EF2480C90F4D"
         ],
         "transformations": [
           "Raster export of LAUNCH-X-KEY-VISUAL-001."
@@ -916,7 +925,8 @@
         ],
         "derivatives": [
           "PROV-FILE-32D1A28C5E72",
-          "PROV-FILE-1291336709CE"
+          "PROV-FILE-1291336709CE",
+          "PROV-FILE-ED5D97E26765"
         ],
         "transformations": [
           "Accessible text alternative authored from LAUNCH-X-KEY-VISUAL-001."
@@ -3999,7 +4009,8 @@
           "DEMO-REHEARSAL-RENDER-PLAN-001"
         ],
         "derivatives": [
-          "PROV-FILE-BB8088961885"
+          "PROV-FILE-BB8088961885",
+          "PROV-FILE-5E2976679C5C"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -4080,7 +4091,8 @@
           "DEMO-REHEARSAL-RENDER-PLAN-001"
         ],
         "derivatives": [
-          "PROV-FILE-81300E0C9615"
+          "PROV-FILE-81300E0C9615",
+          "PROV-FILE-77112C4E205D"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -5801,7 +5813,8 @@
           "PROV-FILE-773E6C706898",
           "PROV-FILE-EE26E516E1F2",
           "PROV-FILE-DAABAA5BBBCE",
-          "PROV-FILE-2A0801C207B7"
+          "PROV-FILE-2A0801C207B7",
+          "PROV-FILE-AA2B61DEEDFF"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -5881,7 +5894,8 @@
         "derivedFrom": [],
         "derivatives": [
           "PROV-FILE-A7C50DDF7F9A",
-          "PROV-FILE-99A2CFD0E288"
+          "PROV-FILE-99A2CFD0E288",
+          "PROV-FILE-5E30437D48A6"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -5960,7 +5974,8 @@
         "derivedFrom": [],
         "derivatives": [
           "PROV-FILE-DC6A027B38C9",
-          "PROV-FILE-931FA338D053"
+          "PROV-FILE-931FA338D053",
+          "PROV-FILE-5211797AFA49"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6039,7 +6054,8 @@
         "derivedFrom": [],
         "derivatives": [
           "PROV-FILE-EFE7C960615E",
-          "PROV-FILE-13139B1FD3A4"
+          "PROV-FILE-13139B1FD3A4",
+          "PROV-FILE-946308520A8D"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6121,7 +6137,8 @@
           "DEMO-REHEARSAL-TRANSCRIPT-001",
           "PROV-FILE-DD88A6342BC4",
           "PROV-FILE-316F5E377A24",
-          "PROV-FILE-2D551B95A355"
+          "PROV-FILE-2D551B95A355",
+          "PROV-FILE-82124887CB12"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6202,7 +6219,8 @@
         ],
         "derivatives": [
           "PROV-FILE-E05714683C41",
-          "PROV-FILE-D128EE8CA45E"
+          "PROV-FILE-D128EE8CA45E",
+          "PROV-FILE-BAAC15849931"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred.",
@@ -6282,7 +6300,8 @@
         "derivedFrom": [],
         "derivatives": [
           "PROV-FILE-47D32100F987",
-          "PROV-FILE-544E2835265C"
+          "PROV-FILE-544E2835265C",
+          "PROV-FILE-0853DDEBA1EA"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6361,7 +6380,8 @@
         "derivedFrom": [],
         "derivatives": [
           "PROV-FILE-523AB7C5F3E1",
-          "PROV-FILE-420DDEC6DC38"
+          "PROV-FILE-420DDEC6DC38",
+          "PROV-FILE-8AD60C075166"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
@@ -6818,7 +6838,8 @@
         "derivedFrom": [],
         "derivatives": [
           "PROV-FILE-5B3DC7E891CE",
-          "PROV-FILE-541805829258"
+          "PROV-FILE-541805829258",
+          "PROV-FILE-6A60A1997A26"
         ],
         "transformations": [
           "Exact candidate file recorded for internal review; no public/release approval inferred."
