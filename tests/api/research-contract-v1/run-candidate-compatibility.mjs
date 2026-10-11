@@ -191,7 +191,7 @@ async function verifyTransitiveInputs(pins, rowsByPath) {
   const pkg = await json(path.join(repoRoot, 'package.json'));
   const lock = await json(path.join(repoRoot, 'package-lock.json'));
   const ajv = lock.packages?.['node_modules/ajv'];
-  if (pkg.devDependencies?.ajv !== '8.17.1' || ajv?.version !== '8.17.1' || !ajv.integrity || ajv.dev !== true) {
+  if (pkg.devDependencies?.ajv !== '8.20.0' || ajv?.version !== '8.20.0' || !ajv.integrity || ajv.dev !== true) {
     fail('Ajv test-only dependency is not exactly pinned in package and lock files');
   }
   return { dependencyPins, checked, ajv: { version: ajv.version, integrity: ajv.integrity, dev: ajv.dev } };
@@ -383,7 +383,7 @@ export async function runCandidateCompatibility() {
     },
     validator_harness: {
       source: 'exact pinned raw JSON schemas in this artifact',
-      implementation: 'test-only schema adapter using Ajv 8.17.1 and the candidate generator exact Draft 2020-12 compiler options and uuid/utc-time formats',
+      implementation: 'test-only schema adapter using Ajv 8.20.0 and the candidate generator exact Draft 2020-12 compiler options and uuid/utc-time formats',
       adapted_surface: 'schema compilation adapter only; candidate runtime, registry, operations, finance-v2 and research-creative helpers are exact pinned bytes',
       related_test_harness: 'EI-only extraction of fixturePayload/assertFixture/evaluateFixture; excluded commerce, production, capability, and historical-finance fixture routes'
     },
