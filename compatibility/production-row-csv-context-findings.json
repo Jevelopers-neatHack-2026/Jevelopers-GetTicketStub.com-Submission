@@ -1,0 +1,12 @@
+{
+  "reviewed_checkpoint": "aea63666e133d2917fd5410fe8f6c3b984eb0b71",
+  "reviewer_session": "01a12d14-9678-7840-ab94-197c90231480",
+  "historical_verdict": "REQUEST_CHANGES",
+  "candidate_package_version": "0.9.6",
+  "fresh_review": "pending_exact_candidate",
+  "findings": [
+    { "id": "SC-CHK-022", "status": "locally_repaired_review_pending", "repair": "Validate row/batch context and canonical-check job, original rows and selected verified references before comparison/hash; inherited page/projection routes return typed failures." },
+    { "id": "SC-CHK-023", "status": "locally_repaired_review_pending", "repair": "Canonical-check conditional enabling/checkpoint references; keep disabled CSV rejection before evidence access and preserve canonical mismatch codes." }
+  ],
+  "acceptance": "No actual publication, CSV launch, issuer/registry authority, named-owner acceptance, consumer adoption, Finance receipt or release approval. Unsupported preview binding and external gates remain open."
+}

@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.9.6 (unreleased development candidate)
+
+The independent whole-PR review of aea6366 verified SC-CHK-021 and reproduced SC-CHK-022 row/batch context exceptions and SC-CHK-023 conditional CSV reference exceptions. Row, batch, page and projection checks validate supplied job/original-row context; visible rows canonical-check the verified references before equality. Structured plans also reject missing outer context before dereference. Conditional CSV checks canonical-check enabling and checkpoint references while disabled CSV still returns before evidence access. Known ContractError cases return INVALID_TRUST_CONTEXT; unrelated programming errors remain observable. Existing canonical mismatch codes and supported controls are retained. Pinned, explicitly synthetic verified-row/checkpoint calibration inputs preserve the reviewer’s exact bases and confer no authority or actual publication/launch acceptance. The unsupported preview bridge and external acceptance gates remain open; fresh exact-candidate review is required.
+
 ## 0.9.5 (unreleased development candidate)
 
 The independent whole-PR review of d96e6cf verified the previous clock and expectation repairs and reproduced a residual SC-CHK-021 exception on noncanonical facts references. Composition now canonical-checks the independently supplied facts reference after facts validation and before equality. Cycles, hidden properties and symbol properties return INVALID_TRUST_CONTEXT through composition and eligibility; invalid facts still retain FACTS_UNSUPPORTED precedence. Six regression cases cover both public routes. The unsupported preview bridge and external Finance, owner, consumer and release gates remain open; fresh exact-candidate review is required.

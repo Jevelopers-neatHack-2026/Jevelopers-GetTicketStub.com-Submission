@@ -1,4 +1,4 @@
-import { validateContract, checkTrustedContext, canonicalJson, hashManifest } from './runtime.mjs';
+import { validateContract, checkTrustedContext, canonicalJson, hashManifest, ContractError } from './runtime.mjs';
 import { checkPartialFailure, checkJobUpdate } from './operations.mjs';
 import { productionIssue, productionOk } from './production-errors.mjs';
 import { checkPersonalizationSchema, checkTemplateSpec } from './production-values.mjs';
@@ -6,6 +6,16 @@ import { checkPersonalizationSchema, checkTemplateSpec } from './production-valu
 const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 const terminal = new Set(['succeeded', 'failed', 'cancelled', 'partially_succeeded']);
 const visible = row => row.artifact_ref !== null || row.bundle_ref !== null;
+
+function checkBatchContext(input, context) {
+  if (context === null || typeof context !== 'object' || Array.isArray(context) || !checkTrustedContext(context.scope, context.scope).ok) return productionIssue('INVALID_TRUST_CONTEXT');
+  if (!checkTrustedContext(input, context.scope).ok) return productionIssue('NOT_FOUND');
+  try { canonicalJson(context.job); }
+  catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+  if (!same(input.job, context.job)) return productionIssue('NOT_FOUND');
+  if (!Array.isArray(context.original_rows)) return productionIssue('INVALID_TRUST_CONTEXT');
+  return productionOk(context);
+}
 
 /** Validate the complete original structured plan before scheduling; no host callbacks. */
 export function checkPersonalizationPlan(input, context) {
@@ -25,6 +35,7 @@ export function checkPersonalizationPlan(input, context) {
   }
   const parsed = validateContract('PersonalizeBatchRequest', input);
   if (!parsed.ok) return parsed;
+  if (context === null || typeof context !== 'object' || Array.isArray(context) || !checkTrustedContext(context.scope, context.scope).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const template = checkTemplateSpec(context.template, context.scope);
   if (!template.ok) return template;
   if (input.binding.template_ref.id !== template.value.template_id || input.binding.template_ref.revision !== template.value.revision || input.binding.template_ref.content_hash !== template.value.content_hash || !same(input.binding.spec_ref, template.value.spec_ref) || !same(input.binding.capability_ref, template.value.capability_ref)) return productionIssue('HASH_MISMATCH');
@@ -50,16 +61,23 @@ export function checkPersonalizationPlan(input, context) {
 export function checkRowResult(input, context) {
   const parsed = validateContract('RowResult', input);
   if (!parsed.ok) return parsed;
-  if (!checkTrustedContext(input, context.scope).ok || !same(input.job, context.job)) return productionIssue('NOT_FOUND');
+  const checkedContext = checkBatchContext(input, context);
+  if (!checkedContext.ok) return checkedContext;
   const original = context.original_rows[input.ordinal];
-  if (!original || original.row_id !== input.row_id || hashManifest(original) !== input.input_hash) return productionIssue('ROW_BINDING_MISMATCH');
+  if (!original) return productionIssue('ROW_BINDING_MISMATCH');
+  try { canonicalJson(original); }
+  catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+  if (original.row_id !== input.row_id || hashManifest(original) !== input.input_hash) return productionIssue('ROW_BINDING_MISMATCH');
   if ((input.status === 'skipped') !== (input.skip_reason !== null)) return productionIssue('ROW_SCHEMA');
   if (['failed', 'cancelled', 'skipped'].includes(input.status) && !input.errors.length) return productionIssue('ROW_SCHEMA');
   if (input.errors.some(error => error.operation !== 'personalizeArtifactBatch' || error.row_id !== input.row_id || !checkTrustedContext(error.diagnostic_ref, context.scope).ok)) return productionIssue('ROW_BINDING_MISMATCH');
   if (input.status !== 'succeeded' && visible(input)) return productionIssue('INVALID_PUBLICATION');
   if (visible(input)) {
     const verified = context.verified_rows?.[input.row_id];
-    if (input.artifact_ref === null || input.bundle_ref === null || input.eligibility.state !== 'eligible' || !verified || !same(verified.artifact_ref, input.artifact_ref) || !same(verified.bundle_ref, input.bundle_ref) || verified.preflight_status !== 'passed') return productionIssue('INVALID_PUBLICATION');
+    if (input.artifact_ref === null || input.bundle_ref === null || input.eligibility.state !== 'eligible' || !verified) return productionIssue('INVALID_PUBLICATION');
+    try { canonicalJson([verified, verified.artifact_ref, verified.bundle_ref, verified.job]); }
+    catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+    if (!same(verified.artifact_ref, input.artifact_ref) || !same(verified.bundle_ref, input.bundle_ref) || verified.preflight_status !== 'passed') return productionIssue('INVALID_PUBLICATION');
     const row = input.bundle_ref.row_scope;
     if (!row || !same(row.job_ref, input.job) || row.row_id !== input.row_id || row.ordinal !== input.ordinal || row.input_hash !== input.input_hash || !same(input.artifact_ref.composition_ref, input.bundle_ref.composition_ref)) return productionIssue('ROW_BINDING_MISMATCH');
     if (verified.input_hash !== input.input_hash || verified.ordinal !== input.ordinal || !same(verified.job, input.job)) return productionIssue('ROW_BINDING_MISMATCH');
@@ -70,7 +88,8 @@ export function checkRowResult(input, context) {
 export function checkBatchResult(input, context) {
   const parsed = validateContract('BatchResult', input);
   if (!parsed.ok) return parsed;
-  if (!checkTrustedContext(input, context.scope).ok || !same(input.job, context.job)) return productionIssue('NOT_FOUND');
+  const checkedContext = checkBatchContext(input, context);
+  if (!checkedContext.ok) return checkedContext;
   const c = input.counts;
   if (c.submitted !== context.original_rows.length || c.submitted !== c.succeeded + c.failed + c.cancelled + c.skipped + c.pending || input.published_count > c.succeeded) return productionIssue('INVALID_COUNTS');
   if (terminal.has(input.status) && c.pending !== 0) return productionIssue('INVALID_COUNTS');

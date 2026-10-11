@@ -62,6 +62,7 @@
     "fixtures/ProductionPolicy.json": "sha256:8422f7094d857da069421ff021fa86d09e3e06439472791596c6b7ee1591b64c",
     "fixtures/ProductionReference.json": "sha256:d9e14a56a0b80154b390b89f57103d201a1e193e7f0562c3eab68b1ccad1e00c",
     "fixtures/ProductionResource.json": "sha256:14cd2834fe02744c3fd0389b64e8402a93e276035573f1d93aeb376611b40d73",
+    "fixtures/ProductionRowCsvContextCalibration.json": "sha256:e715a8369e2e70ce6601e6ccb244f0805a53a627e7b0709a2407b8fd2aafde42",
     "fixtures/ProductionRuntime.json": "sha256:2e21cc4e53436952e3f0d50722f8760fd1a65d5f95ac982165607424465ef10e",
     "fixtures/ProjectRequest.json": "sha256:5ad1e5aa2074e2acd58d3a7eb8246e889321a6e786766d2c30e90e1f877fcc12",
     "fixtures/QueryRequest.2_0_0.json": "sha256:69c2290ed3e18b2a577d4ae5f8e493d3b506a8a71761f59e0b32887a12a84e1f",
@@ -91,7 +92,7 @@
     "fixtures/TemplateSpec.json": "sha256:bf202ffcb3c06d4ff8de157bdb5cd69894846e06015a6cf042e4f037b041aaac",
     "fixtures/UsageEvent.json": "sha256:c3261936892562c1b0dbf57a665d5d460c8c462ac85dce15fbc05846a7b71cdb"
   },
-  "digest": "sha256:efc2ee556c8ba43c29ea36932af8c947048b059ff4f2d7a7bbec15b85a05f07b",
+  "digest": "sha256:8db06e6348ff798c066f429bb0b21d5b7fd56ce07705b0133584bfe4f8d829ab",
   "status": "synthetic_candidates_only",
   "contracts": [
     {
