@@ -1576,17 +1576,6 @@ test('the whole-run deadline interrupts an already-admitted last request and kee
     'the local TCP socket remains open until the original run deadline');
   assert.ok(responseClosed && socketClosed, 'both observed close events came from real local fixture objects');
 
-  const lateBodyTargetPerfMs = effectiveDeadlineUpperPerfMs + 250;
-  await waitUntilPerfAtOrAfter(lateBodyTargetPerfMs);
-  lateBodyAttempted = true;
-  lateBodyAttemptedAtPerfMs = performance.now();
-  lateBodySawClosedResponse = serverResponse.destroyed;
-  if (!serverResponse.destroyed) {
-    lateBodyDelivered = true;
-    serverResponse.end(eventHtml());
-  }
-  resolveLateBodyAttempt();
-
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('deadline_exceeded'));
@@ -1603,6 +1592,17 @@ test('the whole-run deadline interrupts an already-admitted last request and kee
   assert.equal(transportBeforeLateBody.states.unknown, 1);
   assert.equal(responseClosed, true, 'deadline abort closes the local response socket');
   assert.equal(socketClosed, true, 'the TCP socket is closed before the late body attempt');
+
+  const lateBodyTargetPerfMs = effectiveDeadlineUpperPerfMs + 250;
+  await waitUntilPerfAtOrAfter(lateBodyTargetPerfMs);
+  lateBodyAttempted = true;
+  lateBodyAttemptedAtPerfMs = performance.now();
+  lateBodySawClosedResponse = serverResponse.destroyed;
+  if (!serverResponse.destroyed) {
+    lateBodyDelivered = true;
+    serverResponse.end(eventHtml());
+  }
+  resolveLateBodyAttempt();
 
   await lateBodyAttempt;
   assert.equal(lateBodyAttempted, true, 'the scheduled late body phase actually ran');
