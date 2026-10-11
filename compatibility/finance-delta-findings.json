@@ -17,13 +17,25 @@
   "review_history": [
     { "source": "d969f68a13fc4c3e71d59b635ffd29b65d3205d5", "verdict": "REQUEST_CHANGES", "scope": "finance_only_not_whole_PR_or_adoption" },
     { "source": "8e33685", "verdict": "APPROVE_COMPATIBILITY", "probes": 117, "scope": "limited_Finance_compatibility_evidence_not_whole_current_PR_approval" },
-    { "source": "a08a24e5849a8012ab9b1a80764c70c1cad0d0ed", "verdict": "REQUEST_CHANGES", "scope": "fresh_whole_PR", "recorded_cases": 72, "expectations_met": 65, "additional_counterexamples": 7 }
+    { "source": "a08a24e5849a8012ab9b1a80764c70c1cad0d0ed", "verdict": "REQUEST_CHANGES", "scope": "fresh_whole_PR", "recorded_cases": 72, "expectations_met": 65, "additional_counterexamples": 7 },
+    { "source": "4066385552c94b46a7662ed78d4cd68bbe6fe0fc", "package_version": "0.8.1", "verdict": "REQUEST_CHANGES", "scope": "fresh_whole_PR", "recorded_cases": 28, "expectations_met": 19, "additional_counterexamples": 9 }
   ],
   "duplicate_candidate": {
     "package_version": "0.8.1",
     "status": "locally_repaired_candidate_pending_fresh_full_Astra_High_and_Finance_compatibility_review",
     "recorded_input_replay": "original58_plus14_unchanged_inputs_and_expectations",
     "accepted_upgrade_or_closure": false
+  },
+  "original_state_candidate": {
+    "package_version": "0.8.2",
+    "starting_source": "4066385552c94b46a7662ed78d4cd68bbe6fe0fc",
+    "status": "local_candidate_pending_fresh_whole_PR_Astra_High_and_Finance_compatibility_delta_review",
+    "required_recorded_input_replay": "28_original_state_plus72_frozen_unchanged_inputs_and_expectations",
+    "required_preserved_expanded_cases": 305,
+    "candidate_behavior": "Successful settle/release results validate granted and closed-state legality against independently supplied original pre-command facts, then require the successor revision and a distinct event before snapshot redelivery can shortcircuit. Ordinary outcomes and duplicates obey this relationship. Cached validation performs no transition or renewed eligibility check; standalone snapshots, Reserve no-pregrant, Query observations and conserved reconciliation holds remain separate.",
+    "historical_acceptance_limit": "Adapters authenticate and retain historical time-dependent acceptance evidence; current clock and cache equality do not reconstruct it. No historical receipt interface is invented.",
+    "accepted_upgrade_or_closure": false,
+    "prior_approval_transfer": false
   },
   "findings": [
     {

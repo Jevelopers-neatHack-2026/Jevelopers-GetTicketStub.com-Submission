@@ -231,6 +231,18 @@ function commandShape(input, context) {
   }
   return parsed;
 }
+function commandState(value, old) {
+  if (!granted(old)) return fail('INVALID_TRANSITION', '/reservation_id');
+  switch (value.contract) {
+    case 'ReleaseRequest':
+      if (closed(old) || !zero(old.consumed)) return fail('INVALID_TRANSITION', '/reason');
+      return ok(value);
+    case 'SettleRequest':
+      if (closed(old) && (value.consumption_kind === 'regular' || value.correction_ref === null || value.settlement_intent !== 'final')) return fail('INVALID_TRANSITION', '/consumption_kind');
+      return ok(value);
+    default: return fail('UNKNOWN_CONTRACT', '/contract');
+  }
+}
 function eligible(value, context) {
   if (value.contract === 'ReserveRequest') {
     if (value.pricing_basis !== 'bounded_conservative') return fail('UNKNOWN_USAGE', '/pricing_basis');
@@ -238,15 +250,13 @@ function eligible(value, context) {
   }
   const old = prior(context); if (!old.ok) return old;
   if (value.contract === 'QueryRequest') return ok(value);
-  if (!granted(old.value)) return fail('INVALID_TRANSITION', '/reservation_id');
+  const state = commandState(value, old.value); if (!state.ok) return state;
   if (value.contract === 'ReleaseRequest' || value.settlement_intent === 'final') {
     if (uncertain(context.execution_state) || (uncertain(old.value.execution_state) && !resolved(context, old.value, value.resolution_ref))) return fail('UNCERTAIN_EXECUTION', value.contract === 'ReleaseRequest' ? '/reason' : '/settlement_intent');
     if (context.usage_completeness !== 'complete' && !(value.contract === 'ReleaseRequest' && context.execution_state === 'not_dispatched' &&
         resolved(context, old.value, value.resolution_ref))) return fail('UNKNOWN_USAGE', '/usage_ref');
   }
   if (value.contract === 'ReleaseRequest') {
-    if (closed(old.value)) return fail('INVALID_TRANSITION', '/reason');
-    if (!zero(old.value.consumed)) return fail('INVALID_TRANSITION', '/reason');
     if (value.reason === 'expired' && Date.parse(context.now) < Date.parse(old.value.expires_at)) return fail('INVALID_TRANSITION', '/reason');
   }
   if (value.contract === 'SettleRequest') {
@@ -254,7 +264,6 @@ function eligible(value, context) {
     const observed = observation(candidate, context); if (!observed.ok) return observed;
     const scale = Math.max(old.value.held.scale, value.consumed.scale);
     if (scaled(value.consumed.amount, scale) > scaled(old.value.held.amount, scale) && value.exception_refs.length === 0) return fail('INVALID_PAYLOAD', '/exception_refs');
-    if (closed(old.value) && (value.consumption_kind === 'regular' || value.correction_ref === null || value.settlement_intent !== 'final')) return fail('INVALID_TRANSITION', '/consumption_kind');
   }
   return ok(value);
 }
@@ -321,6 +330,13 @@ export function checkFinanceResult(input, context) {
     const checked = reservation(value.reservation, heldContext, duplicate); return checked.ok ? parsed : checked;
   }
   if (!duplicate) { const transition = eligible(command, context); if (!transition.ok) return transition; }
+  if (['SettleRequest', 'ReleaseRequest'].includes(command.contract)) {
+    const old = prior(outcomeContext); if (!old.ok) return old;
+    if (duplicate) { const state = commandState(command, old.value); if (!state.ok) return state; }
+    // Snapshot equality cannot establish the origin of a successful mutation.
+    if (value.reservation.revision !== old.value.revision + 1) return fail(value.reservation.revision === old.value.revision ? 'REVISION_CONFLICT' : 'STALE_REVISION', '/revision');
+    if (value.reservation.event_id === old.value.event_id) return fail('IDENTITY_COLLISION', '/event_id');
+  }
   const checked = reservation(value.reservation, subcontext, duplicate); if (!checked.ok) return checked;
   const snapshot = checked.value;
   for (const key of ['budget_scope_id', 'logical_operation_id', 'billable_attempt_id']) if (snapshot[key] !== command[key]) return fail('IDENTITY_COLLISION', '/reservation/' + key);

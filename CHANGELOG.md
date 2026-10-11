@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.8.2 (unreleased)
+
+FC-003 original-state candidate repair follows the whole-PR REQUEST_CHANGES at 4066385. Successful settle/release results now require a legal independently supplied original command state, its successor revision and a distinct event, including cached outcomes. Exact snapshot redelivery remains available at the reservation boundary. Cached validation performs no transition and does not renew eligibility after lease expiry. Adapters remain responsible for authentic historical time-dependent acceptance evidence. Retained schema, fixture, version-specific type and pin bytes are unchanged. Fresh whole-PR Astra High and Finance compatibility review of the changed candidate remain required; no prior approval transfers.
+
 ## 0.8.1 (unreleased)
 
 FC-003/FC-004 duplicate-result candidate repair follows the whole-PR REQUEST_CHANGES at a08a24e: exact cached outcomes now pass command amount/intent/evidence/disposition checks and independent execution/usage validation. Replays validate the original command state without renewing eligibility, spending or executing again; advanced live state, expired grant leases, conserved uncertain holds, known partial consumption/overrun and fenced undispatched releases remain supported. Wire schemas, fixture bytes, dependency pins and historical verdicts remain unchanged. This semantic safety narrowing requires fresh full Astra High re-review and refreshed Finance compatibility review of the changed candidate. Prior limited Finance approval is not whole-PR approval or permanent acceptance; no adoption, closure or release is claimed.
