@@ -4,8 +4,10 @@ import { types as utilTypes } from 'node:util';
 import {
   DurableWorkflowStore,
   measureCheckpointPayload,
-  checkpointPayloadForIntegrity
+  checkpointPayloadForIntegrity,
+  consumeLocalCompletionBusyAfterConfirmedInactive
 } from '../../internal/durable-store.js';
+import { RuntimeError } from '../../internal/errors.js';
 import {
   MAX_CHECKPOINT_SERIALIZED_BYTES
 } from '../../internal/checkpoint-bounds.js';
@@ -48,7 +50,10 @@ const CONTROLLER_KEYS = new Set([
   'runIdentity', 'limitsJson', 'limitsHash', 'budget', 'completedResultsJson',
   'pendingStepId', 'lastAdmissionKind', 'lastAdmissionStepId', 'baseCheckpointData'
 ]);
-const INPUT_KEYS = new Set(['store', 'workflowId', 'ownerId', 'fence', 'planJson', 'limitsJson']);
+const INPUT_KEYS = new Set([
+  'store', 'workflowId', 'ownerId', 'fence', 'planJson', 'limitsJson',
+  'busyTimeoutMs', 'runtimeDeadlineNs'
+]);
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 
 export class LocalControllerError extends Error {
@@ -446,6 +451,29 @@ function elapsedNow(baseElapsed, processStart) {
   return baseElapsed + delta;
 }
 
+function isCompletionBusy(error) {
+  const confirmedInactive = consumeLocalCompletionBusyAfterConfirmedInactive(error);
+  return confirmedInactive
+    && error instanceof RuntimeError
+    && error.module === 'state'
+    && error?.operation === '_localControllerComplete'
+    && error?.code === 'STORE_BUSY'
+    && error?.retryable === true;
+}
+
+function completionRetryWindowAvailable(fields, snapshot, now, elapsedMs, limitSet) {
+  if (!Number.isSafeInteger(fields.busyTimeoutMs) || typeof fields.runtimeDeadlineNs !== 'bigint') return false;
+  const busyWaitNs = BigInt(fields.busyTimeoutMs) * 1_000_000n;
+  if (fields.runtimeDeadlineNs - process.hrtime.bigint() <= busyWaitNs) return false;
+  const limits = getLimitValues(limitSet);
+  const remainingWallMs = Math.min(
+    snapshot.workflow.leaseExpiresAtMs - now,
+    snapshot.checkpoint.data.budget.deadlineWallMs - now,
+    limits.maxElapsedMs - elapsedMs
+  );
+  return remainingWallMs > fields.busyTimeoutMs;
+}
+
 /**
  * Execute one pinned private plan over the durable store. The only executable
  * handlers come from the static reviewed registry; each allowance and result
@@ -474,6 +502,15 @@ export async function runBoundedLocalPlan(input) {
       || (fields.planJson !== undefined && typeof fields.planJson !== 'string')
       || (fields.limitsJson !== undefined && typeof fields.limitsJson !== 'string')
     ) fail('CONTROLLER_INPUT_INVALID');
+    const hasBusyTimeout = Object.hasOwn(fields, 'busyTimeoutMs');
+    const hasRuntimeDeadline = Object.hasOwn(fields, 'runtimeDeadlineNs');
+    if (hasBusyTimeout !== hasRuntimeDeadline || (hasBusyTimeout && (
+      !Number.isSafeInteger(fields.busyTimeoutMs)
+      || fields.busyTimeoutMs < 1
+      || fields.busyTimeoutMs > 250
+      || typeof fields.runtimeDeadlineNs !== 'bigint'
+      || fields.runtimeDeadlineNs < 1n
+    ))) fail('CONTROLLER_INPUT_INVALID');
 
     const store = fields.store;
     setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
@@ -650,19 +687,107 @@ export async function runBoundedLocalPlan(input) {
       if (commitClockReason) return controllerStop(commitClockReason, workflowId, checkpointSequence);
       diagnosticPhase = 'completion';
       setOperationsDiagnosticPhase(diagnosticPhase, checkpointSequence);
-      const completion = store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
-        workflowId,
-        ownerId: fields.ownerId,
-        fence: fields.fence,
-        expectedRevision: beforeCommit.workflow.revision,
-        expectedCheckpointSequence: beforeCommit.checkpoint.sequence,
-        stepId: pendingStepId,
-        eventId: eventId('complete'),
-        controllerState: completedState
-      });
+      const completionEventId = eventId('complete');
+      let completionState = completedState;
+      let completion;
+      let completionResolution = null;
+      for (let completionCall = 1; completionCall <= 3; completionCall += 1) {
+        try {
+          completion = store._localControllerComplete(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+            workflowId,
+            ownerId: fields.ownerId,
+            fence: fields.fence,
+            expectedRevision: beforeCommit.workflow.revision,
+            expectedCheckpointSequence: beforeCommit.checkpoint.sequence,
+            stepId: pendingStepId,
+            eventId: completionEventId,
+            controllerState: completionState
+          });
+          break;
+        } catch (error) {
+          if (!isCompletionBusy(error) || !hasBusyTimeout) throw error;
+          let resolution;
+          try {
+            resolution = store._localControllerResolveCompletion(LOCAL_CONTROLLER_STORAGE_CAPABILITY, {
+              workflowId,
+              ownerId: fields.ownerId,
+              fence: fields.fence,
+              expectedRevision: beforeCommit.workflow.revision,
+              expectedCheckpointSequence: beforeCommit.checkpoint.sequence,
+              stepId: pendingStepId,
+              eventId: completionEventId,
+              previousCheckpointSha256: beforeCommit.checkpoint.sha256,
+              controllerState: completionState
+            });
+          } catch (resolutionError) {
+            recordOperationsDiagnosticError('controller_error', resolutionError, {
+              phase: 'completion_resolution', checkpointSequence
+            });
+            return controllerStop('LOCAL_COMPLETION_OUTCOME_UNKNOWN', workflowId, checkpointSequence);
+          }
+          if (resolution.kind === 'committed') {
+            completion = resolution;
+            completionResolution = resolution;
+            break;
+          }
+          if (resolution.kind !== 'pending' || completionCall === 3) {
+            return controllerStop(
+              resolution.kind === 'pending' ? 'LOCAL_COMPLETION_BUSY' : 'LOCAL_COMPLETION_OUTCOME_UNKNOWN',
+              workflowId,
+              checkpointSequence
+            );
+          }
+
+          // The exact attempted checkpoint is classified before yielding or
+          // refreshing mutable clocks. Recheck the same pending barrier after
+          // yielding so cancellation, fencing, or an unresolved outcome wins.
+          await yieldAtControllerBoundary();
+          const retrySnapshot = store._localControllerSnapshot(LOCAL_CONTROLLER_STORAGE_CAPABILITY, workflowId);
+          checkpointSequence = retrySnapshot.checkpoint.sequence;
+          const retryStop = unavailableSnapshot(retrySnapshot);
+          if (retryStop) return controllerStop(retryStop, workflowId, checkpointSequence);
+          const retryWallNow = store._localControllerNow(LOCAL_CONTROLLER_STORAGE_CAPABILITY);
+          if (
+            retrySnapshot.workflow.revision !== beforeCommit.workflow.revision
+            || retrySnapshot.checkpoint.sequence !== beforeCommit.checkpoint.sequence
+            || retrySnapshot.checkpoint.sha256 !== beforeCommit.checkpoint.sha256
+            || retrySnapshot.workflow.leaseOwner !== fields.ownerId
+            || retrySnapshot.workflow.fence !== fields.fence
+            || retrySnapshot.workflow.leaseExpiresAtMs === null
+            || retrySnapshot.workflow.leaseExpiresAtMs <= retryWallNow
+          ) return controllerStop('WORKFLOW_SNAPSHOT_CHANGED', workflowId, checkpointSequence);
+          const retryElapsed = elapsedNow(elapsedAtStart, initialMono);
+          const retryClockReason = checkClockBudget(byteRecord.state, retryWallNow, retryElapsed, limitSet);
+          if (retryClockReason) return controllerStop(retryClockReason, workflowId, checkpointSequence);
+          if (!completionRetryWindowAvailable(fields, retrySnapshot, retryWallNow, retryElapsed, limitSet)) {
+            return controllerStop('LOCAL_COMPLETION_BUSY', workflowId, checkpointSequence);
+          }
+          const retryBudget = Object.freeze({
+            ...byteRecord.state,
+            lastWallMs: retryWallNow,
+            elapsedMs: retryElapsed
+          });
+          completionState = buildCompletedCheckpoint(state, plan, resultRecord, retryBudget);
+          assertPrivateCheckpointRoundTrip(beforeCommit, completionState, plan, limitSet, retryWallNow);
+        }
+      }
+      if (!completion) return controllerStop('LOCAL_COMPLETION_OUTCOME_UNKNOWN', workflowId, checkpointSequence);
+      if (completionResolution) {
+        const current = completionResolution.snapshot;
+        const currentStop = unavailableSnapshot(current);
+        if (currentStop) return controllerStop(currentStop, workflowId, current.checkpoint.sequence);
+        if (
+          current.workflow.revision !== completion.revision
+          || current.checkpoint.sequence !== completion.checkpointSequence
+          || current.workflow.leaseOwner !== fields.ownerId
+          || current.workflow.fence !== fields.fence
+          || current.workflow.leaseExpiresAtMs === null
+          || current.workflow.leaseExpiresAtMs <= completionResolution.now
+        ) return controllerStop('WORKFLOW_SNAPSHOT_CHANGED', workflowId, current.checkpoint.sequence);
+      }
       completionOrdinal += 1;
       recordOperationsDiagnosticProgress('completion_committed', completionOrdinal, completion.checkpointSequence);
-      state = completedState;
+      state = completionState;
       checkpointSequence = completion.checkpointSequence;
       const allResults = validatePrivateCheckpointResults(plan, state.completedResultsJson);
       if (allResults.resultCount === getPlanStepIds(plan).length) {
