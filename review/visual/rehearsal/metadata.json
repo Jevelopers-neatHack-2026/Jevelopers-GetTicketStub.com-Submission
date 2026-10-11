@@ -198,18 +198,18 @@
     },
     {
       "path": "demo/storyboard.md",
-      "sha256": "90d237fe798274dcdbe024755654f88e629976b32c413b57cabc7998062a0ba3",
-      "bytes": 5121
+      "sha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
+      "bytes": 5260
     },
     {
       "path": "demo/narration.md",
-      "sha256": "9acec3f0efd53772baa66d69487fc3cc69eb4e027d7e05690610fb7152d06f72",
-      "bytes": 3017
+      "sha256": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
+      "bytes": 3064
     },
     {
       "path": "demo/rehearsal-transcript.md",
-      "sha256": "6d15ba0ae0b32c1f0e7ae9232687b39bf759e6ae44659c900da30600604e1984",
-      "bytes": 5169
+      "sha256": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
+      "bytes": 5253
     },
     {
       "path": "demo/exports/silent-synthetic-rehearsal.mp4",
@@ -654,7 +654,7 @@
     "durationSeconds": 150,
     "bytes": 2012777
   },
-  "sourceCommit": "1d12448ed92de392f272743a19b7be87b0b301e7",
+  "sourceCommit": "bcae620efd3a700397779864647e5ee38b671573",
   "sourcePaths": [
     "demo/rehearsal-scenes.json",
     "demo/storyboard.md",
@@ -784,6 +784,47 @@
     "baselineMediaCommit": "c2badc5b297cea393c75dae28300fc60f69040b0",
     "mediaReencoded": false,
     "sourceSceneNarrationTranscriptBytesUnchanged": true,
+    "changedMediaCaptionHtmlInspectionPaths": [],
+    "relativeFfprobeFilenamePreserved": true
+  },
+  "narrativeReceiptRefresh": {
+    "status": "PASS_AUTHOR_CHECK_ONLY_PENDING_INDEPENDENT_REVIEW",
+    "sourceRevision": "da10a923c37ef384b8cb8bcbf3381be40ac617df",
+    "mechanicalAdoption": "Exact upstream narration and transcript blobs. Narration status now states five proposals mapped but unapproved; spoken text unchanged. Transcript enumerates exact existing screenText, capitalization and punctuation, including CONCEPTUAL ONLY.",
+    "changes": [
+      {
+        "path": "demo/narration.md",
+        "previousSha256": "9acec3f0efd53772baa66d69487fc3cc69eb4e027d7e05690610fb7152d06f72",
+        "sha256": "818dcf3f2796bd2a29a2f3597d2a0fcc36b36fd7e87e50454af94616058e5cf6",
+        "bytes": 3064
+      },
+      {
+        "path": "demo/rehearsal-transcript.md",
+        "previousSha256": "6d15ba0ae0b32c1f0e7ae9232687b39bf759e6ae44659c900da30600604e1984",
+        "sha256": "36792f4d4ac8389dd9853be5a54d5ac2672c527f3984d1ac3dc28018ae3f385e",
+        "bytes": 5253
+      }
+    ],
+    "renderSourceCommitPreserved": "75123ec8a99a94ecbb1227eae945efa62a175091",
+    "renderContractBytesUnchanged": true,
+    "transcriptSceneTextAndCaptionsExact": true,
+    "narrationSceneTextUnchanged": true,
+    "mediaReencoded": false,
+    "baselineMediaCommit": "9c25e41a58daed00d32d54557a8317ae435e3709",
+    "changedMediaCaptionHtmlInspectionPaths": [],
+    "relativeFfprobeFilenamePreserved": true
+  },
+  "finalSourceReceiptRefresh": {
+    "status": "PASS_AUTHOR_CHECK_ONLY_PENDING_INDEPENDENT_REVIEW",
+    "sourceRevision": "bcae620efd3a700397779864647e5ee38b671573",
+    "path": "demo/storyboard.md",
+    "sha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
+    "previousSha256": "90d237fe798274dcdbe024755654f88e629976b32c413b57cabc7998062a0ba3",
+    "mechanicalAdoption": "Exact upstream blob; journey/hold-revise/event ledger references now identify mapped but proposed/unapproved rows. No rendered scene text, timing, caption or media input changed.",
+    "allFourSourceBlobsMatchRevision": true,
+    "originalRenderSourceCommitPreserved": "75123ec8a99a94ecbb1227eae945efa62a175091",
+    "mediaReencoded": false,
+    "baselineMediaCommit": "9c25e41a58daed00d32d54557a8317ae435e3709",
     "changedMediaCaptionHtmlInspectionPaths": [],
     "relativeFfprobeFilenamePreserved": true
   }
