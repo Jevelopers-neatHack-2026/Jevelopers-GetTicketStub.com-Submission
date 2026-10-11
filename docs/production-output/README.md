@@ -79,8 +79,12 @@ Gray image spaces are permitted. PDF/X, CMYK and arbitrary ICC profiles are
 unsupported; no conversion or certification is asserted.
 
 PDF extraction must contain each original measured line exactly, with no Unicode
-normalization or removal of wrap spaces. The actual pinned renderer fails Arabic
-Unicode and trailing wrap-space cases. Requested PDF fails the entire row as
+normalization or removal of wrap spaces. The pinned Chromium/PDF.js pipeline
+fails Arabic Unicode and trailing wrap-space cases. The generated Arabic PDF
+already carries correct ActualText spans; the independent pinned extraction
+path ignores them. The wrap PDF contains the trailing space CID and correct
+ToUnicode mapping, but that reader discards the trailing whitespace. Requested
+PDF fails the entire row as
 `OUTPUT_CONTENT / pdf.exactUnicodeOrWrapSpaces`; it is never silently omitted.
 An explicitly supplied SVG/PNG-only template can render Arabic. This is a local
 capability fixture, not permission to change a real launch roster. Other Unicode
@@ -148,8 +152,17 @@ Passing private leaves retain external-blocked outer receipts. Nested test-conte
 regressions deliberately fail canaries and reject inherited success receipts.
 
 Frozen prerequisite merges are `4f11723f59b44da574738e3e45a14043aad23fe9` and
-`0282c2d4ad31691b2bf4e8cb91e87619983a7204`. Remaining DUR-R6/DUR-R7 and actual Linux
-attestation are owner holds. No later owner changes are guessed or imported.
+`0282c2d4ad31691b2bf4e8cb91e87619983a7204`. The continuation also integrates frozen
+durability `b5b96e04951561d44d1b8360d1a5f59d7ed63ce8` and runtime
+`f413ef020629cb264eaf71a5a1df1e150fdc4b12` normally, preserving authorship.
+DUR-R6/DUR-R7 fixes are integrated and await independent disposition. ROOT-R1
+remains open: the supervisor reports a passed PR Linux run and a failed push
+trace binding; the active runtime owner handles that nondeterminism. Local
+macOS evidence cannot certify the final Linux candidate. No later active writer
+changes are guessed or imported.
 Parent owns manual QA, independent review, push and any merge/closure transition.
 [Acceptance matrix](ACCEPTANCE.md) records local proof separately from external
 acceptance. This work does not mark ART-03/04/05 or release complete.
+
+[PDF mapping investigation](PDF-MAPPING.md) records actual CMaps/ActualText,
+reader behavior, feasible approaches and the unchanged exactness rejection.

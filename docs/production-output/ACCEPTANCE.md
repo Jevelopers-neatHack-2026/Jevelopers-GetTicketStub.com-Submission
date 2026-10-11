@@ -7,9 +7,9 @@ ART-03/04/05 remain open; no mock peer is called real conformance.
 | --- | --- | --- |
 | PP-06A.1 | Versioned allowed fields, stable IDs, exact leading zeros and unchanged fact/approval identities | Accepted row contract and authoritative template/approval policy |
 | PP-06A.2 | Missing/extra/non-string/bounds errors before browser; duplicate ID rejection; equal content remains distinct; idempotency conflict | Canonical request/hash agreement |
-| PP-06A.3 | Actual atomic failure and partial SQLite publication with complete inventory | Canonical job envelopes; inherited DUR-R6/DUR-R7 owner fixes |
+| PP-06A.3 | Actual atomic failure and partial SQLite publication with complete inventory | Canonical job envelopes; integrated DUR-R6/DUR-R7 fixes await independent disposition |
 | PP-06A.4 | Paged row/input/job/operation/publication/archive/error joins; immutable typed render diagnostic | Accepted result/error envelope |
-| PP-06A.5 | 100-row plan, real page rendering, engine concurrency, cancellation, reopened database and killed worker | Owner recovery fixes and canonical progress semantics |
+| PP-06A.5 | 100-row plan, real page rendering, engine concurrency, cancellation, reopened database and killed worker | Integrated bounded recovery awaits independent disposition; canonical progress semantics |
 | PP-06A.6 | Real composition/assets/fonts/preflight/render/storage per row; no generation | Real approved input and current permission adapters |
 | PP-06B.1 | Fatal UTF-8/BOM, declared dialect/quotes/newlines/header mapping and bounds, exact strings | Approved CSV roster and canonical mapping |
 | PP-06B.2 | Digest, physical/logical positions, stable IDs, header paths and typed file/row separation | Canonical importer/result adapter |
@@ -27,13 +27,13 @@ ART-03/04/05 remain open; no mock peer is called real conformance.
 | PP-09B.2 | Actual parsed file descriptors and full preflight report digest/check inventory; readiness external-blocked | Canonical report and warning vocabulary |
 | PP-09B.3 | Detached nonrecursive payload→inventory→ZIP protocol and independent verification | Canonical owner hash protocol agreement |
 | PP-09B.4 | Source/preview/composition/render/manifest/archive/input/spec identities separated | Actual purchase/approval applicability remains external |
-| PP-09B.5 | Atomic row sets through actual storage; current permission at export/assembly/retrieval; failed/partial status separate | No production eligibility granted; owner durability holds |
+| PP-09B.5 | Atomic row sets through actual storage; current permission at export/assembly/retrieval; failed/partial status separate | No production eligibility granted; integrated durability fixes await independent disposition |
 | PP-09B.6 | Existing stored archive recomputation and parser checks; extra/missing/tampered/lineage/revocation/access reject; no new usage | Local verifier is not canonical schema conformance; public CLI adapter absent |
 | PP-12F.1 | Exact local lock/font/browser/profile pins and revision refs; real modules vs synthetic ports recorded | Shared/creative/event/app/fulfillment component revisions absent |
 | PP-12F.2 | Actual names/seat/leading zeros through real render plus source-byte preservation | Real approved golden inputs and ART-03 owner acceptance |
 | PP-12F.3 | Existing composition negative suites plus output dimensions/DPI/visibility/overflow/font/profile/revocation/spec cases | Real supplier/template/approval scopes remain external |
 | PP-12F.4 | Real mechanical normalization export; material escalation; all enabled formats parsed; hash/ZIP lineage checked | Unsupported required PDF cases block; canonical manifest absent |
-| PP-12F.5 | Actual duplicate/partial/atomic/concurrency/idempotency/cancel/reopen/kill/outbox joins and conditional CSV | Frozen durability process corpus covers partial writes; DUR-R6/R7 still held |
+| PP-12F.5 | Actual duplicate/partial/atomic/concurrency/idempotency/cancel/reopen/kill/outbox joins and conditional CSV | Frozen durability corpus includes partial writes and bounded recovery; DUR-R6/R7 independent disposition pending |
 | PP-12F.6 | No fake fulfillment/app acceptance is emitted; real local publication precedes read-only validation | Real unchanged-hash fulfillment validator, scoped app fixtures, finance intake and EvaluationEvidence absent |
 | PP-12F.7 | Fresh corpus index, actual artifacts, exact counts/commands/digests; all outer gates nonzero | Parent manual QA, independent review and canonical consumer release evidence |
 

@@ -61,11 +61,11 @@ export const compositionExpectedTests = {
 	"bounded-repair": 55,
 } as const;
 export const outputExpectedTests = {
-	personalization: 32,
-	"csv-personalization": 29,
-	exporters: 29,
-	manifests: 29,
-	"integration-production": 58,
+	personalization: 35,
+	"csv-personalization": 32,
+	exporters: 32,
+	manifests: 32,
+	"integration-production": 61,
 } as const;
 export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 	const root = join(evidenceDir, suite, "local"),
@@ -147,6 +147,7 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 				"integration/production-output-csv-flow.test.js",
 				"integration/production-output-process.test.js",
 				"integration/production-output-receipt.test.js",
+				"integration/production-output-pdf-mapping.test.js",
 				"fixtures/production-output/canary.js",
 			];
 			directoryVariable = "PP_OUTPUT_EVIDENCE_DIR";
@@ -171,6 +172,34 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 						mode: z.literal("real-process-private-synthetic"),
 						executionAttempts: z.literal(2),
 						interruptedAttempt: z.string().uuid(),
+					}),
+				},
+				{
+					path: "pdf-mapping/arabic.json",
+					schema: z.object({
+						mode: z.literal("diagnostic-synthetic-not-production"),
+						productionExactness: z.literal("blocked"),
+						networkRequests: z.literal(0),
+						fileDigest: z.string().regex(/^[a-f0-9]{64}$/),
+						expected: z.array(z.string()).min(1),
+					}),
+				},
+				{
+					path: "pdf-mapping/wrap.json",
+					schema: z.object({
+						mode: z.literal("diagnostic-synthetic-not-production"),
+						productionExactness: z.literal("blocked"),
+						networkRequests: z.literal(0),
+						fileDigest: z.string().regex(/^[a-f0-9]{64}$/),
+						expected: z.array(z.string()).min(1),
+					}),
+				},
+				{
+					path: "pdf-mapping/actualtext-control.json",
+					schema: z.object({
+						mode: z.literal("diagnostic-synthetic-not-production"),
+						readerUsesActualText: z.literal(false),
+						productionExactness: z.literal("not-accepted"),
 					}),
 				},
 			];
