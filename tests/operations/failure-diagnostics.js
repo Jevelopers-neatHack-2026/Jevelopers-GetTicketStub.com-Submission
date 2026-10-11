@@ -18,6 +18,9 @@ const C02_CONTROL_FAILURE_BOUNDARIES = new Set([
   'C02_WATCHDOG_TARGET_ACK', 'C02_INERT_DESCENDANT_MARKER', 'C02_WATCHDOG_RESULT'
 ]);
 const C02_CONTROL_FAILURE_ERROR_CLASSES = new Set(['Error', 'RangeError', 'SyntaxError', 'TypeError']);
+const INCOMPLETE_C02_CONTROL_DIAGNOSTICS = Object.freeze({
+  complete: false, recordCount: 0, records: Object.freeze([])
+});
 const SAFE_ERROR_CODES = new Set([
   'EACCES', 'EISDIR', 'ENOENT', 'ETIMEDOUT', 'ERR_ASSERTION',
   'ERR_CHILD_PROCESS_STDIO_MAXBUFFER', 'ERR_SQLITE_ERROR', 'ERR_TEST_FAILURE',
@@ -43,33 +46,39 @@ function safeSignal(value) {
   return SAFE_SIGNALS.has(value) ? value : null;
 }
 
-export function parseC02ControlReadDiagnostics({
-  lines = '', count = 0, bytes = 0, diagnosticsComplete = true
-} = {}) {
-  let complete = typeof lines === 'string'
-    && Number.isSafeInteger(count) && count >= 0 && count <= C02_CONTROL_FAILURE_MAX_RECORDS
-    && Number.isSafeInteger(bytes) && bytes >= 0 && bytes <= C02_CONTROL_FAILURE_MAX_BYTES
-    && diagnosticsComplete === true;
-  const actualBytes = typeof lines === 'string' ? Buffer.byteLength(lines, 'utf8') : -1;
-  if (actualBytes !== bytes || (lines.length > 0 && !lines.endsWith('\n'))) complete = false;
-  const rawLines = typeof lines === 'string' && lines.length > 0 ? lines.slice(0, C02_CONTROL_FAILURE_MAX_BYTES).split('\n') : [];
-  if (rawLines.at(-1) === '') rawLines.pop();
-  if (rawLines.length !== count || rawLines.length > C02_CONTROL_FAILURE_MAX_RECORDS) complete = false;
+export function parseC02ControlReadDiagnostics(channel) {
+  if (!channel || typeof channel !== 'object' || Array.isArray(channel)) return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
+  const expectedKeys = ['bytes', 'count', 'diagnosticsComplete', 'lines'];
+  const keys = Object.keys(channel).sort();
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])
+      || expectedKeys.some(key => !Object.hasOwn(channel, key))) return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
+  const { lines, count, bytes, diagnosticsComplete } = channel;
+  if (typeof lines !== 'string' || !Number.isSafeInteger(count) || count < 0
+      || count > C02_CONTROL_FAILURE_MAX_RECORDS || !Number.isSafeInteger(bytes) || bytes < 0
+      || bytes > C02_CONTROL_FAILURE_MAX_BYTES || typeof diagnosticsComplete !== 'boolean'
+      || diagnosticsComplete !== true || lines.length > C02_CONTROL_FAILURE_MAX_BYTES) {
+    return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
+  }
+  const actualBytes = Buffer.byteLength(lines, 'utf8');
+  if (actualBytes > C02_CONTROL_FAILURE_MAX_BYTES || actualBytes !== bytes
+      || (count === 0 ? lines !== '' : !lines.endsWith('\n'))) {
+    return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
+  }
+  const rawLines = count === 0 ? [] : lines.split('\n');
+  if (count > 0) rawLines.pop();
+  if (rawLines.length !== count || rawLines.length > C02_CONTROL_FAILURE_MAX_RECORDS) {
+    return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
+  }
   const records = [];
-  for (const rawLine of rawLines.slice(0, C02_CONTROL_FAILURE_MAX_RECORDS)) {
+  for (const rawLine of rawLines) {
     if (Buffer.byteLength(rawLine, 'utf8') + 1 > C02_CONTROL_FAILURE_MAX_LINE_BYTES
-        || !rawLine.startsWith(C02_CONTROL_FAILURE_PREFIX)) {
-      complete = false;
-      break;
-    }
+        || !rawLine.startsWith(C02_CONTROL_FAILURE_PREFIX)) return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
     let value;
     try { value = JSON.parse(rawLine.slice(C02_CONTROL_FAILURE_PREFIX.length)); } catch {
-      complete = false;
-      break;
+      return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
     }
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      complete = false;
-      break;
+      return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
     }
     const keys = Object.keys(value).sort();
     if (keys.length !== 4 || keys[0] !== 'boundary' || keys[1] !== 'caseId'
@@ -77,18 +86,15 @@ export function parseC02ControlReadDiagnostics({
         || value.schema !== 'agent-harness.ah11-ops-c02-control-failure.v1'
         || value.caseId !== 'OPS04.C02'
         || !C02_CONTROL_FAILURE_BOUNDARIES.has(value.boundary)
-        || !C02_CONTROL_FAILURE_ERROR_CLASSES.has(value.errorClass)) {
-      complete = false;
-      break;
-    }
+        || !C02_CONTROL_FAILURE_ERROR_CLASSES.has(value.errorClass)) return INCOMPLETE_C02_CONTROL_DIAGNOSTICS;
     records.push(Object.freeze({
       caseId: 'OPS04.C02', boundary: value.boundary, errorClass: value.errorClass
     }));
   }
   return Object.freeze({
-    complete,
-    recordCount: complete ? records.length : 0,
-    records: Object.freeze(complete ? records : [])
+    complete: true,
+    recordCount: records.length,
+    records: Object.freeze(records)
   });
 }
 

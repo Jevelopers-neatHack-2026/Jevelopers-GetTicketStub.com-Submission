@@ -255,12 +255,18 @@ try {
 } catch {
   try { process.stderr.write('AH-11-OPS runtime metrics were not produced.\n'); } catch {}
 }
-const c02ControlReadDiagnostics = parseC02ControlReadDiagnostics({
-  lines: metrics?.c02ControlReadFailureLines,
-  count: metrics?.c02ControlReadFailureCount,
-  bytes: metrics?.c02ControlReadFailureBytes,
-  diagnosticsComplete: metrics !== null && metrics.c02ControlReadDiagnosticsComplete === true
-});
+const c02ControlMetricKeys = [
+  'c02ControlReadFailureLines', 'c02ControlReadFailureCount',
+  'c02ControlReadFailureBytes', 'c02ControlReadDiagnosticsComplete'
+];
+const hasCompleteC02ControlChannel = metrics !== null && typeof metrics === 'object'
+  && !Array.isArray(metrics) && c02ControlMetricKeys.every(key => Object.hasOwn(metrics, key));
+const c02ControlReadDiagnostics = parseC02ControlReadDiagnostics(hasCompleteC02ControlChannel ? {
+  lines: metrics.c02ControlReadFailureLines,
+  count: metrics.c02ControlReadFailureCount,
+  bytes: metrics.c02ControlReadFailureBytes,
+  diagnosticsComplete: metrics.c02ControlReadDiagnosticsComplete
+} : null);
 const suiteDiagnostics = buildSafeFailureDiagnostics({
   scenario: fixture,
   phase: 'operation-suite',

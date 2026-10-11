@@ -189,22 +189,66 @@ function readC02ControlJson(path, boundary, readFile = readFileSync, state = MET
 }
 
 function publishC02ControlJsonAtomically(targetPath, value, fileOps = {}) {
-  const writer = fileOps.writeFileSync ?? writeFileSync;
+  const acquire = fileOps.openSync ?? openSync;
+  const write = fileOps.writeSync ?? writeSync;
+  const close = fileOps.closeSync ?? closeSync;
   const rename = fileOps.renameSync ?? renameSync;
   const remove = fileOps.rmSync ?? rmSync;
   const uuid = fileOps.randomUUID ?? randomUUID;
   const data = Buffer.from(JSON.stringify(value), 'utf8');
   if (data.byteLength > 1_024) throw new RangeError('C02 control marker exceeds its byte bound.');
   const temporaryPath = `${targetPath}.${uuid()}.tmp`;
+  let descriptor = null;
+  let descriptorAcquired = false;
+  let acquiredTemporary = false;
+  let failure;
+  let failed = false;
   try {
-    writer(temporaryPath, data, { flag: 'wx', mode: 0o600 });
+    descriptor = acquire(temporaryPath, 'wx', 0o600);
+    acquiredTemporary = true;
+    descriptorAcquired = true;
+    if (!Number.isSafeInteger(descriptor) || descriptor < 0) {
+      throw new TypeError('C02 control marker temp acquisition returned an invalid descriptor.');
+    }
+    let offset = 0;
+    let writeCalls = 0;
+    while (offset < data.byteLength) {
+      if (writeCalls >= data.byteLength) throw new RangeError('C02 control marker write exceeded its progress bound.');
+      const written = write(descriptor, data, offset, data.byteLength - offset, null);
+      writeCalls += 1;
+      if (!Number.isSafeInteger(written) || written <= 0 || written > data.byteLength - offset) {
+        throw new RangeError('C02 control marker write returned an invalid progress count.');
+      }
+      offset += written;
+    }
+  } catch (error) {
+    failure = error;
+    failed = true;
+  }
+  if (descriptorAcquired) {
+    try { close(descriptor); } catch (error) {
+      if (!failed) {
+        failure = error;
+        failed = true;
+      }
+    }
+  }
+  if (failed) {
+    if (acquiredTemporary) {
+      try { remove(temporaryPath, { force: true }); } catch {
+        try { fileOps.onCleanupFailure?.(); } catch {}
+      }
+    }
+    throw failure;
+  }
+  try {
     rename(temporaryPath, targetPath);
     return true;
   } catch (primaryError) {
-    try {
-      remove(temporaryPath, { force: true });
-    } catch {
-      try { fileOps.onCleanupFailure?.(); } catch {}
+    if (acquiredTemporary) {
+      try { remove(temporaryPath, { force: true }); } catch {
+        try { fileOps.onCleanupFailure?.(); } catch {}
+      }
     }
     throw primaryError;
   }
@@ -1559,7 +1603,7 @@ function startPrelaunchedOwnedGroupWatchdog(controlPath, timeoutMs = 15_000) {
   const resultPath = `${controlPath}.result`;
   const source = `
 import { randomUUID } from 'node:crypto';
-import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 const publishC02ControlJsonAtomically = ${publishC02ControlJsonAtomically.toString()};
 const attemptC02WatchdogTargetAck = ${attemptC02WatchdogTargetAck.toString()};
@@ -3089,39 +3133,75 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       const value = { schema: 'synthetic-control.v1', complete: true };
       const encoded = Buffer.from(JSON.stringify(value), 'utf8');
       const primaryFailure = new Error('SYNTHETIC_PRIVATE_C02_PRIMARY');
+      const closeFailure = new Error('SYNTHETIC_PRIVATE_C02_CLOSE');
       const cleanupFailure = new Error('SYNTHETIC_PRIVATE_C02_CLEANUP');
+      const acquisitionFailure = Object.assign(new Error('SYNTHETIC_PRIVATE_C02_EEXIST'), { code: 'EEXIST' });
+      const temporaryPath = `${targetPath}.deterministic-token.tmp`;
+      let acquiredDescriptor = null;
       let completedTempWrite = false;
       let finalWasVisibleDuringTempWrite = false;
       let renamed = false;
+      let closed = false;
+      let writeCalls = 0;
+      let closeCalls = 0;
+      let renameCalls = 0;
       let cleanedPath = null;
       let cleanupFailureObserved = false;
       let caughtFailure;
       try {
         publishC02ControlJsonAtomically(targetPath, value, {
           randomUUID: () => 'deterministic-token',
-          writeFileSync(path, bytes, options) {
+          openSync(path, flags, mode) {
             assert.equal(path, '/private/ops-c02/control.json.deterministic-token.tmp',
               'the temp is a fresh sibling of the consumer-visible marker');
-            assert.deepEqual(options, { flag: 'wx', mode: 0o600 });
+            assert.equal(flags, 'wx');
+            assert.equal(mode, 0o600);
             assert.equal(files.has(targetPath), false, 'the final marker is absent before temp creation');
+            if (failAt === 'acquire') {
+              files.set(path, Buffer.from('preexisting-sentinel'));
+              throw acquisitionFailure;
+            }
             files.set(path, Buffer.alloc(0));
+            acquiredDescriptor = 73;
+            return acquiredDescriptor;
+          },
+          writeSync(descriptor, bytes, offset, length, position) {
+            assert.equal(descriptor, acquiredDescriptor);
+            assert.equal(position, null);
+            writeCalls += 1;
+            if (failAt === 'zero-progress') return 0;
+            if (failAt === 'invalid-write') return length + 1;
+            const chunkBytes = Math.min(length, Math.max(1, Math.floor(length / 2)));
+            const current = files.get(temporaryPath);
+            files.set(temporaryPath, Buffer.concat([current, Buffer.from(bytes).subarray(offset, offset + chunkBytes)]));
             finalWasVisibleDuringTempWrite ||= files.has(targetPath);
-            files.set(path, Buffer.from(bytes).subarray(0, Math.max(1, Math.floor(bytes.byteLength / 2))));
-            finalWasVisibleDuringTempWrite ||= files.has(targetPath);
-            if (failAt === 'write') throw primaryFailure;
-            files.set(path, Buffer.from(bytes));
-            completedTempWrite = true;
+            completedTempWrite = files.get(temporaryPath).byteLength === encoded.byteLength;
+            if ((failAt === 'write' || failAt === 'write-close-cleanup') && !completedTempWrite) {
+              throw primaryFailure;
+            }
+            return chunkBytes;
+          },
+          closeSync(descriptor) {
+            assert.equal(descriptor, acquiredDescriptor);
+            closeCalls += 1;
+            if (failAt === 'close' || failAt === 'close-cleanup' || failAt === 'write-close-cleanup') throw closeFailure;
+            closed = true;
           },
           renameSync(from, to) {
+            renameCalls += 1;
+            assert.equal(from, temporaryPath);
+            assert.equal(to, targetPath);
             assert.equal(completedTempWrite, true, 'rename occurs only after the full temp content is visible');
+            assert.equal(closed, true, 'rename occurs only after the exclusive temp descriptor is closed');
             assert.equal(files.has(to), false, 'the final marker stays absent through complete temp writing');
-            if (failAt === 'rename') throw primaryFailure;
+            if (failAt === 'rename' || failAt === 'rename-cleanup') throw primaryFailure;
             files.set(to, files.get(from));
             files.delete(from);
             renamed = true;
           },
           rmSync(path, options) {
             cleanedPath = path;
+            assert.equal(path, temporaryPath);
             assert.deepEqual(options, { force: true });
             if (cleanupFails) throw cleanupFailure;
             files.delete(path);
@@ -3132,9 +3212,9 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         caughtFailure = error;
       }
       return {
-        targetPath, files, value, encoded, primaryFailure, caughtFailure,
-        completedTempWrite, finalWasVisibleDuringTempWrite, renamed,
-        cleanedPath, cleanupFailureObserved
+        targetPath, temporaryPath, files, value, encoded, primaryFailure, closeFailure, acquisitionFailure, caughtFailure,
+        completedTempWrite, finalWasVisibleDuringTempWrite, renamed, closed,
+        writeCalls, closeCalls, renameCalls, cleanedPath, cleanupFailureObserved
       };
     }
 
@@ -3143,6 +3223,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     assert.equal(successfulPublication.finalWasVisibleDuringTempWrite, false,
       'the consumer-visible final path never exists while the fake filesystem creates or fills the temp');
     assert.equal(successfulPublication.renamed, true);
+    assert.ok(successfulPublication.writeCalls > 1, 'short writes are completed by the bounded progress loop');
+    assert.equal(successfulPublication.closeCalls, 1);
     assert.deepEqual(JSON.parse(successfulPublication.files.get(successfulPublication.targetPath).toString('utf8')),
       successfulPublication.value);
     assert.deepEqual(successfulPublication.files.get(successfulPublication.targetPath), successfulPublication.encoded);
@@ -3153,12 +3235,66 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     assert.equal(failedWrite.files.has(failedWrite.targetPath), false);
     assert.equal(failedWrite.files.size, 0, 'the partial temp is removed after the failed write');
     assert.equal(failedWrite.cleanedPath, '/private/ops-c02/control.json.deterministic-token.tmp');
+    assert.equal(failedWrite.closeCalls, 1, 'an acquired descriptor is closed once after write failure');
+    assert.equal(failedWrite.renameCalls, 0);
 
     const failedRename = runFakeAtomicPublication({ failAt: 'rename' });
     assert.equal(failedRename.caughtFailure, failedRename.primaryFailure,
       'a failed rename rethrows its exact primary error');
     assert.equal(failedRename.files.has(failedRename.targetPath), false);
     assert.equal(failedRename.files.size, 0, 'the complete temp is removed after the failed rename');
+    assert.equal(failedRename.closeCalls, 1);
+    assert.equal(failedRename.renameCalls, 1);
+
+    const failedRenameCleanup = runFakeAtomicPublication({ failAt: 'rename-cleanup', cleanupFails: true });
+    assert.equal(failedRenameCleanup.caughtFailure, failedRenameCleanup.primaryFailure,
+      'a cleanup failure cannot replace the original rename error');
+    assert.equal(failedRenameCleanup.cleanupFailureObserved, true);
+    assert.equal(failedRenameCleanup.files.has(failedRenameCleanup.targetPath), false);
+    assert.equal(failedRenameCleanup.files.size, 1,
+      'a failed cleanup remains explicit while preserving the rename error');
+
+    const failedClose = runFakeAtomicPublication({ failAt: 'close' });
+    assert.equal(failedClose.caughtFailure, failedClose.closeFailure,
+      'a close failure becomes primary only when earlier writes succeeded');
+    assert.equal(failedClose.closeCalls, 1);
+    assert.equal(failedClose.renameCalls, 0, 'rename is withheld after a failed close');
+    assert.equal(failedClose.files.has(failedClose.targetPath), false);
+    assert.equal(failedClose.files.size, 0);
+
+    const failedCloseCleanup = runFakeAtomicPublication({ failAt: 'close-cleanup', cleanupFails: true });
+    assert.equal(failedCloseCleanup.caughtFailure, failedCloseCleanup.closeFailure,
+      'a cleanup failure cannot replace the original close error');
+    assert.equal(failedCloseCleanup.cleanupFailureObserved, true);
+    assert.equal(failedCloseCleanup.renameCalls, 0);
+    assert.equal(failedCloseCleanup.files.size, 1);
+
+    const acquisitionCollision = runFakeAtomicPublication({ failAt: 'acquire' });
+    assert.equal(acquisitionCollision.caughtFailure, acquisitionCollision.acquisitionFailure,
+      'exclusive-open EEXIST remains the original failure');
+    assert.equal(acquisitionCollision.files.get(acquisitionCollision.temporaryPath).toString('utf8'),
+      'preexisting-sentinel', 'failed acquisition preserves the preexisting sentinel file');
+    assert.equal(acquisitionCollision.cleanedPath, null, 'a pathname is never unlinked before this call acquired it');
+    assert.equal(acquisitionCollision.closeCalls, 0);
+    assert.equal(acquisitionCollision.renameCalls, 0);
+
+    for (const invalidResult of ['zero-progress', 'invalid-write']) {
+      const failedProgress = runFakeAtomicPublication({ failAt: invalidResult });
+      assert.ok(failedProgress.caughtFailure instanceof RangeError, `${invalidResult} fails with a fixed bounded error`);
+      assert.equal(failedProgress.closeCalls, 1, `${invalidResult} closes its acquired descriptor`);
+      assert.equal(failedProgress.cleanedPath, failedProgress.temporaryPath, `${invalidResult} removes only its acquired temp`);
+      assert.equal(failedProgress.renameCalls, 0, `${invalidResult} never publishes the final path`);
+    }
+
+    let oversizeOpenCalls = 0;
+    let oversizeFailure;
+    try {
+      publishC02ControlJsonAtomically('/private/ops-c02/oversize.json', { value: 'x'.repeat(1_025) }, {
+        openSync() { oversizeOpenCalls += 1; throw new Error('oversize must fail before open'); }
+      });
+    } catch (error) { oversizeFailure = error; }
+    assert.ok(oversizeFailure instanceof RangeError);
+    assert.equal(oversizeOpenCalls, 0, 'the 1,024-byte marker cap is checked before any filesystem acquisition');
 
     const failedCleanup = runFakeAtomicPublication({ failAt: 'write', cleanupFails: true });
     assert.equal(failedCleanup.caughtFailure, failedCleanup.primaryFailure,
@@ -3167,6 +3303,15 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       'an unremoved private temp is surfaced to the caller as an incomplete cleanup state');
     assert.equal(failedCleanup.files.has(failedCleanup.targetPath), false);
     assert.equal(failedCleanup.files.size, 1, 'the fake cleanup failure remains explicit instead of claiming removal');
+
+    const combinedWriteCloseCleanupFailure = runFakeAtomicPublication({
+      failAt: 'write-close-cleanup', cleanupFails: true
+    });
+    assert.equal(combinedWriteCloseCleanupFailure.caughtFailure, combinedWriteCloseCleanupFailure.primaryFailure,
+      'later close and cleanup failures cannot replace the earlier partial-write error');
+    assert.equal(combinedWriteCloseCleanupFailure.closeCalls, 1);
+    assert.equal(combinedWriteCloseCleanupFailure.cleanupFailureObserved, true);
+    assert.equal(combinedWriteCloseCleanupFailure.files.has(combinedWriteCloseCleanupFailure.targetPath), false);
 
     const failedAckState = { targetAckSent: false, targetAckPublicationFailed: false };
     let failedAckProbeCalls = 0;
@@ -3222,11 +3367,99 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       records: [{ caseId: 'OPS04.C02', boundary: 'C02_WATCHDOG_READY', errorClass: 'SyntaxError' }]
     });
     assert.doesNotMatch(JSON.stringify(safeControlDiagnostics), /SYNTHETIC_PRIVATE|private|912345|marker\.json/u);
-    assert.equal(parseC02ControlReadDiagnostics({
-      lines: `${C02_CONTROL_DIAGNOSTIC_PREFIX}{"schema":"agent-harness.ah11-ops-c02-control-failure.v1","caseId":"OPS04.C02","boundary":"C02_WATCHDOG_READY","errorClass":"SyntaxError","path":"/private"}\n`,
-      count: 1, bytes: Buffer.byteLength(`${C02_CONTROL_DIAGNOSTIC_PREFIX}{"schema":"agent-harness.ah11-ops-c02-control-failure.v1","caseId":"OPS04.C02","boundary":"C02_WATCHDOG_READY","errorClass":"SyntaxError","path":"/private"}\n`),
-      diagnosticsComplete: true
-    }).complete, false, 'extra diagnostic fields fail closed instead of leaking raw details');
+    const expectedIncompleteDiagnostics = {
+      complete: false, recordCount: 0, records: []
+    };
+    const diagnosticLine = (boundary = 'C02_WATCHDOG_READY', errorClass = 'SyntaxError', extra = {}) =>
+      `${C02_CONTROL_DIAGNOSTIC_PREFIX}${JSON.stringify({
+        schema: 'agent-harness.ah11-ops-c02-control-failure.v1',
+        caseId: 'OPS04.C02', boundary, errorClass, ...extra
+      })}`;
+    const diagnosticChannel = (lines, diagnosticsComplete = true) => ({
+      lines, count: lines === '' ? 0 : lines.split('\n').length - 1,
+      bytes: Buffer.byteLength(lines, 'utf8'), diagnosticsComplete
+    });
+    const assertIncompleteChannel = (channel, label) => {
+      assert.deepEqual(parseC02ControlReadDiagnostics(channel), expectedIncompleteDiagnostics, label);
+    };
+    const validChannel = diagnosticChannel(`${diagnosticLine()}\n`);
+    for (const field of ['lines', 'count', 'bytes', 'diagnosticsComplete']) {
+      const missingField = { ...validChannel };
+      delete missingField[field];
+      assertIncompleteChannel(missingField, `missing ${field} is incomplete`);
+    }
+    assertIncompleteChannel(null, 'a null channel returns fixed incomplete diagnostics');
+    assertIncompleteChannel({ lines: null, count: 0, bytes: -1, diagnosticsComplete: true },
+      'the malformed null/negative metrics pair returns incomplete without throwing');
+    for (const wrongType of [
+      { ...validChannel, lines: 1 },
+      { ...validChannel, count: '1' },
+      { ...validChannel, bytes: 'number' },
+      { ...validChannel, diagnosticsComplete: 1 }
+    ]) assertIncompleteChannel(wrongType, 'wrong channel field types fail closed');
+    assertIncompleteChannel({ ...validChannel, count: 0 }, 'record-count mismatch is incomplete');
+    assertIncompleteChannel({ ...validChannel, bytes: validChannel.bytes + 1 }, 'byte-count mismatch is incomplete');
+    assertIncompleteChannel({ ...validChannel, lines: validChannel.lines.trimEnd(), bytes: validChannel.bytes - 1 },
+      'a missing final newline is incomplete');
+    assertIncompleteChannel({ ...validChannel, diagnosticsComplete: false }, 'producer-incomplete status is retained');
+    assertIncompleteChannel({ ...validChannel, ignored: 'extra channel property' },
+      'extra channel fields are rejected');
+    for (const badRecord of [
+      `${C02_CONTROL_DIAGNOSTIC_PREFIX}{\n`,
+      `${C02_CONTROL_DIAGNOSTIC_PREFIX}{"schema":"agent-harness.ah11-ops-c02-control-failure.v1","caseId":"OPS04.C02","boundary":"UNLISTED","errorClass":"SyntaxError"}\n`,
+      `${C02_CONTROL_DIAGNOSTIC_PREFIX}{"schema":"agent-harness.ah11-ops-c02-control-failure.v1","caseId":"OPS04.C02","boundary":"C02_WATCHDOG_READY","errorClass":"PrivateError"}\n`,
+      `${C02_CONTROL_DIAGNOSTIC_PREFIX}{"schema":"wrong-schema","caseId":"OPS04.C02","boundary":"C02_WATCHDOG_READY","errorClass":"SyntaxError"}\n`,
+      `${diagnosticLine('C02_WATCHDOG_READY', 'SyntaxError', { path: '/private' })}\n`,
+      `UNRELATED_PREFIX${diagnosticLine().slice(C02_CONTROL_DIAGNOSTIC_PREFIX.length)}\n`
+    ]) assertIncompleteChannel(diagnosticChannel(badRecord), 'malformed JSON/prefix and invalid enum/class/schema/keys fail closed');
+
+    const boundaryNames = [...C02_CONTROL_DIAGNOSTIC_BOUNDARIES];
+    const validBoundaryChannel = diagnosticChannel(boundaryNames.map(boundary => `${diagnosticLine(boundary, 'Error')}\n`).join(''));
+    assert.equal(parseC02ControlReadDiagnostics(validBoundaryChannel).complete, true,
+      'each of the six fixed boundary enums is accepted');
+    const errorClassNames = ['Error', 'RangeError', 'SyntaxError', 'TypeError'];
+    const validErrorClasses = diagnosticChannel(errorClassNames.map(errorClass => `${diagnosticLine('C02_WATCHDOG_READY', errorClass)}\n`).join(''));
+    assert.equal(parseC02ControlReadDiagnostics(validErrorClasses).complete, true,
+      'each allowlisted original error class is accepted');
+
+    const exactLine = diagnosticLine();
+    assert.ok(Buffer.byteLength(exactLine, 'utf8') < 191);
+    const exactLineWithPadding = `${exactLine}${' '.repeat(191 - Buffer.byteLength(exactLine, 'utf8'))}\n`;
+    assert.equal(Buffer.byteLength(exactLineWithPadding, 'utf8'), 192);
+    assert.equal(parseC02ControlReadDiagnostics(diagnosticChannel(exactLineWithPadding)).complete, true,
+      'a 192-byte diagnostic line is accepted at the exact bound');
+    assertIncompleteChannel(diagnosticChannel(`${exactLineWithPadding.slice(0, -1)} \n`),
+      'a 193-byte diagnostic line is rejected');
+    const eightLinesAtLimit = exactLineWithPadding.repeat(8);
+    const eightRecordChannel = diagnosticChannel(eightLinesAtLimit);
+    assert.equal(eightRecordChannel.bytes, 1_536);
+    assert.equal(parseC02ControlReadDiagnostics(eightRecordChannel).complete, true,
+      'eight 192-byte lines and 1,536 total bytes are accepted at their exact bounds');
+    const nineRecordChannel = diagnosticChannel(`${Array(9).fill(`${diagnosticLine()}\n`).join('')}`);
+    assertIncompleteChannel(nineRecordChannel, 'the ninth record fails the bounded record cap');
+    assertIncompleteChannel({
+      lines: 'x'.repeat(1_537), count: 8, bytes: 1_537, diagnosticsComplete: true
+    }, 'the 1,537-byte total overflow fails before string splitting');
+
+    const producerOverflowState = {
+      c02ControlReadFailureLines: '', c02ControlReadFailureCount: 0,
+      c02ControlReadFailureBytes: 0, c02ControlReadDiagnosticsComplete: true,
+      ci1PhaseCaptureIncomplete: false
+    };
+    for (let index = 0; index < 8; index += 1) {
+      assert.equal(recordC02ControlReadFailure('C02_WATCHDOG_READY', new SyntaxError('private'), producerOverflowState), true);
+    }
+    assert.equal(recordC02ControlReadFailure('C02_WATCHDOG_READY', new SyntaxError('private'), producerOverflowState), false);
+    assert.equal(producerOverflowState.c02ControlReadFailureCount, 8);
+    assert.equal(producerOverflowState.c02ControlReadDiagnosticsComplete, false);
+    assert.equal(producerOverflowState.ci1PhaseCaptureIncomplete, true,
+      'producer overflow fails closed in the shared custody completeness metric');
+    assertIncompleteChannel({
+      lines: producerOverflowState.c02ControlReadFailureLines,
+      count: producerOverflowState.c02ControlReadFailureCount,
+      bytes: producerOverflowState.c02ControlReadFailureBytes,
+      diagnosticsComplete: producerOverflowState.c02ControlReadDiagnosticsComplete
+    }, 'producer overflow remains an incomplete sanitized result');
 
     const failureDir = tempDirectory('ah11-jev-fixture-failure-', { ci1OwnedGroups: true });
     registerCi1OwnedTemporaryDirectoryFinalizer(t, cleanupCi1OwnedTemporaryDirectory, failureDir, METRICS);
@@ -3862,7 +4095,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const inertParentSource = `
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, openSync, renameSync, rmSync, writeSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 const publishC02ControlJsonAtomically = ${publishC02ControlJsonAtomically.toString()};
 const markerPath = process.argv[1];
@@ -6873,7 +7106,9 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       'ownedRunnerCountHighWater', 'supervisorOpenFileDescriptors', 'runnerOpenFileDescriptors',
       'processSigintSignalsSent', 'maxSupervisorRssBytes', 'maxRunnerRssBytes',
       'ci1PhaseCaptures', 'ci1PhaseCaptureBytes', 'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete',
-      'ci1PhaseCaptureChildCloseUnconfirmed', 'ci1PhaseCaptureOwnedGroupCloseUnconfirmed'
+      'ci1PhaseCaptureChildCloseUnconfirmed', 'ci1PhaseCaptureOwnedGroupCloseUnconfirmed',
+      'c02ControlReadFailureLines', 'c02ControlReadFailureCount', 'c02ControlReadFailureBytes',
+      'c02ControlReadDiagnosticsComplete'
   ].sort());
   for (const key of [
     'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete', 'ci1PhaseCaptureChildCloseUnconfirmed',
@@ -6881,6 +7116,22 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
   ]) {
     assert.equal(typeof METRICS[key], 'boolean', `${key} must remain an explicit boolean custody metric`);
   }
+  assert.equal(typeof METRICS.c02ControlReadFailureLines, 'string');
+  assert.equal(Number.isSafeInteger(METRICS.c02ControlReadFailureCount), true);
+  assert.ok(METRICS.c02ControlReadFailureCount >= 0 && METRICS.c02ControlReadFailureCount <= 8);
+  assert.equal(Number.isSafeInteger(METRICS.c02ControlReadFailureBytes), true);
+  assert.ok(METRICS.c02ControlReadFailureBytes >= 0 && METRICS.c02ControlReadFailureBytes <= 1_536);
+  assert.equal(typeof METRICS.c02ControlReadDiagnosticsComplete, 'boolean');
+  assert.equal(Buffer.byteLength(METRICS.c02ControlReadFailureLines, 'utf8'), METRICS.c02ControlReadFailureBytes);
+  const c02DiagnosticLines = METRICS.c02ControlReadFailureLines.length === 0
+    ? [] : METRICS.c02ControlReadFailureLines.split('\n');
+  if (c02DiagnosticLines.length > 0) {
+    assert.equal(c02DiagnosticLines.at(-1), '', 'nonempty diagnostics terminate on a complete line');
+    c02DiagnosticLines.pop();
+  }
+  assert.equal(c02DiagnosticLines.length, METRICS.c02ControlReadFailureCount);
+  assert.ok(c02DiagnosticLines.every(line => Buffer.byteLength(`${line}\n`, 'utf8') <= 192));
+  assert.ok(Buffer.byteLength(METRICS.c02ControlReadFailureLines, 'utf8') <= 1_536);
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
   await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', async t => {
