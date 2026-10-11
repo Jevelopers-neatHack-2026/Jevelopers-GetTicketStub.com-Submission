@@ -11,7 +11,8 @@ export const independentCounts = (stdout: string) =>
 	);
 export const diagnosticSchema = z
 	.object({
-		version: z.literal(1),
+		version: z.literal(2),
+		elapsedMs: z.number().int().nonnegative(),
 		executionNonce: z.string().uuid(),
 		reason: z.enum([
 			"child-exit",
@@ -26,14 +27,33 @@ export const diagnosticSchema = z
 		exitCode: z.number().int().nullable(),
 		signal: z.enum(["SIGTERM", "SIGKILL", "SIGABRT", "SIGSEGV"]).nullable(),
 		expectedTests: z.number().int().nullable(),
-		counts: z.record(z.string(), z.number().int().nullable()),
-		stdoutDigest: z.string(),
-		stderrDigest: z.string(),
+		counts: z
+			.object({
+				tests: z.number().int().nonnegative().nullable(),
+				pass: z.number().int().nonnegative().nullable(),
+				fail: z.number().int().nonnegative().nullable(),
+				cancelled: z.number().int().nonnegative().nullable(),
+				skipped: z.number().int().nonnegative().nullable(),
+				todo: z.number().int().nonnegative().nullable(),
+			})
+			.strict(),
+		stdoutDigest: z.string().regex(/^[a-f0-9]{64}$/),
+		stderrDigest: z.string().regex(/^[a-f0-9]{64}$/),
 		failures: z
-			.array(z.object({ ordinal: z.number().int(), nameDigest: z.string() }))
+			.array(
+				z
+					.object({
+						ordinal: z.number().int(),
+						nameDigest: z.string().regex(/^[a-f0-9]{64}$/),
+					})
+					.strict(),
+			)
 			.max(64),
 		artifactIndex: z.number().int().nullable(),
-		artifactNameDigest: z.string().nullable(),
+		artifactNameDigest: z
+			.string()
+			.regex(/^[a-f0-9]{64}$/)
+			.nullable(),
 	})
 	.strict()
 	.readonly();

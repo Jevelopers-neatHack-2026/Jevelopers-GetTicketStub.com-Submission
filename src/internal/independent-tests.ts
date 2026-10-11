@@ -124,6 +124,15 @@ export async function runIndependentTests(options: {
 		"--test-reporter=tap",
 		...options.paths,
 	];
+	const environment = Object.fromEntries(
+		Object.entries(independentTestEnvironment(options.environment)).filter(
+			([key]) =>
+				!/^PP_(OUTPUT|COMPOSITION|DURABILITY)_(EVIDENCE_DIR|EXECUTION_NONCE)$/.test(
+					key,
+				),
+		),
+	);
+	const started = performance.now();
 	let phase:
 			| "child-exit"
 			| "counts"
@@ -140,7 +149,7 @@ export async function runIndependentTests(options: {
 			command.slice(1),
 			{
 				env: {
-					...independentTestEnvironment(options.environment),
+					...environment,
 					[directoryVariable]: evidenceDir,
 					[nonceVariable]: executionNonce,
 				},
@@ -194,6 +203,7 @@ export async function runIndependentTests(options: {
 		return {
 			command,
 			exitCode: 0,
+			elapsedMs: Math.ceil(performance.now() - started),
 			tests,
 			passed,
 			expectedTests: options.expectedTests ?? null,
@@ -211,7 +221,8 @@ export async function runIndependentTests(options: {
 				stderr = child.stderr;
 			}
 			const diagnostic = diagnosticSchema.parse({
-				version: 1,
+				version: 2,
+				elapsedMs: Math.ceil(performance.now() - started),
 				executionNonce,
 				reason: phase === "child-exit" ? child.reason : phase,
 				exitCode: phase === "child-exit" ? child.exitCode : 0,

@@ -23,7 +23,7 @@ ART-03/04/05 remain open; no mock peer is called real conformance.
 | PP-09A.4 | Real independent parsers plus final preflight; tamper/dimensions/fonts/profile and issued-receipt rejection | Real supplier final-file policy and approved input pins |
 | PP-09A.5 | Deterministic exact ZIP dialect; independent sizes/CRC/hash/set/type inspection; traversal/symlink/hidden bytes reject | Canonical supplied manifest adapter absent |
 | PP-09A.6 | Exact declared file set; unsupported profiles/PDF mechanisms fail closed; semantic policy identity explicit | Approved real format roster and independent semantic review absent |
-| PP-09B.1 | Private scoped lineage, source/layout/font/policy/renderer/repair/CSV/batch refs; privacy-safe descriptors | Canonical ProductionBundle package/schema/version missing |
+| PP-09B.1 | Private scoped lineage, source/layout/font/policy/renderer/repair/CSV/batch refs; privacy-safe descriptors | Executable shared candidate unaccepted; full-file/detached protocol and Node-24 compatibility unresolved |
 | PP-09B.2 | Actual parsed file descriptors and full preflight report digest/check inventory; readiness external-blocked | Canonical report and warning vocabulary |
 | PP-09B.3 | Detached nonrecursive payload→inventory→ZIP protocol and independent verification | Canonical owner hash protocol agreement |
 | PP-09B.4 | Source/preview/composition/render/manifest/archive/input/spec identities separated | Actual purchase/approval applicability remains external |

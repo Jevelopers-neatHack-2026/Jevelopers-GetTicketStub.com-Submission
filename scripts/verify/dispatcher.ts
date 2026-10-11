@@ -107,7 +107,6 @@ export async function dispatchVerification(
 					});
 				}
 			}
-			// External contract/supplier/consumer pins do not exist yet. No fabricated integration receipt.
 			evidence = {
 				schemaVersion: 1,
 				suite: args.suite,

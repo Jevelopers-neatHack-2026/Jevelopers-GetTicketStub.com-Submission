@@ -164,6 +164,16 @@ export async function runPrivateSuite(suite: SuiteName, evidenceDir: string) {
 				},
 			];
 			requiredEvidence.push(...semanticRequirements);
+			requiredEvidence.push({
+				path: "csv-flow-state.json",
+				schema: z.object({
+					mode: z.literal("finite-csv-test-stage"),
+					phase: z.literal("completed"),
+					generationCalls: z.literal(0),
+					privacyVerified: z.literal(true),
+					privacyRevision: z.literal("private-observation-test-privacy-1"),
+				}),
+			});
 			expectedTests = outputExpectedTests[key];
 		}
 		const result = await runIndependentTests({

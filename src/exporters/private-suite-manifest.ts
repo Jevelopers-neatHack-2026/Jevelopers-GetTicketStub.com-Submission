@@ -27,12 +27,25 @@ export const outputTestFiles = {
 		"production-output-batch",
 		"production-output-diagnostics",
 		"production-output-independent-diagnostics",
+		"production-output-observation-privacy",
 	],
-	"csv-personalization": ["production-output-csv"],
-	exporters: ["production-output-containers", "production-output-pdf-bounds"],
-	manifests: ["production-output-containers", "production-output-pdf-bounds"],
+	"csv-personalization": [
+		"production-output-csv",
+		"production-output-observation-privacy",
+	],
+	exporters: [
+		"production-output-containers",
+		"production-output-pdf-bounds",
+		"production-output-observation-privacy",
+	],
+	manifests: [
+		"production-output-containers",
+		"production-output-pdf-bounds",
+		"production-output-observation-privacy",
+	],
 	"integration-production": [
 		"production-output-independent-diagnostics",
+		"production-output-observation-privacy",
 		"production-output-rows",
 		"production-output-csv",
 		"production-output-pdf-bounds",
@@ -50,11 +63,11 @@ export const compositionExpectedTests = {
 	"bounded-repair": 55,
 } as const;
 export const outputExpectedTests = {
-	personalization: 47,
-	"csv-personalization": 40,
-	exporters: 48,
-	manifests: 48,
-	"integration-production": 81,
+	personalization: 51,
+	"csv-personalization": 43,
+	exporters: 51,
+	manifests: 51,
+	"integration-production": 85,
 } as const;
 export const semanticRequirements = [
 	{

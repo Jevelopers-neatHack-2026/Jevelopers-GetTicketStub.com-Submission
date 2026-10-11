@@ -5,6 +5,9 @@ private composition, assets, typography, preflight, repair, SQLite storage,
 durable jobs and observation modules. These modules are not public canonical
 operations. The package root still exports runtime only. No local inventory is
 a canonical ProductionBundle, and no private publication is handoff eligible.
+The executable shared-contracts candidate is unaccepted; see
+[candidate intake](../contracts/candidate-intake.md) and
+[combined runner diagnosis](RUNNER-DIAGNOSIS.md) for current owner holds.
 
 ## Functions and boundaries
 

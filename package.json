@@ -30,7 +30,7 @@
 		"typecheck": "node scripts/environment.mjs && tsc --noEmit -p tsconfig.json",
 		"format": "biome format --write package.json tsconfig.json src scripts tests docs/runtime/pins.json",
 		"format:check": "biome format package.json tsconfig.json src scripts tests docs/runtime/pins.json",
-		"test": "node scripts/environment.mjs && node --test dist/tests/unit/*.test.js dist/tests/contract/*.test.js dist/tests/integration/*.test.js",
+		"test": "node scripts/environment.mjs && node --test --test-concurrency=1 dist/tests/unit/*.test.js dist/tests/contract/*.test.js dist/tests/integration/*.test.js",
 		"verify": "node dist/scripts/verify/cli.js",
 		"browser:install": "node scripts/environment.mjs && playwright install chromium"
 	},
