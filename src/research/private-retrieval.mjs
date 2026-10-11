@@ -596,6 +596,7 @@ export async function runPrivateRetrieval(value) {
   const candidateResults = [];
   const outputFacts = new Map();
   const evidenceIds = new Set();
+  const verifiedCompletionProofs = new Map();
   const omittedLinkCandidates = [];
   let truncatedSuggestionCount = 0;
   let sourceLinkCandidateOmittedCountLowerBound = 0;
@@ -729,6 +730,86 @@ export async function runPrivateRetrieval(value) {
         throw abortError();
       }
       return snapshot;
+    };
+
+    const rememberVerifiedCompletion = async (candidateId, receipt) => {
+      let binding;
+      let snapshot;
+      try {
+        binding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+          scope, input.runId, candidateId, controller.signal,
+        ));
+        snapshot = await readActiveSnapshot();
+      } catch (error) {
+        return { valid: false, unavailable: true, error };
+      }
+      const truncatedCount = receipt.truncatedCount ?? 0;
+      if (!binding || binding.claim.candidateId !== candidateId || binding.claim.state !== 'completed'
+        || binding.claim.claimKey !== receipt.claim.claimKey
+        || binding.claim.workerId !== receipt.claim.workerId
+        || binding.claim.leaseToken !== receipt.claim.leaseToken
+        || binding.completion?.completionKey !== receipt.completionKey
+        || binding.completion?.outcome !== receipt.outcome
+        || !completionPayloadMatches(receipt, snapshot, candidateId, binding.completion, truncatedCount)) {
+        return { valid: false, unavailable: false };
+      }
+      verifiedCompletionProofs.set(candidateId, {
+        completionKey: receipt.completionKey,
+        claim: {
+          claimKey: receipt.claim.claimKey,
+          workerId: receipt.claim.workerId,
+          leaseToken: receipt.claim.leaseToken,
+        },
+        legacyReceipt: receipt.omissionMetadataVersion !== 1,
+        receipt: {
+          outcome: receipt.outcome,
+          suggestions: receipt.suggestions,
+          truncatedCount,
+        },
+      });
+      return { valid: true, snapshot };
+    };
+
+    const verifyProjectionObservationStream = async (snapshot) => {
+      const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
+      const parents = new Set(verifiedCompletionProofs.keys());
+      const hasLegacyReceipt = [...verifiedCompletionProofs.values()].some((proof) => proof.legacyReceipt);
+      for (const observation of snapshot.observations) {
+        if (observation.kind !== 'link') continue;
+        const parentCandidateId = observation.parentCandidateId;
+        const parent = candidatesById.get(parentCandidateId);
+        const proof = verifiedCompletionProofs.get(parentCandidateId);
+        if (!parent || parent.state !== 'completed' || !proof) {
+          return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+        }
+        parents.add(parentCandidateId);
+      }
+      for (const parentCandidateId of parents) {
+        const proof = verifiedCompletionProofs.get(parentCandidateId);
+        const parent = candidatesById.get(parentCandidateId);
+        if (!parent || parent.state !== 'completed' || parent.completionOutcome !== proof.receipt.outcome) {
+          return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+        }
+        let binding;
+        try {
+          binding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+            scope, input.runId, parentCandidateId, controller.signal,
+          ));
+        } catch (error) {
+          return { valid: false, unavailable: true, legacy: hasLegacyReceipt, error };
+        }
+        if (!binding || binding.claim.candidateId !== parentCandidateId || binding.claim.state !== 'completed'
+          || binding.claim.claimKey !== proof.claim.claimKey
+          || binding.claim.workerId !== proof.claim.workerId
+          || binding.claim.leaseToken !== proof.claim.leaseToken
+          || binding.completion?.completionKey !== proof.completionKey
+          || binding.completion?.outcome !== proof.receipt.outcome
+          || !completionPayloadMatches(proof.receipt, snapshot, parentCandidateId,
+            binding.completion, proof.receipt.truncatedCount)) {
+          return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+        }
+      }
+      return { valid: true };
     };
 
     const retainReceipt = (receipt) => {
@@ -933,11 +1014,30 @@ export async function runPrivateRetrieval(value) {
             }
           }
         }
+        const proof = await rememberVerifiedCompletion(candidate.candidateId, replayReceipt);
+        if (!proof.valid) {
+          if (proof.unavailable) limitations.add('private_receipt_unavailable');
+          else limitations.add('private_receipt_completion_mismatch');
+          if (!proof.unavailable && receipt.omissionMetadataVersion !== 1) {
+            limitations.add('legacy_receipt_fanout_recovery_unverified');
+          }
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
         retainReceipt(replayReceipt);
       }
     };
 
     await recoverDurableReceipts();
+    if (!runFailure) {
+      const recoveredSnapshot = await readActiveSnapshot();
+      const streamProof = await verifyProjectionObservationStream(recoveredSnapshot);
+      if (!streamProof.valid) {
+        limitations.add(streamProof.unavailable ? 'private_receipt_unavailable' : 'private_receipt_completion_mismatch');
+        if (streamProof.legacy) limitations.add('legacy_receipt_fanout_recovery_unverified');
+        runFailure = 'private_receipt_unavailable';
+      }
+    }
 
     const processClaim = async (claim) => {
       const candidate = claim.candidate;
@@ -1339,6 +1439,27 @@ export async function runPrivateRetrieval(value) {
         suggestions: acceptedSuggestions,
         truncatedCount,
       }, controller.signal));
+      let persistedReceipt;
+      try {
+        persistedReceipt = await awaitOperation(() => input.evidenceStore.readPrivateRunReceipt(
+          evidenceScope, receiptBinding, input.request, controller.signal,
+        ));
+      } catch (error) {
+        limitations.add(limitationFor(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error)));
+        limitations.add('private_receipt_unavailable');
+        runFailure = 'private_receipt_unavailable';
+        return;
+      }
+      const proof = persistedReceipt.state === 'complete'
+        ? await rememberVerifiedCompletion(candidate.candidateId, persistedReceipt)
+        : { valid: false, unavailable: false };
+      if (!proof.valid) {
+        limitations.add(proof.unavailable ? 'private_receipt_unavailable' : 'private_receipt_completion_mismatch');
+        if (!proof.unavailable && persistedReceipt.omissionMetadataVersion !== 1) {
+          limitations.add('legacy_receipt_fanout_recovery_unverified');
+        }
+        runFailure = 'private_receipt_unavailable';
+      }
     };
 
     while (!controller.signal.aborted && !runFailure) {
@@ -1403,6 +1524,12 @@ export async function runPrivateRetrieval(value) {
     if (externalAbort || snapshotHasBlockingStop(finalSnapshot) || controller.signal.aborted) {
       if (stopCause === 'deadline') return incompleteWithProgress(input.runId, finalSnapshot, [...limitations, 'deadline_exceeded']);
       return incompleteResult(input.runId, 'cancelled', [...limitations, 'cancelled']);
+    }
+    const finalStreamProof = await verifyProjectionObservationStream(finalSnapshot);
+    if (!finalStreamProof.valid) {
+      limitations.add(finalStreamProof.unavailable ? 'private_receipt_unavailable' : 'private_receipt_completion_mismatch');
+      if (finalStreamProof.legacy) limitations.add('legacy_receipt_fanout_recovery_unverified');
+      runFailure = 'private_receipt_unavailable';
     }
     if (runFailure) return incompleteResult(input.runId, 'incomplete', [...limitations, runFailure]);
     const transport = await awaitOperation(() => input.frontier.getTransportProgress(scope, input.runId, controller.signal));
