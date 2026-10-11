@@ -1,0 +1,19 @@
+# Prodigi Product Details wire decoder
+
+`src/prodigi-product-details.ts` contains a pure, provider-private projection of the documented Prodigi v4 `GET /v4.0/products/{sku}` success response. The current reference describes the response envelope (`outcome: "Ok"`, `product`) and product SKU, description, dimensions and units, product attributes, print areas, variants, variant `shipsTo`, and print-area resolutions. The module preserves those values without converting units or inferring a selected variant.
+
+The decoder accepts an already-parsed plain-data value and an expected SKU. It requires the exact successful envelope, validates the expected SKU binding and documented field types, applies bounded string/record/array/node limits, and returns a detached, deeply frozen DTO. It rejects accessors, symbols, custom prototypes, sparse or augmented arrays, duplicate string members in attribute and `shipsTo` lists, exact duplicate variant rows, dangerous dictionary keys, malformed numbers, and unknown fields. `traceParent` is accepted as a bounded string and discarded.
+
+The unknown-field rule is deliberately fail-closed: a new top-level, product, dimension, variant, print-area, or resolution field makes decoding fail until the current provider reference is reviewed and the private projection is updated. This avoids silently treating an unreviewed wire change as understood. JSON object member names that were duplicated in raw JSON cannot be detected once an upstream JSON parser has collapsed them into an object; this decoder receives objects rather than raw JSON text. The caller's JSON decoding boundary must decide how to handle that case. This module does reject duplicate values in the documented string lists.
+
+`prodigiProductDetailsPath(sku)` returns only the fixed relative path `/v4.0/products/{escaped-sku}`. It rejects empty or trimmed identifiers, path separators, percent-encoded input, query/fragment delimiters, controls, traversal-only dot segments, malformed Unicode, and identifiers over 128 code units; it percent-encodes the remaining segment. It does not accept a host or construct a URL.
+
+`ProdigiProductDetailsError` exposes only one of three fixed codes (`invalid_sku`, `sku_mismatch`, `invalid_response`) and fixed messages. It does not include caller SKU text or provider response content.
+
+This data is not a catalog snapshot or orderability decision. In particular, the parsed response does not establish `available` versus `removed`, selected variant, current price, quote expiry, tax/currency treatment, shipping eligibility for an actual destination, print-art eligibility, approval, or authorization. The module performs no HTTP, secret access, quote, order, status, cancellation, finance, authorization, or metering operation, and is not wired into the runtime.
+
+The static suite `tests/prodigi-product-details-suite.mjs` uses only synthetic fixtures and placeholder values; it is designed to run after a TypeScript build. It makes no provider request.
+
+## Provider reference
+
+- [Prodigi API v4 reference: Product Details](https://www.prodigi.com/print-api/docs/reference/) (Product Details object and Get Product Details sections; checked 2026-10-11)
