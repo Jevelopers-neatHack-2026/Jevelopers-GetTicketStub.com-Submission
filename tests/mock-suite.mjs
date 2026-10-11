@@ -373,6 +373,120 @@ test("active provider key replays after quote expiry across JSON restart without
   assert.equal(restored.snapshot().billingEvidence.length, 1);
 });
 
+test("submit retention ledger rejects any missing live replay row across multiple accepted orders", async () => {
+  const harness = createMockHarness({ quoteTtlMs: 10_000, idempotencyTtlMs: 100 });
+  const { command } = await prepareSubmit(harness);
+  let firstCommand;
+  for (const suffix of ["a", "b", "c"]) {
+    const variant = {
+      ...command,
+      idempotencyKey: `many-order-key-${suffix}`,
+      requestFingerprint: `many-order-request-${suffix}`
+    };
+    await harness.simulator.adapter.submit(variant, adapterContext(harness.simulator));
+    if (firstCommand === undefined) firstCommand = variant;
+  }
+  assert.ok(firstCommand);
+  await harness.simulator.adapter.submit(firstCommand, adapterContext(harness.simulator));
+  const snapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+  assert.equal(snapshot.format, "fc-mock-development/2");
+  assert.equal(snapshot.orders.length, 3);
+  assert.equal(snapshot.idempotency.length, 3);
+  assert.equal(snapshot.idempotencyHistory.length, 3);
+  assert.equal(snapshot.billingEvidence.length, snapshot.orders.length);
+  assert.equal(snapshot.duplicateSubmissions, 1);
+  assert.equal(snapshot.dispatchCounters.submit, snapshot.orders.length + snapshot.duplicateSubmissions);
+
+  for (let index = 0; index < snapshot.idempotency.length; index += 1) {
+    const candidate = JSON.parse(JSON.stringify(snapshot));
+    candidate.idempotency.splice(index, 1);
+    assert.throws(() => createDeterministicSimulator({ snapshot: candidate }), TypeError, `missing current key row ${index}`);
+
+    const missingHistory = JSON.parse(JSON.stringify(snapshot));
+    missingHistory.idempotencyHistory.splice(index, 1);
+    assert.throws(() => createDeterministicSimulator({ snapshot: missingHistory }), TypeError, `missing retained generation ${index}`);
+  }
+
+  const duplicateGeneration = JSON.parse(JSON.stringify(snapshot));
+  duplicateGeneration.idempotencyHistory.push({ ...duplicateGeneration.idempotencyHistory[0] });
+  assert.throws(() => createDeterministicSimulator({ snapshot: duplicateGeneration }), TypeError, "duplicate accepted generation fact");
+  const missingDuplicateDispatch = JSON.parse(JSON.stringify(snapshot));
+  missingDuplicateDispatch.dispatchCounters.submit = missingDuplicateDispatch.orders.length;
+  assert.throws(() => createDeterministicSimulator({ snapshot: missingDuplicateDispatch }), TypeError, "duplicate replay requires a dispatch counter");
+});
+
+test("submit generations retain expired history and allow reuse exactly at expiry", async () => {
+  const harness = createMockHarness({ quoteTtlMs: 10_000, idempotencyTtlMs: 100 });
+  const { command } = await prepareSubmit(harness);
+  const submitGeneration = async (requestFingerprint) => harness.simulator.adapter.submit({
+    ...command,
+    idempotencyKey: "generation-boundary-key",
+    requestFingerprint
+  }, adapterContext(harness.simulator));
+
+  const first = await submitGeneration("generation-request-1");
+  harness.simulator.advanceTime(100);
+  const second = await submitGeneration("generation-request-2");
+  assert.notEqual(second.value.providerRequestId, first.value.providerRequestId);
+  assert.equal(harness.simulator.snapshot().idempotencyHistory[0].expiresAt, Date.parse(second.value.acceptedAt));
+
+  harness.simulator.advanceTime(200);
+  const third = await submitGeneration("generation-request-3");
+  const throughThree = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+  const keyDigest = throughThree.idempotency[0].keyDigest;
+  assert.deepEqual(throughThree.idempotencyHistory.filter((row) => row.keyDigest === keyDigest).map((row) => row.generation), [1, 2, 3]);
+  assert.equal(throughThree.idempotency.find((row) => row.keyDigest === keyDigest).providerRequestId, third.value.providerRequestId);
+  const restored = createDeterministicSimulator({ snapshot: throughThree });
+  assert.equal(restored.orders().length, 3);
+  const overlappingGeneration = JSON.parse(JSON.stringify(throughThree));
+  const secondGeneration = overlappingGeneration.idempotencyHistory.find((row) => row.generation === 2);
+  const firstGeneration = overlappingGeneration.idempotencyHistory.find((row) => row.generation === 1);
+  const secondOrder = overlappingGeneration.orders.find((order) => order.providerRequestId === secondGeneration.providerRequestId);
+  const secondEvidence = overlappingGeneration.billingEvidence.find((row) => row.providerRequestId === secondOrder.providerRequestId);
+  assert.ok(firstGeneration && secondGeneration && secondOrder && secondEvidence);
+  const overlappingAcceptedAt = new Date(firstGeneration.expiresAt - 1).toISOString();
+  secondOrder.acceptedAt = overlappingAcceptedAt;
+  secondOrder.statusOccurredAt = overlappingAcceptedAt;
+  secondEvidence.observedAt = overlappingAcceptedAt;
+  secondGeneration.expiresAt = Date.parse(overlappingAcceptedAt) + overlappingGeneration.idempotencyTtlMs;
+  assert.throws(() => createDeterministicSimulator({ snapshot: overlappingGeneration }), TypeError, "a new generation cannot overlap the prior key retention window");
+
+  restored.advanceTime(100);
+  const fourth = await restored.adapter.submit({
+    ...command,
+    idempotencyKey: "generation-boundary-key",
+    requestFingerprint: "generation-request-4"
+  }, adapterContext(restored));
+  assert.notEqual(fourth.value.providerRequestId, third.value.providerRequestId);
+  assert.deepEqual(restored.snapshot().idempotencyHistory.filter((row) => row.keyDigest === keyDigest).map((row) => row.generation), [1, 2, 3, 4]);
+  assert.doesNotThrow(() => createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(restored.snapshot())) }));
+});
+
+test("accepted timeout and crash snapshots reject omitted submit replay evidence", async () => {
+  for (const fault of ["accepted_then_timeout", "crash_after_acceptance"]) {
+    const harness = createMockHarness({
+      quoteTtlMs: 10_000,
+      idempotencyTtlMs: 100,
+      faults: [{ operation: "submit", kind: fault }]
+    });
+    const { command } = await prepareSubmit(harness);
+    let durableSnapshot;
+    if (fault === "crash_after_acceptance") harness.simulator.setCrashBarrierHandler(() => { durableSnapshot = harness.simulator.snapshot(); });
+    await expectConnectorError(harness.runtime.submit(envelope(command), MOCK_SCOPE), "ambiguous_submission", "possible");
+    const validSnapshot = durableSnapshot ?? harness.simulator.snapshot();
+    assert.equal(validSnapshot.orders.length, 1);
+    assert.equal(validSnapshot.idempotencyHistory.length, 1);
+    assert.doesNotThrow(() => createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(validSnapshot)) }));
+
+    const missingIndex = JSON.parse(JSON.stringify(validSnapshot));
+    missingIndex.idempotency = [];
+    assert.throws(() => createDeterministicSimulator({ snapshot: missingIndex }), TypeError, `${fault} missing replay index`);
+    const missingHistory = JSON.parse(JSON.stringify(validSnapshot));
+    missingHistory.idempotencyHistory = [];
+    assert.throws(() => createDeterministicSimulator({ snapshot: missingHistory }), TypeError, `${fault} missing retained key history`);
+  }
+});
+
 test("accepted-then-timeout key resolves from restored provider state after quote expiry", async () => {
   const firstHarness = createMockHarness({
     quoteTtlMs: 10,
@@ -420,6 +534,102 @@ test("cancel idempotency returns the same terminal observation on replay", async
   assert.equal(harness.simulator.orders().length, 1);
   assert.equal(harness.simulator.snapshot().cancelIdempotency.length, 1);
   assert.equal(harness.simulator.dispatchCounters().cancel, 2);
+});
+
+test("cancel history survives cache expiry and key reuse while replay indexes stay complete", async () => {
+  const harness = createMockHarness({ quoteTtlMs: 10_000, idempotencyTtlMs: 100 });
+  const { command } = await prepareSubmit(harness);
+  const firstOrder = await harness.simulator.adapter.submit(command, adapterContext(harness.simulator));
+  harness.simulator.advanceTime(1);
+  const cancelKey = "reused-cancel-history-key";
+  const firstCancel = await harness.simulator.adapter.cancel(cancelCommand(firstOrder.value.providerRequestId, cancelKey), adapterContext(harness.simulator));
+  assert.equal(firstCancel.value.outcome, "cancelled");
+
+  harness.simulator.advanceTime(100);
+  const expiredReplay = await harness.simulator.adapter.cancel(cancelCommand(firstOrder.value.providerRequestId, cancelKey), adapterContext(harness.simulator));
+  assert.equal(expiredReplay.value.outcome, "already_terminal");
+  const secondOrder = await harness.simulator.adapter.submit({
+    ...command,
+    idempotencyKey: "second-order-for-cancel-history",
+    requestFingerprint: "second-order-for-cancel-history"
+  }, adapterContext(harness.simulator));
+  harness.simulator.advanceTime(100);
+  const secondCancel = await harness.simulator.adapter.cancel(cancelCommand(secondOrder.value.providerRequestId, cancelKey), adapterContext(harness.simulator));
+  assert.equal(secondCancel.value.outcome, "cancelled");
+
+  const snapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+  assert.deepEqual(snapshot.cancelIdempotencyHistory.map((record) => record.generation), [1, 2, 3]);
+  assert.deepEqual(snapshot.cancelIdempotencyHistory.map((record) => record.result.outcome), ["cancelled", "already_terminal", "cancelled"]);
+  assert.equal(snapshot.cancellations.length, 2);
+  assert.equal(snapshot.cancellations[0].occurredAt, firstCancel.value.observedAt);
+  assert.equal(snapshot.cancellations[1].occurredAt, secondCancel.value.observedAt);
+  assert.equal(snapshot.cancelIdempotency[0].generation, 3);
+  assert.doesNotThrow(() => createDeterministicSimulator({ snapshot }));
+
+  const missingIndex = JSON.parse(JSON.stringify(snapshot));
+  missingIndex.cancelIdempotency = [];
+  assert.throws(() => createDeterministicSimulator({ snapshot: missingIndex }), TypeError, "missing current cancellation key row");
+  const missingHistory = JSON.parse(JSON.stringify(snapshot));
+  missingHistory.cancelIdempotencyHistory.pop();
+  assert.throws(() => createDeterministicSimulator({ snapshot: missingHistory }), TypeError, "missing retained cancellation generation");
+  const missingFact = JSON.parse(JSON.stringify(snapshot));
+  missingFact.cancellations.shift();
+  assert.throws(() => createDeterministicSimulator({ snapshot: missingFact }), TypeError, "missing durable effective cancellation fact");
+  const duplicateFact = JSON.parse(JSON.stringify(snapshot));
+  duplicateFact.cancellations.push({ ...duplicateFact.cancellations[0] });
+  assert.throws(() => createDeterministicSimulator({ snapshot: duplicateFact }), TypeError, "duplicate cancellation fact");
+  const duplicateResult = JSON.parse(JSON.stringify(snapshot));
+  duplicateResult.cancelIdempotencyHistory.push({
+    ...duplicateResult.cancelIdempotencyHistory[0],
+    result: { ...duplicateResult.cancelIdempotencyHistory[0].result }
+  });
+  assert.throws(() => createDeterministicSimulator({ snapshot: duplicateResult }), TypeError, "duplicate retained cancellation result");
+  const acceptedStatus = JSON.parse(JSON.stringify(snapshot));
+  acceptedStatus.orders[0].status = "accepted";
+  assert.throws(() => createDeterministicSimulator({ snapshot: acceptedStatus }), TypeError, "status contradicts direct cancellation");
+  const rewoundTime = JSON.parse(JSON.stringify(snapshot));
+  rewoundTime.orders[0].statusOccurredAt = rewoundTime.orders[0].acceptedAt;
+  assert.throws(() => createDeterministicSimulator({ snapshot: rewoundTime }), TypeError, "timestamp contradicts direct cancellation");
+  const lowCancelCount = JSON.parse(JSON.stringify(snapshot));
+  lowCancelCount.dispatchCounters.cancel = 0;
+  assert.throws(() => createDeterministicSimulator({ snapshot: lowCancelCount }), TypeError, "cancellation history requires dispatch evidence");
+});
+
+test("restore derives order status and time only from applied status, shipment, and cancellation facts", async () => {
+  const harness = createMockHarness();
+  const { command } = await prepareSubmit(harness);
+  const submitted = await harness.runtime.submit(envelope(command), MOCK_SCOPE);
+  const providerRequestId = submitted.value.providerRequestId;
+  const queuedEvent = harness.simulator.queueStatusCallback({
+    providerRequestId,
+    status: "delivered",
+    occurredAt: "2026-10-10T14:00:20.000Z",
+    delayMs: 10
+  });
+  const queuedSnapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+  assert.equal(queuedSnapshot.orders[0].status, "accepted");
+  assert.equal(queuedSnapshot.callbacks.find((callback) => callback.eventId === queuedEvent).applied, false);
+  assert.doesNotThrow(() => createDeterministicSimulator({ snapshot: queuedSnapshot }));
+
+  const queuedStatus = JSON.parse(JSON.stringify(queuedSnapshot));
+  queuedStatus.orders[0].status = "delivered";
+  assert.throws(() => createDeterministicSimulator({ snapshot: queuedStatus }), TypeError, "queued callback cannot promote order status");
+  const queuedTimestamp = JSON.parse(JSON.stringify(queuedSnapshot));
+  queuedTimestamp.orders[0].statusOccurredAt = "2026-10-10T14:00:20.000Z";
+  assert.throws(() => createDeterministicSimulator({ snapshot: queuedTimestamp }), TypeError, "queued callback cannot advance status time");
+
+  harness.simulator.advanceTime(10);
+  assert.equal(harness.simulator.deliverCallback(queuedEvent).outcome, "delivered");
+  const appliedSnapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+  assert.equal(appliedSnapshot.orders[0].status, "delivered");
+  assert.equal(appliedSnapshot.orders[0].statusOccurredAt, "2026-10-10T14:00:20.000Z");
+  assert.doesNotThrow(() => createDeterministicSimulator({ snapshot: appliedSnapshot }));
+  const rewoundStatus = JSON.parse(JSON.stringify(appliedSnapshot));
+  rewoundStatus.orders[0].status = "accepted";
+  assert.throws(() => createDeterministicSimulator({ snapshot: rewoundStatus }), TypeError, "applied callback status cannot be rewound");
+  const rewoundTimestamp = JSON.parse(JSON.stringify(appliedSnapshot));
+  rewoundTimestamp.orders[0].statusOccurredAt = rewoundTimestamp.orders[0].acceptedAt;
+  assert.throws(() => createDeterministicSimulator({ snapshot: rewoundTimestamp }), TypeError, "applied callback time cannot be rewound");
 });
 
 test("first transport cancellation result, adapter result, and runtime result cannot mutate persisted replay state", async () => {
@@ -682,6 +892,13 @@ test("versioned snapshot validation rejects malformed nested state before any pr
   assert.equal(restored.shipments(providerRequestId).length, 1);
   assert.doesNotThrow(() => createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(restored.snapshot())) }));
 
+  const legacySnapshot = JSON.parse(JSON.stringify(snapshot));
+  legacySnapshot.format = "fc-mock-development/1";
+  delete legacySnapshot.idempotencyHistory;
+  delete legacySnapshot.cancelIdempotencyHistory;
+  delete legacySnapshot.cancellations;
+  assert.throws(() => createDeterministicSimulator({ snapshot: legacySnapshot }), /cannot be migrated.*recreate this development-only fixture/);
+
   const corruptions = [
     ["format version", (state) => { state.format = "fc-mock-development/999"; }],
     ["unknown top-level field", (state) => { state.extra = true; }],
@@ -700,11 +917,17 @@ test("versioned snapshot validation rejects malformed nested state before any pr
     ["shipment tracking identifier is not a fixture identifier", (state) => { state.orders[0].shipments[0].trackingNumber = "9400111899223856923456"; }],
     ["unknown nested order field", (state) => { state.orders[0].supplierResponse = "live"; }],
     ["null active key expiry", (state) => { state.idempotency[0].expiresAt = null; }],
+    ["missing active submit key row", (state) => { state.idempotency = []; }],
+    ["missing retained submit key history", (state) => { state.idempotencyHistory = []; }],
     ["dangling idempotency order reference", (state) => { state.idempotency[0].providerRequestId = "sim-order-00000000000000000000"; }],
     ["duplicate idempotency key", (state) => { state.idempotency.push({ ...state.idempotency[0] }); }],
     ["cancel result has unsupported outcome", (state) => { state.cancelIdempotency[0].result.outcome = "charged"; }],
     ["cancel result has dangling order reference", (state) => { state.cancelIdempotency[0].result.providerRequestId = "sim-order-absent"; }],
     ["duplicate cancellation idempotency key", (state) => { state.cancelIdempotency.push({ ...state.cancelIdempotency[0], result: { ...state.cancelIdempotency[0].result } }); }],
+    ["missing active cancellation key row", (state) => { state.cancelIdempotency = []; }],
+    ["missing retained cancellation key history", (state) => { state.cancelIdempotencyHistory = []; }],
+    ["missing durable cancellation fact", (state) => { state.cancellations = []; }],
+    ["duplicate durable cancellation fact", (state) => { state.cancellations.push({ ...state.cancellations[0] }); }],
     ["callback has unknown status", (state) => { state.callbacks[0].status = "unknown"; }],
     ["status callback event identity binds its timestamp", (state) => { state.callbacks[0].occurredAt = "2026-10-10T14:00:09.000Z"; }],
     ["callback has dangling order reference", (state) => { state.callbacks[0].providerRequestId = "sim-order-absent"; }],
@@ -723,6 +946,9 @@ test("versioned snapshot validation rejects malformed nested state before any pr
     ["missing accepted-order evidence", (state) => { state.billingEvidence = []; }],
     ["counter key is required", (state) => { delete state.dispatchCounters.cancel; }],
     ["counter must be a safe integer", (state) => { state.dispatchCounters.submit = 1.5; }],
+    ["submit count covers accepted orders", (state) => { state.dispatchCounters.submit = 0; }],
+    ["quote count covers retained quotes", (state) => { state.dispatchCounters.quote = 0; }],
+    ["cancel count covers retained outcomes", (state) => { state.dispatchCounters.cancel = 0; }],
     ["counter object rejects extra fields", (state) => { state.dispatchCounters.live = 1; }],
     ["duplicate callback counter must be a safe integer", (state) => { state.duplicateCallbacks = Number.NaN; }]
   ];

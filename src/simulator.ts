@@ -23,7 +23,7 @@ import type {
 } from "./types.js";
 
 /** Private local fixture identity. It is not a supplier or accepted contract version. */
-export const SIMULATOR_FIXTURE_VERSION = "fc-mock-development/1";
+export const SIMULATOR_FIXTURE_VERSION = "fc-mock-development/2";
 export const SIMULATOR_PROVIDER_ID = "development-deterministic-simulator";
 
 export type SimulatorOrderStatus = StatusResult["normalizedState"];
@@ -81,12 +81,28 @@ export interface SimulatorIdempotencyRecord {
   readonly generation: number;
 }
 
+/** Retained accepted-order generation evidence. Unlike the replay index, this is append-only. */
+export type SimulatorIdempotencyHistoryRecord = SimulatorIdempotencyRecord;
+
 export interface SimulatorCancelIdempotencyRecord {
   readonly keyDigest: string;
   readonly requestDigest: string;
   readonly result: CancelResult;
   readonly expiresAt: number;
   readonly generation: number;
+}
+
+/** Retained cancel result generations used to validate the current cancel replay index. */
+export type SimulatorCancelIdempotencyHistoryRecord = SimulatorCancelIdempotencyRecord;
+
+/** Durable fact for a cancellation that changed an accepted order's status. */
+export interface SimulatorCancellationEvent {
+  readonly eventId: string;
+  readonly keyDigest: string;
+  readonly requestDigest: string;
+  readonly generation: number;
+  readonly providerRequestId: string;
+  readonly occurredAt: string;
 }
 
 export interface SimulatorBillingEvidence {
@@ -141,7 +157,10 @@ export interface SimulatorSnapshot {
   quotes: SimulatorQuoteRecord[];
   orders: SimulatorOrderRecord[];
   idempotency: SimulatorIdempotencyRecord[];
+  idempotencyHistory: SimulatorIdempotencyHistoryRecord[];
   cancelIdempotency: SimulatorCancelIdempotencyRecord[];
+  cancelIdempotencyHistory: SimulatorCancelIdempotencyHistoryRecord[];
+  cancellations: SimulatorCancellationEvent[];
   callbacks: SimulatorCallbackRecord[];
   readonly dispatchCounters: Record<Operation, number>;
   duplicateSubmissions: number;
@@ -375,7 +394,10 @@ function makeInitialState(options: SimulatorOptions): SimulatorSnapshot {
     quotes: [],
     orders: [],
     idempotency: [],
+    idempotencyHistory: [],
     cancelIdempotency: [],
+    cancelIdempotencyHistory: [],
+    cancellations: [],
     callbacks: [],
     dispatchCounters: {
       discover_capabilities: 0, quote: 0, preflight: 0, submit: 0, status: 0, shipment: 0, cancel: 0
@@ -394,10 +416,14 @@ function parseSnapshot(snapshot: SimulatorSnapshot): SimulatorSnapshot {
     throw new TypeError("simulator snapshot must be JSON serializable");
   }
   const invalid = (): never => { throw new TypeError("simulator snapshot is invalid or has an unsupported version"); };
+  if (isPlainRecord(parsed) && parsed.format === "fc-mock-development/1") {
+    throw new TypeError("simulator snapshot fc-mock-development/1 cannot be migrated because it lacks retained generation and cancellation history; recreate this development-only fixture");
+  }
   const snapshotKeys = [
     "format", "billingMode", "seed", "nowMs", "quoteTtlMs", "idempotencyTtlMs", "unsupportedOperations", "faults",
-    "triggeredFaults", "quotes", "orders", "idempotency", "cancelIdempotency", "callbacks", "dispatchCounters",
-    "duplicateSubmissions", "duplicateCallbacks", "billingEvidence"
+    "triggeredFaults", "quotes", "orders", "idempotency", "idempotencyHistory", "cancelIdempotency",
+    "cancelIdempotencyHistory", "cancellations", "callbacks", "dispatchCounters", "duplicateSubmissions",
+    "duplicateCallbacks", "billingEvidence"
   ];
   if (!hasExactKeys(parsed, snapshotKeys)) return invalid();
   const copy = parsed as unknown as SimulatorSnapshot;
@@ -410,7 +436,9 @@ function parseSnapshot(snapshot: SimulatorSnapshot): SimulatorSnapshot {
     !Array.isArray(copy.faults) || !copy.faults.every(validFaultPlan) ||
     !Array.isArray(copy.triggeredFaults) || !copy.triggeredFaults.every(validFaultPlan) ||
     !Array.isArray(copy.quotes) || !Array.isArray(copy.orders) || !Array.isArray(copy.idempotency) ||
-    !Array.isArray(copy.cancelIdempotency) || !Array.isArray(copy.callbacks) || !Array.isArray(copy.billingEvidence) ||
+    !Array.isArray(copy.idempotencyHistory) || !Array.isArray(copy.cancelIdempotency) ||
+    !Array.isArray(copy.cancelIdempotencyHistory) || !Array.isArray(copy.cancellations) ||
+    !Array.isArray(copy.callbacks) || !Array.isArray(copy.billingEvidence) ||
     !hasExactKeys(copy.dispatchCounters, OPERATIONS) ||
     OPERATIONS.some((operation) => !validSafeInteger(copy.dispatchCounters[operation], 0)) ||
     !validSafeInteger(copy.duplicateSubmissions, 0) || !validSafeInteger(copy.duplicateCallbacks, 0)) {
@@ -470,30 +498,63 @@ function parseSnapshot(snapshot: SimulatorSnapshot): SimulatorSnapshot {
     ordersById.set(order.providerRequestId, order);
   }
 
-  const idempotencyKeys = new Set<string>();
-  const idempotencyOrders = new Set<string>();
-  for (const value of copy.idempotency as unknown[]) {
-    if (!hasExactKeys(value, ["keyDigest", "requestDigest", "providerRequestId", "expiresAt", "generation"])) return invalid();
-    const record = value as unknown as SimulatorIdempotencyRecord;
+  const acceptedHistoryByKey = new Map<string, SimulatorIdempotencyHistoryRecord[]>();
+  const acceptedHistoryByOrder = new Map<string, SimulatorIdempotencyHistoryRecord>();
+  const idempotencyRecordKeys = ["keyDigest", "requestDigest", "providerRequestId", "expiresAt", "generation"];
+  for (const value of copy.idempotencyHistory as unknown[]) {
+    if (!hasExactKeys(value, idempotencyRecordKeys)) return invalid();
+    const record = value as unknown as SimulatorIdempotencyHistoryRecord;
     const order = typeof record.providerRequestId === "string" ? ordersById.get(record.providerRequestId) : undefined;
     const acceptedAtMs = order === undefined ? Number.NaN : Date.parse(order.acceptedAt);
     const expectedId = isHexDigest(record.keyDigest) && isHexDigest(record.requestDigest) && validSafeInteger(record.generation, 1)
       ? `sim-order-${hashText(`${copy.seed}|${record.keyDigest}|${record.requestDigest}|${record.generation}`).slice(0, 20)}`
       : "";
-    if (!isHexDigest(record.keyDigest) || idempotencyKeys.has(record.keyDigest) || !isHexDigest(record.requestDigest) ||
-      !isSyntheticOrderId(record.providerRequestId) || order === undefined || idempotencyOrders.has(record.providerRequestId) ||
-      !validSafeInteger(record.expiresAt) || !validSafeInteger(record.generation, 1) || record.providerRequestId !== expectedId ||
+    if (!isHexDigest(record.keyDigest) || !isHexDigest(record.requestDigest) ||
+      !isSyntheticOrderId(record.providerRequestId) || order === undefined ||
+      acceptedHistoryByOrder.has(record.providerRequestId) || !validSafeInteger(record.expiresAt) ||
+      !validSafeInteger(record.generation, 1) || record.providerRequestId !== expectedId ||
       order.requestFingerprintDigest !== `sha256:${record.requestDigest}` ||
       record.expiresAt !== acceptedAtMs + copy.idempotencyTtlMs) return invalid();
-    idempotencyKeys.add(record.keyDigest);
-    idempotencyOrders.add(record.providerRequestId);
+    acceptedHistoryByOrder.set(record.providerRequestId, record);
+    const generations = acceptedHistoryByKey.get(record.keyDigest) ?? [];
+    generations.push(record);
+    acceptedHistoryByKey.set(record.keyDigest, generations);
+  }
+  if (acceptedHistoryByOrder.size !== ordersById.size) return invalid();
+  for (const generations of acceptedHistoryByKey.values()) {
+    generations.sort((left, right) => left.generation - right.generation);
+    for (let index = 0; index < generations.length; index += 1) {
+      const record = generations[index];
+      if (record === undefined) return invalid();
+      const order = ordersById.get(record.providerRequestId);
+      if (record.generation !== index + 1 || order === undefined) return invalid();
+      if (index > 0) {
+        const previous = generations[index - 1];
+        if (previous === undefined) return invalid();
+        if (previous.expiresAt > Date.parse(order.acceptedAt)) return invalid();
+      }
+    }
   }
 
-  const cancelKeys = new Set<string>();
-  for (const value of copy.cancelIdempotency as unknown[]) {
-    if (!hasExactKeys(value, ["keyDigest", "requestDigest", "result", "expiresAt", "generation"])) return invalid();
-    const record = value as unknown as SimulatorCancelIdempotencyRecord;
-    if (!isHexDigest(record.keyDigest) || cancelKeys.has(record.keyDigest) || !isHexDigest(record.requestDigest) ||
+  const idempotencyKeys = new Set<string>();
+  for (const value of copy.idempotency as unknown[]) {
+    if (!hasExactKeys(value, idempotencyRecordKeys)) return invalid();
+    const record = value as unknown as SimulatorIdempotencyRecord;
+    const history = acceptedHistoryByKey.get(record.keyDigest);
+    const latest = history?.[history.length - 1];
+    if (!isHexDigest(record.keyDigest) || idempotencyKeys.has(record.keyDigest) || latest === undefined ||
+      canonicalJson(record) !== canonicalJson(latest)) return invalid();
+    idempotencyKeys.add(record.keyDigest);
+  }
+  if (idempotencyKeys.size !== acceptedHistoryByKey.size) return invalid();
+
+  const cancelHistoryByKey = new Map<string, SimulatorCancelIdempotencyHistoryRecord[]>();
+  const cancelHistoryByGeneration = new Map<string, SimulatorCancelIdempotencyHistoryRecord>();
+  const cancelRecordKeys = ["keyDigest", "requestDigest", "result", "expiresAt", "generation"];
+  for (const value of copy.cancelIdempotencyHistory as unknown[]) {
+    if (!hasExactKeys(value, cancelRecordKeys)) return invalid();
+    const record = value as unknown as SimulatorCancelIdempotencyHistoryRecord;
+    if (!isHexDigest(record.keyDigest) || !isHexDigest(record.requestDigest) ||
       !validSafeInteger(record.expiresAt) || !validSafeInteger(record.generation, 1) ||
       !hasExactKeys(record.result, ["providerRequestId", "outcome", "observedAt"]) ||
       !isSyntheticOrderId(record.result.providerRequestId) ||
@@ -502,8 +563,64 @@ function parseSnapshot(snapshot: SimulatorSnapshot): SimulatorSnapshot {
       record.expiresAt !== Date.parse(record.result.observedAt) + copy.idempotencyTtlMs) return invalid();
     const orderExists = ordersById.has(record.result.providerRequestId);
     if ((record.result.outcome === "not_found") === orderExists) return invalid();
+    const generationKey = `${record.keyDigest}:${record.generation}`;
+    if (cancelHistoryByGeneration.has(generationKey)) return invalid();
+    cancelHistoryByGeneration.set(generationKey, record);
+    const generations = cancelHistoryByKey.get(record.keyDigest) ?? [];
+    generations.push(record);
+    cancelHistoryByKey.set(record.keyDigest, generations);
+  }
+  for (const generations of cancelHistoryByKey.values()) {
+    generations.sort((left, right) => left.generation - right.generation);
+    for (let index = 0; index < generations.length; index += 1) {
+      const record = generations[index];
+      if (record === undefined) return invalid();
+      if (record.generation !== index + 1) return invalid();
+      if (index > 0) {
+        const previous = generations[index - 1];
+        if (previous === undefined || previous.expiresAt > Date.parse(record.result.observedAt)) return invalid();
+      }
+    }
+  }
+
+  const cancelKeys = new Set<string>();
+  for (const value of copy.cancelIdempotency as unknown[]) {
+    if (!hasExactKeys(value, cancelRecordKeys)) return invalid();
+    const record = value as unknown as SimulatorCancelIdempotencyRecord;
+    const history = cancelHistoryByKey.get(record.keyDigest);
+    const latest = history?.[history.length - 1];
+    if (!isHexDigest(record.keyDigest) || cancelKeys.has(record.keyDigest) || latest === undefined ||
+      canonicalJson(record) !== canonicalJson(latest)) return invalid();
     cancelKeys.add(record.keyDigest);
   }
+  if (cancelKeys.size !== cancelHistoryByKey.size) return invalid();
+
+  const cancellationEventsByOrder = new Map<string, SimulatorCancellationEvent>();
+  const cancellationEventsByGeneration = new Map<string, SimulatorCancellationEvent>();
+  const cancellationEventIds = new Set<string>();
+  for (const value of copy.cancellations as unknown[]) {
+    if (!hasExactKeys(value, ["eventId", "keyDigest", "requestDigest", "generation", "providerRequestId", "occurredAt"])) return invalid();
+    const event = value as unknown as SimulatorCancellationEvent;
+    const order = typeof event.providerRequestId === "string" ? ordersById.get(event.providerRequestId) : undefined;
+    const eventGenerationKey = `${event.keyDigest}:${event.generation}`;
+    const historyRecord = cancelHistoryByGeneration.get(eventGenerationKey);
+    const expectedId = isHexDigest(event.keyDigest) && isHexDigest(event.requestDigest) && validSafeInteger(event.generation, 1)
+      ? `sim-cancel-event-${hashText(`${copy.seed}|${event.keyDigest}|${event.requestDigest}|${event.generation}|${event.providerRequestId}|${event.occurredAt}`).slice(0, 16)}`
+      : "";
+    if (!isHexDigest(event.keyDigest) || !isHexDigest(event.requestDigest) || !validSafeInteger(event.generation, 1) ||
+      !isSyntheticOrderId(event.providerRequestId) || order === undefined || !canonicalTimestamp(event.occurredAt) ||
+      Date.parse(event.occurredAt) < Date.parse(order.acceptedAt) || Date.parse(event.occurredAt) > copy.nowMs ||
+      event.eventId !== expectedId || cancellationEventIds.has(event.eventId) ||
+      cancellationEventsByOrder.has(event.providerRequestId) || cancellationEventsByGeneration.has(eventGenerationKey) ||
+      historyRecord === undefined || historyRecord.result.outcome !== "cancelled" ||
+      historyRecord.requestDigest !== event.requestDigest || historyRecord.result.providerRequestId !== event.providerRequestId ||
+      historyRecord.result.observedAt !== event.occurredAt) return invalid();
+    cancellationEventIds.add(event.eventId);
+    cancellationEventsByOrder.set(event.providerRequestId, event);
+    cancellationEventsByGeneration.set(eventGenerationKey, event);
+  }
+  const effectiveCancellations = [...cancelHistoryByGeneration.entries()].filter(([, record]) => record.result.outcome === "cancelled");
+  if (cancellationEventsByGeneration.size !== effectiveCancellations.length) return invalid();
 
   const callbackKeys = new Set<string>();
   const appliedShipments = new Map<string, Map<string, SimulatorShipmentRecord>>();
@@ -548,7 +665,28 @@ function parseSnapshot(snapshot: SimulatorSnapshot): SimulatorSnapshot {
       .sort((left, right) => left.providerShipmentId < right.providerShipmentId ? -1 : left.providerShipmentId > right.providerShipmentId ? 1 : 0);
     if (order.shipments.length !== expectedShipments.length || order.shipments.some((shipment, index) =>
       canonicalJson(shipment) !== canonicalJson(expectedShipments[index]))) return invalid();
+
+    const derived = { ...order, status: "accepted" as const, statusOccurredAt: order.acceptedAt, shipments: [] };
+    for (const callbackValue of copy.callbacks as SimulatorCallbackRecord[]) {
+      if (!callbackValue.applied || callbackValue.providerRequestId !== order.providerRequestId) continue;
+      if (callbackValue.kind === "status") mergeStatusObservation(derived, callbackValue.status, callbackValue.occurredAt);
+      else mergeStatusObservation(derived, "shipped", callbackValue.occurredAt);
+    }
+    const cancellation = cancellationEventsByOrder.get(order.providerRequestId);
+    if (cancellation !== undefined) mergeStatusObservation(derived, "cancelled", cancellation.occurredAt);
+    if (order.status !== derived.status || order.statusOccurredAt !== derived.statusOccurredAt) return invalid();
   }
+
+  for (const [, record] of cancelHistoryByGeneration) {
+    if (record.result.outcome !== "already_terminal") continue;
+    const order = ordersById.get(record.result.providerRequestId);
+    if (order === undefined || !["delivered", "cancelled", "failed", "shipped"].includes(order.status)) return invalid();
+  }
+
+  const minimumSubmitDispatches = copy.orders.length + copy.duplicateSubmissions;
+  const minimumCancelDispatches = Math.max(copy.cancelIdempotencyHistory.length, copy.cancellations.length);
+  if (!Number.isSafeInteger(minimumSubmitDispatches) || copy.dispatchCounters.submit < minimumSubmitDispatches ||
+    copy.dispatchCounters.quote < copy.quotes.length || copy.dispatchCounters.cancel < minimumCancelDispatches) return invalid();
 
   const evidenceByOrder = new Set<string>();
   if (copy.billingEvidence.length !== copy.orders.length) return invalid();
@@ -1059,8 +1197,11 @@ export class DeterministicSimulator implements Clock {
     if (Date.parse(quote.expiresAt) <= this.state.nowMs || Date.parse(quoteExpiresAt) <= this.state.nowMs) {
       throw new SimulatedProviderError("The simulated quote is stale.", "STALE_QUOTE");
     }
-    const prior = this.state.idempotency.find((entry) => entry.keyDigest === keyDigest);
-    const generation = (prior?.generation ?? 0) + 1;
+    const priorGeneration = this.state.idempotencyHistory.reduce(
+      (maximum, entry) => entry.keyDigest === keyDigest ? Math.max(maximum, entry.generation) : maximum,
+      0
+    );
+    const generation = priorGeneration + 1;
     const idempotencyExpiry = this.state.nowMs + this.state.idempotencyTtlMs;
     if (!Number.isSafeInteger(idempotencyExpiry)) throw new SimulatedProviderError();
     const providerRequestId = `sim-order-${hashText(`${this.state.seed}|${keyDigest}|${requestDigest}|${generation}`).slice(0, 20)}`;
@@ -1077,8 +1218,10 @@ export class DeterministicSimulator implements Clock {
       shipments: []
     };
     this.state.orders.push(order);
+    const idempotencyRecord = { keyDigest, requestDigest, providerRequestId, expiresAt: idempotencyExpiry, generation };
+    this.state.idempotencyHistory.push(idempotencyRecord);
     this.state.idempotency = this.state.idempotency.filter((entry) => entry.keyDigest !== keyDigest);
-    this.state.idempotency.push({ keyDigest, requestDigest, providerRequestId, expiresAt: idempotencyExpiry, generation });
+    this.state.idempotency.push(idempotencyRecord);
     this.state.billingEvidence.push({
       billingMode: "simulated",
       event: "order_accepted",
@@ -1135,18 +1278,33 @@ export class DeterministicSimulator implements Clock {
     let outcome: CancelResult["outcome"];
     if (order === undefined) outcome = "not_found";
     else if (["delivered", "cancelled", "failed", "shipped"].includes(order.status)) outcome = "already_terminal";
-    else {
-      order.status = "cancelled";
-      order.statusOccurredAt = iso(this.state.nowMs);
-      outcome = "cancelled";
-    }
-    const result = { providerRequestId, outcome, observedAt: iso(this.state.nowMs) } satisfies CancelResult;
-    const prior = this.state.cancelIdempotency.find((entry) => entry.keyDigest === keyDigest);
-    const generation = (prior?.generation ?? 0) + 1;
+    else outcome = "cancelled";
+    const observedAt = iso(this.state.nowMs);
+    const result = { providerRequestId, outcome, observedAt } satisfies CancelResult;
+    const priorGeneration = this.state.cancelIdempotencyHistory.reduce(
+      (maximum, entry) => entry.keyDigest === keyDigest ? Math.max(maximum, entry.generation) : maximum,
+      0
+    );
+    const generation = priorGeneration + 1;
     const idempotencyExpiry = this.state.nowMs + this.state.idempotencyTtlMs;
     if (!Number.isSafeInteger(idempotencyExpiry)) throw new SimulatedProviderError();
+    const idempotencyRecord = { keyDigest, requestDigest, result, expiresAt: idempotencyExpiry, generation };
+    if (outcome === "cancelled") {
+      if (order === undefined) throw new SimulatedProviderError();
+      mergeStatusObservation(order, "cancelled", observedAt);
+      const event: SimulatorCancellationEvent = {
+        eventId: `sim-cancel-event-${hashText(`${this.state.seed}|${keyDigest}|${requestDigest}|${generation}|${providerRequestId}|${observedAt}`).slice(0, 16)}`,
+        keyDigest,
+        requestDigest,
+        generation,
+        providerRequestId,
+        occurredAt: observedAt
+      };
+      this.state.cancellations.push(event);
+    }
+    this.state.cancelIdempotencyHistory.push(idempotencyRecord);
     this.state.cancelIdempotency = this.state.cancelIdempotency.filter((entry) => entry.keyDigest !== keyDigest);
-    this.state.cancelIdempotency.push({ keyDigest, requestDigest, result, expiresAt: idempotencyExpiry, generation });
+    this.state.cancelIdempotency.push(idempotencyRecord);
     return JSON.parse(JSON.stringify(result)) as CancelResult;
   }
 
