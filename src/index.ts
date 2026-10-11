@@ -1,8 +1,63 @@
 export * from './shared/index.js';
 export { ingestUsage, validateUsageObservationBoundary, UsageObservationSchema, IngestionReceiptSchema } from './metering/index.js';
 export type { UsageObservation, IngestionReceipt } from './metering/index.js';
-export { estimate, validateEstimateRequestBoundary, RateCardSchema, EstimateRequestSchema, EstimateResultSchema } from './pricing/index.js';
-export type { RateCard, EstimateRequest, EstimateResult } from './pricing/index.js';
+export {
+  estimate,
+  estimateV2,
+  registerFxRateV2,
+  registerPricingRuleV2,
+  registerRateCardV2,
+  validateEstimateRequestBoundary,
+  validateEstimateRequestV2Boundary,
+  validateFxRateV2Boundary,
+  validatePricingRuleV2Boundary,
+  validateRateCardV2Boundary,
+  CatalogWriteReceiptV2Schema,
+  EstimateRequestSchema,
+  EstimateRequestV2Schema,
+  EstimateResultSchema,
+  EstimateResultV2Schema,
+  EstimateStatusV2Schema,
+  ExactRatioV2Schema,
+  FxRateV2Schema,
+  PricingPartitionGroupSchema,
+  PricingRuleV2Schema,
+  RateCardSchema,
+  RateCardV2Schema,
+  RegisterFxRateRequestV2Schema,
+  RegisterPricingRuleRequestV2Schema,
+  RegisterRateCardRequestV2Schema,
+  SourceReferenceSchema,
+  VersionedReferenceV2Schema,
+} from './pricing/index.js';
+export type {
+  CatalogWriteReceiptV2,
+  ContractTimeAuthorityPort,
+  EstimateRequest,
+  EstimateRequestV2,
+  EstimateResult,
+  EstimateResultV2,
+  FxRateV2,
+  PricingAction,
+  PricingActionAuthorityPort,
+  PricingActionDecision,
+  PricingBoundEvidence,
+  PricingBoundEvidenceAuthorityPort,
+  PricingDatabasePort,
+  PricingDimensionEvidence,
+  PricingDimensionEvidencePort,
+  PricingRuleV2,
+  PricingRuntimePorts,
+  PricingTransactionPort,
+  RateCard,
+  RateCardV2,
+  RegisterFxRateRequestV2,
+  RegisterPricingRuleRequestV2,
+  RegisterRateCardRequestV2,
+  ResolvedContractTime,
+  SourceReference,
+  VersionedReferenceV2,
+} from './pricing/index.js';
 export * from './budgets/index.js';
 export * from './ledger/index.js';
 export { querySummary, validateFinancialSummaryPageBoundary, FinancialSummaryFiltersSchema, FinancialSummaryQuerySchema, SummarySourceWatermarkSchema, FinancialSummaryPageSchema } from './reporting/index.js';

@@ -1,5 +1,11 @@
 {
   "schema_version": "1.0.0",
+  "schema_versions": {
+    "pricing": [
+      "1.0.0",
+      "2.0.0"
+    ]
+  },
   "package": "@jevelopers/cost-intelligence",
   "shared_contracts": {
     "package": "@jevelopers/shared-contracts@0.3.0",
@@ -18,6 +24,8 @@
     {
       "module": "shared",
       "name": "ErrorEnvelopeSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ErrorEnvelopeSchema",
       "path": "schemas/cost-intelligence/1.0.0/shared/ErrorEnvelopeSchema.json",
       "completeness": "complete",
       "sha256": "936d6a52cee4cbb2e3dbeed214a5d85927f7e937a900bf980d05bae8cfe20a55"
@@ -25,6 +33,8 @@
     {
       "module": "shared",
       "name": "TrustedScopeSchema",
+      "schema_version": "1.0.0",
+      "export_name": "TrustedScopeSchema",
       "path": "schemas/cost-intelligence/1.0.0/shared/TrustedScopeSchema.json",
       "completeness": "complete",
       "sha256": "82bcc6132ca341f6a89a601968e210d9c676bd2c4378e16d9b60983b9a390352"
@@ -32,6 +42,8 @@
     {
       "module": "metering",
       "name": "UsageObservationSchema",
+      "schema_version": "1.0.0",
+      "export_name": "UsageObservationSchema",
       "path": "schemas/cost-intelligence/1.0.0/metering/UsageObservationSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateUsageObservationBoundary",
@@ -40,6 +52,8 @@
     {
       "module": "metering",
       "name": "IngestionReceiptSchema",
+      "schema_version": "1.0.0",
+      "export_name": "IngestionReceiptSchema",
       "path": "schemas/cost-intelligence/1.0.0/metering/IngestionReceiptSchema.json",
       "completeness": "complete",
       "sha256": "0b12ec89dae6144a215ee3c46c54d2f9a3277c22606292e869f7f3503bbf9ded"
@@ -47,6 +61,8 @@
     {
       "module": "pricing",
       "name": "RateCardSchema",
+      "schema_version": "1.0.0",
+      "export_name": "RateCardSchema",
       "path": "schemas/cost-intelligence/1.0.0/pricing/RateCardSchema.json",
       "completeness": "complete",
       "sha256": "dfc09f9bc6753fbacfc6c7061d52978b8091c804527abe22bc42cd3008d26c10"
@@ -54,6 +70,8 @@
     {
       "module": "pricing",
       "name": "EstimateRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "EstimateRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateEstimateRequestBoundary",
@@ -62,6 +80,8 @@
     {
       "module": "pricing",
       "name": "EstimateResultSchema",
+      "schema_version": "1.0.0",
+      "export_name": "EstimateResultSchema",
       "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateResultSchema.json",
       "completeness": "complete",
       "sha256": "9074bed6fea2fb894a7bbdcd684981e9867ce30da0f7acc10e92c9abfe502dc0"
@@ -69,6 +89,8 @@
     {
       "module": "budgets",
       "name": "ReservationRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReservationRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateReservationRequestBoundary",
@@ -77,6 +99,8 @@
     {
       "module": "budgets",
       "name": "AuthorizationDecisionSchema",
+      "schema_version": "1.0.0",
+      "export_name": "AuthorizationDecisionSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/AuthorizationDecisionSchema.json",
       "completeness": "complete",
       "sha256": "610bcc075fbf5c7290fc289cba8991be249f645ea1752085e05446295800051c"
@@ -84,6 +108,8 @@
     {
       "module": "budgets",
       "name": "MarkDispatchedCommandSchema",
+      "schema_version": "1.0.0",
+      "export_name": "MarkDispatchedCommandSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/MarkDispatchedCommandSchema.json",
       "completeness": "complete",
       "sha256": "422cc372c038d77f2530b35f739bdcc885c4b5ce9076f8d0dd0131a7732dca35"
@@ -91,6 +117,8 @@
     {
       "module": "budgets",
       "name": "SettleReservationCommandSchema",
+      "schema_version": "1.0.0",
+      "export_name": "SettleReservationCommandSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/SettleReservationCommandSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateSettleReservationCommandBoundary",
@@ -99,6 +127,8 @@
     {
       "module": "budgets",
       "name": "ReleaseReservationCommandSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReleaseReservationCommandSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/ReleaseReservationCommandSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateReleaseReservationCommandBoundary",
@@ -107,6 +137,8 @@
     {
       "module": "budgets",
       "name": "ReservationCommandSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReservationCommandSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationCommandSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateReservationCommandBoundary",
@@ -115,6 +147,8 @@
     {
       "module": "budgets",
       "name": "ReservationSnapshotSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReservationSnapshotSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationSnapshotSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateReservationSnapshotBoundary",
@@ -123,6 +157,8 @@
     {
       "module": "budgets",
       "name": "BudgetChangeRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "BudgetChangeRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeRequestSchema.json",
       "completeness": "complete",
       "sha256": "50a4087bbceff69627309669b8bd4f1af5eb1cc9654481bc0dbc9edc2e2dcf10"
@@ -130,6 +166,8 @@
     {
       "module": "budgets",
       "name": "BudgetChangeReceiptSchema",
+      "schema_version": "1.0.0",
+      "export_name": "BudgetChangeReceiptSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeReceiptSchema.json",
       "completeness": "complete",
       "sha256": "d3e2fbdcb5e6901a3e5acb7b4286aea1dbcf70964e07d6325731122d00c57b87"
@@ -137,6 +175,8 @@
     {
       "module": "budgets",
       "name": "ExpenseAdjustmentRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ExpenseAdjustmentRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/ExpenseAdjustmentRequestSchema.json",
       "completeness": "complete",
       "sha256": "fdc0d135732e8035c5daef14431cff9385584dec12e9e7023932b046709e2203"
@@ -144,6 +184,8 @@
     {
       "module": "budgets",
       "name": "PostingReceiptSchema",
+      "schema_version": "1.0.0",
+      "export_name": "PostingReceiptSchema",
       "path": "schemas/cost-intelligence/1.0.0/budgets/PostingReceiptSchema.json",
       "completeness": "complete",
       "sha256": "5f11699858d983170b24e1a563eb1ce643a4260b398119be0134048c09eb2010"
@@ -151,6 +193,8 @@
     {
       "module": "ledger",
       "name": "FinancialEventSchema",
+      "schema_version": "1.0.0",
+      "export_name": "FinancialEventSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/FinancialEventSchema.json",
       "completeness": "complete",
       "sha256": "67313c8e6e0c9fdb4a319e45a958e5de9e1a85413c472b4c4af637b8d56710c9"
@@ -158,6 +202,8 @@
     {
       "module": "ledger",
       "name": "LedgerEventTypeSchema",
+      "schema_version": "1.0.0",
+      "export_name": "LedgerEventTypeSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerEventTypeSchema.json",
       "completeness": "complete",
       "sha256": "8a44bdbd7073449b4f4df51e5415fe814e194501834277238e14d0883d042967"
@@ -165,6 +211,8 @@
     {
       "module": "ledger",
       "name": "LedgerClassificationSchema",
+      "schema_version": "1.0.0",
+      "export_name": "LedgerClassificationSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerClassificationSchema.json",
       "completeness": "complete",
       "sha256": "303a3dcb3bb373955a664c4a7eac3870631a54919c7b0e9012bb2ef93bdac94f"
@@ -172,6 +220,8 @@
     {
       "module": "ledger",
       "name": "LedgerAppendRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "LedgerAppendRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerAppendRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateLedgerAppendRequestBoundary",
@@ -180,6 +230,8 @@
     {
       "module": "ledger",
       "name": "LedgerAppendReceiptSchema",
+      "schema_version": "1.0.0",
+      "export_name": "LedgerAppendReceiptSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerAppendReceiptSchema.json",
       "completeness": "complete",
       "sha256": "0020643b0052198833e40a8e5e1b5ac77ebfc342bb51a16b57876cf022115878"
@@ -187,6 +239,8 @@
     {
       "module": "ledger",
       "name": "LedgerProjectionRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "LedgerProjectionRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateLedgerProjectionRequestBoundary",
@@ -195,6 +249,8 @@
     {
       "module": "ledger",
       "name": "LedgerProjectionSchema",
+      "schema_version": "1.0.0",
+      "export_name": "LedgerProjectionSchema",
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionSchema.json",
       "completeness": "complete",
       "sha256": "2e1a1003c24c2108f3344df77b8210e0778f1cc30b6da30dedd122cb64629ee8"
@@ -202,6 +258,8 @@
     {
       "module": "reporting",
       "name": "FinancialSummaryFiltersSchema",
+      "schema_version": "1.0.0",
+      "export_name": "FinancialSummaryFiltersSchema",
       "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryFiltersSchema.json",
       "completeness": "complete",
       "sha256": "b4a7ee77fe0d4af843b1393bd55d7c92ce1e2913b69663afac99e229db6c01f2"
@@ -209,6 +267,8 @@
     {
       "module": "reporting",
       "name": "FinancialSummaryQuerySchema",
+      "schema_version": "1.0.0",
+      "export_name": "FinancialSummaryQuerySchema",
       "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryQuerySchema.json",
       "completeness": "complete",
       "sha256": "8505ff4e2d9bed4380e2d11ff07d11726798e3a0004e94d20bdcbf5273021755"
@@ -216,6 +276,8 @@
     {
       "module": "reporting",
       "name": "SummarySourceWatermarkSchema",
+      "schema_version": "1.0.0",
+      "export_name": "SummarySourceWatermarkSchema",
       "path": "schemas/cost-intelligence/1.0.0/reporting/SummarySourceWatermarkSchema.json",
       "completeness": "complete",
       "sha256": "d60811b5af2e06c653cd97fabf4207ffa0a8f51aa8ee462bf335bfa78d882159"
@@ -223,6 +285,8 @@
     {
       "module": "reporting",
       "name": "FinancialSummaryPageSchema",
+      "schema_version": "1.0.0",
+      "export_name": "FinancialSummaryPageSchema",
       "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryPageSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateFinancialSummaryPageBoundary",
@@ -231,6 +295,8 @@
     {
       "module": "reconciliation",
       "name": "ReconciliationRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReconciliationRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationRequestSchema.json",
       "completeness": "complete",
       "sha256": "a4c003239855bb919a97fff06f09cfadeabbbe72e7461a6bf6138754331a0e13"
@@ -238,6 +304,8 @@
     {
       "module": "reconciliation",
       "name": "ReconciliationRunSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReconciliationRunSchema",
       "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationRunSchema.json",
       "completeness": "complete",
       "sha256": "b5bfa6eb9d3edc65780e3da47881dbd647b09eb084263dd999af1c5a052821a0"
@@ -245,6 +313,8 @@
     {
       "module": "reconciliation",
       "name": "ReconciliationResultSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ReconciliationResultSchema",
       "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationResultSchema.json",
       "completeness": "complete",
       "sha256": "39968c5feca4c2f3ad391ed46462677f2fdf5656f01f22c67fde548b401ff97a"
@@ -252,6 +322,8 @@
     {
       "module": "integrations",
       "name": "ExportRequestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ExportRequestSchema",
       "path": "schemas/cost-intelligence/1.0.0/integrations/ExportRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateExportRequestBoundary",
@@ -260,9 +332,141 @@
     {
       "module": "integrations",
       "name": "ExportManifestSchema",
+      "schema_version": "1.0.0",
+      "export_name": "ExportManifestSchema",
       "path": "schemas/cost-intelligence/1.0.0/integrations/ExportManifestSchema.json",
       "completeness": "complete",
       "sha256": "14e496d5d9113ecf041d28e7e8bb0f741c846790ea146cb218d43527b231555a"
+    },
+    {
+      "module": "pricing",
+      "name": "RateCardSchema",
+      "schema_version": "2.0.0",
+      "export_name": "RateCardV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RateCardSchema.json",
+      "completeness": "complete",
+      "sha256": "41b8e9961693b5d733ef9ece0f5c69c6e2b7ea606146fdd4ade75db95268a1a6"
+    },
+    {
+      "module": "pricing",
+      "name": "PricingRuleSchema",
+      "schema_version": "2.0.0",
+      "export_name": "PricingRuleV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/PricingRuleSchema.json",
+      "completeness": "complete",
+      "sha256": "c010ac84116fc3f20faf0ea61784eaafb2d762871d814ee3b8cb34323c578a2b"
+    },
+    {
+      "module": "pricing",
+      "name": "FxRateSchema",
+      "schema_version": "2.0.0",
+      "export_name": "FxRateV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/FxRateSchema.json",
+      "completeness": "complete",
+      "sha256": "f6d35f8d1183d9b6db3b79c6bae6e36b3d9c1730c8120b52dbc33d3aa1c06db1"
+    },
+    {
+      "module": "pricing",
+      "name": "RegisterPricingRuleRequestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "RegisterPricingRuleRequestV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RegisterPricingRuleRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validatePricingRuleV2Boundary",
+      "sha256": "43ff3117ec2cbc6f4434be45de871c57f59eee4fe9a194308c6f7323a847dffb"
+    },
+    {
+      "module": "pricing",
+      "name": "RegisterRateCardRequestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "RegisterRateCardRequestV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RegisterRateCardRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateRateCardV2Boundary",
+      "sha256": "b24c5bd70188557e995f1eb5490d884c2e42b864069560d8f148d138209359c8"
+    },
+    {
+      "module": "pricing",
+      "name": "RegisterFxRateRequestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "RegisterFxRateRequestV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/RegisterFxRateRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateFxRateV2Boundary",
+      "sha256": "63eabfd42ad5a3ebcec9d14a9066e6b2d574d24a9304119b027fc1bf7b9bcbea"
+    },
+    {
+      "module": "pricing",
+      "name": "CatalogWriteReceiptSchema",
+      "schema_version": "2.0.0",
+      "export_name": "CatalogWriteReceiptV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/CatalogWriteReceiptSchema.json",
+      "completeness": "complete",
+      "sha256": "95db5610d7f857256ae93ade7dd7889cd43ab79e77bd773d4389359901d8413f"
+    },
+    {
+      "module": "pricing",
+      "name": "EstimateRequestSchema",
+      "schema_version": "2.0.0",
+      "export_name": "EstimateRequestV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/EstimateRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateEstimateRequestV2Boundary",
+      "sha256": "2b4620a5812c3b7c4695b7251a3451a00d7bd08ba5655c95253db8e9e6ef75f5"
+    },
+    {
+      "module": "pricing",
+      "name": "EstimateResultSchema",
+      "schema_version": "2.0.0",
+      "export_name": "EstimateResultV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/EstimateResultSchema.json",
+      "completeness": "complete",
+      "sha256": "a6adb2b3326fd874835afe13569e85769d738a4739d3c73991fb2fcfe125fa40"
+    },
+    {
+      "module": "pricing",
+      "name": "EstimateStatusSchema",
+      "schema_version": "2.0.0",
+      "export_name": "EstimateStatusV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/EstimateStatusSchema.json",
+      "completeness": "complete",
+      "sha256": "8091e4c50aad0c7d124a794a80d55832cddb61cb4dae3406cc9d2ad38f6a7dd7"
+    },
+    {
+      "module": "pricing",
+      "name": "ExactRatioSchema",
+      "schema_version": "2.0.0",
+      "export_name": "ExactRatioV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/ExactRatioSchema.json",
+      "completeness": "complete",
+      "sha256": "2b655bfeafb17b8b2c9e35ed67ee41f2a16c84bd80a4af95e235e90e9ada89ea"
+    },
+    {
+      "module": "pricing",
+      "name": "VersionedReferenceSchema",
+      "schema_version": "2.0.0",
+      "export_name": "VersionedReferenceV2Schema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/VersionedReferenceSchema.json",
+      "completeness": "complete",
+      "sha256": "b80188f68cbf79740b177224d4b81645f7de8fd12ee25caa07402bf77df50b6f"
+    },
+    {
+      "module": "pricing",
+      "name": "SourceReferenceSchema",
+      "schema_version": "2.0.0",
+      "export_name": "SourceReferenceSchema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/SourceReferenceSchema.json",
+      "completeness": "complete",
+      "sha256": "18a92a80ea7d50e90acbfe3882d325410ef86aa5490235d2102d6c42e0a701ea"
+    },
+    {
+      "module": "pricing",
+      "name": "PricingPartitionGroupSchema",
+      "schema_version": "2.0.0",
+      "export_name": "PricingPartitionGroupSchema",
+      "path": "schemas/cost-intelligence/2.0.0/pricing/PricingPartitionGroupSchema.json",
+      "completeness": "complete",
+      "sha256": "06e14940451ddc69a66b8e61d5293a21d6cd3117f5942a8d991baf8c0564fa69"
     }
   ]
 }

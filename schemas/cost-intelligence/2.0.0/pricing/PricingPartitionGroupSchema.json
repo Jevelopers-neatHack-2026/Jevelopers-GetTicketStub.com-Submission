@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/pricing/PricingPartitionGroupSchema/2.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "parent",
+    "separatelyPricedMembers",
+    "semantics",
+    "conservativeBound"
+  ],
+  "properties": {
+    "parent": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "separatelyPricedMembers": {
+      "minItems": 1,
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 128,
+        "type": "string"
+      }
+    },
+    "semantics": {
+      "const": "pairwise_disjoint_included_subsets",
+      "type": "string"
+    },
+    "conservativeBound": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "policy",
+            "evidenceRef"
+          ],
+          "properties": {
+            "policy": {
+              "const": "maximum_marginal_rate",
+              "type": "string"
+            },
+            "evidenceRef": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "contract",
+                "schema_version",
+                "id",
+                "revision",
+                "content_hash"
+              ],
+              "properties": {
+                "contract": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "schema_version": {
+                  "const": "1.0.0",
+                  "type": "string"
+                },
+                "id": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "content_hash": {
+                  "pattern": "^sha256:[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

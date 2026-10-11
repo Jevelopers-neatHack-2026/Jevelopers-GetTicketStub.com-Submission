@@ -1,0 +1,360 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/pricing/PricingRuleSchema/2.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "revision",
+    "provider",
+    "product",
+    "usageSource",
+    "usageSemantics",
+    "partitionGroups",
+    "usageUnits",
+    "effectiveFrom",
+    "effectiveTo",
+    "retrievedAt",
+    "freshnessMaxAgeSeconds",
+    "sourceUrl",
+    "sourceContentHash",
+    "approvalRef",
+    "provenance"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0",
+      "type": "string"
+    },
+    "id": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "provider": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "product": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "usageSource": {
+      "anyOf": [
+        {
+          "const": "provider_response",
+          "type": "string"
+        },
+        {
+          "const": "provider_usage_api",
+          "type": "string"
+        },
+        {
+          "const": "trace",
+          "type": "string"
+        },
+        {
+          "const": "billing_export",
+          "type": "string"
+        },
+        {
+          "const": "other",
+          "type": "string"
+        }
+      ]
+    },
+    "usageSemantics": {
+      "minLength": 1,
+      "maxLength": 3000,
+      "type": "string"
+    },
+    "partitionGroups": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "parent",
+          "separatelyPricedMembers",
+          "semantics",
+          "conservativeBound"
+        ],
+        "properties": {
+          "parent": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "separatelyPricedMembers": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          "semantics": {
+            "const": "pairwise_disjoint_included_subsets",
+            "type": "string"
+          },
+          "conservativeBound": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "policy",
+                  "evidenceRef"
+                ],
+                "properties": {
+                  "policy": {
+                    "const": "maximum_marginal_rate",
+                    "type": "string"
+                  },
+                  "evidenceRef": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "contract",
+                      "schema_version",
+                      "id",
+                      "revision",
+                      "content_hash"
+                    ],
+                    "properties": {
+                      "contract": {
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "type": "string"
+                      },
+                      "schema_version": {
+                        "const": "1.0.0",
+                        "type": "string"
+                      },
+                      "id": {
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "type": "string"
+                      },
+                      "revision": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "content_hash": {
+                        "pattern": "^sha256:[a-f0-9]{64}$",
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "usageUnits": {
+      "minItems": 1,
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "category",
+          "unit",
+          "relation",
+          "treatment",
+          "missingPolicy"
+        ],
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "const": "standalone",
+                "type": "string"
+              },
+              {
+                "const": "included_subset",
+                "type": "string"
+              },
+              {
+                "const": "unknown_relation",
+                "type": "string"
+              }
+            ]
+          },
+          "includedIn": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "treatment": {
+            "anyOf": [
+              {
+                "const": "charge_total",
+                "type": "string"
+              },
+              {
+                "const": "charge_residual",
+                "type": "string"
+              },
+              {
+                "const": "charge_subset",
+                "type": "string"
+              },
+              {
+                "const": "included",
+                "type": "string"
+              },
+              {
+                "const": "unsupported",
+                "type": "string"
+              }
+            ]
+          },
+          "missingPolicy": {
+            "anyOf": [
+              {
+                "const": "required",
+                "type": "string"
+              },
+              {
+                "const": "not_applicable",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "effectiveFrom": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    },
+    "effectiveTo": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "pattern": "Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "retrievedAt": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    },
+    "freshnessMaxAgeSeconds": {
+      "minimum": 0,
+      "maximum": 315360000,
+      "type": "integer"
+    },
+    "sourceUrl": {
+      "format": "uri",
+      "maxLength": 2048,
+      "type": "string"
+    },
+    "sourceContentHash": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "approvalRef": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "contract",
+        "schema_version",
+        "id",
+        "revision",
+        "content_hash"
+      ],
+      "properties": {
+        "contract": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "const": "synthetic_fixture",
+          "type": "string"
+        },
+        {
+          "const": "documented_tariff",
+          "type": "string"
+        },
+        {
+          "const": "owner_approved",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

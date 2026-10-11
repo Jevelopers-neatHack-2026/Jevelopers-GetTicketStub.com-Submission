@@ -1,0 +1,355 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/pricing/EstimateRequestSchema/2.0.0",
+  "x-schema-completeness": "partial_wrapper_requires_combined_validation",
+  "x-combined-validator": "validateEstimateRequestV2Boundary",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "idempotencyKey",
+    "scope",
+    "usageEvent",
+    "selection"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0",
+      "type": "string"
+    },
+    "requestId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "idempotencyKey": {
+      "minLength": 1,
+      "maxLength": 200,
+      "type": "string"
+    },
+    "scope": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "tenantId",
+        "projectId",
+        "environment",
+        "billingMode",
+        "actorId"
+      ],
+      "properties": {
+        "tenantId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "projectId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "const": "development",
+              "type": "string"
+            },
+            {
+              "const": "test",
+              "type": "string"
+            },
+            {
+              "const": "production",
+              "type": "string"
+            }
+          ]
+        },
+        "billingMode": {
+          "anyOf": [
+            {
+              "const": "live",
+              "type": "string"
+            },
+            {
+              "const": "sandbox",
+              "type": "string"
+            },
+            {
+              "const": "simulated",
+              "type": "string"
+            }
+          ]
+        },
+        "actorId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        }
+      }
+    },
+    "usageEvent": {},
+    "selection": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "policy",
+        "effectiveAt",
+        "product",
+        "requestedCurrency",
+        "rateCardRef",
+        "fxRateRef",
+        "contractTimeEvidenceRef",
+        "contextTier",
+        "serviceTier",
+        "reasoningMode",
+        "toolClass",
+        "dimensionsEvidenceRef"
+      ],
+      "properties": {
+        "policy": {
+          "anyOf": [
+            {
+              "const": "event_time",
+              "type": "string"
+            },
+            {
+              "const": "contract_time",
+              "type": "string"
+            }
+          ]
+        },
+        "effectiveAt": {
+          "format": "date-time",
+          "pattern": "Z$",
+          "type": "string"
+        },
+        "product": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "requestedCurrency": {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        "rateCardRef": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "contract",
+                "schema_version",
+                "id",
+                "revision",
+                "content_hash"
+              ],
+              "properties": {
+                "contract": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "schema_version": {
+                  "const": "2.0.0",
+                  "type": "string"
+                },
+                "id": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "content_hash": {
+                  "pattern": "^sha256:[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fxRateRef": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "contract",
+                "schema_version",
+                "id",
+                "revision",
+                "content_hash"
+              ],
+              "properties": {
+                "contract": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "schema_version": {
+                  "const": "2.0.0",
+                  "type": "string"
+                },
+                "id": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "content_hash": {
+                  "pattern": "^sha256:[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contractTimeEvidenceRef": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "contract",
+                "schema_version",
+                "id",
+                "revision",
+                "content_hash"
+              ],
+              "properties": {
+                "contract": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "schema_version": {
+                  "const": "1.0.0",
+                  "type": "string"
+                },
+                "id": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "content_hash": {
+                  "pattern": "^sha256:[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contextTier": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serviceTier": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoningMode": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolClass": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dimensionsEvidenceRef": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "contract",
+                "schema_version",
+                "id",
+                "revision",
+                "content_hash"
+              ],
+              "properties": {
+                "contract": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "schema_version": {
+                  "const": "1.0.0",
+                  "type": "string"
+                },
+                "id": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "revision": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "content_hash": {
+                  "pattern": "^sha256:[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

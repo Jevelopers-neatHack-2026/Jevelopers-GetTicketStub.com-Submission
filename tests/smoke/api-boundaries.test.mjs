@@ -52,11 +52,44 @@ test('public domain boundaries return explicit unavailable results and never fab
     ...base, usageEvent, evidenceMode: 'mocked', verificationStatus: 'verified', evidenceProvenanceRef: 'fixture:usage-event',
   };
   await checkBoundary('ingestUsage', usage, 'SOURCE_UNAVAILABLE');
-  const estimate = {
+  const estimateV1 = {
     ...base, usageEvent,
-    selection: { policy: 'event_time', effectiveAt: '2026-10-10T12:00:00Z', requestedCurrency: 'USD', rateCardRef: null },
+    selection: { policy: 'event_time', effectiveAt: usageEvent.occurred_at, requestedCurrency: 'USD', rateCardRef: null },
   };
-  await checkBoundary('estimate', estimate, 'PRICING_UNKNOWN');
+  validRequests.push({ operation: 'estimate', request: estimateV1 });
+  assertError(await api.estimate(estimateV1, ports), 'PRICING_UNKNOWN',
+    'the retained 1.0.0 estimate boundary remains fail closed without a versioned tariff contract');
+  const estimateV2 = {
+    ...estimateV1, schemaVersion: '2.0.0',
+    selection: {
+      policy: 'event_time', effectiveAt: usageEvent.occurred_at, product: 'responses', requestedCurrency: 'USD',
+      rateCardRef: null, fxRateRef: null, contractTimeEvidenceRef: null, contextTier: null, serviceTier: null,
+      reasoningMode: null, toolClass: null, dimensionsEvidenceRef: null,
+    },
+  };
+  const pricingPorts = {
+    ...ports,
+    actionAuthority: {
+      authorize: async ({ scope: requestedScope, action }) => ({
+        decisionId: `smoke-pricing-${action}`,
+        action,
+        scope: requestedScope,
+        actorId: requestedScope.actorId,
+        allowed: true,
+        issuedAt: '2026-10-10T11:59:00Z',
+        expiresAt: '2026-10-10T12:01:00Z',
+      }),
+    },
+    database: {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => {},
+      }),
+    },
+  };
+  const estimateResult = await api.estimateV2(estimateV2, pricingPorts);
+  assert.equal(estimateResult.ok, true);
+  assert.equal(estimateResult.value.status, 'pricing_unknown', 'an empty catalog returns typed unknown pricing, not a zero estimate');
 
   const attemptBinding = {
     logicalOperationId: usageEvent.logical_operation_id, transportAttemptId: usageEvent.transport_attempt_id,

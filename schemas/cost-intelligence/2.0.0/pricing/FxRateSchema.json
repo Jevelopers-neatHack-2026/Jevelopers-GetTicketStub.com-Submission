@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/pricing/FxRateSchema/2.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "revision",
+    "sourceCurrency",
+    "targetCurrency",
+    "rate",
+    "effectiveFrom",
+    "effectiveTo",
+    "retrievedAt",
+    "freshnessMaxAgeSeconds",
+    "sourceUrl",
+    "sourceContentHash",
+    "approvalRef",
+    "provenance"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0",
+      "type": "string"
+    },
+    "id": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "sourceCurrency": {
+      "pattern": "^[A-Z]{3}$",
+      "type": "string"
+    },
+    "targetCurrency": {
+      "pattern": "^[A-Z]{3}$",
+      "type": "string"
+    },
+    "rate": {
+      "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+      "maxLength": 40,
+      "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
+      "type": "string"
+    },
+    "effectiveFrom": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    },
+    "effectiveTo": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "pattern": "Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "retrievedAt": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    },
+    "freshnessMaxAgeSeconds": {
+      "minimum": 0,
+      "maximum": 315360000,
+      "type": "integer"
+    },
+    "sourceUrl": {
+      "format": "uri",
+      "maxLength": 2048,
+      "type": "string"
+    },
+    "sourceContentHash": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "approvalRef": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "contract",
+        "schema_version",
+        "id",
+        "revision",
+        "content_hash"
+      ],
+      "properties": {
+        "contract": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "const": "synthetic_fixture",
+          "type": "string"
+        },
+        {
+          "const": "documented_tariff",
+          "type": "string"
+        },
+        {
+          "const": "owner_approved",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

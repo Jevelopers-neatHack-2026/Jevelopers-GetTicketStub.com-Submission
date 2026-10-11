@@ -126,7 +126,9 @@ test('combined public validators enforce every nested pinned canonical request a
   };
   const estimateRequest = {
     schemaVersion: '1.0.0', requestId: 'combined-estimate', idempotencyKey: 'combined-estimate-idem', scope: scopeFor(usageEvent), usageEvent,
-    selection: { policy: 'event_time', effectiveAt: '2026-10-10T12:00:00Z', requestedCurrency: 'USD', rateCardRef: null },
+    selection: {
+      policy: 'event_time', effectiveAt: usageEvent.occurred_at, requestedCurrency: 'USD', rateCardRef: null,
+    },
   };
   const reservationRequest = {
     schemaVersion: '1.0.0', requestId: 'combined-reserve', idempotencyKey: 'combined-reserve-idem', scope: scopeFor(reserveRequest), canonicalRequest: reserveRequest,

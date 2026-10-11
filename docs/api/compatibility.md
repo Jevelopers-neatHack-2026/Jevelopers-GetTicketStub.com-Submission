@@ -10,9 +10,15 @@ The local package consumes the exact archive for `@jevelopers/shared-contracts@0
 
 The candidate's policy uses exact semantic schema versions, rejects unknown fields and enums, and only permits an optional-field addition under a new exact schema version. Existing version encodings and fixtures are retained for consumers during any eventual migration. This package rejects every unsupported local version rather than silently accepting unknown minor or additive values. Because no previous cost-intelligence API release is accepted, older-consumer compatibility remains unverified.
 
+### Pricing version migration
+
+The original base pricing 1.0.0 `RateCard`, `EstimateRequest`, and `EstimateResult` schemas and types remain available under their exact names and shapes, along with the original fail-closed `estimate` function. The base had no catalog-write API. Incompatible catalog, rule, FX, and valuation shapes are 2.0.0 and use explicit `*V2Schema`, `*V2` type, and `*V2` function names; generated v2 pricing artifacts live under `schemas/cost-intelligence/2.0.0/pricing/`. A clean packed-consumer check compiles and imports both interfaces and validates old and new wire fixtures. The 1.0.0 estimate remains fail closed because that encoding cannot carry the required operation-specific host grant. Use the v2 functions for pricing behavior.
+
+Pricing v2 consumes the unchanged shared `UsageEvent@1.0.0` and uses finance-owned v2 references for its rules, cards, FX rates, and valuation results. No canonical contract or issuer capability was added. A real issuer adapter and its accepted decision source remain an external integration gate.
+
 ## Runtime boundary
 
-The package targets the Node.js 22 backend line (`>=22.23.3 <23`); the current acceptance run is pinned to Node 22.23.3. The financial ledger is a backend specialist module. A host must inject `LedgerRuntimePorts`, including the host-approved trusted-context resolver, an existing PostgreSQL-compatible transaction port, and a clock. The module opens no hidden pool, and callers cannot authorize a wider tenant, project, environment, or billing-mode scope by changing request fields. Browser-safe execution is not supported or claimed, and Node 24 compatibility has not been tested or claimed.
+The package targets the Node.js 22 backend line (`>=22.23.3 <23`); the current acceptance run is pinned to Node 22.23.3. The financial ledger and v2 pricing are backend specialist modules. Hosts inject existing PostgreSQL-compatible transaction ports and clocks; v2 pricing also requires a current, action-specific scope decision before database access. The modules open no hidden pool, and callers cannot authorize a wider tenant, project, environment, or billing-mode scope by changing request fields. Browser-safe execution is not supported or claimed, and Node 24 compatibility has not been tested or claimed.
 
 ## Finance handoff blockers
 
