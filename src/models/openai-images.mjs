@@ -4,8 +4,9 @@ import {
   checkRef, evaluateOpenAIImageRetry, exactUsage, fail, freezeUsageObservation, hashJson, inspectConceptReferenceBytes,
   inspectOpenAIImageBytes, isRecord, readPrivateOpenAIImageRequestId, readPrivateOpenAIImageRetryDisposition,
   readPrivateOpenAIImageTargetBindingSha256, responseHeader, runImageDispatch, safeProviderRequestRef,
-  snapshotJson, usageWithMissingField, utilTypes,
+  snapshotJson, snapshotUsageData, usageWithMissingField,
 } from "./image-provider-core.mjs";
+import { IMAGE_PROVIDER_ROUTES } from "./image-provider-routes.mjs";
 
 // The shared validation, decoding, fence, and dispatch logic lives in image-provider-core.mjs
 // and is reused by the OpenRouter adapter. This module keeps only the direct OpenAI Images
@@ -15,8 +16,8 @@ export {
   readPrivateOpenAIImageRequestId, readPrivateOpenAIImageRetryDisposition, readPrivateOpenAIImageTargetBindingSha256,
 };
 
-const GENERATION_ENDPOINT = "https://api.openai.com/v1/images/generations";
-const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
+const GENERATION_ENDPOINT = IMAGE_PROVIDER_ROUTES.openai.generation_endpoint;
+const EDIT_ENDPOINT = IMAGE_PROVIDER_ROUTES.openai.edit_endpoint;
 const RETRY_MAPPING_REF = "openai-images-direct/retry-policy-v1";
 
 /** The documented candidate pin is explicit and never auto-selected. Owner capability evidence is still required. */
@@ -102,39 +103,7 @@ function validateConfiguration(configuration, profile, operation) {
 
 /** Preserve allowlisted provider counters; only a reviewed owner profile may map them for settlement. */
 export function normalizeOpenAIImageUsage(raw, identities = {}) {
-  const snapshotData = (value, field, allowedKeys, { rejectUnknown = false } = {}) => {
-    if (value === null || typeof value !== "object") return undefined;
-    // util.types.isProxy is a native brand check and does not invoke proxy
-    // traps. Reject before Array.isArray/getPrototypeOf/ownKeys can do so.
-    if (utilTypes.isProxy(value)) {
-      fail("usage_invalid", "Provider usage must contain bounded data fields.", { outcome: "unknown", field });
-    }
-    if (!isRecord(value)) return undefined;
-    let descriptors;
-    let keys;
-    try {
-      keys = Reflect.ownKeys(value);
-      if (keys.length > 32 || keys.some((key) => typeof key !== "string")) {
-        fail("usage_invalid", "Provider usage must contain bounded data fields.", { outcome: "unknown", field });
-      }
-      descriptors = Object.getOwnPropertyDescriptors(value);
-    } catch {
-      fail("usage_invalid", "Provider usage must contain bounded data fields.", { outcome: "unknown", field });
-    }
-    const result = Object.create(null);
-    for (const key of keys) {
-      const descriptor = descriptors[key];
-      if (!descriptor || !Object.hasOwn(descriptor, "value")) {
-        fail("usage_invalid", "Provider usage accessors are not accepted.", { outcome: "unknown", field });
-      }
-      if (rejectUnknown && !allowedKeys.has(key)) {
-        fail("usage_invalid", "Provider usage contains an unsupported field.", { outcome: "unknown", field });
-      }
-      result[key] = descriptor.value;
-    }
-    return result;
-  };
-  const identityData = snapshotData(identities, "usage.identities", new Set(["transport_attempt_id", "provider_request_id"]), { rejectUnknown: true }) ?? Object.create(null);
+  const identityData = snapshotUsageData(identities, "usage.identities", new Set(["transport_attempt_id", "provider_request_id"]), { rejectUnknown: true }) ?? Object.create(null);
   const transport_attempt_id = identityData.transport_attempt_id;
   const provider_request_id = identityData.provider_request_id;
   const result = { completeness: "unknown", missing_fields: ["usage.profile_mapping_pending"] };
@@ -142,7 +111,7 @@ export function normalizeOpenAIImageUsage(raw, identities = {}) {
   const safeRequestRef = safeProviderRequestRef(provider_request_id);
   if (safeRequestRef) result.provider_request_id = safeRequestRef;
   if (typeof provider_request_id === "string") PRIVATE_PROVIDER_REQUEST_IDS.set(result, provider_request_id);
-  const rawData = snapshotData(raw, "usage", new Set([
+  const rawData = snapshotUsageData(raw, "usage", new Set([
     "input_tokens", "output_tokens", "total_tokens", "input_tokens_details", "output_tokens_details",
   ]));
   if (!rawData) {
@@ -160,7 +129,7 @@ export function normalizeOpenAIImageUsage(raw, identities = {}) {
   for (const parent of ["input_tokens", "output_tokens"]) {
     const detailsKey = `${parent}_details`;
     if (!Object.hasOwn(rawData, detailsKey)) { missing.add(`usage.${detailsKey}`); continue; }
-    const details = snapshotData(rawData[detailsKey], `usage.${detailsKey}`, new Set(["text_tokens", "image_tokens"]));
+    const details = snapshotUsageData(rawData[detailsKey], `usage.${detailsKey}`, new Set(["text_tokens", "image_tokens"]));
     if (!details) { missing.add(`usage.${detailsKey}`); continue; }
     const safeDetails = {};
     for (const part of ["text_tokens", "image_tokens"]) {

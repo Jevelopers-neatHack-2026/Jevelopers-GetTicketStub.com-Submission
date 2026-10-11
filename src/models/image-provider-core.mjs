@@ -1642,10 +1642,44 @@ async function inspectConceptReferenceBytes(assetPort, { scope, references, maxi
 }
 
 
+/** Bounded, accessor-free snapshot of a provider usage record. */
+function snapshotUsageData(value, field, allowedKeys, { rejectUnknown = false } = {}) {
+  if (value === null || typeof value !== "object") return undefined;
+  // util.types.isProxy is a native brand check and does not invoke proxy
+  // traps. Reject before Array.isArray/getPrototypeOf/ownKeys can do so.
+  if (utilTypes.isProxy(value)) {
+    fail("usage_invalid", "Provider usage must contain bounded data fields.", { outcome: "unknown", field });
+  }
+  if (!isRecord(value)) return undefined;
+  let descriptors;
+  let keys;
+  try {
+    keys = Reflect.ownKeys(value);
+    if (keys.length > 32 || keys.some((key) => typeof key !== "string")) {
+      fail("usage_invalid", "Provider usage must contain bounded data fields.", { outcome: "unknown", field });
+    }
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    fail("usage_invalid", "Provider usage must contain bounded data fields.", { outcome: "unknown", field });
+  }
+  const result = Object.create(null);
+  for (const key of keys) {
+    const descriptor = descriptors[key];
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+      fail("usage_invalid", "Provider usage accessors are not accepted.", { outcome: "unknown", field });
+    }
+    if (rejectUnknown && !allowedKeys.has(key)) {
+      fail("usage_invalid", "Provider usage contains an unsupported field.", { outcome: "unknown", field });
+    }
+    result[key] = descriptor.value;
+  }
+  return result;
+}
+
 export {
   HASH, OPAQUE_REF, MAX_IMAGE_BYTES, MAX_PIXELS, MAX_PROMPT_CODE_POINTS, PRIVATE_PROVIDER_REQUEST_IDS,
-  PRIVATE_TARGET_BINDING_SHA256, TYPED_ARRAY_BUFFER,
+  PRIVATE_RETRY_DISPOSITIONS, PRIVATE_TARGET_BINDING_SHA256,
   amountAtMost, attachUsageObservation, checkRef, fail, freezeUsageObservation, hashJson, isDate, isRecord,
   responseHeader, runImageDispatch, safeProviderRequestRef, sha256, snapshotJson, inspectConceptReferenceBytes,
-  exactUsage, usageWithMissingField, parseRetryAfter, utilTypes,
+  exactUsage, usageWithMissingField, parseRetryAfter, snapshotUsageData,
 };

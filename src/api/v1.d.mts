@@ -768,9 +768,7 @@ export interface CreativeRuntimePorts {
       Promise<CreativeProviderRoute> | CreativeProviderRoute;
     generate(input: ProviderInput): Promise<ProviderOutput>;
     edit(input: ProviderInput | CreativeConceptProviderInput): Promise<ProviderOutput>;
-    getConceptConfiguration?(): Readonly<{ model_id: string; configuration: Readonly<{
-      quality: string; size: string; output_format: string; background: string; moderation: string;
-    }> }>;
+    getConceptConfiguration?(): Readonly<{ model_id: string; configuration: object }>;
     /** Decode and hash the exact two authorized inputs before C03; the native edit rereads and verifies them. */
     inspectConceptReferences?(input: { scope: TrustedScope;
       references: readonly CreativeConceptReferencePreflight[];
