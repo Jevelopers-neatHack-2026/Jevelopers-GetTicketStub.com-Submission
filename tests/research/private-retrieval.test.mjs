@@ -1233,8 +1233,12 @@ test('the whole-run deadline interrupts an already-admitted last request and kee
   let lateBodyAttemptedAtMs;
   let delayedResponse;
   let resolveRequestReceived;
+  let resolveResponseClosed;
+  let resolveSocketClosed;
   let resolveLateBodyAttempt;
   const requestReceived = new Promise((resolve) => { resolveRequestReceived = resolve; });
+  const responseClosedEvent = new Promise((resolve) => { resolveResponseClosed = resolve; });
+  const socketClosedEvent = new Promise((resolve) => { resolveSocketClosed = resolve; });
   const lateBodyAttempt = new Promise((resolve) => { resolveLateBodyAttempt = resolve; });
   const server = await startFixture((_request, response) => {
     requestCount += 1;
@@ -1244,6 +1248,7 @@ test('the whole-run deadline interrupts an already-admitted last request and kee
     response.once('close', () => {
       responseClosed = true;
       responseClosedAtMs = Date.now();
+      resolveResponseClosed();
     });
     const remainingMs = Number.isSafeInteger(persistedDeadlineAtMs)
       ? persistedDeadlineAtMs - Date.now() : 0;
@@ -1264,6 +1269,7 @@ test('the whole-run deadline interrupts an already-admitted last request and kee
     socket.once('close', () => {
       socketClosed = true;
       socketClosedAtMs = Date.now();
+      resolveSocketClosed();
     });
   });
   t.after(async () => {
@@ -1309,8 +1315,45 @@ test('the whole-run deadline interrupts an already-admitted last request and kee
   assert.ok(requestReceivedAtMs < persistedDeadlineAtMs, 'the request arrived before the whole-run deadline');
 
   const result = await running;
-  const deadlineReturnLagMs = Date.now() - persistedDeadlineAtMs;
+  const runReturnedAtMs = Date.now();
+  const deadlineReturnLagMs = runReturnedAtMs - persistedDeadlineAtMs;
+  const closeWaitStartedAtMs = Date.now();
+  let closeEventsObserved;
+  let closeWaitTimer;
+  try {
+    closeEventsObserved = await Promise.race([
+      Promise.all([responseClosedEvent, socketClosedEvent]).then(() => true),
+      new Promise((resolve) => { closeWaitTimer = setTimeout(() => resolve(false), 1_000); }),
+    ]);
+  } finally {
+    clearTimeout(closeWaitTimer);
+  }
+  const closeWaitFinishedAtMs = Date.now();
+  t.diagnostic(JSON.stringify({
+    runStartedAtMs,
+    persistedDeadlineAtMs,
+    requestReceivedAtMs: requestReceivedAtMs ?? null,
+    remainingAtRequestMs: Number.isSafeInteger(requestReceivedAtMs)
+      ? persistedDeadlineAtMs - requestReceivedAtMs : null,
+    tcpConnectionCount,
+    requestCount,
+    runReturnedAtMs,
+    deadlineReturnLagMs,
+    closeWaitStartedAtMs,
+    closeWaitFinishedAtMs,
+    closeWaitLagMs: closeWaitFinishedAtMs - closeWaitStartedAtMs,
+    closeEventsObserved,
+    responseClosed,
+    responseClosedAtMs: responseClosedAtMs ?? null,
+    socketClosed,
+    socketClosedAtMs: socketClosedAtMs ?? null,
+    lateBodyAttempted: lateBodyAttempted,
+    lateBodyAttemptedAtMs: lateBodyAttemptedAtMs ?? null,
+    lateBodySawClosedResponse,
+    lateBodyDelivered,
+  }));
   assert.ok(deadlineReturnLagMs < 2_000, 'the final authorized hop returns promptly after the original run deadline');
+  assert.equal(closeEventsObserved, true, 'both local response and TCP socket close events are observed within the bounded wait');
   assert.ok(responseClosedAtMs >= persistedDeadlineAtMs - 100,
     'the active local response remains open until the original run deadline');
   assert.equal(result.status, 'incomplete');
