@@ -44,6 +44,40 @@ export async function verifyCompositionProjectionHash(projection, subtle) {
   const bytes=await subtle.digest('SHA-256',new TextEncoder().encode(canonical(body)));
   return `sha256:${Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')}`===projection.projection_sha256;
 }
+/** A review is a closed presentation of the trusted server's normalized plan.
+ * Its digest and draft binding are verified separately before enabling Apply. */
+export function assertCompositionDraftReview(value, projection, draft) {
+  const x = snapshotControlJson(value); projection = assertCompositionProjection(projection); draft = snapshotControlJson(draft);
+  if (!exact(x, ['contract','schema_version','projection_sha256','draft_sha256','changes','approval','purchase','review_sha256']) ||
+      x.contract !== 'CreativeCompositionDraftReview' || x.schema_version !== '1.0' || !common(x) || !digest(x.draft_sha256) || !digest(x.review_sha256) ||
+      x.projection_sha256 !== projection.projection_sha256 || !exact(draft, ['categories','exact']) || !isRecord(draft.categories) || !isRecord(draft.exact) ||
+      !Array.isArray(x.changes) || x.changes.length < 1 || x.changes.length > 4) deny();
+  const fields = { set_text:'text', set_text_size:'text_size', set_layer_layout:'layout', position_approved_logo:'logo' }, seen = new Set();
+  const categoryFields = { name_size:'text_size', layout:'layout', logo_position:'logo', layout_emphasis:'layout' }, requested = new Set();
+  for (const [field, value] of Object.entries(draft.categories)) {
+    const category = projection.categories.find(c => c.field === field);
+    if (!category || category.locked || !category.options.includes(value)) deny();
+    if (value !== category.current_value) requested.add(categoryFields[field]);
+  }
+  for (const [field, value] of Object.entries(draft.exact)) {
+    const control = projection.exact_controls[field];
+    if (!control || control.locked) deny();
+    if (canonical(value) !== canonical(control.value)) requested.add(field);
+  }
+  for (const change of x.changes) {
+    const field = fields[change?.kind], control = projection.exact_controls[field];
+    if (!exact(change, ['kind','layer_id','asset_id','before','after']) || !control || !requested.has(field) || control.locked || change.layer_id !== control.layer_id ||
+        canonical(change.before) !== canonical(control.value) || seen.has(`${change.layer_id}:${field === 'logo' ? 'layout' : field}`) ||
+        (field === 'logo' ? change.asset_id !== control.asset_id : change.asset_id !== null)) deny();
+    seen.add(`${change.layer_id}:${field === 'logo' ? 'layout' : field}`);
+    if (field === 'text' && (typeof change.after !== 'string' || !change.after.length || change.after.length > control.max_length || /[<>\u0000-\u001f\u007f]/.test(change.after)) ||
+        field === 'text_size' && (!size(change.after) || change.after === null || !control.bounds.units.includes(change.after.unit) || Number(change.after.value) < Number(control.bounds.min_value) || Number(change.after.value) > Number(control.bounds.max_value)) ||
+        ['layout','logo'].includes(field) && (change.after === null || !layout(change.after)) ||
+        Object.hasOwn(draft.exact, field) && canonical(change.after) !== canonical(draft.exact[field]) || canonical(change.before) === canonical(change.after)) deny();
+  }
+  if (x.changes.length !== requested.size) deny();
+  return x;
+}
 export function assertCompositionCurrent(value) {
   const x=snapshotControlJson(value);if(!common(x)||typeof x.ok!=='boolean')deny();
   if(x.ok&&x.status==='current'){

@@ -77,12 +77,13 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': value.artifact.media_type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(Buffer.from(value.bytes));
     }
-    if (req.method !== 'POST' || !['/api/artwork/retry','/api/artwork/status','/api/composition/apply','/api/composition/retry','/api/composition/lookup','/api/composition/cancel','/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset', '/__fixture/capture'].includes(path)) return json(res, { code: 'not_found' }, 404);
+    if (req.method !== 'POST' || !['/api/artwork/retry','/api/artwork/status','/api/composition/review','/api/composition/apply','/api/composition/retry','/api/composition/lookup','/api/composition/cancel','/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset', '/__fixture/capture'].includes(path)) return json(res, { code: 'not_found' }, 404);
     if (!req.headers['content-type']?.startsWith('application/json')) return json(res, { code: 'validation' }, 415);
     if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, { code: 'permission' }, 403);
     let bytes = '', size = 0; for await (const chunk of req) { size += chunk.length; if (size > 32768) return json(res, { code: 'validation' }, 413); bytes += chunk; }
     const payload = JSON.parse(bytes);
     if (path === '/__fixture/capture') { closeAndCaptureHost('browser-case-complete'); return json(res, { ok: true, mode: 'mock', live_calls: 0 }); }
+    if (path === '/api/composition/review') return json(res, { review: await host.composition.review(compositionPrincipal(req), payload), counters: host.counts() });
     if (path === '/api/composition/apply') return json(res, { result: await host.composition.apply(compositionPrincipal(req), payload), counters: host.counts() });
     if (path === '/api/composition/lookup') return json(res, { result: await host.composition.lookup(compositionPrincipal(req), payload.action_id), counters: host.counts() });
     if (path === '/api/composition/retry') return json(res, { result: await host.composition.retry(compositionPrincipal(req), payload.action_id), counters: host.counts() });

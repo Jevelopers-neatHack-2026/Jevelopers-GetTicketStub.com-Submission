@@ -1,7 +1,15 @@
 import type { CreativeRuntimePorts, CreativeCompositionHistoryResult } from 'creative-engine/api/v1';
-import type { CreativeCompositionSha256 } from 'creative-engine/contracts/composition-authority';
+import type { CreativeCompositionSha256, CreativeCompositionLayout, CreativeCompositionTextSize } from 'creative-engine/contracts/composition-authority';
 import type { CurrentCreativeControlContext } from './index.mjs';
-import type { CompositionPrincipal, CompositionControlApply, CreativeCompositionControlPolicy, CreativeCompositionControlProjection } from './composition-projection.mjs';
+import type { CompositionPrincipal, CompositionControlApply, CompositionControlDraft, CreativeCompositionControlPolicy, CreativeCompositionControlProjection } from './composition-projection.mjs';
+export interface CompositionDraftReview {
+  readonly contract: 'CreativeCompositionDraftReview'; readonly schema_version: '1.0'; readonly projection_sha256: CreativeCompositionSha256;
+  readonly draft_sha256: CreativeCompositionSha256; readonly review_sha256: CreativeCompositionSha256; readonly approval: false; readonly purchase: false;
+  readonly changes: readonly (Readonly<{ kind: 'set_text'; layer_id: string; asset_id: null; before: string; after: string }> |
+    Readonly<{ kind: 'set_text_size'; layer_id: string; asset_id: null; before: CreativeCompositionTextSize; after: NonNullable<CreativeCompositionTextSize> }> |
+    Readonly<{ kind: 'set_layer_layout'; layer_id: string; asset_id: null; before: CreativeCompositionLayout; after: NonNullable<CreativeCompositionLayout> }> |
+    Readonly<{ kind: 'position_approved_logo'; layer_id: string; asset_id: string; before: CreativeCompositionLayout; after: NonNullable<CreativeCompositionLayout> }>)[];
+}
 export interface CompositionPreviewDescriptor {
   readonly revision_id: string; readonly revision_sha256: CreativeCompositionSha256; readonly state_sha256: CreativeCompositionSha256; readonly preview_id: string;
   readonly preview_sha256: CreativeCompositionSha256; readonly byte_length: number; readonly mime_type: 'image/png' | 'image/jpeg' | 'image/webp'; readonly width_px: number; readonly height_px: number;
@@ -30,6 +38,7 @@ export interface ControlsSqliteDatabase {
 export class CompositionControlsAdapter {
   constructor(options: { database: ControlsSqliteDatabase; ports: CreativeRuntimePorts; readContext(principal: CompositionPrincipal): CurrentCreativeControlContext; readPolicy(principal: CompositionPrincipal, context: CurrentCreativeControlContext): CreativeCompositionControlPolicy; now?: () => number });
   current(principal: CompositionPrincipal): Promise<CompositionCurrentView>;
+  review(principal: CompositionPrincipal, input: Readonly<{ projection_sha256: CreativeCompositionSha256; draft: CompositionControlDraft }>): Promise<CompositionDraftReview>;
   history(principal: CompositionPrincipal, options?: Readonly<{ limit?: number; after_revision_id?: string }>): Promise<CompositionHistoryView>;
   apply(principal: CompositionPrincipal, action: CompositionControlApply | CompositionInitializeAction | CompositionRenewAction): Promise<CompositionCompletion>;
   lookup(principal: CompositionPrincipal, action_id: string): Promise<CompositionCompletion | null>;

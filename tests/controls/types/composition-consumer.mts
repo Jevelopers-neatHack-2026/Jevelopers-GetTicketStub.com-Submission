@@ -1,4 +1,4 @@
-import { createCompositionControlProjection, createCompositionControlPlan, validateCompositionControlPolicy, assertCompositionCurrent, assertCompositionCompletion, COMPOSITION_APPLY_VERSION,
+import { createCompositionControlProjection, createCompositionControlPlan, validateCompositionControlPolicy, assertCompositionCurrent, assertCompositionCompletion, assertCompositionDraftReview, COMPOSITION_APPLY_VERSION,
   type CompositionControlApply, type CreativeCompositionControlPolicy, type CreativeCompositionControlProjection, type CompositionControlDraft } from '../../../src/controls/index.mjs';
 import type { CreativeCompositionRevision } from 'creative-engine/contracts/composition-authority';
 type IsAny<T> = 0 extends (1 & T) ? true : false;
@@ -26,6 +26,10 @@ void [wrongCategory,purchase,unsupported,wrongUnit,invented];
 
 import { assertCompositionHistory, type CompositionRenewAction, type CompositionHistoryView, type CompositionControlsAdapter } from '../../../src/controls/index.mjs';
 declare const adapter: CompositionControlsAdapter;
+const draftReviewAny: IsAny<ReturnType<typeof assertCompositionDraftReview>> = false; void draftReviewAny;
+adapter.review({actor_id:'actor',tenant_id:'tenant',project_id:'project'}, { projection_sha256:projection.projection_sha256, draft:action.draft });
+// @ts-expect-error review reads an exact draft; client policy templates confer no authority
+adapter.review({actor_id:'actor',tenant_id:'tenant',project_id:'project'}, { projection_sha256:projection.projection_sha256, draft:action.draft, policy:{} });
 const renew: CompositionRenewAction = { action_version:'creative-composition-renew/1.0',action_id:'renew:typed',intent:'renew',review_sha256:projection.projection_sha256 };
 adapter.apply({actor_id:'actor',tenant_id:'tenant',project_id:'project'},renew);
 const historyAny: IsAny<ReturnType<typeof assertCompositionHistory>> = false; void historyAny;

@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
-import { assertCompositionCurrent, assertCompositionCompletion, assertCompositionProjection, verifyCompositionProjectionHash, assertCompositionHistory, assertCompositionHistoryIdentity } from '../../src/controls/composition-view.mjs';
+import { assertCompositionCurrent, assertCompositionCompletion, assertCompositionProjection, verifyCompositionProjectionHash, assertCompositionHistory, assertCompositionHistoryIdentity, assertCompositionDraftReview } from '../../src/controls/composition-view.mjs';
 import { assertRenderableSchema } from '../../src/controls/schema.mjs';
 import { validateCompositionControlPolicy } from '../../src/controls/composition-projection.mjs';
 import { fixtureCompositionPolicy } from '../../fixtures/controls/composition-policy.mjs';
@@ -22,6 +22,19 @@ test('actual producer projection hashes validate while old consumers reject the 
   assert.equal(await verifyCompositionProjectionHash(current.projection,webcrypto.subtle),true);
   assert.throws(()=>assertRenderableSchema(current.projection),'legacy schema must not silently discard new full state');
   const altered=structuredClone(current.projection);altered.base.state_sha256=`sha256:${'a'.repeat(64)}`;assert.equal(await verifyCompositionProjectionHash(altered,webcrypto.subtle),false);
+});
+test('server draft review rejects swapped layers/assets/before values, unrequested operations and hostile descriptors', async t => {
+  const {host,current} = await context(t), draft = {categories:{logo_position:'bottom'},exact:{}};
+  const review = await host.composition.review(fixturePrincipal,{projection_sha256:current.projection.projection_sha256,draft});
+  assertCompositionDraftReview(review,current.projection,draft);
+  for (const mutate of [x=>{x.script='run';}, x=>{x.changes[0].layer_id='other-layer';}, x=>{x.changes[0].asset_id='other-asset';},
+    x=>{x.changes[0].before.x_milli++;}, x=>{x.changes[0].after.x_milli=1001;}, x=>{x.changes.push(x.changes[0]);},
+    x=>{x.changes[0].kind='set_layer_layout';x.changes[0].layer_id=current.projection.exact_controls.layout.layer_id;x.changes[0].asset_id=null;x.changes[0].before=current.projection.exact_controls.layout.value;},
+    x=>{x.projection_sha256=`sha256:${'a'.repeat(64)}`;}, x=>{x.approval=true;}, x=>{x.schema_version='2.0';}]) {
+    const input=structuredClone(review);mutate(input);assert.throws(()=>assertCompositionDraftReview(input,current.projection,draft));
+  }
+  let hooks=0;const input=structuredClone(review);Object.defineProperty(input.changes[0],'after',{enumerable:true,get(){hooks++;return review.changes[0].after;}});
+  assert.throws(()=>assertCompositionDraftReview(input,current.projection,draft));assert.equal(hooks,0);
 });
 test('deep view allowlists reject hostile extras, previews, geometry, swaps and script text with zero getters',async t=>{
   const {current,result}=await context(t);let hooks=0;const getter=structuredClone(current);

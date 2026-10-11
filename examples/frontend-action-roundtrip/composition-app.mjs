@@ -1,8 +1,8 @@
 import { canonical, assertRenderableSchema, defaultDraft } from '/schema.mjs';
-import { assertCompositionCurrent, assertCompositionCompletion, assertCompositionHistory, verifyCompositionProjectionHash } from '/composition-view.mjs';
+import { assertCompositionCurrent, assertCompositionCompletion, assertCompositionHistory, assertCompositionDraftReview, verifyCompositionProjectionHash } from '/composition-view.mjs';
 import { projectApplyResult } from '/public-result.mjs';
 const $=id=>document.getElementById(id), labels={name_size:'Name size',layout:'Layout',logo_position:'Approved logo position',layout_emphasis:'Stacked layout emphasis'};
-let current, generation=0, sequence=0, observedTerminal=0, busy=false, previewReady=false, reviewed, action, styleSchema, styleReview, styleAction, historyView, renewalReview, historySequence=0, uncertain=false, styleUncertain=false, scopeIdentity;
+let current, generation=0, sequence=0, observedTerminal=0, busy=false, previewReady=false, reviewed, action, styleSchema, styleReview, styleAction, historyView, renewalReview, historySequence=0, reviewSequence=0, uncertain=false, styleUncertain=false, scopeIdentity;
 const urls=new Map(), storageKey='creative-composition-reviewed-action/1';
 const hash=async value=>`sha256:${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(value)))),b=>b.toString(16).padStart(2,'0')).join('')}`;
 const same=(a,b)=>canonical(a)===canonical(b);
@@ -10,7 +10,7 @@ async function api(path,body){const response=await fetch(path,body===undefined?{
 function live(g){return g===generation;}
 function error(message,g= generation){if(!live(g))return;$('composition-error').textContent=message;$('composition-error').hidden=false;$('composition-error').focus();}
 function counter(c){if(c&&['image_calls','jev_calls','reservations','composition_previews'].every(k=>Number.isSafeInteger(c[k])&&c[k]>=0))$('composition-counters').textContent=`Image calls: ${c.image_calls} · JEV calls: ${c.jev_calls} · Fixture reservations: ${c.reservations} · Composition previews: ${c.composition_previews}`;}
-function invalidateReview() {reviewed=undefined;styleReview=undefined;$('apply-review').hidden=true;$('style-review').hidden=true;$('apply-style').hidden=true;$('review-draft').disabled=busy||uncertain||styleUncertain||!previewReady;$('composition-status').textContent='Draft changed. Review the new values before Apply.';}
+function invalidateReview() {reviewSequence++;reviewed=undefined;styleReview=undefined;$('apply-review').hidden=true;$('style-review').hidden=true;$('apply-style').hidden=true;$('review-draft').disabled=busy||uncertain||styleUncertain||!previewReady;$('composition-status').textContent='Draft changed. Review the new values before Apply.';}
 function recoveryButtons(){$('review-draft').disabled=busy||uncertain||styleUncertain||!previewReady; $('initialize').disabled=busy||uncertain||styleUncertain||!previewReady||!$('initialize-reviewed').checked||!current?.review?.can_initialize; if(styleSchema){const style=styleSchema.controls.find(c=>c.id==='c04');$('review-style').disabled=busy||uncertain||styleUncertain||!style||style.locked;} const available=!!action;$('composition-retry').disabled=busy||!available;$('composition-lookup').disabled=!available;$('composition-cancel').disabled=!available||observedTerminal>0;}
 function saveAction(a){const base=current?.projection?.base??current?.review?.base??historyView?.review?.base;if(!base)throw Error('No scope');action=a;uncertain=true;sessionStorage.setItem(storageKey,canonical({scope:{tenant_id:base.tenant_id,project_id:base.project_id},action:{action_id:a.action_id,action_version:a.action_version}}));recoveryButtons();}
 function restoreAction(){try{const stored=JSON.parse(sessionStorage.getItem(storageKey));const base=current?.projection?.base??current?.review?.base??historyView?.review?.base??styleSchema;
@@ -44,7 +44,7 @@ async function loadImage(id,path,expected,g){const response=await fetch(path,{ca
  try{await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=url;});await image.decode();if(!live(g)||urls.get(id)!==url)return;
   if(expected.width_px&&image.naturalWidth!==expected.width_px||expected.height_px&&image.naturalHeight!==expected.height_px||image.naturalWidth<1||image.naturalHeight<1||image.naturalWidth>16384||image.naturalHeight>16384||image.naturalWidth*image.naturalHeight>40000000)throw Error('Preview dimensions mismatch');image.hidden=false;
  }finally{if(previous)URL.revokeObjectURL(previous);if(!live(g)||urls.get(id)!==url)URL.revokeObjectURL(url);}}
-async function refresh(){const g=++generation,seq=++sequence;reviewed=undefined;styleReview=undefined;renewalReview=undefined;historyView=undefined;$('renewal-review').hidden=true;$('composition-renew').disabled=true;$('composition-history-more').hidden=true;$('composition-history').replaceChildren();current=undefined;busy=false;previewReady=false;styleSchema=undefined;$('composition-style').disabled=true;$('review-style').disabled=true;$('composition-fields').disabled=false;$('apply-style').disabled=false;$('composition-identity').textContent='';clearImages();$('apply-review').hidden=true;$('composition-editor').hidden=true;$('initialization').hidden=true;$('composition-previews').hidden=true;$('initialize-reviewed').checked=false;$('initialize').disabled=true;$('composition-error').hidden=true;
+async function refresh(){reviewSequence++;const g=++generation,seq=++sequence;reviewed=undefined;styleReview=undefined;renewalReview=undefined;historyView=undefined;$('renewal-review').hidden=true;$('composition-renew').disabled=true;$('composition-history-more').hidden=true;$('composition-history').replaceChildren();current=undefined;busy=false;previewReady=false;styleSchema=undefined;$('composition-style').disabled=true;$('review-style').disabled=true;$('composition-fields').disabled=false;$('apply-style').disabled=false;$('composition-identity').textContent='';clearImages();$('apply-review').hidden=true;$('composition-editor').hidden=true;$('initialization').hidden=true;$('composition-previews').hidden=true;$('initialize-reviewed').checked=false;$('initialize').disabled=true;$('composition-error').hidden=true;
  try{const trusted=await api('/api/schema');if(!live(g))return;styleSchema=assertRenderableSchema(trusted.schema);const nextScope=canonical({tenant_id:styleSchema.tenant_id,project_id:styleSchema.project_id});if(scopeIdentity!==undefined&&scopeIdentity!==nextScope){action=undefined;uncertain=false;observedTerminal=0;styleAction=undefined;styleUncertain=false;$('operation-status').textContent='No composition operation submitted in this scope.';$('style-status').textContent='';}scopeIdentity=nextScope;const raw=await api('/api/composition/current');if(!live(g))return;const view=assertCompositionCurrent(raw.view);const base=view.projection?.base??view.review?.base;if(base&&['tenant_id','project_id','brief_id'].some(k=>base[k]!==styleSchema[k]))throw Error('Scope mismatch');if(view.status==='not_initialized'){const body={...view.review};delete body.review_sha256;if(await hash(body)!==view.review.review_sha256)throw Error('Initialization mismatch');}if(view.status==='current'&&!await verifyCompositionProjectionHash(view.projection,crypto.subtle))throw Error('Projection mismatch');if(!live(g))return;current=view;counter(raw.counters);restoreAction();
   if(view.status==='not_initialized'){$('initialization').hidden=false;$('initialization-review').textContent=`Selected ${view.review.base.design_version_id} · artwork ${view.review.base.artwork_sha256} · selection ${view.review.base.selection_revision}`;$('initialize-reviewed').disabled=true;$('composition-status').textContent='Composition is not initialized. Explicit review and initialization are required.';$('composition-previews').hidden=false;const b=view.review.base;await loadImage('composition-artwork',`/api/artifact?design_version_id=${encodeURIComponent(b.design_version_id)}`,{sha256:b.artwork_sha256},g);if(!live(g))return;previewReady=true;$('composition-artwork-caption').textContent=`Immutable selected artwork ${b.artwork_sha256}`;$('composition-preview-caption').textContent='Composition is not initialized.';$('preview-status').textContent='Selected artwork bytes verified, loaded and decoded. No composition preview exists.';$('initialize-reviewed').disabled=!view.review.can_initialize;}
   else if(view.status==='current'){$('composition-editor').hidden=false;$('composition-categories').replaceChildren();for(const c of view.projection.categories)$('composition-categories').append(field(`category-${c.field}`,labels[c.field],c.options,c.current_value,c.locked));updateQuestion();renderExact();$('review-draft').disabled=true;
@@ -65,7 +65,37 @@ $('composition-refresh').addEventListener('click',refresh);
 $('initialize-reviewed').addEventListener('change',()=>{$('initialize').disabled=!previewReady||!$('initialize-reviewed').checked||!current?.review?.can_initialize;});
 $('initialize').addEventListener('click',()=>{if(uncertain||styleUncertain||!previewReady||!current?.review||!$('initialize-reviewed').checked)return;observedTerminal=0;saveAction({action_version:'creative-composition-initialize/1.0',action_id:`action_${crypto.randomUUID()}`,review_sha256:current.review.review_sha256,intent:'initialize'});invoke('/api/composition/apply',action);});
 $('edit-mode').addEventListener('change',()=>{renderExact();invalidateReview();});
-$('composition-form').addEventListener('submit',e=>{e.preventDefault();try{if(busy||uncertain||styleUncertain||!previewReady||current?.status!=='current')return;const proposed=draft();reviewed={projection_sha256:current.projection.projection_sha256,draft:proposed};$('review-summary').textContent=`Proposed values: ${canonical(proposed)}. Exact text, size, layout or approved-logo instructions only. Artwork stays unchanged.`;$('review-binding').textContent=`Review binding ${current.projection.base.revision_sha256} · policy ${current.projection.base.control_policy_sha256}`;$('apply-review').hidden=false;$('composition-apply').focus();}catch{error('Complete the required draft fields before review.');}});
+function reviewValue(value) {
+  if (value === null) return 'Unspecified';
+  if (typeof value === 'string') return value;
+  if (Object.hasOwn(value, 'unit')) return `${value.value} ${value.unit}`;
+  return `x ${value.x_milli}, y ${value.y_milli}, width ${value.width_milli ?? 'unspecified'}, height ${value.height_milli ?? 'unspecified'} (normalized 0–1000)`;
+}
+$('composition-form').addEventListener('submit', async e => {
+  e.preventDefault(); const g = generation, seq = ++reviewSequence;
+  try {
+    if (busy || uncertain || styleUncertain || !previewReady || current?.status !== 'current') return;
+    const proposed = draft(), projection = structuredClone(current.projection);
+    reviewed = undefined; $('apply-review').hidden = true; $('review-draft').disabled = true;
+    $('composition-status').textContent = 'Checking the draft against current layer values and trusted policy. No changes have been applied.';
+    const raw = await api('/api/composition/review', { projection_sha256: projection.projection_sha256, draft: proposed });
+    if (!live(g) || seq !== reviewSequence || current?.projection?.projection_sha256 !== projection.projection_sha256) return;
+    const review = assertCompositionDraftReview(raw.review, projection, proposed), body = { ...review }; delete body.review_sha256;
+    if (await hash(body) !== review.review_sha256 || await hash(proposed) !== review.draft_sha256) throw Error('Review mismatch');
+    if (!live(g) || seq !== reviewSequence || current?.projection?.projection_sha256 !== projection.projection_sha256) return;
+    reviewed = { projection_sha256: projection.projection_sha256, draft: proposed };
+    $('review-summary').replaceChildren();
+    for (const change of review.changes) {
+      const item = document.createElement('li');
+      item.textContent = `${change.kind} · layer ${change.layer_id}${change.asset_id ? ` · approved asset ${change.asset_id}` : ''}: ${reviewValue(change.before)} → ${reviewValue(change.after)}`;
+      $('review-summary').append(item);
+    }
+    $('review-binding').textContent = `Full revision ${projection.base.revision_sha256} · state ${projection.base.state_sha256} · preview ${projection.base.preview_sha256} · trusted controls policy ${projection.base.control_policy_sha256} · review ${review.review_sha256}`;
+    $('composition-status').textContent = 'Exact before and after values reviewed. Apply is required to save this composition; artwork stays unchanged.';
+    $('apply-review').hidden = false; $('composition-apply').focus();
+  } catch { if (live(g) && seq === reviewSequence) error('Draft review unavailable or invalid. Refresh current authority or correct the draft before Apply.', g); }
+  finally { if (live(g) && seq === reviewSequence) recoveryButtons(); }
+});
 $('composition-apply').addEventListener('click',()=>{if(uncertain||styleUncertain||!previewReady||!reviewed||reviewed.projection_sha256!==current?.projection?.projection_sha256)return;observedTerminal=0;saveAction({action_version:'creative-composition-apply/1.0',action_id:`action_${crypto.randomUUID()}`,intent:'apply',...structuredClone(reviewed)});reviewed=undefined;$('apply-review').hidden=true;invoke('/api/composition/apply',action);});
 $('composition-retry').addEventListener('click',()=>invoke('/api/composition/retry',{action_id:action?.action_id}));$('composition-lookup').addEventListener('click',()=>invoke('/api/composition/lookup',{action_id:action?.action_id}));$('composition-cancel').addEventListener('click',()=>invoke('/api/composition/cancel',{action_id:action?.action_id}));
 $('review-style').addEventListener('click',()=>{const value=$('composition-style').value,old=styleSchema?.controls.find(c=>c.id==='c04');if(!old||old.locked||value===old.default_value)return;styleReview={value,schema:structuredClone(styleSchema)};$('style-review').textContent=`Review artwork style ${value} against ${styleSchema.expected_versions.design}. One eligible artwork edit creates new bytes and requires a fresh composition context. Usage and cost depend on the provider; this fixture is simulated.`;$('style-review').hidden=false;$('apply-style').hidden=false;$('apply-style').focus();});
@@ -106,6 +136,7 @@ $('apply-style').addEventListener('click', async () => {
     action_id:`style_${crypto.randomUUID()}`,tenant_id:schema.tenant_id,project_id:schema.project_id,brief_id:schema.brief_id,
     expected_versions:schema.expected_versions,intent:'apply',draft:d,control_schema_hash:await hash(schema),draft_hash:(await hash(d)).slice(7)};
   if(!live(g)||!styleReview||!same(styleReview,review))return;
+  reviewSequence++; reviewed=undefined; $('apply-review').hidden=true;
   styleAction=body.action_id;styleUncertain=true;
   sessionStorage.setItem(styleStorageKey,canonical({scope:{tenant_id:schema.tenant_id,project_id:schema.project_id},action_id:styleAction}));
   styleReview=undefined; $('style-review').hidden=true; $('apply-style').hidden=true;

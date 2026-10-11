@@ -4,9 +4,10 @@ import { mkdtemp, rm, cp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { createIntegratedHost, fixturePrincipal as principal } from '../../fixtures/controls/integrated-host.mjs';
+import { fixtureCompositionPolicy } from '../../fixtures/controls/composition-policy.mjs';
 import { canonicalHash } from 'creative-engine/contracts';
 import { spawnSync } from 'node:child_process';
-import { assertCompositionHistory, assertCompositionHistoryIdentity } from '../../src/controls/composition-view.mjs';
+import { assertCompositionHistory, assertCompositionHistoryIdentity, assertCompositionDraftReview } from '../../src/controls/composition-view.mjs';
 
 async function setup(t, options = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'controls-composition-'));
@@ -37,6 +38,36 @@ async function action(host, exact = {}, categories = {}, id = 'apply') {
 const current = host => host.store.getCurrentComposition({ scope: host.scope, design_version_id: host.selection().design_version_id });
 const previewBinding = preview => Object.fromEntries(['revision_id','revision_sha256','preview_sha256'].map(k=>[k,preview[k]]));
 const zeroEffects = host => assert.deepEqual([host.counts().image_calls, host.counts().jev_calls, host.counts().reservations], [0,0,0]);
+
+test('read-only server review maps categories and every exact operation to actual before/after values without publishing', async t => {
+  const host = await setup(t); await initialize(host);
+  const view = await host.composition.current(principal), original = current(host), before = host.counts();
+  const journalCount = () => host.adapter.db.prepare('SELECT COUNT(*) AS n FROM control_composition_actions_v1').get().n;
+  const rows = journalCount(), mapping = fixtureCompositionPolicy(0);
+  for (const [draft, kind, field, after] of [
+    [{ categories:{name_size:'large'}, exact:{} }, 'set_text_size', 'text_size', {value:'36',unit:'pt'}],
+    [{ categories:{layout:'stacked',layout_emphasis:'name'}, exact:{} }, 'set_layer_layout', 'layout', mapping.layouts.stacked_name],
+    [{ categories:{logo_position:'bottom'}, exact:{} }, 'position_approved_logo', 'logo', mapping.logos.bottom],
+    [{ categories:{}, exact:{text:'Taylor Sample'} }, 'set_text', 'text', 'Taylor Sample'],
+    [{ categories:{}, exact:{text_size:{value:'31.125',unit:'px'}} }, 'set_text_size', 'text_size', {value:'31.125',unit:'px'}],
+    [{ categories:{}, exact:{layout:{x_milli:200,y_milli:230,width_milli:650,height_milli:120}} }, 'set_layer_layout', 'layout', {x_milli:200,y_milli:230,width_milli:650,height_milli:120}],
+    [{ categories:{}, exact:{logo:{x_milli:60,y_milli:790,width_milli:130,height_milli:130}} }, 'position_approved_logo', 'logo', {x_milli:60,y_milli:790,width_milli:130,height_milli:130}],
+  ]) {
+    const review = await host.composition.review(principal, { projection_sha256:view.projection.projection_sha256, draft });
+    assertCompositionDraftReview(review, view.projection, draft);
+    assert.equal(review.changes.length, 1); assert.equal(review.changes[0].kind, kind);
+    assert.deepEqual(review.changes[0].before, view.projection.exact_controls[field].value);
+    assert.deepEqual(review.changes[0].after, after);
+    assert.equal(review.changes[0].asset_id, field === 'logo' ? 'asset-1' : null);
+    const {review_sha256, ...body} = review; assert.equal(review_sha256, canonicalHash(body)); assert.equal(review.draft_sha256, canonicalHash(draft));
+    assert.deepEqual(current(host), original); assert.equal(journalCount(), rows);
+  }
+  assert.equal(host.counts().jobs, before.jobs); assert.equal(host.counts().composition_previews, before.composition_previews); zeroEffects(host);
+  await assert.rejects(host.composition.review(principal, { projection_sha256:canonicalHash({}), draft:{categories:{name_size:'large'},exact:{}} }));
+  await assert.rejects(host.composition.review({...principal,tenant_id:'wrong-tenant'}, { projection_sha256:view.projection.projection_sha256, draft:{categories:{name_size:'large'},exact:{}} }));
+  await assert.rejects(host.composition.review(principal, { projection_sha256:view.projection.projection_sha256, draft:{categories:{name_size:'large'},exact:{}}, policy:{} }));
+  assert.equal(journalCount(), rows); zeroEffects(host);
+});
 
 test('composition reads are uninitialized and read-only; initialization requires its exact reviewed binding', async t => {
   const host = await setup(t), empty = await host.composition.current(principal);

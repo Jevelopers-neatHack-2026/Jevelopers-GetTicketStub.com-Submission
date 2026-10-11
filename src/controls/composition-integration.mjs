@@ -5,7 +5,7 @@ import { canonicalHash, canonicalSerialize } from 'creative-engine/contracts';
 import { snapshotCompositionJson, validateCompositionProductionEnvelope, createCompositionProductionEnvelope } from 'creative-engine/contracts/composition-authority';
 import { snapshotControlJson, validId, canonical } from './schema.mjs';
 import { createCompositionControlProjection, createCompositionControlPlan, COMPOSITION_APPLY_VERSION, CompositionControlsError } from './composition-projection.mjs';
-import { assertCompositionHistoryIdentity } from './composition-view.mjs';
+import { assertCompositionHistoryIdentity, assertCompositionDraftReview } from './composition-view.mjs';
 import { projectPublicTelemetry } from 'creative-engine/telemetry';
 
 const safe = input => { const output = projectPublicTelemetry(input); if (output.redactions.length) throw new TypeError('Unsafe composition view'); return snapshotControlJson(output.value); };
@@ -68,6 +68,32 @@ export class CompositionControlsAdapter {
     if (revision.brief_id !== after.brief.brief_id || revision.dependencies.design_version_id !== after.design.design_version_id || revision.dependencies.design_version_sha256 !== after.design.design_hash || revision.dependencies.selection_revision !== after.selection.revision) throw new TypeError('Current result binding mismatch');
     const projection = createCompositionControlProjection({ revision, preview_bytes: Uint8Array.from(bytes), principal, policy: this.readPolicy(principal, after), selection_revision: after.selection.revision, can_apply: !!can_apply, now_ms: this.now() });
     return safe({ ok: true, status: 'current', projection, preview: this.previewDescriptor(revision), approval: false, purchase: false });
+  }
+  /** Read-only normalization of a draft. It creates neither a job nor a preview.
+   * Categorical transforms come from the trusted policy, never browser guesses. */
+  async review(principal, rawDraft) {
+    this.assertTransactionFree();
+    const input = snapshotControlJson(rawDraft);
+    if (!exact(input, ['projection_sha256', 'draft'])) throw new CompositionControlsError('invalid_request', 'review');
+    const view = await this.current(principal);
+    if (view.status !== 'current' || input.projection_sha256 !== view.projection.projection_sha256) throw new CompositionControlsError('stale_version', 'review');
+    const context = this.context(principal, true);
+    const stored = await this.ports.storage.getCurrentComposition({ scope: { ...principal, brief_id: context.brief.brief_id }, design_version_id: context.design.design_version_id });
+    this.assertTransactionFree();
+    const after = this.context(principal, true);
+    if (canonical(this.binding(context)) !== canonical(this.binding(after)) || this.now() >= view.projection.expires_at) throw new CompositionControlsError('stale_version', 'review');
+    const plan = createCompositionControlPlan({ revision: stored?.revision, policy: this.readPolicy(principal, after), projection: view.projection,
+      action: { action_version: COMPOSITION_APPLY_VERSION, action_id: 'controls-draft-review', intent: 'apply', ...input } });
+    const fields = { set_text: 'text', set_text_size: 'text_size', set_layer_layout: 'layout', position_approved_logo: 'logo' };
+    const changes = plan.operations.map(operation => {
+      const control = view.projection.exact_controls[fields[operation.kind]];
+      if (!control || control.layer_id !== operation.layer_id) throw new TypeError('Review target mismatch');
+      return { kind: operation.kind, layer_id: operation.layer_id, asset_id: operation.asset_id ?? null, before: control.value,
+        after: operation.kind === 'set_text' ? operation.value : operation.kind === 'set_text_size' ? operation.size : operation.layout };
+    });
+    const body = { contract: 'CreativeCompositionDraftReview', schema_version: '1.0', projection_sha256: input.projection_sha256,
+      draft_sha256: canonicalHash(input.draft), changes, approval: false, purchase: false };
+    return assertCompositionDraftReview(safe({ ...body, review_sha256: canonicalHash(body) }), view.projection, input.draft);
   }
   async history(principal, options = {}) {
     this.assertTransactionFree(); options = snapshotControlJson(options);

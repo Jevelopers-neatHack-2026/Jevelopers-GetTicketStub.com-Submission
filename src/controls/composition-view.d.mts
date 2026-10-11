@@ -1,5 +1,6 @@
-import type { CreativeCompositionControlProjection } from './composition-projection.mjs';
-import type { CompositionPreviewDescriptor, CompositionCurrentView, CompositionCompletion, CompositionHistoryView } from './composition-integration.mjs';
+import type { CreativeCompositionControlProjection, CompositionControlDraft } from './composition-projection.mjs';
+import type { CompositionPreviewDescriptor, CompositionCurrentView, CompositionCompletion, CompositionHistoryView, CompositionDraftReview } from './composition-integration.mjs';
+export function assertCompositionDraftReview(value: unknown, projection: CreativeCompositionControlProjection, draft: CompositionControlDraft): CompositionDraftReview;
 export function assertCompositionPreview(value: unknown): CompositionPreviewDescriptor;
 export function assertCompositionProjection(value: unknown): CreativeCompositionControlProjection;
 export function assertCompositionCurrent(value: unknown): CompositionCurrentView;
