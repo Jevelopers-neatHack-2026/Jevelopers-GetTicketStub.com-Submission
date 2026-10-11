@@ -2,9 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { parseAndValidateUrl } from '../../security/url-policy.mjs';
+import { hasSensitiveUrlMaterial, parseAndValidateUrl } from '../../security/url-policy.mjs';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 3;
+const CLAIM_BINDING_VERSION = 1;
 const MAX_SEEDS = 10;
 const MAX_DEPTH = 2;
 const MAX_ATTEMPT_ADMISSIONS = 30;
@@ -14,6 +15,8 @@ const MAX_SUGGESTIONS = 16;
 const MAX_SOURCE_REFS = 4;
 const MAX_RUNS_PER_TENANT = 128;
 const MAX_DATABASE_BYTES = 64 * 1024 * 1024;
+const MAX_DECODED_BYTES_PER_RUN = 100 * 1024 * 1024;
+const RESERVED_DECODED_BYTES_PER_HOP = 20 * 1024 * 1024;
 const MAX_DATABASE_PAGES = 16_384;
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
 const MAX_SQLITE_TIMEOUT_MS = 10_000;
@@ -170,6 +173,8 @@ function normalizeUrl(raw) {
   if (!validText(raw, 8_192)) fail();
   try {
     const parsed = parseAndValidateUrl(raw);
+    const supplied = new URL(raw);
+    if (hasSensitiveUrlMaterial(supplied)) fail();
     return { suppliedUrl: raw, canonicalUrl: parsed.url.href };
   } catch {
     fail();
@@ -306,6 +311,31 @@ function isBusy(error) {
   return error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY';
 }
 
+function checkOperationSignal(signal) {
+  if (signal?.aborted) fail('FRONTIER_STOPPED');
+}
+
+async function retryDelay(deadline, signal) {
+  checkOperationSignal(signal);
+  const remaining = deadline - performance.now();
+  if (remaining <= 0) fail('FRONTIER_BUSY');
+  await new Promise((resolve, reject) => {
+    let timer;
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(new DiscoveryFrontierError('FRONTIER_STOPPED'));
+    };
+    timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, Math.min(8, Math.max(1, remaining)));
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
+  checkOperationSignal(signal);
+}
+
 function safeStorageError(error) {
   if (error instanceof DiscoveryFrontierError) return error;
   if (error?.errcode === 13 || error?.code === 'ERR_SQLITE_FULL') {
@@ -362,6 +392,8 @@ function schemaSql() {
       worker_id TEXT NOT NULL,
       state TEXT NOT NULL CHECK (state IN ('leased', 'completed', 'unresolved')),
       resolution_reason TEXT,
+      claim_binding_version INTEGER NOT NULL DEFAULT 0 CHECK (claim_binding_version IN (0, 1)),
+      claim_observation_sequence INTEGER,
       PRIMARY KEY (tenant_hash, run_id, claim_key),
       UNIQUE (tenant_hash, run_id, lease_token),
       FOREIGN KEY (tenant_hash, run_id, candidate_id)
@@ -428,6 +460,38 @@ function schemaSql() {
       PRIMARY KEY (tenant_hash, run_id, reason),
       FOREIGN KEY (tenant_hash, run_id) REFERENCES frontier_runs (tenant_hash, run_id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS frontier_transport_hops (
+      tenant_hash TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      attempt_key TEXT NOT NULL,
+      lease_token TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN (
+        'reserved', 'dispatch_intent', 'response_received', 'body_complete', 'known_zero', 'unknown'
+      )),
+      reservation_bytes INTEGER NOT NULL CHECK (reservation_bytes = ${RESERVED_DECODED_BYTES_PER_HOP}),
+      decoded_bytes INTEGER,
+      updated_at_ms INTEGER NOT NULL,
+      PRIMARY KEY (tenant_hash, run_id, attempt_key),
+      FOREIGN KEY (tenant_hash, run_id, attempt_key)
+        REFERENCES frontier_attempts (tenant_hash, run_id, attempt_key)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS frontier_transport_hops_capacity
+      ON frontier_transport_hops (tenant_hash, run_id, state);
+    CREATE TABLE IF NOT EXISTS frontier_transport_legacy_uncertainty (
+      tenant_hash TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      reserved_bytes INTEGER NOT NULL CHECK (reserved_bytes = ${MAX_DECODED_BYTES_PER_RUN}),
+      PRIMARY KEY (tenant_hash, run_id),
+      FOREIGN KEY (tenant_hash, run_id) REFERENCES frontier_runs (tenant_hash, run_id)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS frontier_private_release (
+      tenant_hash TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('open', 'sealed')),
+      sealed_at_ms INTEGER,
+      PRIMARY KEY (tenant_hash, run_id),
+      FOREIGN KEY (tenant_hash, run_id) REFERENCES frontier_runs (tenant_hash, run_id)
+    ) STRICT;
   `;
 }
 
@@ -448,47 +512,89 @@ function safeIntegerTime(value) {
   return value;
 }
 
-async function openDatabase(directory, tenantHash, timeoutMs) {
+async function openDatabase(directory, tenantHash, deadline, signal) {
   const tenantDirectory = path.join(directory, tenantHash);
-  await ensureDirectory(tenantDirectory);
   const databasePath = path.join(tenantDirectory, 'frontier.sqlite');
-  let priorStats = null;
-  try {
-    priorStats = await lstat(databasePath);
-    if (priorStats.isSymbolicLink() || !priorStats.isFile()) fail('FRONTIER_STORAGE');
-  } catch (error) {
-    if (error instanceof DiscoveryFrontierError) throw error;
-    if (error?.code !== 'ENOENT') throw safeStorageError(error);
-  }
-  let database;
-  try {
-    database = new DatabaseSync(databasePath, { timeout: timeoutMs });
-    const openedStats = await lstat(databasePath);
-    if (openedStats.isSymbolicLink() || !openedStats.isFile()
-      || (priorStats && (openedStats.dev !== priorStats.dev || openedStats.ino !== priorStats.ino))) {
-      fail('FRONTIER_STORAGE');
+  while (true) {
+    checkOperationSignal(signal);
+    let database;
+    try {
+      await ensureDirectory(tenantDirectory);
+      let priorStats = null;
+      try {
+        priorStats = await lstat(databasePath);
+        if (priorStats.isSymbolicLink() || !priorStats.isFile()) fail('FRONTIER_STORAGE');
+      } catch (error) {
+        if (error instanceof DiscoveryFrontierError) throw error;
+        if (error?.code !== 'ENOENT') throw safeStorageError(error);
+      }
+      checkOperationSignal(signal);
+      // A DatabaseSync busy timeout blocks the event loop, which prevents the
+      // caller's deadline and abort listeners from running. Retry SQLITE_BUSY
+      // asynchronously instead, with this one absolute operation deadline.
+      database = new DatabaseSync(databasePath, { timeout: 0 });
+      const openedStats = await lstat(databasePath);
+      if (openedStats.isSymbolicLink() || !openedStats.isFile()
+        || (priorStats && (openedStats.dev !== priorStats.dev || openedStats.ino !== priorStats.ino))) {
+        fail('FRONTIER_STORAGE');
+      }
+      database.exec(`
+        PRAGMA journal_mode = DELETE;
+        PRAGMA synchronous = FULL;
+        PRAGMA secure_delete = ON;
+        PRAGMA trusted_schema = OFF;
+        PRAGMA foreign_keys = ON;
+        PRAGMA max_page_count = ${MAX_DATABASE_PAGES};
+      `);
+      const version = database.prepare('PRAGMA user_version').get().user_version;
+      if (version !== 0 && version !== 1 && version !== 2 && version !== SCHEMA_VERSION) fail('FRONTIER_VERSION');
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database.exec(schemaSql());
+        const claimColumns = new Set(database.prepare('PRAGMA table_info(frontier_claims)').all()
+          .map((column) => column.name));
+        if (version < SCHEMA_VERSION) {
+          if (!claimColumns.has('claim_binding_version')) {
+            database.exec(`ALTER TABLE frontier_claims ADD COLUMN claim_binding_version INTEGER NOT NULL DEFAULT 0
+              CHECK (claim_binding_version IN (0, 1))`);
+          }
+          if (!claimColumns.has('claim_observation_sequence')) {
+            database.exec('ALTER TABLE frontier_claims ADD COLUMN claim_observation_sequence INTEGER');
+          }
+        }
+        const migratedClaimColumns = new Set(database.prepare('PRAGMA table_info(frontier_claims)').all()
+          .map((column) => column.name));
+        if (!migratedClaimColumns.has('claim_binding_version')
+          || !migratedClaimColumns.has('claim_observation_sequence')) fail('FRONTIER_VERSION');
+        if (version === 1) {
+          // V1 recorded planner admissions but had no durable transport or body
+          // accounting. Any such admission may have reached the network and
+          // consumed decoded bytes. Preserve that uncertainty as a full-run
+          // reservation rather than treating the new ledger as fresh capacity.
+          database.prepare(`INSERT OR IGNORE INTO frontier_transport_legacy_uncertainty
+            (tenant_hash, run_id, reserved_bytes)
+            SELECT tenant_hash, run_id, ${MAX_DECODED_BYTES_PER_RUN}
+            FROM frontier_attempts GROUP BY tenant_hash, run_id`).run();
+        }
+        if (version !== SCHEMA_VERSION) database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+        checkOperationSignal(signal);
+        database.exec('COMMIT');
+      } catch (error) {
+        try { database.exec('ROLLBACK'); } catch { /* Keep the original migration failure. */ }
+        throw error;
+      }
+      await chmod(databasePath, 0o600);
+      const pageSize = database.prepare('PRAGMA page_size').get().page_size;
+      const pageCount = database.prepare('PRAGMA page_count').get().page_count;
+      if (!Number.isSafeInteger(pageSize) || !Number.isSafeInteger(pageCount)
+        || pageSize * pageCount > MAX_DATABASE_BYTES) fail('FRONTIER_STORAGE_LIMIT');
+      return database;
+    } catch (error) {
+      try { database?.close(); } catch { /* Close failures do not replace the bounded error. */ }
+      if (error instanceof DiscoveryFrontierError) throw error;
+      if (!isBusy(error)) throw safeStorageError(error);
+      await retryDelay(deadline, signal);
     }
-    database.exec(`
-      PRAGMA journal_mode = DELETE;
-      PRAGMA synchronous = FULL;
-      PRAGMA secure_delete = ON;
-      PRAGMA trusted_schema = OFF;
-      PRAGMA foreign_keys = ON;
-      PRAGMA max_page_count = ${MAX_DATABASE_PAGES};
-    `);
-    const version = database.prepare('PRAGMA user_version').get().user_version;
-    if (version !== 0 && version !== SCHEMA_VERSION) fail('FRONTIER_VERSION');
-    database.exec(schemaSql());
-    if (version === 0) database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-    await chmod(databasePath, 0o600);
-    const pageSize = database.prepare('PRAGMA page_size').get().page_size;
-    const pageCount = database.prepare('PRAGMA page_count').get().page_count;
-    if (!Number.isSafeInteger(pageSize) || !Number.isSafeInteger(pageCount)
-      || pageSize * pageCount > MAX_DATABASE_BYTES) fail('FRONTIER_STORAGE_LIMIT');
-    return database;
-  } catch (error) {
-    try { database?.close(); } catch { /* Close failures do not replace the bounded error. */ }
-    throw safeStorageError(error);
   }
 }
 
@@ -499,14 +605,32 @@ function pageBytes(database) {
   return size * count;
 }
 
-function transaction(database, callback) {
+async function transaction(database, callback, deadline, signal) {
   let open = false;
   try {
-    database.exec('BEGIN IMMEDIATE');
+    while (true) {
+      checkOperationSignal(signal);
+      try {
+        database.exec('BEGIN IMMEDIATE');
+        break;
+      } catch (error) {
+        if (!isBusy(error)) throw error;
+        await retryDelay(deadline, signal);
+      }
+    }
     open = true;
     const result = callback(database);
     if (pageBytes(database) > MAX_DATABASE_BYTES) fail('FRONTIER_STORAGE_LIMIT');
-    database.exec('COMMIT');
+    while (true) {
+      checkOperationSignal(signal);
+      try {
+        database.exec('COMMIT');
+        break;
+      } catch (error) {
+        if (!isBusy(error)) throw error;
+        await retryDelay(deadline, signal);
+      }
+    }
     open = false;
     return result;
   } catch (error) {
@@ -542,10 +666,12 @@ function advanceClock(database, tenantHash, run, readClock) {
   database.prepare(`UPDATE frontier_runs SET last_clock_ms = ? WHERE tenant_hash = ? AND run_id = ?`)
     .run(nowMs, tenantHash, run.run_id);
   const updated = { ...run, last_clock_ms: nowMs };
-  if (nowMs >= run.deadline_at_ms && run.status === 'active') {
+  if (nowMs >= run.deadline_at_ms) {
     recordStop(database, tenantHash, run.run_id, 'deadline', nowMs, true);
-    updated.status = 'halted';
-    updated.halt_reason = 'deadline';
+    if (run.status === 'active') {
+      updated.status = 'halted';
+      updated.halt_reason = 'deadline';
+    }
   }
   return updated;
 }
@@ -632,6 +758,65 @@ function insertObservation(database, tenantHash, run, { kind, parentCandidateId 
   database.prepare(`UPDATE frontier_runs SET next_observation_sequence = ?
     WHERE tenant_hash = ? AND run_id = ?`).run(currentSequence + 1, tenantHash, run.run_id);
   return { candidate, disposition };
+}
+
+function admitAttemptInTransaction(database, tenantHash, runIdValue, run, input) {
+  const previous = database.prepare(`SELECT * FROM frontier_attempts
+    WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ?`)
+    .get(tenantHash, runIdValue, input.attemptKey);
+  if (previous) {
+    const same = previous.lease_token === input.leaseToken
+      && previous.kind === input.kind
+      && previous.previous_attempt_key === input.previousAttemptKey
+      && previous.canonical_url === input.canonicalUrl;
+    if (!same) fail('FRONTIER_CONFLICT');
+    return deepFreeze({ state: 'already_admitted', attemptKey: previous.attempt_key,
+      sequence: previous.attempt_sequence, admittedAtMs: previous.admitted_at_ms });
+  }
+  const claim = getClaimByToken(database, tenantHash, runIdValue, input.leaseToken);
+  const candidate = claim ? candidateRow(database, tenantHash, runIdValue, claim.candidate_id) : null;
+  if (!claim || claim.state !== 'leased' || !candidate || candidate.state !== 'leased'
+    || candidate.lease_token !== input.leaseToken) fail('FRONTIER_STALE_LEASE');
+  if (run.status !== 'active') return deepFreeze({ state: 'denied', reason: run.halt_reason ?? 'frontier_exhausted' });
+  if (run.attempts_admitted >= run.max_attempts) {
+    recordStop(database, tenantHash, runIdValue, 'attempt_limit', run.last_clock_ms, true);
+    return deepFreeze({ state: 'denied', reason: 'attempt_limit' });
+  }
+  const latest = database.prepare(`SELECT * FROM frontier_attempts WHERE tenant_hash = ? AND run_id = ?
+    AND candidate_id = ? ORDER BY attempt_sequence DESC LIMIT 1`)
+    .get(tenantHash, runIdValue, candidate.candidate_id);
+  if (input.kind === 'initial') {
+    if (latest || input.canonicalUrl !== candidate.canonical_url) fail('FRONTIER_CONFLICT');
+  } else {
+    if (!latest || latest.attempt_key !== input.previousAttemptKey || latest.lease_token !== input.leaseToken) {
+      fail('FRONTIER_CONFLICT');
+    }
+    if (input.kind === 'retry' && latest.canonical_url !== input.canonicalUrl) fail('FRONTIER_CONFLICT');
+    if (input.kind === 'redirect') {
+      if (latest.canonical_url === input.canonicalUrl) fail('FRONTIER_CONFLICT');
+      const seen = database.prepare(`SELECT 1 AS found FROM frontier_attempts
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ? AND canonical_url = ? LIMIT 1`)
+        .get(tenantHash, runIdValue, candidate.candidate_id, input.canonicalUrl);
+      if (seen) fail('FRONTIER_CONFLICT');
+    }
+  }
+  const sequence = run.attempts_admitted + 1;
+  database.prepare(`INSERT INTO frontier_attempts
+    (tenant_hash, run_id, attempt_key, attempt_sequence, candidate_id, claim_key, lease_token,
+     kind, previous_attempt_key, canonical_url, admitted_at_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(tenantHash, runIdValue, input.attemptKey, sequence, candidate.candidate_id, claim.claim_key,
+      input.leaseToken, input.kind, input.previousAttemptKey, input.canonicalUrl, run.last_clock_ms);
+  database.prepare(`UPDATE frontier_runs SET attempts_admitted = ?
+    WHERE tenant_hash = ? AND run_id = ?`).run(sequence, tenantHash, runIdValue);
+  database.prepare(`UPDATE frontier_candidates SET attempts_admitted = attempts_admitted + 1,
+    last_attempt_key = ? WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+    .run(input.attemptKey, tenantHash, runIdValue, candidate.candidate_id);
+  if (sequence >= run.max_attempts) {
+    recordStop(database, tenantHash, runIdValue, 'attempt_limit', run.last_clock_ms, true);
+  }
+  return deepFreeze({ state: 'admitted', attemptKey: input.attemptKey,
+    sequence, admittedAtMs: run.last_clock_ms, stopAfterThisAdmission: sequence >= run.max_attempts });
 }
 
 function safeJsonParse(value) {
@@ -808,6 +993,97 @@ function claimResult(database, tenantHash, runId, claim, replayed) {
   });
 }
 
+function candidateClaimBindingInTransaction(database, tenantHash, runId, candidate, claim) {
+  if (!candidate || !claim || candidate.candidate_id !== claim.candidate_id
+    || candidate.canonical_url !== normalizeUrl(candidate.canonical_url).canonicalUrl
+    || candidate.candidate_id !== candidateId(tenantHash, runId, candidate.canonical_url)
+    || !validId(claim.claim_key, 128) || !validId(claim.worker_id, 96) || !validId(claim.lease_token, 64)
+    || !['leased', 'completed', 'unresolved'].includes(claim.state)
+    || ![0, CLAIM_BINDING_VERSION].includes(claim.claim_binding_version)) fail('FRONTIER_STORAGE');
+
+  let claimedCandidate = null;
+  if (claim.claim_binding_version === 0) {
+    if (claim.claim_observation_sequence !== null) fail('FRONTIER_STORAGE');
+  } else {
+    const runRow = getRun(database, tenantHash, runId);
+    const cutoff = claim.claim_observation_sequence;
+    const maxSequence = runRow.next_observation_sequence - 1;
+    if (!Number.isSafeInteger(maxSequence) || maxSequence < 1
+      || !Number.isSafeInteger(cutoff) || cutoff < 1 || cutoff > maxSequence
+      || cutoff > MAX_SEEDS + MAX_ATTEMPT_ADMISSIONS * MAX_SUGGESTIONS) fail('FRONTIER_STORAGE');
+    const prefixStats = database.prepare(`SELECT COUNT(*) AS count, MIN(sequence) AS first_sequence,
+      MAX(sequence) AS last_sequence FROM frontier_observations
+      WHERE tenant_hash = ? AND run_id = ? AND sequence <= ?`).get(tenantHash, runId, cutoff);
+    if (prefixStats.count !== cutoff || prefixStats.first_sequence !== 1 || prefixStats.last_sequence !== cutoff) {
+      fail('FRONTIER_STORAGE');
+    }
+    const rows = database.prepare(`SELECT sequence, kind, parent_candidate_id, supplied_url, canonical_url,
+      depth, label, disposition, outcome, source_refs_json
+      FROM frontier_observations WHERE tenant_hash = ? AND run_id = ? AND target_candidate_id = ?
+        AND sequence <= ? ORDER BY sequence`).all(tenantHash, runId, candidate.candidate_id, cutoff);
+    if (rows.length === 0 || rows.some((row) => !['seed', 'link'].includes(row.kind)
+      || !Number.isSafeInteger(row.depth) || row.depth < 0
+      || normalizeUrl(row.supplied_url).canonicalUrl !== row.canonical_url
+      || row.canonical_url !== candidate.canonical_url)) fail('FRONTIER_STORAGE');
+    const allReferences = [];
+    for (const row of rows) {
+      allReferences.push(...normalizeReferences(safeJsonParse(row.source_refs_json), row.supplied_url, { required: false }));
+    }
+    const uniqueReferences = [...new Map(allReferences.map((reference) => [stableJson(reference), reference])).values()];
+    uniqueReferences.sort((left, right) => stableCompare(stableJson(left), stableJson(right)));
+    const sourceObservations = [...rows].sort((left, right) => stableCompare(
+      stableJson([left.kind, left.parent_candidate_id ?? '', left.canonical_url, left.supplied_url,
+        stableJson(normalizeReferences(safeJsonParse(left.source_refs_json), left.supplied_url, { required: false })),
+        left.label ?? '', left.disposition, left.outcome ?? '']),
+      stableJson([right.kind, right.parent_candidate_id ?? '', right.canonical_url, right.supplied_url,
+        stableJson(normalizeReferences(safeJsonParse(right.source_refs_json), right.supplied_url, { required: false })),
+        right.label ?? '', right.disposition, right.outcome ?? '']),
+    ));
+    claimedCandidate = {
+      candidateId: candidate.candidate_id,
+      canonicalUrl: candidate.canonical_url,
+      depth: Math.min(...rows.map((row) => row.depth)),
+      seed: rows.some((row) => row.kind === 'seed'),
+      sourceRefs: uniqueReferences,
+      suppliedUrl: sourceObservations[0].supplied_url,
+    };
+  }
+
+  const completionRows = database.prepare(`SELECT completion_key, candidate_id, lease_token, outcome
+    FROM frontier_completions WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+    .all(tenantHash, runId, candidate.candidate_id);
+  if (completionRows.length > 1) fail('FRONTIER_STORAGE');
+  const completionRow = completionRows[0] ?? null;
+  const expectedCandidateState = claim.state === 'leased' ? 'leased' : claim.state;
+  if (candidate.state !== expectedCandidateState
+    || (claim.state === 'leased' && candidate.lease_token !== claim.lease_token)
+    || (claim.state !== 'leased' && candidate.lease_token !== null)) fail('FRONTIER_STORAGE');
+  let completion = null;
+  if (claim.state === 'completed') {
+    if (!completionRow || completionRow.candidate_id !== claim.candidate_id
+      || completionRow.lease_token !== claim.lease_token
+      || !validId(completionRow.completion_key, 128)
+      || !['links_observed', 'no_links', 'failed', 'access_restricted'].includes(completionRow.outcome)) {
+      fail('FRONTIER_STORAGE');
+    }
+    completion = { completionKey: completionRow.completion_key, outcome: completionRow.outcome };
+  } else if (completionRow) {
+    fail('FRONTIER_STORAGE');
+  }
+  return deepFreeze({
+    bindingVersion: claim.claim_binding_version,
+    candidate: claimedCandidate,
+    claim: {
+      claimKey: claim.claim_key,
+      workerId: claim.worker_id,
+      leaseToken: claim.lease_token,
+      candidateId: claim.candidate_id,
+      state: claim.state,
+    },
+    completion,
+  });
+}
+
 function appendStopSnapshot(database, tenantHash, runId, reason, nowMs, halt) {
   recordStop(database, tenantHash, runId, reason, nowMs, halt);
 }
@@ -828,15 +1104,18 @@ export function createDiscoveryFrontierStore(options) {
     if (closed) fail('FRONTIER_STORAGE');
   }
 
-  async function withScope(scope, operation) {
+  async function withScope(scope, operation, signal) {
     assertOpen();
     let scopeInfo;
     try { scopeInfo = tenantScopes.get(scope); } catch { scopeInfo = undefined; }
     if (!scopeInfo) fail('FRONTIER_DENIED');
-    const database = await openDatabase(directory, scopeInfo.tenantHash, lockTimeoutMs);
+    checkOperationSignal(signal);
+    const deadline = performance.now() + lockTimeoutMs;
+    const database = await openDatabase(directory, scopeInfo.tenantHash, deadline, signal);
     try {
       assertOpen();
-      return transaction(database, (db) => operation(db, scopeInfo));
+      checkOperationSignal(signal);
+      return await transaction(database, (db) => operation(db, scopeInfo), deadline, signal);
     } catch (error) {
       throw safeStorageError(error);
     } finally {
@@ -855,7 +1134,7 @@ export function createDiscoveryFrontierStore(options) {
     return scope;
   }
 
-  async function createRun(scope, value) {
+  async function createRun(scope, value, signal) {
     const input = normalizeRunInput(value);
     return withScope(scope, (database, { tenantHash }) => {
       const prior = database.prepare(`SELECT config_hash FROM frontier_runs
@@ -880,6 +1159,9 @@ export function createDiscoveryFrontierStore(options) {
         .run(tenantHash, input.runId, input.configHash, input.configJson, clockNow, deadline, clockNow,
           input.limits.maxDepth, input.limits.maxTransportAttemptAdmissions, input.limits.maxInFlightLeases,
           input.limits.durationMs, input.limits.maxSuggestionsPerCompletion);
+      database.prepare(`INSERT INTO frontier_private_release
+        (tenant_hash, run_id, state, sealed_at_ms) VALUES (?, ?, 'open', NULL)`)
+        .run(tenantHash, input.runId);
       const run = getRun(database, tenantHash, input.runId);
       for (const seed of input.seeds) {
         insertObservation(database, tenantHash, run, {
@@ -888,10 +1170,10 @@ export function createDiscoveryFrontierStore(options) {
         });
       }
       return snapshotInTransaction(database, tenantHash, input.runId);
-    });
+    }, signal);
   }
 
-  async function claimNext(scope, runIdValue, workerValue) {
+  async function claimNext(scope, runIdValue, workerValue, signal) {
     if (!validId(runIdValue, 96)) fail();
     const worker = normalizeWorkerInput(workerValue);
     return withScope(scope, (database, { tenantHash }) => {
@@ -903,6 +1185,9 @@ export function createDiscoveryFrontierStore(options) {
         if (prior.worker_id !== worker.workerId) fail('FRONTIER_CONFLICT');
         return claimResult(database, tenantHash, runIdValue, prior, true);
       }
+      const release = database.prepare(`SELECT state FROM frontier_private_release
+        WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runIdValue);
+      if (release?.state === 'sealed') return deepFreeze({ state: 'stopped', reason: 'private_draft_sealed' });
       if (run.status !== 'active') return deepFreeze({ state: 'stopped', reason: run.halt_reason ?? 'frontier_exhausted' });
       const inFlight = database.prepare(`SELECT COUNT(*) AS count FROM frontier_candidates
         WHERE tenant_hash = ? AND run_id = ? AND state = 'leased'`).get(tenantHash, runIdValue).count;
@@ -920,85 +1205,191 @@ export function createDiscoveryFrontierStore(options) {
       }
       const candidate = eligible[0];
       const token = randomUUID();
+      const observationSequence = run.next_observation_sequence - 1;
+      if (!Number.isSafeInteger(observationSequence) || observationSequence < 1
+        || observationSequence > MAX_SEEDS + MAX_ATTEMPT_ADMISSIONS * MAX_SUGGESTIONS) fail('FRONTIER_STORAGE');
+      const prefixStats = database.prepare(`SELECT COUNT(*) AS count, MIN(sequence) AS first_sequence,
+        MAX(sequence) AS last_sequence FROM frontier_observations
+        WHERE tenant_hash = ? AND run_id = ? AND sequence <= ?`)
+        .get(tenantHash, runIdValue, observationSequence);
+      if (prefixStats.count !== observationSequence || prefixStats.first_sequence !== 1
+        || prefixStats.last_sequence !== observationSequence) fail('FRONTIER_STORAGE');
       database.prepare(`UPDATE frontier_candidates SET state = 'leased', lease_token = ?, lease_worker_id = ?
         WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ? AND state = 'queued'`)
         .run(token, worker.workerId, tenantHash, runIdValue, candidate.candidate_id);
       database.prepare(`INSERT INTO frontier_claims
-        (tenant_hash, run_id, claim_key, candidate_id, lease_token, worker_id, state)
-        VALUES (?, ?, ?, ?, ?, ?, 'leased')`)
-        .run(tenantHash, runIdValue, worker.claimKey, candidate.candidate_id, token, worker.workerId);
+        (tenant_hash, run_id, claim_key, candidate_id, lease_token, worker_id, state,
+          claim_binding_version, claim_observation_sequence)
+        VALUES (?, ?, ?, ?, ?, ?, 'leased', ?, ?)`)
+        .run(tenantHash, runIdValue, worker.claimKey, candidate.candidate_id, token, worker.workerId,
+          CLAIM_BINDING_VERSION, observationSequence);
       const claim = database.prepare(`SELECT * FROM frontier_claims
         WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).get(tenantHash, runIdValue, worker.claimKey);
       return claimResult(database, tenantHash, runIdValue, claim, false);
-    });
+    }, signal);
   }
 
-  async function admitAttempt(scope, runIdValue, value) {
+  async function admitAttempt(scope, runIdValue, value, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = normalizeAttemptInput(value);
     return withScope(scope, (database, { tenantHash }) => {
       let run = getRun(database, tenantHash, runIdValue);
       run = advanceClock(database, tenantHash, run, now);
-      const previous = database.prepare(`SELECT * FROM frontier_attempts
+      return admitAttemptInTransaction(database, tenantHash, runIdValue, run, input);
+    }, signal);
+  }
+
+  function transportCapacityInTransaction(database, tenantHash, runIdValue) {
+    const rows = database.prepare(`SELECT state, reservation_bytes, decoded_bytes
+      FROM frontier_transport_hops WHERE tenant_hash = ? AND run_id = ?`).all(tenantHash, runIdValue);
+    let reservedBytes = 0;
+    let spentBytes = 0;
+    const legacyUnknownRuns = database.prepare(`SELECT COUNT(*) AS count
+      FROM frontier_transport_legacy_uncertainty WHERE tenant_hash = ? AND run_id = ?`)
+      .get(tenantHash, runIdValue).count;
+    if (legacyUnknownRuns > 0) reservedBytes += MAX_DECODED_BYTES_PER_RUN;
+    const states = Object.create(null);
+    for (const row of rows) {
+      states[row.state] = (states[row.state] ?? 0) + 1;
+      if (['reserved', 'dispatch_intent', 'response_received', 'unknown'].includes(row.state)) {
+        reservedBytes += row.reservation_bytes;
+      } else if (row.state === 'body_complete') {
+        if (!Number.isSafeInteger(row.decoded_bytes) || row.decoded_bytes < 0) fail('FRONTIER_STORAGE');
+        spentBytes += row.decoded_bytes;
+      }
+    }
+    if (reservedBytes + spentBytes > MAX_DECODED_BYTES_PER_RUN) fail('FRONTIER_STORAGE');
+    return deepFreeze({ reservedBytes, spentBytes,
+      availableBytes: MAX_DECODED_BYTES_PER_RUN - reservedBytes - spentBytes, states, legacyUnknownRuns });
+  }
+
+  async function admitTransportHop(scope, runIdValue, value, signal) {
+    if (!validId(runIdValue, 96)) fail();
+    const input = normalizeAttemptInput(value);
+    return withScope(scope, (database, { tenantHash }) => {
+      let run = advanceClock(database, tenantHash, getRun(database, tenantHash, runIdValue), now);
+      const prior = database.prepare(`SELECT state, reservation_bytes, decoded_bytes FROM frontier_transport_hops
         WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ?`)
         .get(tenantHash, runIdValue, input.attemptKey);
-      if (previous) {
-        const same = previous.lease_token === input.leaseToken
-          && previous.kind === input.kind
-          && previous.previous_attempt_key === input.previousAttemptKey
-          && previous.canonical_url === input.canonicalUrl;
-        if (!same) fail('FRONTIER_CONFLICT');
-        return deepFreeze({ state: 'already_admitted', attemptKey: previous.attempt_key,
-          sequence: previous.attempt_sequence, admittedAtMs: previous.admitted_at_ms });
+      if (prior) {
+        const priorAttempt = database.prepare(`SELECT lease_token, kind, previous_attempt_key, canonical_url
+          FROM frontier_attempts WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ?`)
+          .get(tenantHash, runIdValue, input.attemptKey);
+        if (!priorAttempt || priorAttempt.lease_token !== input.leaseToken || priorAttempt.kind !== input.kind
+          || priorAttempt.previous_attempt_key !== input.previousAttemptKey
+          || priorAttempt.canonical_url !== input.canonicalUrl) fail('FRONTIER_CONFLICT');
+        // Durable replay is status inspection only. It never grants a second dispatch.
+        return deepFreeze({ state: 'already_admitted', transportState: prior.state,
+          capacity: transportCapacityInTransaction(database, tenantHash, runIdValue) });
       }
+      const historical = database.prepare(`SELECT 1 AS found FROM frontier_attempts
+        WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ?`)
+        .get(tenantHash, runIdValue, input.attemptKey);
+      if (historical) return deepFreeze({ state: 'already_admitted_without_transport_state',
+        capacity: transportCapacityInTransaction(database, tenantHash, runIdValue) });
+      const capacity = transportCapacityInTransaction(database, tenantHash, runIdValue);
+      const release = database.prepare(`SELECT state FROM frontier_private_release
+        WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runIdValue);
+      if (release?.state === 'sealed') return deepFreeze({ state: 'denied', reason: 'private_draft_sealed', capacity });
+      if (capacity.availableBytes < RESERVED_DECODED_BYTES_PER_HOP) {
+        return deepFreeze({ state: 'denied', reason: 'decoded_budget', capacity });
+      }
+      const admission = admitAttemptInTransaction(database, tenantHash, runIdValue, run, input);
+      if (admission.state !== 'admitted') return deepFreeze({ ...admission, capacity });
+      database.prepare(`INSERT INTO frontier_transport_hops
+        (tenant_hash, run_id, attempt_key, lease_token, state, reservation_bytes, decoded_bytes, updated_at_ms)
+        VALUES (?, ?, ?, ?, 'reserved', ?, NULL, ?)`)
+        .run(tenantHash, runIdValue, input.attemptKey, input.leaseToken,
+          RESERVED_DECODED_BYTES_PER_HOP, run.last_clock_ms);
+      const after = transportCapacityInTransaction(database, tenantHash, runIdValue);
+      return deepFreeze({ state: 'admitted', attemptKey: admission.attemptKey,
+        sequence: admission.sequence, admittedAtMs: admission.admittedAtMs,
+        stopAfterThisAdmission: admission.stopAfterThisAdmission, capacity: after });
+    }, signal);
+  }
+
+  async function updateTransportHop(scope, runIdValue, value, nextState, decodedBytes, signal) {
+    if (!validId(runIdValue, 96)) fail();
+    const input = ownRecord(value, new Set(['leaseToken', 'attemptKey']));
+    if (!input || !validId(input.leaseToken, 64) || !validId(input.attemptKey, 128)) fail();
+    return withScope(scope, (database, { tenantHash }) => {
+      const run = advanceClock(database, tenantHash, getRun(database, tenantHash, runIdValue), now);
+      const row = database.prepare(`SELECT * FROM frontier_transport_hops
+        WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ?`)
+        .get(tenantHash, runIdValue, input.attemptKey);
+      if (!row || row.lease_token !== input.leaseToken) fail('FRONTIER_STALE_LEASE');
       const claim = getClaimByToken(database, tenantHash, runIdValue, input.leaseToken);
       const candidate = claim ? candidateRow(database, tenantHash, runIdValue, claim.candidate_id) : null;
       if (!claim || claim.state !== 'leased' || !candidate || candidate.state !== 'leased'
         || candidate.lease_token !== input.leaseToken) fail('FRONTIER_STALE_LEASE');
-      if (run.status !== 'active') return deepFreeze({ state: 'denied', reason: run.halt_reason ?? 'frontier_exhausted' });
-      if (run.attempts_admitted >= run.max_attempts) {
-        appendStopSnapshot(database, tenantHash, runIdValue, 'attempt_limit', run.last_clock_ms, true);
-        return deepFreeze({ state: 'denied', reason: 'attempt_limit' });
+      if (row.state !== 'reserved' && row.state !== 'dispatch_intent' && row.state !== 'response_received') {
+        return deepFreeze({ state: 'unchanged', transportState: row.state,
+          capacity: transportCapacityInTransaction(database, tenantHash, runIdValue) });
       }
-      const latest = database.prepare(`SELECT * FROM frontier_attempts WHERE tenant_hash = ? AND run_id = ?
-        AND candidate_id = ? ORDER BY attempt_sequence DESC LIMIT 1`)
-        .get(tenantHash, runIdValue, candidate.candidate_id);
-      if (input.kind === 'initial') {
-        if (latest || input.canonicalUrl !== candidate.canonical_url) fail('FRONTIER_CONFLICT');
+      if (nextState === 'dispatch_intent') {
+        if (row.state !== 'reserved') return deepFreeze({ state: 'unchanged', transportState: row.state,
+          capacity: transportCapacityInTransaction(database, tenantHash, runIdValue) });
+        database.prepare(`UPDATE frontier_transport_hops SET state = 'dispatch_intent', updated_at_ms = ?
+          WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ? AND state = 'reserved'`)
+          .run(run.last_clock_ms, tenantHash, runIdValue, input.attemptKey);
+      } else if (nextState === 'response_received') {
+        if (row.state === 'response_received') return deepFreeze({ state: 'unchanged', transportState: row.state,
+          capacity: transportCapacityInTransaction(database, tenantHash, runIdValue) });
+        if (row.state !== 'dispatch_intent') fail('FRONTIER_CONFLICT');
+        database.prepare(`UPDATE frontier_transport_hops SET state = 'response_received', updated_at_ms = ?
+          WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ? AND state = 'dispatch_intent'`)
+          .run(run.last_clock_ms, tenantHash, runIdValue, input.attemptKey);
+      } else if (nextState === 'known_zero') {
+        if (!['reserved', 'dispatch_intent', 'response_received'].includes(row.state)) fail('FRONTIER_CONFLICT');
+        database.prepare(`UPDATE frontier_transport_hops SET state = 'known_zero', decoded_bytes = 0,
+          updated_at_ms = ? WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ? AND state = ?`)
+          .run(run.last_clock_ms, tenantHash, runIdValue, input.attemptKey, row.state);
+      } else if (nextState === 'body_complete') {
+        if (row.state !== 'response_received' || !Number.isSafeInteger(decodedBytes)
+          || decodedBytes < 0 || decodedBytes > row.reservation_bytes) fail('FRONTIER_CONFLICT');
+        database.prepare(`UPDATE frontier_transport_hops SET state = 'body_complete', decoded_bytes = ?,
+          updated_at_ms = ? WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ? AND state = 'response_received'`)
+          .run(decodedBytes, run.last_clock_ms, tenantHash, runIdValue, input.attemptKey);
       } else {
-        if (!latest || latest.attempt_key !== input.previousAttemptKey || latest.lease_token !== input.leaseToken) {
-          fail('FRONTIER_CONFLICT');
-        }
-        if (input.kind === 'retry' && latest.canonical_url !== input.canonicalUrl) fail('FRONTIER_CONFLICT');
-        if (input.kind === 'redirect') {
-          if (latest.canonical_url === input.canonicalUrl) fail('FRONTIER_CONFLICT');
-          const seen = database.prepare(`SELECT 1 AS found FROM frontier_attempts
-            WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ? AND canonical_url = ? LIMIT 1`)
-            .get(tenantHash, runIdValue, candidate.candidate_id, input.canonicalUrl);
-          if (seen) fail('FRONTIER_CONFLICT');
-        }
+        if (!['dispatch_intent', 'response_received'].includes(row.state)) fail('FRONTIER_CONFLICT');
+        database.prepare(`UPDATE frontier_transport_hops SET state = 'unknown', decoded_bytes = NULL,
+          updated_at_ms = ? WHERE tenant_hash = ? AND run_id = ? AND attempt_key = ? AND state = ?`)
+          .run(run.last_clock_ms, tenantHash, runIdValue, input.attemptKey, row.state);
       }
-      const sequence = run.attempts_admitted + 1;
-      database.prepare(`INSERT INTO frontier_attempts
-        (tenant_hash, run_id, attempt_key, attempt_sequence, candidate_id, claim_key, lease_token,
-         kind, previous_attempt_key, canonical_url, admitted_at_ms)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(tenantHash, runIdValue, input.attemptKey, sequence, candidate.candidate_id, claim.claim_key,
-          input.leaseToken, input.kind, input.previousAttemptKey, input.canonicalUrl, run.last_clock_ms);
-      database.prepare(`UPDATE frontier_runs SET attempts_admitted = ?
-        WHERE tenant_hash = ? AND run_id = ?`).run(sequence, tenantHash, runIdValue);
-      database.prepare(`UPDATE frontier_candidates SET attempts_admitted = attempts_admitted + 1,
-        last_attempt_key = ? WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
-        .run(input.attemptKey, tenantHash, runIdValue, candidate.candidate_id);
-      if (sequence >= run.max_attempts) {
-        recordStop(database, tenantHash, runIdValue, 'attempt_limit', run.last_clock_ms, true);
-      }
-      return deepFreeze({ state: 'admitted', attemptKey: input.attemptKey,
-        sequence, admittedAtMs: run.last_clock_ms, stopAfterThisAdmission: sequence >= run.max_attempts });
-    });
+      return deepFreeze({ state: 'updated', transportState: nextState,
+        capacity: transportCapacityInTransaction(database, tenantHash, runIdValue) });
+    }, signal);
   }
 
-  async function completeCandidate(scope, runIdValue, value) {
+  async function markTransportDispatchIntent(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'dispatch_intent', undefined, signal);
+  }
+
+  async function markTransportResponseReceived(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'response_received', undefined, signal);
+  }
+
+  async function settleTransportHopKnownZero(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'known_zero', undefined, signal);
+  }
+
+  async function settleTransportHopBodyComplete(scope, runIdValue, input, decodedBytes, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'body_complete', decodedBytes, signal);
+  }
+
+  async function markTransportHopUnknown(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'unknown', undefined, signal);
+  }
+
+  async function getTransportProgress(scope, runIdValue, signal) {
+    if (!validId(runIdValue, 96)) fail();
+    return withScope(scope, (database, { tenantHash }) => {
+      getRun(database, tenantHash, runIdValue);
+      return transportCapacityInTransaction(database, tenantHash, runIdValue);
+    }, signal);
+  }
+
+  async function completeCandidate(scope, runIdValue, value, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = normalizeCompletionInput(value);
     const payloadHash = digest(stableJson({ outcome: input.outcome, suggestions: input.suggestions,
@@ -1015,6 +1406,9 @@ export function createDiscoveryFrontierStore(options) {
         }
         return snapshotInTransaction(database, tenantHash, runIdValue);
       }
+      const deadlineStop = database.prepare(`SELECT 1 AS found FROM frontier_stops
+        WHERE tenant_hash = ? AND run_id = ? AND reason = 'deadline' LIMIT 1`).get(tenantHash, runIdValue);
+      if (deadlineStop) fail('FRONTIER_STOPPED');
       const claim = getClaimByToken(database, tenantHash, runIdValue, input.leaseToken);
       const candidate = claim ? candidateRow(database, tenantHash, runIdValue, claim.candidate_id) : null;
       if (!claim || claim.state !== 'leased' || !candidate || candidate.state !== 'leased'
@@ -1050,10 +1444,10 @@ export function createDiscoveryFrontierStore(options) {
       const updated = getRun(database, tenantHash, runIdValue);
       expireOrExhaust(database, tenantHash, updated, now);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
-  async function markUnresolved(scope, runIdValue, value) {
+  async function markUnresolved(scope, runIdValue, value, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = normalizeUnresolvedInput(value);
     return withScope(scope, (database, { tenantHash }) => {
@@ -1077,26 +1471,76 @@ export function createDiscoveryFrontierStore(options) {
         .run(tenantHash, runIdValue, claim.candidate_id);
       recordStop(database, tenantHash, runIdValue, 'unresolved_work', run.last_clock_ms, true);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
-  async function stopRun(scope, runIdValue, reason) {
+  async function stopRun(scope, runIdValue, reason, signal) {
     if (!validId(runIdValue, 96)
-      || !['cancelled', 'budget_denied', 'access_restricted', 'adequate_facts', 'review_required'].includes(reason)) fail();
+      || !['cancelled', 'budget_denied', 'access_restricted', 'adequate_facts', 'review_required', 'deadline'].includes(reason)) fail();
     return withScope(scope, (database, { tenantHash }) => {
       const run = advanceClock(database, tenantHash, getRun(database, tenantHash, runIdValue), now);
+      const release = database.prepare(`SELECT state FROM frontier_private_release
+        WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runIdValue);
+      if (release?.state === 'sealed') {
+        if (reason === 'deadline') recordStop(database, tenantHash, runIdValue, reason, run.last_clock_ms, true);
+        return snapshotInTransaction(database, tenantHash, runIdValue);
+      }
       recordStop(database, tenantHash, runIdValue, reason, run.last_clock_ms, true);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
-  async function getSnapshot(scope, runIdValue) {
+  async function sealPrivateDraft(scope, runIdValue, signal) {
+    if (!validId(runIdValue, 96)) fail();
+    return withScope(scope, (database, { tenantHash }) => {
+      const run = advanceClock(database, tenantHash, getRun(database, tenantHash, runIdValue), now);
+      database.prepare(`INSERT OR IGNORE INTO frontier_private_release
+        (tenant_hash, run_id, state, sealed_at_ms) VALUES (?, ?, 'open', NULL)`)
+        .run(tenantHash, runIdValue);
+      const release = database.prepare(`SELECT state FROM frontier_private_release
+        WHERE tenant_hash = ? AND run_id = ?`).get(tenantHash, runIdValue);
+      if (release?.state === 'sealed') return deepFreeze({ state: 'already_sealed' });
+      const stop = database.prepare(`SELECT 1 AS found FROM frontier_stops
+        WHERE tenant_hash = ? AND run_id = ? AND reason IN (
+          'cancelled', 'budget_denied', 'deadline', 'access_restricted',
+          'adequate_facts', 'review_required', 'unresolved_work'
+        ) LIMIT 1`)
+        .get(tenantHash, runIdValue);
+      if (stop) return deepFreeze({ state: 'denied', reason: 'run_stopped' });
+      const activeClaims = database.prepare(`SELECT COUNT(*) AS count FROM frontier_candidates
+        WHERE tenant_hash = ? AND run_id = ? AND state = 'leased'`).get(tenantHash, runIdValue).count;
+      if (activeClaims !== 0) return deepFreeze({ state: 'denied', reason: 'run_incomplete' });
+      const capacity = transportCapacityInTransaction(database, tenantHash, runIdValue);
+      if (capacity.reservedBytes !== 0) return deepFreeze({ state: 'denied', reason: 'transport_uncertain' });
+      database.prepare(`UPDATE frontier_private_release SET state = 'sealed', sealed_at_ms = ?
+        WHERE tenant_hash = ? AND run_id = ? AND state = 'open'`)
+        .run(run.last_clock_ms, tenantHash, runIdValue);
+      return deepFreeze({ state: 'sealed' });
+    }, signal);
+  }
+
+  async function getSnapshot(scope, runIdValue, signal) {
     if (!validId(runIdValue, 96)) fail();
     return withScope(scope, (database, { tenantHash }) => {
       const run = getRun(database, tenantHash, runIdValue);
       expireOrExhaust(database, tenantHash, run, now);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
+  }
+
+  async function getCandidateReceiptBinding(scope, runIdValue, candidateIdValue, signal) {
+    if (!validId(runIdValue, 96) || typeof candidateIdValue !== 'string' || !HEX_SHA256.test(candidateIdValue)) fail();
+    return withScope(scope, (database, { tenantHash }) => {
+      getRun(database, tenantHash, runIdValue);
+      const candidate = candidateRow(database, tenantHash, runIdValue, candidateIdValue);
+      if (!candidate) fail('FRONTIER_NOT_FOUND');
+      const claims = database.prepare(`SELECT * FROM frontier_claims
+        WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
+        .all(tenantHash, runIdValue, candidateIdValue);
+      if (claims.length === 0) return null;
+      if (claims.length !== 1) fail('FRONTIER_STORAGE');
+      return candidateClaimBindingInTransaction(database, tenantHash, runIdValue, candidate, claims[0]);
+    }, signal);
   }
 
   return Object.freeze({
@@ -1104,10 +1548,19 @@ export function createDiscoveryFrontierStore(options) {
     createRun,
     claimNext,
     admitAttempt,
+    admitTransportHop,
+    markTransportDispatchIntent,
+    markTransportResponseReceived,
+    settleTransportHopKnownZero,
+    settleTransportHopBodyComplete,
+    markTransportHopUnknown,
+    getTransportProgress,
     completeCandidate,
     markUnresolved,
     stopRun,
+    sealPrivateDraft,
     getSnapshot,
+    getCandidateReceiptBinding,
     close() { closed = true; },
   });
 }

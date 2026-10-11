@@ -12,6 +12,7 @@ const MAX_TOTAL_BYTES = 2 * 1024 * 1024;
 const MAX_IDENTITY_CANDIDATES = 23;
 const MAX_FACTS = 128;
 const MAX_POSITIONS = 128;
+const MAX_LINK_CANDIDATES = 16;
 const MAX_COMPARISONS = 256;
 const DEADLINE_MS = 12_000;
 const HEX_SHA256 = /^[a-f0-9]{64}$/;
@@ -152,7 +153,9 @@ function copyBytes(value, maximum) {
 }
 
 function snapshotDocument(value) {
-  const input = ownRecord(value, new Set(["url", "contentType", "bytes", "fetchedAt", "redirects", "image"]));
+  const input = ownRecord(value, new Set([
+    "url", "requestedUrl", "redirectChain", "contentType", "bytes", "fetchedAt", "redirects", "image",
+  ]));
   if (!input || typeof input.url !== "string" || input.url.length < 1 || input.url.length > 2_048
     || typeof input.contentType !== "string" || input.contentType.length < 1 || input.contentType.length > 160
     || typeof input.fetchedAt !== "string" || input.fetchedAt.length < 1 || input.fetchedAt.length > 64) fail("INVALID_INPUT");
@@ -163,11 +166,24 @@ function snapshotDocument(value) {
     fail("INVALID_INPUT");
   }
   const redirects = input.redirects;
-  if (redirects !== 0) {
+  const redirectChain = input.redirectChain === undefined ? [] : ownArray(input.redirectChain, 20);
+  const requestedUrl = input.requestedUrl === undefined ? input.url : input.requestedUrl;
+  if (typeof requestedUrl !== "string" || requestedUrl.length < 1 || requestedUrl.length > 2_048
+    || !redirectChain || redirectChain.length !== redirects
+    || redirectChain.some((url) => typeof url !== "string" || url.length < 1 || url.length > 2_048)
+    || (redirects > 0 && redirectChain.at(-1) !== input.url)) {
     bytes.fill(0);
     fail("STORED_SOURCE_MISMATCH");
   }
-  return Object.freeze({ url: input.url, contentType: input.contentType, fetchedAt: input.fetchedAt, redirects, bytes });
+  return Object.freeze({
+    url: input.url,
+    requestedUrl,
+    redirectChain: Object.freeze([...redirectChain]),
+    contentType: input.contentType,
+    fetchedAt: input.fetchedAt,
+    redirects,
+    bytes,
+  });
 }
 
 function snapshotSources(value) {
@@ -468,18 +484,180 @@ function draftSourceCandidates(extraction, document) {
   return { entities, drafts };
 }
 
-function sourcePositions(drafts) {
+function repeatedlyDecodeUrlComponent(value) {
+  let current = value;
+  for (let depth = 0; depth < 8; depth += 1) {
+    let decoded;
+    try { decoded = decodeURIComponent(current.replaceAll('+', '%20')); }
+    catch { return null; }
+    if (decoded === current) return current;
+    current = decoded;
+  }
+  try {
+    return decodeURIComponent(current.replaceAll('+', '%20')) === current ? current : null;
+  } catch {
+    return null;
+  }
+}
+
+function isSafeLinkUrl(value) {
+  if (typeof value !== "string" || value.length < 1 || value.length > 2_048) return false;
+  let parsed;
+  try { parsed = new URL(value); } catch { return false; }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return false;
+  const sensitive = /(?:token|key|auth|code|signature|sig|secret|session|password|credential|invite|ticket|admission)/i;
+  for (const key of parsed.searchParams.keys()) {
+    const decoded = repeatedlyDecodeUrlComponent(key);
+    if (decoded === null || sensitive.test(decoded)) return false;
+  }
+  const fragment = repeatedlyDecodeUrlComponent(parsed.hash.slice(1));
+  if (fragment === null || sensitive.test(fragment)) return false;
+  for (const component of fragment.split(/[&;]/)) {
+    const key = repeatedlyDecodeUrlComponent(component.split('=', 1)[0]);
+    if (key === null || sensitive.test(key)) return false;
+  }
+  return true;
+}
+
+function draftLinkCandidates(extraction, document) {
+  const candidates = [
+    ...extraction.canonicalSuggestions,
+    ...extraction.pageMetadata.filter((candidate) => candidate.field === "openGraph.url"),
+  ];
+  const drafts = [];
+  const seenLocators = new Map();
+  let omittedCount = 0;
+  try {
+    for (const candidate of candidates) {
+      const input = ownRecord(candidate, new Set([
+        "field", "rawValue", "normalizedValue", "source", "suggestionOnly", "urlSuggestion", "property",
+      ]));
+      const source = ownRecord(input?.source, new Set(["kind", "locator", "jsonPointer", "property"]));
+      const locator = ownTextRange(source?.locator);
+      if (!input || !source || !locator || !["canonical", "open-graph"].includes(source.kind)
+        || !["canonical.url", "openGraph.url"].includes(input.field)
+        || typeof input.rawValue !== "string" || input.rawValue.length < 1 || input.rawValue.length > 4_096
+        || !isSafeLinkUrl(input.urlSuggestion) || locator.endByte > document.bytes.byteLength) {
+        omittedCount += 1;
+        continue;
+      }
+      const positionBytes = Buffer.from(input.rawValue, "utf8");
+      const selected = document.bytes.subarray(locator.startByte, locator.endByte);
+      if (!selected.equals(positionBytes)) {
+        positionBytes.fill(0);
+        fail("SOURCE_BINDING_FAILED");
+      }
+      const key = locatorKey(locator);
+      const previous = seenLocators.get(key);
+      if (previous) {
+        if (previous.url !== input.urlSuggestion || !previous.positionBytes.equals(positionBytes)) {
+          positionBytes.fill(0);
+          fail("SOURCE_BINDING_FAILED");
+        }
+        positionBytes.fill(0);
+        continue;
+      }
+      if (drafts.length >= MAX_LINK_CANDIDATES) {
+        omittedCount += 1;
+        positionBytes.fill(0);
+        continue;
+      }
+      const draft = {
+        url: input.urlSuggestion,
+        field: input.field,
+        locator,
+        positionDigest: sha256(positionBytes),
+        positionBytes,
+      };
+      drafts.push(draft);
+      seenLocators.set(key, { url: draft.url, positionBytes });
+    }
+    return { drafts, omittedCount };
+  } catch (error) {
+    for (const draft of drafts) draft.positionBytes.fill(0);
+    throw error;
+  }
+}
+
+function allSourcePositions(drafts, linkDrafts) {
   const positions = new Map();
-  for (const draft of drafts) {
+  for (const draft of [...drafts, ...linkDrafts]) {
     const key = locatorKey(draft.locator);
     const previous = positions.get(key);
     if (previous && (previous.positionDigest !== draft.positionDigest || !previous.content.equals(draft.positionBytes))) {
       fail("SOURCE_BINDING_FAILED");
     }
-    if (!previous) positions.set(key, { locator: draft.locator, content: draft.positionBytes, positionDigest: draft.positionDigest });
+    if (!previous) positions.set(key, {
+      locator: draft.locator,
+      content: draft.positionBytes,
+      positionDigest: draft.positionDigest,
+    });
   }
   if (positions.size > MAX_POSITIONS) fail("RESOURCE_LIMIT");
   return [...positions.values()];
+}
+
+function isValidPdfTextBoxLocator(value) {
+  const locator = ownRecord(value, new Set([
+    "kind", "pageIndex", "textIndex", "x", "y", "width", "height", "pageWidth", "pageHeight",
+    "rotation", "coordinateSystem", "geometry",
+  ]));
+  return Boolean(locator && locator.kind === "pdf-text-box"
+    && Number.isSafeInteger(locator.pageIndex) && locator.pageIndex >= 0
+    && Number.isSafeInteger(locator.textIndex) && locator.textIndex >= 0
+    && [locator.x, locator.y, locator.width, locator.height, locator.pageWidth, locator.pageHeight].every(Number.isFinite)
+    && locator.x >= 0 && locator.y >= 0 && locator.width >= 0 && locator.height >= 0
+    && locator.pageWidth > 0 && locator.pageHeight > 0
+    && [0, 90, 180, 270].includes(locator.rotation)
+    && locator.coordinateSystem === "viewport-points-top-left"
+    && locator.geometry === "approximate-text-item");
+}
+
+function reconcileStoredSourcePositions(positionValues, source) {
+  const actual = ownArray(positionValues, MAX_POSITIONS);
+  if (!actual || actual.length === 0) fail("EVIDENCE_POSITION_MISSING");
+  const requestedByLocator = new Map(source.expectedPositions.map((position) => [locatorKey(position.locator), position]));
+  const factsByLocator = new Set(source.drafts.map((draft) => locatorKey(draft.locator)));
+  const linksByLocator = new Map(source.linkDrafts.map((draft) => [locatorKey(draft.locator), draft]));
+  const actualByLocator = new Map();
+  const reconciled = [];
+  for (const value of actual) {
+    const position = ownRecord(value, new Set(["handle", "locator", "contentHash"]));
+    // Stored derived-PDF positions have their own locator representation and
+    // cannot bind the raw fetched bytes consumed by this composer. Preserve the
+    // established source-binding error for that representation boundary while
+    // keeping malformed raw-position errors on the stored-mismatch path.
+    if (position?.handle && isValidPdfTextBoxLocator(position.locator)) fail("SOURCE_BINDING_FAILED");
+    const locator = ownTextRange(position?.locator);
+    if (!position || !position.handle || !locator || locator.endByte > source.document.bytes.byteLength
+      || !HEX_SHA256.test(position.contentHash)) fail("STORED_SOURCE_MISMATCH");
+    const key = locatorKey(locator);
+    if (actualByLocator.has(key)) fail("EVIDENCE_POSITION_AMBIGUOUS");
+    const bytes = source.document.bytes.subarray(locator.startByte, locator.endByte);
+    const positionDigest = sha256(bytes);
+    if (positionDigest !== position.contentHash) fail("STORED_SOURCE_MISMATCH");
+    const requested = requestedByLocator.get(key);
+    if (requested && requested.positionDigest !== positionDigest) fail("STORED_SOURCE_MISMATCH");
+    const checked = { locator, content: bytes, positionDigest };
+    actualByLocator.set(key, checked);
+    reconciled.push(checked);
+  }
+  for (const key of factsByLocator) {
+    if (!actualByLocator.has(key)) fail("EVIDENCE_POSITION_MISSING");
+  }
+  let omittedCount = 0;
+  const linkDrafts = source.linkDrafts.filter((draft) => {
+    const actualPosition = actualByLocator.get(locatorKey(draft.locator));
+    if (actualPosition?.positionDigest === draft.positionDigest) return true;
+    omittedCount += 1;
+    return false;
+  });
+  for (const draft of source.linkDrafts) {
+    const actualPosition = actualByLocator.get(locatorKey(draft.locator));
+    if (actualPosition && actualPosition.positionDigest !== draft.positionDigest) fail("STORED_SOURCE_MISMATCH");
+  }
+  if (linksByLocator.size !== source.linkDrafts.length) fail("SOURCE_BINDING_FAILED");
+  return { expectedPositions: reconciled, linkDrafts, omittedCount };
 }
 
 function metadataSnapshot(value, expectedFullHash) {
@@ -596,13 +774,14 @@ function snapshotSelectedSource(value, expected) {
   if (!selected || !selected.handle || typeof selected.handle !== "object"
     || metadata.evidenceId !== expected.evidenceId
     || !source || !redirects || redirects.some((url) => typeof url !== "string")
-    || source.sourceUrl !== expected.document.url
+    || source.sourceUrl !== expected.document.requestedUrl
     || source.canonicalUrl !== canonicalSourceUrl(expected.document.url)
     || source.contentType !== expected.document.contentType || source.sourceKind !== "external"
     || source.retrievedAt !== metadata.retrievedAt
     || !Number.isSafeInteger(source.retrievedAtMs) || source.retrievedAtMs !== Date.parse(source.retrievedAt)
     || source.contentHash !== expected.fullHash
-    || redirects.length !== expected.document.redirects) {
+    || redirects.length !== expected.document.redirectChain.length
+    || redirects.some((url, index) => url !== expected.document.redirectChain[index])) {
     fail("STORED_SOURCE_MISMATCH");
   }
   const positions = matchPositionHandles(selected.positions, expected.positions, metadata.positionCount);
@@ -761,7 +940,9 @@ function projectStoredSource(source) {
 function validateExtractorResult(extraction) {
   if (extraction.status === "CANCELED" || extraction.termination === "CANCELED") fail("CANCELED");
   if (extraction.termination !== null || extraction.status === "RESOURCE_LIMIT") fail("RESOURCE_LIMIT");
-  if (extraction.status !== "PARTIAL" || !extraction.source || !extraction.sourceHash) fail("EXTRACTION_UNUSABLE");
+  if (!['PARTIAL', 'NO_ANSWER'].includes(extraction.status) || !extraction.source || !extraction.sourceHash) {
+    fail("EXTRACTION_UNUSABLE");
+  }
 }
 
 /**
@@ -774,6 +955,7 @@ export async function composeSourceIdentity(inputValue) {
   let guard;
   const sourceRuns = [];
   let totalEvidenceFacts = 0;
+  let totalLinkCandidatesOmitted = 0;
   try {
     guard = createGuard(input.signal);
     guard.check();
@@ -784,12 +966,33 @@ export async function composeSourceIdentity(inputValue) {
       }));
       guard.check();
       validateExtractorResult(extraction);
-      const { entities, drafts } = draftSourceCandidates(extraction, source.document);
-      sourceRuns.push({ ...source, extraction, entities, drafts, evidence: null, identityFacts: [] });
+      let candidateResult;
+      let links;
+      try {
+        candidateResult = draftSourceCandidates(extraction, source.document);
+        links = draftLinkCandidates(extraction, source.document);
+      } catch (error) {
+        for (const draft of candidateResult?.drafts ?? []) draft.positionBytes.fill(0);
+        throw error;
+      }
+      const { entities, drafts } = candidateResult;
+      sourceRuns.push({
+        ...source,
+        extraction,
+        entities,
+        drafts,
+        linkDrafts: links.drafts,
+        linkCandidatesOmitted: links.omittedCount,
+        evidence: null,
+        identityFacts: [],
+      });
       totalEvidenceFacts += drafts.length;
+      totalLinkCandidatesOmitted += links.omittedCount;
       if (totalEvidenceFacts > MAX_FACTS) fail("RESOURCE_LIMIT");
     }
-    if (!sourceRuns.some((source) => source.drafts.length > 0)) fail("NO_IDENTITY_CANDIDATES");
+    if (!sourceRuns.some((source) => source.drafts.length > 0 || source.linkDrafts.length > 0)) {
+      fail("NO_IDENTITY_CANDIDATES");
+    }
 
     const identityCandidateCount = sourceRuns.reduce((count, source) => {
       const knownEntityKeys = new Set(source.entities.map((entry) => entry.entityKey));
@@ -807,9 +1010,9 @@ export async function composeSourceIdentity(inputValue) {
     let totalPositions = 0;
     const evidenceSources = [];
     for (const source of sourceRuns) {
-      if (source.drafts.length === 0) continue;
+      if (source.drafts.length === 0 && source.linkDrafts.length === 0) continue;
       guard.check();
-      const positions = sourcePositions(source.drafts);
+      const positions = allSourcePositions(source.drafts, source.linkDrafts);
       totalPositions += positions.length;
       if (totalPositions > MAX_POSITIONS) fail("RESOURCE_LIMIT");
       const fullHashMatch = SOURCE_HASH.exec(source.extraction.sourceHash);
@@ -818,14 +1021,16 @@ export async function composeSourceIdentity(inputValue) {
       let scope = await guard.awaitCall(() => input.methods.scopeForAuthenticatedRequest(input.request));
       guard.check();
       const ingest = await guard.awaitCall(() => input.methods.ingestEvidence(scope, {
-        sourceUrl: source.document.url,
+        sourceUrl: source.document.requestedUrl,
+        canonicalUrl: source.document.url,
+        redirectChain: source.document.redirectChain,
         content: source.document.bytes,
         contentType: source.document.contentType,
         retrievedAt: source.document.fetchedAt,
         sourceKind: "external",
         positions: positions.map(({ locator, content }) => ({ locator, content })),
         retentionHandle: source.retentionHandle,
-      }));
+      }, guard.controller.signal));
       guard.check();
       const ingestResult = ownRecord(ingest, new Set(["evidence", "positions", "created", "metadata"]));
       const ingestMetadata = metadataSnapshot(ingestResult?.metadata, fullHash);
@@ -858,6 +1063,15 @@ export async function composeSourceIdentity(inputValue) {
       const evidenceId = selectedEvidenceId(selectedRecord?.metadata);
       const source = expectedById.get(evidenceId);
       if (!source) fail("STORED_SOURCE_MISMATCH");
+      const compatiblePositions = reconcileStoredSourcePositions(selectedRecord.positions, source);
+      const compatibleLinkDrafts = new Set(compatiblePositions.linkDrafts);
+      for (const draft of source.linkDrafts) {
+        if (!compatibleLinkDrafts.has(draft)) draft.positionBytes.fill(0);
+      }
+      source.expectedPositions = compatiblePositions.expectedPositions;
+      source.linkDrafts = compatiblePositions.linkDrafts;
+      source.linkCandidatesOmitted += compatiblePositions.omittedCount;
+      totalLinkCandidatesOmitted += compatiblePositions.omittedCount;
       const verified = snapshotSelectedSource(selected, {
         evidenceId: source.expectedEvidenceId,
         document: source.document,
@@ -893,7 +1107,7 @@ export async function composeSourceIdentity(inputValue) {
         };
         scope = await guard.awaitCall(() => input.methods.scopeForAuthenticatedRequest(input.request));
         guard.check();
-        const factHandle = await guard.awaitCall(() => input.methods.appendFact(scope, factInput, input.request));
+        const factHandle = await guard.awaitCall(() => input.methods.appendFact(scope, factInput, input.request, guard.controller.signal));
         guard.check();
         if (!factHandle || typeof factHandle !== "object") fail("SOURCE_BINDING_FAILED");
         source.identityFacts.push({ draft, factHandle });
@@ -963,6 +1177,16 @@ export async function composeSourceIdentity(inputValue) {
       extraction: source.extraction,
     }));
     const transitions = Object.freeze([]);
+    const linkCandidates = evidenceSources.flatMap((source) => source.linkDrafts.map((draft) => Object.freeze({
+      url: draft.url,
+      sourceRef: Object.freeze({
+        evidenceId: source.metadata.evidenceId,
+        contentHash: source.fullHash,
+        locator: draft.locator,
+        field: draft.field,
+        value: draft.url,
+      }),
+    })));
     const result = freezeDeep({
       schema: RESULT_SCHEMA,
       sources,
@@ -973,6 +1197,8 @@ export async function composeSourceIdentity(inputValue) {
       occurrenceDecisions,
       transitionLinks: transitions,
       unresolvedTransitions: projected.transitionDiagnostics,
+      linkCandidates,
+      linkCandidatesOmitted: totalLinkCandidatesOmitted,
       sourceAuthority: "not_evaluated",
       limits: Object.freeze({
         maxSources: MAX_SOURCES,
@@ -995,6 +1221,7 @@ export async function composeSourceIdentity(inputValue) {
     guard?.dispose();
     for (const source of sourceRuns) {
       for (const draft of source.drafts) draft.positionBytes.fill(0);
+      for (const draft of source.linkDrafts ?? []) draft.positionBytes.fill(0);
     }
     for (const source of input.sources) {
       source.document.bytes.fill(0);

@@ -10,6 +10,7 @@ import { isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } f
 import { resolveSystemHost } from "./dns-resolver.mjs";
 import { RetrievalError } from "./errors.mjs";
 import { getTestSeam } from "./internal/test-seams.mjs";
+import { recordSafeFetchProvenance, safeFetchLifecycleFor } from "./internal/fetch-lifecycle.mjs";
 
 export { RetrievalError };
 
@@ -224,11 +225,11 @@ class PinnedHttpsAgent extends https.Agent {
   createConnection(options, callback) { return this.connection.createConnection(options, callback); }
 }
 
-function createContext(signal) {
+function createContext(signal, totalMilliseconds = DEFAULT_RUN_LIMITS.totalMilliseconds) {
   const controller = new AbortController();
   const context = {
     signal: controller.signal,
-    deadline: performance.now() + DEFAULT_RUN_LIMITS.totalMilliseconds,
+    deadline: performance.now() + totalMilliseconds,
     deadlineReached: false,
   };
   const onAbort = () => controller.abort();
@@ -237,7 +238,7 @@ function createContext(signal) {
   const timer = setTimeout(() => {
     context.deadlineReached = true;
     controller.abort();
-  }, DEFAULT_RUN_LIMITS.totalMilliseconds);
+  }, totalMilliseconds);
   return {
     context,
     close() {
@@ -323,55 +324,83 @@ function readContentLength(value, maximum) {
   if (!Number.isSafeInteger(length) || length > maximum) throw new RetrievalError("RESOURCE_LIMIT");
 }
 
-async function consumeBody(response, mime, context, fetcherState) {
+async function consumeBody(response, mime, context, fetcherState, lifecycle, onDecodeStart) {
   throwIfStopped(context);
   const encoding = String(response.headers["content-encoding"] ?? "identity").toLowerCase().trim();
   if (encoding !== "identity" && encoding !== "gzip") throw new RetrievalError("UNSUPPORTED_MEDIA");
-  const maximum = bodyLimit(mime);
+  const maximum = mime.startsWith("image/") || mime === "application/pdf"
+    ? lifecycle?.options.decodedMediaBytesPerResponse ?? DEFAULT_RUN_LIMITS.decodedMediaBytesPerRequest
+    : lifecycle?.options.decodedTextBytesPerResponse ?? DEFAULT_RUN_LIMITS.decodedTextBytesPerRequest;
   const wireMaximum = DEFAULT_RUN_LIMITS.wireBytesPerRequest;
   readContentLength(response.headers["content-length"], wireMaximum);
   let encoded = 0;
   let decoded = 0;
-  let source = response;
   let completion;
+  let wireGuard;
+  let gunzip;
+  let producedDecoded = 0;
+  const chunkSize = lifecycle?.options.gzipChunkSize ?? 16 * 1024;
+  const readableHighWaterMark = lifecycle?.options.gzipReadableHighWaterMark ?? 64 * 1024;
+  const writableHighWaterMark = lifecycle?.options.gzipWritableHighWaterMark ?? 16 * 1024;
+  wireGuard = new Transform({
+    transform(chunk, _encoding, callback) {
+      encoded += chunk.length;
+      if (encoded > wireMaximum) callback(new RetrievalError("RESOURCE_LIMIT"));
+      else callback(null, chunk);
+    },
+    readableHighWaterMark: writableHighWaterMark,
+    writableHighWaterMark,
+  });
+  const outputGuard = new Transform({
+    transform(chunk, _encoding, callback) {
+      producedDecoded += chunk.length;
+      if (producedDecoded > maximum) callback(new RetrievalError("RESOURCE_LIMIT"));
+      else callback(null, chunk);
+    },
+    readableHighWaterMark,
+    writableHighWaterMark,
+  });
   if (encoding === "gzip") {
-    const counter = new Transform({
-      transform(chunk, _encoding, callback) {
-        encoded += chunk.length;
-        if (encoded > wireMaximum) callback(new RetrievalError("RESOURCE_LIMIT"));
-        else callback(null, chunk);
-      },
-    });
-    const gunzip = createGunzip({ chunkSize: 16 * 1024 });
-    source = gunzip;
-    completion = pipeline(response, counter, gunzip).catch((error) => {
-      if (!gunzip.destroyed) gunzip.destroy(error);
+    gunzip = createGunzip({
+      chunkSize,
+      readableHighWaterMark,
+      writableHighWaterMark,
     });
   }
   const chunks = [];
   try {
-    for await (const chunk of source) {
+    await onDecodeStart();
+    throwIfStopped(context);
+    completion = (gunzip
+      ? pipeline(response, wireGuard, gunzip, outputGuard)
+      : pipeline(response, wireGuard, outputGuard)).catch((error) => {
+      // The iterator below observes stream errors. Keep the completion promise
+      // handled as well so a concurrent pipeline rejection cannot go unobserved.
+      if (!outputGuard.destroyed) outputGuard.destroy(error);
+    });
+    for await (const chunk of outputGuard) {
       throwIfStopped(context);
-      if (encoding === "identity") {
-        encoded += chunk.length;
-        if (encoded > wireMaximum) throw new RetrievalError("RESOURCE_LIMIT");
-      }
       decoded += chunk.length;
       if (decoded > maximum || fetcherState.decodedBytes + chunk.length > DEFAULT_RUN_LIMITS.decodedBytesPerRun) {
         throw new RetrievalError("RESOURCE_LIMIT");
       }
       fetcherState.decodedBytes += chunk.length;
-      chunks.push(chunk);
+      chunks.push(Buffer.from(chunk));
     }
     if (completion) await completion;
+    return Buffer.concat(chunks, decoded);
   } catch (error) {
     response.destroy(error instanceof Error ? error : undefined);
-    source.destroy?.(error instanceof Error ? error : undefined);
+    outputGuard.destroy(error instanceof Error ? error : undefined);
+    wireGuard.destroy(error instanceof Error ? error : undefined);
+    gunzip?.destroy(error instanceof Error ? error : undefined);
+    if (completion) await completion;
     if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
     if (signalIsAborted(context.signal) && !(error instanceof RetrievalError)) throw new RetrievalError("CANCELED");
     throw error instanceof RetrievalError ? error : new RetrievalError("TRANSPORT_FAILURE");
+  } finally {
+    for (const chunk of chunks) chunk.fill(0);
   }
-  return Buffer.concat(chunks, decoded);
 }
 
 function detectMime(body) {
@@ -470,35 +499,70 @@ export class SafeFetcher {
     let release;
     try {
       externalSignal = validateFetchOptions(options);
-      const createdContext = createContext(externalSignal);
+      const lifecycle = safeFetchLifecycleFor(this);
+      const createdContext = createContext(externalSignal,
+        lifecycle?.options.totalMilliseconds ?? DEFAULT_RUN_LIMITS.totalMilliseconds);
       context = createdContext.context;
       closeContext = createdContext.close;
       release = await this.#semaphore.acquire(context);
       let current = input;
+      let firstHopUrl;
       let redirects = 0;
+      const redirectChain = [];
+      const hops = [];
       while (true) {
         throwIfStopped(context);
         if (this.#state.requestCount >= DEFAULT_RUN_LIMITS.requests) throw new RetrievalError("REQUEST_LIMIT");
+        // Keep historical per-instance accounting: even a URL rejected during parsing consumes a slot.
         this.#state.requestCount += 1;
         const validated = this.#seam?.validateUrl
           ? this.#seam.validateUrl(current)
           : parseAndValidateUrl(current);
-        const host = validateHostnameForResolver(validated.hostname, this.#seam);
-        const resolved = this.#seam?.resolve
-          ? await this.#seam.resolve(host, { signal: context.signal, deadline: context.deadline })
-          : await resolveSystemHost(host, { signal: context.signal, deadline: context.deadline });
-        throwIfStopped(context);
-        if (!resolved || !Array.isArray(resolved.addresses) || resolved.addresses.length === 0) throw new RetrievalError("DNS_FAILURE");
-        for (const alias of resolved.aliases ?? []) {
-          if (isIPHost(alias)) throw new RetrievalError("DNS_FAILURE");
-          validateHostnameForResolver(alias, this.#seam);
+        if (firstHopUrl === undefined) firstHopUrl = validated.url.href;
+        const hopIndex = hops.length;
+        let hopAdmissionReturned = false;
+        try {
+          await lifecycle?.hooks.beforeHop?.(Object.freeze({ url: validated.url.href, hopIndex, redirects }));
+          hopAdmissionReturned = true;
+          throwIfStopped(context);
+        } catch (error) {
+          if (hopAdmissionReturned) await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "before_dispatch_stopped" }));
+          throw error;
         }
-        for (const address of resolved.addresses) assertAllowedAddress(address, this.#seam);
+        const hop = { url: validated.url.href, statusCode: null, dispatchIntent: false,
+          responseReceived: false, bodyComplete: false, decodedBytes: null };
+        hops.push(hop);
+        let resolved;
+        try {
+          const host = validateHostnameForResolver(validated.hostname, this.#seam);
+          resolved = this.#seam?.resolve
+            ? await this.#seam.resolve(host, { signal: context.signal, deadline: context.deadline })
+            : await resolveSystemHost(host, { signal: context.signal, deadline: context.deadline });
+          throwIfStopped(context);
+          if (!resolved || !Array.isArray(resolved.addresses) || resolved.addresses.length === 0) throw new RetrievalError("DNS_FAILURE");
+          for (const alias of resolved.aliases ?? []) {
+            if (isIPHost(alias)) throw new RetrievalError("DNS_FAILURE");
+            validateHostnameForResolver(alias, this.#seam);
+          }
+          for (const address of resolved.addresses) assertAllowedAddress(address, this.#seam);
+        } catch (error) {
+          await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "pre_dispatch_failure" }));
+          throw error;
+        }
         const chosenAddress = resolved.addresses[0];
         let result;
         try {
+          await lifecycle?.hooks.onDispatchIntent?.(Object.freeze({ url: validated.url.href, hopIndex }));
+          throwIfStopped(context);
+        } catch (error) {
+          await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "dispatch_not_started" }));
+          throw error;
+        }
+        hop.dispatchIntent = true;
+        try {
           result = await requestOnce(validated, chosenAddress, context, this.#seam);
         } catch (error) {
+          await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "no_response" }));
           if (context.deadlineReached) throw new RetrievalError("DEADLINE_EXCEEDED");
           throw error;
         }
@@ -507,28 +571,69 @@ export class SafeFetcher {
           cleanup();
           agent.destroy();
         };
+        let body;
+        let returnedBody = false;
+        hop.statusCode = response.statusCode;
+        hop.responseReceived = true;
+        try {
+          await lifecycle?.hooks.onResponseHeaders?.(Object.freeze({
+            url: validated.url.href, hopIndex, statusCode: response.statusCode,
+          }));
+          throwIfStopped(context);
+        } catch (error) {
+          response.destroy();
+          finishTransport();
+          throw error;
+        }
         if (REDIRECT_CODES.has(response.statusCode)) {
           const location = response.headers.location;
           response.destroy();
           finishTransport();
+          await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "redirect" }));
+          throwIfStopped(context);
           if (redirects >= DEFAULT_RUN_LIMITS.redirectsPerFetch) throw new RetrievalError("REDIRECT_LIMIT");
           if (typeof location !== "string" || location.length > 8_192) throw new RetrievalError("POLICY_DENIED");
           let next;
           try { next = new URL(location, validated.url).toString(); }
           catch { throw new RetrievalError("POLICY_DENIED"); }
           // Validate each redirect before consuming a request slot or starting DNS/socket work.
-          if (this.#seam?.validateUrl) this.#seam.validateUrl(next);
-          else parseAndValidateUrl(next);
+          const validatedNext = this.#seam?.validateUrl
+            ? this.#seam.validateUrl(next)
+            : parseAndValidateUrl(next);
+          redirectChain.push(validatedNext.url.href);
           redirects += 1;
           current = next;
           continue;
         }
         try {
-          if (response.statusCode !== 200) throw new RetrievalError("TRANSPORT_FAILURE");
-          const mime = parseMime(response.headers["content-type"]);
-          const body = await consumeBody(response, mime, context, this.#state);
+          if (response.statusCode !== 200) {
+            await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "status_rejected" }));
+            throwIfStopped(context);
+            throw new RetrievalError("TRANSPORT_FAILURE");
+          }
+          let mime;
+          try { mime = parseMime(response.headers["content-type"]); }
+          catch (error) {
+            await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "content_type_rejected" }));
+            throwIfStopped(context);
+            throw error;
+          }
+          let decodeStarted = false;
+          try {
+            body = await consumeBody(response, mime, context, this.#state, lifecycle, async () => {
+              decodeStarted = true;
+              await lifecycle?.hooks.onDecodeStart?.(Object.freeze({ hopIndex, mime }));
+            });
+          } catch (error) {
+            if (!decodeStarted) await lifecycle?.hooks.onKnownZero?.(Object.freeze({ hopIndex, reason: "body_decode_not_started" }));
+            throw error;
+          }
+          hop.bodyComplete = true;
+          hop.decodedBytes = body.byteLength;
+          await lifecycle?.hooks.onBodyComplete?.(Object.freeze({ hopIndex, decodedBytes: body.byteLength }));
+          throwIfStopped(context);
           const dimensions = validateFinalBody(body, mime);
-          return Object.freeze({
+          const fetched = Object.freeze({
             url: validated.url.toString(),
             contentType: mime,
             bytes: body,
@@ -536,7 +641,16 @@ export class SafeFetcher {
             redirects,
             ...(dimensions ? { image: dimensions } : {}),
           });
+          recordSafeFetchProvenance(fetched, {
+            requestedUrl: firstHopUrl,
+            finalUrl: validated.url.href,
+            redirectChain,
+            hops,
+          });
+          returnedBody = true;
+          return fetched;
         } finally {
+          if (!returnedBody && body) body.fill(0);
           finishTransport();
         }
       }

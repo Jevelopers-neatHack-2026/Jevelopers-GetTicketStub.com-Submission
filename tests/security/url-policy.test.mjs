@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RetrievalError } from "../../src/security/errors.mjs";
-import { isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } from "../../src/security/url-policy.mjs";
+import { hasSensitiveUrlMaterial, isPublicAddress, parseAndValidateUrl, sameAddress, validateHostname } from "../../src/security/url-policy.mjs";
 
 function denied(operation) {
   assert.throws(operation, (error) => error instanceof RetrievalError && error.code === "POLICY_DENIED");
@@ -11,6 +11,34 @@ test("accepts only canonical public HTTP(S) URL authorities", () => {
   assert.equal(parseAndValidateUrl("https://example.org/news?q=1#section").url.href, "https://example.org/news?q=1");
   assert.equal(parseAndValidateUrl("http://example.org:80/").port, 80);
   assert.equal(parseAndValidateUrl("https://[2001:4860:4860::8888]/").hostname, "2001:4860:4860::8888");
+});
+
+test("rejects sensitive query and fragment names through the shared bounded decoder", () => {
+  const nestedPercentEncoding = (value, layers) => {
+    let encoded = value;
+    for (let index = 0; index < layers; index += 1) encoded = encodeURIComponent(encoded);
+    return encoded;
+  };
+  const overBoundSensitiveKey = nestedPercentEncoding("%74oken", 6);
+  const overBoundUnknownKey = nestedPercentEncoding("%68eadline", 6);
+  assert.notEqual(overBoundSensitiveKey, "%74oken");
+  assert.ok(overBoundSensitiveKey.includes("%25"));
+  const overBoundUnknownUrl = new URL(`https://example.org/?${overBoundUnknownKey}=value`);
+  let decodedUnknownKey = overBoundUnknownUrl.searchParams.keys().next().value;
+  for (let index = 0; index < 4; index += 1) decodedUnknownKey = decodeURIComponent(decodedUnknownKey);
+  assert.notEqual(decodeURIComponent(decodedUnknownKey), decodedUnknownKey,
+    "the unknown query name remains encoded after the policy decoder's four rounds");
+  for (const value of [
+    "https://example.org/?access_token=canary",
+    "https://example.org/?%61ccess_%74oken=canary",
+    "https://example.org/#%74oken=canary",
+    `https://example.org/?${overBoundSensitiveKey}=canary`,
+    `https://example.org/?${overBoundUnknownKey}=value`,
+  ]) {
+    assert.equal(hasSensitiveUrlMaterial(new URL(value)), true, value);
+  }
+  assert.equal(hasSensitiveUrlMaterial(new URL("https://example.org/?source=event#details")), false);
+  assert.equal(hasSensitiveUrlMaterial({ searchParams: new URLSearchParams() }), true);
 });
 
 test("compares peer addresses independent of IPv6 compression and mapped IPv4 spelling", () => {

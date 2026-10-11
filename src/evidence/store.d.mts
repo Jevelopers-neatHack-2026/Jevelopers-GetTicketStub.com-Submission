@@ -487,11 +487,73 @@ export interface EvidenceIntegritySnapshot {
   readonly availableFacts: number;
   readonly expiredFacts: number;
   readonly encryptedPayloadRecords: number;
+  readonly encryptedPrivateReceiptRecords: number;
 }
+
+export interface PrivateRetrievalReceiptCandidate {
+  readonly candidateId: string;
+  readonly canonicalUrl: string;
+  /** Present on new v3 frontier claims; absent from historical v1/v2 receipt bindings. */
+  readonly suppliedUrl?: string;
+  readonly depth: number;
+  readonly seed: boolean;
+  readonly sourceRefs: readonly Readonly<{
+    evidenceId: string;
+    contentHash: string;
+    locator: TextRangeLocator | JsonPointerLocator;
+    field: string;
+    value: string;
+  }>[];
+}
+
+export interface PrivateRetrievalReceiptClaim {
+  readonly claimKey: string;
+  readonly workerId: string;
+  readonly leaseToken: string;
+}
+
+export interface PrivateRetrievalReceiptIdentity {
+  readonly entityCandidates: readonly unknown[];
+  readonly occurrenceCandidates: readonly unknown[];
+  readonly transitionLinks: readonly unknown[];
+  readonly unresolvedTransitions: readonly unknown[];
+}
+
+export interface PrivateRetrievalReceiptCompletion {
+  readonly completionKey: string;
+  readonly outcome: 'links_observed' | 'no_links' | 'failed' | 'access_restricted';
+  readonly suggestions: readonly unknown[];
+  readonly limitations: readonly string[];
+  readonly identity: PrivateRetrievalReceiptIdentity;
+}
+
+export interface PrivateRetrievalReceiptBinding {
+  readonly runId: string;
+  readonly configHash: string;
+  readonly candidate: PrivateRetrievalReceiptCandidate;
+}
+
+export type PrivateRetrievalReceiptRead =
+  | { readonly state: 'missing' | 'expired' | 'mismatch' }
+  | (PrivateRetrievalReceiptBinding & {
+    readonly state: 'pending';
+    readonly claim: PrivateRetrievalReceiptClaim;
+  })
+  | (PrivateRetrievalReceiptBinding & {
+    readonly state: 'complete';
+    readonly claim: PrivateRetrievalReceiptClaim;
+    readonly completionKey: string;
+    readonly outcome: 'links_observed' | 'no_links' | 'failed' | 'access_restricted';
+    readonly suggestions: readonly unknown[];
+    readonly limitations: readonly string[];
+    readonly identity: PrivateRetrievalReceiptIdentity;
+    readonly evidenceIds: readonly string[];
+    readonly facts: readonly StoredEvidenceFactRecord[];
+  });
 
 export interface EvidenceStore<Request = unknown> {
   scopeForAuthenticatedRequest(request: Request): Promise<EvidenceTenantScope>;
-  ingestEvidence(scope: EvidenceTenantScope, input: EvidenceIngestInput): Promise<EvidenceIngestResult>;
+  ingestEvidence(scope: EvidenceTenantScope, input: EvidenceIngestInput, signal?: AbortSignal): Promise<EvidenceIngestResult>;
   /** Runs the existing bounded HTML/XHTML/JSON-LD parser and stores only exact private source excerpts. */
   ingestAssetSourceEvidence(
     scope: EvidenceTenantScope,
@@ -506,7 +568,7 @@ export interface EvidenceStore<Request = unknown> {
     request: Request,
     signal?: AbortSignal,
   ): Promise<PdfDerivedEvidenceIngestResult>;
-  lookupEvidence(scope: EvidenceTenantScope, evidenceId: string): Promise<EvidenceHandle>;
+  lookupEvidence(scope: EvidenceTenantScope, evidenceId: string, signal?: AbortSignal): Promise<EvidenceHandle>;
   getEvidenceMetadata(scope: EvidenceTenantScope, evidence: EvidenceHandle): Promise<EvidenceMetadata>;
   listEvidencePositions(scope: EvidenceTenantScope, evidence: EvidenceHandle, request: Request): Promise<readonly Readonly<{
     handle: EvidencePositionHandle;
@@ -521,12 +583,37 @@ export interface EvidenceStore<Request = unknown> {
     signal?: AbortSignal,
   ): Promise<EvidenceSelectedMaterialization>;
   withPrivatePayload(scope: EvidenceTenantScope, evidence: EvidenceHandle, request: Request): Promise<EvidencePrivatePayloadResult>;
-  appendFact(scope: EvidenceTenantScope, fact: EvidenceFactInput, request: Request): Promise<EvidenceFactHandle>;
-  lookupFact(scope: EvidenceTenantScope, factId: string): Promise<EvidenceFactHandle>;
+  appendFact(scope: EvidenceTenantScope, fact: EvidenceFactInput, request: Request, signal?: AbortSignal): Promise<EvidenceFactHandle>;
+  lookupFact(scope: EvidenceTenantScope, factId: string, signal?: AbortSignal): Promise<EvidenceFactHandle>;
   readFact(scope: EvidenceTenantScope, fact: EvidenceFactHandle, request: Request): Promise<StoredEvidenceFactRecord>;
   listFacts(scope: EvidenceTenantScope, request: Request): Promise<readonly StoredEvidenceFactRecord[]>;
-  purgeExpired(scope: EvidenceTenantScope): Promise<number>;
+  purgeExpired(scope: EvidenceTenantScope, signal?: AbortSignal): Promise<number>;
   integritySnapshot(scope: EvidenceTenantScope): Promise<EvidenceIntegritySnapshot>;
+  /** Internal durable marker written before private retrieval can dispatch. */
+  beginPrivateRunReceipt(
+    scope: EvidenceTenantScope,
+    input: PrivateRetrievalReceiptBinding & { readonly claim: PrivateRetrievalReceiptClaim },
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<Readonly<{ state: 'pending' | 'complete' | 'expired'; created: boolean }>>;
+  /** Stores an encrypted, bounded completion before the frontier completion CAS. */
+  finalizePrivateRunReceipt(
+    scope: EvidenceTenantScope,
+    input: PrivateRetrievalReceiptBinding & {
+      readonly claim: PrivateRetrievalReceiptClaim;
+      readonly completion: PrivateRetrievalReceiptCompletion;
+      readonly selection: EvidenceSelectedMaterializationInput;
+    },
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<Readonly<{ state: 'complete' | 'already_complete' }>>;
+  /** Reopens exact evidence and facts under current key, retention, and authorization checks. */
+  readPrivateRunReceipt(
+    scope: EvidenceTenantScope,
+    input: PrivateRetrievalReceiptBinding,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<PrivateRetrievalReceiptRead>;
 }
 
 export declare function createEvidenceStore<Request = unknown>(options: EvidenceStoreOptions<Request>): EvidenceStore<Request>;

@@ -77,7 +77,7 @@ test("deterministic extraction mock route runs only local fixtures with complete
   assert.equal(summary.case, "deterministic-extraction");
   assert.equal(summary.mode, "mock");
   assert.equal(summary.status, "passed");
-  assert.equal(summary.test_files, 2);
+  assert.equal(summary.test_files, 3);
   assert.ok(summary.expected_cases > 0);
   assert.equal(summary.expected_cases, summary.terminal_cases);
   assert.equal(summary.passed_cases, summary.expected_cases);

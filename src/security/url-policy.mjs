@@ -4,6 +4,41 @@ import { RetrievalError } from "./errors.mjs";
 const DENIED_SUFFIXES = Object.freeze([
   ".localhost", ".local", ".internal", ".test", ".invalid", ".example", ".onion",
 ]);
+const SENSITIVE_QUERY_KEY = /(?:token|key|auth|code|signature|sig|secret|session|password|credential|invite|ticket|admission)/i;
+
+function repeatedlyDecode(value) {
+  let current = value;
+  for (let depth = 0; depth < 4; depth += 1) {
+    let decoded;
+    try { decoded = decodeURIComponent(current.replaceAll('+', '%20')); }
+    catch { return null; }
+    if (decoded === current) return current;
+    current = decoded;
+  }
+  try {
+    return decodeURIComponent(current.replaceAll('+', '%20')) === current ? current : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Reject credential-like query and fragment names before a URL is persisted or fetched. */
+export function hasSensitiveUrlMaterial(url) {
+  if (!(url instanceof URL)) return true;
+  for (const key of url.searchParams.keys()) {
+    const decoded = repeatedlyDecode(key);
+    if (decoded === null || SENSITIVE_QUERY_KEY.test(decoded)) return true;
+  }
+  const fragment = url.hash.slice(1);
+  if (fragment === '') return false;
+  const decodedFragment = repeatedlyDecode(fragment);
+  if (decodedFragment === null || SENSITIVE_QUERY_KEY.test(decodedFragment)) return true;
+  for (const component of decodedFragment.split(/[&;]/)) {
+    const key = repeatedlyDecode(component.split('=', 1)[0]);
+    if (key === null || SENSITIVE_QUERY_KEY.test(key)) return true;
+  }
+  return false;
+}
 
 function ipv4Number(address) {
   const parts = address.split(".");
