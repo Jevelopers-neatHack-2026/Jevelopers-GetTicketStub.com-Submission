@@ -285,9 +285,10 @@ The matching [JSON tracker](https://github.com/Jevelopers-neatHack-2026/integrat
 
 ### SPN-01 Neatlogs use
 
-- [ ] **Planned** | P0 | Finance and reliability
+- [x] **Verified** 2026-10-11 (owner-accepted) | P0 | Finance and reliability
 - **Verify:** Record an actual agent run in Neatlogs and provide inspectable traces or sanitized screenshots.
 - **Evidence:** Neatlogs artifact tied to an evaluated application run.
+- **Recorded evidence:** [Original TicketStub Neatlogs record](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/d9be4d1832a7d0f713cf8494eb5df0e59d94ec89/evidence/neatlogs/2026-10-11) at integration-evals `d9be4d1`; see the [qualified record](../evidence/neatlogs/2026-10-11/README.md). Owner (Finance and reliability: CompleteDotTech) accepted 2026-10-11 by explicit chat instruction ("I approve") relayed by an agent via PR #33; that chronology is preserved. Four screenshots show research success/timeout, agent reply and later art model/token/timing steps with span types varying by example; the curated owner/agent summary supplies exact IDs/times, reported production getticketstub.com `e4a1993`/runtime binding, HTTP 422 and summary-only malformed-request art recovery. Raw backend/host receipts are absent. Three of seven sessions were not found in the reported readback window; a once-only acceptance diagnostic establishes at least one reported success, with no per-export counters/ACK joins and unresolved client/server/finalization cause or permanent storage outcome. The owner corrected the earlier broad production-art-failure claim: malformed test payloads reportedly lacked facts; a later well-formed request reportedly generated a live image (trace 4dbdf9e9caf3953a881ad2c8815a91ee). Its 22:44:01.057 UTC start is outside the original 21:57-22:05 readback window; exact later readback cutoff was not supplied. Missing-facts cause and fallback response remain owner-reported for observed requests. Provider cost is exported when supplied, otherwise absent/unknown; art cost $0.018785 is owner-summary metadata without raw provider/billing receipts; dashboard costs and no-further-spend reports are not verified billing. Full genuine GPT Image workflow/IE-07 completion is not independently established. No before/after improvement (EVAL-02) or durable harness integration is established.
 
 ### SPN-02 Entire use
 

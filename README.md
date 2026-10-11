@@ -12,7 +12,7 @@ Cross-component verification for TicketStub, and the home of the master acceptan
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
   <a href="#status"><img alt="Status: verification tooling; integrated acceptance pending" src="https://img.shields.io/badge/status-tooling%20candidate-B4693E?style=flat-square&labelColor=17140F"></a>
-  <a href="planning/acceptance-checklist.md"><img alt="Acceptance checklist: 47 criteria, 2 verified" src="https://img.shields.io/badge/criteria-2%20of%2047%20verified-26302A?style=flat-square&labelColor=17140F"></a>
+  <a href="planning/acceptance-checklist.md"><img alt="Acceptance checklist: 47 criteria, 3 verified" src="https://img.shields.io/badge/criteria-3%20of%2047%20verified-26302A?style=flat-square&labelColor=17140F"></a>
 </p>
 
 [Status](#status) · [What's here](#whats-here) · [Docs](#docs) · [Related](#related-repositories)
@@ -24,15 +24,24 @@ benchmark statistics, immutable reports, and offline CI. Integrated product acce
 remains incomplete until owner runners, exact composed release pins, ratified datasets
 and policy, and authorized real evidence satisfy the required boundaries.
 
-- SPN-02 (Entire) and SPN-03 (CFO.ai) are owner-accepted as recorded in the
+- SPN-01 (Neatlogs), SPN-02 (Entire) and SPN-03 (CFO.ai) are owner-accepted as recorded in the
   [master checklist](planning/acceptance-checklist.md) and [evidence index](evidence/README.md).
-  The remaining 45 criteria are planned.
+  The remaining 44 criteria are planned. These owner acceptances were relayed from chat;
+  their chronology and artifact limitations remain in the dated records.
+- Neatlogs evidence includes four screenshots and a curated owner/agent summary of
+  reported research, agent and art runs. Exact trace/deployment bindings, malformed-art
+  recovery, delivery cause and billing remain unverified. The later art screenshot shows
+  model steps, tokens and timings; it does not close the complete IE-07 workflow or
+  establish EVAL-02 comparable improvement. See the [qualified record](evidence/neatlogs/2026-10-11/README.md).
 - Entire evidence covers one Claude checkpoint and repository graph snapshots; no
   entire.io mirror or Codex checkpoint is recorded, and the graph plugin version is unpinned.
 - CFO.ai revision 2 is accepted with hypothetical forecasts; the authoritative Finance
   summary export, actual cash, demo coverage and submission remain open.
 - Local tooling and canonical contract checks do not establish complete integrated
   product acceptance. Missing assembly is reported as blocked.
+- The broader [draft PR #23](https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/23)
+  remains on maintainer hold; merging accepted evidence into this candidate does not
+  approve or release its verification tooling.
 - Planned work is tracked in [IE-EPIC #1](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/1)
   and its linked IE issues, ending with the [IE-12 release gate](https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/22).
 
