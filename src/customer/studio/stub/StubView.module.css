@@ -225,6 +225,15 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
+/* Small print under the weather: its own line, unstyled by the edition, still legible on the smallest stub. */
+.weatherCredit {
+  flex-basis: 100%;
+  font-size: max(0.6em, 1.5cqw);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  opacity: 0.75;
+}
 .chips {
   display: flex;
   flex-wrap: wrap;

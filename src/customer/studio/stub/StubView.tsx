@@ -161,6 +161,13 @@ function Chip({ c, f }: { c: Ctx; f: Fact }) {
   );
 }
 
+// Open-Meteo weather is CC BY 4.0: wherever it shows, on screen or in print, its credit sits next to it (#48).
+const fromOpenMeteo = (f: Fact) => f.id === "weather" && f.provenance === "live" && f.source.startsWith("Open-Meteo");
+
+function WeatherCredit() {
+  return <span className={s.weatherCredit}>Weather data by Open-Meteo.com</span>;
+}
+
 function Facts({ c, className, sep = " · ", upper }: { c: Ctx; className?: string; sep?: string; upper?: boolean }) {
   if (!c.show("facts")) return null;
   const line = c.kept.map((f) => f.label).join(sep);
@@ -179,6 +186,7 @@ function Facts({ c, className, sep = " · ", upper }: { c: Ctx; className?: stri
           ))}
         </span>
       )}
+      {[...c.kept, ...c.unsure].some(fromOpenMeteo) && <WeatherCredit />}
     </div>
   );
 }
@@ -480,15 +488,21 @@ function BackList({ c }: { c: Ctx }) {
       </ul>
     );
   }
-  const items = e.programme?.length ? e.programme : e.facts.filter((f) => c.show(f.id)).map((f) => f.label);
+  const listed = e.programme?.length ? [] : e.facts.filter((f) => c.show(f.id)).slice(0, cap);
+  const items = e.programme?.length ? e.programme.slice(0, cap) : listed.map((f) => f.label);
   return (
     <ul className={s.backList}>
-      {items.slice(0, cap).map((p, i) => (
+      {items.map((p, i) => (
         <li key={i}>
           <span className={s.backIdx}>·</span>
           <span>{p}</span>
         </li>
       ))}
+      {listed.some(fromOpenMeteo) && (
+        <li>
+          <WeatherCredit />
+        </li>
+      )}
     </ul>
   );
 }
