@@ -288,7 +288,7 @@ The matching [JSON tracker](https://github.com/Jevelopers-neatHack-2026/integrat
 - [x] **Verified** 2026-10-11 (owner-accepted) | P0 | Finance and reliability
 - **Verify:** Record an actual agent run in Neatlogs and provide inspectable traces or sanitized screenshots.
 - **Evidence:** Neatlogs artifact tied to an evaluated application run.
-- **Recorded evidence:** [Live TicketStub Neatlogs traces](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/d9be4d1832a7d0f713cf8494eb5df0e59d94ec89/evidence/neatlogs/2026-10-11) at integration-evals `d9be4d1` (production getticketstub.com `e4a1993`). Limitations: receiver dropped 3 of 7 accepted traces; AI art currently falls back to procedural.
+- **Recorded evidence:** [Live TicketStub Neatlogs traces](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/d9be4d1832a7d0f713cf8494eb5df0e59d94ec89/evidence/neatlogs/2026-10-11) at integration-evals `d9be4d1` (production getticketstub.com `e4a1993`). Limitations: receiver dropped 3 of 7 accepted traces; production image generation verified working after a correction (trace 4dbdf9e9…).
 
 ### SPN-02 Entire use
 

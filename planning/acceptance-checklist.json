@@ -912,7 +912,7 @@
         "getticketstub.com e4a19931b5febbf6efdb85e11d1d3da1b88106fe (published, GoDaddy gvk66o79l1)",
         "Neatlogs project Complete's project (US), traces 601d02d5d5658f22286286e53cdbe450, d3d7bccece4e343b863db06eec4ad578, 63b4db3d65091615052591841c961ed1, 8fc27f1ac8ceee3ef891900a9147a350"
       ],
-      "notes": "Owner (Finance and reliability: CompleteDotTech) accepted 2026-10-11 by explicit chat instruction (\"I approve\") relayed by an agent; see PR #33. Actual production agent runs recorded as Neatlogs traces with LLM/tool spans, a failure trace and an internal-error recovery; synthetic/public inputs. Limitations: Neatlogs silently dropped 3 of 7 accepted production traces; production AI art fails internally (procedural fallback); no before/after improvement claim (EVAL-02).",
+      "notes": "Owner (Finance and reliability: CompleteDotTech) accepted 2026-10-11 by explicit chat instruction (\"I approve\") relayed by an agent; see PR #33. Actual production agent runs recorded as Neatlogs traces with LLM/tool spans, a failure trace and an internal-error recovery; synthetic/public inputs. Limitations: Neatlogs silently dropped 3 of 7 accepted production traces; a malformed-request art fallback (production image generation verified working, trace 4dbdf9e9caf3953a881ad2c8815a91ee); no before/after improvement claim (EVAL-02).",
       "dependencies": [
         "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
         "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
