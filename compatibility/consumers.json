@@ -1,7 +1,7 @@
 {
-  "mode": "discovery_only_local_operations_candidates",
+  "mode": "discovery_only_local_research_creative_candidates",
   "shared_source_revision": null,
-  "package_version": "0.2.0",
+  "package_version": "0.3.0",
   "repositories": [
     {
       "repository": "agent-harness",
@@ -193,6 +193,21 @@
           "contract": "FulfillmentStatus",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": false,
+          "consumer": true
         }
       ]
     },
@@ -346,6 +361,21 @@
           "contract": "ApprovalReceipt",
           "producer": false,
           "consumer": true
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": true,
+          "consumer": false
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": true,
+          "consumer": false
         }
       ]
     },
@@ -514,6 +544,21 @@
           "contract": "ArtifactHandoffManifest",
           "producer": true,
           "consumer": false
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": false,
+          "consumer": true
         }
       ]
     },
@@ -934,6 +979,21 @@
           "contract": "EvaluationEvidence",
           "producer": true,
           "consumer": false
+        },
+        {
+          "contract": "ResearchRequestReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchAnswerReceipt",
+          "producer": false,
+          "consumer": true
+        },
+        {
+          "contract": "ResearchBatchReceipt",
+          "producer": false,
+          "consumer": true
         }
       ]
     },

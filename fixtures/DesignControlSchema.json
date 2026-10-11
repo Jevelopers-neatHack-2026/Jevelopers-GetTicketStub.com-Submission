@@ -1,0 +1,655 @@
+{
+  "contract": "DesignControlSchema",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "DesignControlSchema",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000001000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "control_schema_id": "123e4567-e89b-42d3-a456-000000000080",
+    "control_schema_hash": "sha256:5941d8c4f8357fbd8dbc0709eacd4f138da75b0c68417ea1d357300ee160721e",
+    "control_schema_version": "1.0.0",
+    "design_ref": {
+      "contract": "DesignVersion",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000090",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policy_ref": {
+      "contract": "policy",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000014",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "controls": [
+      {
+        "control_id": "saturation",
+        "label": "Saturation",
+        "description": "Inert numeric control",
+        "action": "set_value",
+        "required": false,
+        "enabled": true,
+        "default_presence": "present",
+        "kind": "number",
+        "unit": "ratio",
+        "minimum": 0,
+        "maximum": 1,
+        "step": 0.1,
+        "default_value": 0.5
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "evidence_id": "123e4567-e89b-42d3-a456-000000000199"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "required",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "type",
+      "category": "type",
+      "set": {
+        "environment": 42
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/environment"
+      }
+    },
+    {
+      "id": "enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "additive",
+      "category": "unknown_field",
+      "set": {
+        "approved": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "date",
+      "category": "format",
+      "set": {
+        "occurred_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/occurred_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "research_creative",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_controls": {
+          "saturation": {
+            "control_id": "saturation",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5
+          }
+        }
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-scope",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_controls": {
+          "saturation": {
+            "control_id": "saturation",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5
+          }
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "unknown-control",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "controls": [
+          {
+            "control_id": "publish",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5
+          }
+        ],
+        "control_schema_hash": "sha256:0d777c49f9003f76da217cb2f4bd94fcdd8b7e4c8e17f42ebed6a551a090e847"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_controls": {
+          "saturation": {
+            "control_id": "saturation",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5
+          }
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "POLICY_MISMATCH",
+        "path": "/controls/0"
+      }
+    },
+    {
+      "id": "out-of-range-default",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "controls": [
+          {
+            "control_id": "saturation",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 2
+          }
+        ],
+        "control_schema_hash": "sha256:8437b302b3bc40aff089b32eec6be3a125d47c0e667d89a920bc0e28ac77c33f"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "design_ref": {
+            "contract": "DesignVersion",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000090",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "allowed_controls": {
+          "saturation": {
+            "control_id": "saturation",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5
+          }
+        }
+      },
+      "expected": {
+        "ok": false,
+        "code": "POLICY_MISMATCH",
+        "path": "/controls/0"
+      }
+    },
+    {
+      "id": "script-label",
+      "category": "structural",
+      "set": {
+        "controls": [
+          {
+            "control_id": "saturation",
+            "label": "<script>alert(1)</script>",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/controls/0/label"
+      }
+    },
+    {
+      "id": "privileged-action",
+      "category": "structural",
+      "set": {
+        "controls": [
+          {
+            "control_id": "saturation",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "publish",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/controls/0/action"
+      }
+    },
+    {
+      "id": "executable-field",
+      "category": "structural",
+      "set": {
+        "controls": [
+          {
+            "control_id": "saturation",
+            "label": "Saturation",
+            "description": "Inert numeric control",
+            "action": "set_value",
+            "required": false,
+            "enabled": true,
+            "default_presence": "present",
+            "kind": "number",
+            "unit": "ratio",
+            "minimum": 0,
+            "maximum": 1,
+            "step": 0.1,
+            "default_value": 0.5,
+            "script": "run()"
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/controls/0"
+      }
+    }
+  ]
+}

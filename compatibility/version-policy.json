@@ -108,6 +108,42 @@
     ],
     "QueryResult": [
       "1.0.0"
+    ],
+    "ProjectRequest": [
+      "1.0.0"
+    ],
+    "ResearchRequest": [
+      "1.0.0"
+    ],
+    "EventIntelligencePackage": [
+      "1.0.0"
+    ],
+    "ResearchRequestReceipt": [
+      "1.0.0"
+    ],
+    "ResearchAnswerReceipt": [
+      "1.0.0"
+    ],
+    "ResearchBatchReceipt": [
+      "1.0.0"
+    ],
+    "ResearchCorrectionRequest": [
+      "1.0.0"
+    ],
+    "ResearchCorrectionReceipt": [
+      "1.0.0"
+    ],
+    "ResearchInvalidation": [
+      "1.0.0"
+    ],
+    "CreativeBrief": [
+      "1.0.0"
+    ],
+    "DesignControlSchema": [
+      "1.0.0"
+    ],
+    "DesignVersion": [
+      "1.0.0"
     ]
   },
   "previous_accepted_major": null

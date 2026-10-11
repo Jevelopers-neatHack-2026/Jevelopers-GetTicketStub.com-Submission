@@ -100,7 +100,7 @@ export interface DecisionPortRequest {
              * @minItems 1
              * @maxItems 255
              */
-            readonly eligible_candidate_ids: [
+            readonly eligible_candidate_ids: readonly [
                 string,
                 ...readonly string[]
             ];
@@ -117,41 +117,32 @@ export interface DecisionPortRequest {
              * @minItems 2
              * @maxItems 10
              */
-            readonly criteria: [
+            readonly criteria: readonly [
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
-                InertValue5,
-                InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
@@ -159,8 +150,7 @@ export interface DecisionPortRequest {
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
@@ -169,7 +159,17 @@ export interface DecisionPortRequest {
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
+            ] | readonly [
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
@@ -195,41 +195,32 @@ export interface DecisionPortRequest {
              * @minItems 2
              * @maxItems 10
              */
-            readonly index_labels: [
+            readonly index_labels: readonly [
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
-                InertValue5,
-                InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
@@ -237,8 +228,7 @@ export interface DecisionPortRequest {
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
-                InertValue5,
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,
@@ -247,7 +237,17 @@ export interface DecisionPortRequest {
                 InertValue5,
                 InertValue5,
                 InertValue5
-            ] | [
+            ] | readonly [
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5,
+                InertValue5
+            ] | readonly [
                 InertValue5,
                 InertValue5,
                 InertValue5,

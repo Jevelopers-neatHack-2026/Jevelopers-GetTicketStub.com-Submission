@@ -59,12 +59,12 @@ export interface FinancialSummary {
      * @minItems 1
      * @maxItems 3
      */
-    readonly included_environments: [
+    readonly included_environments: readonly [
         "development" | "test" | "production"
-    ] | [
+    ] | readonly [
         "development" | "test" | "production",
         "development" | "test" | "production"
-    ] | [
+    ] | readonly [
         "development" | "test" | "production",
         "development" | "test" | "production",
         "development" | "test" | "production"
@@ -73,12 +73,12 @@ export interface FinancialSummary {
      * @minItems 1
      * @maxItems 3
      */
-    readonly included_billing_modes: [
+    readonly included_billing_modes: readonly [
         "live" | "sandbox" | "simulated"
-    ] | [
+    ] | readonly [
         "live" | "sandbox" | "simulated",
         "live" | "sandbox" | "simulated"
-    ] | [
+    ] | readonly [
         "live" | "sandbox" | "simulated",
         "live" | "sandbox" | "simulated",
         "live" | "sandbox" | "simulated"

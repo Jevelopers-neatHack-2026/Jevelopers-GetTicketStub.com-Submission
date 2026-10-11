@@ -1,0 +1,575 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/DesignControlSchema/1.0.0",
+  "title": "DesignControlSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "DesignControlSchema",
+      "x-classification": "public"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "policy_version": {
+      "const": "1.0.0",
+      "x-classification": "public"
+    },
+    "event_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EventId",
+      "x-classification": "internal"
+    },
+    "tenant_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TenantId",
+      "x-classification": "restricted"
+    },
+    "project_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProjectId",
+      "x-classification": "restricted"
+    },
+    "workflow_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/WorkflowId",
+      "x-classification": "internal"
+    },
+    "run_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/RunId",
+      "x-classification": "internal"
+    },
+    "job_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/JobId",
+      "x-classification": "internal"
+    },
+    "artifact_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ArtifactId",
+      "x-classification": "restricted"
+    },
+    "design_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignId",
+      "x-classification": "restricted"
+    },
+    "design_version_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/DesignVersionId",
+      "x-classification": "restricted"
+    },
+    "order_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/OrderId",
+      "x-classification": "restricted"
+    },
+    "trace_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TraceId",
+      "x-classification": "internal"
+    },
+    "correlation_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/CorrelationId",
+      "x-classification": "internal"
+    },
+    "evidence_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/EvidenceId",
+      "x-classification": "internal"
+    },
+    "usage_event_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UsageEventId",
+      "x-classification": "internal"
+    },
+    "logical_operation_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/LogicalOperationId",
+      "x-classification": "internal"
+    },
+    "provider_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderAttemptId",
+      "x-classification": "internal"
+    },
+    "billable_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/BillableAttemptId",
+      "x-classification": "internal"
+    },
+    "transport_attempt_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/TransportAttemptId",
+      "x-classification": "internal"
+    },
+    "provider_request_id": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/ProviderRequestId",
+      "x-classification": "restricted"
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "source_revision",
+        "build_revision"
+      ],
+      "x-classification": "internal",
+      "properties": {
+        "module": {
+          "type": "string",
+          "enum": [
+            "getticketstub.com",
+            "agent-harness",
+            "event-intelligence",
+            "creative-engine",
+            "print-production",
+            "fulfillment-connectors",
+            "cost-intelligence",
+            "team-dashboard",
+            "integration-evals",
+            "shared-contracts"
+          ],
+          "x-classification": "public"
+        },
+        "source_revision": {
+          "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/SourceRevision",
+          "x-classification": "public"
+        },
+        "build_revision": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,128}$",
+          "x-classification": "internal"
+        }
+      }
+    },
+    "occurred_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal"
+    },
+    "observed_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal"
+    },
+    "ingested_at": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/UtcTime",
+      "x-classification": "internal"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "development",
+        "test",
+        "production"
+      ],
+      "x-classification": "public"
+    },
+    "billing_mode": {
+      "type": "string",
+      "enum": [
+        "live",
+        "sandbox",
+        "simulated"
+      ],
+      "x-classification": "public"
+    },
+    "source_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "x-classification": "restricted",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artifact",
+              "evidence",
+              "source_observation",
+              "provider_request",
+              "manifest"
+            ],
+            "x-classification": "internal"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,256}$",
+            "x-classification": "restricted"
+          },
+          "content_hash": {
+            "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+            "x-classification": "restricted"
+          }
+        }
+      }
+    },
+    "control_schema_id": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 36,
+      "maxLength": 36,
+      "tsType": "Brand<string, 'ControlSchemaId'>",
+      "x-classification": "restricted"
+    },
+    "control_schema_hash": {
+      "$ref": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0#/$defs/Sha256",
+      "x-classification": "restricted"
+    },
+    "control_schema_version": {
+      "const": "1.0.0",
+      "x-classification": "restricted"
+    },
+    "design_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "policy_ref": {
+      "$ref": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0#/$defs/VersionedReference",
+      "x-classification": "restricted"
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "control_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                "x-classification": "restricted"
+              },
+              "label": {
+                "type": "string",
+                "pattern": "^[^<>\\u0000-\\u001f]{1,160}$",
+                "x-classification": "restricted"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1000,
+                "pattern": "^[^<>\\u0000-\\u001f]{0,1000}$",
+                "x-classification": "restricted"
+              },
+              "action": {
+                "const": "set_value",
+                "x-classification": "restricted"
+              },
+              "required": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "enabled": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "default_presence": {
+                "type": "string",
+                "enum": [
+                  "absent",
+                  "present"
+                ],
+                "x-classification": "restricted"
+              },
+              "kind": {
+                "const": "number",
+                "x-classification": "restricted"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "ratio",
+                  "degrees",
+                  "pixels",
+                  "mm"
+                ],
+                "x-classification": "restricted"
+              },
+              "minimum": {
+                "type": "number",
+                "x-classification": "restricted"
+              },
+              "maximum": {
+                "type": "number",
+                "x-classification": "restricted"
+              },
+              "step": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "x-classification": "restricted"
+              },
+              "default_value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "control_id",
+              "label",
+              "description",
+              "action",
+              "required",
+              "enabled",
+              "default_presence",
+              "kind",
+              "unit",
+              "minimum",
+              "maximum",
+              "step",
+              "default_value"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "control_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                "x-classification": "restricted"
+              },
+              "label": {
+                "type": "string",
+                "pattern": "^[^<>\\u0000-\\u001f]{1,160}$",
+                "x-classification": "restricted"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1000,
+                "pattern": "^[^<>\\u0000-\\u001f]{0,1000}$",
+                "x-classification": "restricted"
+              },
+              "action": {
+                "const": "set_value",
+                "x-classification": "restricted"
+              },
+              "required": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "enabled": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "default_presence": {
+                "type": "string",
+                "enum": [
+                  "absent",
+                  "present"
+                ],
+                "x-classification": "restricted"
+              },
+              "kind": {
+                "const": "enum",
+                "x-classification": "restricted"
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^<>\\u0000-\\u001f]{1,160}$"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "uniqueItems": true,
+                "x-classification": "restricted"
+              },
+              "default_value": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[^<>\\u0000-\\u001f]{1,160}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "control_id",
+              "label",
+              "description",
+              "action",
+              "required",
+              "enabled",
+              "default_presence",
+              "kind",
+              "values",
+              "default_value"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "control_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                "x-classification": "restricted"
+              },
+              "label": {
+                "type": "string",
+                "pattern": "^[^<>\\u0000-\\u001f]{1,160}$",
+                "x-classification": "restricted"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1000,
+                "pattern": "^[^<>\\u0000-\\u001f]{0,1000}$",
+                "x-classification": "restricted"
+              },
+              "action": {
+                "const": "set_value",
+                "x-classification": "restricted"
+              },
+              "required": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "enabled": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "default_presence": {
+                "type": "string",
+                "enum": [
+                  "absent",
+                  "present"
+                ],
+                "x-classification": "restricted"
+              },
+              "kind": {
+                "const": "boolean",
+                "x-classification": "restricted"
+              },
+              "default_value": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "control_id",
+              "label",
+              "description",
+              "action",
+              "required",
+              "enabled",
+              "default_presence",
+              "kind",
+              "default_value"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "control_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                "x-classification": "restricted"
+              },
+              "label": {
+                "type": "string",
+                "pattern": "^[^<>\\u0000-\\u001f]{1,160}$",
+                "x-classification": "restricted"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1000,
+                "pattern": "^[^<>\\u0000-\\u001f]{0,1000}$",
+                "x-classification": "restricted"
+              },
+              "action": {
+                "const": "set_value",
+                "x-classification": "restricted"
+              },
+              "required": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "enabled": {
+                "type": "boolean",
+                "x-classification": "restricted"
+              },
+              "default_presence": {
+                "type": "string",
+                "enum": [
+                  "absent",
+                  "present"
+                ],
+                "x-classification": "restricted"
+              },
+              "kind": {
+                "const": "text",
+                "x-classification": "restricted"
+              },
+              "max_length": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 8192,
+                "x-classification": "restricted"
+              },
+              "default_value": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 8192
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "x-classification": "restricted"
+              }
+            },
+            "required": [
+              "control_id",
+              "label",
+              "description",
+              "action",
+              "required",
+              "enabled",
+              "default_presence",
+              "kind",
+              "max_length",
+              "default_value"
+            ]
+          }
+        ]
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "x-classification": "restricted"
+    }
+  },
+  "required": [
+    "contract",
+    "schema_version",
+    "policy_version",
+    "event_id",
+    "tenant_id",
+    "project_id",
+    "correlation_id",
+    "producer",
+    "occurred_at",
+    "observed_at",
+    "ingested_at",
+    "environment",
+    "billing_mode",
+    "source_refs",
+    "control_schema_id",
+    "control_schema_hash",
+    "control_schema_version",
+    "design_ref",
+    "policy_ref",
+    "controls"
+  ]
+}

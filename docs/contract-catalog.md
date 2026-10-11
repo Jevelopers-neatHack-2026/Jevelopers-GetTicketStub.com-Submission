@@ -1,6 +1,6 @@
 # Contract Catalog
 
-This is the maintained inventory. The JSON record below is consumed by `contracts:inventory`. Foundation candidates are implemented locally and await owner review. Operations leaves #9-14 now have local candidates; domain leaves #15-28 remain unimplemented. Paths and versions remain null until artifacts exist; no planned export counts as an implementation.
+This is the maintained inventory. The JSON record below is consumed by `contracts:inventory`. Foundation candidates are implemented locally and await owner review. Operations leaves #9-14 now have local candidates; domain leaves #22-28 remain unimplemented. Paths and versions remain null until artifacts exist; no planned export counts as an implementation.
 
 | Export | Leaf | Producers | Consumers | State |
 | --- | --- | --- | --- | --- |
@@ -26,15 +26,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
 | DecisionPortRequest | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | operations_candidate |
 | DecisionPortResult | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | operations_candidate |
 | DecisionReceipt | #14 SC-05 | agent-harness, event-intelligence, creative-engine | agent-harness, event-intelligence, creative-engine, integration-evals | operations_candidate |
-| ProjectRequest | #15 SC-02.PROJECT | getticketstub.com | agent-harness | unimplemented |
-| ResearchRequest | #16 SC-02.RESEARCH | agent-harness | event-intelligence | unimplemented |
-| EventIntelligencePackage | #17 SC-02.RESEARCH-PACKAGE | event-intelligence | creative-engine, agent-harness, getticketstub.com, integration-evals | unimplemented |
-| ResearchCorrectionRequest | #18 SC-02.RESEARCH-EVENTS | getticketstub.com, event-intelligence | event-intelligence, creative-engine, agent-harness, integration-evals | unimplemented |
-| ResearchCorrectionReceipt | #18 SC-02.RESEARCH-EVENTS | getticketstub.com, event-intelligence | event-intelligence, creative-engine, agent-harness, integration-evals | unimplemented |
-| ResearchInvalidation | #18 SC-02.RESEARCH-EVENTS | getticketstub.com, event-intelligence | event-intelligence, creative-engine, agent-harness, integration-evals | unimplemented |
-| CreativeBrief | #19 SC-02.BRIEF | creative-engine | agent-harness, creative-engine | unimplemented |
-| DesignControlSchema | #20 SC-02.CONTROLS | creative-engine | getticketstub.com | unimplemented |
-| DesignVersion | #21 SC-02.DESIGN | creative-engine | getticketstub.com, print-production, agent-harness, integration-evals | unimplemented |
+| ProjectRequest | #15 SC-02.PROJECT | getticketstub.com | agent-harness | research_creative_candidate |
+| ResearchRequest | #16 SC-02.RESEARCH | agent-harness | event-intelligence | research_creative_candidate |
+| EventIntelligencePackage | #17 SC-02.RESEARCH-PACKAGE | event-intelligence | creative-engine, agent-harness, getticketstub.com, integration-evals | research_creative_candidate |
+| ResearchCorrectionRequest | #18 SC-02.RESEARCH-EVENTS | getticketstub.com, event-intelligence | event-intelligence, creative-engine, agent-harness, integration-evals | research_creative_candidate |
+| ResearchCorrectionReceipt | #18 SC-02.RESEARCH-EVENTS | getticketstub.com, event-intelligence | event-intelligence, creative-engine, agent-harness, integration-evals | research_creative_candidate |
+| ResearchInvalidation | #18 SC-02.RESEARCH-EVENTS | getticketstub.com, event-intelligence | event-intelligence, creative-engine, agent-harness, integration-evals | research_creative_candidate |
+| CreativeBrief | #19 SC-02.BRIEF | creative-engine | agent-harness, creative-engine | research_creative_candidate |
+| DesignControlSchema | #20 SC-02.CONTROLS | creative-engine | getticketstub.com | research_creative_candidate |
+| DesignVersion | #21 SC-02.DESIGN | creative-engine | getticketstub.com, print-production, agent-harness, integration-evals | research_creative_candidate |
 | ApprovalReference | #22 SC-07.APPROVAL | getticketstub.com | creative-engine, print-production, event-intelligence, agent-harness, integration-evals | unimplemented |
 | ApprovalReceipt | #22 SC-07.APPROVAL | getticketstub.com | creative-engine, print-production, event-intelligence, agent-harness, integration-evals | unimplemented |
 | ArtifactHandoffManifest | #23 SC-07.HANDOFF | creative-engine | print-production, getticketstub.com, agent-harness, integration-evals | unimplemented |
@@ -868,15 +868,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "authenticated application ingress",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "getticketstub.com",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ProjectRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ProjectRequest_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ProjectRequest.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -899,15 +899,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "bounded research ingress",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "agent-harness",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ResearchRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ResearchRequest_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ResearchRequest.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -933,15 +933,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "facts and asset permissions; ResearchPackage alias unresolved",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "event-intelligence",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/EventIntelligencePackage/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/EventIntelligencePackage_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/EventIntelligencePackage.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -968,15 +968,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "immutable correction and stale-use propagation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "getticketstub.com",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ResearchCorrectionRequest/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ResearchCorrectionRequest_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ResearchCorrectionRequest.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1003,15 +1003,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "immutable correction and stale-use propagation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "getticketstub.com",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ResearchCorrectionReceipt/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ResearchCorrectionReceipt_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ResearchCorrectionReceipt.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1038,15 +1038,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "immutable correction and stale-use propagation",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "getticketstub.com",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ResearchInvalidation/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ResearchInvalidation_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ResearchInvalidation.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1070,15 +1070,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "exact sourced facts and bounded generation policy",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "creative-engine",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/CreativeBrief/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/CreativeBrief_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/CreativeBrief.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1101,15 +1101,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "inert declarative controls",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "creative-engine",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/DesignControlSchema/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/DesignControlSchema_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/DesignControlSchema.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1135,15 +1135,15 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "semantic_authority": "immutable original/generated/transformed artwork",
       "lifecycle": "versioned immutable wire record; domain owner controls transitions",
       "field_steward": "creative-engine",
-      "state": "unimplemented",
-      "schema_path": null,
-      "schema_version": null,
-      "generated_export": null,
-      "helper": null,
-      "fixtures": null,
-      "docs": "docs/contract-catalog.md",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/DesignVersion/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/DesignVersion_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/DesignVersion.json",
+      "docs": "docs/research-creative-contracts.md",
       "version_policy": "compatibility/version-policy.json",
-      "field_classification": "pending domain leaf",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
       "acceptance": null
     },
     {
@@ -1413,6 +1413,108 @@ This is the maintained inventory. The JSON record below is consumed by `contract
       "version_policy": "compatibility/version-policy.json",
       "field_classification": "pending domain leaf",
       "acceptance": null
+    },
+    {
+      "name": "ResearchRequestReceipt",
+      "group": "ResearchRequestReceipt",
+      "issue": 17,
+      "requirement": "SC-02.RESEARCH-PACKAGE",
+      "owner_role": "Agent and research (shared-contracts maintainer)",
+      "domain_steward": "event-intelligence",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "event-intelligence"
+      ],
+      "consumers": [
+        "agent-harness",
+        "creative-engine",
+        "integration-evals"
+      ],
+      "trust_boundary": "immutable research receipt; no authority or provider execution",
+      "semantic_authority": "event-intelligence observation; application retains authentication/permission authority",
+      "lifecycle": "versioned immutable wire record; domain owner controls transitions",
+      "field_steward": "event-intelligence",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ResearchRequestReceipt/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ResearchRequestReceipt_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ResearchRequestReceipt.json",
+      "docs": "docs/research-creative-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
+      "acceptance": null,
+      "naming_status": "proposed_from_EI_handoff_pending_owner_review"
+    },
+    {
+      "name": "ResearchAnswerReceipt",
+      "group": "ResearchAnswerReceipt",
+      "issue": 17,
+      "requirement": "SC-02.RESEARCH-PACKAGE",
+      "owner_role": "Agent and research (shared-contracts maintainer)",
+      "domain_steward": "event-intelligence",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "event-intelligence"
+      ],
+      "consumers": [
+        "agent-harness",
+        "creative-engine",
+        "integration-evals"
+      ],
+      "trust_boundary": "immutable research receipt; no authority or provider execution",
+      "semantic_authority": "event-intelligence observation; application retains authentication/permission authority",
+      "lifecycle": "versioned immutable wire record; domain owner controls transitions",
+      "field_steward": "event-intelligence",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ResearchAnswerReceipt/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ResearchAnswerReceipt_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ResearchAnswerReceipt.json",
+      "docs": "docs/research-creative-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
+      "acceptance": null,
+      "naming_status": "proposed_from_EI_handoff_pending_owner_review"
+    },
+    {
+      "name": "ResearchBatchReceipt",
+      "group": "ResearchBatchReceipt",
+      "issue": 17,
+      "requirement": "SC-02.RESEARCH-PACKAGE",
+      "owner_role": "Agent and research (shared-contracts maintainer)",
+      "domain_steward": "event-intelligence",
+      "named_owner": null,
+      "reviewer": null,
+      "owner_acknowledgement": null,
+      "producers": [
+        "event-intelligence"
+      ],
+      "consumers": [
+        "agent-harness",
+        "creative-engine",
+        "integration-evals"
+      ],
+      "trust_boundary": "immutable research receipt; no authority or provider execution",
+      "semantic_authority": "event-intelligence observation; application retains authentication/permission authority",
+      "lifecycle": "versioned immutable wire record; domain owner controls transitions",
+      "field_steward": "event-intelligence",
+      "state": "research_creative_candidate",
+      "schema_path": "schemas/ResearchBatchReceipt/1.0.0.json",
+      "schema_version": "1.0.0",
+      "generated_export": "generated/ResearchBatchReceipt_1_0_0.d.ts",
+      "helper": "tooling/research-creative.mjs",
+      "fixtures": "fixtures/ResearchBatchReceipt.json",
+      "docs": "docs/research-creative-contracts.md",
+      "version_policy": "compatibility/version-policy.json",
+      "field_classification": "schema x-classification; public evidence stays allowlisted",
+      "acceptance": null,
+      "naming_status": "proposed_from_EI_handoff_pending_owner_review"
     }
   ],
   "unresolved_export_slots": [
@@ -1423,8 +1525,12 @@ This is the maintained inventory. The JSON record below is consumed by `contract
         "research answer receipt",
         "research batch receipt"
       ],
-      "export_names": null,
-      "state": "pending_owner_naming",
+      "export_names": [
+        "ResearchRequestReceipt",
+        "ResearchAnswerReceipt",
+        "ResearchBatchReceipt"
+      ],
+      "state": "locally_implemented_proposals_pending_owner_review",
       "producer": "event-intelligence",
       "consumers": [
         "agent-harness",
@@ -1487,3 +1593,5 @@ See [identity rules](identity-policy.md), [privacy](privacy-policy.md), [version
 Foundation navigation: [CommonEnvelope schema](../schemas/CommonEnvelope/1.0.0.json), [type](../generated/CommonEnvelope_1_0_0.d.ts), [fixtures](../fixtures/CommonEnvelope.json); [EvidenceProjection schema](../schemas/EvidenceProjection/1.0.0.json), [type](../generated/EvidenceProjection_1_0_0.d.ts), [fixtures](../fixtures/EvidenceProjection.json); [runtime helpers](../tooling/runtime.mjs). Domain paths stay null until implemented.
 
 Operations navigation: [contracts and helper guide](operations-contracts.md), [installed consumer example](../examples/operations-consumer.mjs), [generated port API](../generated/operations.d.ts). Each operations entry above has a real schema, declaration and fixture path; owner acknowledgement remains null.
+
+Research and creative navigation: [contract and migration guide](research-creative-contracts.md), [installed consumer](../examples/research-creative-consumer.mjs), [generated context API](../generated/research-creative.d.ts). ResearchRequestReceipt, ResearchAnswerReceipt and ResearchBatchReceipt are separately indexed proposals grounded in EI's receipt handoff; final names and acceptance remain pending.

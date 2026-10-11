@@ -32,3 +32,7 @@ export type QuestionKey = Brand<string, "QuestionKey">;
 export type Currency = Brand<string, "Currency">;
 export type Revision = Brand<number, "Revision">;
 export type SignedDecimal = Brand<string, "SignedDecimal">;
+export type PackageId = Brand<string, "PackageId">;
+export type FactId = Brand<string, "FactId">;
+export type AssetId = Brand<string, "AssetId">;
+export type BriefId = Brand<string, "BriefId">;

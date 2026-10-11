@@ -1,5 +1,5 @@
 {
-  "package_version": "0.2.0",
+  "package_version": "0.3.0",
   "source_revision": null,
   "status": "unreleased_candidates",
   "toolchain": {
@@ -32,6 +32,13 @@
       "sha256": "8b805d89efd8104bb2b88f6ba441f0ce42cc5b4df1ffcb1c8bd7f5126d102bb2"
     },
     {
+      "contract": "CreativeBrief",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/CreativeBrief/1.0.0",
+      "path": "schemas/CreativeBrief/1.0.0.json",
+      "sha256": "497b5b8453205e2056d1d2a8b8ef21708f8a7db7a435bda1b30e5e661b17baa3"
+    },
+    {
       "contract": "DecisionPortRequest",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/DecisionPortRequest/1.0.0",
@@ -53,11 +60,32 @@
       "sha256": "9d4a5e08259a57045fc84e0a775ba8b6945add0762c171aed93f3baa4ec294f5"
     },
     {
+      "contract": "DesignControlSchema",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/DesignControlSchema/1.0.0",
+      "path": "schemas/DesignControlSchema/1.0.0.json",
+      "sha256": "0808caa5f31d7d2d7a42ee3c75274065f7a6580a3aef50d39265301584d9d6d4"
+    },
+    {
+      "contract": "DesignVersion",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/DesignVersion/1.0.0",
+      "path": "schemas/DesignVersion/1.0.0.json",
+      "sha256": "f8c49765ab608419a23503affb4f7549db03581ff5a39fb642c03fa106aa7c80"
+    },
+    {
       "contract": "ErrorEnvelope",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/ErrorEnvelope/1.0.0",
       "path": "schemas/ErrorEnvelope/1.0.0.json",
       "sha256": "9a27a2b9a8f1a1ec9f8c56d67b9e5b9d74e0dc9b7e87dea1be1fd87729f8f93c"
+    },
+    {
+      "contract": "EventIntelligencePackage",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/EventIntelligencePackage/1.0.0",
+      "path": "schemas/EventIntelligencePackage/1.0.0.json",
+      "sha256": "80352284ea5560ef7be8e0282edbbf723e7f5393308356d5916f5434f5bfc450"
     },
     {
       "contract": "EvidenceProjection",
@@ -102,6 +130,13 @@
       "sha256": "ffbc017416dec37983be87bcfab5e4275d3f72cd80b6edbeb67d88c0257ad6c2"
     },
     {
+      "contract": "ProjectRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ProjectRequest/1.0.0",
+      "path": "schemas/ProjectRequest/1.0.0.json",
+      "sha256": "be6b676371c85b93ab417f371ab44ac5f160ed2f253d1e9a50ab7e0d9d35b1f9"
+    },
+    {
       "contract": "QueryRequest",
       "version": "1.0.0",
       "schema_id": "https://schemas.jevelopers.org/QueryRequest/1.0.0",
@@ -128,6 +163,55 @@
       "schema_id": "https://schemas.jevelopers.org/ReleaseResult/1.0.0",
       "path": "schemas/ReleaseResult/1.0.0.json",
       "sha256": "de7b769c95dbac04b4fefc96bf9fad3c2dd9eb54864cf5e6ad4de3cc1025cbd2"
+    },
+    {
+      "contract": "ResearchAnswerReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchAnswerReceipt/1.0.0",
+      "path": "schemas/ResearchAnswerReceipt/1.0.0.json",
+      "sha256": "3eb351ad99babffb35e7568ea82562ba37998e83506b09f6eb70d4bb215a0411"
+    },
+    {
+      "contract": "ResearchBatchReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchBatchReceipt/1.0.0",
+      "path": "schemas/ResearchBatchReceipt/1.0.0.json",
+      "sha256": "2d6f0b6d3a1e1553c034f05e236f450c8d0749d344a8607d0a29dbd811479d4f"
+    },
+    {
+      "contract": "ResearchCorrectionReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchCorrectionReceipt/1.0.0",
+      "path": "schemas/ResearchCorrectionReceipt/1.0.0.json",
+      "sha256": "a39ebd090b97577fcdc2bd84ae3f6fed76f42f4137d678dfbd51e3ee7cf00ef3"
+    },
+    {
+      "contract": "ResearchCorrectionRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchCorrectionRequest/1.0.0",
+      "path": "schemas/ResearchCorrectionRequest/1.0.0.json",
+      "sha256": "396b1647cc864494aab73df33d2515d7bc2c3f3bc0c7a36b3a5afbe75f5744a8"
+    },
+    {
+      "contract": "ResearchInvalidation",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchInvalidation/1.0.0",
+      "path": "schemas/ResearchInvalidation/1.0.0.json",
+      "sha256": "a984d2ac803210c88af0f77d09b7f1612eaf90fa93f9e35bfea094c2bd6c4093"
+    },
+    {
+      "contract": "ResearchRequest",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchRequest/1.0.0",
+      "path": "schemas/ResearchRequest/1.0.0.json",
+      "sha256": "cbe6377c2a743f585bc622bf726be8a8bb8cc17aceff167304af7b38c03f0fc0"
+    },
+    {
+      "contract": "ResearchRequestReceipt",
+      "version": "1.0.0",
+      "schema_id": "https://schemas.jevelopers.org/ResearchRequestReceipt/1.0.0",
+      "path": "schemas/ResearchRequestReceipt/1.0.0.json",
+      "sha256": "9aa3d546de7045a00753436b30937191379c81d69dd76cf036a792a403eb4f48"
     },
     {
       "contract": "ReserveRequest",

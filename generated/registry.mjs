@@ -8,6 +8,9 @@ const records = {
   "CommonEnvelope": {
     "1.0.0": "CommonEnvelope_1_0_0"
   },
+  "CreativeBrief": {
+    "1.0.0": "CreativeBrief_1_0_0"
+  },
   "DecisionPortRequest": {
     "1.0.0": "DecisionPortRequest_1_0_0"
   },
@@ -17,8 +20,17 @@ const records = {
   "DecisionReceipt": {
     "1.0.0": "DecisionReceipt_1_0_0"
   },
+  "DesignControlSchema": {
+    "1.0.0": "DesignControlSchema_1_0_0"
+  },
+  "DesignVersion": {
+    "1.0.0": "DesignVersion_1_0_0"
+  },
   "ErrorEnvelope": {
     "1.0.0": "ErrorEnvelope_1_0_0"
+  },
+  "EventIntelligencePackage": {
+    "1.0.0": "EventIntelligencePackage_1_0_0"
   },
   "EvidenceProjection": {
     "1.0.0": "EvidenceProjection_1_0_0"
@@ -38,6 +50,9 @@ const records = {
   "PartialFailure": {
     "1.0.0": "PartialFailure_1_0_0"
   },
+  "ProjectRequest": {
+    "1.0.0": "ProjectRequest_1_0_0"
+  },
   "QueryRequest": {
     "1.0.0": "QueryRequest_1_0_0"
   },
@@ -49,6 +64,27 @@ const records = {
   },
   "ReleaseResult": {
     "1.0.0": "ReleaseResult_1_0_0"
+  },
+  "ResearchAnswerReceipt": {
+    "1.0.0": "ResearchAnswerReceipt_1_0_0"
+  },
+  "ResearchBatchReceipt": {
+    "1.0.0": "ResearchBatchReceipt_1_0_0"
+  },
+  "ResearchCorrectionReceipt": {
+    "1.0.0": "ResearchCorrectionReceipt_1_0_0"
+  },
+  "ResearchCorrectionRequest": {
+    "1.0.0": "ResearchCorrectionRequest_1_0_0"
+  },
+  "ResearchInvalidation": {
+    "1.0.0": "ResearchInvalidation_1_0_0"
+  },
+  "ResearchRequest": {
+    "1.0.0": "ResearchRequest_1_0_0"
+  },
+  "ResearchRequestReceipt": {
+    "1.0.0": "ResearchRequestReceipt_1_0_0"
   },
   "ReserveRequest": {
     "1.0.0": "ReserveRequest_1_0_0"
@@ -101,5 +137,9 @@ export const primitiveValidators = Object.freeze({
   "QuestionKey": "PrimitiveQuestionKey",
   "Currency": "PrimitiveCurrency",
   "Revision": "PrimitiveRevision",
-  "SignedDecimal": "PrimitiveSignedDecimal"
+  "SignedDecimal": "PrimitiveSignedDecimal",
+  "PackageId": "PrimitivePackageId",
+  "FactId": "PrimitiveFactId",
+  "AssetId": "PrimitiveAssetId",
+  "BriefId": "PrimitiveBriefId"
 });

@@ -56,4 +56,4 @@ DecisionReceipt binds request/result/question/answer canonical hashes, immutable
 
 ## Local and release gates
 
-Run build, test, test:installed, each named contract's contracts:check/contracts:fixtures, and contracts:compat --implemented. --implemented checks all 22 current candidates; --foundation remains the two foundation contracts. Full catalog checks still fail for #15-28; require-owner/require-consumer-pins and contracts:consumers still require genuine external evidence. Compatibility baselines bind candidate schema bytes; no historical accepted major, live integration, Finance approval or accepted Score migration is fabricated.
+Run build, test, test:installed, each named contract's contracts:check/contracts:fixtures, and contracts:compat --implemented. --implemented checks all 34 current candidates; --foundation remains the two foundation contracts. Full catalog checks still fail for #22-28; require-owner/require-consumer-pins and contracts:consumers still require genuine external evidence. Compatibility baselines bind candidate schema bytes; no historical accepted major, live integration, Finance approval or accepted Score migration is fabricated.

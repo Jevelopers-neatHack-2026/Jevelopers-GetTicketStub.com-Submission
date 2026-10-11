@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { root, readJson, schemaFiles, compiler, outputs } from './generate.mjs';
 import { validateContract, parseContract, checkTrustedContext, hashBytes, hashManifest, canonicalJson } from '../tooling/runtime.mjs';
 import { checkOperation, compareUsageIdentity } from '../tooling/operations.mjs';
+import { checkResearchCreative } from '../tooling/research-creative.mjs';
 import { schemaImpact } from './compatibility.mjs';
 
 const knownConsumers = ['agent-harness', 'event-intelligence', 'creative-engine', 'print-production', 'fulfillment-connectors', 'cost-intelligence', 'team-dashboard', 'integration-evals', 'getticketstub.com'];
@@ -59,7 +60,12 @@ export async function runFixtures(entry) {
     const payload = structuredClone(manifest.valid);
     for (const key of fixture.remove ?? []) delete payload[key];
     Object.assign(payload, fixture.set ?? {});
-    if (fixture.mode === 'semantic') result = checkOperation(entry.name, payload, fixture.context);
+    if (fixture.mode === 'research_creative') {
+      const context = structuredClone(fixture.context);
+      if (context.artifact_bytes) context.artifact_bytes = Object.fromEntries(Object.entries(context.artifact_bytes).map(([id, bytes]) => [id, Uint8Array.from(bytes)]));
+      result = checkResearchCreative(entry.name, payload, context);
+    }
+    else if (fixture.mode === 'semantic') result = checkOperation(entry.name, payload, fixture.context);
     else if (fixture.mode === 'relationship') result = compareUsageIdentity(fixture.prior, payload);
     else if (fixture.mode === 'context') result = checkTrustedContext(payload, fixture.expected_context);
     else if (fixture.mode === 'parse') result = parseContract(entry.name, fixture.json);
@@ -214,7 +220,7 @@ export async function execute(command, options) {
       break;
     }
     case 'docs': {
-      for (const path of ['README.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md']) {
+      for (const path of ['README.md', 'docs/contract-catalog.md', 'docs/identity-policy.md', 'docs/privacy-policy.md', 'docs/adr/0001-canonical-schemas.md', 'docs/operations-contracts.md', 'docs/research-creative-contracts.md']) {
         const text = await readFile(root + path, 'utf8');
         for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
           if (/^(https?:|#)/.test(match[1])) continue;

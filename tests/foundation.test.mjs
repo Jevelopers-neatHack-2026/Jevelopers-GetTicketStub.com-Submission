@@ -97,7 +97,7 @@ test('unknown version names cannot resolve inherited registry members', () => {
 
 test('unknown contracts fail closed', () => {
   // Given an absent domain export, when validated, then no generic envelope substitutes.
-  assert.deepEqual(validateContract('ProjectRequest', common.valid), { ok: false, errors: [{ code: 'UNKNOWN_CONTRACT', path: '/contract' }] });
+  assert.deepEqual(validateContract('NoSuchContract', common.valid), { ok: false, errors: [{ code: 'UNKNOWN_CONTRACT', path: '/contract' }] });
 });
 
 test('safe errors omit arbitrary submitted values and unknown field names', () => {
@@ -236,8 +236,8 @@ test('full catalog schema checks fail for each absent named domain export', asyn
   // Given the foundation-only baseline, when the full gate runs, then no missing leaf passes.
   const result = await execute('check', {});
   assert.equal(result.status, 'failed_or_blocked');
-  assert.ok(result.failures.some(entry => entry.contract === 'ProjectRequest' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
-  assert.ok(result.failures.some(entry => entry.contract === 'ResearchRequest' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
+  assert.ok(result.failures.some(entry => entry.contract === 'ApprovalReceipt' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
+  assert.ok(result.failures.some(entry => entry.contract === 'ProductionBundle' && entry.code === 'MISSING_SCHEMA_OR_EXPORT'));
 });
 
 for (const [flag, code] of [['require-owner', 'BLOCKED_OWNER_ACCEPTANCE'], ['require-fixtures', 'MISSING_FIXTURES'], ['require-docs', 'MISSING_DISCOVERABLE_ARTIFACT'], ['require-consumer-pins', 'BLOCKED_CONSUMER_PIN'], ['require-field-classification', 'MISSING_CLASSIFIED_SCHEMA']]) test('inventory flag ' + flag + ' fails on missing release evidence', async () => {

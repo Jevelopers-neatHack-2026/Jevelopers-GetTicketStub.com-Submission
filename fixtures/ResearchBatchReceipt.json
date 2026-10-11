@@ -1,0 +1,683 @@
+{
+  "contract": "ResearchBatchReceipt",
+  "policy_version": "1.0.0",
+  "status": "synthetic_candidate_owner_review_pending",
+  "valid": {
+    "contract": "ResearchBatchReceipt",
+    "schema_version": "1.0.0",
+    "policy_version": "1.0.0",
+    "event_id": "123e4567-e89b-42d3-a456-000000001000",
+    "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+    "project_id": "123e4567-e89b-42d3-a456-426614174000",
+    "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+    "producer": {
+      "module": "shared-contracts",
+      "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+      "build_revision": "fixture-1"
+    },
+    "occurred_at": "2026-10-10T12:00:00Z",
+    "observed_at": "2026-10-10T12:00:01Z",
+    "ingested_at": "2026-10-10T12:00:02Z",
+    "environment": "test",
+    "billing_mode": "simulated",
+    "source_refs": [],
+    "receipt_id": "123e4567-e89b-42d3-a456-000000000032",
+    "batch_id": "123e4567-e89b-42d3-a456-000000000021",
+    "request_ids": [
+      "123e4567-e89b-42d3-a456-000000000020"
+    ],
+    "request_receipt_refs": [
+      {
+        "contract": "ResearchRequestReceipt",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000030",
+        "revision": 1,
+        "content_hash": "sha256:4d1681f13b1a2f9031f9c7d494cf5ddcd404947aa7b3bdde8cb5fc7239bbaf66"
+      }
+    ],
+    "answer_receipt_refs": [
+      {
+        "contract": "ResearchAnswerReceipt",
+        "schema_version": "1.0.0",
+        "id": "123e4567-e89b-42d3-a456-000000000031",
+        "revision": 1,
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "acceptance_policy": "partial",
+    "successful_request_ids": [
+      "123e4567-e89b-42d3-a456-000000000020"
+    ],
+    "failed_request_ids": [],
+    "pending_request_ids": [],
+    "policy_ref": {
+      "contract": "policy",
+      "schema_version": "1.0.0",
+      "id": "123e4567-e89b-42d3-a456-000000000014",
+      "revision": 1,
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "cases": [
+    {
+      "id": "minimal",
+      "category": "minimal",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "full",
+      "category": "full",
+      "set": {
+        "evidence_id": "123e4567-e89b-42d3-a456-000000000199"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "required",
+      "category": "missing",
+      "remove": [
+        "policy_version"
+      ],
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/policy_version"
+      }
+    },
+    {
+      "id": "type",
+      "category": "type",
+      "set": {
+        "environment": 42
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/environment"
+      }
+    },
+    {
+      "id": "enum",
+      "category": "enum",
+      "set": {
+        "billing_mode": "free"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/billing_mode"
+      }
+    },
+    {
+      "id": "json",
+      "category": "malformed_json",
+      "mode": "parse",
+      "json": "{",
+      "expected": {
+        "ok": false,
+        "code": "MALFORMED_JSON",
+        "path": ""
+      }
+    },
+    {
+      "id": "version",
+      "category": "unsupported_version",
+      "set": {
+        "schema_version": "2.0.0"
+      },
+      "expected": {
+        "ok": false,
+        "code": "UNSUPPORTED_VERSION",
+        "path": "/schema_version"
+      }
+    },
+    {
+      "id": "additive",
+      "category": "unknown_field",
+      "set": {
+        "approved": true
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": ""
+      }
+    },
+    {
+      "id": "date",
+      "category": "format",
+      "set": {
+        "occurred_at": "2025-02-29T00:00:00Z"
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/occurred_at"
+      }
+    },
+    {
+      "id": "semantic-positive",
+      "category": "semantic",
+      "mode": "research_creative",
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "request_receipt_refs/0": {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000030",
+            "revision": 1,
+            "content_hash": "sha256:4d1681f13b1a2f9031f9c7d494cf5ddcd404947aa7b3bdde8cb5fc7239bbaf66"
+          },
+          "answer_receipt_refs/0": {
+            "contract": "ResearchAnswerReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000031",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "request_ids": [
+          "123e4567-e89b-42d3-a456-000000000020"
+        ],
+        "acceptance_policy": "partial",
+        "request_receipts": [
+          {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000001000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "receipt_id": "123e4567-e89b-42d3-a456-000000000030",
+            "request_id": "123e4567-e89b-42d3-a456-000000000020",
+            "request_ref": {
+              "contract": "ResearchRequest",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000020",
+              "revision": 1,
+              "content_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08"
+            },
+            "request_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08",
+            "status": "accepted",
+            "error_ref": null,
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "id": "forged-scope",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "tenant_id": "123e4567-e89b-42d3-a456-000000000999"
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "request_receipt_refs/0": {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000030",
+            "revision": 1,
+            "content_hash": "sha256:4d1681f13b1a2f9031f9c7d494cf5ddcd404947aa7b3bdde8cb5fc7239bbaf66"
+          },
+          "answer_receipt_refs/0": {
+            "contract": "ResearchAnswerReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000031",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "request_ids": [
+          "123e4567-e89b-42d3-a456-000000000020"
+        ],
+        "acceptance_policy": "partial",
+        "request_receipts": [
+          {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000001000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "receipt_id": "123e4567-e89b-42d3-a456-000000000030",
+            "request_id": "123e4567-e89b-42d3-a456-000000000020",
+            "request_ref": {
+              "contract": "ResearchRequest",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000020",
+              "revision": 1,
+              "content_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08"
+            },
+            "request_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08",
+            "status": "accepted",
+            "error_ref": null,
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "SCOPE_MISMATCH",
+        "path": "/tenant_id"
+      }
+    },
+    {
+      "id": "duplicate-request",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "successful_request_ids": [
+          "123e4567-e89b-42d3-a456-000000000020",
+          "123e4567-e89b-42d3-a456-000000000020"
+        ]
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "request_receipt_refs/0": {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000030",
+            "revision": 1,
+            "content_hash": "sha256:4d1681f13b1a2f9031f9c7d494cf5ddcd404947aa7b3bdde8cb5fc7239bbaf66"
+          },
+          "answer_receipt_refs/0": {
+            "contract": "ResearchAnswerReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000031",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "request_ids": [
+          "123e4567-e89b-42d3-a456-000000000020"
+        ],
+        "acceptance_policy": "partial",
+        "request_receipts": [
+          {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000001000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "receipt_id": "123e4567-e89b-42d3-a456-000000000030",
+            "request_id": "123e4567-e89b-42d3-a456-000000000020",
+            "request_ref": {
+              "contract": "ResearchRequest",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000020",
+              "revision": 1,
+              "content_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08"
+            },
+            "request_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08",
+            "status": "accepted",
+            "error_ref": null,
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_PAYLOAD",
+        "path": "/successful_request_ids"
+      }
+    },
+    {
+      "id": "foreign-request",
+      "category": "semantic",
+      "mode": "research_creative",
+      "set": {
+        "failed_request_ids": [
+          "123e4567-e89b-42d3-a456-000000000999"
+        ]
+      },
+      "context": {
+        "scope": {
+          "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+          "project_id": "123e4567-e89b-42d3-a456-426614174000"
+        },
+        "now": "2026-10-10T12:00:00Z",
+        "policy_version": "1.0.0",
+        "allowed_domains": [
+          "events.example.invalid"
+        ],
+        "allowed_actions": [
+          "create_project",
+          "request_research"
+        ],
+        "allowed_outputs": [
+          "artwork",
+          "preview"
+        ],
+        "max_variants": 3,
+        "max_sources": 5,
+        "max_age_seconds": 3600,
+        "requested_facts": [
+          "title"
+        ],
+        "audience": "creative-engine",
+        "approvals": {
+          "123e4567-e89b-42d3-a456-000000000004": {
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "issuer": "getticketstub.com",
+            "audience": "creative-engine",
+            "actor_id": "actor_1",
+            "subject_id": "123e4567-e89b-42d3-a456-000000000003",
+            "subject_version": 1,
+            "subject_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "intended_use": "display",
+            "issued_at": "2026-10-10T11:00:00Z",
+            "expires_at": "2026-10-10T13:00:00Z",
+            "status": "valid",
+            "reference": {
+              "contract": "ApprovalReference",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000004",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        },
+        "references": {
+          "request_receipt_refs/0": {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000030",
+            "revision": 1,
+            "content_hash": "sha256:4d1681f13b1a2f9031f9c7d494cf5ddcd404947aa7b3bdde8cb5fc7239bbaf66"
+          },
+          "answer_receipt_refs/0": {
+            "contract": "ResearchAnswerReceipt",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000031",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "policy_ref": {
+            "contract": "policy",
+            "schema_version": "1.0.0",
+            "id": "123e4567-e89b-42d3-a456-000000000014",
+            "revision": 1,
+            "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        },
+        "request_ids": [
+          "123e4567-e89b-42d3-a456-000000000020"
+        ],
+        "acceptance_policy": "partial",
+        "request_receipts": [
+          {
+            "contract": "ResearchRequestReceipt",
+            "schema_version": "1.0.0",
+            "policy_version": "1.0.0",
+            "event_id": "123e4567-e89b-42d3-a456-000000001000",
+            "tenant_id": "123e4567-e89b-42d3-a456-426614174000",
+            "project_id": "123e4567-e89b-42d3-a456-426614174000",
+            "correlation_id": "123e4567-e89b-42d3-a456-426614174000",
+            "producer": {
+              "module": "shared-contracts",
+              "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+              "build_revision": "fixture-1"
+            },
+            "occurred_at": "2026-10-10T12:00:00Z",
+            "observed_at": "2026-10-10T12:00:01Z",
+            "ingested_at": "2026-10-10T12:00:02Z",
+            "environment": "test",
+            "billing_mode": "simulated",
+            "source_refs": [],
+            "receipt_id": "123e4567-e89b-42d3-a456-000000000030",
+            "request_id": "123e4567-e89b-42d3-a456-000000000020",
+            "request_ref": {
+              "contract": "ResearchRequest",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000020",
+              "revision": 1,
+              "content_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08"
+            },
+            "request_hash": "sha256:925f55e49b4ed80de1767e8ec4d9bd56ab56d80ffd93e939c499cb690e614e08",
+            "status": "accepted",
+            "error_ref": null,
+            "policy_ref": {
+              "contract": "policy",
+              "schema_version": "1.0.0",
+              "id": "123e4567-e89b-42d3-a456-000000000014",
+              "revision": 1,
+              "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "ok": false,
+        "code": "INVALID_BATCH",
+        "path": "/request_ids"
+      }
+    }
+  ]
+}

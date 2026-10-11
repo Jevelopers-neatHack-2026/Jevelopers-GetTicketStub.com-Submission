@@ -15,6 +15,7 @@ function immutableDeclaration(source) {
       if (ts.isPropertySignature(child)) return ts.factory.updatePropertySignature(child, [ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword)], child.name, child.questionToken, child.type);
       if (ts.isIndexSignatureDeclaration(child)) return ts.factory.updateIndexSignature(child, [ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword)], child.parameters, child.type);
       if (ts.isArrayTypeNode(child)) return ts.factory.createTypeOperatorNode(ts.SyntaxKind.ReadonlyKeyword, child);
+      if (ts.isTupleTypeNode(child)) return ts.factory.createTypeOperatorNode(ts.SyntaxKind.ReadonlyKeyword, child);
       return child;
     }
     return node => ts.visitNode(node, visit);
@@ -94,14 +95,16 @@ export async function outputs() {
   result.set('schema-manifest.json', JSON.stringify({ package_version: packageManifest.version, source_revision: null, status: 'unreleased_candidates', toolchain: { ajv: '8.17.1', esbuild: '0.25.12', typescript: '5.9.3', json_schema_to_typescript: '15.0.4', node: '22.23.3' }, schemas: manifest }, null, 2) + '\n');
   result.set('brands.d.ts', 'declare const brand: unique symbol;\nexport type Brand<T, Name extends string> = T & { readonly [brand]: Name };\n');
   const names = Object.keys(versions);
-  result.set('index.mjs', "export { validateContract, parseContract, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport { versions } from './registry.mjs';\n");
+  result.set('index.mjs', "export { validateContract, parseContract, validatePrimitive, checkTrustedContext, projectEvidence, canonicalJson, hashManifest, hashBytes, ContractError } from '../tooling/runtime.mjs';\nexport * from '../tooling/operations.mjs';\nexport * from '../tooling/research-creative.mjs';\nexport { versions } from './registry.mjs';\n");
   result.set('operations.d.ts', (await readFile(root + 'tooling/operations-api.d.ts', 'utf8')).replace('../generated/index.js', './index.js'));
+  result.set('research-creative.d.ts', (await readFile(root + 'tooling/research-creative-api.d.ts', 'utf8')).replaceAll('../generated/index.js', './index.js'));
   const details = localSchemas.get('https://schemas.jevelopers.org/ErrorEnvelope/1.0.0').$defs.ErrorDetail.oneOf;
   const errorRegistry = Object.fromEntries(details.map(detail => [detail.properties.code.const, { category: detail.properties.category.const, safe_message: detail.properties.safe_message.const }]));
   result.set('error-registry.mjs', 'const records = ' + JSON.stringify(errorRegistry, null, 2) + ';\nfor (const record of Object.values(records)) Object.freeze(record);\nexport const errorRegistry = Object.freeze(records);\n');
   result.set('index.d.ts', names.map(name => `import type { ${name} } from './${versions[name][Object.keys(versions[name]).at(-1)]}.js';\nexport type { ${name} } from './${versions[name][Object.keys(versions[name]).at(-1)]}.js';`).join('\n') + `
 export type { Brand } from './brands.js';
 export * from './operations.js';
+export * from './research-creative.js';
 export type * from './primitives.js';
 import type * as Primitives from './primitives.js';
 export type PrimitiveName = keyof PrimitiveMap;
