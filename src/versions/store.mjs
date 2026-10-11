@@ -23,7 +23,7 @@ import { compositionPreviewHash, snapshotCompositionBytesRecord, snapshotComposi
   createCompositionProductionEnvelope, validateCompositionProductionEnvelope,
   validateCompositionRevision } from "../contracts/composition-authority.mjs";
 
-const STORAGE_VERSION = 12;
+const STORAGE_VERSION = 13;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9_.:-]{1,256}$/;
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -417,7 +417,8 @@ export function creativeCompositionFenceCurrent(store, scope, fence, { afterPubl
         .get(scope.tenant_id, scope.project_id, scope.brief_id, composition_id, expected_current_revision_id);
       const expected = compositionRevisionFromRow(store, scope, expectedRow);
       if (expected.revision.revision_sha256 !== expected_current_revision_sha256 ||
-          !compositionRevisionIsCurrent(store, scope, expected.revision, afterPublication ? undefined : current)) return false;
+          action.operation !== "composition.revalidate" &&
+            !compositionRevisionIsCurrent(store, scope, expected.revision, afterPublication ? undefined : current)) return false;
     }
     if (afterPublication) {
       const targetRow = store.db.prepare(`SELECT * FROM creative_composition_revisions_v1
@@ -670,7 +671,7 @@ function readStoredObjectSync(objectRoot, contentHash) {
 
 function makeSchema(db) {
   const version = db.prepare("PRAGMA user_version").get().user_version;
-  if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, STORAGE_VERSION].includes(version)) {
+  if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, STORAGE_VERSION].includes(version)) {
     db.close();
     reject("unsupported_version", "storage_version");
   }
@@ -1203,8 +1204,13 @@ function makeSchema(db) {
       reject("migration_failed", "storage_version");
     }
   }
+  // Schema 11, 12, and 13 form one migration unit. If a final composition
+  // invariant fails, a genuine schema-10 database must remain at schema 10
+  // rather than being left at an intermediate committed version.
+  if (version < STORAGE_VERSION) {
+    db.exec("PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;");
+  }
   if (version < 11) {
-    db.exec("BEGIN IMMEDIATE");
     try {
       db.exec(`CREATE TABLE creative_composition_revisions_v1 (
         tenant_id TEXT NOT NULL,
@@ -1328,8 +1334,7 @@ function makeSchema(db) {
         BEFORE DELETE ON creative_composition_action_leases_v1 BEGIN SELECT RAISE(ABORT,'composition action leases are immutable'); END;
       CREATE TRIGGER creative_composition_current_no_delete
         BEFORE DELETE ON creative_composition_current_v1 BEGIN SELECT RAISE(ABORT,'composition current pointer cannot be deleted'); END;
-      PRAGMA user_version=11;
-      COMMIT;`);
+      PRAGMA user_version=11;`);
     } catch {
       if (db.isTransaction) db.exec("ROLLBACK");
       db.close();
@@ -1337,7 +1342,6 @@ function makeSchema(db) {
     }
   }
   if (version < 12) {
-    db.exec("BEGIN IMMEDIATE");
     try {
       const duplicate = db.prepare(`SELECT tenant_id,project_id,brief_id,design_version_id
         FROM creative_composition_current_v1 GROUP BY tenant_id,project_id,brief_id,design_version_id
@@ -1345,9 +1349,98 @@ function makeSchema(db) {
       if (duplicate) reject("integrity_error", "composition.current_design_identity");
       db.exec(`CREATE UNIQUE INDEX creative_composition_one_current_per_design_v1
         ON creative_composition_current_v1(tenant_id,project_id,brief_id,design_version_id);
-        PRAGMA user_version=12; COMMIT;`);
+        PRAGMA user_version=12;`);
     } catch (error) {
       if (db.isTransaction) db.exec("ROLLBACK");
+      db.close();
+      if (error instanceof VersionStoreError) throw error;
+      reject("migration_failed", "storage_version");
+    }
+  }
+  if (version < 13) {
+    // API 1.3 adds a separate stale-proof revalidation action. Rebuild both
+    // related tables so their closed operation CHECK and foreign key agree;
+    // copy every row byte-for-byte and recreate all immutability/transition
+    // triggers before re-enabling foreign-key enforcement.
+    try {
+      db.exec(`DROP TRIGGER IF EXISTS creative_composition_actions_identity_immutable;
+        DROP TRIGGER IF EXISTS creative_composition_actions_stage_once;
+        DROP TRIGGER IF EXISTS creative_composition_actions_transition;
+        DROP TRIGGER IF EXISTS creative_composition_actions_no_delete;
+        DROP TRIGGER IF EXISTS creative_composition_action_leases_no_update;
+        DROP TRIGGER IF EXISTS creative_composition_action_leases_no_delete;
+        ALTER TABLE creative_composition_action_leases_v1 RENAME TO creative_composition_action_leases_v12;
+        ALTER TABLE creative_composition_actions_v1 RENAME TO creative_composition_actions_v12;
+        CREATE TABLE creative_composition_actions_v1 (
+          tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, brief_id TEXT NOT NULL, action_id TEXT NOT NULL,
+          job_id TEXT NOT NULL, actor_id TEXT NOT NULL,
+          operation TEXT NOT NULL CHECK(operation IN ('composition.create','composition.update','composition.revalidate')),
+          request_hash TEXT NOT NULL, intent_hash TEXT NOT NULL, intent_json TEXT NOT NULL,
+          expected_current_revision_id TEXT, expected_current_revision_sha256 TEXT,
+          expected_design_version_id TEXT NOT NULL, expected_design_hash TEXT NOT NULL,
+          expected_selection_revision INTEGER NOT NULL CHECK(expected_selection_revision > 0),
+          candidate_revision_json TEXT, preview_sha256 TEXT, preview_bytes BLOB,
+          status TEXT NOT NULL CHECK(status IN ('pending','staged','published','stale','cancelled','unknown','abandoned')),
+          result_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+          PRIMARY KEY(tenant_id,project_id,brief_id,action_id), UNIQUE(tenant_id,project_id,job_id),
+          FOREIGN KEY(tenant_id,project_id,job_id) REFERENCES creative_jobs(tenant_id,project_id,job_id),
+          CHECK((status IN ('pending','staged') AND result_json IS NULL) OR
+            (status IN ('published','stale','cancelled','unknown','abandoned') AND result_json IS NOT NULL)),
+          CHECK((status IN ('pending','abandoned','cancelled','unknown') AND candidate_revision_json IS NULL AND
+            preview_sha256 IS NULL AND preview_bytes IS NULL) OR
+            (status IN ('staged','published','stale','cancelled','unknown') AND candidate_revision_json IS NOT NULL AND
+            preview_sha256 IS NOT NULL AND preview_bytes IS NOT NULL))
+        ) STRICT;
+        INSERT INTO creative_composition_actions_v1 SELECT * FROM creative_composition_actions_v12;
+        CREATE TABLE creative_composition_action_leases_v1 (
+          tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, brief_id TEXT NOT NULL, action_id TEXT NOT NULL,
+          lease_hash TEXT NOT NULL, observed_at TEXT NOT NULL,
+          PRIMARY KEY(tenant_id,project_id,brief_id,action_id,lease_hash),
+          FOREIGN KEY(tenant_id,project_id,brief_id,action_id)
+            REFERENCES creative_composition_actions_v1(tenant_id,project_id,brief_id,action_id)
+        ) STRICT;
+        INSERT INTO creative_composition_action_leases_v1 SELECT * FROM creative_composition_action_leases_v12;
+        DROP TABLE creative_composition_action_leases_v12;
+        DROP TABLE creative_composition_actions_v12;
+        CREATE TRIGGER creative_composition_actions_identity_immutable
+          BEFORE UPDATE ON creative_composition_actions_v1
+          WHEN NEW.tenant_id!=OLD.tenant_id OR NEW.project_id!=OLD.project_id OR NEW.brief_id!=OLD.brief_id OR
+            NEW.action_id!=OLD.action_id OR NEW.job_id!=OLD.job_id OR NEW.actor_id!=OLD.actor_id OR
+            NEW.operation!=OLD.operation OR NEW.request_hash!=OLD.request_hash OR NEW.intent_hash!=OLD.intent_hash OR
+            NEW.intent_json!=OLD.intent_json OR NEW.expected_current_revision_id IS NOT OLD.expected_current_revision_id OR
+            NEW.expected_current_revision_sha256 IS NOT OLD.expected_current_revision_sha256 OR
+            NEW.expected_design_version_id!=OLD.expected_design_version_id OR NEW.expected_design_hash!=OLD.expected_design_hash OR
+            NEW.expected_selection_revision!=OLD.expected_selection_revision OR NEW.created_at!=OLD.created_at
+          BEGIN SELECT RAISE(ABORT,'composition action identity is immutable'); END;
+        CREATE TRIGGER creative_composition_actions_stage_once
+          BEFORE UPDATE ON creative_composition_actions_v1
+          WHEN OLD.status!='pending' AND (NEW.candidate_revision_json IS NOT OLD.candidate_revision_json OR
+            NEW.preview_sha256 IS NOT OLD.preview_sha256 OR NEW.preview_bytes IS NOT OLD.preview_bytes)
+          BEGIN SELECT RAISE(ABORT,'composition preview stage is immutable'); END;
+        CREATE TRIGGER creative_composition_actions_transition
+          BEFORE UPDATE ON creative_composition_actions_v1
+          WHEN NOT ((OLD.status='pending' AND NEW.status='staged' AND NEW.result_json IS NULL) OR
+            (OLD.status='pending' AND NEW.status IN ('abandoned','cancelled','unknown') AND NEW.result_json IS NOT NULL) OR
+            (OLD.status='staged' AND NEW.status IN ('published','stale','cancelled','unknown') AND NEW.result_json IS NOT NULL))
+          BEGIN SELECT RAISE(ABORT,'invalid composition action transition'); END;
+        CREATE TRIGGER creative_composition_actions_no_delete BEFORE DELETE ON creative_composition_actions_v1
+          BEGIN SELECT RAISE(ABORT,'composition actions are immutable'); END;
+        CREATE TRIGGER creative_composition_action_leases_no_update BEFORE UPDATE ON creative_composition_action_leases_v1
+          BEGIN SELECT RAISE(ABORT,'composition action leases are immutable'); END;
+        CREATE TRIGGER creative_composition_action_leases_no_delete BEFORE DELETE ON creative_composition_action_leases_v1
+          BEGIN SELECT RAISE(ABORT,'composition action leases are immutable'); END;
+        PRAGMA user_version=13;`);
+      const violation = db.prepare("PRAGMA foreign_key_check").get();
+      if (violation) reject("integrity_error", "composition.action_foreign_key");
+      const actionCheck = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='creative_composition_actions_v1'").get();
+      const leaseCheck = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='creative_composition_action_leases_v1'").get();
+      if (!actionCheck?.sql?.includes("composition.revalidate") || !leaseCheck?.sql?.includes("FOREIGN KEY")) {
+        reject("integrity_error", "composition.action_schema");
+      }
+      db.exec("COMMIT; PRAGMA foreign_keys=ON;");
+    } catch (error) {
+      if (db.isTransaction) db.exec("ROLLBACK");
+      db.exec("PRAGMA foreign_keys=ON;");
       db.close();
       if (error instanceof VersionStoreError) throw error;
       reject("migration_failed", "storage_version");
@@ -1442,7 +1535,22 @@ function compositionActionRowValue(store, scope, row) {
   let result = null;
   try {
     intent = snapshotCompositionJson(JSON.parse(row.intent_json));
-    if (canonicalSerialize(intent) !== row.intent_json || canonicalHash(intent) !== row.intent_hash) {
+    const intentKeys = ["contract", "schema_version", "operation", "composition_id", "candidate_revision_id",
+      "source_revision_id", "source_revision_sha256", "plan"];
+    const isLegacyIntent = intent?.schema_version === "1.0" &&
+      ["composition.create", "composition.update"].includes(intent.operation);
+    const isRevalidationIntent = intent?.schema_version === "1.1" && intent.operation === "composition.revalidate";
+    if (!isRecord(intent) || Object.keys(intent).length !== intentKeys.length ||
+        intentKeys.some((key) => !Object.hasOwn(intent, key)) ||
+        intent.contract !== "CreativeCompositionActionIntent" || (!isLegacyIntent && !isRevalidationIntent) ||
+        intent.operation !== row.operation || intent.source_revision_id !== row.expected_current_revision_id ||
+        intent.source_revision_sha256 !== row.expected_current_revision_sha256 ||
+        intent.candidate_revision_id === row.expected_current_revision_id ||
+        (intent.operation === "composition.create" && (intent.source_revision_id !== null ||
+          intent.source_revision_sha256 !== null || intent.plan !== null)) ||
+        (intent.operation === "composition.update" && !isRecord(intent.plan)) ||
+        (intent.operation === "composition.revalidate" && intent.plan !== null) ||
+        canonicalSerialize(intent) !== row.intent_json || canonicalHash(intent) !== row.intent_hash) {
       reject("integrity_error", "composition.action.intent");
     }
     if (row.result_json !== null) {
@@ -3290,7 +3398,7 @@ export class CreativeVersionStore {
         const safeCode = ["integrity_error", "stale_version"].includes(code) ? code : "unavailable";
         const safeField = ["creation.intent", "creative_context", "job.lease_expired"].includes(field)
           ? field : "creation.intent";
-        const operation = ["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.get",
+        const operation = ["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.revalidate", "composition.get",
           "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]
           .includes(job.operation) ? job.operation : "unknown";
         const error = {
@@ -3760,28 +3868,35 @@ export class CreativeVersionStore {
     const action_id = reference(safe.action_id, "action_id");
     const request_hash = hash(safe.request_hash, "request_hash");
     const operation = safe.operation;
-    if (!(["composition.create", "composition.update"].includes(operation))) reject("invalid_request", "operation");
+    if (!(["composition.create", "composition.update", "composition.revalidate"].includes(operation))) reject("invalid_request", "operation");
     const expected_current = compositionExpectedCurrent(safe.expected_current);
     const expected_design_version_id = reference(safe.expected_design_version_id, "expected_design_version_id");
     const expected_design_hash = hash(safe.expected_design_hash, "expected_design_hash");
     const expected_selection_revision = safe.expected_selection_revision;
     if (!Number.isSafeInteger(expected_selection_revision) || expected_selection_revision < 1 ||
         operation === "composition.create" && expected_current !== null ||
-        operation === "composition.update" && expected_current === null) reject("invalid_request", "composition.action.current");
+        ["composition.update", "composition.revalidate"].includes(operation) && expected_current === null) reject("invalid_request", "composition.action.current");
     const intent = snapshotCompositionJson(safe.intent);
     const intentFields = ["contract", "schema_version", "operation", "composition_id", "candidate_revision_id",
       "source_revision_id", "source_revision_sha256", "plan"];
+    const intentVersionMatches = operation === "composition.revalidate"
+      ? intent?.schema_version === "1.1" : intent?.schema_version === "1.0";
     if (!isRecord(intent) || Object.keys(intent).length !== intentFields.length ||
         intentFields.some((field) => !Object.hasOwn(intent, field)) ||
-        intent.contract !== "CreativeCompositionActionIntent" || intent.schema_version !== "1.0" ||
+        intent.contract !== "CreativeCompositionActionIntent" || !intentVersionMatches ||
         intent.operation !== operation ||
         (operation === "composition.create" && (intent.source_revision_id !== null || intent.source_revision_sha256 !== null || intent.plan !== null)) ||
-        (operation === "composition.update" && (intent.source_revision_id !== expected_current.revision_id ||
-          intent.source_revision_sha256 !== expected_current.revision_sha256 || !isRecord(intent.plan)))) {
+        (["composition.update", "composition.revalidate"].includes(operation) &&
+          (intent.source_revision_id !== expected_current.revision_id ||
+          intent.source_revision_sha256 !== expected_current.revision_sha256 ||
+          (operation === "composition.update" ? !isRecord(intent.plan) : intent.plan !== null)))) {
       reject("invalid_request", "composition.action.intent");
     }
     const composition_id = reference(intent.composition_id, "composition.action.intent.composition_id");
-    reference(intent.candidate_revision_id, "composition.action.intent.candidate_revision_id");
+    const candidate_revision_id = reference(intent.candidate_revision_id, "composition.action.intent.candidate_revision_id");
+    if (operation === "composition.revalidate" && candidate_revision_id === expected_current.revision_id) {
+      reject("invalid_request", "composition.action.candidate_revision_id");
+    }
     const intent_json = canonicalSerialize(intent);
     const intent_hash = canonicalHash(intent);
     const lease_hash = createHash("sha256").update(lease_token).digest("hex");
@@ -3839,7 +3954,7 @@ export class CreativeVersionStore {
           .get(scope.tenant_id, scope.project_id, scope.brief_id, composition_id, current.revision_id);
         const stored = compositionRevisionFromRow(this, scope, revisionRow);
         if (stored.revision.revision_sha256 !== current.revision_sha256 ||
-            !compositionRevisionIsCurrent(this, scope, stored.revision, current)) {
+            operation !== "composition.revalidate" && !compositionRevisionIsCurrent(this, scope, stored.revision, current)) {
           this.db.exec("ROLLBACK");
           return freezeReturned({ status: "stale" });
         }
@@ -3876,6 +3991,30 @@ export class CreativeVersionStore {
       WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
       .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id);
     return row ? compositionActionRowValue(this, scope, row) : null;
+  }
+
+  getCompositionActionIdentityByJob({ scope: inputScope, job_id }) {
+    this.assertOpen();
+    if (!isRecord(inputScope)) reject("scope_denied", "scope");
+    const tenant_id = reference(inputScope.tenant_id, "scope.tenant_id");
+    const project_id = reference(inputScope.project_id, "scope.project_id");
+    const checkedJobId = reference(job_id, "job_id");
+    const rows = this.db.prepare(`SELECT * FROM creative_composition_actions_v1
+      WHERE tenant_id=? AND project_id=? AND job_id=?`).all(tenant_id, project_id, checkedJobId);
+    if (rows.length > 1) reject("integrity_error", "composition.action.job");
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    const scope = validScope({ tenant_id, project_id }, row.brief_id);
+    const action = compositionActionRowValue(this, scope, row);
+    const job = this.db.prepare(`SELECT job_id,tenant_id,project_id,brief_id,actor_id,action_id,operation,request_hash
+      FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+      .get(tenant_id, project_id, checkedJobId);
+    if (!job || job.brief_id !== scope.brief_id || job.actor_id !== action.actor_id ||
+        job.action_id !== action.action_id || job.operation !== action.operation ||
+        job.request_hash !== action.request_hash) reject("integrity_error", "composition.action.job");
+    return Object.freeze({ tenant_id, project_id, brief_id: scope.brief_id, job_id: checkedJobId,
+      actor_id: action.actor_id, action_id: action.action_id, operation: action.operation,
+      request_hash: action.request_hash });
   }
 
   stageCompositionRevision(input) {
@@ -4125,6 +4264,32 @@ export class CreativeVersionStore {
     return Object.freeze({ revision: stored.revision, preview_bytes: Uint8Array.from(stored.preview_bytes) });
   }
 
+  getCurrentCompositionIdentity({ scope: inputScope, brief_id, design_version_id }) {
+    this.assertOpen();
+    const scope = validScope(inputScope, brief_id ?? inputScope?.brief_id);
+    reference(design_version_id, "design_version_id");
+    const rows = this.db.prepare(`SELECT * FROM creative_composition_current_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=? ORDER BY composition_id LIMIT 2`)
+      .all(scope.tenant_id, scope.project_id, scope.brief_id, design_version_id);
+    if (rows.length === 0) return null;
+    if (rows.length !== 1) reject("integrity_error", "composition.current_identity");
+    const current = rows[0];
+    const revisionRow = this.db.prepare(`SELECT * FROM creative_composition_revisions_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND composition_id=? AND revision_id=?`)
+      .get(scope.tenant_id, scope.project_id, scope.brief_id, current.composition_id, current.revision_id);
+    const stored = compositionRevisionFromRow(this, scope, revisionRow);
+    if (stored.revision.revision_sha256 !== current.revision_sha256 ||
+        stored.revision.dependencies.design_version_id !== current.design_version_id ||
+        stored.revision.dependencies.design_version_sha256 !== current.design_hash ||
+        stored.revision.dependencies.selection_revision !== current.selection_revision) {
+      reject("integrity_error", "composition.current_identity");
+    }
+    return Object.freeze({ composition_id: current.composition_id, revision_id: current.revision_id,
+      revision_sha256: current.revision_sha256, design_version_id: current.design_version_id,
+      design_version_sha256: current.design_hash, selection_revision: current.selection_revision,
+      updated_at: current.updated_at });
+  }
+
   assertCurrentComposition({ scope: inputScope, brief_id, composition_id, design_version_id,
     revision_id, revision_sha256, selection_revision }) {
     this.assertOpen();
@@ -4275,7 +4440,9 @@ export class CreativeVersionStore {
         .get(scope.tenant_id, scope.project_id, scope.brief_id, revision.composition_id, current.revision_id);
       const prior = compositionRevisionFromRow(this, scope, priorRow);
       if (prior.revision.revision_sha256 !== current.revision_sha256 ||
-          !compositionRevisionIsCurrent(this, scope, prior.revision, current)) reject("stale_version", "composition.parent_current");
+          row.operation !== "composition.revalidate" && !compositionRevisionIsCurrent(this, scope, prior.revision, current)) {
+        reject("stale_version", "composition.parent_current");
+      }
     }
     if (!compositionRevisionIsCurrent(this, scope, revision)) reject("stale_version", "composition.dependencies");
     this.#assertBriefNotInvalidated(scope, this.getBrief({ scope, brief_id: scope.brief_id }));

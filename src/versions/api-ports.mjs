@@ -5,7 +5,7 @@ import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurren
 import { applyResearchInvalidation } from "../planning/index.mjs";
 import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 
-const OPERATIONS = new Set(["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.get",
+const OPERATIONS = new Set(["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.revalidate", "composition.get", "composition.history",
   "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
 const HASH = /^sha256:[a-f0-9]{64}$/;
 
@@ -217,10 +217,12 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     getConceptVersions(input) { return serial(() => store.getConceptVersions(input)); },
     beginCompositionAction(input) { return serial(() => store.beginCompositionAction(input)); },
     getCompositionAction(input) { return serial(() => store.getCompositionAction(input)); },
+    getCompositionActionIdentityByJob(input) { return serial(() => store.getCompositionActionIdentityByJob(input)); },
     stageCompositionRevision(input) { return serial(() => store.stageCompositionRevision(input)); },
     finishCompositionAction(input) { return serial(() => store.finishCompositionAction(input)); },
     recoverCompositionAction(input) { return serial(() => store.recoverCompositionAction(input)); },
     getCurrentComposition(input) { return serial(() => store.getCurrentComposition(input)); },
+    getCurrentCompositionIdentity(input) { return serial(() => store.getCurrentCompositionIdentity(input)); },
     assertCurrentComposition(input) { return store.assertCurrentComposition(input); },
     getCompositionRevision(input) { return serial(() => store.getCompositionRevision(input)); },
     listCompositionRevisions(input) { return serial(() => store.listCompositionRevisions(input)); },
@@ -653,7 +655,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(scope.tenant_id, scope.project_id, job_id);
           if (!row || row.actor_id !== actor_id || row.action_id !== action_id || row.request_hash !== request_hash ||
-            !["inspect", "concepts.create", "composition.create", "composition.update"].includes(row.operation)) {
+            !["inspect", "concepts.create", "composition.create", "composition.update", "composition.revalidate"].includes(row.operation)) {
             store.db.exec("ROLLBACK");
             return Object.freeze({ kind: "conflict" });
           }
@@ -937,6 +939,26 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
             if (fenceResult !== true) {
               throw new VersionStoreError("invalid_request", "job_publication.final_fence_result");
             }
+          }
+          // beforeCommit is the last synchronous owner-backed assertion. It may
+          // advance a test clock or observe a lease/context change, so recheck
+          // the same-store lease and context after it returns and immediately
+          // before the transaction becomes durable.
+          const afterFence = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+            .get(scope.tenant_id, scope.project_id, input.job_id);
+          const afterFenceNow = store.now();
+          if (!afterFence || afterFence.status !== "completed" || afterFence.actor_id !== input.actor_id ||
+              afterFence.lease_hash !== tokenHash(input.lease_token) ||
+              !Number.isFinite(afterFenceNow) || Date.parse(afterFence.lease_expires_at) <= afterFenceNow ||
+              afterFence.action_id !== input.action_id || afterFence.operation !== input.operation ||
+              afterFence.request_hash !== row.request_hash ||
+              !contextFenceMatches(store, scope, input.publication_fence,
+                { requireRecordedRepair: true, afterPublication: true })) {
+            throw new VersionStoreError("cancelled", "job.lease_token");
+          }
+          const finalBrief = store.getBrief({ scope, brief_id: scope.brief_id });
+          if (!finalBrief || canonicalHash(finalBrief) !== input.publication_fence.brief_hash) {
+            throw new VersionStoreError("stale_version", "brief_hash");
           }
           store.db.exec("COMMIT");
           faultInjector?.("after_job_commit");
