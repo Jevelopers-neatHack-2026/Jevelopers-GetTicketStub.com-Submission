@@ -25,15 +25,17 @@
     "docs/simulator.md",
     "docs/quotes.md",
     "docs/comparison.md",
-    "docs/attempt-store.md"
+    "docs/attempt-store.md",
+    "docs/status.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node scripts/run-contract-tests.mjs && node scripts/run-provider-matrix-tests.mjs && node scripts/run-metering-tests.mjs && node scripts/run-security-tests.mjs && node scripts/run-catalog-tests.mjs && node scripts/run-mock-tests.mjs && node scripts/run-quote-tests.mjs && node scripts/run-attempt-store-tests.mjs && node scripts/run-comparison-tests.mjs",
+    "test": "npm run build && node scripts/run-contract-tests.mjs && node scripts/run-provider-matrix-tests.mjs && node scripts/run-metering-tests.mjs && node scripts/run-security-tests.mjs && node scripts/run-catalog-tests.mjs && node scripts/run-mock-tests.mjs && node scripts/run-quote-tests.mjs && node scripts/run-attempt-store-tests.mjs && node scripts/run-comparison-tests.mjs && node scripts/run-status-tests.mjs",
     "test:catalog": "node scripts/run-catalog-tests.mjs",
     "test:quote": "npm run build && node scripts/run-quote-tests.mjs",
     "test:attempt-store": "npm run build && node scripts/run-attempt-store-tests.mjs",
     "test:comparison": "npm run build && node scripts/run-comparison-tests.mjs",
+    "test:status": "npm run build && node scripts/run-status-tests.mjs",
     "verify:contract": "./scripts/verify-fulfillment --suite contract --mode simulated --evidence-dir evidence/FC-01",
     "verify:provider-matrix": "./scripts/verify-fulfillment --suite provider-matrix --mode simulated --evidence-dir evidence/FC-02",
     "verify:security": "./scripts/verify-fulfillment --suite security --mode simulated --evidence-dir evidence/FC-11",
@@ -42,7 +44,8 @@
     "verify:mock": "./scripts/verify-fulfillment --suite mock --mode simulated --evidence-dir evidence/FC-02-MOCK",
     "verify:quote": "./scripts/verify-fulfillment --suite quote --mode simulated --evidence-dir evidence/FC-04",
     "verify:attempt-store": "./scripts/verify-fulfillment --suite attempt-store --mode simulated --evidence-dir evidence/FC-06-ATTEMPT-STORE",
-    "verify:comparison": "./scripts/verify-fulfillment --suite comparison --mode simulated --evidence-dir evidence/FC-09-COMPARISON"
+    "verify:comparison": "./scripts/verify-fulfillment --suite comparison --mode simulated --evidence-dir evidence/FC-09-COMPARISON",
+    "verify:status": "./scripts/verify-fulfillment --suite status --mode simulated --evidence-dir evidence/FC-07-STATUS"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

@@ -61,3 +61,6 @@ jobs:
 
       - name: Verify private offline comparison fixtures
         run: npm run verify:comparison
+
+      - name: Verify private offline status fixtures
+        run: npm run verify:status

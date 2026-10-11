@@ -77,6 +77,55 @@ export type {
   QuotedAmount
 } from "./quotes.js";
 export type { ExactMoney as PrivateQuoteExactMoney } from "./quotes.js";
+export {
+  fixtureStatusMapping,
+  fixtureTrackingHostPolicy,
+  normalizeProviderObservation,
+  StatusInputError
+} from "./status.js";
+export type {
+  NormalizedQuantityFact,
+  NormalizedStatusItem,
+  NormalizedStatusObservation,
+  NormalizedStatusShipment,
+  ObservationSource,
+  ProjectedStatusState,
+  ProviderStatusMapping,
+  ProviderStatusObservation,
+  QuantityBasis,
+  QuantityFact,
+  QuantityKind,
+  StatusInputErrorCode,
+  StatusItemFact,
+  StatusShipmentFact,
+  StatusState,
+  TrackingHostPolicy
+} from "./status.js";
+export { LocalStatusStore, StatusStoreError } from "./status-store.js";
+export type {
+  ConflictKind,
+  ConflictLocation,
+  LocalStatusStoreOptions,
+  PollLease,
+  PollPolicy,
+  PollRunResult,
+  PollTaskKind,
+  ProjectedItem,
+  ProjectedQuantity,
+  ProjectedShipment,
+  StatusConflict,
+  StatusCorrectionPolicy,
+  StatusObservationRecord,
+  StatusOutboxEvent,
+  StatusOutboxLease,
+  StatusProjection,
+  StatusResolution,
+  StatusScope,
+  StatusStoreErrorCode,
+  TrustedLookupRequest,
+  TrustedLookupResponse,
+  TrustedStatusLookup
+} from "./status-store.js";
 export { comparePrivateQuotes, PRIVATE_COMPARISON_FORMAT } from "./comparison.js";
 export type {
   ComparisonCapabilityFit,
