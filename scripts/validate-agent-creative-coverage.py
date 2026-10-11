@@ -33,6 +33,20 @@ REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 ISSUE_PATH_RE = re.compile(r"^/([^/]+)/([^/]+)/issues/([1-9][0-9]*)/?$")
 MODES = {"mock", "recorded", "sandbox", "shadow", "live"}
 STAGES = {"fixture", "contract", "runnable", "final_acceptance"}
+PROJECTION_STAGES = STAGES | {
+    "accepted_policy_fixture", "canonical_agreement_and_fixture",
+    "live_evidence", "readiness_config",
+}
+REQUIRED_STAGE_REASONS = {
+    "live body prerequisite",
+    "explicit transitive closure of all 59 required leaves, not additional implementation ordering",
+    "live dispatch only; no additional block on offline implementation",
+    "external artifact, not external epic closure",
+    "additional exact external-owner/action obligation inside authorized repositories",
+    "access obligation",
+    "accepted decision required, proposed values are not accepted policy",
+    "mandatory declared out-of-scope boundary acceptance",
+}
 STAGED_EDGE_STATES = {"pending", "satisfied"}
 EVIDENCE_KINDS = {"test", "runtime", "configuration", "artifact", "receipt"}
 LEAF_KINDS = {"implementation_leaf", "delivery_leaf"}
@@ -385,6 +399,1042 @@ def _verify_source_pins(
     if revision is not None and (not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None):
         _add_issue(issues, "ISSUE_READBACK_PIN_INVALID", "issue-readbacks")
     return map_pin, canonical_pin, readback_pin
+
+
+def _verify_source_pins_v2(
+    pins: dict[str, Any],
+    map_raw: bytes,
+    canonical_raw: bytes,
+    readbacks_raw: bytes,
+    issues: list[dict[str, str]],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+    """Verify v2 pins while delegating common canonical/readback checks to v1."""
+    if pins.get("format") != "acv1.coverage-source-reference/v2":
+        raise InputError("UNSUPPORTED_SOURCE_PINS_FORMAT", "source-pins")
+    map_pin = _as_dict(pins.get("coverage_map"), "COVERAGE_MAP_PIN_REQUIRED", "coverage-map")
+    readback_pin = _as_dict(pins.get("issue_readbacks"), "ISSUE_READBACK_PIN_REQUIRED", "issue-readbacks")
+    if pins.get("snapshot_id") != readback_pin.get("capture_id"):
+        _add_issue(issues, "PROJECTION_SNAPSHOT_ID_MISMATCH", "source-pins")
+    if map_pin.get("adapter") != "agent-harness.coverage-projection/v2":
+        _add_issue(issues, "COVERAGE_MAP_ADAPTER_UNSUPPORTED", "coverage-map")
+    if readback_pin.get("adapter") != "agent-harness.issue-readbacks/v2":
+        _add_issue(issues, "ISSUE_READBACK_ADAPTER_UNSUPPORTED", "issue-readbacks")
+    compatibility = dict(pins)
+    compatibility["format"] = "acv1.coverage-source-reference/v1"
+    compatibility["coverage_map"] = dict(map_pin, adapter="agent-harness.coverage-map-current/v1")
+    compatibility["issue_readbacks"] = dict(readback_pin, adapter="agent-harness.issue-readbacks/v1")
+    verified_map, canonical_pin, verified_readbacks = _verify_source_pins(
+        compatibility, map_raw, canonical_raw, readbacks_raw, issues
+    )
+    return map_pin, canonical_pin, readback_pin if verified_readbacks is not None else None
+
+
+def _validate_map_v2(
+    coverage: dict[str, Any],
+    pins: dict[str, Any],
+    canonical: dict[str, Any],
+    readbacks: dict[str, Any],
+    map_pin: dict[str, Any],
+    readback_pin: dict[str, Any] | None,
+    *,
+    check_urls: bool,
+    check_dag: bool,
+    require_specialists: bool,
+) -> tuple[list[dict[str, str]], dict[str, int], dict[str, dict[str, Any]], dict[str, Any]]:
+    """Validate a directional, source-preserving projection without changing v1 rules."""
+    issues: list[dict[str, str]] = []
+    if coverage.get("format") != "agent-harness.coverage-projection/v2":
+        _add_issue(issues, "COVERAGE_MAP_FORMAT_UNSUPPORTED", "coverage-map")
+    if not check_urls:
+        _add_issue(issues, "REQUIRED_CHECK_NOT_RUN", "issue-readbacks")
+    if not check_dag:
+        _add_issue(issues, "REQUIRED_CHECK_NOT_RUN", "dag")
+    _snapshot_state(coverage.get("coordination_status"), COORDINATION_STATES, "coordination_status", issues)
+    _snapshot_state(coverage.get("publication_status"), PUBLICATION_STATES, "publication_status", issues)
+    if coverage.get("complete") is not True or map_pin.get("complete") is not True:
+        _add_issue(issues, "COVERAGE_SNAPSHOT_INCOMPLETE", "coverage-map")
+    if pins.get("projection_inputs") != coverage.get("projection_inputs"):
+        _add_issue(issues, "PROJECTION_INPUT_PINS_MISMATCH", "coverage-map")
+    projection_inputs = coverage.get("projection_inputs")
+    expected_input_roles = {
+        "coverage_map", "pair_review", "stage_review", "external_artifacts",
+        "issue_readbacks", "canonical_checklist", "canonical_reference",
+    }
+    if not isinstance(projection_inputs, list) or len(projection_inputs) != len(expected_input_roles):
+        _add_issue(issues, "PROJECTION_INPUT_FAMILY_INVALID", "projection_inputs")
+        projection_inputs = []
+    seen_input_roles: set[str] = set()
+    for index, item in enumerate(projection_inputs):
+        if not isinstance(item, dict) or not isinstance(item.get("role"), str):
+            _add_issue(issues, "PROJECTION_INPUT_INVALID", f"projection-input-{index}")
+            continue
+        role = item["role"]
+        if role not in expected_input_roles or role in seen_input_roles:
+            _add_issue(issues, "PROJECTION_INPUT_ROLE_INVALID", _label(role))
+        seen_input_roles.add(role)
+        if not isinstance(item.get("source_path"), str) or not item.get("source_path") or len(item.get("source_path", "")) > 4096:
+            _add_issue(issues, "PROJECTION_INPUT_PATH_INVALID", _label(role))
+        size = item.get("bytes")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0 or size > LIMITS["coverage-map"]:
+            _add_issue(issues, "PROJECTION_INPUT_SIZE_INVALID", _label(role))
+        if not isinstance(item.get("sha256"), str) or HASH_RE.fullmatch(item.get("sha256", "")) is None:
+            _add_issue(issues, "PROJECTION_INPUT_DIGEST_INVALID", _label(role))
+    if seen_input_roles != expected_input_roles:
+        _add_issue(issues, "PROJECTION_INPUT_ROLE_SET_MISMATCH", "projection_inputs")
+
+    criteria = _canonical_criteria(canonical, issues)
+    entries_raw = coverage.get("entries")
+    ownership_raw = coverage.get("ownership_rows")
+    source_rows_raw = coverage.get("source_contribution_rows")
+    pair_review_raw = coverage.get("pair_review_rows")
+    source_stage_raw = coverage.get("source_stage_rows")
+    additions_raw = coverage.get("source_supported_associations")
+    extras_raw = coverage.get("reviewed_typed_extras")
+    unresolved_raw = coverage.get("unresolved_associations")
+    if not isinstance(entries_raw, list):
+        _add_issue(issues, "ENTRY_FAMILY_MISSING", "entries")
+        entries_raw = []
+    if not isinstance(ownership_raw, list):
+        _add_issue(issues, "OWNERSHIP_FAMILY_MISSING", "ownership_rows")
+        ownership_raw = []
+    if not isinstance(source_rows_raw, list):
+        _add_issue(issues, "CONTRIBUTION_FAMILY_MISSING", "source_contribution_rows")
+        source_rows_raw = []
+    if not isinstance(pair_review_raw, list):
+        _add_issue(issues, "PAIR_REVIEW_FAMILY_MISSING", "pair_review_rows")
+        pair_review_raw = []
+    if not isinstance(source_stage_raw, list):
+        _add_issue(issues, "SOURCE_STAGE_FAMILY_MISSING", "source_stage_rows")
+        source_stage_raw = []
+    for family, rows in (
+        ("source_supported_associations", additions_raw),
+        ("reviewed_typed_extras", extras_raw),
+        ("unresolved_associations", unresolved_raw),
+    ):
+        if not isinstance(rows, list):
+            _add_issue(issues, "PROJECTION_RELATION_FAMILY_MISSING", family)
+        elif len(rows) > MAX_OWNERSHIP_ROWS:
+            _add_issue(issues, "PROJECTION_RELATION_ROW_LIMIT_EXCEEDED", family)
+    for family, rows, maximum, code in (
+        ("entries", entries_raw, MAX_ENTRIES, "ENTRY_ROW_LIMIT_EXCEEDED"),
+        ("ownership_rows", ownership_raw, MAX_OWNERSHIP_ROWS, "OWNERSHIP_ROW_LIMIT_EXCEEDED"),
+        ("source_contribution_rows", source_rows_raw, MAX_CONTRIBUTION_ROWS, "CONTRIBUTION_ROW_LIMIT_EXCEEDED"),
+    ):
+        if len(rows) > maximum:
+            _add_issue(issues, code, family)
+    entries_raw = entries_raw[:MAX_ENTRIES]
+    ownership_raw = ownership_raw[:MAX_OWNERSHIP_ROWS]
+    source_rows_raw = source_rows_raw[:MAX_CONTRIBUTION_ROWS]
+    pair_review_raw = pair_review_raw[:MAX_OWNERSHIP_ROWS]
+    source_stage_raw = source_stage_raw[:MAX_GRAPH_ROWS]
+    additions_raw = additions_raw[:MAX_OWNERSHIP_ROWS] if isinstance(additions_raw, list) else []
+    extras_raw = extras_raw[:MAX_OWNERSHIP_ROWS] if isinstance(extras_raw, list) else []
+    unresolved_raw = unresolved_raw[:MAX_OWNERSHIP_ROWS] if isinstance(unresolved_raw, list) else []
+
+    entry_by_key: dict[str, dict[str, Any]] = {}
+    leaves: dict[str, dict[str, Any]] = {}
+    repo_counts: dict[str, int] = {}
+    for index, entry in enumerate(entries_raw):
+        if not isinstance(entry, dict) or not _safe_key(entry.get("key")):
+            _add_issue(issues, "ENTRY_INVALID", f"entry-{index}")
+            continue
+        key = entry["key"]
+        if key in entry_by_key:
+            _add_issue(issues, "ENTRY_KEY_DUPLICATE", key)
+            continue
+        entry_by_key[key] = entry
+        record_type = entry.get("record_type")
+        if record_type != "delivery_leaf":
+            _add_issue(issues, "ENTRY_RECORD_TYPE_UNSUPPORTED", key)
+        required = entry.get("required_for_v1")
+        if not isinstance(required, bool):
+            _add_issue(issues, "REQUIRED_LEAF_FLAG_MISSING", key)
+        elif required:
+            leaves[key] = entry
+            repo = entry.get("repository")
+            if not isinstance(repo, str) or REPOSITORY_RE.fullmatch(repo) is None:
+                _add_issue(issues, "ENTRY_REPOSITORY_INVALID", key)
+            else:
+                repo_counts[repo] = repo_counts.get(repo, 0) + 1
+            if not isinstance(entry.get("owner_role"), str) or not entry.get("owner_role", "").strip():
+                _add_issue(issues, "ENTRY_OWNER_ROLE_MISSING", key)
+            elif len(entry["owner_role"]) > MAX_BLOCKER_TEXT:
+                _add_issue(issues, "ENTRY_OWNER_ROLE_TOO_LONG", key)
+            if not isinstance(entry.get("priority"), str) or not entry.get("priority", "").strip() or len(entry.get("priority", "")) > 32:
+                _add_issue(issues, "ENTRY_PRIORITY_INVALID", key)
+            reqs = entry.get("requirement_ids")
+            if not isinstance(reqs, list) or any(not _safe_key(value) for value in reqs):
+                _add_issue(issues, "ENTRY_REQUIREMENT_IDS_INVALID", key)
+            elif len(reqs) != len(set(reqs)):
+                _add_issue(issues, "ENTRY_REQUIREMENT_ID_DUPLICATE", key)
+            if entry.get("issue_url") is not None:
+                try:
+                    _entry_identity(entry, key, issues)
+                except InputError as exc:
+                    _add_issue(issues, exc.code, exc.record)
+                for field in ("historical_body_sha256",):
+                    value = entry.get(field)
+                    if not isinstance(value, str) or HASH_RE.fullmatch(value) is None:
+                        _add_issue(issues, "ENTRY_BODY_DIGEST_INVALID", key)
+                current = entry.get("current_readback")
+                if not isinstance(current, dict) or not isinstance(current.get("body_sha256"), str) or HASH_RE.fullmatch(current.get("body_sha256", "")) is None:
+                    _add_issue(issues, "CURRENT_READBACK_INVALID", key)
+                else:
+                    body_changed = current.get("body_sha256") != entry.get("historical_body_sha256")
+                    title_changed = isinstance(entry.get("historical_issue_title"), str) and current.get("title") != entry.get("historical_issue_title")
+                    state_changed = isinstance(entry.get("historical_issue_state"), str) and current.get("state") != entry.get("historical_issue_state")
+                    if (body_changed or title_changed or state_changed) and not _has_source_semantic_review(entry, current):
+                        if body_changed:
+                            _add_issue(issues, "ISSUE_BODY_CHANGE_UNADJUDICATED", key)
+                        if title_changed:
+                            _add_issue(issues, "ISSUE_TITLE_CHANGE_UNADJUDICATED", key)
+                        if state_changed:
+                            _add_issue(issues, "ISSUE_STATE_CHANGE_UNADJUDICATED", key)
+            required_test_status = entry.get("required_test_declaration_status")
+            if required_test_status == "not_declared_in_source":
+                tests = entry.get("required_tests")
+                if tests != []:
+                    _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
+                _add_issue(issues, "ENTRY_REQUIRED_TESTS_UNDECLARED", key)
+            elif required_test_status in (None, "declared_in_source"):
+                tests = entry.get("required_tests", entry.get("tests", []))
+            else:
+                _add_issue(issues, "ENTRY_REQUIRED_TEST_DECLARATION_STATUS_INVALID", key)
+                tests = entry.get("required_tests", [])
+            if not isinstance(tests, list) or len(tests) > MAX_ENTRIES:
+                _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
+            elif any(not isinstance(value, (str, dict)) for value in tests):
+                _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
+            else:
+                test_ids = _required_test_ids(entry)
+                if len(test_ids) != len(tests) or any(not _safe_key(value) for value in test_ids):
+                    _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
+                if len(test_ids) != len(set(test_ids)):
+                    _add_issue(issues, "ENTRY_REQUIRED_TESTS_DUPLICATE", key)
+            evidence = entry.get("required_evidence", [])
+            if not isinstance(evidence, list) or any(not _safe_key(value) for value in evidence):
+                _add_issue(issues, "ENTRY_REQUIRED_EVIDENCE_INVALID", key)
+            elif len(evidence) != len(set(evidence)):
+                _add_issue(issues, "ENTRY_REQUIRED_EVIDENCE_DUPLICATE", key)
+            receipts = entry.get("required_owner_receipts", [])
+            if not isinstance(receipts, list) or any(not _safe_key(value) for value in receipts):
+                _add_issue(issues, "ENTRY_REQUIRED_RECEIPTS_INVALID", key)
+            elif len(receipts) != len(set(receipts)):
+                _add_issue(issues, "ENTRY_REQUIRED_RECEIPTS_DUPLICATE", key)
+            for field in ("required_model_revision", "required_policy_revision"):
+                if field in entry and not _safe_key(entry.get(field)):
+                    _add_issue(issues, "ENTRY_REQUIRED_CONFIGURATION_PIN_INVALID", key)
+            for field in ("required_evidence", "required_release_stage", "required_mode"):
+                if field not in entry:
+                    continue
+                if field == "required_evidence" and (not isinstance(entry[field], list) or any(not _safe_key(x) for x in entry[field])):
+                    _add_issue(issues, "ENTRY_REQUIRED_EVIDENCE_INVALID", key)
+                elif field == "required_release_stage" and (not isinstance(entry[field], str) or entry[field] not in PROJECTION_STAGES):
+                    _add_issue(issues, "ENTRY_REQUIRED_RELEASE_STAGE_INVALID", key)
+                elif field == "required_mode" and (not isinstance(entry[field], str) or entry[field] not in MODES):
+                    _add_issue(issues, "ENTRY_REQUIRED_MODE_INVALID", key)
+            state = entry.get("state")
+            if not isinstance(state, str) or state not in {"planned", "in_progress", "blocked", "closed", "complete", "verified", "deferred", "not_planned", "not-planned"}:
+                _add_issue(issues, "ENTRY_STATE_INVALID", key)
+            elif state in {"deferred", "not_planned", "not-planned"}:
+                _add_issue(issues, "REQUIRED_LEAF_NOT_DELIVERED", key)
+            elif state == "closed" and not _has_exact_closure_evidence(entry.get("closure_evidence"), _required_test_ids(entry)):
+                _add_issue(issues, "CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", key)
+            blockers = entry.get("blockers", [])
+            if not isinstance(blockers, list) or len(blockers) > MAX_GRAPH_ROWS:
+                _add_issue(issues, "ENTRY_BLOCKERS_INVALID", key)
+            else:
+                for blocker in blockers:
+                    if not isinstance(blocker, dict) or any(
+                        not isinstance(blocker.get(field), str)
+                        or not blocker.get(field, "").strip()
+                        or len(blocker.get(field, "")) > MAX_BLOCKER_TEXT
+                        for field in ("owner", "action")
+                    ):
+                        _add_issue(issues, "ENTRY_BLOCKER_OWNER_ACTION_REQUIRED", key)
+            if entry.get("issue_url") is None and not blockers:
+                _add_issue(issues, "REQUIRED_NULL_URL_BLOCKER_REQUIRED", key)
+            for relation_name in ("supersedes", "superseded_by"):
+                related = entry.get(relation_name)
+                if related is not None and (not isinstance(related, str) or not _safe_key(related)):
+                    _add_issue(issues, "SUPERSESSION_RELATION_INVALID", key)
+
+    if check_urls:
+        _validate_issue_readbacks_v2(entries_raw, readbacks, readback_pin, issues)
+    if require_specialists:
+        for family in ("agent-harness", "event-intelligence", "creative-engine"):
+            if repo_counts.get(family, 0) < 1:
+                _add_issue(issues, "REQUIRED_LEAF_FAMILY_MISSING", family)
+
+    unresolved_pairs: set[tuple[str, str]] = set()
+    for row in unresolved_raw:
+        if (
+            isinstance(row, dict)
+            and _safe_key(row.get("requirement_id"))
+            and _safe_key(row.get("leaf_key"))
+        ):
+            unresolved_pairs.add((row["requirement_id"], row["leaf_key"]))
+        else:
+            _add_issue(issues, "UNRESOLVED_ASSOCIATION_INVALID", "unresolved_associations")
+
+    ownership_by_id: dict[str, dict[str, Any]] = {}
+    accountable_pairs: set[tuple[str, str]] = set()
+    contributor_pairs: set[tuple[str, str]] = set()
+    for index, row in enumerate(ownership_raw):
+        if not isinstance(row, dict) or not _safe_key(row.get("requirement_id")):
+            _add_issue(issues, "OWNERSHIP_ROW_INVALID", f"ownership-{index}")
+            continue
+        ident = row["requirement_id"]
+        if ident in ownership_by_id:
+            _add_issue(issues, "OWNERSHIP_ID_DUPLICATE", ident)
+            continue
+        ownership_by_id[ident] = row
+        if row.get("source_pointer") != f"/ownership_rows/{index}":
+            _add_issue(issues, "OWNERSHIP_SOURCE_POINTER_INVALID", ident)
+        if row.get("required_for_v1") is not True:
+            _add_issue(issues, "OWNERSHIP_REQUIRED_FLAG_INVALID", ident)
+        accountable, acceptance = row.get("accountable_delivery_leaf"), row.get("acceptance_owner_leaf")
+        if not isinstance(accountable, str) or accountable not in leaves:
+            _add_issue(issues, "ACCOUNTABLE_DELIVERY_LEAF_INVALID", ident)
+        else:
+            if (ident, accountable) not in unresolved_pairs and ident not in leaves[accountable].get("requirement_ids", []):
+                _add_issue(issues, "ACCOUNTABLE_LEAF_REQUIREMENT_MISMATCH", ident)
+            accountable_pairs.add((ident, accountable))
+        if not isinstance(acceptance, str) or acceptance not in leaves:
+            _add_issue(issues, "ACCEPTANCE_OWNER_LEAF_INVALID", ident)
+        contributors = row.get("required_contributors", [])
+        if not isinstance(contributors, list) or len(contributors) > MAX_ENTRIES or any(not isinstance(item, str) or item not in leaves for item in contributors):
+            _add_issue(issues, "OWNERSHIP_CONTRIBUTOR_INVALID", ident)
+        else:
+            if len(contributors) != len(set(contributors)):
+                _add_issue(issues, "OWNERSHIP_CONTRIBUTOR_DUPLICATE", ident)
+            for contributor in contributors:
+                if (ident, contributor) not in unresolved_pairs and ident not in leaves[contributor].get("requirement_ids", []):
+                    _add_issue(issues, "CONTRIBUTOR_REQUIREMENT_MISMATCH", ident)
+                contributor_pairs.add((ident, contributor))
+        expected_scope = "scoped_contribution" if ident in criteria else "local"
+        if row.get("scope") != expected_scope:
+            _add_issue(issues, "OWNERSHIP_SCOPE_MISMATCH", ident)
+        if ident in criteria:
+            if isinstance(row.get("global_status"), str) and row.get("global_status") in {"complete", "accepted", "satisfied"}:
+                _add_issue(issues, "GLOBAL_SCOPE_OVERCLAIM", ident)
+        elif row.get("scope_and_global_role") not in (None, "Scoped requirement") and row.get("scope") != "local":
+            _add_issue(issues, "LOCAL_SCOPE_CLASSIFICATION_INVALID", ident)
+
+    expected_endpoint_sources: dict[str, list[tuple[str, str, tuple[str, ...]]]] = {}
+    for index, row in enumerate(ownership_raw):
+        if not isinstance(row, dict) or not _safe_key(row.get("requirement_id")):
+            continue
+        ident = row["requirement_id"]
+        pointer = f"/ownership_rows/{index}"
+        endpoints: dict[str, list[str]] = {}
+        accountable = row.get("accountable_delivery_leaf")
+        if isinstance(accountable, str) and (ident, accountable) not in unresolved_pairs:
+            endpoints.setdefault(accountable, []).append("accountable_delivery")
+        contributors = row.get("required_contributors", [])
+        if isinstance(contributors, list):
+            for contributor in contributors:
+                if isinstance(contributor, str) and (ident, contributor) not in unresolved_pairs:
+                    roles = endpoints.setdefault(contributor, [])
+                    if "required_contributor" not in roles:
+                        roles.append("required_contributor")
+        for leaf, roles in endpoints.items():
+            expected_endpoint_sources.setdefault(leaf, []).append((ident, pointer, tuple(roles)))
+    for entry in entries_raw:
+        if not isinstance(entry, dict) or not (
+            "source_requirement_ids" in entry or "requirement_id_sources" in entry
+        ):
+            continue
+        key = entry.get("key")
+        if not _safe_key(key):
+            continue
+        source_ids = entry.get("source_requirement_ids")
+        projected_ids = entry.get("requirement_ids")
+        source_rows = entry.get("requirement_id_sources")
+        if (
+            not isinstance(source_ids, list)
+            or any(not _safe_key(value) for value in source_ids)
+            or len(source_ids) != len(set(source_ids))
+            or not isinstance(projected_ids, list)
+            or any(not _safe_key(value) for value in projected_ids)
+            or len(projected_ids) != len(set(projected_ids))
+            or not isinstance(source_rows, list)
+        ):
+            _add_issue(issues, "ENTRY_REQUIREMENT_PROJECTION_INVALID", key)
+            continue
+        expected_rows = expected_endpoint_sources.get(key, [])
+        expected_ids = set(source_ids) | {item[0] for item in expected_rows}
+        actual_rows: list[tuple[str, str, tuple[str, ...]]] = []
+        valid_rows = True
+        for source_row in source_rows:
+            if (
+                not isinstance(source_row, dict)
+                or not _safe_key(source_row.get("requirement_id"))
+                or not isinstance(source_row.get("ownership_row_pointer"), str)
+                or not isinstance(source_row.get("endpoint_roles"), list)
+                or any(role not in {"accountable_delivery", "required_contributor"} for role in source_row.get("endpoint_roles", []))
+                or len(source_row.get("endpoint_roles", [])) != len(set(source_row.get("endpoint_roles", [])))
+            ):
+                valid_rows = False
+                break
+            actual_rows.append((
+                source_row["requirement_id"],
+                source_row["ownership_row_pointer"],
+                tuple(source_row["endpoint_roles"]),
+            ))
+        if (
+            not valid_rows
+            or len(actual_rows) != len(set(actual_rows))
+            or set(actual_rows) != set(expected_rows)
+            or set(projected_ids) != expected_ids
+        ):
+            _add_issue(issues, "ENTRY_REQUIREMENT_PROJECTION_MISMATCH", key)
+
+    additions: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in additions_raw:
+        if not isinstance(row, dict) or not isinstance(row.get("requirement_id"), str) or not isinstance(row.get("leaf_key"), str):
+            _add_issue(issues, "SOURCE_SUPPORTED_ASSOCIATION_INVALID", "source_supported_associations")
+            continue
+        pair = (row["requirement_id"], row["leaf_key"])
+        if pair in additions:
+            _add_issue(issues, "SOURCE_SUPPORTED_ASSOCIATION_DUPLICATE", pair[0])
+        additions[pair] = row
+    typed_extras: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in extras_raw:
+        if not isinstance(row, dict) or not isinstance(row.get("requirement_id"), str) or not isinstance(row.get("leaf_key"), str):
+            _add_issue(issues, "TYPED_EXTRA_ASSOCIATION_INVALID", "reviewed_typed_extras")
+            continue
+        pair = (row["requirement_id"], row["leaf_key"])
+        if pair in typed_extras or not _safe_key(row.get("role")):
+            _add_issue(issues, "TYPED_EXTRA_ASSOCIATION_INVALID", pair[0])
+        typed_extras[pair] = row
+
+    pair_review_by_pointer: dict[str, dict[str, Any]] = {}
+    pair_review_by_id: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(pair_review_raw):
+        if not isinstance(row, dict):
+            _add_issue(issues, "PAIR_REVIEW_ROW_INVALID", f"pair-{index}")
+            continue
+        pointer = f"/pairs/{index}"
+        expected_id = f"PAIR-{index + 1:04d}"
+        if row.get("source_pointer") != pointer or row.get("review_row_id") != expected_id:
+            _add_issue(issues, "PAIR_REVIEW_POINTER_INVALID", expected_id)
+        if pointer in pair_review_by_pointer or expected_id in pair_review_by_id:
+            _add_issue(issues, "PAIR_REVIEW_ID_DUPLICATE", expected_id)
+        pair_review_by_pointer[pointer] = row
+        pair_review_by_id[expected_id] = row
+        if not isinstance(row.get("requirement_id"), str) or not _safe_key(row.get("requirement_id")):
+            _add_issue(issues, "PAIR_REVIEW_REQUIREMENT_INVALID", expected_id)
+        if not isinstance(row.get("leaf"), str) or not _safe_key(row.get("leaf")):
+            _add_issue(issues, "PAIR_REVIEW_LEAF_INVALID", expected_id)
+        before = row.get("before")
+        if not isinstance(before, dict):
+            _add_issue(issues, "PAIR_REVIEW_BEFORE_INVALID", expected_id)
+            continue
+        owner_pointer = before.get("ownership_row_pointer")
+        owner_match = re.fullmatch(r"/ownership_rows/([0-9]+)", owner_pointer) if isinstance(owner_pointer, str) else None
+        if owner_match is None:
+            _add_issue(issues, "PAIR_REVIEW_OWNERSHIP_POINTER_INVALID", expected_id)
+        else:
+            owner_index = int(owner_match.group(1))
+            if owner_index >= len(ownership_raw) or not isinstance(ownership_raw[owner_index], dict) or ownership_raw[owner_index].get("requirement_id") != row.get("requirement_id"):
+                _add_issue(issues, "PAIR_REVIEW_OWNERSHIP_POINTER_MISMATCH", expected_id)
+        actual_present = before.get("actual_contribution_row_present")
+        contribution_pointer = before.get("contribution_row_pointer")
+        if actual_present is True:
+            contribution_match = re.fullmatch(r"/source_contribution_rows/([0-9]+)", contribution_pointer) if isinstance(contribution_pointer, str) else None
+            if contribution_match is None:
+                _add_issue(issues, "PAIR_REVIEW_CONTRIBUTION_POINTER_INVALID", expected_id)
+            else:
+                contribution_index = int(contribution_match.group(1))
+                if contribution_index >= len(source_rows_raw):
+                    _add_issue(issues, "PAIR_REVIEW_CONTRIBUTION_POINTER_MISMATCH", expected_id)
+                else:
+                    source_row = source_rows_raw[contribution_index]
+                    if not isinstance(source_row, dict) or (source_row.get("requirement_id"), source_row.get("owning_leaf_key")) != (row.get("requirement_id"), row.get("leaf")):
+                        _add_issue(issues, "PAIR_REVIEW_CONTRIBUTION_POINTER_MISMATCH", expected_id)
+        elif actual_present is False:
+            if contribution_pointer is not None:
+                _add_issue(issues, "PAIR_REVIEW_CONTRIBUTION_POINTER_UNEXPECTED", expected_id)
+        else:
+            _add_issue(issues, "PAIR_REVIEW_BEFORE_INVALID", expected_id)
+
+    referenced_pair_reviews: set[str] = set()
+    for family, table, decisions in (
+        ("source_supported_associations", additions, {"ADD_SCOPED_ASSOCIATION", "ADD_SCOPED_ASSOCIATION_WITH_ACCOUNTABILITY_QUALIFICATION"}),
+        ("reviewed_typed_extras", typed_extras, {"PRESERVE_TYPED_SCOPED_CONTRIBUTION"}),
+    ):
+        for pair, row in table.items():
+            review_id, pointer = row.get("review_row_id"), row.get("source_pointer")
+            source_row = pair_review_by_id.get(review_id) if isinstance(review_id, str) else None
+            if source_row is None or source_row.get("source_pointer") != pointer:
+                _add_relation_issue(issues, "PAIR_REVIEW_REFERENCE_MISMATCH", pair[0], pair[1])
+                continue
+            if (source_row.get("requirement_id"), source_row.get("leaf")) != pair:
+                _add_relation_issue(issues, "PAIR_REVIEW_PAIR_MISMATCH", pair[0], pair[1])
+            if not isinstance(source_row.get("after_recommendation"), str) or source_row.get("after_recommendation") not in decisions:
+                _add_relation_issue(issues, "PAIR_REVIEW_DECISION_MISMATCH", pair[0], pair[1])
+            projected_role = row.get("role") if family == "reviewed_typed_extras" else row.get("recommended_role")
+            if projected_role != source_row.get("recommended_role"):
+                _add_relation_issue(issues, "PAIR_REVIEW_ROLE_MISMATCH", pair[0], pair[1])
+            if family == "source_supported_associations" and row.get("decision") != source_row.get("after_recommendation"):
+                _add_relation_issue(issues, "PAIR_REVIEW_DECISION_MISMATCH", pair[0], pair[1])
+            if row.get("evidence") != source_row.get("evidence"):
+                _add_relation_issue(issues, "PAIR_REVIEW_EVIDENCE_MISMATCH", pair[0], pair[1])
+            if source_row.get("implementation_owner_change") is not False or source_row.get("new_dependency_edge_implied") is not False:
+                _add_relation_issue(issues, "PAIR_REVIEW_SCOPE_CHANGE", pair[0], pair[1])
+            before = source_row.get("before", {})
+            if family == "source_supported_associations" and before.get("actual_contribution_row_present") is not False:
+                _add_relation_issue(issues, "PAIR_REVIEW_ADDITION_ALREADY_PRESENT", pair[0], pair[1])
+            if family == "reviewed_typed_extras" and before.get("actual_contribution_row_present") is not True:
+                _add_relation_issue(issues, "PAIR_REVIEW_EXTRA_NOT_PRESENT", pair[0], pair[1])
+            if isinstance(review_id, str):
+                if review_id in referenced_pair_reviews:
+                    _add_relation_issue(issues, "PAIR_REVIEW_DECISION_REUSED", pair[0], pair[1])
+                referenced_pair_reviews.add(review_id)
+    for pair in unresolved_pairs:
+        rows = [row for row in unresolved_raw if isinstance(row, dict) and (row.get("requirement_id"), row.get("leaf_key")) == pair]
+        if len(rows) != 1:
+            _add_relation_issue(issues, "UNRESOLVED_ASSOCIATION_DUPLICATE", pair[0], pair[1])
+            continue
+        row = rows[0]
+        review_id = row.get("review_row_id")
+        source_row = pair_review_by_id.get(review_id) if isinstance(review_id, str) else None
+        if (
+            source_row is None
+            or source_row.get("source_pointer") != row.get("source_pointer")
+            or source_row.get("after_recommendation") != "RETAIN_UNRESOLVED_ACCOUNTABILITY_DO_NOT_AUTO_ADD"
+            or (source_row.get("requirement_id"), source_row.get("leaf")) != pair
+        ):
+            _add_relation_issue(issues, "UNRESOLVED_ASSOCIATION_SOURCE_MISMATCH", pair[0], pair[1])
+        if isinstance(review_id, str):
+            if review_id in referenced_pair_reviews:
+                _add_relation_issue(issues, "PAIR_REVIEW_DECISION_REUSED", pair[0], pair[1])
+            referenced_pair_reviews.add(review_id)
+    if referenced_pair_reviews != set(pair_review_by_id):
+        _add_issue(issues, "PAIR_REVIEW_DECISION_NOT_PROJECTED", "pair_review_rows")
+
+    actual_pairs: set[tuple[str, str]] = set()
+    row_ids: set[str] = set()
+    actual_role_pairs: set[tuple[tuple[str, str], str]] = set()
+    for index, row in enumerate(source_rows_raw):
+        if not isinstance(row, dict):
+            _add_issue(issues, "CONTRIBUTION_ROW_INVALID", f"contribution-{index}")
+            continue
+        ident, leaf = row.get("requirement_id"), row.get("owning_leaf_key")
+        row_id = row.get("row_id")
+        pair = (ident, leaf) if isinstance(ident, str) and isinstance(leaf, str) else None
+        if pair is None or not _safe_key(row_id) or not isinstance(row.get("source_pointer"), str):
+            _add_issue(issues, "CONTRIBUTION_ROW_INVALID", f"contribution-{index}")
+            continue
+        if row_id in row_ids:
+            _add_issue(issues, "CONTRIBUTION_ROW_ID_DUPLICATE", row_id)
+        if row_id != f"SRC-{index + 1:04d}" or row.get("source_pointer") != f"/source_contribution_rows/{index}":
+            _add_relation_issue(issues, "CONTRIBUTION_SOURCE_ID_OR_POINTER_INVALID", row_id, ident)
+        row_ids.add(row_id)
+        actual_pairs.add(pair)
+        role = row.get("relation_role")
+        if pair in typed_extras:
+            expected_role = typed_extras[pair].get("role")
+        elif pair in accountable_pairs and pair in contributor_pairs:
+            expected_role = "accountable_delivery_and_required_contributor"
+        elif pair in accountable_pairs:
+            expected_role = "accountable_delivery"
+        elif pair in contributor_pairs:
+            expected_role = "required_contributor"
+        else:
+            expected_role = None
+        if expected_role is None:
+            _add_relation_issue(issues, "CONTRIBUTION_PAIR_UNDECLARED", row_id, ident)
+        elif role != expected_role:
+            _add_relation_issue(issues, "CONTRIBUTION_ROLE_MISMATCH", row_id, expected_role)
+        else:
+            actual_role_pairs.add((pair, expected_role))
+        if ident not in ownership_by_id:
+            _add_issue(issues, "ORPHAN_CONTRIBUTION_REQUIREMENT", ident)
+        if leaf not in leaves:
+            _add_issue(issues, "CONTRIBUTION_OWNER_NOT_LEAF", ident)
+        elif pair not in typed_extras and ident not in leaves[leaf].get("requirement_ids", []):
+            _add_issue(issues, "CONTRIBUTION_NOT_DECLARED_BY_LEAF", ident)
+        if row.get("source_pointer") != f"/source_contribution_rows/{index}":
+            _add_relation_issue(issues, "CONTRIBUTION_SOURCE_POINTER_INVALID", row_id, ident)
+        expected_scope = "scoped_contribution" if ident in criteria else "local"
+        if row.get("scope") != expected_scope:
+            _add_relation_issue(issues, "CONTRIBUTION_SCOPE_MISMATCH", row_id, ident)
+        if ident in criteria:
+            acceptance = row.get("authoritative_acceptance")
+            criterion = criteria[ident]
+            if not isinstance(acceptance, dict) or any(acceptance.get(field) != criterion.get(field) for field in ("id", "title", "priority", "owner_role", "verification", "evidence_required")):
+                _add_issue(issues, "GLOBAL_ACCEPTANCE_METADATA_MISMATCH", ident)
+        elif row.get("authoritative_acceptance") is not None:
+            _add_issue(issues, "LOCAL_ROW_CLAIMS_GLOBAL_ACCEPTANCE", ident)
+    expected_pairs = accountable_pairs | contributor_pairs
+    for pair in sorted(expected_pairs):
+        if pair in actual_pairs or pair in additions:
+            continue
+        if pair in unresolved_pairs:
+            _add_relation_issue(issues, "ASSOCIATION_OWNER_DECISION_UNRESOLVED", pair[0], pair[1])
+        else:
+            _add_relation_issue(issues, "REQUIRED_ASSOCIATION_MISSING", pair[0], pair[1])
+    for pair in actual_pairs - expected_pairs - set(typed_extras):
+        _add_relation_issue(issues, "CONTRIBUTION_PAIR_UNDECLARED", pair[0], pair[1])
+    for pair, row in additions.items():
+        if pair not in expected_pairs or pair in actual_pairs or pair[1] not in leaves:
+            _add_relation_issue(issues, "SOURCE_SUPPORTED_ASSOCIATION_INVALID", pair[0], pair[1])
+        if not isinstance(row.get("association_id"), str) or not _safe_key(row.get("association_id")):
+            _add_relation_issue(issues, "SOURCE_SUPPORTED_ASSOCIATION_ID_INVALID", pair[0], pair[1])
+        if not isinstance(row.get("source_pointer"), str) or not re.fullmatch(r"/pairs/[0-9]+", row.get("source_pointer", "")):
+            _add_relation_issue(issues, "SOURCE_SUPPORTED_ASSOCIATION_POINTER_INVALID", pair[0], pair[1])
+        if row.get("decision") not in {"ADD_SCOPED_ASSOCIATION", "ADD_SCOPED_ASSOCIATION_WITH_ACCOUNTABILITY_QUALIFICATION"}:
+            _add_relation_issue(issues, "SOURCE_SUPPORTED_ASSOCIATION_DECISION_INVALID", pair[0], pair[1])
+        if row.get("new_dependency_edge_implied") is True or row.get("implementation_owner_change") is True:
+            _add_relation_issue(issues, "SOURCE_SUPPORTED_ASSOCIATION_SCOPE_CHANGED", pair[0], pair[1])
+    for pair in typed_extras:
+        if pair not in actual_pairs or pair in expected_pairs:
+            _add_relation_issue(issues, "TYPED_EXTRA_ASSOCIATION_INVALID", pair[0], pair[1])
+    all_entry_requirement_ids: set[str] = set()
+    for entry in entries_raw:
+        if isinstance(entry, dict) and isinstance(entry.get("requirement_ids"), list):
+            all_entry_requirement_ids.update(value for value in entry["requirement_ids"] if isinstance(value, str))
+    for ident in sorted(all_entry_requirement_ids - set(ownership_by_id)):
+        _add_issue(issues, "REQUIRED_ID_WITHOUT_OWNERSHIP", ident)
+    for entry in entries_raw:
+        if not isinstance(entry, dict):
+            continue
+        key = entry.get("key")
+        supersedes = entry.get("supersedes")
+        if isinstance(supersedes, str):
+            prior = entry_by_key.get(supersedes)
+            if prior is None or prior.get("superseded_by") != key:
+                _add_issue(issues, "SUPERSESSION_RELATION_UNVERIFIED", _label(key))
+        superseded_by = entry.get("superseded_by")
+        if isinstance(superseded_by, str):
+            replacement = entry_by_key.get(superseded_by)
+            if replacement is None or replacement.get("supersedes") != key:
+                _add_issue(issues, "SUPERSESSION_RELATION_UNVERIFIED", _label(key))
+
+    graph_summary = _validate_projection_graph(coverage.get("execution_graph"), entry_by_key, leaves, issues) if check_dag else {}
+    stage_relations = coverage.get("stage_relations")
+    if not isinstance(stage_relations, list):
+        _add_issue(issues, "STAGE_RELATION_FAMILY_MISSING", "stage_relations")
+        stage_relations = []
+    stage_relations = _bounded_rows(stage_relations, MAX_GRAPH_ROWS, "STAGE_RELATION_ROW_LIMIT_EXCEEDED", "stage_relations", issues)
+    relation_ids: set[str] = set()
+    source_pointers: set[str] = set()
+    if len(source_stage_raw) != len(stage_relations):
+        _add_issue(issues, "STAGE_RELATION_SOURCE_CARDINALITY_MISMATCH", "source_stage_rows")
+    source_stage_by_pointer: dict[str, dict[str, Any]] = {}
+    for index, source_row in enumerate(source_stage_raw):
+        expected_pointer = f"/staged_edges/{index}"
+        if not isinstance(source_row, dict) or source_row.get("source_pointer") != expected_pointer:
+            _add_issue(issues, "SOURCE_STAGE_POINTER_INVALID", f"stage-{index}")
+            continue
+        source_stage_by_pointer[expected_pointer] = source_row
+    external_nodes = coverage.get("external_artifact_nodes")
+    if not isinstance(external_nodes, list) or len(external_nodes) > MAX_ENTRIES:
+        _add_issue(issues, "EXTERNAL_ARTIFACT_FAMILY_INVALID", "external_artifact_nodes")
+        external_nodes = []
+    external_by_id: dict[str, dict[str, Any]] = {}
+    used_external_ids: set[str] = set()
+    for index, node in enumerate(external_nodes):
+        if not isinstance(node, dict) or not _safe_key(node.get("artifact_id")) or node.get("artifact_id") in external_by_id:
+            _add_issue(issues, "EXTERNAL_ARTIFACT_INVALID", f"external-{index}")
+            continue
+        ident = node["artifact_id"]
+        external_by_id[ident] = node
+        for field in ("owner_role", "deliverable", "status", "source_pointer"):
+            if not isinstance(node.get(field), str) or not node.get(field).strip():
+                _add_issue(issues, "EXTERNAL_ARTIFACT_METADATA_MISSING", ident)
+        if node.get("source_pointer") != f"/nodes/{index}" or node.get("upstream_source_pointer") != f"/external_artifact_nodes/{ident}":
+            _add_issue(issues, "EXTERNAL_ARTIFACT_SOURCE_POINTER_INVALID", ident)
+        if not isinstance(node.get("status"), str) or node.get("status") not in {"pending_external", "accepted", "rejected", "unresolved"}:
+            _add_issue(issues, "EXTERNAL_ARTIFACT_STATUS_INVALID", ident)
+        if not isinstance(node.get("action_status"), str) or node.get("action_status") not in {"declared_in_source", "not_declared_in_source"}:
+            _add_issue(issues, "EXTERNAL_ACTION_STATUS_INVALID", ident)
+        if node.get("action_status") == "not_declared_in_source" and node.get("action") is not None:
+            _add_issue(issues, "EXTERNAL_ACTION_UNDECLARED", ident)
+        elif node.get("action_status") == "declared_in_source" and (not isinstance(node.get("action"), str) or not node.get("action", "").strip()):
+            _add_issue(issues, "EXTERNAL_ACTION_MISSING", ident)
+    for index, relation in enumerate(stage_relations):
+        record = f"stage-{index}"
+        if not isinstance(relation, dict) or not _safe_key(relation.get("relation_id")):
+            _add_issue(issues, "STAGE_RELATION_INVALID", record)
+            continue
+        ident = relation["relation_id"]
+        if ident in relation_ids:
+            _add_issue(issues, "STAGE_RELATION_ID_DUPLICATE", ident)
+        relation_ids.add(ident)
+        pointer = relation.get("source_pointer")
+        if not isinstance(pointer, str) or pointer in source_pointers:
+            _add_issue(issues, "STAGE_RELATION_SOURCE_POINTER_INVALID", ident)
+        source_pointers.add(pointer if isinstance(pointer, str) else "")
+        source_row = source_stage_by_pointer.get(pointer) if isinstance(pointer, str) else None
+        if source_row is None:
+            _add_issue(issues, "STAGE_RELATION_SOURCE_NOT_FOUND", ident)
+        else:
+            pointer_index = int(pointer.rsplit("/", 1)[-1]) if pointer.rsplit("/", 1)[-1].isdigit() else -1
+            if relation.get("relation_id") != f"STG-{pointer_index:03d}":
+                _add_issue(issues, "STAGE_RELATION_ID_SOURCE_MISMATCH", ident)
+            if relation.get("consumer_key") != source_row.get("consumer_key") or relation.get("consumer_requirement_ids") != source_row.get("consumer_requirement_ids"):
+                _add_issue(issues, "STAGE_RELATION_CONSUMER_SOURCE_MISMATCH", ident)
+            expected_external = source_row.get("external_endpoint") is True
+            expected_producer = None if expected_external else source_row.get("prerequisite_key")
+            expected_external_id = source_row.get("prerequisite_key") if expected_external else None
+            if relation.get("producer_key") != expected_producer or relation.get("external_artifact_id") != expected_external_id:
+                _add_issue(issues, "STAGE_RELATION_PRODUCER_SOURCE_MISMATCH", ident)
+            if relation.get("producer_requirement_ids") != source_row.get("prerequisite_requirement_ids"):
+                _add_issue(issues, "STAGE_RELATION_PRODUCER_REQUIREMENT_SOURCE_MISMATCH", ident)
+            if relation.get("shared_requirement_ids") != source_row.get("shared_requirement_ids"):
+                _add_issue(issues, "STAGE_RELATION_SHARED_REQUIREMENT_SOURCE_MISMATCH", ident)
+            if relation.get("external_endpoint") is not source_row.get("external_endpoint") or relation.get("disjoint_internal") is not source_row.get("disjoint_internal"):
+                _add_issue(issues, "STAGE_RELATION_ENDPOINT_FLAGS_SOURCE_MISMATCH", ident)
+            if relation.get("source_evidence_file") != source_row.get("evidence_file") or relation.get("source_evidence_line") != source_row.get("evidence_line"):
+                _add_issue(issues, "STAGE_RELATION_PROVENANCE_SOURCE_MISMATCH", ident)
+            for field in ("consumer_stage", "deliverable", "reason", "status"):
+                if relation.get(field) != source_row.get(field):
+                    _add_issue(issues, "STAGE_RELATION_SOURCE_MISMATCH", ident)
+            if relation.get("prerequisite_stage") != source_row.get("prerequisite_stage"):
+                _add_issue(issues, "STAGE_RELATION_SOURCE_MISMATCH", ident)
+            reason = source_row.get("reason")
+            expected_applicability = "required" if isinstance(reason, str) and reason in REQUIRED_STAGE_REASONS else "unresolved"
+            if relation.get("applicability") != expected_applicability:
+                _add_issue(issues, "STAGE_RELATION_APPLICABILITY_SOURCE_MISMATCH", ident)
+            expected_scope = "live_only" if source_row.get("reason") == "live dispatch only; no additional block on offline implementation" else "declared_stage"
+            if relation.get("application_scope") != expected_scope:
+                _add_issue(issues, "STAGE_RELATION_SCOPE_SOURCE_MISMATCH", ident)
+        consumer = relation.get("consumer_key")
+        producer = relation.get("producer_key")
+        external_id = relation.get("external_artifact_id")
+        if not isinstance(consumer, str) or consumer not in leaves:
+            _add_issue(issues, "STAGE_RELATION_CONSUMER_INVALID", ident)
+        if not isinstance(consumer, str) or consumer not in leaves:
+            consumer_req_ids: list[str] = []
+        else:
+            consumer_req_ids = relation.get("consumer_requirement_ids") if isinstance(relation.get("consumer_requirement_ids"), list) else []
+            if not isinstance(relation.get("consumer_requirement_ids"), list) or not consumer_req_ids or any(not isinstance(value, str) or value not in leaves[consumer].get("requirement_ids", []) for value in consumer_req_ids):
+                _add_issue(issues, "STAGE_RELATION_CONSUMER_REQUIREMENT_MISMATCH", ident)
+            elif len(consumer_req_ids) != len(set(consumer_req_ids)):
+                _add_issue(issues, "STAGE_RELATION_CONSUMER_REQUIREMENT_INVALID", ident)
+        if external_id is not None:
+            if not isinstance(external_id, str) or external_id not in external_by_id or producer is not None:
+                _add_issue(issues, "STAGE_RELATION_EXTERNAL_ENDPOINT_INVALID", ident)
+            else:
+                used_external_ids.add(external_id)
+            if relation.get("producer_requirement_ids") not in (None, []):
+                _add_issue(issues, "STAGE_RELATION_EXTERNAL_REQUIREMENTS_INVALID", ident)
+        elif not isinstance(producer, str) or producer not in leaves:
+            _add_issue(issues, "STAGE_RELATION_PRODUCER_INVALID", ident)
+        else:
+            producer_req_ids = relation.get("producer_requirement_ids")
+            if not isinstance(producer_req_ids, list) or not producer_req_ids or any(not isinstance(value, str) or value not in leaves[producer].get("requirement_ids", []) for value in producer_req_ids):
+                _add_issue(issues, "STAGE_RELATION_PRODUCER_REQUIREMENT_MISMATCH", ident)
+            elif len(producer_req_ids) != len(set(producer_req_ids)):
+                _add_issue(issues, "STAGE_RELATION_PRODUCER_REQUIREMENT_INVALID", ident)
+        shared_ids = relation.get("shared_requirement_ids")
+        if not isinstance(shared_ids, list) or any(not isinstance(value, str) or not _safe_key(value) for value in shared_ids):
+            _add_issue(issues, "STAGE_RELATION_SHARED_REQUIREMENT_INVALID", ident)
+        elif len(shared_ids) != len(set(shared_ids)):
+            _add_issue(issues, "STAGE_RELATION_SHARED_REQUIREMENT_INVALID", ident)
+        else:
+            consumer_declared = set(consumer_req_ids) if consumer_req_ids and all(isinstance(value, str) for value in consumer_req_ids) else set()
+            producer_declared = set(producer_req_ids) if external_id is None and isinstance(producer_req_ids, list) and all(isinstance(value, str) for value in producer_req_ids) else set()
+            expected_shared = consumer_declared & producer_declared
+            if set(shared_ids) != expected_shared:
+                _add_issue(issues, "STAGE_RELATION_SHARED_REQUIREMENT_MISMATCH", ident)
+            expected_disjoint = external_id is None and not expected_shared
+            if relation.get("disjoint_internal") is not expected_disjoint:
+                _add_issue(issues, "STAGE_RELATION_DISJOINT_FLAG_MISMATCH", ident)
+        if relation.get("consumer_stage") not in PROJECTION_STAGES or relation.get("prerequisite_stage") not in PROJECTION_STAGES:
+            _add_issue(issues, "STAGE_RELATION_STAGE_INVALID", ident)
+        if not isinstance(relation.get("applicability"), str) or relation.get("applicability") not in {"required", "unresolved"}:
+            _add_issue(issues, "STAGE_RELATION_APPLICABILITY_INVALID", ident)
+        if not isinstance(relation.get("status"), str) or relation.get("status") not in {"unverified", "pending", "satisfied", "rejected"}:
+            _add_issue(issues, "STAGE_RELATION_STATUS_INVALID", ident)
+        if not isinstance(relation.get("source_evidence_file"), str) or not relation.get("source_evidence_file", "").strip():
+            _add_issue(issues, "STAGE_RELATION_PROVENANCE_INVALID", ident)
+        line = relation.get("source_evidence_line")
+        if not isinstance(line, int) or isinstance(line, bool) or line < 1:
+            _add_issue(issues, "STAGE_RELATION_PROVENANCE_INVALID", ident)
+    if used_external_ids != set(external_by_id):
+        _add_issue(issues, "EXTERNAL_ARTIFACT_RELATION_SET_MISMATCH", "external_artifact_nodes")
+
+    global_ids = set(criteria)
+    mapped_global = set(ownership_by_id) & global_ids
+    local_ids = set(ownership_by_id) - global_ids
+    global_rows = sum(1 for row in source_rows_raw if isinstance(row, dict) and row.get("requirement_id") in global_ids)
+    dimensions = {
+        "required_leaf_records": len(leaves),
+        "agent_harness_leaf_records": repo_counts.get("agent-harness", 0),
+        "specialist_leaf_records": sum(value for key, value in repo_counts.items() if key != "agent-harness"),
+        "source_contribution_rows": len(source_rows_raw),
+        "unique_mapped_requirement_ids": len(ownership_by_id),
+        "local_scoped_requirement_ids": len(local_ids),
+        "global_ids_with_scoped_contributions": len(mapped_global),
+        "global_criteria_total": len(criteria),
+        "global_ids_outside_scoped_contribution": len(global_ids - mapped_global),
+        "contribution_rows_to_global_ids": global_rows,
+        "contribution_rows_to_local_ids": len(source_rows_raw) - global_rows,
+        "source_supported_associations": len(additions),
+        "typed_extra_associations": len(typed_extras),
+        "unresolved_associations": len(unresolved_pairs),
+        "stage_relations": len(stage_relations),
+        "external_artifact_nodes": len(external_by_id),
+    }
+    expected_dimensions = coverage.get("source_dimensions")
+    if isinstance(expected_dimensions, dict):
+        checks = {
+            "required_issue_outcomes": len(entries_raw), "source_contribution_rows": len(source_rows_raw),
+            "ownership_records": len(ownership_by_id), "canonical_criteria": len(criteria),
+            "canonical_criteria_outside_scope": len(global_ids - mapped_global),
+            "staged_relations": len(stage_relations), "external_artifact_nodes": len(external_by_id),
+        }
+        for name, value in checks.items():
+            if expected_dimensions.get(name) != value:
+                _add_issue(issues, "SOURCE_DIMENSION_PIN_MISMATCH", name)
+    return issues, dimensions, leaves, graph_summary
+
+
+def _validate_issue_readbacks_v2(
+    entries: list[Any], readbacks: dict[str, Any], pin: dict[str, Any] | None,
+    issues: list[dict[str, str]],
+) -> None:
+    if readbacks.get("format") != "agent-harness.issue-readbacks/v2":
+        _add_issue(issues, "ISSUE_READBACK_FORMAT_UNSUPPORTED", "issue-readbacks")
+    if pin is None or readbacks.get("capture_id") != pin.get("capture_id"):
+        _add_issue(issues, "ISSUE_READBACK_CAPTURE_MISMATCH", "issue-readbacks")
+    if pin is not None and readbacks.get("captured_at") != pin.get("captured_at"):
+        _add_issue(issues, "ISSUE_READBACK_TIME_MISMATCH", "issue-readbacks")
+    if readbacks.get("pages_complete") is not True or pin is None or pin.get("pages_complete") is not True:
+        _add_issue(issues, "ISSUE_READBACK_PAGES_INCOMPLETE", "issue-readbacks")
+    try:
+        _iso_utc(readbacks.get("captured_at"), "ISSUE_READBACK_TIME_INVALID", "issue-readbacks")
+    except InputError as exc:
+        _add_issue(issues, exc.code, exc.record)
+    rows = readbacks.get("issues")
+    if not isinstance(rows, list):
+        _add_issue(issues, "ISSUE_READBACK_ROWS_MISSING", "issue-readbacks")
+        return
+    rows = _bounded_rows(rows, MAX_ENTRIES, "ISSUE_READBACK_ROW_LIMIT_EXCEEDED", "issue-readbacks", issues)
+    by_url: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or not isinstance(row.get("url"), str):
+            _add_issue(issues, "ISSUE_READBACK_ROW_INVALID", f"readback-{index}")
+            continue
+        try:
+            parsed = urlparse(row["url"])
+        except ValueError:
+            _add_issue(issues, "ISSUE_READBACK_URL_INVALID", f"readback-{index}")
+            continue
+        match = ISSUE_PATH_RE.fullmatch(parsed.path)
+        if (
+            parsed.scheme != "https" or parsed.hostname != "github.com" or match is None
+            or len(match.group(3)) > MAX_ISSUE_NUMBER_DIGITS or parsed.query or parsed.fragment
+            or parsed.username is not None or parsed.password is not None
+        ):
+            _add_issue(issues, "ISSUE_READBACK_URL_INVALID", f"readback-{index}")
+            continue
+        if row["url"] in by_url:
+            _add_issue(issues, "ISSUE_READBACK_DUPLICATE", "issue-readbacks")
+            continue
+        by_url[row["url"]] = row
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("required_for_v1") is not True:
+            continue
+        key = _label(entry.get("key"))
+        identity = _entry_identity(entry, key, issues)
+        if identity is None:
+            _add_issue(issues, "REQUIRED_ISSUE_URL_UNPROVEN", key)
+            continue
+        repo_full, url, number = identity
+        row = by_url.get(url)
+        if row is None:
+            _add_issue(issues, "ISSUE_READBACK_NOT_FOUND", key)
+            continue
+        current = entry.get("current_readback")
+        if row.get("repository") not in (entry.get("repository"), repo_full):
+            _add_issue(issues, "ISSUE_READBACK_REPOSITORY_MISMATCH", key)
+        if row.get("number") != number or isinstance(row.get("number"), bool):
+            _add_issue(issues, "ISSUE_READBACK_NUMBER_MISMATCH", key)
+        if not isinstance(row.get("title"), str) or not row.get("title").strip():
+            _add_issue(issues, "ISSUE_READBACK_TITLE_INVALID", key)
+        if not isinstance(row.get("body_sha256"), str) or HASH_RE.fullmatch(row.get("body_sha256", "")) is None:
+            _add_issue(issues, "ISSUE_READBACK_BODY_INVALID", key)
+        if not isinstance(row.get("state"), str) or row.get("state") not in {"open", "closed"}:
+            _add_issue(issues, "ISSUE_READBACK_STATE_INVALID", key)
+        if isinstance(current, dict):
+            for field in ("repository", "number", "url", "title", "state", "body_sha256"):
+                if current.get(field) != row.get(field):
+                    _add_issue(issues, "CURRENT_READBACK_MISMATCH", key)
+                    break
+            if row.get("state") == "closed" and not _has_exact_closure_evidence(entry.get("closure_evidence"), _required_test_ids(entry)):
+                _add_issue(issues, "CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", key)
+        current = entry.get("current_readback")
+        if isinstance(current, dict):
+            body_changed = row.get("body_sha256") != entry.get("historical_body_sha256")
+            title_changed = isinstance(entry.get("historical_issue_title"), str) and row.get("title") != entry.get("historical_issue_title")
+            state_changed = isinstance(entry.get("historical_issue_state"), str) and row.get("state") != entry.get("historical_issue_state")
+            if (body_changed or title_changed or state_changed) and not _has_source_semantic_review(entry, current):
+                if body_changed:
+                    _add_issue(issues, "ISSUE_BODY_CHANGE_UNADJUDICATED", key)
+                if title_changed:
+                    _add_issue(issues, "ISSUE_TITLE_CHANGE_UNADJUDICATED", key)
+                if state_changed:
+                    _add_issue(issues, "ISSUE_STATE_CHANGE_UNADJUDICATED", key)
+
+
+def _has_source_semantic_review(entry: dict[str, Any], current: dict[str, Any]) -> bool:
+    review = entry.get("body_semantic_review")
+    if not isinstance(review, dict) or entry.get("body_semantic_disposition") != "reviewed_source_semantics":
+        return False
+    pointers = review.get("source_pointers")
+    return (
+        review.get("decision") == "source_semantics_reviewed"
+        and review.get("historical_body_sha256") == entry.get("historical_body_sha256")
+        and review.get("current_body_sha256") == current.get("body_sha256")
+        and review.get("historical_title") == entry.get("historical_issue_title")
+        and review.get("current_title") == current.get("title")
+        and review.get("historical_state") == entry.get("historical_issue_state")
+        and review.get("current_state") == current.get("state")
+        and isinstance(review.get("reviewer_role"), str) and bool(review.get("reviewer_role", "").strip())
+        and isinstance(review.get("rationale"), str) and 0 < len(review.get("rationale", "")) <= MAX_BLOCKER_TEXT
+        and isinstance(pointers, list) and bool(pointers) and all(isinstance(value, str) and value.startswith("/") for value in pointers)
+        and review.get("implementation_scope_changed") is False
+        and review.get("external_acceptance_claimed") is False
+    )
+
+
+def _validate_projection_graph(
+    graph: Any, entry_by_key: dict[str, dict[str, Any]], leaves: dict[str, dict[str, Any]],
+    issues: list[dict[str, str]],
+) -> dict[str, Any]:
+    if not isinstance(graph, dict) or not isinstance(graph.get("edges"), dict):
+        _add_issue(issues, "EXECUTION_DAG_MISSING", "execution_graph")
+        return {}
+    edges_raw = graph["edges"]
+    if len(edges_raw) > MAX_GRAPH_ROWS:
+        _add_issue(issues, "EXECUTION_EDGE_ROW_LIMIT_EXCEEDED", "execution_graph")
+        edges_raw = dict(list(edges_raw.items())[:MAX_GRAPH_ROWS])
+    edges: dict[str, set[str]] = {}
+    for consumer, prereqs in edges_raw.items():
+        if not isinstance(consumer, str) or consumer not in leaves or not isinstance(prereqs, list) or len(prereqs) > MAX_ENTRIES:
+            _add_issue(issues, "EXECUTION_EDGE_INVALID", _label(consumer))
+            continue
+        normalized: set[str] = set()
+        for prerequisite in prereqs:
+            if not isinstance(prerequisite, str) or prerequisite not in leaves:
+                _add_issue(issues, "EXECUTION_EDGE_UNKNOWN_NODE", consumer)
+                continue
+            if prerequisite == consumer:
+                _add_issue(issues, "EXECUTION_EDGE_SELF", consumer)
+            if prerequisite in normalized:
+                _add_issue(issues, "EXECUTION_EDGE_DUPLICATE", consumer)
+            normalized.add(prerequisite)
+        edges[consumer] = normalized
+    for node in leaves:
+        if node not in edges:
+            _add_issue(issues, "EXECUTION_NODE_MISSING", node)
+            edges[node] = set()
+    _check_cycle(edges, issues)
+    gates = graph.get("gate_outcomes")
+    if not isinstance(gates, list):
+        _add_issue(issues, "GATE_FAN_IN_INVALID", "execution_graph")
+        gates = []
+    gate_ids: set[str] = set()
+    for gate in gates:
+        if not isinstance(gate, dict) or not isinstance(gate.get("key"), str) or gate.get("key") not in leaves:
+            _add_issue(issues, "GATE_FAN_IN_INVALID", "execution_graph")
+            continue
+        key = gate["key"]
+        if key in gate_ids or gate.get("outcome_required") is not True or gate.get("node_role") != "release_gate_fan_in":
+            _add_issue(issues, "GATE_FAN_IN_INVALID", key)
+        gate_ids.add(key)
+        observed = gate.get("fan_in")
+        if (
+            not isinstance(observed, list)
+            or any(not isinstance(item, str) for item in observed)
+            or set(observed) != edges.get(key, set())
+            or len(observed) != len(set(observed))
+        ):
+            _add_issue(issues, "GATE_FAN_IN_MISMATCH", key)
+    for key, entry in entry_by_key.items():
+        roles = entry.get("node_roles", [])
+        if not isinstance(roles, list) or "required_acceptance_outcome" not in roles:
+            _add_issue(issues, "REQUIRED_OUTCOME_ROLE_MISSING", key)
+        normalized_roles = roles if isinstance(roles, list) else []
+        if any(not isinstance(role, str) or role not in {"required_acceptance_outcome", "release_gate_fan_in"} for role in normalized_roles):
+            _add_issue(issues, "EXECUTION_NODE_ROLE_INVALID", key)
+        if ("release_gate_fan_in" in normalized_roles) != (key in gate_ids):
+            _add_issue(issues, "GATE_NODE_ROLE_MISMATCH", key)
+    if len(gate_ids) != 1:
+        _add_issue(issues, "RELEASE_GATE_NODE_CARDINALITY_INVALID", "execution_graph")
+
+    remaining = {node: set(deps) for node, deps in edges.items()}
+    waves: list[list[str]] = []
+    visited: list[str] = []
+    while remaining:
+        ready = sorted(node for node, deps in remaining.items() if not deps)
+        if not ready:
+            break
+        waves.append(ready)
+        for node in ready:
+            visited.append(node)
+            remaining.pop(node)
+        for deps in remaining.values():
+            deps.difference_update(ready)
+    if len(visited) != len(edges):
+        return {"nodes": len(edges), "edges": sum(len(v) for v in edges.values()), "acyclic": False, "waves": waves}
+    reachable: set[str] = set()
+    pending = list(gate_ids)
+    while pending:
+        current = pending.pop()
+        if current in reachable:
+            continue
+        reachable.add(current)
+        pending.extend(edges.get(current, set()) - reachable)
+    if set(leaves) - reachable:
+        _add_issue(issues, "REQUIRED_OUTCOME_NOT_REACHABLE_FROM_GATE", sorted(set(leaves) - reachable)[0])
+    depth: dict[str, int] = {}
+    parent: dict[str, str | None] = {}
+    for node in visited:
+        prerequisites = sorted(edges[node])
+        if not prerequisites:
+            depth[node], parent[node] = 1, None
+        else:
+            best = max(prerequisites, key=lambda item: (depth.get(item, 0), item))
+            depth[node], parent[node] = depth.get(best, 0) + 1, best
+    terminal_candidates = [node for node in edges if not any(node in deps for deps in edges.values())]
+    terminal = max(terminal_candidates, key=lambda item: (depth.get(item, 0), item)) if terminal_candidates else None
+    path: list[str] = []
+    cursor = terminal
+    while cursor is not None:
+        path.append(cursor)
+        cursor = parent.get(cursor)
+    path.reverse()
+    source_claims = graph.get("source_claims") if isinstance(graph.get("source_claims"), dict) else {}
+    if source_claims.get("acyclic") is not True:
+        _add_issue(issues, "EXECUTION_GRAPH_SOURCE_CLAIM_MISMATCH", "acyclic")
+    if source_claims.get("wave_count") != len(waves):
+        _add_issue(issues, "EXECUTION_GRAPH_SOURCE_CLAIM_MISMATCH", "wave_count")
+    if source_claims.get("waves") != waves:
+        _add_issue(issues, "EXECUTION_GRAPH_SOURCE_CLAIM_MISMATCH", "waves")
+    source_path = source_claims.get("critical_path")
+    longest_length = max(depth.values(), default=0)
+    source_path_valid = (
+        isinstance(source_path, list)
+        and bool(source_path)
+        and all(isinstance(node, str) and node in edges for node in source_path)
+        and len(source_path) == len(set(source_path))
+        and not edges.get(source_path[0], set())
+        and not any(source_path[-1] in prerequisites for prerequisites in edges.values())
+        and all(previous in edges[current] for previous, current in zip(source_path, source_path[1:]))
+        and len(source_path) == longest_length
+    )
+    if not source_path_valid:
+        _add_issue(issues, "EXECUTION_GRAPH_SOURCE_CLAIM_MISMATCH", "critical_path")
+    if source_claims.get("all_59_required_reachable") is not True:
+        _add_issue(issues, "EXECUTION_GRAPH_SOURCE_CLAIM_MISMATCH", "all_59_required_reachable")
+    return {"nodes": len(edges), "edges": sum(len(v) for v in edges.values()), "acyclic": True,
+            "waves": waves, "wave_count": len(waves), "critical_path": path, "critical_path_length": len(path)}
 
 
 def _canonical_criteria(canonical: dict[str, Any], issues: list[dict[str, str]]) -> dict[str, dict[str, Any]]:
@@ -1127,9 +2177,14 @@ def _validate_release(
     required_gate_fan_in: Any,
     staged_edges: Any,
     issues: list[dict[str, str]],
+    *,
+    expected_format: str = "acv1.release-manifest/v1",
+    projection_relations: list[dict[str, Any]] | None = None,
+    external_artifacts: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     manifest, manifest_raw = _read_json(release_path, "release-manifest")
-    if manifest.get("format") != "acv1.release-manifest/v1":
+    allowed_stages = PROJECTION_STAGES if expected_format == "acv1.release-manifest/v2" else STAGES
+    if manifest.get("format") != expected_format:
         _add_issue(issues, "RELEASE_FORMAT_UNSUPPORTED", "release-manifest")
     revisions_raw = manifest.get("tested_revisions")
     evidence_raw = manifest.get("evidence")
@@ -1290,11 +2345,11 @@ def _validate_release(
             _add_issue(issues, "REQUIRED_OUTCOME_NOT_VERIFIED", leaf)
         required_stage = leaves[leaf].get("required_release_stage")
         evaluated_stage = item.get("evaluated_stage")
-        if not isinstance(required_stage, str) or required_stage not in STAGES:
+        if not isinstance(required_stage, str) or required_stage not in allowed_stages:
             _add_issue(issues, "REQUIRED_RELEASE_STAGE_MISSING", leaf)
-        if not isinstance(evaluated_stage, str) or evaluated_stage not in STAGES:
+        if not isinstance(evaluated_stage, str) or evaluated_stage not in allowed_stages:
             _add_issue(issues, "OUTCOME_EVALUATED_STAGE_INVALID", leaf)
-        elif isinstance(required_stage, str) and required_stage in STAGES and evaluated_stage != required_stage:
+        elif isinstance(required_stage, str) and required_stage in allowed_stages and evaluated_stage != required_stage:
             _add_issue(issues, "OUTCOME_EVALUATED_STAGE_MISMATCH", leaf)
         revision = item.get("revision")
         repo = leaves[leaf].get("repository")
@@ -1490,6 +2545,12 @@ def _validate_release(
                     ):
                         _add_issue(issues, "STAGED_EDGE_OWNER_RECEIPT_MISSING", edge_id or f"stage-{edge_index}")
 
+    if projection_relations is not None:
+        _validate_projection_relation_evidence(
+            manifest, projection_relations, evidence_by_id, outcomes, leaves,
+            external_artifacts or {}, issues,
+        )
+
     for leaf, entry in leaves.items():
         if entry.get("required_for_v1") is True and leaf not in outcomes:
             _add_issue(issues, "REQUIRED_OUTCOME_MISSING", leaf)
@@ -1524,6 +2585,108 @@ def _validate_release(
     }
 
 
+def _validate_projection_relation_evidence(
+    manifest: dict[str, Any],
+    relations: list[dict[str, Any]],
+    evidence_by_id: dict[str, dict[str, Any]],
+    outcomes: dict[str, dict[str, Any]],
+    leaves: dict[str, dict[str, Any]],
+    external_artifacts: dict[str, dict[str, Any]],
+    issues: list[dict[str, str]],
+) -> None:
+    """Bind v2 stage evidence to the exact directional relation and content."""
+    rows = manifest.get("stage_evidence", [])
+    if not isinstance(rows, list):
+        _add_issue(issues, "STAGE_EVIDENCE_FAMILY_INVALID", "release-manifest")
+        rows = []
+    rows = _bounded_rows(rows, MAX_RELEASE_RECORDS, "RELEASE_ROW_LIMIT_EXCEEDED", "stage_evidence", issues)
+    by_relation: dict[str, list[dict[str, Any]]] = {}
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or not _safe_key(row.get("relation_id")):
+            _add_issue(issues, "STAGE_EVIDENCE_INVALID", f"stage-evidence-{index}")
+            continue
+        by_relation.setdefault(row["relation_id"], []).append(row)
+    stage_order = {
+        "accepted_policy_fixture": 0,
+        "canonical_agreement_and_fixture": 1,
+        "readiness_config": 2,
+        "runnable": 3,
+        "live_evidence": 4,
+        "final_acceptance": 5,
+        "fixture": 0,
+        "contract": 1,
+    }
+    for relation in relations:
+        if not isinstance(relation, dict):
+            continue
+        relation_id = relation.get("relation_id")
+        consumer = relation.get("consumer_key")
+        if not _safe_key(relation_id):
+            continue
+        outcome = outcomes.get(consumer) if isinstance(consumer, str) else None
+        if outcome is None:
+            continue
+        selected_stage = outcome.get("evaluated_stage")
+        consumer_stage = relation.get("consumer_stage")
+        if (
+            not isinstance(selected_stage, str) or selected_stage not in stage_order
+            or not isinstance(consumer_stage, str) or consumer_stage not in stage_order
+            or stage_order[consumer_stage] > stage_order[selected_stage]
+        ):
+            continue
+        if relation.get("applicability") != "required":
+            _add_issue(issues, "STAGE_RELATION_APPLICABILITY_UNRESOLVED", relation_id)
+            continue
+        if relation.get("application_scope") == "live_only" and outcome.get("required_mode") != "live":
+            continue
+        external_id = relation.get("external_artifact_id")
+        if external_id is not None:
+            artifact = external_artifacts.get(external_id) if isinstance(external_id, str) else None
+            if artifact is None or artifact.get("status") != "accepted":
+                _add_issue(issues, "REQUIRED_EXTERNAL_ARTIFACT_PENDING", relation_id)
+                continue
+        if relation.get("status") != "satisfied":
+            _add_issue(issues, "STAGE_RELATION_PREREQUISITE_PENDING", relation_id)
+            continue
+        matches = by_relation.get(relation_id, [])
+        if len(matches) != 1:
+            _add_issue(issues, "STAGE_EVIDENCE_CARDINALITY_INVALID", relation_id)
+            continue
+        proof = matches[0]
+        evidence_id = proof.get("evidence_id")
+        evidence = evidence_by_id.get(evidence_id) if isinstance(evidence_id, str) else None
+        evidence_ids = outcome.get("evidence_ids") if isinstance(outcome.get("evidence_ids"), list) else []
+        expected_producer = relation.get("producer_key")
+        expected_producer_evidence = proof.get("producer_evidence_id")
+        producer_outcome = outcomes.get(expected_producer) if isinstance(expected_producer, str) else None
+        producer_ids = producer_outcome.get("evidence_ids", []) if isinstance(producer_outcome, dict) and isinstance(producer_outcome.get("evidence_ids"), list) else []
+        exact_fields = (
+            proof.get("consumer_key") == consumer
+            and proof.get("consumer_requirement_ids") == relation.get("consumer_requirement_ids")
+            and proof.get("consumer_stage") == relation.get("consumer_stage")
+            and proof.get("producer_key") == expected_producer
+            and proof.get("producer_requirement_ids") == relation.get("producer_requirement_ids")
+            and proof.get("external_artifact_id") == external_id
+            and proof.get("producer_stage") == relation.get("prerequisite_stage")
+        )
+        digest_matches = (
+            evidence is not None
+            and proof.get("content_sha256") == evidence.get("sha256")
+            and proof.get("source_revision") == evidence.get("source_revision")
+            and proof.get("mode") == evidence.get("mode")
+            and proof.get("source_revision") == outcome.get("revision")
+            and proof.get("mode") == outcome.get("required_mode")
+        )
+        producer_bound = external_id is not None or (
+            producer_outcome is not None and expected_producer_evidence in producer_ids
+        )
+        if (
+            not exact_fields or not digest_matches or not isinstance(evidence_id, str) or evidence_id not in evidence_ids
+            or evidence is None or not producer_bound
+        ):
+            _add_issue(issues, "STAGE_EVIDENCE_BINDING_MISMATCH", relation_id)
+
+
 def _required_test_ids(entry: dict[str, Any]) -> list[str]:
     raw = entry.get("required_tests", entry.get("tests", []))
     if not isinstance(raw, list):
@@ -1551,25 +2714,38 @@ def validate(
     require_specialists: bool = True,
 ) -> dict[str, Any]:
     issues: list[dict[str, str]] = []
+    projection_v2 = False
     try:
         pins, _ = _read_json(source_pins_path, "source-pins")
         coverage, map_raw = _read_json(coverage_map_path, "coverage-map")
         canonical, canonical_raw = _read_json(canonical_path, "canonical-checklist")
         readbacks, readbacks_raw = _read_json(issue_readbacks_path, "issue-readbacks")
-        map_pin, canonical_pin, readback_pin = _verify_source_pins(
-            pins, map_raw, canonical_raw, readbacks_raw, issues
-        )
-        map_issues, dimensions, leaves = _validate_map(
-            coverage,
-            pins,
-            canonical,
-            readbacks,
-            map_pin,
-            readback_pin,
-            check_urls=check_urls,
-            check_dag=check_dag,
-            require_specialists=require_specialists or release_path is not None,
-        )
+        projection_v2 = coverage.get("format") == "agent-harness.coverage-projection/v2"
+        if projection_v2:
+            map_pin, canonical_pin, readback_pin = _verify_source_pins_v2(
+                pins, map_raw, canonical_raw, readbacks_raw, issues
+            )
+            map_issues, dimensions, leaves, graph_summary = _validate_map_v2(
+                coverage, pins, canonical, readbacks, map_pin, readback_pin,
+                check_urls=check_urls, check_dag=check_dag,
+                require_specialists=require_specialists or release_path is not None,
+            )
+        else:
+            map_pin, canonical_pin, readback_pin = _verify_source_pins(
+                pins, map_raw, canonical_raw, readbacks_raw, issues
+            )
+            map_issues, dimensions, leaves = _validate_map(
+                coverage,
+                pins,
+                canonical,
+                readbacks,
+                map_pin,
+                readback_pin,
+                check_urls=check_urls,
+                check_dag=check_dag,
+                require_specialists=require_specialists or release_path is not None,
+            )
+            graph_summary = {}
         issues.extend(item for item in map_issues if item not in issues)
         planning_issue_count = len(issues)
         planning_clean = planning_issue_count == 0
@@ -1577,10 +2753,31 @@ def validate(
         release_issue_start = len(issues)
         if release_path is not None:
             try:
-                dag = coverage.get("dag")
-                fan_in = dag.get("required_gate_fan_in") if isinstance(dag, dict) else None
+                if projection_v2:
+                    execution_graph = coverage.get("execution_graph")
+                    dag = execution_graph if isinstance(execution_graph, dict) else {"edges": {}}
+                    gate_rows = dag.get("gate_outcomes", [])
+                    fan_in = {
+                        row.get("key"): row.get("fan_in")
+                        for row in gate_rows if isinstance(row, dict) and isinstance(row.get("key"), str)
+                    } if isinstance(gate_rows, list) else {}
+                    release_relations = coverage.get("stage_relations", [])
+                    external_nodes_raw = coverage.get("external_artifact_nodes", [])
+                    external_nodes = {
+                        row.get("artifact_id"): row
+                        for row in external_nodes_raw if isinstance(row, dict) and isinstance(row.get("artifact_id"), str)
+                    } if isinstance(external_nodes_raw, list) else {}
+                else:
+                    dag = coverage.get("dag")
+                    fan_in = dag.get("required_gate_fan_in") if isinstance(dag, dict) else None
+                    release_relations = None
+                    external_nodes = None
                 release_counts = _validate_release(
-                    release_path, leaves, dag, fan_in, coverage.get("staged_edges"), issues
+                    release_path, leaves, dag, fan_in,
+                    [] if projection_v2 else coverage.get("staged_edges"), issues,
+                    expected_format="acv1.release-manifest/v2" if projection_v2 else "acv1.release-manifest/v1",
+                    projection_relations=release_relations,
+                    external_artifacts=external_nodes,
                 )
             except InputError as exc:
                 _add_issue(issues, exc.code, exc.record)
@@ -1598,8 +2795,61 @@ def validate(
         if not isinstance(canonical_revision, str) or re.fullmatch(r"[0-9a-f]{40}", canonical_revision) is None:
             canonical_revision = None
         pending_blockers, pending_blockers_truncated = _reported_blockers(coverage)
-        return {
-            "schema": "acv1.coverage-validation/v1",
+        external_artifact_obligations: list[dict[str, Any]] = []
+        stage_relation_obligations: list[dict[str, Any]] = []
+        if projection_v2:
+            ext_nodes = coverage.get("external_artifact_nodes", [])
+            if isinstance(ext_nodes, list):
+                for node in ext_nodes:
+                    if not isinstance(node, dict):
+                        continue
+                    external_artifact_obligations.append({
+                        "artifact_id": _label(node.get("artifact_id")),
+                        "owner_role": str(node.get("owner_role", "unassigned"))[:MAX_BLOCKER_TEXT],
+                        "deliverable": str(node.get("deliverable", ""))[:MAX_BLOCKER_TEXT],
+                        "status": _label(node.get("status")),
+                        "action_status": _label(node.get("action_status")),
+                        "action": node.get("action") if isinstance(node.get("action"), str) else None,
+                        "source_pointer": _label(node.get("source_pointer")),
+                        "upstream_source_pointer": _label(node.get("upstream_source_pointer")),
+                        "independent_artifact": node.get("independent_artifact") is True,
+                    })
+                    if node.get("status") == "pending_external":
+                        if len(pending_blockers) == 250:
+                            pending_blockers_truncated = True
+                        else:
+                            pending_blockers.append({
+                                "record": _label(node.get("artifact_id")),
+                                "owner": str(node.get("owner_role", "unassigned"))[:MAX_BLOCKER_TEXT],
+                                "action": (
+                                    str(node.get("action"))[:MAX_BLOCKER_TEXT]
+                                    if node.get("action_status") == "declared_in_source" and isinstance(node.get("action"), str)
+                                    else "External action is not declared in source."
+                                ),
+                            })
+            relation_rows = coverage.get("stage_relations", [])
+            if isinstance(relation_rows, list):
+                for relation in relation_rows:
+                    if not isinstance(relation, dict):
+                        continue
+                    stage_relation_obligations.append({
+                        "relation_id": _label(relation.get("relation_id")),
+                        "consumer_key": _label(relation.get("consumer_key")),
+                        "consumer_requirement_ids": relation.get("consumer_requirement_ids", []),
+                        "consumer_stage": _label(relation.get("consumer_stage")),
+                        "producer_key": _label(relation.get("producer_key")) if relation.get("producer_key") is not None else None,
+                        "producer_requirement_ids": relation.get("producer_requirement_ids"),
+                        "external_artifact_id": _label(relation.get("external_artifact_id")) if relation.get("external_artifact_id") is not None else None,
+                        "prerequisite_stage": _label(relation.get("prerequisite_stage")),
+                        "deliverable": str(relation.get("deliverable", ""))[:MAX_BLOCKER_TEXT],
+                        "status": _label(relation.get("status")),
+                        "applicability": _label(relation.get("applicability")),
+                        "application_scope": _label(relation.get("application_scope")),
+                        "reason": str(relation.get("reason", ""))[:MAX_BLOCKER_TEXT],
+                        "source_pointer": _label(relation.get("source_pointer")),
+                    })
+        result = {
+            "schema": "acv1.coverage-validation/v2" if projection_v2 else "acv1.coverage-validation/v1",
             "mode": mode,
             "status": status,
             "planning_status": "BACKLOG_READY" if planning_clean else "BLOCKED",
@@ -1625,16 +2875,21 @@ def validate(
                 "issue_readback_captured_at": _normalized_utc(readback_pin.get("captured_at")) if readback_pin is not None else None,
             },
             "counts": dimensions,
+            "computed_graph": graph_summary,
             "release_counts": release_counts,
             "planning_issue_count": planning_issue_count,
             "release_issue_count": release_issue_count,
             "issue_count": len(issues),
             "issues": issues[:250],
         }
+        if projection_v2:
+            result["external_artifact_obligations"] = external_artifact_obligations
+            result["stage_relation_obligations"] = stage_relation_obligations
+        return result
     except InputError as exc:
         issues.append({"code": exc.code, "record": exc.record})
         return {
-            "schema": "acv1.coverage-validation/v1",
+            "schema": "acv1.coverage-validation/v2" if projection_v2 else "acv1.coverage-validation/v1",
             "mode": "release" if release_path is not None else "planning",
             "status": "BLOCKED",
             "planning_status": "BLOCKED",
@@ -1653,15 +2908,41 @@ def validate(
             "global_acceptance": "not_asserted",
             "source_pins": {},
             "counts": {},
+            "computed_graph": {},
             "release_counts": None,
             "planning_issue_count": 1,
             "release_issue_count": 1 if release_path is not None else 0,
             "issue_count": 1,
             "issues": issues,
+            **({"external_artifact_obligations": [], "stage_relation_obligations": []} if projection_v2 else {}),
+        }
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        issues.append({"code": "VALIDATION_STRUCTURE_INVALID", "record": "input"})
+        return {
+            "schema": "acv1.coverage-validation/v2" if projection_v2 else "acv1.coverage-validation/v1",
+            "mode": "release" if release_path is not None else "planning",
+            "status": "BLOCKED",
+            "planning_status": "BLOCKED",
+            "coordination_status": "unreported",
+            "publication_status": "unreported",
+            "release_status": "BLOCKED" if release_path is not None else "not_run",
+            "checks": {"issue_readbacks": check_urls, "typed_graph": check_dag,
+                       "specialist_families": require_specialists or release_path is not None},
+            "pending_blockers": [],
+            "pending_blockers_truncated": False,
+            "planning_only": release_path is None,
+            "whole_program_acceptance": False,
+            "global_acceptance": "not_asserted",
+            "source_pins": {"coverage_map_sha256": None, "canonical_git_blob_sha1": None,
+                            "issue_readbacks_sha256": None, "canonical_revision": None,
+                            "issue_readback_capture_id": None, "issue_readback_captured_at": None},
+            "counts": {}, "computed_graph": {}, "release_counts": None,
+            "planning_issue_count": 1, "release_issue_count": 0, "issue_count": 1, "issues": issues,
+            **({"external_artifact_obligations": [], "stage_relation_obligations": []} if projection_v2 else {}),
         }
     except Exception:
         return {
-            "schema": "acv1.coverage-validation/v1",
+            "schema": "acv1.coverage-validation/v2" if projection_v2 else "acv1.coverage-validation/v1",
             "mode": "release" if release_path is not None else "planning",
             "status": "BLOCKED",
             "planning_status": "BLOCKED",
@@ -1680,11 +2961,13 @@ def validate(
             "global_acceptance": "not_asserted",
             "source_pins": {},
             "counts": {},
+            "computed_graph": {},
             "release_counts": None,
             "planning_issue_count": 1,
             "release_issue_count": 1 if release_path is not None else 0,
             "issue_count": 1,
             "issues": [{"code": "VALIDATION_INTERNAL_ERROR", "record": "input"}],
+            **({"external_artifact_obligations": [], "stage_relation_obligations": []} if projection_v2 else {}),
         }
 
 
