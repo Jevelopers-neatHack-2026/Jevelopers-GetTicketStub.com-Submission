@@ -37,12 +37,15 @@
 	"dependencies": {
 		"@fontsource/noto-sans": "5.3.0",
 		"@fontsource/noto-sans-arabic": "5.3.0",
+		"csv-parse": "6.1.0",
+		"fflate": "0.8.2",
 		"fontkit": "2.0.4",
 		"pdf-lib": "1.17.1",
 		"pdfjs-dist": "6.4.299",
 		"playwright": "1.64.0",
 		"pngjs": "7.0.0",
 		"sax": "1.6.1",
+		"yauzl": "3.2.0",
 		"zod": "4.6.5"
 	},
 	"devDependencies": {
@@ -51,6 +54,7 @@
 		"@types/node": "24.19.2",
 		"@types/pngjs": "6.0.5",
 		"@types/sax": "1.2.7",
+		"@types/yauzl": "2.10.3",
 		"typescript": "6.0.2"
 	}
 }

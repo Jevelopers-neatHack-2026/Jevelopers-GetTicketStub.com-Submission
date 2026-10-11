@@ -1,127 +1,23 @@
 import { z } from "zod";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-	runIndependentTests,
-	durabilityTestFiles,
-	durabilityProcessEvidence,
-	durabilityExpectedTests,
-} from "../../src/internal/independent-tests.js";
 import { verifyRuntime } from "../../src/runtime/calibration.js";
 import {
 	failureReceipt,
 	VerificationFailure,
 } from "../../src/runtime/errors.js";
 
-export const suiteNames = [
-	"runtime",
-	"api-contracts",
-	"templates",
-	"composition",
-	"typography",
-	"approved-assets",
-	"artifact-storage",
-	"preflight",
-	"bounded-repair",
-	"personalization",
-	"csv-personalization",
-	"exporters",
-	"manifests",
-	"restart-recovery",
-	"metering-traces",
-	"integration-production",
-	"release",
-] as const;
-export type SuiteName = (typeof suiteNames)[number];
-export const suiteRegistry = {
-	runtime: { state: "implemented", dependency: "PP-01A local calibration" },
-	"api-contracts": {
-		state: "unimplemented",
-		dependency:
-			"PP-01B canonical shared-contracts package and immutable commit pin",
-	},
-	templates: {
-		state: "external-blocked",
-		dependency:
-			"PP-03 private template engine tested; canonical adapter, approved roster and confirmed supplier specification absent",
-	},
-	composition: {
-		state: "external-blocked",
-		dependency:
-			"PP-02 private composition tested; canonical creative/fact/approval adapters and real approved input pins absent",
-	},
-	typography: {
-		state: "external-blocked",
-		dependency:
-			"PP-04 private typography tested; real approved field/font policies and exporter content conformance absent",
-	},
-	"approved-assets": {
-		state: "external-blocked",
-		dependency:
-			"PP-05 private asset checks tested; canonical authoritative permission lookup and real approved asset fixtures absent",
-	},
-	"artifact-storage": {
-		state: "external-blocked",
-		dependency:
-			"PP-10A private adapter tested; accepted canonical request/hash/scope adapter and app access fixtures absent",
-	},
-	preflight: {
-		state: "external-blocked",
-		dependency:
-			"PP-07 private preflight tested; real supplier constraints, final exporter profile/content checks and canonical ProductionBundle status absent",
-	},
-	"bounded-repair": {
-		state: "external-blocked",
-		dependency:
-			"PP-08 private bounded repair tested; real mechanical permission, canonical approval applicability and final export checks absent",
-	},
-	personalization: {
-		state: "unimplemented",
-		dependency: "Canonical personalization contract and implementation",
-	},
-	"csv-personalization": {
-		state: "unimplemented",
-		dependency: "CSV batch personalization implementation",
-	},
-	exporters: {
-		state: "unimplemented",
-		dependency: "Supplier-bound production exporters; calibration is synthetic",
-	},
-	manifests: {
-		state: "unimplemented",
-		dependency: "Production manifests implementation",
-	},
-	"restart-recovery": {
-		state: "external-blocked",
-		dependency:
-			"PP-10B private recovery tested; canonical job/row semantics, structured personalization and ProductionBundle ports absent",
-	},
-	"metering-traces": {
-		state: "external-blocked",
-		dependency:
-			"PP-11 private staged observations tested; accepted UsageEvent/EvaluationEvidence, real finance intake and Neatlogs ports absent",
-	},
-	"integration-production": {
-		state: "unimplemented",
-		dependency:
-			"Canonical consumer/supplier/finance pins and real integration implementation",
-	},
-	release: {
-		state: "aggregate",
-		dependency: "Every registered leaf and verified immutable external pins",
-	},
-} as const satisfies Record<
-	SuiteName,
-	{
-		readonly state:
-			| "implemented"
-			| "unimplemented"
-			| "aggregate"
-			| "external-blocked";
-		readonly dependency: string;
-	}
->;
+export {
+	suiteNames,
+	suiteRegistry,
+} from "../../src/exporters/private-suite.js";
+import {
+	suiteNames,
+	suiteRegistry,
+	runPrivateSuite,
+} from "../../src/exporters/private-suite.js";
+import type { SuiteName } from "../../src/exporters/private-suite.js";
+export type { SuiteName } from "../../src/exporters/private-suite.js";
 
 const argumentsSchema = z
 	.object({
@@ -168,146 +64,8 @@ async function runLeaf(
 	suite: Exclude<SuiteName, "release">,
 	evidenceDir: string,
 ) {
-	const compositionFiles = {
-		templates: ["composition-model.test.js"],
-		composition: ["composition-model.test.js"],
-		typography: ["composition-model.test.js"],
-		"approved-assets": ["composition-assets.test.js"],
-		preflight: ["composition-preflight.test.js"],
-		"bounded-repair": ["composition-repair.test.js"],
-	} as const;
-	if (suite in compositionFiles) {
-		const localSuite = z
-			.enum([
-				"templates",
-				"composition",
-				"typography",
-				"approved-assets",
-				"preflight",
-				"bounded-repair",
-			])
-			.parse(suite);
-		const evidence = join(evidenceDir, suite, "local");
-		await mkdir(evidence, { recursive: true });
-		const paths = [
-			...compositionFiles[localSuite].map((file) => `unit/${file}`),
-			"integration/composition-render.test.js",
-		].map((file) =>
-			fileURLToPath(new URL(`../../tests/${file}`, import.meta.url)),
-		);
-		try {
-			const result = await promisify(execFile)(
-				process.execPath,
-				["--test", ...paths],
-				{
-					env: { ...process.env, PP_COMPOSITION_EVIDENCE_DIR: evidence },
-					timeout: 60000,
-					maxBuffer: 1024 * 1024,
-				},
-			);
-			await Promise.all([
-				writeFile(
-					join(evidenceDir, `${suite}-local.json`),
-					JSON.stringify(
-						{
-							state: "passed-private-mechanisms",
-							mode: "synthetic-draft-only",
-							command: [process.execPath, "--test", ...paths],
-							exitCode: 0,
-							stdoutDigest: hash(result.stdout),
-							stderrDigest: hash(result.stderr),
-							externalState: "external-blocked",
-						},
-						null,
-						2,
-					),
-				),
-				writeFile(join(evidence, "tests.stdout.txt"), result.stdout),
-				writeFile(join(evidence, "tests.stderr.txt"), result.stderr),
-			]);
-		} catch (error) {
-			if (error instanceof Error) {
-				await writeFile(
-					join(evidenceDir, `${suite}-local.json`),
-					JSON.stringify(
-						{
-							state: "failed-private-mechanisms",
-							externalState: "external-blocked",
-							code: "RUNTIME_FAILURE",
-						},
-						null,
-						2,
-					),
-				);
-				throw new VerificationFailure(
-					"RUNTIME_FAILURE",
-					"Private composition checks failed; external integration remains blocked.",
-				);
-			}
-			throw error;
-		}
-		throw new VerificationFailure(
-			"SUITE_UNIMPLEMENTED",
-			suiteRegistry[suite].dependency,
-		);
-	}
 	if (suiteRegistry[suite].state === "external-blocked") {
-		const localSuite = z
-			.enum(["artifact-storage", "restart-recovery", "metering-traces"])
-			.parse(suite);
-		const evidence = join(evidenceDir, suite, "local");
-		await mkdir(evidence, { recursive: true });
-		const localReceipt = join(evidenceDir, `${suite}-local.json`);
-		await rm(localReceipt, { force: true });
-		const paths = [
-			...durabilityTestFiles[localSuite],
-			"fixtures/durability/canary.js",
-		].map((file) =>
-			fileURLToPath(new URL(`../../tests/${file}`, import.meta.url)),
-		);
-		try {
-			const result = await runIndependentTests({
-				paths,
-				evidenceDir: evidence,
-				expectedTests: durabilityExpectedTests[localSuite] + 1,
-				requiredEvidence: [
-					...durabilityProcessEvidence,
-					"canary-executed.json",
-				],
-			});
-			await writeFile(
-				localReceipt,
-				JSON.stringify(
-					{
-						state: "passed-private-mechanisms",
-						...result,
-						externalState: "external-blocked",
-					},
-					null,
-					2,
-				),
-			);
-		} catch (error) {
-			if (error instanceof Error) {
-				await writeFile(
-					localReceipt,
-					JSON.stringify(
-						{
-							state: "failed-private-mechanisms",
-							externalState: "external-blocked",
-							code: "RUNTIME_FAILURE",
-						},
-						null,
-						2,
-					),
-				);
-				throw new VerificationFailure(
-					"RUNTIME_FAILURE",
-					"Private durability checks failed; external integration remains blocked.",
-				);
-			}
-			throw error;
-		}
+		await runPrivateSuite(suite, evidenceDir);
 		throw new VerificationFailure(
 			"SUITE_UNIMPLEMENTED",
 			suiteRegistry[suite].dependency,
