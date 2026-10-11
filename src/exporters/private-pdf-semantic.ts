@@ -10,6 +10,8 @@ import type { Box } from "./private-pdf-geometry.js";
 import { validatePdfLine } from "./private-pdf-line.js";
 import { verifyPdfPaint } from "./private-pdf-paint.js";
 import { unicodeGlyphReference } from "./private-unicode-glyph-relations.js";
+import { verifyPdfSourcePaint } from "./private-pdf-source.js";
+import { checkPdfEnvelope } from "./private-pdf-envelope.js";
 
 import { pdfSemanticRevision } from "./private-pdf-semantic-identity.js";
 export { pdfSemanticRevision } from "./private-pdf-semantic-identity.js";
@@ -22,8 +24,10 @@ export async function inspectPdfSemantics(
 		"OUTPUT_LIMIT",
 		"pdf.fileBytes",
 	);
+	checkPdfEnvelope(bytes);
 	const identity = verifyArtifactIdentity(artifact),
 		doc = await PDFDocument.load(bytes, { updateMetadata: false });
+	const sourcePaint = await verifyPdfSourcePaint(doc, artifact, bytes);
 	requireOutput(
 		doc.getPageCount() === 1 &&
 			!doc.isEncrypted &&
@@ -69,6 +73,7 @@ export async function inspectPdfSemantics(
 	}
 	verifyPdfPaint(doc, content.paints, artifact, boxes);
 	return {
+		sourcePaint,
 		inspectorRevision: pdfSemanticRevision,
 		fileDigest: digest(bytes),
 		artifactIdentityDigest: identity,

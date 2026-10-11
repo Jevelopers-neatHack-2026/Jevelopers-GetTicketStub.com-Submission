@@ -36,7 +36,7 @@ export function requireOutput(
 }
 export const outputPolicySchema = z
 	.object({
-		revision: z.literal("private-output-2"),
+		revision: z.literal("private-output-3"),
 		pdfSemanticInspector: z.literal(pdfSemanticRevision),
 		dpi: z.number().int().min(72).max(1200),
 		maxPixels: z.number().int().positive().max(40000000),
@@ -50,7 +50,7 @@ export const outputPolicySchema = z
 	.readonly();
 export type OutputPolicy = z.infer<typeof outputPolicySchema>;
 export const defaultOutputPolicy: OutputPolicy = outputPolicySchema.parse({
-	revision: "private-output-2",
+	revision: "private-output-3",
 	pdfSemanticInspector: pdfSemanticRevision,
 	dpi: 300,
 	maxPixels: 16000000,
