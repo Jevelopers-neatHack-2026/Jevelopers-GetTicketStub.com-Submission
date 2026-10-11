@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { FILE_NAME } from "./files";
@@ -142,4 +142,56 @@ export function listBackups(dbFile: string): Pick<BackupManifest, "id" | "create
     }
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// ---------------------------------------------------------------------------------------------
+// One backup at a time across processes: Preview and Publish share the same /private on Plus Launch,
+// so an in-memory flag is not enough. The lock is a file created with O_EXCL; one older than
+// LOCK_STALE_MS belongs to a process that died mid-backup and is taken over.
+
+const LOCK_STALE_MS = 30 * 60_000;
+
+export class BackupBusy extends Error {}
+
+export function withBackupLock<T>(dbFile: string, fn: () => T): T {
+  const root = backupsDir(dbFile);
+  mkdirSync(root, { recursive: true });
+  const lock = join(root, ".lock");
+  let fd: number;
+  try {
+    fd = openSync(lock, "wx");
+  } catch (e) {
+    if ((e as { code?: string }).code !== "EEXIST") throw e;
+    let age = 0;
+    try {
+      age = Date.now() - statSync(lock).mtimeMs;
+    } catch {
+      /* gone already */
+    }
+    if (age < LOCK_STALE_MS) throw new BackupBusy("A backup is already running.");
+    rmSync(lock, { force: true });
+    fd = openSync(lock, "wx");
+  }
+  try {
+    writeSync(fd, `${process.pid} ${new Date().toISOString()}\n`);
+    closeSync(fd);
+    return fn();
+  } finally {
+    rmSync(lock, { force: true });
+  }
+}
+
+/** True when there is no finished backup, or the newest is at least `everyMs` old. */
+export function backupDue(dbFile: string, now: number, everyMs: number): boolean {
+  const newest = listBackups(dbFile)[0];
+  return !newest || now - Date.parse(newest.createdAt) >= everyMs;
+}
+
+/** The scheduled path: takes a backup only when one is due, re-checking under the lock so two processes can't both run it. */
+export function runScheduledBackup(opts: { dbFile: string; filesDir: string; everyMs: number; now?: Date }): BackupManifest | null {
+  const now = opts.now ?? new Date();
+  if (!backupDue(opts.dbFile, now.getTime(), opts.everyMs)) return null;
+  return withBackupLock(opts.dbFile, () =>
+    backupDue(opts.dbFile, now.getTime(), opts.everyMs) ? createBackup({ dbFile: opts.dbFile, filesDir: opts.filesDir, now }) : null,
+  );
 }
