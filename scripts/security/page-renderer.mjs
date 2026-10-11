@@ -94,9 +94,18 @@ export async function identifyPageRenderer(page) {
 			const complete = new Promise((resolve) => {
 				finish = resolve;
 			});
-			let dataLoss = false;
-			onComplete = ({ dataLossOccurred }) => {
-				dataLoss = dataLossOccurred === true;
+			let completionFailure = "MALFORMED_TRACE_COMPLETION";
+			onComplete = (payload) => {
+				if (
+					payload !== null &&
+					typeof payload === "object" &&
+					!Array.isArray(payload) &&
+					Object.hasOwn(payload, "dataLossOccurred") &&
+					typeof payload.dataLossOccurred === "boolean"
+				) {
+					completionFailure =
+						payload.dataLossOccurred === false ? undefined : "TRACE_DATA_LOSS";
+				}
 				finish(true);
 			};
 			cdp.once("Tracing.tracingComplete", onComplete);
@@ -126,13 +135,12 @@ export async function identifyPageRenderer(page) {
 				result.failure ??
 				(ended !== true
 					? "TRACE_TIMEOUT"
-					: dataLoss
-						? "TRACE_DATA_LOSS"
-						: result.ids.length === 0
+					: (completionFailure ??
+						(result.ids.length === 0
 							? "NO_FRAME_IDENTITY"
 							: result.ids.length !== 1
 								? "AMBIGUOUS_FRAME_IDENTITY"
-								: undefined);
+								: undefined)));
 			requireCheck(
 				failure === undefined,
 				"SANDBOX_POLICY_FAILURE",

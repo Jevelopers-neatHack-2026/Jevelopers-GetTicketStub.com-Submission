@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EventEmitter } from "node:events";
+import { malformedCompletions } from "./page-renderer-completion-cases.mjs";
 import {
 	createBindingCollector,
 	frameProcessIds,
@@ -40,9 +41,12 @@ function sessionFixture(events, options = {}) {
 			for (const value of events)
 				session.emit("Tracing.dataCollected", { value });
 			if (!options.timeout)
-				session.emit("Tracing.tracingComplete", {
-					dataLossOccurred: options.loss === true,
-				});
+				session.emit(
+					"Tracing.tracingComplete",
+					Object.hasOwn(options, "completion")
+						? options.completion
+						: { dataLossOccurred: options.loss === true },
+				);
 			return {};
 		}
 		throw new Error("Unexpected fixed protocol method");
@@ -189,4 +193,52 @@ test("fails closed at the existing trace deadline and removes listeners without 
 	assert.equal(fixture.calls.filter((m) => m === "Tracing.start").length, 1);
 	assert.equal(fixture.calls.filter((m) => m === "Tracing.end").length, 1);
 	assert.equal(fixture.cleaned(), true);
+});
+
+test("requires an object completion with an explicit own boolean lossless indicator", async (t) => {
+	for (const [name, completion] of malformedCompletions) {
+		await t.test(name, async (t) => {
+			const cleared = t.mock.method(globalThis, "clearTimeout");
+			const fixture = sessionFixture([[mapping(42)]], { completion });
+			await assert.rejects(
+				identifyPageRenderer(fixture.page),
+				(error) =>
+					error.code === "SANDBOX_POLICY_FAILURE" &&
+					error.message.endsWith("[MALFORMED_TRACE_COMPLETION]."),
+			);
+			assert.equal(fixture.cleaned(), true);
+			assert.equal(cleared.mock.callCount(), 1);
+			assert.notEqual(cleared.mock.calls[0].arguments[0], undefined);
+			assert.deepEqual(fixture.calls, [
+				"Page.getFrameTree",
+				"Tracing.start",
+				"Tracing.end",
+			]);
+		});
+	}
+});
+
+test("accepts literal false and rejects literal true completion with cleanup", async (t) => {
+	const cleared = t.mock.method(globalThis, "clearTimeout");
+	for (const dataLossOccurred of [false, true]) {
+		const fixture = sessionFixture([[mapping(42)]], {
+			completion: { dataLossOccurred },
+		});
+		if (dataLossOccurred === false)
+			assert.equal(await identifyPageRenderer(fixture.page), 42);
+		else
+			await assert.rejects(
+				identifyPageRenderer(fixture.page),
+				(error) =>
+					error.code === "SANDBOX_POLICY_FAILURE" &&
+					error.message.endsWith("[TRACE_DATA_LOSS]."),
+			);
+		assert.equal(fixture.cleaned(), true);
+		assert.equal(fixture.calls.filter((m) => m === "Tracing.start").length, 1);
+		assert.equal(fixture.calls.filter((m) => m === "Tracing.end").length, 1);
+	}
+	assert.equal(cleared.mock.callCount(), 2);
+	assert.ok(
+		cleared.mock.calls.every((call) => call.arguments[0] !== undefined),
+	);
 });
