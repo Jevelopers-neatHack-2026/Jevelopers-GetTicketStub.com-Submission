@@ -15,9 +15,9 @@ preview at `660cc5e`; [#21](https://github.com/Jevelopers-neatHack-2026/getticke
 
 ## Toolchain
 
-Use Node **24.18.0** (see [`.nvmrc`](../../.nvmrc)) and npm **11.16.0**
+Use Node **22.23.3** (see [`.nvmrc`](../../.nvmrc)) and npm **11.16.0**
 (`packageManager` in [`package.json`](../../package.json); `engines` allows
-Node `>=24.18.0 <25` and npm `>=11.16.0 <12`). Next.js 16.4.0 and React/React
+Node `>=22.23.3 <23` and npm `>=11.16.0 <12`). Next.js 16.4.0 and React/React
 DOM 19.3.0 are pinned in the root manifest and lockfile.
 
 ## Build and start
@@ -41,7 +41,7 @@ so the build environment needs outbound access to Google Fonts and npm.
 ## Plus Launch configuration
 
 Configure the repository root as the working directory, `main` as the source,
-Node 24.18.0, install command `npm ci`, build command `npm run build`, and start
+Node 22.23.3, install command `npm ci`, build command `npm run build`, and start
 command `npm start`. This is a Node server deployment, not a static export.
 Keep `.next`, `public`, and installed runtime dependencies available to the
 start process. No application secrets or environment variables are required

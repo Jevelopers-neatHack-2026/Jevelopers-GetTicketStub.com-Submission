@@ -20,10 +20,14 @@ Alternatives considered:
 
 ## Pins
 
-- Node `24.18.0` (`.nvmrc`; `engines.node` `>=24.18.0 <25`) and npm `11.16.0` (`packageManager`; `engines.npm` `>=11.16.0 <12`). The database is `node:sqlite`, which needs a recent Node.
+- Node `22.23.3` (`.nvmrc`; `engines.node` `>=22.23.3 <23`) and npm `11.16.0` (`packageManager`; `engines.npm` `>=11.16.0 <12`). The database is `node:sqlite`, which needs a recent Node.
 - `next` `16.4.0`, `react` and `react-dom` `19.3.0`, `eslint-config-next` `16.4.0`: exact versions in `package.json`, resolved in `package-lock.json`. Install with `npm ci`; CI (`.github/workflows/runtime.yml`) does.
 - The dashboard package must declare React 19.3.x and Next 16.4.x as peers, not bundle them (routes.md, "Admin mount contract").
 - Next 16 has breaking changes against older docs; read `node_modules/next/dist/docs/` before using an API (see `AGENTS.md`). Example: error boundaries receive `retry`, not only `reset`.
+
+## Hosting runtime reconciliation (2026-10-11)
+
+GoDaddy published runtime logs for app `gvk66o79l1` report Node `v22.23.3`. The application pin and supported engine range now match that Node 22 runtime instead of requiring Node 24. CI installs npm `11.16.0` explicitly and runs the existing foundation, access and unavailable-storage fixture suites on the pinned Node version. Local fixture checks use disposable SQLite databases and do not establish deployed persistence, email delivery or live-provider acceptance.
 
 ## Demo and live modes
 
@@ -35,7 +39,7 @@ Alternatives considered:
 
 ## Deployment
 
-- Preview: Plus Launch, per README. Repository root, `main`, Node 24.18.0, `npm ci`, `npm run build`, `npm start` (binds `0.0.0.0`, reads `PORT`). A Node server deployment, not a static export. Updating the preview and the build log are recorded in #21; a local or CI pass does not prove the platform has synchronised. Publishing to Live needs separate authorisation.
+- Preview: Plus Launch, per README. Repository root, `main`, Node 22.23.3, `npm ci`, `npm run build`, `npm start` (binds `0.0.0.0`, reads `PORT`). A Node server deployment, not a static export. Updating the preview and the build log are recorded in #21; a local or CI pass does not prove the platform has synchronised. Publishing to Live needs separate authorisation.
 - Self-hosted (VPS): the same build and start commands behind HTTPS and a reverse proxy that sets `X-Forwarded-Host`, `X-Forwarded-Proto` and `X-Real-IP`. State is a SQLite file (`TICKETSTUB_DB`, default `./data/ticketstub.sqlite`) and a files folder (`TICKETSTUB_FILES`): one writer, one host, back both up together. SQLite means one app instance; scaling out needs a different `Storage` implementation behind the existing interface in `src/server/storage.ts`.
 - Canonical origin: `https://getticketstub.com` (`APP_URL`), used for email links and as an allowed `Origin`.
 
