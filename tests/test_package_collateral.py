@@ -33,7 +33,9 @@ class PackagePolicyTests(unittest.TestCase):
         all_blockers = " ".join(manifest["collateralPackageReadiness"]["blockers"])
         self.assertRegex(all_blockers, r"inventory join is (?:stale|missing_join|missing_asset_record)")
         self.assertRegex(all_blockers, r"provenance and rights record is missing or not approved")
-        self.assertIn("demo/storyboard.md: current bytes differ from the source snapshot used for rendering", all_blockers)
+        video = next(asset for asset in manifest["assets"] if asset["assetId"] == "DEMO-REHEARSAL-VIDEO-001")
+        self.assertEqual("exact_current_source_snapshot", video["renderReceipt"]["sourceInputStatus"])
+        self.assertEqual([], video["renderReceipt"]["sourceInputErrors"])
 
     def test_controlled_approved_fixture_can_pass_both_gates(self) -> None:
         # Synthetic policy fixture only: this proves the gate logic, not actual
