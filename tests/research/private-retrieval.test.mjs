@@ -3204,7 +3204,9 @@ test('Linux private PDF retrieval selects stored derived provenance instead of c
     limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0 },
   }));
   assert.equal(result.status, 'incomplete');
+  assert.ok(Array.isArray(result.facts), `PDF run returned no fact projection: ${JSON.stringify(result)}`);
   assert.equal(result.facts.length, 0);
+  assert.ok(Array.isArray(result.sources), `PDF run returned no source projection: ${JSON.stringify(result)}`);
   const pdf = result.sources.find((source) => source.representation === 'pdf-derived-text');
   assert.ok(pdf);
   assert.ok(pdf.pdf.pageCount > 0);
