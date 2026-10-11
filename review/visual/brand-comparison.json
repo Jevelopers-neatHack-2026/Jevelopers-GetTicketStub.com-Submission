@@ -1,0 +1,195 @@
+{
+  "scope": "MM-06 author comparison and draft consumption record, not canonical brand distribution or approved producer contract",
+  "checkedAt": "2026-10-11 UTC",
+  "visualCandidate": "456053c5a12fa189f3c16a4cd9067a242e218031",
+  "sources": [
+    {
+      "repo": "brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "SPEC.md",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/SPEC.md",
+      "sha256": "b6416fb88c3108b91fa05f3469949bec10144bb8ef2ad9e0e5aea11516b9ddd8",
+      "bytes": 5770
+    },
+    {
+      "repo": "brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "tokens/tokens.json",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/tokens/tokens.json",
+      "sha256": "8fde0d4b27046af5cc8105e6139f61c5010610de341f58fd191ff2ffbb478bfc",
+      "bytes": 6588
+    },
+    {
+      "repo": "brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "docs/voice.md",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/docs/voice.md",
+      "sha256": "6af9864b397a677c6d5af953f2afb85314868a91cd4dfe57bec4b013907b6027",
+      "bytes": 2656
+    },
+    {
+      "repo": "brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "docs/logo.md",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/docs/logo.md",
+      "sha256": "04aa94912718e8424b03ae7d98d5c1cbc03e2bfb3c664de368e967cd034b3dc3",
+      "bytes": 1799
+    },
+    {
+      "repo": "brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "docs/imagery.md",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/docs/imagery.md",
+      "sha256": "fc38a8ab086e0e69bccfc656ba8e3a444d325e56c60c5c83e3c83ea1ffe05a2c",
+      "bytes": 2210
+    },
+    {
+      "repo": "brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "fonts/Fraunces-OFL.txt",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/fonts/Fraunces-OFL.txt",
+      "sha256": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b",
+      "bytes": 4391
+    },
+    {
+      "repo": "brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "fonts/InterTight-OFL.txt",
+      "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/fonts/InterTight-OFL.txt",
+      "sha256": "50240ab035cf1b6b3307940235481d515c4b6de3ab1fa843dbe59e7892cb9d58",
+      "bytes": 4383
+    },
+    {
+      "repo": "landing-page-repo",
+      "revision": "3f28c8ac691374614354a8e53c1a2520e8c7854c",
+      "path": "docs/architecture/OWNERSHIP.md",
+      "url": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo/blob/3f28c8ac691374614354a8e53c1a2520e8c7854c/docs/architecture/OWNERSHIP.md",
+      "sha256": "de6de2027af647b70b156621ef638c527200622d535fa69d0e46c3c978228256",
+      "bytes": 3119
+    },
+    {
+      "repo": "getticketstub.com",
+      "revision": "5a2986454297dd6df97088a8fbde69adc771f7a0",
+      "path": "docs/architecture/OWNERSHIP.md",
+      "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/5a2986454297dd6df97088a8fbde69adc771f7a0/docs/architecture/OWNERSHIP.md",
+      "sha256": "b0a8d878af54afb521521c88e09a8bda93e4e3cbadd4a6121a1dc9d4cecc1dda",
+      "bytes": 3712
+    }
+  ],
+  "selectedDraftSubset": [
+    "SPEC.md palette/roles/type fallback",
+    "tokens/tokens.json color values and spacing reference",
+    "docs/voice.md plain language principles",
+    "docs/logo.md no-redraw/usage constraints",
+    "docs/imagery.md exclusion constraints"
+  ],
+  "copiedBinaryAssets": [],
+  "approvedSubset": null,
+  "brandConformance": "BLOCKED_PENDING_OWNER_APPROVAL",
+  "accountableMarketingOwner": "User-assigned marketing-material supervisor",
+  "requiredApprovals": [
+    {
+      "owner": "brand-kit producer/reviewer",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/14",
+      "status": "pending",
+      "deliverable": "Approved pinned allowlist and locator"
+    },
+    {
+      "owner": "brand-kit producer and consumer reviewers",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/brand-kit/issues/15",
+      "status": "pending",
+      "deliverable": "Imports/hash/font/fallback/migration contract"
+    },
+    {
+      "owner": "Named brand and landing consumer reviewers",
+      "issue": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/7",
+      "status": "pending",
+      "deliverable": "Exact two-treatment conformance decision"
+    }
+  ],
+  "treatments": [
+    {
+      "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "source": "demo/diagrams/demo-workflow.svg",
+      "preview": "review/visual/brand-comparison/demo.png",
+      "comparison": "review/visual/brand-comparison/demo.html",
+      "authorFinding": "Draft palette/type fallback roles consistent; conceptual states explicit; no logos; publication/brand blocked"
+    },
+    {
+      "assetId": "LAUNCH-X-KEY-VISUAL-001",
+      "source": "launch/assets/x-submission-key-visual.svg",
+      "preview": "review/visual/brand-comparison/announcement.png",
+      "comparison": "review/visual/brand-comparison/announcement.html",
+      "authorFinding": "Draft night-stage palette and readable feed type consistent; docs CTA; no logos or sponsor claims; publication/brand blocked"
+    }
+  ],
+  "migrationExample": {
+    "hypotheticalChange": "New approved revision changes font fallback or allowed orange treatment; not an actual upstream release",
+    "impactedAssetIds": [
+      "DEMO-WORKFLOW-DIAGRAM-001",
+      "DEMO-SCREENSHOT-SET-001",
+      "DEMO-DECK-SUPPORT-001",
+      "LAUNCH-X-KEY-VISUAL-001",
+      "LAUNCH-X-ALT-TEXT-001"
+    ],
+    "action": "Keep historical pins; obtain approved subset and consumer contract; role-routed edits in new candidate; rerender sources/derivatives, recheck contrast/mobile/text, update canonical inventory/provenance hashes through owner, obtain refreshed independent and owner approval",
+    "rollback": "Use prior pinned bytes only if rights and destination approvals remain valid; revoked assets remain blocked. Retain superseded history with deprecated status, never relabel approval."
+  },
+  "approvalInvariant": "Missing, unknown or revoked required approval cannot be represented as passed conformance. Author alignment is distinct from owner approval.",
+  "browserEvidence": {
+    "command": "node review/visual/brand-comparison/render.mjs",
+    "browser": {
+      "protocolVersion": "1.3",
+      "product": "Chrome/154.0.8037.98",
+      "revision": "@b859317bf11f6be47f9b7799ec690a0a42a1fb33",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+      "jsVersion": "15.4.80.20"
+    },
+    "node": "v24.15.0",
+    "results": [
+      {
+        "page": "review/visual/brand-comparison/demo.html",
+        "preview": "review/visual/brand-comparison/demo.png",
+        "width": 1800,
+        "height": 1300,
+        "pageErrors": [],
+        "externalRequests": []
+      },
+      {
+        "page": "review/visual/brand-comparison/announcement.html",
+        "preview": "review/visual/brand-comparison/announcement.png",
+        "width": 1800,
+        "height": 1300,
+        "pageErrors": [],
+        "externalRequests": []
+      }
+    ],
+    "authorInspection": "Both final 1800x1300 PNGs opened and inspected by UI author; palette/type/status and actual SVG compared with labeled pinned-source summary. Not owner/independent approval."
+  },
+  "candidateHashes": [
+    {
+      "path": "demo/diagrams/demo-workflow.svg",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971"
+    },
+    {
+      "path": "launch/assets/x-submission-key-visual.svg",
+      "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699"
+    },
+    {
+      "path": "review/visual/brand-comparison/demo.html",
+      "sha256": "ac9fc648b0c4a3d720513346679f9abda2658e1216f77486c1c94383e04e53f4"
+    },
+    {
+      "path": "review/visual/brand-comparison/demo.png",
+      "sha256": "f9bd3462c157a474135e72edb0cec80bd1fa78cf5118e2888c5b3d0595cfbd7d"
+    },
+    {
+      "path": "review/visual/brand-comparison/announcement.html",
+      "sha256": "885f7c1289650509afb42991a8754023fe49d30cf4de17a38c2a8118787ff52f"
+    },
+    {
+      "path": "review/visual/brand-comparison/announcement.png",
+      "sha256": "b073ef808cbef97f0abfde4211259da4a03d08638f30430fb9a53dd6977f2676"
+    }
+  ]
+}
