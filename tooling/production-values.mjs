@@ -1,9 +1,9 @@
-import { validateContract, checkTrustedContext, canonicalJson, hashManifest, hashBytes } from './runtime.mjs';
+import { validateContract, checkTrustedContext, canonicalJson, hashManifest, hashBytes, ContractError } from './runtime.mjs';
 import { checkPrintSpec, checkFulfillmentCapabilitySnapshot } from './capability.mjs';
 import { researchContentHash } from './research-creative.mjs';
 import { commerceContentHash } from './commerce-evidence.mjs';
 import { validateVersionedReference } from './operations.mjs';
-import { productionIssue, productionOk } from './production-errors.mjs';
+import { productionIssue, productionOk, validateProductionReference } from './production-errors.mjs';
 import { productionReferences } from './production-operations.mjs';
 
 export function productionContentHash(value) {
@@ -160,6 +160,12 @@ export function checkComposition(input, context) {
   if (context === null || typeof context !== 'object' || Array.isArray(context) || !checkTrustedContext(context.scope, context.scope).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const parsed = checkProductionValueIntegrity('Composition', input, context.scope);
   if (!parsed.ok) return parsed;
+  try { canonicalJson({ policies: context.expected_policy_refs, fonts: context.expected_font_refs, runtime: context.expected_runtime_ref }); }
+  catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
+  if (context.expected_policy_refs === null || typeof context.expected_policy_refs !== 'object' || Array.isArray(context.expected_policy_refs) ||
+      Object.keys(input.policy_refs).some(key => !(key === 'repair' && context.expected_policy_refs[key] === null) && !validateProductionReference(context.expected_policy_refs[key]).ok) ||
+      !Array.isArray(context.expected_font_refs) || context.expected_font_refs.some(ref => !validateProductionReference(ref).ok) ||
+      !validateProductionReference(context.expected_runtime_ref).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   if (!checkTrustedContext(input, context.scope).ok) return productionIssue('NOT_FOUND');
   if (input.content_hash !== productionContentHash(input)) return productionIssue('HASH_MISMATCH');
   for (const [path, reference] of productionReferences(input)) {

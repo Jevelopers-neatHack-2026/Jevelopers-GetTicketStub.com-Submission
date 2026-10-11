@@ -23,8 +23,14 @@ export function checkProductionBundleEligibility(bundle, context) {
   const parsed = checkProductionBundleV2(bundle, context.scope);
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(bundle, context.scope).ok) return productionIssue('NOT_FOUND');
+  const rootScope = { tenant_id: context.scope.tenant_id, project_id: context.scope.project_id };
+  if (!checkTrustedContext(context.composition, rootScope).ok || !checkTrustedContext(context.composition_context?.scope, rootScope).ok) return productionIssue('NOT_FOUND');
   const composition = checkComposition(context.composition, context.composition_context);
   if (!composition.ok) return composition;
+  if (bundle.composition_ref.contract !== composition.value.contract || bundle.composition_ref.schema_version !== composition.value.schema_version ||
+      bundle.composition_ref.id !== composition.value.composition_id || bundle.composition_ref.revision !== composition.value.revision ||
+      bundle.composition_ref.content_hash !== composition.value.content_hash) return productionIssue('HASH_MISMATCH', '/composition_ref');
+  if (!same(bundle.facts_ref, composition.value.facts_ref)) return productionIssue('FACTS_UNSUPPORTED', '/facts_ref');
   const facts = context.composition_context.facts?.package;
   if (!facts || facts.readiness !== 'ready' || Date.parse(facts.expires_at) <= Date.parse(context.now)) return productionIssue('FACTS_UNSUPPORTED');
   if (!same(bundle.composition_ref, context.artifact_ref.composition_ref) || bundle.composition.composition_hash !== composition.value.content_hash || bundle.composition.render_hash !== context.artifact_ref.render_hash || bundle.composition.private_revision_hash !== context.artifact_ref.private_revision_hash || !same(bundle.composition.source_artwork_hashes, context.artifact_ref.source_artwork_hashes)) return productionIssue('HASH_MISMATCH');

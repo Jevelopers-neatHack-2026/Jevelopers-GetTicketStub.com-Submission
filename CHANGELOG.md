@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.9.2 (unreleased development candidate)
+
+The independent whole-PR review of 49250d5 reproduced earlier SC-CHK-015 bundle-facts and SC-CHK-016 foreign-composition eligibility defects, plus SC-CHK-017 partially missing composition expectations. Eligibility now binds the checked facts tuple and complete Composition identity/revision/hash, and applies the outer tenant/project scope to the Composition and its validation context. Composition validates required policy/font/runtime expectations before comparison, preserving nullable repair policy and returning typed failures for malformed values. Added an explicitly synthetic eligibility calibration and positive/rebound/contradiction regressions. The earlier email's candidate SC-CHK-015 lineage ID is distinguished as EMAIL-SC-CHK-015-LINEAGE; both histories are retained. Fresh exact-candidate review and Finance/owner/consumer gates remain required.
+
 ## 0.9.1 (unreleased development candidate)
 
 SC-CHK-015 follows the corrected review at 92516d2: supplied parent descriptors must match the package ID and preceding version, and initial packages cannot have a parent. Historical null parents remain the explicit existing producer allowance. Facts, intrinsic integrity, composition and eligibility share the repaired boundary. Missing composition context returns a typed rejection. Canonical encoding and duplicate-member parsing now reject more than 64 nested containers with RESOURCE_LIMIT, which is included in the generated validation-code union; supported canonical bytes and wire schemas are unchanged. The consumer runner validates successful probe status and complete unique record coverage, distinguishes output-buffer failure, and uses fixed observer processing codes. Fresh exact-candidate independent review, Finance receipt and owner/consumer acceptance remain required.

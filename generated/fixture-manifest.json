@@ -56,6 +56,7 @@
     "fixtures/ProductionCalibration.json": "sha256:b0885d7671de16396ce6841381d47c7feacc5ebe3eae29c892642f1c71403d87",
     "fixtures/ProductionDerivedProvenance.json": "sha256:540f14e408385e648b81333082449f2b042a5641f6f909d6bc14e80a81043d87",
     "fixtures/ProductionDiagnostic.json": "sha256:3735a55e973d530eee5bb0370549fbb243a7e972daef648a09feebb7f4e546f9",
+    "fixtures/ProductionEligibilityCalibration.json": "sha256:f20f60d4e32a5c1c470f2cde693677989c1ccca204adf80ce1d8c9e15272a246",
     "fixtures/ProductionError.json": "sha256:b9eb5229686bdf6390f82babf0c47a1da0ee39bcb88f1bf7c98314e44e8dddea",
     "fixtures/ProductionExecutionPins.json": "sha256:0d764438542d9efe974e9d01168e1aede33fe52c634ff29d18437c7c1f723422",
     "fixtures/ProductionPolicy.json": "sha256:8422f7094d857da069421ff021fa86d09e3e06439472791596c6b7ee1591b64c",
@@ -90,7 +91,7 @@
     "fixtures/TemplateSpec.json": "sha256:bf202ffcb3c06d4ff8de157bdb5cd69894846e06015a6cf042e4f037b041aaac",
     "fixtures/UsageEvent.json": "sha256:c3261936892562c1b0dbf57a665d5d460c8c462ac85dce15fbc05846a7b71cdb"
   },
-  "digest": "sha256:0e4e7f048d77cb931a026e58532316a22e0f4ea287339cfee11e8f88360554e0",
+  "digest": "sha256:efc2ee556c8ba43c29ea36932af8c947048b059ff4f2d7a7bbec15b85a05f07b",
   "status": "synthetic_candidates_only",
   "contracts": [
     {

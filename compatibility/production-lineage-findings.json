@@ -7,7 +7,9 @@
   "fresh_independent_review": "pending_exact_candidate",
   "findings": [
     {
-      "id": "SC-CHK-015",
+      "id": "EMAIL-SC-CHK-015-LINEAGE",
+      "original_email_candidate_id": "SC-CHK-015",
+      "id_disambiguation": "The earlier whole-PR review already used SC-CHK-015 for bundle-facts eligibility. This email explicitly proposed a candidate ID; preserve both source histories without reinterpreting the established finding.",
       "status": "locally_repaired_review_pending",
       "decision": "Preserve explicit null-parent historical allowance; enforce supplied parent tuple consistency and initial-version null parent.",
       "negative_cases": ["initial-with-parent", "foreign-parent-id", "wrong-parent-revision", "version-nine-arbitrary-parent"],
