@@ -355,6 +355,51 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.match(safeArtifacts, /usage metering/);
     assert.match(safeArtifacts, /tokens/);
 
+    const approvedCompatibilityCases = [
+      ['input-with-output-missing', makeRequest(privacyScope, {
+        usage: { completeness: 'incomplete', missingFields: ['output'], units: [
+          { name: 'input', quantity: '10', scale: 0, relation: 'standalone' },
+        ] },
+      })],
+      ['unknown-all', makeRequest(privacyScope, {
+        eventType: 'usage_observation', classification: 'usage_memo', financialEffect: false,
+        valuation: 'unknown', amount: null,
+        usage: { completeness: 'unknown', missingFields: ['all'], units: [] },
+      })],
+      ['unknown-usage-identity', makeRequest(privacyScope, {
+        eventType: 'usage_observation', classification: 'usage_memo', financialEffect: false,
+        valuation: 'unknown', amount: null,
+        usage: { completeness: 'unknown', missingFields: ['usage', 'providerAttemptId', 'billableAttemptId'], units: [] },
+      })],
+      ['cache-write-tokens', makeRequest(privacyScope, {
+        usage: { completeness: 'complete', missingFields: [], units: [
+          { name: 'cache_write_tokens', quantity: '4', scale: 0, relation: 'standalone' },
+        ] },
+      })],
+    ];
+    const approvedCompatibilityArtifacts = [];
+    for (const [label, request] of approvedCompatibilityCases) {
+      const appended = await appendLedgerEvent(request, privacyPorts);
+      assert.equal(appended.ok, true, `${label} is reviewed financial evidence and remains accepted`);
+      const persisted = await pool.query(
+        'SELECT event_payload, source_refs, quantity_units FROM cost_intelligence.financial_ledger_events WHERE event_id = $1',
+        [request.eventId],
+      );
+      assert.equal(persisted.rows.length, 1, `${label} persists as an immutable supported event`);
+      const projection = await rebuildLedgerProjection({
+        schemaVersion: '1.0.0', requestId: `projection-${label}-${randomUUID()}`, scope: privacyScope, asOf: '2026-10-11T03:00:00.000Z',
+      }, privacyPorts);
+      assert.equal(projection.ok, true, `${label} remains available in the scoped financial projection`);
+      approvedCompatibilityArtifacts.push({ response: appended, projection, rows: persisted.rows });
+    }
+    const approvedCompatibilityJson = JSON.stringify(approvedCompatibilityArtifacts);
+    assert.doesNotMatch(approvedCompatibilityJson, /CI09_PRIVATE_PROMPT_ADDRESS_TOKEN_CANARY/);
+    assert.match(approvedCompatibilityJson, /"name":"input"/);
+    assert.match(approvedCompatibilityJson, /"name":"cache_write_tokens"/);
+    assert.match(approvedCompatibilityJson, /"missingFields":\["all"\]/);
+    assert.match(approvedCompatibilityJson, /providerAttemptId/);
+    assert.match(approvedCompatibilityJson, /billableAttemptId/);
+
     const idempotencyScope = makeScope('idempotency-contention');
     const idempotencyPorts = makePorts(pool, idempotencyScope, clock);
     const sameRequest = makeRequest(idempotencyScope, { amount: '0.05' });

@@ -311,7 +311,8 @@ function validationFailure(module: string, operation: string, requestId: string,
 // These are finance-measure identifiers, not free-form source labels. New
 // producer units are added only after their meaning and display safety are reviewed.
 const SAFE_LEDGER_UNITS = new Set([
-  'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+  'token', 'tokens', 'input', 'output', 'reasoning', 'input_tokens', 'output_tokens', 'cached_tokens',
+  'uncached_tokens', 'reasoning_tokens', 'cache_read_tokens', 'cache_write_tokens',
   'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
   'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
   'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
@@ -320,7 +321,7 @@ const SAFE_LEDGER_UNITS = new Set([
 
 const SAFE_LEDGER_MISSING_FIELDS = new Set([
   ...SAFE_LEDGER_UNITS, 'amount', 'currency', 'source_reference', 'provider_reference', 'pricing_reference',
-  'input', 'output', 'reasoning', 'image_count', 'request_count', 'duration',
+  'all', 'usage', 'providerAttemptId', 'billableAttemptId', 'image_count', 'request_count', 'duration',
 ]);
 
 const unsafeFinanceText = /(?:https?:\/\/|\b[a-z][a-z0-9+.-]*:\/\/|[\u0000-\u001f]|(?:^|[^a-z0-9])(?:prompt|password|passwd|secret|bearer|private|address|email)(?:$|[^a-z0-9])|(?:^|[^a-z0-9])token(?:$|[^a-z0-9])|(?:^|[^a-z0-9])(?:\d{1,3}\.){3}\d{1,3}(?:$|[^a-z0-9])|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i;

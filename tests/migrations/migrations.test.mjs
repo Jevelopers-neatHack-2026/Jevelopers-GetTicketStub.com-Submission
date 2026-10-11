@@ -400,6 +400,23 @@ async function apply0006ToLegacyDatabase(client, name) {
   }
 }
 
+async function assert0006RejectedBeforeRecord(client, migrationName, label) {
+  await assert.rejects(
+    apply0006ToLegacyDatabase(client, migrationName),
+    error => error.code === '42501',
+    `${label}: unsafe pre-existing runtime authority must stop the upgrade`,
+  );
+  const recorded = await client.query(
+    'SELECT version FROM cost_intelligence.schema_migrations WHERE version = $1',
+    [migrationName.replace(/\.sql$/, '')],
+  );
+  assert.deepEqual(recorded.rows, [], `${label}: a rejected upgrade cannot report migration success`);
+}
+
+function quoteIdentifier(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
 async function captureLegacyFinancialRows(client) {
   const tables = [
     'financial_ledger_events', 'financial_ledger_identity_bindings', 'financial_source_revision_heads',
@@ -604,16 +621,16 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       assert.equal(Number(health.rows[0].required_migrations_present), names.length);
 
       const roleGroups = await client.query(
-        `SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls
+        `SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
          FROM pg_roles WHERE rolname = ANY($1::text[]) ORDER BY rolname`,
         [['ci_finance_migrator', 'ci_finance_owner', 'ci_finance_runtime']],
       );
       assert.deepEqual(roleGroups.rows.map(row => row.rolname), ['ci_finance_migrator', 'ci_finance_owner', 'ci_finance_runtime']);
-      assert.deepEqual(roleGroups.rows.map(({ rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls }) =>
-        ({ rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls })), [
-        { rolname: 'ci_finance_migrator', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: true },
-        { rolname: 'ci_finance_owner', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false },
-        { rolname: 'ci_finance_runtime', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false },
+      assert.deepEqual(roleGroups.rows.map(({ rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls }) =>
+        ({ rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls })), [
+        { rolname: 'ci_finance_migrator', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: true },
+        { rolname: 'ci_finance_owner', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false },
+        { rolname: 'ci_finance_runtime', rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false },
       ]);
       const scopedOwners = await client.query(
         `SELECT c.relname, owner.rolname AS owner
@@ -816,6 +833,292 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
   }
 });
 
+test('0006 rejects pre-existing runtime role graphs and ACL escalation before a restricted-login upgrade', async () => {
+  assert.ok(process.env.CI_TEST_DB_HOST, 'role-upgrade audit requires the disposable PostgreSQL harness');
+  const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
+  assert.equal(names.length, 6);
+  const migrationName = names[5];
+  const { name, base, config } = await createPre0006Database();
+  const admin = new Client(config);
+  await admin.connect();
+  const runtimeLogin = runtimeDatabaseConfigFromEnvironment().user;
+  const runtimeRole = quoteIdentifier(runtimeLogin);
+  let financeRowsBefore;
+  try {
+    await installDisposableMarker(admin);
+    await applyMigrationsThrough0005(admin, names);
+    financeRowsBefore = await captureLegacyFinancialRows(admin);
+  } catch (error) {
+    await admin.end();
+    await dropTestDatabase(name, base);
+    throw error;
+  }
+
+  const scenarios = [];
+  scenarios.push({
+    label: 'direct migrator membership',
+    prepare: () => admin.query('GRANT ci_finance_migrator TO ci_finance_runtime'),
+    cleanup: () => admin.query('REVOKE ci_finance_migrator FROM ci_finance_runtime'),
+  });
+  scenarios.push({
+    label: 'direct owner membership',
+    prepare: () => admin.query('GRANT ci_finance_owner TO ci_finance_runtime'),
+    cleanup: () => admin.query('REVOKE ci_finance_owner FROM ci_finance_runtime'),
+  });
+  const migrationBridge = `ci09_migrator_bridge_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'transitive migrator membership',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(migrationBridge)} NOLOGIN`);
+      await admin.query(`GRANT ci_finance_migrator TO ${quoteIdentifier(migrationBridge)}`);
+      await admin.query(`GRANT ${quoteIdentifier(migrationBridge)} TO ci_finance_runtime`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(migrationBridge)} FROM ci_finance_runtime`);
+      await admin.query(`REVOKE ci_finance_migrator FROM ${quoteIdentifier(migrationBridge)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(migrationBridge)}`);
+    },
+  });
+  const elevatedBridge = `ci09_elevated_bridge_${randomUUID().replaceAll('-', '')}`;
+  const elevatedRole = `ci09_bypass_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'transitive elevated role membership',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(elevatedRole)} NOLOGIN BYPASSRLS`);
+      await admin.query(`CREATE ROLE ${quoteIdentifier(elevatedBridge)} NOLOGIN`);
+      await admin.query(`GRANT ${quoteIdentifier(elevatedRole)} TO ${quoteIdentifier(elevatedBridge)}`);
+      await admin.query(`GRANT ${quoteIdentifier(elevatedBridge)} TO ci_finance_runtime`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(elevatedBridge)} FROM ci_finance_runtime`);
+      await admin.query(`REVOKE ${quoteIdentifier(elevatedRole)} FROM ${quoteIdentifier(elevatedBridge)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(elevatedBridge)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(elevatedRole)}`);
+    },
+  });
+  const adminOptionRole = `ci09_admin_option_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'runtime group admin-option membership',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(adminOptionRole)} NOLOGIN`);
+      await admin.query(`GRANT ${quoteIdentifier(adminOptionRole)} TO ci_finance_runtime WITH ADMIN OPTION`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(adminOptionRole)} FROM ci_finance_runtime`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(adminOptionRole)}`);
+    },
+  });
+  scenarios.push({
+    label: 'host runtime login admin option',
+    prepare: () => admin.query(`GRANT ci_finance_runtime TO ${runtimeRole} WITH ADMIN OPTION`),
+    cleanup: async () => {
+      await admin.query(`REVOKE ci_finance_runtime FROM ${runtimeRole}`);
+      await admin.query(`GRANT ci_finance_runtime TO ${runtimeRole}`);
+    },
+  });
+  const settableAclRole = `ci09_settable_acl_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'runtime login SET ROLE-only history DELETE grant',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(settableAclRole)} NOLOGIN`);
+      await admin.query(`GRANT DELETE ON cost_intelligence.financial_ledger_events TO ${quoteIdentifier(settableAclRole)}`);
+      await admin.query(`GRANT ${quoteIdentifier(settableAclRole)} TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(settableAclRole)} FROM ${runtimeRole}`);
+      await admin.query(`REVOKE DELETE ON cost_intelligence.financial_ledger_events FROM ${quoteIdentifier(settableAclRole)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(settableAclRole)}`);
+    },
+  });
+  const delegatedMembershipRole = `ci09_admin_path_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'runtime login ADMIN OPTION on a separate membership',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(delegatedMembershipRole)} NOLOGIN`);
+      await admin.query(`GRANT ${quoteIdentifier(delegatedMembershipRole)} TO ${runtimeRole} WITH ADMIN OPTION`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(delegatedMembershipRole)} FROM ${runtimeRole}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(delegatedMembershipRole)}`);
+    },
+  });
+  scenarios.push({
+    label: 'host runtime login migrator membership',
+    prepare: () => admin.query(`GRANT ci_finance_migrator TO ${runtimeRole}`),
+    cleanup: () => admin.query(`REVOKE ci_finance_migrator FROM ${runtimeRole}`),
+  });
+  scenarios.push({
+    label: 'direct schema CREATE grant',
+    prepare: () => admin.query('GRANT CREATE ON SCHEMA cost_intelligence TO ci_finance_runtime'),
+    cleanup: () => admin.query('REVOKE CREATE ON SCHEMA cost_intelligence FROM ci_finance_runtime'),
+  });
+  scenarios.push({
+    label: 'runtime login database CREATE grant',
+    prepare: () => admin.query(`GRANT CREATE ON DATABASE ${quoteIdentifier(name)} TO ${runtimeRole}`),
+    cleanup: () => admin.query(`REVOKE CREATE ON DATABASE ${quoteIdentifier(name)} FROM ${runtimeRole}`),
+  });
+  scenarios.push({
+    label: 'direct table UPDATE DELETE TRUNCATE grants',
+    prepare: () => admin.query('GRANT UPDATE, DELETE, TRUNCATE ON cost_intelligence.financial_ledger_events TO ci_finance_runtime'),
+    cleanup: () => admin.query('REVOKE ALL ON cost_intelligence.financial_ledger_events FROM ci_finance_runtime'),
+  });
+  scenarios.push({
+    label: 'direct column UPDATE grant',
+    prepare: () => admin.query('GRANT UPDATE (event_payload) ON cost_intelligence.financial_ledger_events TO ci_finance_runtime'),
+    cleanup: () => admin.query('REVOKE UPDATE (event_payload) ON cost_intelligence.financial_ledger_events FROM ci_finance_runtime'),
+  });
+  const functionProbe = `ci09_privileged_probe_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'direct privileged-function EXECUTE grant',
+    prepare: async () => {
+      await admin.query(`CREATE FUNCTION cost_intelligence.${quoteIdentifier(functionProbe)}() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$`);
+      await admin.query(`GRANT EXECUTE ON FUNCTION cost_intelligence.${quoteIdentifier(functionProbe)}() TO ci_finance_runtime`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE EXECUTE ON FUNCTION cost_intelligence.${quoteIdentifier(functionProbe)}() FROM ci_finance_runtime`);
+      await admin.query(`DROP FUNCTION cost_intelligence.${quoteIdentifier(functionProbe)}()`);
+    },
+  });
+  const sequenceProbe = `ci09_sequence_probe_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'direct sequence privilege grant',
+    prepare: async () => {
+      await admin.query(`CREATE SEQUENCE cost_intelligence.${quoteIdentifier(sequenceProbe)}`);
+      await admin.query(`GRANT USAGE, SELECT, UPDATE ON SEQUENCE cost_intelligence.${quoteIdentifier(sequenceProbe)} TO ci_finance_runtime`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE ALL ON SEQUENCE cost_intelligence.${quoteIdentifier(sequenceProbe)} FROM ci_finance_runtime`);
+      await admin.query(`DROP SEQUENCE cost_intelligence.${quoteIdentifier(sequenceProbe)}`);
+    },
+  });
+  scenarios.push({
+    label: 'direct runtime-login history DELETE grant',
+    prepare: () => admin.query(`GRANT DELETE ON cost_intelligence.financial_ledger_events TO ${runtimeRole}`),
+    cleanup: () => admin.query(`REVOKE DELETE ON cost_intelligence.financial_ledger_events FROM ${runtimeRole}`),
+  });
+  const inheritedAclRole = `ci09_inherited_acl_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'runtime-login inherited history DELETE grant',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(inheritedAclRole)} NOLOGIN`);
+      await admin.query(`GRANT DELETE ON cost_intelligence.financial_ledger_events TO ${quoteIdentifier(inheritedAclRole)}`);
+      await admin.query(`GRANT ${quoteIdentifier(inheritedAclRole)} TO ${runtimeRole}`);
+    },
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(inheritedAclRole)} FROM ${runtimeRole}`);
+      await admin.query(`REVOKE DELETE ON cost_intelligence.financial_ledger_events FROM ${quoteIdentifier(inheritedAclRole)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(inheritedAclRole)}`);
+    },
+  });
+  const eventOwnerBefore = await admin.query(
+    `SELECT owner.rolname FROM pg_class relation
+     JOIN pg_roles owner ON owner.oid = relation.relowner
+     JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+     WHERE schema.nspname = 'cost_intelligence' AND relation.relname = 'financial_ledger_events'`,
+  );
+  assert.equal(eventOwnerBefore.rows.length, 1);
+  const eventOwner = quoteIdentifier(eventOwnerBefore.rows[0].rolname);
+  scenarios.push({
+    label: 'runtime group owns immutable history',
+    prepare: () => admin.query('ALTER TABLE cost_intelligence.financial_ledger_events OWNER TO ci_finance_runtime'),
+    cleanup: () => admin.query(`ALTER TABLE cost_intelligence.financial_ledger_events OWNER TO ${eventOwner}`),
+  });
+  scenarios.push({
+    label: 'host runtime login owns immutable history',
+    prepare: () => admin.query(`ALTER TABLE cost_intelligence.financial_ledger_events OWNER TO ${runtimeRole}`),
+    cleanup: () => admin.query(`ALTER TABLE cost_intelligence.financial_ledger_events OWNER TO ${eventOwner}`),
+  });
+
+  try {
+    for (const scenario of scenarios) {
+      try {
+        await scenario.prepare();
+        await assert0006RejectedBeforeRecord(admin, migrationName, scenario.label);
+        assert.deepEqual(await captureLegacyFinancialRows(admin), financeRowsBefore,
+          `${scenario.label}: a rejected security migration leaves immutable ledger and projection rows unchanged`);
+      } finally {
+        await scenario.cleanup();
+      }
+    }
+
+    await apply0006ToLegacyDatabase(admin, migrationName);
+    const runtimeConfig = { ...runtimeDatabaseConfigFromEnvironment(), database: name };
+    const restricted = new Client(runtimeConfig);
+    await restricted.connect();
+    const runtimePool = new Pool({ ...runtimeConfig, max: 4 });
+    try {
+      const login = await restricted.query(
+        `SELECT current_user, role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolreplication, role.rolbypassrls,
+                pg_has_role(current_user, 'ci_finance_runtime', 'MEMBER') AS is_runtime,
+                pg_has_role(current_user, 'ci_finance_owner', 'MEMBER') AS is_owner,
+                pg_has_role(current_user, 'ci_finance_migrator', 'MEMBER') AS is_migrator,
+                has_database_privilege(current_user, current_database(), 'CREATE') AS database_can_create
+         FROM pg_roles role WHERE role.rolname = current_user`,
+      );
+      assert.equal(login.rows.length, 1);
+      assert.deepEqual(login.rows[0], {
+        current_user: runtimeLogin, rolsuper: false, rolcreatedb: false, rolcreaterole: false,
+        rolreplication: false, rolbypassrls: false,
+        is_runtime: true, is_owner: false, is_migrator: false, database_can_create: false,
+      });
+      for (const role of ['ci_finance_owner', 'ci_finance_migrator']) {
+        await assert.rejects(restricted.query(`SET ROLE ${role}`), error => error.code === '42501',
+          `the real runtime login cannot assume ${role}`);
+      }
+      await assert.rejects(restricted.query('CREATE TABLE cost_intelligence.ci09_runtime_ddl_probe (value integer)'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('CREATE SCHEMA ci09_runtime_schema_probe'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('ALTER TABLE cost_intelligence.financial_ledger_events DISABLE TRIGGER financial_ledger_events_append_only'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('ALTER TABLE cost_intelligence.financial_ledger_events DISABLE ROW LEVEL SECURITY'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('UPDATE cost_intelligence.financial_ledger_events SET amount = amount'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('DELETE FROM cost_intelligence.financial_ledger_events'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('TRUNCATE cost_intelligence.pricing_rate_card_versions'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('SELECT * FROM cost_intelligence.schema_migrations'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query('SELECT cost_intelligence.audit_legacy_financial_privacy()'),
+        error => error.code === '42501');
+      await assert.rejects(restricted.query("SELECT cost_intelligence.financial_jsonb_has_sensitive_text('{}'::jsonb)"),
+        error => error.code === '42501');
+
+      const scope = legacyScope('actual-restricted-upgrade');
+      const event = legacyRequest(scope, { amount: '0.37' });
+      await appendLegacyEvent(runtimePool, event);
+      const projection = await projectLegacyScope(runtimePool, scope);
+      assert.equal(projection.ok, true, projection.ok ? '' : projection.error.safe_message);
+      if (projection.ok) assert.ok(projection.value.amounts.some(item => item.totalAmount === '0.37'));
+      await restricted.query('BEGIN');
+      try {
+        await bindRawFinanceScope(restricted, scope);
+        const own = await restricted.query(
+          'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = $1', [event.eventId],
+        );
+        assert.deepEqual(own.rows, [{ event_id: event.eventId }], 'restricted login reads an authorized scoped row');
+        await bindRawFinanceScope(restricted, { ...scope, tenantId: `${scope.tenantId}-foreign` });
+        const foreign = await restricted.query(
+          'SELECT event_id FROM cost_intelligence.financial_ledger_events WHERE event_id = $1', [event.eventId],
+        );
+        assert.deepEqual(foreign.rows, [], 'restricted login cannot read a foreign tenant row by ID');
+        await restricted.query('COMMIT');
+      } catch (error) {
+        await restricted.query('ROLLBACK').catch(() => {});
+        throw error;
+      }
+    } finally {
+      await runtimePool.end();
+      await restricted.end();
+    }
+  } finally {
+    await admin.end();
+    await dropTestDatabase(name, base);
+  }
+});
+
 test('legacy financial privacy upgrade preserves immutable economics and fails affected scopes closed', async () => {
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
   assert.equal(names.length, 6);
@@ -872,6 +1175,34 @@ test('legacy financial privacy upgrade preserves immutable economics and fails a
       observationCount: 4, knownQuantityCount: 3, unknownQuantityCount: 1, incompleteObservationCount: 1,
       knownSubtotal: '13', totalQuantity: null, completeness: 'incomplete',
     }, 'the clean legacy scope retains incomplete quantity and token measure facts');
+
+    const approvedMeasuresScope = legacyScope('approved-measure-conservation');
+    const approvedInput = legacyRequest(approvedMeasuresScope, { usage: {
+      completeness: 'incomplete', missingFields: ['output'],
+      units: [{ name: 'input', quantity: '10', scale: 0, relation: 'standalone' }],
+    } });
+    const approvedCacheWrite = legacyRequest(approvedMeasuresScope, { usage: {
+      completeness: 'complete', missingFields: [], units: [
+        { name: 'input_tokens', quantity: '20', scale: 0, relation: 'standalone' },
+        { name: 'cache_write_tokens', quantity: '4', scale: 0, relation: 'included_subset', includedIn: 'input_tokens' },
+      ],
+    } });
+    const approvedAllUnknown = legacyRequest(approvedMeasuresScope, {
+      amount: null, valuation: 'unknown', usage: { completeness: 'unknown', missingFields: ['all'], units: [] },
+    });
+    const approvedIdentityUnknown = legacyRequest(approvedMeasuresScope, {
+      amount: null, valuation: 'unknown',
+      usage: { completeness: 'unknown', missingFields: ['usage', 'providerAttemptId', 'billableAttemptId'], units: [] },
+    });
+    const approvedMeasureEvents = [approvedInput, approvedCacheWrite, approvedAllUnknown, approvedIdentityUnknown];
+    for (const request of approvedMeasureEvents) await appendLegacyEvent(seedPool, request);
+    const approvedMeasuresBefore = await projectLegacyScope(seedPool, approvedMeasuresScope);
+    assert.equal(approvedMeasuresBefore.ok, true);
+    if (approvedMeasuresBefore.ok) {
+      assert.ok(approvedMeasuresBefore.value.quantities.some(item => item.unitName === 'input' && item.knownSubtotal === '10'));
+      assert.ok(approvedMeasuresBefore.value.quantities.some(item => item.unitName === 'cache_write_tokens' && item.knownSubtotal === '4'));
+      assert.equal(approvedMeasuresBefore.value.amounts.find(item => item.currency === 'USD').knownAmountCount, 2);
+    }
 
     const cleanOtherCurrencyScope = legacyScope('clean-other-currency');
     await appendLegacyEvent(seedPool, legacyRequest(cleanOtherCurrencyScope, { amount: '3.00', currency: 'EUR' }));
@@ -1202,12 +1533,18 @@ test('legacy financial privacy upgrade preserves immutable economics and fails a
     const cleanEventIds = [
       known.eventId, unknown.eventId, incomplete.eventId, sameScopeClean.eventId,
       affectedKnown.eventId, affectedUnknown.eventId, affectedIncomplete.eventId,
+      ...approvedMeasureEvents.map(request => request.eventId),
     ];
+    // Quarantine stores immutable content hashes, so resolve the event IDs to
+    // their persisted hashes before running the no-false-positive assertion.
     const cleanEventHashes = await admin.query(
       'SELECT event_hash FROM cost_intelligence.financial_ledger_events WHERE event_id = ANY($1::text[]) ORDER BY event_id',
       [cleanEventIds],
     );
     const cleanHashes = cleanEventHashes.rows.map(row => row.event_hash);
+    assert.equal(cleanHashes.length, cleanEventIds.length, 'every seeded clean event must contribute its stored immutable event_hash');
+    assert.ok(cleanHashes.every(hash => /^sha256:[a-f0-9]{64}$/.test(hash)),
+      'the clean-row quarantine guard compares content hashes, not event IDs');
     assert.deepEqual(auditAfterSecondRun.rows, expectedAudit,
       'audit must catch effective correction, ancestor, deep reversal, reservation authorization, label-only, and combined cases');
     assert.doesNotMatch(JSON.stringify(auditAfterSecondRun.rows), new RegExp(legacyPrivacyMarker));
@@ -1231,6 +1568,16 @@ test('legacy financial privacy upgrade preserves immutable economics and fails a
     assert.equal(cleanAfterUpgrade.ok, true);
     assert.deepEqual(cleanAfterUpgrade.value, cleanBeforeUpgrade.value,
       'a clean same-scope as-of replay after upgrade retains the exact pre-upgrade amount, quantity, evidence, and hash');
+    const approvedMeasuresAfter = await projectLegacyScope(runtimePool, approvedMeasuresScope);
+    assert.equal(approvedMeasuresAfter.ok, true);
+    assert.deepEqual(approvedMeasuresAfter.value, approvedMeasuresBefore.value,
+      'approved input, cache-write, and unknown-field observations retain exact pre-upgrade projection identity');
+    const approvedSnapshotQuarantine = await admin.query(
+      'SELECT record_hash FROM cost_intelligence.financial_privacy_quarantine WHERE record_kind = $1 AND record_hash = $2',
+      ['projection_snapshot', approvedMeasuresBefore.value.snapshotId],
+    );
+    assert.deepEqual(approvedSnapshotQuarantine.rows, [],
+      'reviewed cache_write_tokens projection labels are not quarantined during upgrade');
     const otherCurrencyAfter = await projectLegacyScope(runtimePool, cleanOtherCurrencyScope);
     assert.equal(otherCurrencyAfter.ok, true);
     assert.deepEqual(otherCurrencyAfter.value, cleanOtherCurrencyBefore.value);

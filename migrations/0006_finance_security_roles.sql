@@ -12,16 +12,226 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_roles
     WHERE rolname IN ('ci_finance_owner', 'ci_finance_runtime')
-      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls OR rolcanlogin)
+      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR rolcanlogin)
   ) OR EXISTS (
     SELECT 1 FROM pg_roles
     WHERE rolname = 'ci_finance_migrator'
-      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolcanlogin OR NOT rolbypassrls)
+      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolcanlogin OR NOT rolbypassrls)
   ) THEN
     RAISE EXCEPTION 'CI finance group roles must remain non-login, non-owner service roles without elevated attributes';
   END IF;
 END
 $roles$;
+
+-- Do not layer the reviewed runtime grants over an unknown pre-existing role
+-- graph or ACL. Role memberships and grants are cluster-wide, so audit both
+-- the runtime group and every existing principal which can assume it before
+-- this migration changes ownership or installs policies.
+DO $runtime_boundary$
+DECLARE
+  owner_role_oid oid;
+  migrator_role_oid oid;
+  runtime_role_oid oid;
+  finance_schema_oid oid;
+  principal record;
+  relation record;
+  column_privilege record;
+  allowed_select text[] := ARRAY[
+    'foundation_health',
+    'financial_ledger_events', 'financial_ledger_identity_bindings', 'financial_source_revision_heads',
+    'financial_posting_attempt_mappings', 'financial_projection_snapshots', 'financial_projection_amounts',
+    'financial_projection_quantities', 'financial_ledger_quarantine', 'financial_privacy_quarantine',
+    'pricing_rule_versions', 'pricing_rate_card_versions', 'pricing_fx_rate_versions',
+    'pricing_operation_idempotency', 'pricing_estimate_snapshots'
+  ];
+  allowed_insert text[] := ARRAY[
+    'financial_ledger_events', 'financial_ledger_identity_bindings', 'financial_source_revision_heads',
+    'financial_posting_attempt_mappings', 'financial_projection_snapshots', 'financial_projection_amounts',
+    'financial_projection_quantities', 'financial_ledger_quarantine', 'pricing_rule_versions',
+    'pricing_rate_card_versions', 'pricing_fx_rate_versions', 'pricing_operation_idempotency',
+    'pricing_estimate_snapshots'
+  ];
+BEGIN
+  SELECT oid INTO owner_role_oid FROM pg_roles WHERE rolname = 'ci_finance_owner';
+  SELECT oid INTO migrator_role_oid FROM pg_roles WHERE rolname = 'ci_finance_migrator';
+  SELECT oid INTO runtime_role_oid FROM pg_roles WHERE rolname = 'ci_finance_runtime';
+  SELECT oid INTO finance_schema_oid FROM pg_namespace WHERE nspname = 'cost_intelligence';
+
+  IF EXISTS (
+    SELECT 1 FROM pg_roles inherited
+    WHERE inherited.oid <> runtime_role_oid
+      AND pg_has_role(runtime_role_oid, inherited.oid, 'MEMBER')
+  ) THEN
+    RAISE EXCEPTION 'CI finance runtime role has an unreviewed membership path'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- A host login that can use the runtime group must not also be an owner,
+  -- migrator, bypass role, or role administrator. Include nested login and
+  -- group memberships; the runtime login itself is provisioned outside SQL.
+  FOR principal IN
+    WITH RECURSIVE runtime_members(member_oid) AS (
+      SELECT membership.member FROM pg_auth_members membership WHERE membership.roleid = runtime_role_oid
+      UNION
+      SELECT membership.member
+      FROM pg_auth_members membership
+      JOIN runtime_members parent ON membership.roleid = parent.member_oid
+    ), runtime_principals(role_oid) AS (
+      SELECT runtime_role_oid
+      UNION
+      SELECT member_oid FROM runtime_members
+    ), settable_roles(role_oid) AS (
+      SELECT role_oid FROM runtime_principals
+      UNION
+      SELECT membership.roleid
+      FROM pg_auth_members membership
+      JOIN settable_roles parent ON membership.member = parent.role_oid
+      WHERE membership.set_option
+    )
+    SELECT candidate.oid, candidate.rolname, candidate.rolsuper, candidate.rolcreatedb,
+           candidate.rolcreaterole, candidate.rolreplication, candidate.rolbypassrls
+    FROM pg_roles candidate
+    WHERE candidate.oid IN (SELECT role_oid FROM settable_roles)
+  LOOP
+    IF principal.oid <> runtime_role_oid AND (
+      principal.rolsuper OR principal.rolcreatedb OR principal.rolcreaterole
+      OR principal.rolreplication OR principal.rolbypassrls
+      OR pg_has_role(principal.oid, owner_role_oid, 'MEMBER')
+      OR pg_has_role(principal.oid, migrator_role_oid, 'MEMBER')
+      OR EXISTS (
+        SELECT 1 FROM pg_roles elevated
+        WHERE (elevated.rolsuper OR elevated.rolcreatedb OR elevated.rolcreaterole
+          OR elevated.rolreplication OR elevated.rolbypassrls)
+          AND pg_has_role(principal.oid, elevated.oid, 'MEMBER')
+      )
+    ) THEN
+      RAISE EXCEPTION 'CI finance runtime principal inherits an elevated role'
+        USING ERRCODE = '42501';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM pg_database database_role
+      WHERE database_role.datname = current_database() AND database_role.datdba = principal.oid
+    ) OR EXISTS (
+      SELECT 1 FROM pg_namespace schema_role
+      WHERE schema_role.oid = finance_schema_oid AND schema_role.nspowner = principal.oid
+    ) OR EXISTS (
+      SELECT 1 FROM pg_class object_role
+      WHERE object_role.relnamespace = finance_schema_oid AND object_role.relowner = principal.oid
+    ) OR EXISTS (
+      SELECT 1 FROM pg_proc function_role
+      WHERE function_role.pronamespace = finance_schema_oid AND function_role.proowner = principal.oid
+    ) OR EXISTS (
+      SELECT 1 FROM pg_type type_role
+      WHERE type_role.typnamespace = finance_schema_oid AND type_role.typowner = principal.oid
+    ) THEN
+      RAISE EXCEPTION 'CI finance runtime principal owns a database object'
+        USING ERRCODE = '42501';
+    END IF;
+
+    IF has_schema_privilege(principal.oid, finance_schema_oid, 'CREATE') THEN
+      RAISE EXCEPTION 'CI finance runtime principal has schema creation privilege'
+        USING ERRCODE = '42501';
+    END IF;
+
+    IF has_database_privilege(principal.oid, current_database(), 'CREATE') THEN
+      RAISE EXCEPTION 'CI finance runtime principal has database schema creation privilege'
+        USING ERRCODE = '42501';
+    END IF;
+
+    FOR relation IN
+      SELECT object.oid, object.relname
+      FROM pg_class object
+      WHERE object.relnamespace = finance_schema_oid
+        AND object.relkind IN ('r', 'p', 'v', 'm', 'f')
+    LOOP
+      IF (has_table_privilege(principal.oid, relation.oid, 'SELECT')
+            AND NOT relation.relname = ANY(allowed_select))
+        OR (has_table_privilege(principal.oid, relation.oid, 'INSERT')
+            AND NOT relation.relname = ANY(allowed_insert))
+        OR has_table_privilege(principal.oid, relation.oid, 'DELETE')
+        OR has_table_privilege(principal.oid, relation.oid, 'TRUN' || 'CATE')
+        OR has_table_privilege(principal.oid, relation.oid, 'REFERENCES')
+        OR has_table_privilege(principal.oid, relation.oid, 'TRIGGER') THEN
+        RAISE EXCEPTION 'CI finance runtime principal has an unreviewed relation privilege'
+          USING ERRCODE = '42501';
+      END IF;
+
+      FOR column_privilege IN
+        SELECT attribute.attnum, attribute.attname
+        FROM pg_attribute attribute
+        WHERE attribute.attrelid = relation.oid AND attribute.attnum > 0 AND NOT attribute.attisdropped
+      LOOP
+        IF (has_column_privilege(principal.oid, relation.oid, column_privilege.attnum, 'SELECT')
+              AND NOT relation.relname = ANY(allowed_select))
+          OR (has_column_privilege(principal.oid, relation.oid, column_privilege.attnum, 'INSERT')
+              AND NOT relation.relname = ANY(allowed_insert))
+          OR (has_column_privilege(principal.oid, relation.oid, column_privilege.attnum, 'UPDATE')
+              AND NOT (
+                relation.relname = 'financial_source_revision_heads'
+                OR (relation.relname = 'financial_ledger_identity_bindings'
+                  AND column_privilege.attname = 'first_event_id')
+              ))
+          OR has_column_privilege(principal.oid, relation.oid, column_privilege.attnum, 'REFERENCES') THEN
+          RAISE EXCEPTION 'CI finance runtime principal has an unreviewed column privilege'
+            USING ERRCODE = '42501';
+        END IF;
+      END LOOP;
+    END LOOP;
+
+    IF EXISTS (
+      SELECT 1 FROM pg_class sequence_obj
+      CROSS JOIN LATERAL aclexplode(COALESCE(sequence_obj.relacl, acldefault('S', sequence_obj.relowner))) privilege
+      WHERE sequence_obj.relnamespace = finance_schema_oid AND sequence_obj.relkind = 'S'
+        AND privilege.grantee <> 0
+        AND privilege.privilege_type IN ('USAGE', 'SELECT', 'UPDATE')
+        AND (privilege.grantee = principal.oid OR pg_has_role(principal.oid, privilege.grantee, 'MEMBER'))
+    ) THEN
+      RAISE EXCEPTION 'CI finance runtime principal has an unreviewed sequence privilege'
+        USING ERRCODE = '42501';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM pg_proc function_obj
+      CROSS JOIN LATERAL aclexplode(COALESCE(function_obj.proacl, acldefault('f', function_obj.proowner))) privilege
+      WHERE function_obj.pronamespace = finance_schema_oid AND privilege.privilege_type = 'EXECUTE'
+        AND privilege.grantee <> 0
+        AND (privilege.grantee = principal.oid OR pg_has_role(principal.oid, privilege.grantee, 'MEMBER'))
+    ) THEN
+      RAISE EXCEPTION 'CI finance runtime principal has an unreviewed function privilege'
+        USING ERRCODE = '42501';
+    END IF;
+  END LOOP;
+
+  -- A runtime principal with ADMIN OPTION on any membership can delegate an
+  -- existing role into the runtime path. Detect every nested path, not only
+  -- the direct grant of ci_finance_runtime to the host login.
+  IF EXISTS (
+    WITH RECURSIVE runtime_members(member_oid, admin_option) AS (
+      SELECT membership.member, membership.admin_option
+      FROM pg_auth_members membership WHERE membership.roleid = runtime_role_oid
+      UNION ALL
+      SELECT membership.member, runtime_members.admin_option OR membership.admin_option
+      FROM pg_auth_members membership
+      JOIN runtime_members ON membership.roleid = runtime_members.member_oid
+    ), membership_paths(principal_oid, role_oid, admin_option) AS (
+      SELECT runtime_members.member_oid, membership.roleid, membership.admin_option
+      FROM runtime_members
+      JOIN pg_auth_members membership ON membership.member = runtime_members.member_oid
+      UNION ALL
+      SELECT membership_paths.principal_oid, membership.roleid,
+             membership_paths.admin_option OR membership.admin_option
+      FROM membership_paths
+      JOIN pg_auth_members membership ON membership.member = membership_paths.role_oid
+    )
+    SELECT 1 FROM membership_paths
+    WHERE membership_paths.admin_option
+  ) THEN
+    RAISE EXCEPTION 'CI finance runtime membership has an administrator'
+      USING ERRCODE = '42501';
+  END IF;
+END
+$runtime_boundary$;
 
 GRANT ci_finance_owner TO ci_finance_migrator;
 
@@ -99,7 +309,8 @@ AS $sensitive$
       (cardinality(path) = 4 AND path[1] = 'usage' AND path[2] = 'units'
         AND path[4] IN ('name', 'includedIn')
         AND node #>> '{}' = ANY(ARRAY[
-          'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+          'token', 'tokens', 'input', 'output', 'reasoning', 'input_tokens', 'output_tokens', 'cached_tokens',
+          'uncached_tokens', 'reasoning_tokens', 'cache_read_tokens', 'cache_write_tokens',
           'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
           'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
           'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
@@ -107,13 +318,14 @@ AS $sensitive$
         ]::text[]))
       OR (cardinality(path) = 3 AND path[1] = 'usage' AND path[2] = 'missingFields'
         AND node #>> '{}' = ANY(ARRAY[
-          'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+          'token', 'tokens', 'input', 'output', 'reasoning', 'input_tokens', 'output_tokens', 'cached_tokens',
+          'uncached_tokens', 'reasoning_tokens', 'cache_read_tokens', 'cache_write_tokens',
           'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
           'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
           'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
           'unit', 'units', 'page', 'pages', 'row', 'rows', 'record', 'records', 'character', 'characters', 'credit', 'credits',
-          'amount', 'currency', 'source_reference', 'provider_reference', 'pricing_reference', 'input', 'output',
-          'reasoning', 'image_count', 'request_count', 'duration'
+          'amount', 'currency', 'source_reference', 'provider_reference', 'pricing_reference',
+          'all', 'usage', 'providerAttemptId', 'billableAttemptId', 'image_count', 'request_count', 'duration'
         ]::text[]))
     )
     AND (node #>> '{}') ~* '(https?://|[?#@]|(^|[^[:alnum:]])(prompt|password|passwd|secret|authorization|bearer|private|address|email|token)([^[:alnum:]]|$)|(^|[^[:alnum:]])([0-9]{1,3}\.){3}[0-9]{1,3}([^[:alnum:]]|$))'
@@ -148,7 +360,8 @@ BEGIN
         AND (quantity.unit_name ~* '(https?://|[?#@[:space:]]|prompt|password|passwd|secret|authorization|bearer|private|address|email|(^|[^[:alnum:]])token([^[:alnum:]]))'
           OR quantity.unit_name !~ '^[a-z][a-z0-9_]{0,63}$')
         AND quantity.unit_name NOT IN (
-          'token', 'tokens', 'input_tokens', 'output_tokens', 'cached_tokens', 'uncached_tokens', 'reasoning_tokens',
+          'token', 'tokens', 'input', 'output', 'reasoning', 'input_tokens', 'output_tokens', 'cached_tokens',
+          'uncached_tokens', 'reasoning_tokens', 'cache_read_tokens', 'cache_write_tokens',
           'request', 'requests', 'call', 'calls', 'job', 'jobs', 'task', 'tasks', 'invocation', 'invocations',
           'image', 'images', 'byte', 'bytes', 'kilobytes', 'megabytes', 'gigabytes', 'millisecond', 'milliseconds',
           'second', 'seconds', 'minute', 'minutes', 'hour', 'hours', 'day', 'days', 'count', 'item', 'items',
