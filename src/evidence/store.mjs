@@ -4245,10 +4245,16 @@ export function createEvidenceStore(options) {
   }
 
   function sameReceiptBinding(value, binding) {
-    return value && value.schemaVersion === PRIVATE_RECEIPT_SCHEMA_VERSION
-      && value.tenantId === binding.tenantId && value.runId === binding.runId
-      && value.configHash === binding.configHash
-      && JSON.stringify(value.candidate) === JSON.stringify(binding.candidate);
+    if (!value || value.schemaVersion !== PRIVATE_RECEIPT_SCHEMA_VERSION
+      || value.tenantId !== binding.tenantId || value.runId !== binding.runId
+      || value.configHash !== binding.configHash
+      || JSON.stringify(value.candidate) !== JSON.stringify(binding.candidate)) return false;
+    if (binding.claim === undefined) return true;
+    const claim = ownDataRecord(value.claim, new Set(['claimKey', 'workerId', 'leaseToken']));
+    return claim !== null
+      && claim.claimKey === binding.claim.claimKey
+      && claim.workerId === binding.claim.workerId
+      && claim.leaseToken === binding.claim.leaseToken;
   }
 
   async function beginPrivateRunReceipt(scope, inputValue, request, signal) {

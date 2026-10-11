@@ -403,6 +403,7 @@ test('separate Node processes serialize the first commit and return one immutabl
 test('SQLite busy transactions never reap a live writer and a killed staged commit leaves no partial evidence', async (t) => {
   const { directory, store, createPermit, sourceText } = await createHarness(t, { lockTimeoutMs: 100 });
   const scope = await store.scopeForAuthenticatedRequest(request('tenant-a'));
+  await store.integritySnapshot(scope);
   const seed = await ingest(store, scope, sourceText, createPermit);
   const before = await store.integritySnapshot(scope);
   const holdMarker = path.join(directory, 'held-writer');
@@ -589,6 +590,65 @@ test('finalizing a missing private receipt cannot create a replayable completion
   } finally {
     database.close();
   }
+});
+
+test('private receipt finalization requires the exact claim captured by its pending receipt', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const binding = {
+    runId: 'receipt-exact-claim-binding',
+    configHash: '9'.repeat(64),
+    candidate: {
+      candidateId: '8'.repeat(64),
+      canonicalUrl: 'https://events.example.test/receipt-exact-claim-binding',
+      depth: 0,
+      seed: true,
+      sourceRefs: [],
+    },
+    claim: { claimKey: 'claim-original', workerId: 'worker-original', leaseToken: randomUUID() },
+  };
+  const completion = {
+    completionKey: 'receipt-exact-claim-completion',
+    outcome: 'failed',
+    suggestions: [],
+    limitations: [],
+    identity: { entityCandidates: [], occurrenceCandidates: [], transitionLinks: [], unresolvedTransitions: [] },
+  };
+  const selection = { evidence: [], facts: [] };
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scope, binding, request('tenant-a')),
+    { state: 'pending', created: true });
+
+  const changedClaims = [
+    { ...binding.claim, claimKey: 'claim-changed' },
+    { ...binding.claim, workerId: 'worker-changed' },
+    { ...binding.claim, leaseToken: randomUUID() },
+  ];
+  for (const claim of changedClaims) {
+    await assert.rejects(harness.store.finalizePrivateRunReceipt(scope, {
+      ...binding, claim, completion, selection,
+    }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INTEGRITY');
+    const stillPending = await harness.store.readPrivateRunReceipt(scope, {
+      runId: binding.runId, configHash: binding.configHash, candidate: binding.candidate,
+    }, request('tenant-a'));
+    assert.equal(stillPending.state, 'pending');
+    assert.equal(stillPending.claim.claimKey, binding.claim.claimKey);
+    assert.equal(stillPending.claim.workerId, binding.claim.workerId);
+    assert.equal(stillPending.claim.leaseToken, binding.claim.leaseToken,
+      'mismatched finalization cannot replace the original pending claim');
+  }
+
+  assert.deepEqual(await harness.store.finalizePrivateRunReceipt(scope, {
+    ...binding, completion, selection,
+  }, request('tenant-a')), { state: 'complete' });
+  const complete = await harness.store.readPrivateRunReceipt(scope, {
+    runId: binding.runId, configHash: binding.configHash, candidate: binding.candidate,
+  }, request('tenant-a'));
+  assert.equal(complete.state, 'complete');
+  assert.equal(complete.claim.claimKey, binding.claim.claimKey);
+  assert.equal(complete.claim.workerId, binding.claim.workerId);
+  assert.equal(complete.claim.leaseToken, binding.claim.leaseToken,
+    'only the original claim can complete and replay this receipt');
 });
 
 test('guarded receipt begin validates the extension schema before inserting its first row', async (t) => {

@@ -913,6 +913,11 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
     return h.evidenceStore.ingestEvidence(...args);
   };
   const runId = 'private-deadline-retention';
+  // Keep cold tenant schema creation outside the run budget; this case targets
+  // the stalled retention callback after a real response has been completed.
+  await h.evidenceStore.integritySnapshot(h.evidenceScope);
+  await assert.rejects(h.frontier.getSnapshot(h.scope, runId), (error) => error?.code === 'FRONTIER_NOT_FOUND');
+  const startedAt = Date.now();
   const running = runPrivateRetrieval(h.makeInput({
     runId,
     server,
@@ -921,7 +926,20 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
     store,
     retentionHandleFor() { retentionStarted(); return pendingRetention; },
   }));
-  await retentionCallbackStarted;
+  const runOutcome = running.then(
+    (result) => ({ kind: 'returned', result }),
+    (error) => ({ kind: 'rejected', error }),
+  );
+  const phase = await Promise.race([
+    retentionCallbackStarted.then(() => ({ kind: 'retention-callback-started' })),
+    runOutcome,
+  ]);
+  if (phase.kind !== 'retention-callback-started') {
+    const outcome = phase.kind === 'returned'
+      ? JSON.stringify({ status: phase.result.status, limitations: phase.result.limitations })
+      : String(phase.error);
+    assert.fail(`run ended before final retention callback; ingestCalls=${ingestCalls}; elapsedMs=${Date.now() - startedAt}; outcome=${outcome}`);
+  }
   const deadlineObservedAt = Date.now();
   const result = await running;
   assert.ok(Date.now() - deadlineObservedAt < 2_000, 'the absolute deadline releases a stalled retention callback promptly');
@@ -1078,6 +1096,7 @@ test('the whole-run deadline withholds a final materialization that never return
     materializationStarted();
     return new Promise(() => {});
   };
+  const startedAt = Date.now();
   const running = runPrivateRetrieval(h.makeInput({
     runId,
     server,
@@ -1085,7 +1104,20 @@ test('the whole-run deadline withholds a final materialization that never return
     seeds: [{ url: sourceUrl('/event') }],
     limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: 1_000 },
   }));
-  await finalMaterializationStarted;
+  const runOutcome = running.then(
+    (result) => ({ kind: 'returned', result }),
+    (error) => ({ kind: 'rejected', error }),
+  );
+  const phase = await Promise.race([
+    finalMaterializationStarted.then(() => ({ kind: 'final-materialization-started' })),
+    runOutcome,
+  ]);
+  if (phase.kind !== 'final-materialization-started') {
+    const outcome = phase.kind === 'returned'
+      ? JSON.stringify({ status: phase.result.status, limitations: phase.result.limitations })
+      : String(phase.error);
+    assert.fail(`run ended before final materialization; calls=${materializeCalls}; elapsedMs=${Date.now() - startedAt}; outcome=${outcome}`);
+  }
   const deadlineObservedAt = Date.now();
   const result = await running;
   assert.ok(Date.now() - deadlineObservedAt < 2_000, 'the final-release phase remains covered after watcher drain');
