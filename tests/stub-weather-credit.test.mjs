@@ -93,4 +93,8 @@ test("the back's fact list credits the weather it lists, and not a programme", (
   const html = render(event([weather({ kept: false }), ...many], generic), "researched", true);
   assert.equal(count(html), 1);
   assert.ok(html.includes("Fact 6") && !html.includes("Fact 7"), "eight facts plus the credit");
+  // Weather that would take the last row, with no room for its credit, stays off the back.
+  const last = render(event([...many.slice(0, 8), weather({ kept: false })], generic), "researched", true);
+  assert.equal(count(last), 0);
+  assert.ok(!last.includes("17°C · rain") && last.includes("Fact 7"), "eight facts, no uncredited weather");
 });

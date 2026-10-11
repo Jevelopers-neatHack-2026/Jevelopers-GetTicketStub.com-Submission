@@ -493,9 +493,11 @@ function BackList({ c }: { c: Ctx }) {
     );
   }
   const shown = e.programme?.length ? [] : e.facts.filter((f) => c.show(f.id));
-  // The list clips at its last row, so the credit takes a row of the cap rather than overflowing.
-  const credited = shown.slice(0, cap - 1).some(fromOpenMeteo(c.stub));
-  const listed = shown.slice(0, credited ? cap - 1 : cap);
+  // The list clips at its last row, so the credit takes a row of the cap rather than overflowing. Weather that would
+  // land in that last row, with no room left for its credit, is left off the back instead.
+  const om = fromOpenMeteo(c.stub);
+  const credited = shown.slice(0, cap - 1).some(om);
+  const listed = shown.slice(0, credited || (shown[cap - 1] && om(shown[cap - 1])) ? cap - 1 : cap);
   const items = e.programme?.length ? e.programme.slice(0, cap) : listed.map((f) => f.label);
   return (
     <ul className={s.backList}>
