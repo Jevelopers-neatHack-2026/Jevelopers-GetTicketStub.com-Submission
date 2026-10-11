@@ -8,11 +8,17 @@ rendered pixels, embedded office metadata, audio/video, or linked destinations.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import posixpath
 import re
+import subprocess
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
+from xml.etree import ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +30,67 @@ SPONSOR_REFS = {
     "SPN-03": "SPN-CFOAI-001",
 }
 SPONSORS = {"SPN-01": "Neatlogs", "SPN-02": "Entire", "SPN-03": "CFO.ai"}
+EXPECTED_VISUAL_COPY_SOURCES = {
+    "demo/diagrams/demo-workflow.svg": "DEMO-WORKFLOW-DIAGRAM-001",
+    "demo/diagrams/demo-workflow-alt-text.md": "DEMO-WORKFLOW-DIAGRAM-001",
+    "demo/screenshots/synthetic-stub-mockup.svg": "DEMO-SCREENSHOT-SET-001",
+    "demo/screenshots/synthetic-stub-alt-text.md": "DEMO-SCREENSHOT-SET-001",
+    "demo/deck/concept-overview.html": "DEMO-DECK-SUPPORT-001",
+    "launch/assets/x-submission-key-visual.svg": "LAUNCH-X-KEY-VISUAL-001",
+    "launch/assets/x-submission-alt-text.md": "LAUNCH-X-ALT-TEXT-001",
+    "examples/synthetic/redaction-after-alt-text.md": "PROV-REDACTION-AFTER-ALT-001",
+}
+STATIC_HTML_COMPOSITION_ASSET_IDS = {"DEMO-DECK-SUPPORT-001"}
+SELECTABLE_COLLATERAL_ASSET_IDS = {
+    "DEMO-WORKFLOW-DIAGRAM-001",
+    "DEMO-SCREENSHOT-SET-001",
+    "DEMO-DECK-SUPPORT-001",
+    "LAUNCH-X-KEY-VISUAL-001",
+    "LAUNCH-X-ALT-TEXT-001",
+}
+DEFAULT_SUBMISSION_SELECTION = sorted(SELECTABLE_COLLATERAL_ASSET_IDS)
+REQUIRED_SUBMISSION_ASSET_IDS = (
+    "DEMO-EXPLAINER-001",
+    "DEMO-SUBMISSION-NARRATIVE-001",
+    "DEMO-SUBMISSION-VIDEO-001",
+    "LAUNCH-X-COPY-001",
+    "LAUNCH-X-CTA-001",
+    "LAUNCH-X-KEY-VISUAL-001",
+    "LAUNCH-X-ALT-TEXT-001",
+)
+REQUIRED_SUBMISSION_CLAIM_IDS = (
+    "CLAIM-PRODUCT-CAPABILITY-001",
+    "CLAIM-EVAL02-COMPARISON-001",
+    "CLAIM-SPN-01-NEATLOGS-001",
+    "CLAIM-SPN-02-ENTIRE-001",
+    "CLAIM-SPN-03-CFO-001",
+)
+REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS = (
+    "EVAL-02",
+    "EVAL-03",
+    "EVAL-04",
+    "SPN-01",
+    "SPN-02",
+    "SPN-03",
+)
+LIFECYCLE_RELEASE_ELIGIBILITY = {
+    "draft": False,
+    "reviewed": False,
+    "released": True,
+    "deprecated": False,
+    "not_applicable": False,
+}
+COMPOSABLE_SOURCE_KINDS = {
+    "editable_visual_source",
+    "synthetic_mockup_source",
+    "visual_export",
+    "static_html_rehearsal_support",
+}
+ACCESSIBLE_ALTERNATIVE_KINDS = {
+    "accessible_text_alternative",
+    "accessible_synthetic_fixture_alternative",
+}
+LOCAL_MEDIA_SUFFIXES = {".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"}
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 RISK_PATTERNS = [
@@ -42,6 +109,149 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{path}: top-level JSON value must be an object")
     return value
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _sha256_path(path: Path) -> str:
+    return _sha256_bytes(path.read_bytes())
+
+
+def _is_tracked_repo_file(path_text: str) -> bool:
+    candidate = Path(path_text)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return False
+    local_path = ROOT / candidate
+    if local_path.is_symlink() or not local_path.is_file():
+        return False
+    try:
+        local_path.resolve(strict=True).relative_to(ROOT.resolve())
+    except (OSError, RuntimeError, ValueError):
+        return False
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", path_text], cwd=ROOT,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def _pinned_file(revision: str, path: str) -> bytes | None:
+    """Read a path from a local immutable commit without trusting the worktree."""
+    result = subprocess.run(
+        ["git", "show", f"{revision}:{path}"],
+        cwd=ROOT,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+class _CopyHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.stack: list[str] = []
+        self.skipped = 0
+        self.units: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        self.stack.append(tag)
+        if tag in {"style", "script"}:
+            self.skipped += 1
+        if tag == "img" and values.get("alt"):
+            self.units.append(("html-alt", _norm(values["alt"] or "")))
+        if values.get("aria-label"):
+            self.units.append(("html-aria", _norm(values["aria-label"] or "")))
+        if values.get("title"):
+            self.units.append(("html-title-attribute", _norm(values["title"] or "")))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"style", "script"} and self.skipped:
+            self.skipped -= 1
+        if tag in self.stack:
+            index = len(self.stack) - 1 - self.stack[::-1].index(tag)
+            self.stack = self.stack[:index]
+
+    def handle_data(self, data: str) -> None:
+        text = _norm(data)
+        if not text or self.skipped:
+            return
+        surface = "html-document-title" if self.stack and self.stack[-1] == "title" else "html-visible-text"
+        self.units.append((surface, text))
+
+
+class _HTMLDependencyParser(HTMLParser):
+    """Collect local media and accessible-alternative links consumed by static HTML."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.references: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if tag == "img" and values.get("src"):
+            self.references.append(("embedded", values["src"] or ""))
+        elif tag in {"audio", "iframe", "source", "video"} and values.get("src"):
+            self.references.append(("embedded", values["src"] or ""))
+        elif tag == "object" and values.get("data"):
+            self.references.append(("embedded", values["data"] or ""))
+        elif tag == "a" and values.get("href"):
+            href = values["href"] or ""
+            suffix = Path(urlsplit(href).path).suffix.lower()
+            if suffix == ".md":
+                self.references.append(("alternative", href))
+            elif suffix in LOCAL_MEDIA_SUFFIXES:
+                self.references.append(("embedded", href))
+
+
+def _markdown_copy_units(text: str) -> list[tuple[str, str]]:
+    units: list[tuple[str, str]] = []
+    for block in re.split(r"\n\s*\n", text.replace("\r\n", "\n")):
+        rest: list[str] = []
+        for line in block.strip().splitlines():
+            heading = re.match(r"^#{1,6}\s+(.+?)\s*#*$", line.strip())
+            if heading:
+                units.append(("markdown-heading", _norm(heading.group(1))))
+            else:
+                rest.append(line)
+        if rest:
+            paragraph = _norm("\n".join(rest))
+            if paragraph:
+                units.append(("markdown-paragraph", paragraph))
+    return units
+
+
+def _extract_copy_units(path: Path) -> list[tuple[str, str]]:
+    suffix = path.suffix.lower()
+    if suffix == ".svg":
+        root = ET.parse(path).getroot()
+        units: list[tuple[str, str]] = []
+        for element in root.iter():
+            tag = element.tag.split("}")[-1]
+            text = _norm("".join(element.itertext()))
+            if not text:
+                continue
+            if tag == "title":
+                units.append(("svg-accessible-title", text))
+            elif tag == "desc":
+                units.append(("svg-accessible-description", text))
+            elif tag == "text":
+                units.append(("svg-visible-text", text))
+        return units
+    if suffix == ".html":
+        parser = _CopyHTMLParser()
+        parser.feed(path.read_text(encoding="utf-8"))
+        return parser.units
+    if suffix == ".md":
+        return _markdown_copy_units(path.read_text(encoding="utf-8"))
+    return []
 
 
 def _pinned_revision(source: dict[str, Any]) -> bool:
@@ -191,10 +401,27 @@ def validate_claims(ledger: dict[str, Any]) -> list[str]:
             continue
         errors.extend(f"{identifier}: {problem}" for problem in _unsafe_positive_copy(row["exactText"]))
         availability = row.get("availability", {})
-        if row.get("wordingReview") == "approved" and availability.get("status") != "confirmed_for_pinned_documentation_only":
-            errors.append(f"{identifier}: CTA wording cannot be approved with unavailable/unconfirmed destination")
-        if row.get("wordingReview") == "approved" and row.get("routeReview") != "confirmed_by_assigned_supervisor_for_repository_docs_only":
-            errors.append(f"{identifier}: CTA cannot be approved without destination-owner confirmation")
+        if row.get("wordingReview") == "approved":
+            if not row.get("reviewer") or not row.get("reviewDate"):
+                errors.append(f"{identifier}: approved CTA wording requires reviewer and reviewDate")
+            if row.get("routeReview") == "confirmed_by_assigned_supervisor_for_repository_docs_only":
+                if availability.get("status") != "confirmed_for_pinned_documentation_only":
+                    errors.append(f"{identifier}: CTA wording cannot be approved with unavailable/unconfirmed destination")
+                if not row.get("routeReviewer") or not row.get("routeReviewDate"):
+                    errors.append(f"{identifier}: confirmed documentation route requires reviewer and routeReviewDate")
+            elif row.get("routeReview") == "confirmed_static_repository_file_only":
+                target = row.get("target")
+                if (
+                    row.get("destinationClass") != "repository_accessible_text_alternative"
+                    or availability.get("status") != "confirmed_local_repository_file_only"
+                    or not isinstance(target, str)
+                    or not _is_tracked_repo_file(target)
+                ):
+                    errors.append(f"{identifier}: confirmed local-file CTA must name an existing repository text alternative")
+                if not row.get("routeReviewer") or not row.get("routeReviewDate"):
+                    errors.append(f"{identifier}: confirmed local-file route requires reviewer and routeReviewDate")
+            else:
+                errors.append(f"{identifier}: CTA cannot be approved without a confirmed destination-owner route")
         if row.get("destinationClass") != "none" and availability.get("status") == "confirmed_for_pinned_documentation_only":
             target = row.get("target")
             if not isinstance(target, str) or not target.startswith("https://github.com/"):
@@ -237,6 +464,24 @@ def validate_provenance(register: dict[str, Any]) -> list[str]:
             or (isinstance(revision, str) and SHA256.fullmatch(revision))
         ):
             errors.append(f"{identifier}: source revision must be a commit or SHA-256 content digest")
+        if source.get("repo") == "Jevelopers-neatHack-2026/marketing-material":
+            source_path = source.get("path")
+            local_path = ROOT / str(source_path)
+            if not local_path.is_file():
+                errors.append(f"{identifier}: exact provenance source file is missing: {source_path}")
+            else:
+                actual_digest = _sha256_path(local_path)
+                if row.get("checksum", {}).get("value") != actual_digest:
+                    errors.append(f"{identifier}: SHA-256 checksum does not match exact source file {source_path}")
+                if isinstance(revision, str) and HEX40.fullmatch(revision):
+                    pinned = _pinned_file(revision, str(source_path))
+                    if pinned is None:
+                        errors.append(f"{identifier}: source path is absent at pinned commit {revision}")
+                    elif _sha256_bytes(pinned) != actual_digest:
+                        errors.append(f"{identifier}: pinned source commit does not contain this exact file revision")
+                elif isinstance(revision, str) and SHA256.fullmatch(revision):
+                    if revision.removeprefix("sha256:") != actual_digest:
+                        errors.append(f"{identifier}: content-digest source pin does not match exact source file")
         permission = row.get("permission", {})
         permission_state = permission.get("status")
         publishability = row.get("publishability")
@@ -256,6 +501,177 @@ def validate_provenance(register: dict[str, Any]) -> list[str]:
                 errors.append(f"{identifier}: public approval requires an explicit destination")
     if "PROV-SYNTHETIC-CANARY-001" not in ids:
         errors.append("required synthetic canary provenance record is missing")
+    errors.extend(validate_provenance_lineage(register))
+    errors.extend(validate_provenance_composition(register))
+    return errors
+
+
+def _local_composition_target(source_path: str, reference: str) -> str | None:
+    """Resolve an in-repository HTML reference while ignoring external URLs/fragments."""
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc or not parsed.path:
+        return None
+    path = unquote(parsed.path)
+    if path.startswith("/"):
+        target = posixpath.normpath(path.lstrip("/"))
+    else:
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(source_path), path))
+    if target in {"", ".", ".."} or target.startswith("../"):
+        raise ValueError("local reference escapes the repository root")
+    return target
+
+
+def validate_provenance_composition(register: dict[str, Any]) -> list[str]:
+    """Validate HTML composition edges separately from source/derivative lineage."""
+    errors: list[str] = []
+    rows = [row for row in register.get("records", []) if isinstance(row, dict)]
+    by_id = {row.get("assetId"): row for row in rows if isinstance(row.get("assetId"), str)}
+    by_path: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        path = row.get("source", {}).get("path")
+        if isinstance(path, str):
+            by_path.setdefault(path, []).append(row)
+
+    graph: dict[str, set[str]] = {}
+    for identifier, row in by_id.items():
+        raw_dependencies = row.get("compositionDependencies", [])
+        if not isinstance(raw_dependencies, list) or not all(isinstance(item, str) for item in raw_dependencies):
+            errors.append(f"{identifier}: compositionDependencies must be an array of provenance record IDs")
+            raw_dependencies = []
+        if len(raw_dependencies) != len(set(raw_dependencies)):
+            errors.append(f"{identifier}: compositionDependencies must be unique")
+        graph[identifier] = set(raw_dependencies)
+        if identifier in graph[identifier]:
+            errors.append(f"{identifier}: composition cannot depend on itself")
+        for dependency_id in raw_dependencies:
+            if dependency_id not in by_id:
+                errors.append(f"{identifier}: unknown composition dependency {dependency_id}")
+
+        source_path = row.get("source", {}).get("path")
+        if row.get("kind") != "static_html_rehearsal_support":
+            if identifier in STATIC_HTML_COMPOSITION_ASSET_IDS:
+                errors.append(f"{identifier}: canonical HTML composition must retain static_html_rehearsal_support kind")
+            continue
+        if not isinstance(source_path, str) or not (ROOT / source_path).is_file():
+            errors.append(f"{identifier}: static HTML composition source is missing")
+            continue
+        parser = _HTMLDependencyParser()
+        try:
+            parser.feed((ROOT / source_path).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"{identifier}: HTML composition references cannot be read: {exc}")
+            continue
+
+        actual_dependencies: set[str] = set()
+        for dependency_kind, reference in parser.references:
+            try:
+                target_path = _local_composition_target(source_path, reference)
+            except ValueError as exc:
+                errors.append(f"{identifier}: unsafe HTML composition reference {reference!r}: {exc}")
+                continue
+            if target_path is None:
+                continue
+            if dependency_kind == "alternative":
+                candidates = [
+                    item for item in by_path.get(target_path, [])
+                    if item.get("kind") in ACCESSIBLE_ALTERNATIVE_KINDS
+                ]
+            else:
+                candidates = [
+                    item for item in by_path.get(target_path, [])
+                    if item.get("kind") in COMPOSABLE_SOURCE_KINDS
+                ]
+            if len(candidates) != 1:
+                errors.append(
+                    f"{identifier}: HTML {dependency_kind} reference {target_path} must resolve to exactly one matching provenance record"
+                )
+                continue
+            actual_dependencies.add(candidates[0]["assetId"])
+
+        declared = set(raw_dependencies)
+        for missing in sorted(actual_dependencies - declared):
+            errors.append(f"{identifier}: compositionDependencies omits consumed HTML source {missing}")
+        for stale in sorted(declared - actual_dependencies):
+            errors.append(f"{identifier}: composition dependency {stale} is not a consumed local HTML source")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(identifier: str) -> None:
+        if identifier in visiting:
+            errors.append(f"{identifier}: provenance composition graph contains a cycle")
+            return
+        if identifier in visited:
+            return
+        visiting.add(identifier)
+        for dependency_id in graph.get(identifier, set()):
+            if dependency_id in by_id:
+                visit(dependency_id)
+        visiting.remove(identifier)
+        visited.add(identifier)
+
+    for identifier in graph:
+        visit(identifier)
+    return errors
+
+
+def validate_provenance_lineage(register: dict[str, Any]) -> list[str]:
+    """Require known, reciprocal source-to-derivative edges and an acyclic graph."""
+    errors: list[str] = []
+    rows = [row for row in register.get("records", []) if isinstance(row, dict)]
+    by_id = {row.get("assetId"): row for row in rows if isinstance(row.get("assetId"), str)}
+    parents: dict[str, set[str]] = {}
+    children: dict[str, set[str]] = {}
+    for identifier, row in by_id.items():
+        lineage = row.get("lineage", {})
+        if not isinstance(lineage, dict):
+            errors.append(f"{identifier}: lineage must be an object")
+            continue
+        raw_parents = lineage.get("derivedFrom", [])
+        raw_children = lineage.get("derivatives", [])
+        if not isinstance(raw_parents, list) or not all(isinstance(item, str) for item in raw_parents):
+            errors.append(f"{identifier}: lineage.derivedFrom must be an array of IDs")
+            raw_parents = []
+        if not isinstance(raw_children, list) or not all(isinstance(item, str) for item in raw_children):
+            errors.append(f"{identifier}: lineage.derivatives must be an array of IDs")
+            raw_children = []
+        if len(raw_parents) != len(set(raw_parents)) or len(raw_children) != len(set(raw_children)):
+            errors.append(f"{identifier}: lineage references must be unique")
+        parents[identifier] = set(raw_parents)
+        children[identifier] = set(raw_children)
+        if identifier in parents[identifier] or identifier in children[identifier]:
+            errors.append(f"{identifier}: lineage cannot reference itself")
+    for child, source_ids in parents.items():
+        for source_id in source_ids:
+            if source_id not in by_id:
+                errors.append(f"{child}: unknown lineage source {source_id}")
+            elif child not in children.get(source_id, set()):
+                errors.append(f"{child}: lineage source {source_id} does not list this derivative")
+    for source_id, derivative_ids in children.items():
+        for child in derivative_ids:
+            if child not in by_id:
+                errors.append(f"{source_id}: unknown lineage derivative {child}")
+            elif source_id not in parents.get(child, set()):
+                errors.append(f"{source_id}: derivative {child} does not list this source")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(identifier: str) -> None:
+        if identifier in visiting:
+            errors.append(f"{identifier}: provenance lineage contains a cycle")
+            return
+        if identifier in visited:
+            return
+        visiting.add(identifier)
+        for child in children.get(identifier, set()):
+            if child in by_id:
+                visit(child)
+        visiting.remove(identifier)
+        visited.add(identifier)
+
+    for identifier in by_id:
+        visit(identifier)
     return errors
 
 
@@ -310,84 +726,787 @@ def validate_fixture(fixture: dict[str, Any], ledger: dict[str, Any]) -> list[st
     return errors
 
 
-def release_blockers(ledger: dict[str, Any], register: dict[str, Any]) -> list[str]:
-    blockers: list[str] = []
-    if ledger.get("status") != "approved":
-        blockers.append("MM-02 claim ledger is draft/unapproved")
-    for row in ledger.get("claims", []):
-        if row.get("reviewStatus") != "approved":
-            blockers.append(f"{row.get('id')}: exact-copy review is not approved")
-        if not isinstance(row.get("source", {}).get("revision"), str):
-            blockers.append(f"{row.get('id')}: source revision is not immutably pinned")
-        if row.get("state") in {"blocked", "planned", "assumed"}:
-            blockers.append(f"{row.get('id')}: claim state is {row.get('state')}")
-    for row in ledger.get("evidenceClasses", []):
-        if row.get("status") != "approved":
-            blockers.append(f"{row.get('id')}: source evidence remains {row.get('status')}")
-    for row in ledger.get("ctas", []):
-        if row.get("wordingReview") != "approved":
-            blockers.append(f"{row.get('id')}: exact CTA wording is not approved")
-        if row.get("availability", {}).get("status") != "confirmed_for_pinned_documentation_only":
-            blockers.append(f"{row.get('id')}: target availability is not confirmed")
-        if not row.get("target"):
-            blockers.append(f"{row.get('id')}: destination target is missing")
-    if register.get("status") != "approved":
-        blockers.append("MM-05 provenance register is draft/unapproved")
-    for row in register.get("records", []):
-        if row.get("publishability") != "approved":
-            blockers.append(f"{row.get('assetId')}: publishability is {row.get('publishability')}")
-        if row.get("permission", {}).get("status") != "approved":
-            blockers.append(f"{row.get('assetId')}: destination permission is not approved")
-        if not row.get("reviewDate") or not row.get("reviewer"):
-            blockers.append(f"{row.get('assetId')}: independent publication review is missing")
-    blockers.extend(
-        [
-            "MM-05-B: this text/JSON canary does not establish pixel redaction or rendered metadata/notes inspection.",
-            "MM-05-A: no visual/media asset has destination-specific rights approval in this register.",
-        ]
+def validate_visual_copy(
+    ledger: dict[str, Any], handoff: dict[str, Any], register: dict[str, Any]
+) -> list[str]:
+    """Require exact copy, source, claim/CTA, and provenance joins for the visual candidate."""
+    errors: list[str] = []
+    copy_policy = ledger.get("visualCopy")
+    if not isinstance(copy_policy, dict):
+        return ["visual copy mapping register is missing"]
+    handoff_path = copy_policy.get("handoffPath")
+    handoff_commit = copy_policy.get("handoffCommit")
+    if handoff_path != "review/visual/asset-handoff.json":
+        errors.append("visual copy mapping must name the canonical asset handoff path")
+    if not isinstance(handoff_commit, str) or not HEX40.fullmatch(handoff_commit):
+        errors.append("visual copy mapping handoff must pin an immutable commit")
+    else:
+        pinned_handoff = _pinned_file(handoff_commit, handoff_path or "")
+        if pinned_handoff is None or _sha256_bytes(pinned_handoff) != copy_policy.get("handoffSha256"):
+            errors.append("visual asset handoff source pin/checksum is missing or stale")
+    claim_ids = {row.get("id") for row in ledger.get("claims", []) if isinstance(row, dict)}
+    cta_by_id = {row.get("id"): row for row in ledger.get("ctas", []) if isinstance(row, dict)}
+    provenance_by_id = {
+        row.get("assetId"): row
+        for row in register.get("records", [])
+        if isinstance(row, dict)
+    }
+    mappings = copy_policy.get("mappings", [])
+    qualifier_contexts = {
+        row.get("qualifierId"): row
+        for row in copy_policy.get("qualifierContexts", [])
+        if isinstance(row, dict)
+    }
+    if len(qualifier_contexts) != len(copy_policy.get("qualifierContexts", [])):
+        errors.append("visual qualifier context IDs must be present and unique")
+    mapping_ids: set[str] = set()
+    mapped_units: dict[tuple[str, str], set[str]] = {}
+    map_by_asset_path_surface: set[tuple[str, str, str, str]] = set()
+    for row in mappings:
+        if not isinstance(row, dict):
+            errors.append("each visual copy mapping must be an object")
+            continue
+        map_id = row.get("mappingId")
+        if not isinstance(map_id, str) or not map_id:
+            errors.append("each visual copy mapping requires a stable mappingId")
+        elif map_id in mapping_ids:
+            errors.append(f"duplicate visual copy mapping ID {map_id}")
+        else:
+            mapping_ids.add(map_id)
+        asset_id, path_text, surface = row.get("assetId"), row.get("path"), row.get("surface")
+        exact_text, kind = row.get("exactText"), row.get("mappingKind")
+        if not all(isinstance(value, str) and value for value in (asset_id, path_text, surface, exact_text)):
+            errors.append(f"{map_id or 'visual mapping'}: asset, path, surface and exactText are required")
+            continue
+        key = (asset_id, path_text, surface, exact_text)
+        if key in map_by_asset_path_surface:
+            errors.append(f"{map_id}: duplicate exact copy mapping for {path_text}")
+        map_by_asset_path_surface.add(key)
+        path = ROOT / path_text
+        if not path.is_file():
+            errors.append(f"{map_id}: copy source path is missing: {path_text}")
+            continue
+        digest = _sha256_path(path)
+        if digest != row.get("sourceSha256"):
+            errors.append(f"{map_id}: copy source checksum drift for {path_text}")
+        revision = row.get("sourceCommit")
+        if not isinstance(revision, str) or not HEX40.fullmatch(revision):
+            errors.append(f"{map_id}: copy source must pin a full commit")
+        else:
+            pinned = _pinned_file(revision, path_text)
+            if pinned is None or _sha256_bytes(pinned) != row.get("sourceSha256"):
+                errors.append(f"{map_id}: pinned source file is absent or does not match the exact checksum")
+        provenance_id = row.get("provenanceRecordId")
+        record = provenance_by_id.get(provenance_id)
+        if not record:
+            errors.append(f"{map_id}: missing provenance record {provenance_id}")
+        else:
+            if record.get("source", {}).get("path") != path_text:
+                errors.append(f"{map_id}: provenance record {provenance_id} points to a different source path")
+            if record.get("checksum", {}).get("value") != digest:
+                errors.append(f"{map_id}: provenance checksum does not match mapped copy source {path_text}")
+        if "claimId" in row:
+            claim_id = row.get("claimId")
+            if claim_id not in claim_ids:
+                errors.append(f"{map_id}: missing claim {claim_id}")
+            else:
+                claim = next(item for item in ledger["claims"] if item.get("id") == claim_id)
+                if claim.get("allowedWording") != exact_text:
+                    errors.append(f"{map_id}: exact copy differs from {claim_id} allowedWording")
+                if claim.get("requiredQualifier"):
+                    context_id = row.get("contextQualifierId")
+                    context = qualifier_contexts.get(context_id)
+                    if not context:
+                        errors.append(f"{map_id}: required qualifier for {claim_id} has no per-asset context mapping")
+                    else:
+                        if asset_id not in context.get("relatedAssetIds", []):
+                            errors.append(f"{map_id}: qualifier context {context_id} does not cover asset {asset_id}")
+                        qualifier_claims = {
+                            item.get("claimId"): item.get("requiredQualifier")
+                            for item in context.get("requiredClaimQualifiers", [])
+                            if isinstance(item, dict)
+                        }
+                        if qualifier_claims.get(claim_id) != claim.get("requiredQualifier"):
+                            errors.append(f"{map_id}: qualifier context {context_id} omits or changes {claim_id} requiredQualifier")
+        elif "ctaId" in row:
+            cta = cta_by_id.get(row.get("ctaId"))
+            if not cta:
+                errors.append(f"{map_id}: missing CTA {row.get('ctaId')}")
+            elif cta.get("exactText") != exact_text:
+                errors.append(f"{map_id}: exact copy differs from {row.get('ctaId')} exactText")
+        else:
+            errors.append(f"{map_id}: exact copy requires a claimId or ctaId")
+        try:
+            actual = _extract_copy_units(path)
+        except (OSError, ET.ParseError) as exc:
+            errors.append(f"{map_id}: source copy cannot be read: {exc}")
+            continue
+        actual_by_surface: dict[str, set[str]] = {}
+        all_text = []
+        for actual_surface, actual_text in actual:
+            actual_by_surface.setdefault(actual_surface, set()).add(actual_text)
+            all_text.append(actual_text)
+        if kind == "block":
+            mapped_units.setdefault((path_text, surface), set()).add(exact_text)
+            if exact_text not in actual_by_surface.get(surface, set()):
+                errors.append(f"{map_id}: mapped copy is absent or drifted in {path_text} ({surface})")
+        elif kind == "span":
+            if exact_text not in " ".join(all_text) and exact_text not in path.read_text(encoding="utf-8"):
+                errors.append(f"{map_id}: CTA action span is absent or drifted in {path_text}")
+        else:
+            errors.append(f"{map_id}: mappingKind must be block or span")
+
+    mapped_paths = {
+        row.get("path") for row in mappings
+        if isinstance(row, dict) and isinstance(row.get("path"), str)
+    }
+    for path_text, expected_asset_id in EXPECTED_VISUAL_COPY_SOURCES.items():
+        if not (ROOT / path_text).is_file():
+            errors.append(f"expected visual-copy source path is missing: {path_text}")
+        if path_text not in mapped_paths:
+            errors.append(f"expected visual-copy source path has no copy mappings: {path_text}")
+        for row in mappings:
+            if isinstance(row, dict) and row.get("path") == path_text and row.get("assetId") != expected_asset_id:
+                errors.append(f"{path_text}: expected copy owner {expected_asset_id}, found {row.get('assetId')}")
+    for path_text in sorted(mapped_paths - set(EXPECTED_VISUAL_COPY_SOURCES)):
+        errors.append(f"unexpected visual-copy source path is not in the independent source manifest: {path_text}")
+
+    for path_text in sorted(set(EXPECTED_VISUAL_COPY_SOURCES) | mapped_paths):
+        try:
+            actual = _extract_copy_units(ROOT / path_text)
+        except (OSError, ET.ParseError) as exc:
+            errors.append(f"visual source copy cannot be extracted for {path_text}: {exc}")
+            continue
+        for surface in {surface for surface, _ in actual}:
+            actual_set = {text for actual_surface, text in actual if actual_surface == surface}
+            mapped_set = mapped_units.get((path_text, surface), set())
+            for missing in sorted(actual_set - mapped_set):
+                errors.append(f"unmapped copy fragment in {path_text} ({surface}): {missing}")
+            for stale in sorted(mapped_set - actual_set):
+                errors.append(f"stale copy mapping in {path_text} ({surface}): {stale}")
+
+    # The consumer handoff remains a required independent inventory of every SVG line.
+    for asset in handoff.get("assets", []):
+        path_text, asset_id = asset.get("source"), asset.get("assetId")
+        mapped = mapped_units.get((path_text, "svg-visible-text"), set())
+        for text in asset.get("visibleText", []):
+            if _norm(text) not in mapped:
+                errors.append(f"asset handoff line is missing an exact copy join for {asset_id}: {text}")
+    for context_id, context in qualifier_contexts.items():
+        review_status = context.get("reviewStatus")
+        disposition = context.get("releaseDisposition")
+        if review_status == "pending_independent_exact_copy_review":
+            if disposition != "blocked":
+                errors.append(f"{context_id}: pending qualifier review must remain blocked")
+        elif review_status == "approved":
+            if disposition != "approved_for_selected_collateral":
+                errors.append(f"{context_id}: approved qualifier review requires selected-collateral disposition")
+            if not context.get("reviewer") or not context.get("reviewDate"):
+                errors.append(f"{context_id}: approved qualifier context requires reviewer and reviewDate")
+        else:
+            errors.append(f"{context_id}: unsupported qualifier-context review state {review_status!r}")
+        for mapping_id in context.get("visibleOrAccessibleQualifierCopyIds", []):
+            if mapping_id not in mapping_ids:
+                errors.append(f"{context_id}: contextual qualifier references missing copy mapping {mapping_id}")
+        for item in context.get("requiredClaimQualifiers", []):
+            claim = next((row for row in ledger.get("claims", []) if row.get("id") == item.get("claimId")), None)
+            if not claim or item.get("requiredQualifier") != claim.get("requiredQualifier"):
+                errors.append(f"{context_id}: per-asset qualifier wording is missing or drifted for {item.get('claimId')}")
+    return errors
+
+
+def validate_inventory(inventory: dict[str, Any]) -> list[str]:
+    """Check exact tracked-file coverage, stable IDs, availability, lifecycle, and checksums."""
+    errors: list[str] = []
+    status_definitions = inventory.get("statusDefinitions", {})
+    documented_lifecycle = (
+        status_definitions.get("releaseEligibilityByLifecycle")
+        if isinstance(status_definitions, dict) else None
     )
+    if documented_lifecycle != LIFECYCLE_RELEASE_ELIGIBILITY:
+        errors.append("statusDefinitions.releaseEligibilityByLifecycle must match the validator lifecycle policy")
+    rows = inventory.get("trackedFiles", [])
+    path_rows: dict[str, dict[str, Any]] = {}
+    id_seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            errors.append("each trackedFiles entry must be an object")
+            continue
+        path_text, file_id = row.get("path"), row.get("fileId")
+        if not isinstance(path_text, str) or not path_text or not isinstance(file_id, str) or not file_id:
+            errors.append("each tracked file requires exact path and canonical fileId")
+            continue
+        if path_text in path_rows:
+            errors.append(f"duplicate tracked file path {path_text}")
+        if file_id in id_seen:
+            errors.append(f"duplicate canonical tracked file ID {file_id}")
+        id_seen.add(file_id)
+        path_rows[path_text] = row
+        path = ROOT / path_text
+        if not path.is_file() or row.get("exists") is not True:
+            errors.append(f"inventory path is marked tracked but missing: {path_text}")
+            continue
+        if row.get("pathAvailability") not in {"tracked_at_baseline", "created_in_candidate"}:
+            errors.append(f"{path_text}: tracked file has invalid pathAvailability")
+        lifecycle = row.get("lifecycleState")
+        expected_eligibility = LIFECYCLE_RELEASE_ELIGIBILITY.get(lifecycle)
+        if expected_eligibility is None:
+            errors.append(f"{path_text}: lifecycleState must be one of {', '.join(LIFECYCLE_RELEASE_ELIGIBILITY)}")
+        elif not isinstance(row.get("releaseEligible"), bool) or row.get("releaseEligible") is not expected_eligibility:
+            errors.append(f"{path_text}: lifecycleState {lifecycle} requires releaseEligible={str(expected_eligibility).lower()}")
+        expected_digest = row.get("sha256")
+        if expected_digest and _sha256_path(path) != expected_digest:
+            errors.append(f"{path_text}: tracked inventory checksum drift")
+    result = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    if result.returncode:
+        errors.append("cannot enumerate tracked files with git ls-files")
+    else:
+        tracked = set(result.stdout.splitlines())
+        indexed = set(path_rows)
+        for path_text in sorted(tracked - indexed):
+            errors.append(f"unlisted tracked collateral/supporting file: {path_text}")
+        for path_text in sorted(indexed - tracked):
+            errors.append(f"inventory lists an untracked path: {path_text}")
+    scope = inventory.get("submissionScope")
+    if not isinstance(scope, dict):
+        errors.append("submissionScope must explicitly define required final assets, claims, evidence classes, and owner gates")
+    else:
+        for field in ("requiredAssetIds", "requiredClaimIds", "requiredEvidenceClassIds", "requiredOwnerGates"):
+            value = scope.get(field)
+            if not isinstance(value, list) or not value:
+                errors.append(f"submissionScope.{field} must be a nonempty array")
+            elif not all(isinstance(item, (str, dict)) for item in value):
+                errors.append(f"submissionScope.{field} contains an invalid value")
+        planned = {row.get("assetId") for row in inventory.get("plannedDeliverables", []) if isinstance(row, dict)}
+        required_assets = scope.get("requiredAssetIds", [])
+        if all(isinstance(item, str) for item in required_assets):
+            if len(required_assets) != len(set(required_assets)):
+                errors.append("submissionScope.requiredAssetIds must be unique")
+            for asset_id in sorted(set(required_assets) - planned):
+                errors.append(f"submissionScope references an asset absent from plannedDeliverables: {asset_id}")
+        for field in ("requiredClaimIds", "requiredEvidenceClassIds"):
+            values = scope.get(field, [])
+            if all(isinstance(item, str) for item in values) and len(values) != len(set(values)):
+                errors.append(f"submissionScope.{field} must be unique")
+        canonical_requirements = {
+            "requiredAssetIds": REQUIRED_SUBMISSION_ASSET_IDS,
+            "requiredClaimIds": REQUIRED_SUBMISSION_CLAIM_IDS,
+            "requiredEvidenceClassIds": REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS,
+        }
+        for field, required_ids in canonical_requirements.items():
+            values = scope.get(field, [])
+            if isinstance(values, list) and all(isinstance(item, str) for item in values):
+                missing_ids = sorted(set(required_ids) - set(values))
+                if missing_ids:
+                    errors.append(f"submissionScope.{field} omits immutable required IDs: {', '.join(missing_ids)}")
+        gates = scope.get("requiredOwnerGates", [])
+        gate_ids = [row.get("id") for row in gates if isinstance(row, dict)]
+        if len(gate_ids) != len(set(gate_ids)):
+            errors.append("submissionScope owner gate IDs must be unique")
+        required_gate_ids = {"BRAND-CONSUMPTION-001", "ORGANIZER-RULES-AND-CUTOFF-001"}
+        if set(gate_ids) != required_gate_ids:
+            errors.append("submissionScope must retain the explicit brand and organizer owner gates")
+        for gate in gates:
+            if not isinstance(gate, dict) or gate.get("status") not in {"pending", "approved"}:
+                errors.append("submissionScope owner gate status must be pending or approved")
+            elif gate.get("status") == "approved" and not all(gate.get(field) for field in ("reviewer", "reviewDate", "evidenceRef")):
+                errors.append(f"submissionScope owner gate {gate.get('id')}: approval requires reviewer, reviewDate and evidenceRef")
+    return errors
+
+
+def _selection_errors(selected_asset_ids: list[str] | tuple[str, ...] | None) -> list[str]:
+    if not selected_asset_ids:
+        return ["selected collateral scope requires at least one --select asset ID"]
+    if len(selected_asset_ids) != len(set(selected_asset_ids)):
+        return ["selected collateral scope cannot contain duplicate asset IDs"]
+    unknown = sorted(set(selected_asset_ids) - SELECTABLE_COLLATERAL_ASSET_IDS)
+    if unknown:
+        return ["unknown or nonselectable collateral asset IDs: " + ", ".join(unknown)]
+    return []
+
+
+def validate_inventory_composition(inventory: dict[str, Any], register: dict[str, Any]) -> list[str]:
+    """Keep the inventory's human-facing composition declaration aligned to provenance."""
+    errors: list[str] = []
+    planned = {
+        row.get("assetId"): row
+        for row in inventory.get("plannedDeliverables", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    records = {
+        row.get("assetId"): row
+        for row in register.get("records", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    for asset_id, record in records.items():
+        if record.get("kind") != "static_html_rehearsal_support":
+            continue
+        inventory_row = planned.get(asset_id)
+        if not inventory_row:
+            errors.append(f"{asset_id}: static HTML composition is missing from the collateral inventory")
+            continue
+        if "compositionDependencies" not in inventory_row:
+            errors.append(f"{asset_id}: static HTML composition is missing its inventory dependency list")
+    for asset_id, row in planned.items():
+        if "compositionDependencies" not in row:
+            continue
+        record = records.get(asset_id)
+        if not record:
+            errors.append(f"{asset_id}: inventory composition has no provenance record")
+            continue
+        if record.get("kind") != "static_html_rehearsal_support":
+            errors.append(f"{asset_id}: inventory composition requires a static HTML provenance record")
+            continue
+        inventory_dependencies = row.get("compositionDependencies")
+        provenance_dependencies = record.get("compositionDependencies", [])
+        if not isinstance(inventory_dependencies, list) or not all(isinstance(item, str) for item in inventory_dependencies):
+            errors.append(f"{asset_id}: inventory compositionDependencies must be an array of provenance record IDs")
+            continue
+        if not isinstance(provenance_dependencies, list) or not all(isinstance(item, str) for item in provenance_dependencies):
+            errors.append(f"{asset_id}: provenance compositionDependencies must be an array of record IDs")
+            continue
+        if set(inventory_dependencies) != set(provenance_dependencies):
+            errors.append(f"{asset_id}: inventory and provenance composition dependencies differ")
+    return errors
+
+
+def validate_inventory_provenance(inventory: dict[str, Any], register: dict[str, Any]) -> list[str]:
+    """Join each required deliverable to its canonical exact-output provenance record."""
+    errors: list[str] = []
+    planned = {
+        row.get("assetId"): row
+        for row in inventory.get("plannedDeliverables", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    records = {
+        row.get("assetId"): row
+        for row in register.get("records", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    scope = inventory.get("submissionScope", {})
+    scoped_asset_ids = scope.get("requiredAssetIds", []) if isinstance(scope, dict) else []
+    required_asset_ids = set(REQUIRED_SUBMISSION_ASSET_IDS)
+    if isinstance(scoped_asset_ids, list):
+        required_asset_ids.update(item for item in scoped_asset_ids if isinstance(item, str))
+    for asset_id in sorted(required_asset_ids):
+        row = planned.get(asset_id)
+        if not row:
+            continue
+        record_ids = row.get("provenanceRecordIds")
+        if not isinstance(record_ids, list) or not all(isinstance(item, str) and item for item in record_ids):
+            errors.append(f"{asset_id}: provenanceRecordIds must be an array of canonical provenance asset IDs")
+            continue
+        if len(record_ids) != len(set(record_ids)):
+            errors.append(f"{asset_id}: provenanceRecordIds must be unique")
+        if len(record_ids) > 1:
+            errors.append(f"{asset_id}: exactly one canonical output provenance record is supported")
+        for record_id in record_ids:
+            record = records.get(record_id)
+            if not record:
+                errors.append(f"{asset_id}: provenanceRecordIds references missing record {record_id}")
+                continue
+            if record_id != asset_id or record.get("assetId") != asset_id:
+                errors.append(f"{asset_id}: provenance record {record_id} is not the canonical output record")
+            source = record.get("source", {})
+            if not isinstance(source, dict) or source.get("path") != row.get("path"):
+                errors.append(f"{asset_id}: provenance record {record_id} source path does not match the planned output")
+    return errors
+
+
+def _expand_selected_assets(
+    ledger: dict[str, Any], register: dict[str, Any], selected_asset_ids: list[str] | tuple[str, ...]
+) -> tuple[set[str], set[str]]:
+    selected = set(selected_asset_ids)
+    mappings = ledger.get("visualCopy", {}).get("mappings", [])
+    records = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
+    contexts = ledger.get("visualCopy", {}).get("qualifierContexts", [])
+    composition_records: set[str] = set()
+    changed = True
+    while changed:
+        before = (set(selected), set(composition_records))
+        for context in contexts:
+            related = set(context.get("relatedAssetIds", []))
+            if related & selected:
+                selected.update(related & SELECTABLE_COLLATERAL_ASSET_IDS)
+        for mapping in mappings:
+            if mapping.get("assetId") not in selected:
+                continue
+            record = records.get(mapping.get("provenanceRecordId"))
+            if not record:
+                continue
+            for parent_id in record.get("lineage", {}).get("derivedFrom", []):
+                if parent_id in SELECTABLE_COLLATERAL_ASSET_IDS:
+                    selected.add(parent_id)
+            for dependency_id in record.get("compositionDependencies", []):
+                composition_records.add(dependency_id)
+                for dependency_mapping in mappings:
+                    if dependency_mapping.get("provenanceRecordId") != dependency_id:
+                        continue
+                    dependency_asset = dependency_mapping.get("assetId")
+                    if dependency_asset in SELECTABLE_COLLATERAL_ASSET_IDS:
+                        selected.add(dependency_asset)
+        changed = before != (selected, composition_records)
+    return selected, composition_records
+
+
+def _cta_blockers(cta: dict[str, Any]) -> list[str]:
+    identifier = cta.get("id", "unknown-CTA")
+    problems: list[str] = []
+    if cta.get("wordingReview") != "approved":
+        problems.append(f"{identifier}: exact CTA wording is not approved")
+        return problems
+    if not cta.get("reviewer") or not cta.get("reviewDate"):
+        problems.append(f"{identifier}: approved CTA wording lacks reviewer/date")
+    availability = cta.get("availability", {})
+    target = cta.get("target")
+    if cta.get("routeReview") == "confirmed_by_assigned_supervisor_for_repository_docs_only":
+        if availability.get("status") != "confirmed_for_pinned_documentation_only" or not isinstance(target, str) or not target.startswith("https://github.com/"):
+            problems.append(f"{identifier}: repository documentation target is unavailable or unpinned")
+    elif cta.get("routeReview") == "confirmed_static_repository_file_only":
+        if (
+            cta.get("destinationClass") != "repository_accessible_text_alternative"
+            or availability.get("status") != "confirmed_local_repository_file_only"
+            or not isinstance(target, str)
+            or not _is_tracked_repo_file(target)
+        ):
+            problems.append(f"{identifier}: confirmed local-file CTA must name an existing repository text alternative")
+    else:
+        problems.append(f"{identifier}: CTA destination-owner route is not confirmed")
+    if not cta.get("routeReviewer") or not cta.get("routeReviewDate"):
+        problems.append(f"{identifier}: CTA route confirmation lacks reviewer/date")
+    return problems
+
+
+def selected_collateral_blockers(
+    ledger: dict[str, Any], register: dict[str, Any], selected_asset_ids: list[str] | tuple[str, ...]
+) -> list[str]:
+    """Evaluate only a nonempty, known selection and its copy, qualifier, CTA, and rights joins."""
+    errors = _selection_errors(selected_asset_ids)
+    if errors:
+        return errors
+    selected, composition_records = _expand_selected_assets(ledger, register, selected_asset_ids)
+    mappings = [
+        row for row in ledger.get("visualCopy", {}).get("mappings", [])
+        if isinstance(row, dict) and row.get("assetId") in selected
+    ]
+    blockers: list[str] = []
+    if not mappings:
+        return ["selected collateral has no exact copy mapping"]
+
+    claims_by_id = {row.get("id"): row for row in ledger.get("claims", []) if isinstance(row, dict)}
+    ctas_by_id = {row.get("id"): row for row in ledger.get("ctas", []) if isinstance(row, dict)}
+    claim_ids = {row.get("claimId") for row in mappings if row.get("claimId")}
+    cta_ids = {row.get("ctaId") for row in mappings if row.get("ctaId")}
+    for claim_id in sorted(claim_ids):
+        claim = claims_by_id.get(claim_id)
+        if not claim:
+            blockers.append(f"{claim_id}: selected copy references a missing claim")
+            continue
+        if claim.get("reviewStatus") != "approved":
+            blockers.append(f"{claim_id}: selected exact-copy review is not approved")
+        if not claim.get("reviewer") or not claim.get("reviewDate"):
+            blockers.append(f"{claim_id}: selected claim approval lacks reviewer/date")
+        if not _pinned_revision(claim.get("source", {})) or not claim.get("source", {}).get("revision"):
+            blockers.append(f"{claim_id}: selected claim source is not immutably pinned")
+        if claim.get("state") in {"blocked", "planned", "assumed"}:
+            blockers.append(f"{claim_id}: selected claim state is {claim.get('state')}")
+        blockers.extend(f"{claim_id}: {item}" for item in _unsafe_positive_copy(claim.get("allowedWording", "")))
+    for cta_id in sorted(cta_ids):
+        cta = ctas_by_id.get(cta_id)
+        if not cta:
+            blockers.append(f"{cta_id}: selected copy references a missing CTA")
+        else:
+            blockers.extend(_cta_blockers(cta))
+
+    contexts_by_id = {
+        row.get("qualifierId"): row
+        for row in ledger.get("visualCopy", {}).get("qualifierContexts", [])
+        if isinstance(row, dict)
+    }
+    required_context_ids = {
+        row.get("contextQualifierId")
+        for row in mappings
+        if row.get("claimId") in claims_by_id and claims_by_id[row["claimId"]].get("requiredQualifier")
+    }
+    for context_id in sorted(required_context_ids):
+        context = contexts_by_id.get(context_id)
+        if not context:
+            blockers.append(f"{context_id}: selected claim has no per-asset qualifier review")
+            continue
+        if context.get("reviewStatus") != "approved" or context.get("releaseDisposition") != "approved_for_selected_collateral":
+            blockers.append(f"{context_id}: selected per-asset qualifier review is pending or blocked")
+        if not context.get("reviewer") or not context.get("reviewDate"):
+            blockers.append(f"{context_id}: selected qualifier approval lacks reviewer/date")
+
+    record_by_id = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
+    required_record_ids = {row.get("provenanceRecordId") for row in mappings if row.get("provenanceRecordId")}
+    required_record_ids.update(composition_records)
+    relevant_kinds = {"editable_visual_source", "synthetic_mockup_source", "visual_export", "accessible_text_alternative", "static_html_rehearsal_support"}
+    queue = list(required_record_ids)
+    seen: set[str] = set()
+    while queue:
+        record_id = queue.pop()
+        if record_id in seen:
+            continue
+        seen.add(record_id)
+        record = record_by_id.get(record_id)
+        if not record:
+            blockers.append(f"{record_id}: selected provenance record is missing")
+            continue
+        if record.get("kind") not in relevant_kinds:
+            continue
+        for parent_id in record.get("lineage", {}).get("derivedFrom", []):
+            if record_by_id.get(parent_id, {}).get("kind") in relevant_kinds:
+                queue.append(parent_id)
+        for child_id in record.get("lineage", {}).get("derivatives", []):
+            if record_by_id.get(child_id, {}).get("kind") in relevant_kinds:
+                queue.append(child_id)
+        for dependency_id in record.get("compositionDependencies", []):
+            if dependency_id in record_by_id:
+                queue.append(dependency_id)
+        if record.get("publishability") != "approved" or record.get("permission", {}).get("status") != "approved":
+            blockers.append(f"{record_id}: selected destination rights/publishability are not approved")
+        if not record.get("reviewer") or not record.get("reviewDate"):
+            blockers.append(f"{record_id}: selected source/export review lacks reviewer/date")
+        if not record.get("allowedDestinations") or not record.get("permission", {}).get("approvedDestinations"):
+            blockers.append(f"{record_id}: selected record has no explicit approved destination")
     return blockers
 
 
-def validate_all(ledger: dict[str, Any], register: dict[str, Any], fixture: dict[str, Any]) -> list[str]:
+def submission_blockers(
+    ledger: dict[str, Any],
+    register: dict[str, Any],
+    selected_asset_ids: list[str] | tuple[str, ...],
+    inventory: dict[str, Any] | None = None,
+) -> list[str]:
+    """Require selected content plus the explicit final-event deliverables and producer gates."""
+    blockers = selected_collateral_blockers(ledger, register, selected_asset_ids)
+    if blockers and blockers[0].startswith(("selected collateral scope", "unknown or nonselectable")):
+        return blockers
+    if inventory is None:
+        inventory = _read_json(ROOT / "docs/collateral-inventory.json")
+    scope = inventory.get("submissionScope", {})
+    if not isinstance(scope, dict):
+        scope = {}
+    for field in ("requiredAssetIds", "requiredClaimIds", "requiredEvidenceClassIds", "requiredOwnerGates"):
+        if not isinstance(scope.get(field), list) or not scope.get(field):
+            blockers.append(f"submission scope is incomplete: {field} must be explicitly populated")
+    immutable_scope = {
+        "requiredAssetIds": REQUIRED_SUBMISSION_ASSET_IDS,
+        "requiredClaimIds": REQUIRED_SUBMISSION_CLAIM_IDS,
+        "requiredEvidenceClassIds": REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS,
+    }
+    scoped_values: dict[str, list[str]] = {}
+    for field, required_ids in immutable_scope.items():
+        values = scope.get(field, [])
+        if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+            values = []
+        scoped_values[field] = values
+        for missing_id in sorted(set(required_ids) - set(values)):
+            blockers.append(f"submission scope omits immutable required {field.removeprefix('required').removesuffix('Ids').lower()} {missing_id}")
+    gates = scope.get("requiredOwnerGates", [])
+    if not isinstance(gates, list):
+        gates = []
+    deliverables = {row.get("assetId"): row for row in inventory.get("plannedDeliverables", []) if isinstance(row, dict)}
+    tracked = {row.get("path"): row for row in inventory.get("trackedFiles", []) if isinstance(row, dict)}
+    provenance_by_id = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
+    required_output_record_ids: list[str] = []
+    selected = set(selected_asset_ids)
+    for asset_id in dict.fromkeys((*REQUIRED_SUBMISSION_ASSET_IDS, *scoped_values["requiredAssetIds"])):
+        row = deliverables.get(asset_id)
+        if not row:
+            blockers.append(f"submission asset {asset_id}: missing from inventory")
+            continue
+        if asset_id in SELECTABLE_COLLATERAL_ASSET_IDS and asset_id not in selected:
+            blockers.append(f"submission asset {asset_id}: required collateral was not selected")
+        path_text = row.get("path")
+        output_exists = isinstance(path_text, str) and (ROOT / path_text).is_file()
+        if not output_exists:
+            blockers.append(f"submission asset {asset_id}: required output is absent ({path_text})")
+        else:
+            indexed = tracked.get(path_text, {})
+            if row.get("pathAvailability") not in {"tracked_at_baseline", "created_in_candidate"} or row.get("lifecycleState") != "released" or indexed.get("releaseEligible") is not True:
+                blockers.append(f"submission asset {asset_id}: exact output is not inventoried as released/eligible")
+
+        output_record_ids = row.get("provenanceRecordIds")
+        if not isinstance(output_record_ids, list) or output_record_ids != [asset_id]:
+            blockers.append(f"submission asset {asset_id}: requires one canonical exact-output provenanceRecordIds entry")
+            continue
+        output_record = provenance_by_id.get(asset_id)
+        if not output_record:
+            blockers.append(f"submission asset {asset_id}: canonical exact-output provenance record is missing")
+            continue
+        source = output_record.get("source", {})
+        if not isinstance(source, dict) or source.get("path") != path_text:
+            blockers.append(f"submission asset {asset_id}: canonical provenance source path does not match the required output")
+        required_output_record_ids.append(asset_id)
+
+    claims_by_id = {row.get("id"): row for row in ledger.get("claims", []) if isinstance(row, dict)}
+    evidence_by_id = {row.get("id"): row for row in ledger.get("evidenceClasses", []) if isinstance(row, dict)}
+    for claim_id in dict.fromkeys((*REQUIRED_SUBMISSION_CLAIM_IDS, *scoped_values["requiredClaimIds"])):
+        claim = claims_by_id.get(claim_id)
+        if not claim:
+            blockers.append(f"required submission claim {claim_id}: missing from claim ledger")
+        elif claim.get("reviewStatus") != "approved" or claim.get("state") in {"blocked", "planned", "assumed"} or not claim.get("source", {}).get("revision"):
+            blockers.append(f"required submission claim {claim_id}: product/evidence approval is not complete")
+    for evidence_id in dict.fromkeys((*REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS, *scoped_values["requiredEvidenceClassIds"])):
+        evidence = evidence_by_id.get(evidence_id)
+        if not evidence or evidence.get("status") != "approved":
+            blockers.append(f"required submission evidence {evidence_id}: producer evidence is not approved")
+    for gate in gates:
+        if not isinstance(gate, dict):
+            blockers.append("required submission owner gate is malformed")
+            continue
+        gate_id = gate.get("id", "unknown-owner-gate")
+        if gate.get("status") != "approved" or not gate.get("reviewer") or not gate.get("reviewDate") or not gate.get("evidenceRef"):
+            blockers.append(f"required submission owner gate {gate_id}: source-owner/organizer confirmation is pending")
+    gate_ids = {gate.get("id") for gate in scope.get("requiredOwnerGates", []) if isinstance(gate, dict)}
+    for required_gate in ("BRAND-CONSUMPTION-001", "ORGANIZER-RULES-AND-CUTOFF-001"):
+        if required_gate not in gate_ids:
+            blockers.append(f"required submission owner gate {required_gate}: missing from submission scope")
+    if register.get("visualReview", {}).get("independentReview") != "passed":
+        blockers.append("required submission review: independent visual/content/accessibility review is pending")
+    if register.get("visualReview", {}).get("brandAndSourceOwnerRights") != "approved":
+        blockers.append("required submission rights gate: brand/source-owner destination rights are not approved")
+    blockers.extend(_submission_provenance_rights_blockers(required_output_record_ids, provenance_by_id))
+    return blockers
+
+
+def _submission_provenance_rights_blockers(
+    output_record_ids: list[str], provenance_by_id: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Require destination approval for each required output and every declared source input."""
+    blockers: list[str] = []
+    queue = list(output_record_ids)
+    seen: set[str] = set()
+    while queue:
+        record_id = queue.pop()
+        if record_id in seen:
+            continue
+        seen.add(record_id)
+        record = provenance_by_id.get(record_id)
+        if not record:
+            blockers.append(f"{record_id}: required submission provenance record is missing")
+            continue
+        permission = record.get("permission", {})
+        if record.get("publishability") != "approved" or permission.get("status") != "approved":
+            blockers.append(f"{record_id}: required output/source provenance destination rights are not approved")
+        if not record.get("reviewer") or not record.get("reviewDate"):
+            blockers.append(f"{record_id}: required output/source provenance review lacks reviewer/date")
+        allowed = record.get("allowedDestinations", [])
+        approved = permission.get("approvedDestinations", [])
+        if (
+            not isinstance(allowed, list) or not all(isinstance(item, str) for item in allowed)
+            or not isinstance(approved, list) or not all(isinstance(item, str) for item in approved)
+            or not set(allowed).intersection(approved)
+        ):
+            blockers.append(f"{record_id}: required output/source provenance has no matching approved destination")
+        source = record.get("source", {})
+        if not isinstance(source, dict) or not source.get("path") or not source.get("revision") or not _pinned_revision(source):
+            blockers.append(f"{record_id}: required output/source provenance is not immutably pinned")
+        elif source.get("repo") == "Jevelopers-neatHack-2026/marketing-material":
+            source_path = source["path"]
+            exact_path = ROOT / source_path
+            checksum = record.get("checksum", {})
+            if (
+                not _is_tracked_repo_file(source_path)
+                or not isinstance(checksum, dict)
+                or checksum.get("algorithm") != "SHA-256"
+                or checksum.get("value") != _sha256_path(exact_path)
+            ):
+                blockers.append(f"{record_id}: required output/source provenance path or checksum is not exact")
+        lineage = record.get("lineage", {})
+        parent_ids = lineage.get("derivedFrom", []) if isinstance(lineage, dict) else []
+        composition_ids = record.get("compositionDependencies", [])
+        for relation_name, relation_ids in (("lineage.derivedFrom", parent_ids), ("compositionDependencies", composition_ids)):
+            if not isinstance(relation_ids, list) or not all(isinstance(item, str) for item in relation_ids):
+                blockers.append(f"{record_id}: {relation_name} must be an array of provenance record IDs")
+                continue
+            queue.extend(relation_ids)
+    return blockers
+
+
+def release_blockers(ledger: dict[str, Any], register: dict[str, Any]) -> list[str]:
+    """Backward-compatible alias for final-submission readiness over the default visual set."""
+    return submission_blockers(ledger, register, DEFAULT_SUBMISSION_SELECTION)
+
+
+def validate_all(
+    ledger: dict[str, Any],
+    register: dict[str, Any],
+    fixture: dict[str, Any],
+    handoff: dict[str, Any] | None = None,
+    inventory: dict[str, Any] | None = None,
+) -> list[str]:
     errors = validate_claims(ledger)
     errors.extend(validate_provenance(register))
     errors.extend(validate_fixture(fixture, ledger))
+    if handoff is None:
+        handoff = _read_json(ROOT / "review/visual/asset-handoff.json")
+    errors.extend(validate_visual_copy(ledger, handoff, register))
+    if inventory is None:
+        inventory = _read_json(ROOT / "docs/collateral-inventory.json")
+    errors.extend(validate_inventory(inventory))
+    errors.extend(validate_inventory_composition(inventory, register))
+    errors.extend(validate_inventory_provenance(inventory, register))
     return errors
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("draft", "release"), default="draft")
+    parser.add_argument("--mode", choices=("draft", "selected", "submission", "release"), default="draft")
+    parser.add_argument("--select", action="append", dest="selected_assets", metavar="ASSET_ID", help="asset to evaluate; repeat for a multi-asset scope")
     parser.add_argument("--claims", type=Path, default=ROOT / "messaging/claims.json")
     parser.add_argument("--provenance", type=Path, default=ROOT / "review/provenance.json")
     parser.add_argument("--fixture", type=Path, default=ROOT / "review/fixtures/synthetic-canaries.json")
+    parser.add_argument("--handoff", type=Path, default=ROOT / "review/visual/asset-handoff.json")
+    parser.add_argument("--inventory", type=Path, default=ROOT / "docs/collateral-inventory.json")
     args = parser.parse_args(argv)
+
+    if args.mode in {"selected", "submission"} and not args.selected_assets:
+        print("ERROR: selected and submission modes require at least one --select ASSET_ID", file=sys.stderr)
+        return 1
+    selected_assets = args.selected_assets or DEFAULT_SUBMISSION_SELECTION
+    if args.mode in {"selected", "submission", "release"}:
+        selection_errors = _selection_errors(selected_assets)
+        if selection_errors:
+            for error in selection_errors:
+                print(f"ERROR: {error}", file=sys.stderr)
+            return 1
 
     try:
         ledger = _read_json(args.claims)
         register = _read_json(args.provenance)
         fixture = _read_json(args.fixture)
+        handoff = _read_json(args.handoff)
+        inventory = _read_json(args.inventory)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"invalid input: {exc}", file=sys.stderr)
         return 1
 
-    errors = validate_all(ledger, register, fixture)
+    errors = validate_all(ledger, register, fixture, handoff, inventory)
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    print("Draft policy validation: PASS (claims, provenance schema, distinct sponsor evidence, and synthetic text canary)")
-    print("Media/pixel/metadata inspection: NOT PERFORMED by this text/JSON validator")
-    if args.mode == "release":
-        blockers = release_blockers(ledger, register)
+    print("Draft policy validation: PASS (claims, provenance/checksum pins, copy joins, full tracked-file inventory, and synthetic text canary)")
+    print("Visual evidence: scoped author SVG/PNG pixel and metadata checks, browser renders, contrast, and alternatives are recorded; this validator does not scan arbitrary media or grant rights.")
+    if args.mode in {"selected", "submission", "release"}:
+        if args.mode == "selected":
+            blockers = selected_collateral_blockers(ledger, register, selected_assets)
+            mode_name = "Selected collateral"
+        else:
+            blockers = submission_blockers(ledger, register, selected_assets, inventory)
+            mode_name = "Final submission" if args.mode == "submission" else "Final submission (legacy --mode release alias)"
         for blocker in blockers:
             print(f"BLOCKED: {blocker}")
-        print(f"Release readiness: BLOCKED ({len(blockers)} blockers)")
+        print(f"{mode_name} readiness: {'BLOCKED' if blockers else 'READY'} ({len(blockers)} blockers)")
         return 2 if blockers else 0
 
-    print("Release readiness: BLOCKED; run --mode release for the current blocker list")
+    print("Readiness: not evaluated; use --mode selected --select ASSET_ID or --mode submission --select ASSET_ID")
     return 0
 
 
