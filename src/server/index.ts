@@ -19,7 +19,7 @@ interface Slot {
 // One connection per process (the V9 suffix makes a hot-reloaded dev server pick up new storage code). The global survives dev hot reloads so we don't reopen the file each time.
 const g = globalThis as unknown as { __ticketstubStorageV9?: Slot };
 
-const dbPath = () => process.env.TICKETSTUB_DB?.trim() || "./data/ticketstub.sqlite";
+export const dbPath = () => process.env.TICKETSTUB_DB?.trim() || "./data/ticketstub.sqlite";
 
 /** Whether the two paths were set on purpose. "default-path" on a host with no persistent volume means data resets on each deploy. */
 export const persistence = (): "configured" | "default-path" =>
