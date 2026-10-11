@@ -1,6 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdtemp, mkdir, rm, cp } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, mkdir, rm, cp, copyFile, chmod } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -323,4 +324,27 @@ test('SC-CHK-001 merely importing the package does not fabricate canonical fixtu
   await writeFile(join(alternate, 'driver.mjs'), noRuns); git(alternate, ['init', '-q']); const revision = commitFixture(alternate);
   const result = await consumerChecks(await manifestFor({ mutate: entry => { entry.source_sha = revision; entry.local_path = alternate; } }));
   assert.equal(failureFor(result), 'MISSING_OBSERVED_PACKAGE_COVERAGE');
+});
+test('SC-CHK-001 runner losing its own executable is a typed runner failure, not a consumer artifact defect', async () => {
+  const alternate = join(directory, 'runner-executable-removed'); await mkdir(alternate);
+  await writeFile(join(alternate, 'driver.mjs'), "console.log(JSON.stringify({ status: 'passed' }));\n");
+  git(alternate, ['init', '-q']); const revision = commitFixture(alternate);
+  const manifestPath = join(directory, 'runner-executable-removed.json');
+  await writeFile(manifestPath, JSON.stringify(await manifestFor({ mutate: entry => { entry.source_sha = revision; entry.local_path = alternate; } })));
+  // A disposable runtime copy removes itself before checking, as when a shared npx cache is re-reified mid-run.
+  const runtime = join(directory, 'runner-executable-removed-node');
+  await copyFile(process.execPath, runtime, fsConstants.COPYFILE_FICLONE);
+  await chmod(runtime, 0o755);
+  const program = `import { readFile, unlink } from 'node:fs/promises';
+const { consumerChecks } = await import(${JSON.stringify(root + 'scripts/consumer-checks.mjs')});
+const manifest = JSON.parse(await readFile(process.argv[1], 'utf8'));
+await unlink(process.execPath);
+console.log(JSON.stringify(await consumerChecks(manifest)));`;
+  const child = spawnSync(runtime, ['--input-type=module', '--eval', program, manifestPath], { encoding: 'utf8', env: { PATH: process.env.PATH }, timeout: 120000 });
+  assert.equal(child.status, 0, child.stderr);
+  const result = JSON.parse(child.stdout);
+  const failure = result.failures.find(row => row.repository === 'agent-harness');
+  assert.deepEqual(failure, { code: 'TRUSTED_PROBE_UNAVAILABLE', repository: 'agent-harness', diagnostic: { error: 'ENOENT', signal: null } });
+  assert.equal(result.records.length, 0);
+  assert.ok(!child.stdout.includes(directory));
 });

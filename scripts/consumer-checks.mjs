@@ -15,6 +15,12 @@ const digest = value => typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.tes
 const same = (a, b) => hashManifest(a) === hashManifest(b);
 const inside = (directory, path) => { const rel = relative(directory, path); return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel); };
 const root = fileURLToPath(new URL('../', import.meta.url));
+const errno = value => typeof value === 'string' && /^E[A-Z0-9]{1,30}$/.test(value) ? value : null;
+
+/** Runner-side failures (not consumer evidence) keep a path-free cause so they are never attributed to the consumer artifact. */
+class RunnerEnvironmentError extends Error {
+  constructor(code, diagnostic) { super(code); this.name = 'RunnerEnvironmentError'; this.code = code; this.diagnostic = diagnostic; }
+}
 
 export function pinsMatch(entry, schemas, fixtureDigest, packageDigest) {
   if (!entry || typeof entry !== 'object' || !Array.isArray(entry.schema_pins) || entry.schema_pins.some(pin => !pin || typeof pin !== 'object' || typeof pin.contract !== 'string' || typeof pin.version !== 'string' || typeof pin.schema_id !== 'string' || typeof pin.sha256 !== 'string')) return false;
@@ -111,7 +117,7 @@ export async function consumerChecks(manifest, paths = {}) {
   const catalog = JSON.parse(catalogText.match(/\x60\x60\x60json catalog\n([\s\S]*?)\n\x60\x60\x60/)[1]).contracts;
   for (const repository of knownConsumers) {
     const entries = manifest.repositories.filter(entry => entry.repository === repository);
-    const block = code => failures.push({ code, repository });
+    const block = (code, diagnostic) => failures.push(diagnostic ? { code, repository, diagnostic } : { code, repository });
     if (entries.length !== 1) { block('MISSING_OR_DUPLICATE_CONSUMER'); continue; }
     const local = paths[repository];
     const entry = structuredClone(entries[0]);
@@ -146,6 +152,7 @@ export async function consumerChecks(manifest, paths = {}) {
       const binding = { repository, consumer_sha: entry.source_sha, shared_source_revision: entry.shared_source_revision, package_integrity: entry.package_integrity ?? null, package_content_digest: expectedPackage.digest, fixture_digest: fixtureManifest.digest, nonce };
       await writeFile(config, JSON.stringify({ snapshot, binding, required: requiredNames, required_fixtures: requiredFixtures, files: expectedPackage.files }));
       const verification = spawnSync(process.execPath, [join(root, 'scripts/consumer-trusted-probe.mjs'), config], { cwd: checkout, encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024, env: { PATH: process.env.PATH } });
+      if (verification.error || verification.status === null) throw new RunnerEnvironmentError('TRUSTED_PROBE_UNAVAILABLE', { error: errno(verification.error?.code), signal: typeof verification.signal === 'string' ? verification.signal : null });
       if (verification.status !== 0) throw new Error('TRUSTED_PACKAGE_FIXTURE_FAILED');
       const trustedRecords = JSON.parse(verification.stdout).records;
       const result = await observeConsumerDriver({ script, checkout, snapshot, hook: join(root, 'scripts/consumer-import-hook.mjs'), requiredFixtures, expectedFiles: expectedPackage.files, env: { PATH: process.env.PATH, SHARED_CONTRACTS_ROOT: snapshot, SHARED_CONTRACTS_OFFLINE: '1', SHARED_CONTRACTS_BINDING_CONFIG: config } });
@@ -161,8 +168,12 @@ export async function consumerChecks(manifest, paths = {}) {
       records.push({ repository, source_sha: entry.source_sha, shared_source_revision: binding.shared_source_revision, package_content_digest: binding.package_content_digest, package_integrity: binding.package_integrity, fixture_digest: binding.fixture_digest, schema_pins: entry.schema_pins, status: 'passed', command: entry.command, observed_contracts: [...new Set(coverage.map(row => row.contract))].sort(), trusted_fixture_verification: trustedRecords, import_observations: result.imports, execution_evidence: 'parent_collected_native_debugger_not_driver_audit', driver_receipt: 'separate_declared_adapter_result', acknowledgement_provenance: { reviewer: acknowledgement.reviewer, record_ref: acknowledgement.record_ref, reviewed_at: acknowledgement.reviewed_at }, authority_authenticity: 'external_owner_review_required' });
     } catch (error) {
       if (!(error instanceof Error)) throw error;
-      const codes = ['BLOCKED_SHARED_REVISION_MISMATCH', 'BLOCKED_DIRTY_SHARED_CHECKOUT', 'ARTIFACT_INTEGRITY_MISMATCH', 'INVALID_PACKAGE_ARCHIVE', 'PACKAGE_CONTENT_MISMATCH', 'INVALID_PACKAGE_PATH'];
-      block(error instanceof ConsumerObservationError ? error.code : codes.includes(error.message) ? error.message : error.code === 'ENOENT' ? 'BLOCKED_MISSING_LOCAL_ARTIFACT' : 'INVALID_LOCAL_INTEGRATION_ARTIFACT');
+      const codes = ['BLOCKED_SHARED_REVISION_MISMATCH', 'BLOCKED_DIRTY_SHARED_CHECKOUT', 'ARTIFACT_INTEGRITY_MISMATCH', 'INVALID_PACKAGE_ARCHIVE', 'PACKAGE_CONTENT_MISMATCH', 'INVALID_PACKAGE_PATH', 'TRUSTED_PACKAGE_FIXTURE_FAILED'];
+      if (error instanceof RunnerEnvironmentError) block(error.code, error.diagnostic);
+      else if (error instanceof ConsumerObservationError) block(error.code);
+      else if (codes.includes(error.message)) block(error.message);
+      else if (error.code === 'ENOENT') block('BLOCKED_MISSING_LOCAL_ARTIFACT');
+      else block('INVALID_LOCAL_INTEGRATION_ARTIFACT', { error: errno(error.code), type: ['SyntaxError', 'TypeError', 'RangeError'].includes(error.name) ? error.name : 'Error' });
     } finally { if (temp) await rm(temp, { recursive: true, force: true }); }
   }
   return { failures, records, checkout_records };
