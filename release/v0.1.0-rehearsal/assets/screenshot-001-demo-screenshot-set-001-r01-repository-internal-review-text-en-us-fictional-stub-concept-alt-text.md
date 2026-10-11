@@ -1,0 +1,1 @@
+Draft synthetic artwork, not a product screenshot. A fictional event called The paper moon appears on a dark ticket with a dotted tear line and draft number 01. No real event, venue, date, person, barcode or purchase is represented. Review facts, artwork rights and destination; revise or hold before production. No product behavior or sponsor results are demonstrated.
