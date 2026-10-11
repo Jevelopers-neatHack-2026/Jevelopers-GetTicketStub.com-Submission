@@ -710,7 +710,7 @@ test("completed inspection replay uses its validated historical eligibility and 
   "tampered replay fails closed without fresh metering or dispatch");
 });
 
-test("compiled public inspection and decision adapters invoke the real dispatch revalidation callback at every stage", async (t) => {
+test("compiled public inspection and decision adapters invoke typed dispatch fences at every stage", async (t) => {
   const buildRoot = await mkdtemp(join(tmpdir(), "creative-inspection-typed-adapter-"));
   t.after(async () => rm(buildRoot, { recursive: true, force: true }));
   const compiler = fileURLToPath(new URL("../../examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc", import.meta.url));
@@ -723,6 +723,13 @@ test("compiled public inspection and decision adapters invoke the real dispatch 
 
   const system = await setupInspectionSystem(t);
   const invoked = [];
+  let typedOwnerFenceCalls = 0;
+  const assertOwnerCurrent = system.ports.jobs.assertDispatchCurrent.bind(system.ports.jobs);
+  const typedOwnerJobs = { assertDispatchCurrent(input) {
+    typedOwnerFenceCalls += 1;
+    return assertOwnerCurrent(input);
+  } };
+  system.ports.jobs.assertDispatchCurrent = (input) => typed.assertCurrentDispatch(typedOwnerJobs, input);
   const observer = system.ports.inspection.inspect;
   system.ports.inspection.inspect = async (input) => {
     await input.recordTransportAttempt(input.transport_attempt_id);
@@ -754,6 +761,7 @@ test("compiled public inspection and decision adapters invoke the real dispatch 
     generated.result.design_version.design_version_id));
   assert.equal(inspected.ok, true, JSON.stringify(inspected));
   assert.deepEqual(invoked.sort(), ["decision_evidence", "decision_route", "generic_decision", "observer"]);
+  assert.ok(typedOwnerFenceCalls >= 5, "generated image plus every observer/decision stage uses the compiled owner callback");
 });
 
 test("inspection repair remains review-gated when trusted owner usage evidence is unavailable", async (t) => {
@@ -2584,7 +2592,19 @@ test("dispatch authorization replay does not reuse an intent after the lease exp
     billable_attempt_id: "billable-replay-lease", transport_attempt_id: "transport-replay-lease",
     context_fence: { brief_id: SCOPE.brief_id, brief_hash: canonicalHash(brief),
       expected_current_design_version_id: null, expected_current_design_hash: null } };
-  assert.equal((await adapter.jobs.authorizeDispatch(authorization)).status, "authorized");
+  const initialAuthorization = await adapter.jobs.authorizeDispatch(authorization);
+  assert.equal(initialAuthorization.status, "authorized");
+  const currentPermit = { ...authorization, dispatch_intent_ref: initialAuthorization.dispatch_intent_ref };
+  assert.deepEqual(adapter.jobs.assertDispatchCurrent(currentPermit), initialAuthorization,
+    "the synchronous owner check accepts the exact current intent");
+  assert.deepEqual(adapter.jobs.assertDispatchCurrent({ ...currentPermit,
+    dispatch_intent_ref: "substituted-intent-reference" }), { status: "lease_lost" },
+  "the owner check rejects a substituted dispatch intent");
+  store.db.exec("BEGIN");
+  assert.deepEqual(adapter.jobs.assertDispatchCurrent(currentPermit), { status: "lease_lost" },
+    "the synchronous read refuses to borrow a caller-owned transaction");
+  assert.equal(store.db.isTransaction, true, "fail-closed checking leaves the caller transaction open");
+  store.db.exec("ROLLBACK");
 
   advanceDuringReplay = true;
   const replay = await adapter.jobs.authorizeDispatch(authorization);
@@ -3065,6 +3085,212 @@ test("actual API process crashes preserve attempt evidence and recover without p
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  }
+});
+
+test("final durable send fence stops actual API dispatch after post-authorization owner changes", async (t) => {
+  const cases = [
+    ...["observer", "decision_evidence", "decision_route"].flatMap((stage) =>
+      ["cancel", "lease_expiry", "lease_replacement", "context_drift"].map((change) => ({ stage, change }))),
+    ...["cancel", "lease_expiry", "lease_replacement", "context_drift"].map((change) => ({ stage: "generic", change })),
+  ];
+  for (const scenario of cases) {
+    await t.test(`${scenario.stage}/${scenario.change}`, async (subtest) => {
+      let currentNow = NOW;
+      const system = await setupInspectionSystem(subtest, { now: () => currentNow, leaseDurationMs: 1_000 });
+      const { api, ports, store, brief } = system;
+      let design;
+      if (scenario.stage !== "generic") {
+        const generated = await api.invoke(actor(), request(`send-fence-seed-${scenario.stage}-${scenario.change}`,
+          await fixture("generate-plan")));
+        assert.equal(generated.ok, true, JSON.stringify(generated));
+        design = generated.result.design_version;
+      }
+
+      const sends = { observer: 0, decision_evidence: 0, decision_route: 0, generic: 0 };
+      const acks = new Set();
+      let ackCount = 0;
+      let reserves = 0;
+      let unknown = 0;
+      let releaseBeforeDispatch = 0;
+      let activeStage;
+      let decisionOrdinal = 0;
+      let activeAuthCount = 0;
+      let mutationApplied = false;
+      const finalFenceStatuses = [];
+      let nestedCancellation;
+      let replacement;
+      const stageIndex = { observer: 1, decision_evidence: 2, decision_route: 3, generic: 1 };
+
+      const originalAck = ports.metering.recordTransportAttempt.bind(ports.metering);
+      ports.metering.recordTransportAttempt = async (input) => {
+        const result = await originalAck(input);
+        acks.add(input.transport_attempt_id);
+        ackCount += 1;
+        return result;
+      };
+      const originalReserve = ports.metering.reserveAttempt.bind(ports.metering);
+      ports.metering.reserveAttempt = async (...args) => { reserves += 1; return originalReserve(...args); };
+      const originalUnknown = ports.metering.markOutcomeUnknown.bind(ports.metering);
+      ports.metering.markOutcomeUnknown = async (...args) => { unknown += 1; return originalUnknown(...args); };
+      const originalRelease = ports.metering.releaseBeforeDispatch.bind(ports.metering);
+      ports.metering.releaseBeforeDispatch = async (...args) => {
+        releaseBeforeDispatch += 1;
+        return originalRelease(...args);
+      };
+
+      const mutateOwner = async (input) => {
+        if (scenario.change === "cancel") {
+          const body = { ...request(`send-fence-cancel-${scenario.stage}-${scenario.change}`, null),
+            operation: "cancel", payload: { job_id: input.job_id } };
+          nestedCancellation = await api.invoke(actor(), body);
+          assert.equal(nestedCancellation.ok, true, JSON.stringify(nestedCancellation));
+          assert.equal(nestedCancellation.job.status, "cancelled");
+        } else if (scenario.change === "lease_expiry" || scenario.change === "lease_replacement") {
+          currentNow = NOW + 2_000; // Expire the 1-second lease while staying inside the 60-second API deadline.
+          if (scenario.change === "lease_replacement") {
+            if (scenario.stage === "generic") {
+              // This API intentionally only resumes inspect jobs. Model a
+              // separate owner installing a replacement generation lease by
+              // changing the persisted token hash directly; the real generic
+              // API call must reject its now-stale token at the same fence.
+              const replacementHash = createHash("sha256").update(`replacement:${input.job_id}`).digest("hex");
+              const updated = store.db.prepare(`UPDATE creative_jobs SET lease_hash=?,lease_expires_at=?,updated_at=?
+                WHERE tenant_id=? AND project_id=? AND job_id=? AND status='running'`)
+                .run(replacementHash, new Date(NOW + 30_000).toISOString(), new Date(NOW).toISOString(),
+                  input.scope.tenant_id, input.scope.project_id, input.job_id);
+              assert.equal(updated.changes, 1);
+              replacement = { kind: "external_owner_token_replaced" };
+            } else {
+              const row = store.db.prepare("SELECT request_hash FROM creative_jobs WHERE job_id=?").get(input.job_id);
+              replacement = await ports.jobs.resumeExpired({ scope: input.scope, actor_id: input.actor_id,
+                job_id: input.job_id, action_id: input.action_id, request_hash: row.request_hash });
+              assert.equal(replacement.kind, "started");
+              assert.notEqual(replacement.lease_token, input.lease_token);
+            }
+          }
+        } else {
+          const changedBrief = structuredClone(brief);
+          changedBrief.facts.verified[0].value = "Changed after final dispatch authorization";
+          const saved = store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id },
+            brief: changedBrief, expected_brief_hash: canonicalHash(brief) });
+          assert.equal(saved.status, "saved");
+        }
+        mutationApplied = true;
+      };
+
+      const authorize = ports.jobs.authorizeDispatch.bind(ports.jobs);
+      ports.jobs.authorizeDispatch = async (input) => {
+        const result = await authorize(input);
+        if (activeStage === scenario.stage && acks.has(input.transport_attempt_id) &&
+            result.status === "authorized") {
+          activeAuthCount += 1;
+          // The first active authorization belongs to the executor's cached
+          // ACK revalidation. The second is the runtime's final awaited owner
+          // check immediately before its send permit is returned.
+          if (activeAuthCount === 2 && !mutationApplied) await mutateOwner(input);
+        }
+        return result;
+      };
+      const assertCurrent = ports.jobs.assertDispatchCurrent.bind(ports.jobs);
+      ports.jobs.assertDispatchCurrent = (input) => {
+        const result = assertCurrent(input);
+        if (activeStage === scenario.stage) finalFenceStatuses.push(result.status);
+        return result;
+      };
+
+      const wrapStage = (owner, key, label) => {
+        const original = owner[key].bind(owner);
+        owner[key] = async (input) => {
+          const previousStage = activeStage;
+          activeStage = label;
+          try {
+            return await original({ ...input, async recordTransportAttempt(id) {
+              await input.recordTransportAttempt(id);
+              sends[label] += 1;
+            } });
+          } finally {
+            activeStage = previousStage;
+          }
+        };
+      };
+      if (scenario.stage === "observer") {
+        wrapStage(ports.inspection, "inspect", "observer");
+      } else if (scenario.stage === "decision_evidence" || scenario.stage === "decision_route") {
+        const originalExecute = ports.decisionPort.execute.bind(ports.decisionPort);
+        ports.decisionPort.execute = async (input) => {
+          decisionOrdinal += 1;
+          const label = decisionOrdinal === 1 ? "decision_evidence" : "decision_route";
+          const previousStage = activeStage;
+          activeStage = label;
+          try {
+            return await originalExecute({ ...input, async recordTransportAttempt(id) {
+              await input.recordTransportAttempt(id);
+              sends[label] += 1;
+            } });
+          } finally {
+            activeStage = previousStage;
+          }
+        };
+      } else {
+        wrapStage(ports.provider, "generate", "generic");
+      }
+
+      const body = scenario.stage === "generic"
+        ? request(`send-fence-generic-${scenario.change}`, await fixture("generate-plan"))
+        : inspectionRequest(`send-fence-inspect-${scenario.stage}-${scenario.change}`, design.design_version_id);
+      const beforeDesignCount = store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count;
+      const result = await api.invoke(actor(), body);
+      assert.equal(result.ok, false, JSON.stringify(result));
+      assert.equal(mutationApplied, true, "the database owner changed after authorization returned");
+      const expectedFinalStatus = scenario.change === "context_drift" ? "stale_context"
+        : scenario.change === "cancel" ? "cancelled" : "lease_lost";
+      assert.deepEqual(finalFenceStatuses, ["authorized", expectedFinalStatus],
+        "cached executor revalidation passes, then the final synchronous fence rejects the stale permit");
+      assert.equal(sends[scenario.stage], 0, "no provider-side effect followed stale authorization");
+      assert.equal(ackCount, stageIndex[scenario.stage], "each reached stage has one Finance ACK");
+      assert.equal(reserves, stageIndex[scenario.stage], "no duplicate reserve was made");
+      assert.equal(unknown, 1, "the acknowledged attempt remains held for reconciliation");
+      assert.equal(releaseBeforeDispatch, 0, "a post-ACK hold is never released as pre-dispatch");
+      assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count,
+        beforeDesignCount, "the failed inspect or generation did not publish a design");
+      const job = store.db.prepare("SELECT job_id,status,result_json FROM creative_jobs WHERE action_id=?")
+        .get(body.action_id);
+      assert.ok(job);
+      assert.notEqual(job.status, "completed");
+      assert.equal(job.result_json, null, "the terminal report/result is not published after a blocked send");
+      let inspectionStageState = [];
+      if (scenario.stage !== "generic") {
+        const session = store.db.prepare(`SELECT status,result_json FROM creative_inspection_sessions_v1
+          WHERE tenant_id=? AND project_id=? AND action_id=?`).get(SCOPE.tenant_id, SCOPE.project_id, body.action_id);
+        assert.ok(session);
+        assert.equal(session.result_json, null, "a blocked stage cannot publish an inspection report");
+        const targetStage = store.db.prepare(`SELECT status FROM creative_inspection_stages_v1
+          WHERE tenant_id=? AND project_id=? AND action_id=? AND stage=?`)
+          .get(SCOPE.tenant_id, SCOPE.project_id, body.action_id, scenario.stage);
+        assert.ok(targetStage);
+        assert.notEqual(targetStage.status, "completed", "the target stage remains incomplete after the blocked send");
+        inspectionStageState = store.db.prepare(`SELECT stage,attempt_id,status,intent_hash,result_hash
+          FROM creative_inspection_stages_v1 WHERE tenant_id=? AND project_id=? AND action_id=? ORDER BY stage`)
+          .all(SCOPE.tenant_id, SCOPE.project_id, body.action_id);
+      }
+      const dispatchIntentsBeforeReplay = store.db.prepare(`SELECT transport_attempt_id,dispatch_intent_ref
+        FROM creative_dispatch_intents WHERE job_id=? ORDER BY transport_attempt_id`).all(job.job_id);
+
+      const beforeReplay = { ...sends, ackCount, reserves, unknown };
+      await api.invoke(actor(), body);
+      assert.deepEqual({ ...sends, ackCount, reserves, unknown }, beforeReplay,
+        "exact replay cannot dispatch, reserve, ACK, or settle new work");
+      assert.deepEqual(store.db.prepare(`SELECT transport_attempt_id,dispatch_intent_ref
+        FROM creative_dispatch_intents WHERE job_id=? ORDER BY transport_attempt_id`).all(job.job_id),
+      dispatchIntentsBeforeReplay, "exact replay cannot add a dispatch identity");
+      if (scenario.stage !== "generic") {
+        assert.deepEqual(store.db.prepare(`SELECT stage,attempt_id,status,intent_hash,result_hash
+          FROM creative_inspection_stages_v1 WHERE tenant_id=? AND project_id=? AND action_id=? ORDER BY stage`)
+          .all(SCOPE.tenant_id, SCOPE.project_id, body.action_id), inspectionStageState,
+        "exact replay cannot complete or add an inspection stage");
+      }
+    });
   }
 });
 

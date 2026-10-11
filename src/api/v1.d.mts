@@ -63,6 +63,11 @@ export interface DispatchAuthorizationInput {
   context_fence: CreativeContextFence;
 }
 
+/** Synchronous owner re-read for the exact dispatch permit after external ACKs and immediately before transport. */
+export interface DispatchCurrentInput extends DispatchAuthorizationInput {
+  dispatch_intent_ref: string;
+}
+
 export interface CreativeImageReferenceManifest {
   readonly contract: "CreativeImageReferenceManifest";
   readonly schema_version: "1.0";
@@ -463,6 +468,8 @@ export interface CreativeRuntimePorts {
       action_id: string; request_hash: string }): Promise<StartedJob | ExistingJob | ConflictingJob> | StartedJob | ExistingJob | ConflictingJob;
     /** Atomically compare context_fence and linearize each dispatch intent with cancellation and lease ownership. */
     authorizeDispatch(input: DispatchAuthorizationInput): Promise<DispatchAuthorizationResult> | DispatchAuthorizationResult;
+    /** Synchronously re-read the same owner rows; implementations must not await or use caller-supplied status. */
+    assertDispatchCurrent(input: DispatchCurrentInput): DispatchAuthorizationResult;
     /** Persist transport, provider, and usage identity references before artifact bytes are staged. */
     recordAttemptEvidence?(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;
       action_id: string; request_hash: string; creation: CreativeVersionCreationEvidence }):

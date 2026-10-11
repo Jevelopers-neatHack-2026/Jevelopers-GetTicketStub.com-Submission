@@ -205,7 +205,10 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
           intent.transport_attempt_id === input.transport_attempt_id);
         if (existing) {
           const sameFence = canonicalSerialize(existing.context_fence) === canonicalSerialize(input.context_fence);
-          const sameAttempt = (existing.billable_attempt_id ?? null) === (input.billable_attempt_id ?? null);
+          const sameAttempt = (existing.billable_attempt_id ?? null) === (input.billable_attempt_id ?? null) &&
+            (existing.reservation_ref ?? null) === (input.reservation_ref ?? null) &&
+            (existing.provider_name ?? null) === (input.provider_name ?? null) &&
+            (existing.provider_model ?? null) === (input.provider_model ?? null);
           return sameFence && sameAttempt
             ? { status: "authorized", dispatch_intent_ref: existing.dispatch_intent_ref }
             : { status: "lease_lost" };
@@ -213,9 +216,31 @@ function makeHarness({ withDesign = true, providerImpl, omit = [], foreignDesign
         dispatchIntentCounter += 1;
         const dispatch_intent_ref = `dispatch-intent:${input.job_id}:${dispatchIntentCounter}`;
         dispatchIntents.push({ job_id: input.job_id, transport_attempt_id: input.transport_attempt_id,
-          billable_attempt_id: input.billable_attempt_id, context_fence: structuredClone(input.context_fence), dispatch_intent_ref });
+          billable_attempt_id: input.billable_attempt_id, reservation_ref: input.reservation_ref,
+          provider_name: input.provider_name, provider_model: input.provider_model,
+          context_fence: structuredClone(input.context_fence), dispatch_intent_ref });
         return { status: "authorized", dispatch_intent_ref };
       });
+    },
+    assertDispatchCurrent(input) {
+      const job = records.get(input.job_id);
+      if (!job || job.tenant_id !== input.scope.tenant_id || job.project_id !== input.scope.project_id ||
+        job.actor_id !== input.actor_id || job.action_id !== input.action_id || job.operation !== input.operation ||
+        leaseTokens.get(input.job_id) !== input.lease_token) return { status: "lease_lost" };
+      if (job.status === "cancelled") return { status: "cancelled" };
+      if (job.status !== "running") return { status: "lease_lost" };
+      if (!contextFenceMatches(input.context_fence)) return { status: "stale_context" };
+      const intent = dispatchIntents.find((entry) => entry.job_id === input.job_id &&
+        entry.transport_attempt_id === input.transport_attempt_id);
+      if (!intent || intent.dispatch_intent_ref !== input.dispatch_intent_ref ||
+        (intent.billable_attempt_id ?? null) !== (input.billable_attempt_id ?? null) ||
+        (intent.reservation_ref ?? null) !== (input.reservation_ref ?? null) ||
+        (intent.provider_name ?? null) !== (input.provider_name ?? null) ||
+        (intent.provider_model ?? null) !== (input.provider_model ?? null) ||
+        canonicalSerialize(intent.context_fence) !== canonicalSerialize(input.context_fence)) {
+        return { status: "lease_lost" };
+      }
+      return { status: "authorized", dispatch_intent_ref: intent.dispatch_intent_ref };
     },
     async completeIfActive(input, publish) {
       return withLock(input.job_id, async () => {

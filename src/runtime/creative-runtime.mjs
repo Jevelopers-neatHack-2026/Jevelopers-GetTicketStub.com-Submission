@@ -1684,22 +1684,23 @@ export function createCreativeApi(options = {}) {
   async function authorizeJobDispatch(principal, request, started, transportAttemptId, billableAttemptId,
     reservationRef, contextFence, route) {
     const authorize = requiredPort(ports, "jobs.authorizeDispatch", request.operation);
+    const input = Object.freeze({
+      scope: started.scope,
+      actor_id: principal.actor_id,
+      job_id: started.job_id,
+      lease_token: started.lease_token,
+      action_id: request.action_id,
+      operation: request.operation,
+      ...(billableAttemptId ? { billable_attempt_id: billableAttemptId } : {}),
+      ...(reservationRef ? { reservation_ref: reservationRef } : {}),
+      ...(route?.provider?.name ? { provider_name: route.provider.name } : {}),
+      ...(route?.provider?.model ? { provider_model: route.provider.model } : {}),
+      transport_attempt_id: boundedString(transportAttemptId, "transport_attempt_id", 256),
+      context_fence: contextFence,
+    });
     let result;
     try {
-      result = await authorize(Object.freeze({
-        scope: started.scope,
-        actor_id: principal.actor_id,
-        job_id: started.job_id,
-        lease_token: started.lease_token,
-        action_id: request.action_id,
-        operation: request.operation,
-        ...(billableAttemptId ? { billable_attempt_id: billableAttemptId } : {}),
-        ...(reservationRef ? { reservation_ref: reservationRef } : {}),
-        ...(route?.provider?.name ? { provider_name: route.provider.name } : {}),
-        ...(route?.provider?.model ? { provider_model: route.provider.model } : {}),
-        transport_attempt_id: boundedString(transportAttemptId, "transport_attempt_id", 256),
-        context_fence: contextFence,
-      }));
+      result = await authorize(input);
     } catch {
       throw new CreativeApiError("unavailable", request.operation, "dispatch_authorization", { retryable: true });
     }
@@ -1712,6 +1713,44 @@ export function createCreativeApi(options = {}) {
     }
     if (result.status !== "authorized") throw new CreativeApiError("unavailable", request.operation, "dispatch_authorization");
     return boundedString(result.dispatch_intent_ref, "dispatch_intent_ref", 256);
+  }
+
+  function assertJobDispatchCurrent(principal, request, started, transportAttemptId, billableAttemptId,
+    reservationRef, contextFence, route, expectedIntentRef) {
+    const assertCurrent = requiredPort(ports, "jobs.assertDispatchCurrent", request.operation);
+    const input = Object.freeze({
+      scope: started.scope,
+      actor_id: principal.actor_id,
+      job_id: started.job_id,
+      lease_token: started.lease_token,
+      action_id: request.action_id,
+      operation: request.operation,
+      ...(billableAttemptId ? { billable_attempt_id: billableAttemptId } : {}),
+      ...(reservationRef ? { reservation_ref: reservationRef } : {}),
+      ...(route?.provider?.name ? { provider_name: route.provider.name } : {}),
+      ...(route?.provider?.model ? { provider_model: route.provider.model } : {}),
+      transport_attempt_id: boundedString(transportAttemptId, "transport_attempt_id", 256),
+      context_fence: contextFence,
+      dispatch_intent_ref: boundedString(expectedIntentRef, "dispatch_intent_ref", 256),
+    });
+    let result;
+    try { result = assertCurrent(input); }
+    catch {
+      throw new CreativeApiError("unavailable", request.operation, "dispatch_authorization");
+    }
+    if (!isRecord(result)) {
+      throw new CreativeApiError("unavailable", request.operation, "dispatch_authorization");
+    }
+    if (result.status === "cancelled" || result.status === "lease_lost") {
+      throw new CreativeApiError("cancelled", request.operation, "dispatch_authorization");
+    }
+    if (result.status === "stale_context") {
+      throw new CreativeApiError("stale_version", request.operation, "creative_context");
+    }
+    if (result.status !== "authorized" || result.dispatch_intent_ref !== expectedIntentRef) {
+      throw new CreativeApiError("unavailable", request.operation, "dispatch_authorization");
+    }
+    return expectedIntentRef;
   }
 
   async function runMetered(principal, request, started, operationKind, route, portPath, invokePort, preDispatchGuard,
@@ -1844,7 +1883,12 @@ export function createCreativeApi(options = {}) {
         preDispatchError = error;
         throw error;
       }
-      try { assertFinalDispatchEligibility(dispatchContext.signal); }
+      try {
+        assertFinalDispatchEligibility(dispatchContext.signal);
+        assertJobDispatchCurrent(principal, request, started, transportAttemptId,
+          dispatchContext.attempt.billable_attempt_id, dispatchContext.reservation_ref,
+          currentContextFence(), checkedRoute, expectedIntentRef);
+      }
       catch (error) {
         preDispatchError = error;
         throw error;
@@ -1894,7 +1938,11 @@ export function createCreativeApi(options = {}) {
         throw error;
       }
       dispatchIntentRefs.set(transport_attempt_id, freshIntentRef);
-      try { assertFinalDispatchEligibility(signal); }
+      try {
+        assertFinalDispatchEligibility(signal);
+        assertJobDispatchCurrent(principal, request, started, transport_attempt_id,
+          billable_attempt_id, reservation_ref, currentContextFence(), checkedRoute, freshIntentRef);
+      }
       catch (error) {
         preDispatchError = error;
         throw error;
@@ -1964,7 +2012,12 @@ export function createCreativeApi(options = {}) {
               preDispatchError = error;
               throw error;
             }
-            try { assertFinalDispatchEligibility(dispatchContext.signal); }
+            try {
+              assertFinalDispatchEligibility(dispatchContext.signal);
+              assertJobDispatchCurrent(principal, request, started, transportId,
+                dispatchContext.attempt.billable_attempt_id, dispatchContext.reservation_ref,
+                currentContextFence(), checkedRoute, intentRef);
+            }
             catch (error) {
               preDispatchError = error;
               throw error;

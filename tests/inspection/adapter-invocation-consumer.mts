@@ -1,6 +1,17 @@
-import type { DecisionDispatchInput, InspectionInput } from "../../src/api/v1.mjs";
+import type {
+  CreativeRuntimePorts,
+  DispatchAuthorizationResult,
+  DispatchCurrentInput,
+  DecisionDispatchInput,
+  InspectionInput,
+} from "../../src/api/v1.mjs";
 
 type TargetBinding = `sha256:${string}`;
+type CurrentDispatchJobs = Pick<NonNullable<CreativeRuntimePorts["jobs"]>, "assertDispatchCurrent">;
+
+export function assertCurrentDispatch(jobs: CurrentDispatchJobs, input: DispatchCurrentInput): DispatchAuthorizationResult {
+  return jobs.assertDispatchCurrent(input);
+}
 
 export function revalidateInspection(input: InspectionInput, target: TargetBinding): Promise<string> {
   return input.revalidateDispatch({

@@ -723,6 +723,88 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         }
       });
     },
+    assertDispatchCurrent(input) {
+      // The send permit crosses a Finance await after authorizeDispatch has
+      // committed. Re-read the durable owner state synchronously at the last
+      // callback boundary; awaiting the serialized authorizer here would
+      // recreate the cancellation/lease race this check closes.
+      try {
+        // This check must not borrow a transaction opened by another caller
+        // on the shared connection. In that case the reads could observe
+        // uncommitted owner state, so fail closed without touching the caller's
+        // transaction.
+        if (store.db.isTransaction) return Object.freeze({ status: "lease_lost" });
+        if (!record(input) || !record(input.scope) || !record(input.context_fence)) {
+          return Object.freeze({ status: "lease_lost" });
+        }
+        const scope = briefScope(input.scope, input.context_fence.brief_id);
+        const actor_id = safeReference(input.actor_id, "actor_id");
+        const job_id = safeReference(input.job_id, "job_id");
+        const lease_token = safeReference(input.lease_token, "lease_token");
+        const action_id = safeReference(input.action_id, "action_id");
+        const operation = safeReference(input.operation, "operation");
+        const transport_attempt_id = safeReference(input.transport_attempt_id, "transport_attempt_id");
+        const dispatch_intent_ref = safeReference(input.dispatch_intent_ref, "dispatch_intent_ref");
+        const billable_attempt_id = input.billable_attempt_id === undefined ? null
+          : safeReference(input.billable_attempt_id, "billable_attempt_id");
+        const reservation_ref = input.reservation_ref === undefined ? null
+          : safeReference(input.reservation_ref, "reservation_ref");
+        const provider_name = input.provider_name === undefined ? null
+          : safeReference(input.provider_name, "provider_name");
+        const provider_model = input.provider_model === undefined ? null
+          : safeReference(input.provider_model, "provider_model");
+        if ((provider_name === null) !== (provider_model === null)) {
+          return Object.freeze({ status: "lease_lost" });
+        }
+        const readJob = () => store.db.prepare(`SELECT * FROM creative_jobs
+          WHERE tenant_id=? AND project_id=? AND job_id=?`).get(scope.tenant_id, scope.project_id, job_id);
+        const readIntent = () => store.db.prepare(`SELECT dispatch_intent_ref,context_fence_json,billable_attempt_id,
+          reservation_ref,provider_name,provider_model FROM creative_dispatch_intents
+          WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`)
+          .get(scope.tenant_id, scope.project_id, job_id, transport_attempt_id);
+        const statusForCurrentJob = () => {
+          const row = readJob();
+          const status = transactionStatusFor(row, scope, actor_id, lease_token, store.now());
+          if (status !== "active") return Object.freeze({ status });
+          if (row.action_id !== action_id || row.operation !== operation) {
+            return Object.freeze({ status: "lease_lost" });
+          }
+          return Object.freeze({ status: "authorized", row });
+        };
+
+        let current = statusForCurrentJob();
+        if (current.status !== "authorized") return Object.freeze({ status: current.status });
+        const intent = readIntent();
+        if (!intent || intent.dispatch_intent_ref !== dispatch_intent_ref ||
+            (intent.billable_attempt_id ?? null) !== billable_attempt_id ||
+            (intent.reservation_ref ?? null) !== reservation_ref ||
+            (intent.provider_name ?? null) !== provider_name ||
+            (intent.provider_model ?? null) !== provider_model) {
+          return Object.freeze({ status: "lease_lost" });
+        }
+        if (!sameDispatchFence(intent.context_fence_json, input.context_fence) ||
+            !contextFenceMatches(store, scope, input.context_fence)) {
+          return Object.freeze({ status: "stale_context" });
+        }
+        // Context and permission checks above may read several owner rows. Do
+        // the job/token/lease read again after them so expiry, cancellation,
+        // or a resumed worker cannot leave a stale permit at this boundary.
+        current = statusForCurrentJob();
+        if (current.status !== "authorized") return Object.freeze({ status: current.status });
+        const finalIntent = readIntent();
+        if (!finalIntent || finalIntent.dispatch_intent_ref !== dispatch_intent_ref ||
+            (finalIntent.billable_attempt_id ?? null) !== billable_attempt_id ||
+            (finalIntent.reservation_ref ?? null) !== reservation_ref ||
+            (finalIntent.provider_name ?? null) !== provider_name ||
+            (finalIntent.provider_model ?? null) !== provider_model ||
+            !sameDispatchFence(finalIntent.context_fence_json, input.context_fence)) {
+          return Object.freeze({ status: "stale_context" });
+        }
+        return Object.freeze({ status: "authorized", dispatch_intent_ref });
+      } catch {
+        return Object.freeze({ status: "lease_lost" });
+      }
+    },
     recordAttemptEvidence(input) {
       return serial(() => store.recordAttemptEvidence(input));
     },
