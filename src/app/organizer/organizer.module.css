@@ -1,0 +1,213 @@
+.intro {
+  margin-bottom: 16px;
+  max-width: 720px;
+}
+.steps ol {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.stepBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px 0 6px;
+  border-radius: var(--ts-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--ts-text) 22%, transparent);
+  background: transparent;
+  white-space: nowrap;
+}
+.stepBtn[aria-current="step"] {
+  background: var(--ts-text);
+  color: var(--ts-bg);
+  border-color: transparent;
+}
+.stepBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.stepNo {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ts-surface);
+  font-weight: 700;
+  font-size: 13px;
+}
+.stepBtn[aria-current="step"] .stepNo {
+  background: var(--ts-orange);
+  color: var(--ts-ink);
+}
+.layout {
+  display: grid;
+  gap: 28px;
+}
+.panel {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  min-width: 0;
+}
+.tall {
+  min-height: 44px;
+}
+.locks {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.locks legend {
+  margin-bottom: 6px;
+}
+.lockRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--ts-radius-control);
+  background: var(--ts-surface);
+  cursor: pointer;
+}
+.lockRow input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ts-orange);
+}
+.lockRow > span:last-child {
+  margin-left: auto;
+}
+.drop {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--ts-radius-sheet);
+  border: 2px dashed color-mix(in srgb, var(--ts-text) 30%, transparent);
+}
+.drop:focus-within {
+  border-color: var(--ts-text);
+}
+.err {
+  color: var(--ts-orange);
+  font-weight: 600;
+  font-size: 14px;
+}
+.mapGrid {
+  display: grid;
+  gap: 10px;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ts-text) 14%, transparent);
+}
+.table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ts-text-muted);
+}
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+  border-radius: var(--ts-radius-control);
+  background: var(--ts-surface);
+}
+.pager p {
+  text-align: center;
+  font-weight: 600;
+}
+.choice {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--ts-radius-control);
+  border: 1.5px solid color-mix(in srgb, var(--ts-text) 22%, transparent);
+  background: transparent;
+}
+.choice[aria-pressed="true"] {
+  border-color: var(--ts-text);
+  background: var(--ts-surface);
+  box-shadow: inset 0 0 0 1px var(--ts-text);
+}
+.choice span {
+  font-size: 14px;
+  color: var(--ts-text-muted);
+}
+.totalLine {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--ts-step-1);
+}
+.nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--ts-text) 12%, transparent);
+}
+.previewCol {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 24px 12px;
+  border-radius: var(--ts-radius-sheet);
+  background: var(--ts-surface);
+  overflow: hidden;
+}
+.lockList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: var(--ts-text-muted);
+}
+.lockList li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (min-width: 640px) {
+  .mapGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 48px;
+    align-items: start;
+  }
+  .previewCol {
+    position: sticky;
+    top: 96px;
+    padding: 40px 24px;
+  }
+}
