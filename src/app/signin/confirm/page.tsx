@@ -6,7 +6,9 @@ import s from "./confirm.module.css";
 
 // The page an emailed link opens. Looking at it never uses the link up (mail scanners fetch links);
 // only the tap on the stamp does, as a plain form post to /api/auth/confirm.
-export const metadata: Metadata = { title: "Sign in · TicketStub", robots: { index: false, follow: false }, referrer: "no-referrer" };
+// Keep the token path/query out of Referer while preserving Origin on the native form POST.
+// no-referrer makes browsers send Origin: null, which the confirmation endpoint must reject.
+export const metadata: Metadata = { title: "Sign in · TicketStub", robots: { index: false, follow: false }, referrer: "strict-origin" };
 
 export default async function ConfirmPage({ searchParams }: { searchParams: Promise<{ token?: string | string[] }> }) {
   const raw = (await searchParams).token;
