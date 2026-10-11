@@ -25,6 +25,9 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
       - name: Run offline ACV1 coverage-validator tests
         run: python3 -B -m unittest discover -s tests/planning -p 'test_coverage_validator.py'
+      - name: Run private command guard fake controls
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: node --test --test-concurrency=1 tests/authorization/private-command-guard.test.js
       - name: Check offline ownership-control fakes
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: node tests/operations/opsactual-ownership-controls.mjs
