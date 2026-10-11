@@ -17,8 +17,8 @@
     "compatibility/matrix.json": "sha256:747f9f7098c50257ad38c36cf4c934f55a1ab5a2fa6142d58bd0ff306f3e7e1c",
     "compatibility/owner-findings.json": "sha256:439277b856243391f80adafe2fd4db8eb659da98bf215da3df1b125553f6b55f",
     "compatibility/privacy-policy.json": "sha256:305551c6948d793cb720150433848d0894b38b8166600dff5376199dd5269fae",
-    "compatibility/production-impact.json": "sha256:e90c0aa1d1319894c1ad969689c97ab676934319d5048f37dda75e53c976e680",
-    "compatibility/production-integrity-findings.json": "sha256:6c5d5e0e6f0e8a4f0641e1968ed515844b0c259f07d2b95ad8db87df447e620e",
+    "compatibility/production-impact.json": "sha256:60c93ba6ae891e1c248beef899796fde39cd0b807dde1c2bf158d8392a7c222f",
+    "compatibility/production-integrity-findings.json": "sha256:4de309b1f528a6f819aa6e6301d92855808a39c1e8562291a9d79162d870b316",
     "compatibility/proposal-intake.json": "sha256:90cf33964d5c7b91024039070391a0fb2176022367a64aa3dbf55747718ec100",
     "compatibility/research-reference-findings.json": "sha256:bd5cbf4dda95d44d9b4479f723da62dd25cb69119cbba6e93f3addba6512baf6",
     "compatibility/semantic-links-findings.json": "sha256:033141d2b4737b8ea0c93dc0787314d74239f50e2e646a7c08ea1c2c57296899",
@@ -40,7 +40,7 @@
     "docs/identity-policy.md": "sha256:2cab79442634f7b07db6d8e9a347fda148f52181a893236eb28c0c7a7699deb3",
     "docs/operations-contracts.md": "sha256:4408efed704338f0850f6f02c6d3301cc67c72014e7a44d0da4c89c7b622f04c",
     "docs/privacy-policy.md": "sha256:8710f71141723a4c7afd07800de636bb44e70e1ba032d499e73989c345204022",
-    "docs/production-contracts.md": "sha256:11fdf431487cb90478d2fcea1fba8130b8ad05834b33172f57c8c970064e6a26",
+    "docs/production-contracts.md": "sha256:84f2b8bbf3ab1569a32d5e29b407081a0006ca83184c7b8283225db7d97cd815",
     "docs/release-guide.md": "sha256:65e48d37aff7ef3ea090b59f6bc072ef14f9f62f5b76010ea95eae2ab09dc0a5",
     "docs/requirements.json": "sha256:ee6d1eaa0417eaf27084c9efa0f4da7929fe073345075fa0ab25c4a9e734c9e2",
     "docs/research-creative-contracts.md": "sha256:50458be984e6e6414cc5f0b81d6e1f1d5d3f4be2d693dca27a4a983759e684c8",
@@ -350,10 +350,10 @@
     "tooling/production-operations.mjs": "sha256:6296244f7c8f97c12278d05a86138dc11d7023ce22d34ce3d1792a737a891547",
     "tooling/production-preflight.mjs": "sha256:f7fccaca189b49c15c8a9a96e21d595fbdf11603db33be4b62f76881ef73ec95",
     "tooling/production-rows.mjs": "sha256:0fcc19c1ce320fef01e457d0ef8ccc20f08e6c48b70cc34014522e19ec7a98a0",
-    "tooling/production-values.mjs": "sha256:0fa237641be31052d2be10823b352279faee1b67f3a5b7b62a5168dc66429ade",
+    "tooling/production-values.mjs": "sha256:117a200e6f3999ea01e218f312229c4db7b6aac8a0a3a3cb794a775754a2091e",
     "tooling/production-zip.mjs": "sha256:5eff1b3a2021c7b68bd6e1698bb669a3bb861a4a3f7aad6001a6d122e3b6e9db",
     "tooling/research-creative.mjs": "sha256:e508ab30d23fb841c9f7d9c85b0978af627e854ad32cfb7c9c89763fd3d25657",
     "tooling/runtime.mjs": "sha256:66d969987a44cb106644d423e8c915b4fd07516fbf063f5120697aa91bd2333f"
   },
-  "digest": "sha256:445f10a3dcf6218d23673032a687c8fb9478959c86a7cdd8eb3abebd2654acbf"
+  "digest": "sha256:143291d69a82a977ea3f32f3b995763faca7b59c2e193975adccbc74f3568fc0"
 }

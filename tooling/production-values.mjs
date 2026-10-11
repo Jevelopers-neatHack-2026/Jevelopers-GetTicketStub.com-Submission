@@ -14,22 +14,38 @@ const unique = values => new Set(values).size === values.length;
 const inside = (inner, outer) => BigInt(inner.x_nm) >= BigInt(outer.x_nm) && BigInt(inner.y_nm) >= BigInt(outer.y_nm) && BigInt(inner.x_nm) + BigInt(inner.width_nm) <= BigInt(outer.x_nm) + BigInt(outer.width_nm) && BigInt(inner.y_nm) + BigInt(inner.height_nm) <= BigInt(outer.y_nm) + BigInt(outer.height_nm);
 const validNm = value => /^(?:0|-?[1-9][0-9]{0,9})$/.test(value) && BigInt(value) >= -2000000000n && BigInt(value) <= 2000000000n;
 
+// All EventIntelligencePackage VersionedReference slots. Null kinds deliberately
+// retain the established generic descriptor semantics (not inferred domain policy).
+function factsReferences(value) {
+  return [
+    ...(value.parent_ref === null ? [] : [['/parent_ref', value.parent_ref, 'EventIntelligencePackage']]),
+    ['/request_ref', value.request_ref, 'ResearchRequest'], ['/request_receipt_ref', value.request_receipt_ref, 'ResearchRequestReceipt'],
+    ...value.answer_receipt_refs.map((ref, index) => ['/answer_receipt_refs/' + index, ref, 'ResearchAnswerReceipt']),
+    ['/batch_receipt_ref', value.batch_receipt_ref, 'ResearchBatchReceipt'],
+    ...value.sources.flatMap((source, index) => [['/sources/' + index + '/retention_ref', source.retention_ref, null], ['/sources/' + index + '/access_ref', source.access_ref, null]]),
+    ...value.facts.flatMap((fact, index) => fact.provenance.map((provenance, inner) => ['/facts/' + index + '/provenance/' + inner + '/evidence_ref', provenance.evidence_ref, null])),
+    ...value.approved_assets.flatMap((asset, index) => [['/approved_assets/' + index + '/artifact_ref', asset.artifact_ref, 'Artifact'], ['/approved_assets/' + index + '/approval_ref', asset.approval_ref, 'ApprovalReference']]),
+    ['/policy_ref', value.policy_ref, null],
+    ...value.decision_refs.map((ref, index) => ['/decision_refs/' + index, ref, null]),
+    ...value.usage_refs.map((ref, index) => ['/usage_refs/' + index, ref, null])
+  ];
+}
+function validFactsURL(value) {
+  let url;
+  try { url = new URL(value); } catch (error) { if (error instanceof TypeError) return false; throw error; }
+  return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password && !url.hash;
+}
+
 /** Immutable facts only: no freshness, issuer, approval or transitive record authority. */
 export function checkProductionFacts(input, scope) {
   const parsed = validateContract('EventIntelligencePackage', input);
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(input, scope).ok) return productionIssue('NOT_FOUND');
-  const kinds = { parent_ref: 'EventIntelligencePackage', request_ref: 'ResearchRequest', request_receipt_ref: 'ResearchRequestReceipt', answer_receipt_refs: 'ResearchAnswerReceipt', batch_receipt_ref: 'ResearchBatchReceipt', approval_ref: 'ApprovalReference' };
-  function references(value, path = '') {
-    if (value === null || typeof value !== 'object') return [];
-    if (Object.hasOwn(value, 'id') && Object.hasOwn(value, 'schema_version') && Object.hasOwn(value, 'content_hash')) return [[path, value]];
-    return Object.entries(value).flatMap(([key, child]) => ['value', 'candidate_values'].includes(key) ? [] : references(child, path + '/' + key));
-  }
-  for (const [path, reference] of references(input)) {
-    const kind = kinds[path.replace(/\/\d+$/, '').split('/').at(-1)];
+  for (const [path, reference, kind] of factsReferences(input)) {
     if (!validateVersionedReference(reference).ok || (kind && reference.contract !== kind)) return productionIssue('FACTS_UNSUPPORTED', path);
   }
   if (input.package_hash !== researchContentHash(input, 'package_hash')) return productionIssue('HASH_MISMATCH', '/package_hash');
+  for (const [index, source] of input.sources.entries()) if (!validFactsURL(source.url)) return productionIssue('FACTS_UNSUPPORTED', '/sources/' + index + '/url');
   if (!unique(input.sources.map(source => source.source_id)) || !unique(input.facts.map(fact => fact.fact_id)) || !unique(input.facts.map(fact => fact.key)) || !unique(input.asset_candidates.map(asset => asset.asset_id)) || !unique(input.approved_assets.map(asset => asset.asset_id))) return productionIssue('FACTS_UNSUPPORTED');
   for (const [index, fact] of input.facts.entries()) {
     if (fact.fact_hash !== researchContentHash(fact, 'fact_hash')) return productionIssue('HASH_MISMATCH', '/facts/' + index + '/fact_hash');
@@ -43,7 +59,10 @@ export function checkProductionFacts(input, scope) {
     }
   }
   if (input.readiness === 'ready' && input.facts.some(fact => fact.status !== 'known')) return productionIssue('FACTS_UNSUPPORTED');
-  for (const asset of input.asset_candidates) if (!input.sources.some(source => source.source_id === asset.source_id)) return productionIssue('FACTS_UNSUPPORTED');
+  for (const [index, asset] of input.asset_candidates.entries()) {
+    if (!input.sources.some(source => source.source_id === asset.source_id)) return productionIssue('FACTS_UNSUPPORTED', '/asset_candidates/' + index + '/source_id');
+    if (!validFactsURL(asset.discovery_url)) return productionIssue('FACTS_UNSUPPORTED', '/asset_candidates/' + index + '/discovery_url');
+  }
   for (const asset of input.approved_assets) if (!input.asset_candidates.some(candidate => candidate.asset_id === asset.asset_id && candidate.revision === asset.revision && candidate.original_hash === asset.original_hash && candidate.transformed_hash === asset.transformed_hash)) return productionIssue('FACTS_UNSUPPORTED');
   return parsed;
 }

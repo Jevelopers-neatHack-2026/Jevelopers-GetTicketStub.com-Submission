@@ -18,6 +18,7 @@
   "v2_to_v1": "LEGACY_UNREPRESENTABLE",
   "reviewed_release": false,
   "integrity_repair": "compatibility/production-integrity-findings.json",
+  "facts_intrinsic_parity": {"reference_slots": 13, "schema_and_research_bytes": "unchanged", "tests": "tests/production-facts-parity.test.mjs", "authority": "independently authenticated owner context; no new approval or accepted pin", "review": "fresh exact whole-PR review required"},
   "host_authority": {"required": true, "fields": ["actor_id", "audience"], "origin": "independently authenticated host before operation", "accepted": false},
   "producer_acknowledgement": null,
   "consumer_acknowledgement": null,
