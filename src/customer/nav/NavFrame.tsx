@@ -14,8 +14,9 @@ import { CartCorner } from "@/customer/cart/CartCorner";
 import { memoryPath } from "@/customer/pages/share";
 import { getStub } from "@/customer/studio/store";
 import { play, useMuted } from "@/customer/studio/feedback";
-import { AccountIcon, CartIcon, ChevronIcon, HandleIcon, MakeIcon, OrganizerIcon, WallIcon } from "./icons";
+import { AccountIcon, AdminIcon, CartIcon, ChevronIcon, HandleIcon, MakeIcon, OrganizerIcon, WallIcon } from "./icons";
 import { useDesktop, useNavOpen } from "./navState";
+import { useStaff } from "./useStaff";
 import { NAV_FREE, buildTree, chainOf, useLocation, type IconKey, type RouteNode } from "./routes";
 import f from "./NavFrame.module.css";
 
@@ -25,6 +26,7 @@ const ICONS: Record<IconKey, ComponentType> = {
   cart: CartIcon,
   organizer: OrganizerIcon,
   account: AccountIcon,
+  admin: AdminIcon,
 };
 
 /** The widths the CSS gives the sidebar (open, folded, the phone's rail); --nav-w on <html> follows them. */
@@ -104,7 +106,8 @@ export function NavFrame({ children, notice }: { children: ReactNode; notice?: R
 
   const { status: accountStatus } = useAccount();
   const unsaved = accountStatus === "out" && stubs.length > 0;
-  const tree = useMemo(() => buildTree({ keys, stubs, cartCount: 0, path, unsaved }), [keys, stubs, path, unsaved]);
+  const staff = useStaff();
+  const tree = useMemo(() => buildTree({ keys, stubs, cartCount: 0, path, unsaved, staff }), [keys, stubs, path, unsaved, staff]);
   const chain = useMemo(() => chainOf(tree, keys), [tree, keys]);
   const current = chain[chain.length - 1];
   const trail = new Set(chain.slice(0, -1));

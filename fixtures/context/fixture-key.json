@@ -1,0 +1,6 @@
+{
+  "warning": "FIXTURE ONLY. NEVER PRODUCTION. Public on purpose: it signs test tokens that carry mode fixture. Never set it as CONTEXT_SECRET.",
+  "kid": "fixture",
+  "alg": "HS256",
+  "key": "FIXTURE-ONLY-NEVER-PRODUCTION--ticketstub-context-key-v1"
+}

@@ -116,8 +116,10 @@ export function toggleFoil(stub: Stub): Stub {
   return { ...stub, personal: { ...stub.personal, foilTitle: !stub.personal.foilTitle } };
 }
 
+/** Holo is a screen effect on every stock now (see capabilities.ts); it is never printed, so no stock rules it out. */
 export function holoAllowed(m: Material): boolean {
-  return m === "print" || m === "framed";
+  void m;
+  return true;
 }
 
 export function setMaterial(stub: Stub, material: Material): Stub {

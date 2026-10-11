@@ -11,6 +11,7 @@ import { decodeStub, getStub, upsertStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
 import { FINISHES, materialPrice } from "@/customer/pages/commerce";
 import { PageShell, FriendlyError, OnDesk, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
+import { TearLink } from "@/customer/desk/Desk";
 import { absoluteUrl, copyText, formatDate, isStub } from "@/customer/pages/share";
 import { renderStoryPng, downloadBlob, photoToDataUrl } from "@/customer/pages/storyImage";
 import { useMounted } from "@/customer/pages/useMounted";
@@ -56,6 +57,8 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
   const [status, setStatus] = useState<{ text: string; ok?: boolean }>({ text: "" });
   const [stampKey, setStampKey] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
+  const [stopped, setStopped] = useState(false);
 
   if (!mounted) return <PageShell>{null}</PageShell>;
   if (decoded === undefined) return <PageShell>{null}</PageShell>;
@@ -67,8 +70,10 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
     );
   }
 
+  // A link that carries the stub itself (not a server token) is untrusted data: it can be read, never owned.
+  const legacy = !(remote?.token === token && remote.stub);
   const stub = owned ?? decoded;
-  const isOwner = !!owned;
+  const isOwner = !!owned && !legacy;
   const e = stub.event;
   const meta = [formatDate(e.dateISO), e.venue, e.city].filter(Boolean).join(" · ");
   const shareUrl = absoluteUrl(`/s/${token}`);
@@ -99,6 +104,17 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
     }
     if (await copyText(url)) say("Link copied", true);
     else say("Couldn't copy the link. Copy it from the address bar.");
+  }
+
+  async function stopSharing() {
+    try {
+      await api.stopSharing(stub.id);
+      setStopped(true);
+      setConfirmStop(false);
+      say("Sharing stopped. The old link no longer works.", true);
+    } catch {
+      say("We couldn't stop sharing just now. Try again in a moment.");
+    }
   }
 
   async function downloadStory() {
@@ -316,6 +332,21 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
                   <PaperButton type="button" onClick={downloadStory} disabled={busy}>
                     Download story image
                   </PaperButton>
+                  {confirmStop ? (
+                    <span role="group" aria-label="Stop sharing this stub">
+                      <span className={ui.muted}>This link stops working for everyone who has it. </span>
+                      <TearLink type="button" onClick={stopSharing}>
+                        Stop sharing
+                      </TearLink>{" "}
+                      <TearLink type="button" onClick={() => setConfirmStop(false)}>
+                        Keep sharing
+                      </TearLink>
+                    </span>
+                  ) : stopped ? null : (
+                    <TearLink type="button" onClick={() => setConfirmStop(true)}>
+                      Stop sharing
+                    </TearLink>
+                  )}
                 </div>
               </section>
             ) : null}
@@ -328,11 +359,14 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
                 </h2>
                 <p className={ui.muted}>Paste your ticket and get a stub with the setlist, the weather and the story of the night.</p>
                 <StampLink href="/">Paste your ticket link</StampLink>
-                <TearAnchor href={claimHref}>Were you there too? Claim a matching stub</TearAnchor>
+                {legacy ? null : <TearAnchor href={claimHref}>Were you there too? Claim a matching stub</TearAnchor>}
               </section>
             ) : null}
 
-            <p className={s.unlisted}>Anyone with the link can see this page. It isn&apos;t listed or searchable.</p>
+            <p className={s.unlisted}>
+              Anyone with the link can see this page. It isn&apos;t listed or searchable.
+              {legacy ? " Old share link." : ""}
+            </p>
           </article>
         </div>
       </PageShell>

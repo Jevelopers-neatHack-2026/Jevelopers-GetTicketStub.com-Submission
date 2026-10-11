@@ -80,6 +80,17 @@ export function checkOrigin(req: Request): void {
   if (!allowed) throw deny();
 }
 
+/** True when the request carries an Origin that isn't ours. A missing Origin is not foreign: for the routes that guests may call without one. */
+export function foreignOrigin(req: Request): boolean {
+  if (!req.headers.get("origin")) return false;
+  try {
+    checkOrigin(req);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 /** Reads a JSON body, refusing anything over `maxBytes` before it is parsed. */
 export async function readJson(req: Request, maxBytes: number): Promise<unknown> {
   const tooBig = () => new HttpError(413, "too_large", "That's too much to send in one go.");

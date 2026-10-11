@@ -229,6 +229,20 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
     }
   }
 
+  /** "Stop sharing": the page goes private and its link is replaced, so the old one is dead for good. */
+  function stopSharingWall() {
+    setIsPublic(false);
+    setPublicToken(null);
+    try {
+      localStorage.setItem(PUBLIC_KEY, "0");
+    } catch {
+      /* storage unavailable */
+    }
+    api.stopSharingWall().catch(() => {
+      /* the switch is off here; the server copy goes private the next time the switch is touched */
+    });
+  }
+
   /** Let go of a stub drag in progress (a second finger landed: that is a pinch, not a move). */
   const cancelDrag = useCallback(() => {
     const d = drag.current;
@@ -342,7 +356,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
             <Switch checked={isPublic} onChange={togglePublic} hint="Only people with the link can see it.">
               Public page
             </Switch>
-            {isPublic ? <PublicLink path={`/u/${publicToken ?? encodeWall(stubs)}`} capped={!publicToken && stubs.length > WALL_TOKEN_MAX} /> : null}
+            {isPublic ? <PublicLink path={`/u/${publicToken ?? encodeWall(stubs)}`} capped={!publicToken && stubs.length > WALL_TOKEN_MAX} onStop={publicToken ? stopSharingWall : undefined} /> : null}
           </div>
         ) : null}
       </div>
@@ -437,8 +451,9 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
 }
 
 /** The public link on a paper strip. */
-function PublicLink({ path, capped }: { path: string; capped: boolean }) {
+function PublicLink({ path, capped, onStop }: { path: string; capped: boolean; onStop?: () => void }) {
   const [status, setStatus] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const url = absoluteUrl(path);
   return (
     <div className={s.publicLink}>
@@ -448,6 +463,23 @@ function PublicLink({ path, capped }: { path: string; capped: boolean }) {
           Copy link
         </PaperButton>
       </div>
+      {onStop ? (
+        confirming ? (
+          <p className={s.small} role="group" aria-label="Stop sharing this page">
+            This link stops working for everyone who has it.{" "}
+            <TearLink type="button" onClick={onStop}>
+              Stop sharing
+            </TearLink>{" "}
+            <TearLink type="button" onClick={() => setConfirming(false)}>
+              Keep sharing
+            </TearLink>
+          </p>
+        ) : (
+          <TearLink type="button" onClick={() => setConfirming(true)}>
+            Stop sharing
+          </TearLink>
+        )
+      ) : null}
       {capped ? <p className={s.small}>Your {WALL_TOKEN_MAX} newest stubs appear on the public page.</p> : null}
       <p className={s.small} aria-live="polite">
         {status}

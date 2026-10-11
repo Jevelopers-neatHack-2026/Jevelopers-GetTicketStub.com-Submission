@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useId, useMemo, useState } from "react";
-import { FinishSwatches, Field, PaperButton, PunchTabs, Rule, SandboxStrip, SourceMark, Stamp, Stamped, Tag, Tags, TearLink, type FinishValue } from "@/customer/desk/Desk";
+import { FinishSwatches, Field, PaperButton, PunchTabs, Rule, MarkLegend, SandboxStrip, SourceMark, Stamp, Stamped, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import d from "@/customer/desk/Desk.module.css";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play } from "@/customer/studio/feedback";
-import { holoAllowed } from "@/customer/studio/editor/ops";
+import { VariantNote } from "@/customer/studio/editor/MaterialPicker";
 import { EDITIONS, MATERIALS, formatMoney, withGuestName, type Edition, type Finish, type Material, type Stub } from "@/customer/studio/types";
 import { ApiError, api, type OrganizerEventReply } from "@/customer/account/api";
 import { placeOrder } from "@/customer/account/orders";
@@ -12,7 +12,8 @@ import { openSignIn } from "@/customer/account/signin";
 import { useAccount } from "@/customer/account/useAccount";
 import { absoluteUrl, copyText } from "@/customer/pages/share";
 import { PageShell, CopyField, OnDesk, PaperLink, TearAnchor, ui } from "@/customer/pages/ui";
-import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, defaultSize, quote, sizesFor, type PrintSize } from "@/customer/pages/commerce";
+import { FINISHES, SANDBOX_LABEL, defaultSize, finishMarks, finishPrices, gateFor, quote, sizesFor, type PrintSize } from "@/customer/pages/commerce";
+import { CAPABILITY_VERSION, HOLO_WORDS, SIZE_COPY, statusMark } from "@/customer/pages/capabilities";
 import {
   SAMPLE_CSV,
   autoMatch,
@@ -32,11 +33,8 @@ import s from "./organizer.module.css";
 const STEPS = ["Design", "Guest list", "Check", "Publish"] as const;
 const MATERIAL_OPTIONS = MATERIALS.map((m) => ({ value: m.id, label: m.label, sub: formatMoney(m.priceMinor) }));
 
-/** "Classic stub · 2 × 5.5 in" becomes a tab ("Classic stub") with its dimensions beneath, as at checkout. */
-const sizeOption = (sz: PrintSize) => {
-  const [label, sub] = SIZE_LABEL[sz].split(" · ");
-  return { value: sz, label, sub };
-};
+/** A size is a tab ("Classic stub") with what its number measures beneath ("2 × 5.5 in trim"), as at checkout. */
+const sizeOption = (sz: PrintSize) => ({ value: sz, label: SIZE_COPY[sz].name, sub: SIZE_COPY[sz].measure });
 const SAMPLE_GUEST = { name: "Priya Raman", seat: "A12" };
 const PAGE = 12;
 const EDITION_LABEL: Record<Edition, string> = {
@@ -251,16 +249,19 @@ export default function OrganizerClient() {
   const each = quote(material, finish, size);
   const run = quote(material, finish, size, n);
   const total = run.totalMinor;
-  const prices = Object.fromEntries(FINISHES.map((f) => [f.id, !physical || f.upchargeMinor === 0 ? "Included" : `+${formatMoney(f.upchargeMinor)}`])) as Record<FinishValue, string>;
+  const gate = gateFor(material, finish, size);
+  const mark = statusMark(run.variantStatus);
   const materialLabel = MATERIALS.find((m) => m.id === material)?.label ?? material;
   const finishLabel = FINISHES.find((f) => f.id === finish)?.label ?? finish;
   const verb = physical ? "Print" : "Send";
 
   function startRun() {
+    if (!gate.ok) return;
     if (!ordered) {
       void placeOrder({
         stubIds: guests.map((_, i) => `${design.setId}-${i}`),
-        lines: [{ title: `${design.title} · ${n} guest stubs`, material, finish, size, totalMinor: total }],
+        lines: [{ title: `${design.title} · ${n} guest stubs`, material, finish, size, totalMinor: total, variantStatus: run.variantStatus }],
+        capabilityVersion: run.capabilityVersion,
         totalMinor: total,
         quoteId: run.quoteId,
         method: "organizer-print",
@@ -538,7 +539,6 @@ export default function OrganizerClient() {
                       value={material}
                       onChange={(m: Material) => {
                         setMaterial(m);
-                        if (finish === "holo" && !holoAllowed(m)) setFinish("foil");
                         setOrdered(null);
                       }}
                     />
@@ -547,17 +547,14 @@ export default function OrganizerClient() {
                     <span className="desk-label">Finish</span>
                     <FinishSwatches
                       value={finish}
-                      prices={prices}
+                      prices={finishPrices(material)}
+                      marks={finishMarks(material, size)}
                       onChange={(f) => {
-                        // Holo only exists on Print and Framed, so choosing it moves the stock up and the price shows it.
-                        if (f === "holo" && !holoAllowed(material)) setMaterial("print");
                         setFinish(f);
                         setOrdered(null);
                       }}
                     />
-                    <p className={ui.status} aria-live="polite">
-                      {!physical ? "On screen and on the wallet pass, every finish is included." : holoAllowed(material) ? "Holo is on Print and Framed." : "Holo comes on Print and Framed. Choosing it moves you to Print."}
-                    </p>
+                    <VariantNote material={material} finish={finish} size={size} withSize={false} />
                   </div>
                   {sizes.length > 1 ? (
                     <div className={s.group}>
@@ -565,6 +562,7 @@ export default function OrganizerClient() {
                       <PunchTabs label="Size" options={sizes.map(sizeOption)} value={size} onChange={(v) => (setSizePick(v), setOrdered(null))} />
                     </div>
                   ) : null}
+                  <p className={ui.status}>{SIZE_COPY[size].caption}</p>
 
                   <Rule kind="perf" />
                   <dl className={s.receipt}>
@@ -574,14 +572,10 @@ export default function OrganizerClient() {
                       </dt>
                       <dd>{formatMoney(run.itemMinor)}</dd>
                     </div>
-                    {run.finishMinor ? (
-                      <div className={s.runLine}>
-                        <dt>
-                          {n} × {finishLabel} finish
-                        </dt>
-                        <dd>{formatMoney(run.finishMinor)}</dd>
-                      </div>
-                    ) : null}
+                    <div className={s.runLine}>
+                      <dt>{finish === "holo" && physical ? HOLO_WORDS : `${n} × ${finishLabel} finish`}</dt>
+                      <dd>{finish === "holo" && physical ? "Not printed" : run.finishMinor ? formatMoney(run.finishMinor) : "Included"}</dd>
+                    </div>
                     {physical ? (
                       <div className={s.runLine}>
                         <dt>Shipping, once</dt>
@@ -598,6 +592,13 @@ export default function OrganizerClient() {
                       <dd>{formatMoney(total)}</dd>
                     </div>
                   </dl>
+                  <p className={ui.status}>Prices are sandbox fixtures, not printer quotes · capability map {CAPABILITY_VERSION}.</p>
+                  {gate.ok ? null : (
+                    <p className={ui.err} role="status">
+                      {gate.message}
+                    </p>
+                  )}
+                  <MarkLegend marks={["estimated", ...(mark ? [mark] : [])]} />
                   {ordered ? (
                     <div className={s.done} role="status">
                       <Stamped>Published</Stamped>
@@ -609,7 +610,7 @@ export default function OrganizerClient() {
                       </TearLink>
                     </div>
                   ) : (
-                    <Stamp block price={formatMoney(total)} onClick={startRun}>
+                    <Stamp block price={formatMoney(total)} onClick={startRun} disabled={!gate.ok}>
                       {verb} all {n}
                     </Stamp>
                   )}

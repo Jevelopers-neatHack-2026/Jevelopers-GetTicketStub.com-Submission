@@ -19,6 +19,12 @@ export interface LoginLinkRecord {
   shareToken?: string | null;
 }
 
+/** What the context layer reads about an account. membershipRevision only ever goes up. */
+export interface AccountState extends Account {
+  membershipRevision: number;
+  isStaff: boolean;
+}
+
 export interface WallRow {
   stub: Stub;
   updatedAt: number;
@@ -90,6 +96,16 @@ export interface Storage {
   createSession(tokenHash: string, accountId: string, now: number, expiresAt: number): Promise<void>;
   getSessionAccount(tokenHash: string, now: number): Promise<Account | null>;
   deleteSession(tokenHash: string): Promise<void>;
+  /** The account behind a live session, with its membership revision and a non-secret reference to the session. Null when unknown, expired or signed out. */
+  getSessionState(tokenHash: string, now: number): Promise<{ account: AccountState; sessionRef: string } | null>;
+  /** True while the session behind a sessionRef still exists and has not expired. */
+  isSessionLive(sessionRef: string, now: number): Promise<boolean>;
+  /** The current state of an account, or null once it is deleted. */
+  getAccountState(accountId: string): Promise<AccountState | null>;
+  /** Records whether the account is on the staff list now. A change bumps membershipRevision. Returns the current revision. */
+  syncStaff(accountId: string, isStaff: boolean): Promise<number>;
+  /** Signs the account out everywhere and bumps membershipRevision. */
+  deleteAccountSessions(accountId: string): Promise<void>;
   prune(now: number): Promise<void>;
 
   // wall
@@ -99,6 +115,8 @@ export interface Storage {
   setWallPublic(accountId: string, isPublic: boolean, newToken: string): Promise<string | null>;
   getWallPublic(accountId: string): Promise<{ isPublic: boolean; token: string | null }>;
   getPublicWall(token: string): Promise<Stub[] | null>;
+  /** Issues a new public token so the old link dies, and switches the wall off when `keepPublic` is false. Returns the new token (null when the wall is now private). */
+  rotateWallToken(accountId: string, newToken: string, keepPublic: boolean): Promise<string | null>;
 
   // orders
   createOrder(order: Order, accountId: string | null, email: string | null): Promise<void>;
@@ -108,6 +126,14 @@ export interface Storage {
   /** The same owner and stub id always get the same token; the snapshot is replaced each time. */
   upsertShare(ownerKey: string, stub: Stub, newToken: string, now: number): Promise<string>;
   getShare(token: string): Promise<Stub | null>;
+  /** Deletes the share of one stub, so its token stops resolving. The next share mints a new token. True when one existed. */
+  revokeShare(ownerKey: string, stubId: string): Promise<boolean>;
+  /** Moves a guest device's shares to the account that just proved an email. Ids the account already shares stay with the guest. */
+  adoptShares(fromKey: string, toKey: string): Promise<number>;
+  /** Does this tenant (account id, or guest:<id>) own the stub: on its wall, or shared by it? Never answers from a body id alone. */
+  ownsStub(tenantId: string, stubId: string): Promise<boolean>;
+  /** The account that created an organizer event, or null. */
+  getEventCaptain(eventId: string): Promise<string | null>;
 
   // art generation caps
   /**

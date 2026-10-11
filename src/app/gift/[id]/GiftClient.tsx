@@ -7,7 +7,7 @@ import { sharePath } from "@/customer/account/share";
 import { getStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
 import { PageShell, CopyField, EmptyState, OnDesk, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
-import { SANDBOX_LABEL, addOrder, materialPrice, updateSeat } from "@/customer/pages/commerce";
+import { OrderBlocked, SANDBOX_LABEL, addOrder, materialPrice, updateSeat } from "@/customer/pages/commerce";
 import { useMounted, randomId } from "@/customer/pages/useMounted";
 import s from "./gift.module.css";
 
@@ -59,7 +59,16 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
       personal: { ...stub.personal, note: note.trim() || stub.personal.note },
     };
     if (delivery === "print") {
-      addOrder({ stubIds: [gift.id], lines: [{ title: `Gift for ${to}: ${stub.event.title}`, material: "print", finish: stub.finish, size: "classic", totalMinor: printPrice }], totalMinor: printPrice, method: "gift-print" });
+      try {
+        addOrder({ stubIds: [gift.id], lines: [{ title: `Gift for ${to}: ${stub.event.title}`, material: "print", finish: stub.finish, size: "classic", totalMinor: printPrice }], totalMinor: printPrice, method: "gift-print" });
+      } catch (e) {
+        // live mode refuses print variants no supplier has confirmed yet (capabilities.ts)
+        if (e instanceof OrderBlocked) {
+          setError("Printed gifts aren't orderable yet. Send it as a link instead.");
+          return;
+        }
+        throw e;
+      }
     }
     if (cartItem && seatIndex !== undefined) updateSeat(cartItem, seatIndex, { decision: "gift", name: to });
     const path = await sharePath(gift);

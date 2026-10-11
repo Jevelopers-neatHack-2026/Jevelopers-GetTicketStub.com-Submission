@@ -162,9 +162,16 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+@media (min-width: 960px) {
+  .preview-notice {
+    padding-left: max(16px, var(--corner-reserve, 0px));
+    text-align: center;
+  }
+}
 .preview-notice {
-  padding: 8px 16px;
-  text-align: center;
+  /* clear the corner cart button: on phones the line starts at the left and stops short of it */
+  padding: 8px max(16px, var(--corner-reserve, 0px)) 8px 16px;
+  text-align: left;
   font-size: 13px;
   background: #f4ecdd;
   color: #17140f;

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Order } from "@/customer/pages/commerce";
-import { getSession, requireSession } from "@/server/auth";
+import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
+import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage } from "@/server/index";
 import { sendMail } from "@/server/mail";
@@ -26,18 +27,27 @@ function parseOrder(v: unknown): Omit<Order, "id" | "mode" | "createdAt"> {
   const lines = v.lines.map((l: unknown) => {
     if (!isObject(l)) throw bad("An order line is not valid.");
     if (!MATERIALS.includes(l.material as string) || !FINISHES.includes(l.finish as string) || !SIZES.includes(l.size as string)) throw bad("An order line has an unknown material, finish or size.");
+    const material = l.material as Order["lines"][number]["material"];
+    const finish = l.finish as Order["lines"][number]["finish"];
+    const size = l.size as Order["lines"][number]["size"];
+    // The status is derived here from the capability map. A variantStatus the browser sent is read by nobody.
+    const variant = variantFor(material, size, finish);
+    const gate = orderGate(variant, runtimeMode({ TICKETSTUB_RUNTIME_MODE: process.env.TICKETSTUB_RUNTIME_MODE }));
+    if (!gate.ok || !variant) throw new HttpError(422, "variant_not_orderable", gate.ok ? "That combination isn't on our list." : gate.message);
     return {
       title: parseText(l.title, 200, "A line title"),
-      material: l.material as Order["lines"][number]["material"],
-      finish: l.finish as Order["lines"][number]["finish"],
-      size: l.size as Order["lines"][number]["size"],
+      material,
+      finish,
+      size,
       totalMinor: minor(l.totalMinor, "A line total"),
+      variantStatus: variant.status,
     };
   });
   if (!METHODS.includes(v.method as string)) throw bad("The payment method is not valid.");
   const out: Omit<Order, "id" | "mode" | "createdAt"> = {
     stubIds: v.stubIds as string[],
     lines,
+    capabilityVersion: CAPABILITY_VERSION,
     totalMinor: minor(v.totalMinor, "The total"),
     currency: "USD",
     method: v.method as Order["method"],
@@ -53,7 +63,9 @@ export const POST = route(async (req: Request) => {
   const body = await readJson(req, 64 * 1024);
   if (!isObject(body)) throw bad("Send { order }.");
   const parsed = parseOrder(body.order);
-  const account = await getSession(req);
+  const ctx = await getRequestContext(req);
+  requireCapability(ctx, "order.create");
+  const account = ctx.actor.kind === "account" ? await accountOf(ctx) : null;
   // A guest order needs an email for the receipt. A signed-in order always uses the account's email.
   if (!account && !parsed.email) throw new HttpError(401, "unauthorized", "Add your email or sign in to place an order.");
   const email = account?.email ?? (parsed.email as string);
@@ -79,6 +91,8 @@ export const POST = route(async (req: Request) => {
 });
 
 export const GET = route(async (req: Request) => {
-  const account = await requireSession(req);
+  const ctx = await getRequestContext(req);
+  requireCapability(ctx, "order.read");
+  const account = await accountOf(ctx);
   return json({ orders: await getStorage().listOrders(account.id, account.email) });
 });

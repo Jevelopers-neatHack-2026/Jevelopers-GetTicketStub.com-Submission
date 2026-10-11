@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
 import { migrate } from "./migrations";
-import type { Account, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
+import type { Account, AccountState, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
 
 type Row = Record<string, unknown>;
 
@@ -88,7 +88,7 @@ export class SqliteStorage implements Storage {
     return this.tx(() => {
       if (!this.get("SELECT id FROM accounts WHERE id = ?", accountId)) return "missing";
       if (this.get("SELECT id FROM accounts WHERE email = ? AND id != ?", email, accountId)) return "taken";
-      this.run("UPDATE accounts SET email = ? WHERE id = ?", email, accountId);
+      this.run("UPDATE accounts SET email = ?, membership_revision = membership_revision + 1 WHERE id = ?", email, accountId);
       return "changed";
     });
   }
@@ -172,6 +172,45 @@ export class SqliteStorage implements Storage {
     this.run("DELETE FROM sessions WHERE token_hash = ?", tokenHash);
   }
 
+  async getSessionState(tokenHash: string, now: number): Promise<{ account: AccountState; sessionRef: string } | null> {
+    const r = this.get(
+      "SELECT s.token_hash, a.id, a.email, a.membership_revision, a.is_staff FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.token_hash = ? AND s.expires_at > ?",
+      tokenHash, now,
+    );
+    if (!r || !safeEqual(r.token_hash as string, tokenHash)) return null;
+    return {
+      account: { id: r.id as string, email: r.email as string, membershipRevision: Number(r.membership_revision), isStaff: Number(r.is_staff) === 1 },
+      sessionRef: (r.token_hash as string).slice(0, 24),
+    };
+  }
+
+  async isSessionLive(sessionRef: string, now: number): Promise<boolean> {
+    if (!/^[a-f0-9]{24}$/.test(sessionRef)) return false;
+    return !!this.get("SELECT 1 AS x FROM sessions WHERE substr(token_hash, 1, 24) = ? AND expires_at > ? LIMIT 1", sessionRef, now);
+  }
+
+  async getAccountState(accountId: string): Promise<AccountState | null> {
+    const r = this.get("SELECT id, email, membership_revision, is_staff FROM accounts WHERE id = ?", accountId);
+    return r ? { id: r.id as string, email: r.email as string, membershipRevision: Number(r.membership_revision), isStaff: Number(r.is_staff) === 1 } : null;
+  }
+
+  async syncStaff(accountId: string, isStaff: boolean): Promise<number> {
+    return this.tx(() => {
+      const r = this.get("SELECT membership_revision, is_staff FROM accounts WHERE id = ?", accountId);
+      if (!r) return 0;
+      if ((Number(r.is_staff) === 1) === isStaff) return Number(r.membership_revision);
+      this.run("UPDATE accounts SET is_staff = ?, membership_revision = membership_revision + 1 WHERE id = ?", isStaff ? 1 : 0, accountId);
+      return Number(r.membership_revision) + 1;
+    });
+  }
+
+  async deleteAccountSessions(accountId: string): Promise<void> {
+    this.tx(() => {
+      this.run("DELETE FROM sessions WHERE account_id = ?", accountId);
+      this.run("UPDATE accounts SET membership_revision = membership_revision + 1 WHERE id = ?", accountId);
+    });
+  }
+
   async prune(now: number): Promise<void> {
     this.run("DELETE FROM sessions WHERE expires_at <= ?", now);
     // Keep used and expired links for a day so a second click still reads as "used", then drop them.
@@ -241,6 +280,16 @@ export class SqliteStorage implements Storage {
     return a ? this.readWall(a.id as string).stubs : null;
   }
 
+  async rotateWallToken(accountId: string, newToken: string, keepPublic: boolean): Promise<string | null> {
+    return this.tx(() => {
+      const r = this.get("SELECT wall_public FROM accounts WHERE id = ?", accountId);
+      if (!r) return null;
+      const stayPublic = keepPublic && Number(r.wall_public) === 1;
+      this.run("UPDATE accounts SET wall_token = ?, wall_public = ? WHERE id = ?", newToken, stayPublic ? 1 : 0, accountId);
+      return stayPublic ? newToken : null;
+    });
+  }
+
   async createOrder(order: Order, accountId: string | null, email: string | null): Promise<void> {
     this.run("INSERT INTO orders (id, account_id, email, created_at, data) VALUES (?, ?, ?, ?, ?)", order.id, accountId, email, Date.parse(order.createdAt) || Date.now(), JSON.stringify(order));
   }
@@ -270,6 +319,24 @@ export class SqliteStorage implements Storage {
   async getShare(token: string): Promise<Stub | null> {
     const r = this.get("SELECT data FROM shares WHERE token = ?", token);
     return r ? (JSON.parse(r.data as string) as Stub) : null;
+  }
+
+  async revokeShare(ownerKey: string, stubId: string): Promise<boolean> {
+    return Number(this.run("DELETE FROM shares WHERE owner_key = ? AND stub_id = ?", ownerKey, stubId).changes) > 0;
+  }
+
+  async adoptShares(fromKey: string, toKey: string): Promise<number> {
+    return Number(this.run("UPDATE OR IGNORE shares SET owner_key = ? WHERE owner_key = ?", toKey, fromKey).changes);
+  }
+
+  async ownsStub(tenantId: string, stubId: string): Promise<boolean> {
+    if (this.get("SELECT 1 AS x FROM shares WHERE owner_key = ? AND stub_id = ?", tenantId, stubId)) return true;
+    return !!this.get("SELECT 1 AS x FROM wall_stubs WHERE account_id = ? AND stub_id = ? AND deleted = 0", tenantId, stubId);
+  }
+
+  async getEventCaptain(eventId: string): Promise<string | null> {
+    const r = this.get("SELECT account_id FROM organizer_events WHERE id = ?", eventId);
+    return r ? (r.account_id as string) : null;
   }
 
   async createEvent(accountId: string, event: { id: string; title: string; stub: Stub; expiresAt: number }, claims: NewClaim[], now: number): Promise<void> {

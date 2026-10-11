@@ -9,7 +9,7 @@ export interface StubRow {
   title: string;
 }
 
-export type IconKey = "make" | "wall" | "cart" | "organizer" | "account";
+export type IconKey = "make" | "wall" | "cart" | "organizer" | "account" | "admin";
 
 export interface RouteNode {
   key: string;
@@ -77,6 +77,8 @@ export function locate(path: string, stubs: StubRow[], shareStubId?: string): st
       return seg[1] === "claim" ? ["organizer", "guests"] : ["organizer"];
     case "account":
       return ["account"];
+    case "admin":
+      return ["admin"];
     case "privacy":
     case "terms":
       return ["account", seg[0]];
@@ -94,10 +96,12 @@ export interface TreeInput {
   path: string;
   /** Signed out with stubs that live only on this device: the Account row carries a dot. */
   unsaved?: boolean;
+  /** The server says this account is staff: the Admin row shows. Cosmetic; /admin checks on the server. */
+  staff?: boolean;
 }
 
 /** The whole tree for this moment. Places that exist only while you're there (a claim, the printing stage) appear only then. */
-export function buildTree({ keys, stubs, cartCount, path, unsaved }: TreeInput): RouteNode[] {
+export function buildTree({ keys, stubs, cartCount, path, unsaved, staff }: TreeInput): RouteNode[] {
   const has = (k: string) => keys.includes(k);
   const currentStub = keys.find((k) => k.startsWith("stub:"))?.slice(5);
 
@@ -141,6 +145,7 @@ export function buildTree({ keys, stubs, cartCount, path, unsaved }: TreeInput):
     { key: "cart", label: "Cart", href: "/cart", icon: "cart", count: cartCount, hidden: true, children: cartKids },
     { key: "organizer", label: "Organizer", href: "/organizer", icon: "organizer", children: orgKids },
     { key: "account", label: "Account", href: "/account", icon: "account", dot: unsaved, children: acctKids },
+    ...(staff ? [{ key: "admin", label: "Admin", href: "/admin", icon: "admin" as const }] : []),
   ];
 }
 

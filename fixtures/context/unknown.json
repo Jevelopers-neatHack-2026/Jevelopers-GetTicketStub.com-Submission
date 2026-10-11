@@ -1,0 +1,11 @@
+{
+  "fixture": "unknown",
+  "description": "No session and no device: role none, the public capabilities only. A valid token that grants nothing private.",
+  "verifyAt": "2026-10-10T12:00:00.000Z",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InRpY2tldHN0dWIuY29udGV4dCJ9.eyJjdHgiOnsic2NoZW1hIjoidGlja2V0c3R1Yi5jb250ZXh0LzEiLCJhY3RvciI6eyJraW5kIjoiYW5vbnltb3VzIn0sInRlbmFudCI6eyJpZCI6ImFub255bW91cyJ9LCJyb2xlIjoibm9uZSIsImNhcGFiaWxpdGllcyI6WyJhZ2VudC51c2UiLCJhcnQuZ2VuZXJhdGUiLCJjbGFpbS52aWV3IiwiZmlsZS5yZWFkIiwib3JkZXIuY3JlYXRlIiwic2hhcmUuY3JlYXRlIiwic2hhcmUudmlldyIsInN0dWIuZHJhZnQiLCJ3YWxsLnB1YmxpYy52aWV3Il0sIm1lbWJlcnNoaXBSZXZpc2lvbiI6MCwicmV2b2tlZCI6ZmFsc2UsImVudmlyb25tZW50IjoiZGV2ZWxvcG1lbnQiLCJtb2RlIjoiZml4dHVyZSIsImlzc3VlZEF0IjoiMjAyNi0xMC0xMFQxMjowMDowMC4wMDBaIiwiZXhwaXJlc0F0IjoiMjAyNi0xMC0xMFQxMjowNTowMC4wMDBaIn0sInNpZCI6bnVsbH0.JQDqHDHWPmRyGVklI0pXde0QmSEzSNbzERqfUxhJVKk",
+  "expect": {
+    "ok": true,
+    "role": "none",
+    "tenant": "anonymous"
+  }
+}

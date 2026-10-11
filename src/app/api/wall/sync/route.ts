@@ -1,4 +1,4 @@
-import { requireSession } from "@/server/auth";
+import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
 import { getStorage } from "@/server/index";
 import { readStub } from "@/server/validate";
@@ -8,7 +8,9 @@ const MAX_ITEMS = 1000;
 
 export const POST = route(async (req: Request) => {
   checkOrigin(req);
-  const account = await requireSession(req);
+  const ctx = await getRequestContext(req);
+  requireCapability(ctx, "wall.sync");
+  const account = await accountOf(ctx); // the wall written is always the caller's own, whatever ids the body carries
   const body = await readJson(req, MAX_BODY);
   if (!isObject(body) || !Array.isArray(body.stubs) || !Array.isArray(body.deleted)) {
     throw new HttpError(400, "bad_request", "Send { stubs, deleted }.");

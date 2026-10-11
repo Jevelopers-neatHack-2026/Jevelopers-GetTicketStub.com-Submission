@@ -1,0 +1,19 @@
+{
+  "fixture": "tenant-a-owner",
+  "description": "Tenant A's owner of stub_fx_shared. Project ids are only unique inside a tenant.",
+  "verifyAt": "2026-10-10T12:00:00.000Z",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InRpY2tldHN0dWIuY29udGV4dCJ9.eyJjdHgiOnsic2NoZW1hIjoidGlja2V0c3R1Yi5jb250ZXh0LzEiLCJhY3RvciI6eyJraW5kIjoiYWNjb3VudCIsImlkIjoiYWNjX0ZJWFRVUkVfdGVuYW50MSJ9LCJ0ZW5hbnQiOnsiaWQiOiJhY2NfRklYVFVSRV90ZW5hbnQxIn0sInByb2plY3QiOnsia2luZCI6InN0dWIiLCJpZCI6InN0dWJfZnhfc2hhcmVkIn0sInJvbGUiOiJvd25lciIsImNhcGFiaWxpdGllcyI6WyJhY2NvdW50LmRlbGV0ZSIsImFjY291bnQuZW1haWwuY2hhbmdlIiwiYWNjb3VudC5yZWFkIiwiYWdlbnQudXNlIiwiYXJ0LmdlbmVyYXRlIiwiY2xhaW0ucmVkZWVtIiwiY2xhaW0udmlldyIsImV2ZW50LmNyZWF0ZSIsImZpbGUucmVhZCIsIm9yZGVyLmNyZWF0ZSIsIm9yZGVyLnJlYWQiLCJzZXNzaW9uLnJldm9rZSIsInNoYXJlLmNyZWF0ZSIsInNoYXJlLnJldm9rZSIsInNoYXJlLnZpZXciLCJzdHViLmRyYWZ0Iiwic3R1Yi5yZWFkIiwic3R1Yi53cml0ZSIsIndhbGwucHVibGljLnZpZXciLCJ3YWxsLnB1Ymxpc2giLCJ3YWxsLnN5bmMiXSwibWVtYmVyc2hpcFJldmlzaW9uIjoxLCJyZXZva2VkIjpmYWxzZSwiZW52aXJvbm1lbnQiOiJkZXZlbG9wbWVudCIsIm1vZGUiOiJmaXh0dXJlIiwiaXNzdWVkQXQiOiIyMDI2LTEwLTEwVDEyOjAwOjAwLjAwMFoiLCJleHBpcmVzQXQiOiIyMDI2LTEwLTEwVDEyOjA1OjAwLjAwMFoifSwic2lkIjoiZngwMDAwMDAwMDAwMDAwMDAwMDAwMDA0In0.KtPzTZdhEvTdw7TvVOaRcmIaMTN1YQisN4GUNeLcB0g",
+  "state": {
+    "membershipRevision": 1,
+    "sessionLive": true
+  },
+  "expect": {
+    "ok": true,
+    "role": "owner",
+    "tenant": "acc_FIXTURE_tenant1",
+    "project": {
+      "kind": "stub",
+      "id": "stub_fx_shared"
+    }
+  }
+}

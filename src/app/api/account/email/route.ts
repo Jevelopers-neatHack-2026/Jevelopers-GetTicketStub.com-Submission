@@ -1,4 +1,5 @@
-import { LINK_TTL_MS, requireSession, sandboxMail } from "@/server/auth";
+import { LINK_TTL_MS, sandboxMail } from "@/server/auth";
+import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { hashToken, newToken } from "@/server/crypto";
 import { HttpError, appOrigin, checkOrigin, clientIp, isObject, json, limit, readJson, route } from "@/server/http";
 import { getStorage } from "@/server/index";
@@ -11,7 +12,9 @@ const WINDOW = 15 * 60_000;
 // Sends a confirm link to the NEW address. Nothing changes until it is opened.
 export const POST = route(async (req: Request) => {
   checkOrigin(req);
-  const account = await requireSession(req);
+  const ctx = await getRequestContext(req);
+  requireCapability(ctx, "account.email.change");
+  const account = await accountOf(ctx);
   limit(`email:ip:${clientIp(req)}`, 20, WINDOW);
   limit(`email:acct:${account.id}`, 5, WINDOW);
   const body = await readJson(req, 4 * 1024);

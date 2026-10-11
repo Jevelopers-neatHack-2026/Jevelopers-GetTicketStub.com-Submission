@@ -212,7 +212,18 @@ export function Tags({ children, label }: { children: ReactNode; label?: string 
 export type FinishValue = "matte" | "foil" | "holo";
 
 /** Finish picker: a chip of each material, so you choose by look. */
-export function FinishSwatches({ value, onChange, prices }: { value: FinishValue; onChange: (v: FinishValue) => void; prices?: Partial<Record<FinishValue, string>> }) {
+export function FinishSwatches({
+  value,
+  onChange,
+  prices,
+  marks,
+}: {
+  value: FinishValue;
+  onChange: (v: FinishValue) => void;
+  prices?: Partial<Record<FinishValue, string>>;
+  /** A printer's mark after the price for a finish that is only a preview, or can't be ordered. */
+  marks?: Partial<Record<FinishValue, "preview" | "blocked">>;
+}) {
   const items: { v: FinishValue; label: string }[] = [
     { v: "matte", label: "Matte" },
     { v: "foil", label: "Foil" },
@@ -237,7 +248,12 @@ export function FinishSwatches({ value, onChange, prices }: { value: FinishValue
         >
           <span className={s.swatchChip} aria-hidden />
           <span>{it.label}</span>
-          {prices?.[it.v] ? <span className={s.swatchPrice}>{prices[it.v]}</span> : null}
+          {prices?.[it.v] ? (
+            <span className={s.swatchPrice}>
+              {prices[it.v]}
+              {marks?.[it.v] ? <SourceMark p={marks[it.v]!} /> : null}
+            </span>
+          ) : null}
         </button>
       ))}
     </div>
@@ -284,7 +300,12 @@ export function Rule({ kind = "single" }: { kind?: "single" | "double" | "perf" 
   return <hr className={kind === "double" ? s.ruleDouble : kind === "perf" ? s.rulePerf : s.rule} />;
 }
 
-const MARK_WORDS: Record<Provenance | "sandbox", string> = {
+/** Marks for what can be ordered: a preview has no confirmed printer SKU yet, blocked can't be ordered at all. */
+export type MarkKind = Provenance | "sandbox" | "preview" | "blocked";
+
+const MARK_WORDS: Record<MarkKind, string> = {
+  preview: "Preview, not yet orderable",
+  blocked: "Not orderable",
   live: "Live source",
   sandbox: "Sandbox",
   simulated: "Simulated",
@@ -293,12 +314,12 @@ const MARK_WORDS: Record<Provenance | "sandbox", string> = {
 };
 
 /** A printer's mark after a fact that says where it came from (EVAL-03), without shouting. */
-export function SourceMark({ p }: { p: Provenance | "sandbox" }) {
+export function SourceMark({ p }: { p: MarkKind }) {
   return <span className={s.mark} data-p={p} role="img" aria-label={MARK_WORDS[p]} title={MARK_WORDS[p]} />;
 }
 
 /** One legend line per screen for the marks used on it. */
-export function MarkLegend({ marks }: { marks: (Provenance | "sandbox")[] }) {
+export function MarkLegend({ marks }: { marks: MarkKind[] }) {
   return (
     <p className={s.legend}>
       {marks.map((m) => (

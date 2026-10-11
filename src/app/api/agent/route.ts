@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import type { EventData } from "@/customer/studio/types";
+import { getRequestContext, requireCapability } from "@/server/context";
+import { HttpError, errorResponse, foreignOrigin } from "@/server/http";
 
 // Optional free-text agent replies. Only answers when ANTHROPIC_API_KEY is configured;
 // otherwise 204 and the client uses its rule-based, clearly labelled simulated agent.
 
 export async function POST(req: Request) {
   if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") return new NextResponse(null, { status: 204 });
+  if (foreignOrigin(req)) return errorResponse(new HttpError(403, "bad_origin", "This request didn't come from TicketStub."));
+  try {
+    requireCapability(await getRequestContext(req), "agent.use");
+  } catch (e) {
+    return errorResponse(e);
+  }
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return new NextResponse(null, { status: 204 });
 

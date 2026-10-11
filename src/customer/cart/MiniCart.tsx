@@ -8,11 +8,12 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerE
 import { MarkLegend, SandboxStrip, SourceMark, Stamp, TearLink } from "@/customer/desk/Desk";
 import { CloseIcon } from "@/customer/desk/icons";
 import { LeavesMark, PaperLink } from "@/customer/pages/ui";
-import { SANDBOX_LABEL, SIZE_LABEL, billableSeats, cartTotals, restoreCartItem, saveCart, type CartItem } from "@/customer/pages/commerce";
+import { SANDBOX_LABEL, billableSeats, cartMarks, cartTotals, restoreCartItem, saveCart, type CartItem } from "@/customer/pages/commerce";
+import { CartLineSpec } from "@/customer/studio/editor/MaterialPicker";
 import { haptic, play } from "@/customer/studio/feedback";
 import { getStub } from "@/customer/studio/store";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { MATERIALS, formatMoney } from "@/customer/studio/types";
+import { formatMoney } from "@/customer/studio/types";
 import { closeMiniCart, useCartItems, useMiniCartOpen } from "./cartStore";
 import m from "./MiniCart.module.css";
 
@@ -173,9 +174,7 @@ export function MiniCart() {
                     <div className={m.thumb}>{st ? <StubView stub={st} size="sm" /> : <div className={m.thumbEmpty} aria-hidden />}</div>
                     <div className={m.info}>
                       <h3 className={m.itemTitle}>{item.title}</h3>
-                      <p className={m.muted}>
-                        {MATERIALS.find((x) => x.id === item.material)?.label} · {item.finish} · {SIZE_LABEL[item.size]}
-                      </p>
+                      <CartLineSpec item={item} className={m.muted} />
                       <p className={m.muted}>{seatLine(item)}</p>
                       <p className={m.price}>
                         {billable > 1 ? <span className={m.each}>{`${billable} × ${formatMoney(item.unitMinor)}`}</span> : null}
@@ -239,7 +238,7 @@ export function MiniCart() {
                 Open full cart
               </PaperLink>
             </div>
-            <MarkLegend marks={["estimated"]} />
+            <MarkLegend marks={["estimated", ...cartMarks(items)]} />
           </footer>
         ) : null}
       </section>

@@ -503,6 +503,16 @@
   border-radius: 1px;
   box-shadow: inset 0 0 0 1.4px currentColor;
 }
+/* Order marks, drawn like crop marks: a preview is a square crossed once, blocked is a ring struck through. */
+.mark[data-p="preview"] {
+  border-radius: 1px;
+  background: linear-gradient(135deg, transparent 44%, currentColor 44% 56%, transparent 56%);
+  box-shadow: inset 0 0 0 1.4px currentColor;
+}
+.mark[data-p="blocked"] {
+  background: linear-gradient(135deg, transparent 44%, currentColor 44% 56%, transparent 56%);
+  box-shadow: inset 0 0 0 1.4px currentColor;
+}
 .legend {
   display: flex;
   flex-wrap: wrap;

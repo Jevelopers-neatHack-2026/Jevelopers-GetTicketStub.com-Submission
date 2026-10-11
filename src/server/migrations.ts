@@ -97,6 +97,12 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (key, day)
   );
   `,
+  `
+  -- Identity context: membership_revision moves when the email changes, sessions are all revoked or staff status flips.
+  ALTER TABLE accounts ADD COLUMN membership_revision INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE accounts ADD COLUMN is_staff INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX shares_owner ON shares (owner_key);
+  `,
 ];
 
 export function migrate(db: DatabaseSync): void {

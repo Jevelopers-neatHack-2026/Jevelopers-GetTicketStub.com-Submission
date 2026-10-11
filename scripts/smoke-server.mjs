@@ -3,11 +3,18 @@
 // Uses fresh random emails and a random client IP each run, so it can be repeated. It writes to the
 // database the server uses. The expired-link check edits that file directly (TICKETSTUB_DB or the default).
 import { createHash, randomBytes } from "node:crypto";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const BASE = (process.argv[2] ?? process.env.SMOKE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const DB = process.env.TICKETSTUB_DB ?? "./data/ticketstub.sqlite";
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const run = randomBytes(4).toString("hex");
+/** Every client made and every response body seen, for the no-secrets scan at the end. */
+const clients = [];
+const responses = [];
 let failed = 0;
 let passed = 0;
 
@@ -33,6 +40,7 @@ function client(label) {
       else jar.set(k.trim(), v);
     }
     const text = await res.text();
+    responses.push(text);
     let json;
     try {
       json = JSON.parse(text);
@@ -48,7 +56,9 @@ function client(label) {
     const token = new URL(r.json.devLink).searchParams.get("token");
     return { link: r, cb: await api("POST", "/api/auth/confirm", { token }) };
   };
-  return { api, signIn, jar, label, ip };
+  const me = { api, signIn, jar, label, ip };
+  clients.push(me);
+  return me;
 }
 
 const tokenOf = (devLink) => new URL(devLink).searchParams.get("token");
@@ -76,6 +86,21 @@ const titles = (r) => (r.json?.stubs ?? []).map((s) => `${s.id}:${s.event.title}
 
 async function main() {
   const t0 = Date.now();
+  if (process.env.SMOKE_EXPECT === "live-nosecret") {
+    // Run against a server started with TICKETSTUB_RUNTIME_MODE=live and no CONTEXT_SECRET.
+    const r = await client("live").api("GET", "/api/context");
+    check("live mode without CONTEXT_SECRET refuses to issue a context token (503)", r.status === 503 && r.json?.error?.code === "context_unavailable" && !r.text.includes("eyJ"), `${r.status} ${r.text.slice(0, 80)}`);
+    // A guest order with an email needs no sign-in, so the order gate can be tried in live mode too.
+    const line = { title: "Foil card", material: "card", finish: "foil", size: "classic", totalMinor: 3500, variantStatus: "orderable" };
+    const base = { stubIds: ["s1"], totalMinor: 3500, method: "card", email: `smoke-live-${run}@example.com` };
+    const pv = await client("live-order").api("POST", "/api/orders", { order: { ...base, lines: [line] } });
+    check("live mode: a preview line, even one claiming orderable, is 422 variant_not_orderable", pv.status === 422 && pv.json?.error?.code === "variant_not_orderable", `${pv.status} ${pv.text.slice(0, 100)}`);
+    const dg = await client("live-order2").api("POST", "/api/orders", { order: { ...base, lines: [{ ...line, material: "digital", finish: "matte", size: "file", totalMinor: 900 }] } });
+    check("live mode: an orderable digital line is accepted", dg.status === 200 && dg.json.order.lines[0].variantStatus === "orderable", `${dg.status} ${dg.text.slice(0, 100)}`);
+    console.log(`
+${passed} passed, ${failed} failed`);
+    process.exit(failed ? 1 : 0);
+  }
   const a = client("A");
   const emailA = `smoke-a-${run}@example.com`;
 
@@ -224,6 +249,22 @@ async function main() {
   check("a guest order with an email is created", go.status === 200 && go.json.order.mode === "sandbox" && /^ord_/.test(go.json.order.id) && go.json.order.email === guestEmail);
   const so = await a.api("POST", "/api/orders", { order });
   check("a signed-in order uses the account email", so.status === 200 && so.json.order.email === emailA);
+  const cap = await import(pathToFileURL(join(ROOT, "src", "customer", "pages", "capabilities.ts")).href);
+  const previewLine = { title: "Foil card", material: "card", finish: "foil", size: "classic", totalMinor: 3500, variantStatus: "orderable" };
+  const forgedPreview = await a.api("POST", "/api/orders", { order: { ...order, lines: [previewLine], capabilityVersion: "forged" } });
+  check("a forged variantStatus orderable on a preview variant is ignored: the server re-derives preview", forgedPreview.status === 200 && forgedPreview.json.order.lines[0].variantStatus === "preview" && forgedPreview.json.order.capabilityVersion === cap.CAPABILITY_VERSION, forgedPreview.text.slice(0, 120));
+  const digitalLine = await a.api("POST", "/api/orders", { order: { ...order, lines: [{ title: "File", material: "digital", finish: "matte", size: "file", totalMinor: 900, variantStatus: "preview" }] } });
+  check("a digital matte line is stored orderable whatever the browser said", digitalLine.status === 200 && digitalLine.json.order.lines[0].variantStatus === "orderable");
+  const holo = await a.api("POST", "/api/orders", { order: { ...order, lines: [{ ...previewLine, finish: "holo" }] } });
+  check("a printed holo line is 422 variant_not_orderable in any mode", holo.status === 422 && holo.json?.error?.code === "variant_not_orderable");
+  const odd = await a.api("POST", "/api/orders", { order: { ...order, lines: [{ ...previewLine, material: "framed", size: "classic" }] } });
+  check("a combination that isn't on the map is 422", odd.status === 422);
+  check("the order gate: live mode rejects every preview and unavailable variant, demo accepts previews", cap.VARIANTS.every((v) => {
+    const live = cap.orderGate(v, "live");
+    const demo = cap.orderGate(v, "demo");
+    return live.ok === (v.status === "orderable") && demo.ok === (v.status !== "unavailable");
+  }) && cap.orderGate(undefined, "demo").ok === false);
+  check("the order gate reads TICKETSTUB_RUNTIME_MODE only, never the browser mirror", cap.runtimeMode({ TICKETSTUB_RUNTIME_MODE: "live" }) === "live" && cap.runtimeMode({ TICKETSTUB_RUNTIME_MODE: "demo" }) === "demo");
   check("an order with a bad method is 400", (await a.api("POST", "/api/orders", { order: { ...order, method: "bitcoin" } })).status === 400);
   check("an order with a negative total is 400", (await a.api("POST", "/api/orders", { order: { ...order, totalMinor: -1 } })).status === 400);
   const list = await a.api("GET", "/api/orders");
@@ -278,7 +319,9 @@ async function main() {
 
   // Emails and the stub picture
   const prev = await anon.api("GET", "/api/dev/email-preview?kind=receipt");
-  check("email preview returns HTML in dev", prev.status === 200 && /TICKETSTUB/.test(prev.text ?? "") === true, String(prev.status));
+  // The preview is dev only: HTML from a dev server, 404 from a production build. The context says which one this is.
+  const isDev = (await anon.api("GET", "/api/context")).json?.context?.environment === "development";
+  check(isDev ? "email preview returns HTML in dev" : "email preview is 404 in production", isDev ? prev.status === 200 && /TICKETSTUB/.test(prev.text ?? "") === true : prev.status === 404, String(prev.status));
   const imgRes = await fetch(`${BASE}/api/stub-image/${sh1.json.token}`);
   check("stub image renders a PNG for a share token", imgRes.status === 200 && imgRes.headers.get("content-type") === "image/png");
   check("stub image for an unknown token is 404", (await fetch(`${BASE}/api/stub-image/nope-nope-nope`)).status === 404);
@@ -427,8 +470,376 @@ async function main() {
   check("the old session is dead server-side", (await sync(b, [])).status === 401);
   check("errors have the contract shape", (await sync(b, [])).json?.error?.code === "unauthorized");
 
+  await gt08(anon);
+
   console.log(`\n${passed} passed, ${failed} failed in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   process.exit(failed ? 1 : 0);
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// GT-08: identity, ACL, sharing and the signed context. Two accounts (X, Y) each own two stubs and an event.
+// ---------------------------------------------------------------------------------------------
+const FIXTURES = join(ROOT, "fixtures", "context");
+const ADMIN_EMAIL = process.env.SMOKE_ADMIN_EMAIL; // must match ADMIN_EMAILS on the server under test
+const encodeLegacy = (st) => Buffer.from(JSON.stringify(st)).toString("base64url");
+
+function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else out.push(p);
+  }
+  return out;
+}
+
+/** Client components must never reach src/server/**. Builds the import graph and walks it from every "use client" file. */
+function importGraphCheck() {
+  const src = join(ROOT, "src");
+  const files = walk(src).filter((f) => /\.(ts|tsx)$/.test(f));
+  const exts = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
+  const resolveImport = (from, spec) => {
+    const base = spec.startsWith("@/") ? join(src, spec.slice(2)) : spec.startsWith(".") ? join(dirname(from), spec) : null;
+    if (!base) return null;
+    return exts.map((e) => base + e).find((p) => existsSync(p) && statSync(p).isFile()) ?? null;
+  };
+  const importRe = /(?:^|\n)\s*(?:import|export)\s+(?!type\b)(?:[^'";]*?\s+from\s+)?["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
+  const graph = new Map();
+  const roots = [];
+  for (const f of files) {
+    const text = readFileSync(f, "utf8");
+    if (/^\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*["']use client["']/.test(text)) roots.push(f);
+    const deps = [];
+    for (const m of text.matchAll(importRe)) {
+      const r = resolveImport(f, m[1] ?? m[2]);
+      if (r) deps.push(r);
+    }
+    graph.set(f, deps);
+  }
+  const serverDir = join(src, "server") + sep;
+  const bad = [];
+  for (const root of roots) {
+    const seen = new Set([root]);
+    const queue = [[root, [root]]];
+    while (queue.length) {
+      const [f, chain] = queue.shift();
+      for (const d of graph.get(f) ?? []) {
+        if (d.startsWith(serverDir)) bad.push([...chain, d].map((p) => relative(ROOT, p)).join(" -> "));
+        else if (!seen.has(d)) {
+          seen.add(d);
+          queue.push([d, [...chain, d]]);
+        }
+      }
+    }
+  }
+  return { roots: roots.length, files: files.length, bad };
+}
+
+/** Built client chunks must hold no server markers. Scans .next/static (a build) and .next/dev/static (the dev server). */
+function clientChunkScan() {
+  const dirs = [join(ROOT, ".next", "static"), join(ROOT, ".next", "dev", "static")].filter((d) => existsSync(d));
+  const markers = ["CONTEXT_SECRET", "ADMIN_EMAILS", "__ticketstubContextKey", "ticketstub.context", "FIXTURE-ONLY", "membership_revision", "RESEND_API_KEY", "OPENAI_API_KEY"];
+  const hits = [];
+  let scanned = 0;
+  for (const dir of dirs) {
+    for (const f of walk(dir).filter((p) => /\.(js|css|map)$/.test(p) && !p.endsWith(".map"))) {
+      scanned++;
+      const text = readFileSync(f, "utf8");
+      for (const m of markers) if (text.includes(m)) hits.push(`${relative(ROOT, f)}: ${m}`);
+    }
+  }
+  return { dirs: dirs.length, scanned, hits };
+}
+
+async function gt08(anon) {
+  const { verifyWithKey, capabilitiesFor, CAPABILITY_MATRIX, CONTEXT_SCHEMA } = await import(pathToFileURL(join(ROOT, "src", "server", "context-token.ts")).href);
+  const { verifyContext, authorizes } = await import(pathToFileURL(join(FIXTURES, "verify.mjs")).href);
+  const t = Date.now() - 3_600_000;
+  const verifier = client("verifier");
+  const verify = (token) => verifier.api("POST", "/api/context/verify", { token });
+  const ctxOf = (c, project) => c.api("GET", `/api/context${project ? `?project=${encodeURIComponent(project)}` : ""}`);
+  const sameDenial = (a, b) => a.status === b.status && a.text === b.text;
+
+  // --- Two accounts, two stubs and an event each.
+  const X = client("X");
+  const Y = client("Y");
+  const emailX = `smoke-x-${run}@example.com`;
+  const emailY = `smoke-y-${run}@example.com`;
+  await X.signIn(emailX);
+  await Y.signIn(emailY);
+  const personal = { titleFont: 0, titleColor: "#000", foilTitle: false, hiddenFields: [], friends: [{ name: "SecretFriend", seat: "Z9", claimed: false }], note: "SECRET NOTE ABOUT BOB" };
+  const ids = { x1: `x1-${run}`, x2: `x2-${run}`, y1: `y1-${run}`, y2: `y2-${run}` };
+  await sync(X, [stub(ids.x1, "X one", t, { personal }), stub(ids.x2, "X two", t)]);
+  await sync(Y, [stub(ids.y1, "Y one", t, { personal }), stub(ids.y2, "Y two", t)]);
+  const shX1 = (await X.api("POST", "/api/share", { stub: stub(ids.x1, "X one", t, { personal }) })).json.token;
+  const shX2 = (await X.api("POST", "/api/share", { stub: stub(ids.x2, "X two", t) })).json.token;
+  const shY1 = (await Y.api("POST", "/api/share", { stub: stub(ids.y1, "Y one", t, { personal }) })).json.token;
+  const shY2 = (await Y.api("POST", "/api/share", { stub: stub(ids.y2, "Y two", t) })).json.token;
+  const evX = (await X.api("POST", "/api/organizer/events", { title: "X event", stub: stub(`ex-${run}`, "X event", t), guests: [{ name: "Gx" }] })).json;
+  const evY = (await Y.api("POST", "/api/organizer/events", { title: "Y event", stub: stub(`ey-${run}`, "Y event", t), guests: [{ name: "Gy" }] })).json;
+  const pubX = (await X.api("PUT", "/api/wall/public", { isPublic: true })).json.token;
+  const pubY = (await Y.api("PUT", "/api/wall/public", { isPublic: true })).json.token;
+  check("setup: two accounts each hold two shares, an event and a public wall", [shX1, shX2, shY1, shY2, evX.eventId, evY.eventId, pubX, pubY].every((v) => typeof v === "string" && v.length > 5));
+
+  // --- /api/context: derived from the cookie, never from the caller's words.
+  const bare = client("bare");
+  const cAnon = await ctxOf(bare);
+  check("context: anonymous gets role none, no admin and no private capabilities", cAnon.status === 200 && cAnon.json.context.actor.kind === "anonymous" && cAnon.json.context.role === "none" && !cAnon.json.context.capabilities.some((c) => /^(admin\.|wall\.sync|stub\.write|event\.)/.test(c)));
+  check("context: the schema, a 5-minute lifetime and a mode are present", cAnon.json.context.schema === CONTEXT_SCHEMA && Date.parse(cAnon.json.context.expiresAt) - Date.parse(cAnon.json.context.issuedAt) === 300_000 && ["sandbox", "live"].includes(cAnon.json.context.mode));
+  const cX = await ctxOf(X);
+  check("context: an account is its own tenant with the owner role and account capabilities", cX.json.context.actor.kind === "account" && cX.json.context.tenant.id === cX.json.context.actor.id && cX.json.context.role === "owner" && cX.json.context.capabilities.includes("wall.sync") && !cX.json.context.capabilities.includes("admin.view"));
+  const cX1 = await ctxOf(X, `stub:${ids.x1}`);
+  const cX2 = await ctxOf(X, `stub:${ids.x2}`);
+  check("context: own stub is role owner with stub.read, stub.write, share.revoke", cX1.status === 200 && cX1.json.context.role === "owner" && ["stub.read", "stub.write", "share.revoke"].every((c) => cX1.json.context.capabilities.includes(c)) && cX1.json.context.project.id === ids.x1);
+  check("context: project A and project B of one user are different contexts and tokens", cX2.json.context.project.id === ids.x2 && cX1.json.token !== cX2.json.token && cX1.json.context.tenant.id === cX2.json.context.tenant.id);
+  const foreign = await ctxOf(X, `stub:${ids.y1}`);
+  const nothing = await ctxOf(X, `stub:nothing-${run}`);
+  check("context: another account's stub is 404", foreign.status === 404 && foreign.json.error.code === "not_found");
+  check("context: a foreign stub and a stub that does not exist answer identically", sameDenial(foreign, nothing), `${foreign.text} / ${nothing.text}`);
+  check("context: another account's event is 404 and identical to a missing one", (await ctxOf(X, `event:${evY.eventId}`)).status === 404 && sameDenial(await ctxOf(X, `event:${evY.eventId}`), await ctxOf(X, `event:evt_nothing${run}`)));
+  const capX = await ctxOf(X, `event:${evX.eventId}`);
+  check("context: the creator is captain of their event with event.publish", capX.status === 200 && capX.json.context.role === "captain" && capX.json.context.capabilities.includes("event.publish") && !capX.json.context.capabilities.includes("stub.write"));
+  check("context: a guest or anonymous caller gets 404 for any project", (await ctxOf(anon, `stub:${ids.x1}`)).status === 404 && (await ctxOf(anon, `event:${evX.eventId}`)).status === 404);
+  check("context: a malformed project is 404", (await ctxOf(X, "stub:")).status === 404 && (await ctxOf(X, "wall:x")).status === 404 && (await ctxOf(X, `stub:${"a".repeat(200)}`)).status === 404);
+  check("context: Y sees exactly Y's side", (await ctxOf(Y, `stub:${ids.y1}`)).status === 200 && (await ctxOf(Y, `stub:${ids.x1}`)).status === 404 && (await ctxOf(Y, `event:${evX.eventId}`)).status === 404);
+  const foreignHeader = await X.api("GET", `/api/context?project=stub:${ids.y1}&tenant=${cX.json.context.tenant.id}`, undefined);
+  check("context: tenant or role in the query changes nothing", foreignHeader.status === 404);
+
+  // --- The signed token: live verification through the port.
+  const v1 = await verify(cX1.json.token);
+  check("token: a fresh token verifies through the port with the same context", v1.status === 200 && v1.json.ok === true && v1.json.context.project.id === ids.x1 && v1.json.context.role === "owner");
+  const [h, p, sg] = cX1.json.token.split(".");
+  const flip = (s) => s.slice(0, -2) + (s.slice(-2) === "AA" ? "BB" : "AA");
+  check("token: a flipped signature is forged", (await verify(`${h}.${p}.${flip(sg)}`)).json?.reason === "forged");
+  const tamper = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(p, "base64url").toString()), ctx: { ...JSON.parse(Buffer.from(p, "base64url").toString()).ctx, role: "staff", capabilities: ["admin.view"] } })).toString("base64url");
+  check("token: an edited payload (role staff, admin.view) is forged", (await verify(`${h}.${tamper}.${sg}`)).json?.reason === "forged");
+  const noneAlg = Buffer.from(JSON.stringify({ alg: "none", typ: "ticketstub.context" })).toString("base64url");
+  check("token: alg none is rejected", (await verify(`${noneAlg}.${p}.`)).json?.reason === "unknown" && (await verify(`${noneAlg}.${p}.${sg}`)).json?.reason === "unknown");
+  check("token: garbage and an oversize token are unknown", (await verify("nope")).json?.reason === "unknown" && (await verify(`${"a".repeat(3000)}.${"b".repeat(3000)}.${"c".repeat(3000)}`)).json?.reason === "unknown");
+  check("token: the port needs a token", (await verifier.api("POST", "/api/context/verify", {})).status === 400);
+
+  // --- Fixtures: the same code the server runs, and the standalone reference verifier, agree on every outcome.
+  const keyFile = JSON.parse(readFileSync(join(FIXTURES, "fixture-key.json"), "utf8"));
+  const fxFiles = readdirSync(FIXTURES).filter((n) => n.endsWith(".json") && !["fixture-key.json", "index.json"].includes(n));
+  const wanted = ["owner", "captain", "staff", "guest", "unknown", "malformed", "forged", "stale", "revoked", "expired", "unsupported-version", "cross-project-a", "cross-project-b", "tenant-a-owner", "tenant-b-owner"];
+  check("fixtures: every required case is published", wanted.every((n) => fxFiles.includes(`${n}.json`)) && /fixture only|never production/i.test(keyFile.warning));
+  let fxBad = [];
+  const fx = {};
+  for (const f of fxFiles) {
+    const x = JSON.parse(readFileSync(join(FIXTURES, f), "utf8"));
+    fx[x.fixture] = x;
+    const opts = { now: Date.parse(x.verifyAt), state: x.state };
+    const a = verifyWithKey(x.token, keyFile.key, opts.now, opts.state);
+    const b = verifyContext(x.token, keyFile.key, opts);
+    const want = x.expect;
+    const good = (r) => r.ok === want.ok && (r.ok ? r.ctx.role === want.role && r.ctx.tenant.id === want.tenant : r.reason === want.reason);
+    if (!good(a) || !good(b)) fxBad.push(x.fixture);
+  }
+  check("fixtures: the server verifier and the reference verifier give each fixture its expected outcome", fxBad.length === 0 && fxFiles.length >= wanted.length, fxBad.join());
+  check("fixtures: the outcomes cover valid, forged, stale, revoked, expired, unsupported_version and unknown", new Set(Object.values(fx).map((x) => (x.expect.ok ? "ok" : x.expect.reason))).size === 7);
+  check("fixtures: capabilities in every valid fixture match the matrix in code", Object.values(fx).filter((x) => x.expect.ok).every((x) => {
+    const c = JSON.parse(Buffer.from(x.token.split(".")[1], "base64url").toString()).ctx;
+    return JSON.stringify(c.capabilities) === JSON.stringify(capabilitiesFor(c.actor.kind, c.role, c.project, c.role === "staff"));
+  }));
+  const a = verifyContext(fx["cross-project-a"].token, keyFile.key, { now: Date.parse(fx["cross-project-a"].verifyAt) }).ctx;
+  const b = verifyContext(fx["cross-project-b"].token, keyFile.key, { now: Date.parse(fx["cross-project-b"].verifyAt) }).ctx;
+  check("fixtures: a token for project A does not authorize project B (same user)", authorizes(a, { tenant: a.tenant.id, project: { kind: "stub", id: "stub_fx_1" }, capability: "stub.read" }) && !authorizes(a, { tenant: a.tenant.id, project: { kind: "stub", id: "stub_fx_2" }, capability: "stub.read" }) && !authorizes(b, { tenant: b.tenant.id, project: { kind: "stub", id: "stub_fx_1" }, capability: "stub.read" }));
+  const ta = verifyContext(fx["tenant-a-owner"].token, keyFile.key, { now: Date.parse(fx["tenant-a-owner"].verifyAt) }).ctx;
+  check("fixtures: tenant A's token does not authorize tenant B's stub with the same id", !authorizes(ta, { tenant: "acc_FIXTURE_tenant2", project: { kind: "stub", id: "stub_fx_shared" }, capability: "stub.read" }));
+  check("fixtures: the fixture key is not accepted by this server", (await verify(fx.owner.token)).json?.reason === "forged");
+  const docs = [join(ROOT, "fixtures", "context", "README.md"), join(ROOT, "docs", "architecture", "identity.md")].map((f) => (existsSync(f) ? readFileSync(f, "utf8") : ""));
+  const allCaps = [...CAPABILITY_MATRIX.public, ...CAPABILITY_MATRIX.account, ...Object.values(CAPABILITY_MATRIX.project).flatMap((m) => Object.values(m).flat()), ...CAPABILITY_MATRIX.staff];
+  check("docs: the fixtures README and the identity ADR both list every capability in the matrix", docs.every((d) => d && allCaps.every((c) => d.includes(c))), allCaps.filter((c) => !docs.every((d) => d.includes(c))).join());
+
+  // --- Forged body IDs and cross-account access: A versus B.
+  const yBefore = titles(await sync(Y, []));
+  const forgedSync = await X.api("POST", "/api/wall/sync", { stubs: [stub(ids.y1, "HIJACKED", Date.now() + 1000)], deleted: [ids.y2], accountId: cX.json.context.tenant.id, tenant: (await ctxOf(Y)).json.context.tenant.id, owner: "Y" });
+  const yAfter = titles(await sync(Y, []));
+  check("acl: X's sync with Y's stub ids and a forged owner touches nothing of Y's", forgedSync.status === 200 && JSON.stringify(yBefore) === JSON.stringify(yAfter) && !yAfter.some((s) => s.includes("HIJACKED")), yAfter.join());
+  check("acl: X's own wall holds that body as X's copy, not as Y's", titles(await sync(X, [])).some((s) => s.startsWith(`${ids.y1}:HIJACKED`)) );
+  const xShareOverwrite = await X.api("POST", "/api/share", { stub: stub(ids.y1, "Overwrite", t) });
+  check("acl: X sharing a stub with Y's id gets its own token and leaves Y's share alone", xShareOverwrite.json.token !== shY1 && (await anon.api("GET", `/api/share/${shY1}`)).json.stub.event.title === "Y one");
+  check("acl: X can't stop Y's sharing, and the answer matches a stub that doesn't exist", (await X.api("POST", "/api/share/revoke", { stubId: ids.y2 })).status === 404 && sameDenial(await X.api("POST", "/api/share/revoke", { stubId: ids.y2 }), await X.api("POST", "/api/share/revoke", { stubId: `ghost-${run}` })) && (await anon.api("GET", `/api/share/${shY2}`)).status === 200);
+  check("acl: stop-sharing needs a body with a stubId, a session or a guest device", (await X.api("POST", "/api/share/revoke", {})).status === 400 && (await client("stranger").api("POST", "/api/share/revoke", { stubId: ids.x1 })).status === 404);
+  const xOrder = await X.api("POST", "/api/orders", { order: { stubIds: [ids.y1], lines: [{ title: "t", material: "card", finish: "matte", size: "classic", totalMinor: 100 }], totalMinor: 100, method: "card", email: emailY, accountId: "Y" } });
+  check("acl: an order naming Y's email, account and stub still belongs to X", xOrder.status === 200 && xOrder.json.order.email === emailX);
+  check("acl: Y does not see X's order, and X sees it", !(await Y.api("GET", "/api/orders")).json.orders.some((o) => o.id === xOrder.json.order.id) && (await X.api("GET", "/api/orders")).json.orders.some((o) => o.id === xOrder.json.order.id));
+  const forgedEvent = await X.api("POST", "/api/organizer/events", { title: "Not Y's", stub: stub(`ez-${run}`, "Z", t), guests: [{ name: "G" }], accountId: (await ctxOf(Y)).json.context.tenant.id, captain: "Y" });
+  check("acl: an event created by X with Y's account id in the body is X's, not Y's", forgedEvent.status === 200 && (await ctxOf(X, `event:${forgedEvent.json.eventId}`)).json.context.role === "captain" && (await ctxOf(Y, `event:${forgedEvent.json.eventId}`)).status === 404);
+  check("acl: a claim link needs a signed-in account and lands on that account", (await anon.api("POST", `/api/claim/${evX.claims[0].token}`)).status === 401);
+  const claimed = await Y.api("POST", `/api/claim/${evX.claims[0].token}`, { accountId: "X", owner: "X" });
+  check("acl: Y claiming X's link gets the stub on Y's wall only", claimed.status === 200 && titles(await sync(Y, [])).some((s) => s.startsWith(claimed.json.stub.id)) && !titles(await sync(X, [])).some((s) => s.startsWith(claimed.json.stub.id)));
+  check("acl: a claim body naming another owner can't take a second claim", (await X.api("POST", `/api/claim/${evX.claims[0].token}`, { accountId: "X" })).status === 409);
+  check("acl: delete and email-change ignore an account id in the body and use the session", (await X.api("DELETE", "/api/account", { confirm: emailY, accountId: "Y" })).status === 400 && (await Y.api("GET", "/api/auth/me")).json.account.email === emailY);
+  const wallPub = await X.api("GET", "/api/wall/public");
+  check("acl: the public-wall settings are the caller's own", wallPub.json.token === pubX && pubX !== pubY && (await Y.api("GET", "/api/wall/public")).json.token === pubY);
+  check("acl: reading another account's private wall by token or id is 404", (await anon.api("GET", `/api/u/${shX1}`)).status === 404 && (await anon.api("GET", `/api/u/${ids.x1}`)).status === 404 && (await anon.api("GET", `/api/share/${pubX}`)).status === 404);
+  check("acl: stub images need a live share token", (await fetch(`${BASE}/api/stub-image/${shX2}`)).status === 200 && (await fetch(`${BASE}/api/stub-image/${ids.x2}`)).status === 404);
+
+  // --- Public projections: whitelisted fields only.
+  const sharedView = await anon.api("GET", `/api/share/${shX1}`);
+  const wallView = await anon.api("GET", `/api/u/${pubX}`);
+  const leaks = (text) => ["SecretFriend", "SECRET NOTE", "Z9", emailX, emailY, "data:image", cX.json.context.tenant.id].filter((s) => text.includes(s));
+  check("projection: a share holds no guest list, note, photos, account email or id", sharedView.status === 200 && leaks(sharedView.text).length === 0 && sharedView.json.stub.personal.friends.length === 0 && sharedView.json.stub.photos.length === 0 && !("note" in sharedView.json.stub.personal), leaks(sharedView.text).join());
+  check("projection: the public wall holds none of them either", wallView.status === 200 && wallView.json.stubs.length >= 1 && leaks(wallView.text).length === 0 && wallView.json.stubs.every((s) => s.personal.friends.length === 0 && s.photos.length === 0 && !s.setId), leaks(wallView.text).join());
+  const unknownField = await X.api("POST", "/api/share", { stub: stub(`uf-${run}`, "UF", t, { secretField: "PRIVATE-X", personal: { ...personal, ssn: "SSN-777" }, event: { type: "concert", title: "UF", facts: [], notes: "PRIVATE-N", ticketBarcode: "BARCODE-123" } }) });
+  const ufView = await anon.api("GET", `/api/share/${unknownField.json.token}`);
+  check("projection: fields nobody whitelisted (a barcode, a stray key) never come back", ufView.status === 200 && !/PRIVATE-X|PRIVATE-N|BARCODE-123|SSN-777/.test(ufView.text));
+  const claimPreview = await anon.api("GET", `/api/claim/${evY.claims[0].token}`);
+  check("projection: a claim preview shows the guest's name and no guest list", claimPreview.status === 200 && claimPreview.json.stub.personal.friends.length === 0 && !claimPreview.text.includes("SecretFriend"));
+  const legacyToken = `legacy${run}`;
+  try {
+    const db = new DatabaseSync(DB);
+    db.prepare("INSERT INTO shares (token, owner_key, stub_id, data, updated_at) VALUES (?, ?, ?, ?, ?)").run(legacyToken, "anon", `legacy-stub-${run}`, JSON.stringify(stub(`legacy-stub-${run}`, "Legacy row", t, { personal, setId: "SET-LEAK" })), Date.now());
+    db.close();
+    const lv = await anon.api("GET", `/api/share/${legacyToken}`);
+    check("projection: an older row stored whole is projected on the way out", lv.status === 200 && lv.json.stub.event.title === "Legacy row" && !/SecretFriend|SECRET NOTE|SET-LEAK/.test(lv.text));
+    check("projection: nobody owns an old anonymous row, so nobody can revoke it", (await X.api("POST", "/api/share/revoke", { stubId: `legacy-stub-${run}` })).status === 404);
+  } catch (e) {
+    check("projection: an older row stored whole is projected on the way out", false, `(could not edit ${DB}: ${e.message})`);
+  }
+
+  // --- Revocation and rotation.
+  const rev1 = await X.api("POST", "/api/share/revoke", { stubId: ids.x1 });
+  check("share: the owner stops sharing a stub", rev1.status === 200 && rev1.json.revoked === true);
+  check("share: the old link is 404 afterwards, the other stub's link is untouched", (await anon.api("GET", `/api/share/${shX1}`)).status === 404 && (await fetch(`${BASE}/api/stub-image/${shX1}`)).status === 404 && (await anon.api("GET", `/api/share/${shX2}`)).status === 200);
+  const rev2 = await X.api("POST", "/api/share/revoke", { stubId: ids.x1 });
+  check("share: stopping twice is harmless", rev2.status === 200 && rev2.json.revoked === false);
+  const reshare = await X.api("POST", "/api/share", { stub: stub(ids.x1, "X one again", t) });
+  check("share: sharing again mints a new link and the old one stays dead", reshare.json.token !== shX1 && (await anon.api("GET", `/api/share/${reshare.json.token}`)).status === 200 && (await anon.api("GET", `/api/share/${shX1}`)).status === 404);
+  const guestC = client("guest-share");
+  const gs = await guestC.api("POST", "/api/share", { stub: stub(`g-${run}`, "Guest stub", t) });
+  check("share: a guest's share is bound to a server-issued device cookie", gs.status === 200 && guestC.jar.has("ts_device") && /httponly/i.test(gs.headers.getSetCookie().find((c) => c.startsWith("ts_device=")) ?? ""));
+  const guestCtx = await ctxOf(guestC, `stub:g-${run}`);
+  check("share: that guest is the owner of that draft and of nothing else", guestCtx.status === 200 && guestCtx.json.context.actor.kind === "guest" && guestCtx.json.context.tenant.id.startsWith("guest:") && guestCtx.json.context.role === "owner" && !guestCtx.json.context.capabilities.includes("wall.sync") && (await ctxOf(guestC, `stub:${ids.x2}`)).status === 404);
+  check("share: another device can't stop that guest's sharing", (await client("other-dev").api("POST", "/api/share/revoke", { stubId: `g-${run}` })).status === 404);
+  const guestRev = await guestC.api("POST", "/api/share/revoke", { stubId: `g-${run}` });
+  check("share: the guest stops their own share and the link dies", guestRev.status === 200 && (await anon.api("GET", `/api/share/${gs.json.token}`)).status === 404);
+  const guestAdopt = client("guest-adopt");
+  const ga = await guestAdopt.api("POST", "/api/share", { stub: stub(`ga-${run}`, "Adopt me", t) });
+  const adopter = `smoke-adopt-${run}@example.com`;
+  await guestAdopt.signIn(adopter);
+  const adopted = await ctxOf(guestAdopt, `stub:ga-${run}`);
+  check("claim: a guest's drafts move to the account only after it proves an email, and the link keeps working", adopted.status === 200 && adopted.json.context.actor.kind === "account" && adopted.json.context.role === "owner" && (await anon.api("GET", `/api/share/${ga.json.token}`)).status === 200);
+
+  const rot = await X.api("PUT", "/api/wall/public", { isPublic: true, rotate: true });
+  check("wall: rotating issues a new public token and the old one is 404", rot.status === 200 && rot.json.token && rot.json.token !== pubX && (await anon.api("GET", `/api/u/${pubX}`)).status === 404 && (await anon.api("GET", `/api/u/${rot.json.token}`)).status === 200);
+  check("wall: rotating X's wall leaves Y's alone", (await anon.api("GET", `/api/u/${pubY}`)).status === 200);
+  const stop = await X.api("PUT", "/api/wall/public", { isPublic: false, rotate: true });
+  check("wall: stop sharing makes it private and both tokens are 404", stop.status === 200 && stop.json.token === null && (await anon.api("GET", `/api/u/${rot.json.token}`)).status === 404 && (await anon.api("GET", `/api/u/${pubX}`)).status === 404);
+  const back2 = await X.api("PUT", "/api/wall/public", { isPublic: true });
+  check("wall: sharing again gives a third, new token", back2.json.token && ![pubX, rot.json.token].includes(back2.json.token));
+  check("wall: rotate must be a boolean", (await X.api("PUT", "/api/wall/public", { isPublic: true, rotate: "yes" })).status === 400);
+
+  // --- Legacy encoded links: readable, untrusted, never an owner.
+  const legacyStub = stub(ids.x2, "Legacy payload", t, { personal });
+  const payload = encodeLegacy(legacyStub);
+  const legacyPage = await fetch(`${BASE}/s/${payload}`);
+  const legacyHtml = await legacyPage.text();
+  check("legacy: an encoded /s/<payload> link still opens", legacyPage.status === 200);
+  check("legacy: /s and /u pages are noindex", /noindex/i.test(legacyHtml) && /noindex/i.test(await (await fetch(`${BASE}/u/${pubY}`)).text()));
+  check("legacy: the API has no payload route: the decoded id grants nothing", (await X.api("GET", `/api/share/${payload}`)).status === 404 && (await X.api("POST", `/api/claim/${payload}`)).status === 404 && (await anon.api("GET", `/api/u/${payload}`)).status === 404);
+  check("legacy: a payload naming X's stub id doesn't make a stranger its owner", (await ctxOf(Y, `stub:${ids.x2}`)).status === 404 && (await Y.api("POST", "/api/share/revoke", { stubId: ids.x2 })).status === 404);
+  const memSrc = readFileSync(join(ROOT, "src", "app", "s", "[token]", "MemoryPage.tsx"), "utf8");
+  check("legacy: the memory page never treats a payload link as owned, and says it is old", /const isOwner = !!owned && !legacy/.test(memSrc) && /Old share link/.test(memSrc));
+
+  // --- CSRF and Origin on every mutating route.
+  const csrfRoutes = [
+    ["POST", "/api/wall/sync", { stubs: [], deleted: [] }],
+    ["PUT", "/api/wall/public", { isPublic: true }],
+    ["POST", "/api/orders", { order: {} }],
+    ["POST", "/api/organizer/events", {}],
+    ["POST", `/api/claim/${evY.claims[0].token}`, {}],
+    ["DELETE", "/api/account", { confirm: emailX }],
+    ["POST", "/api/account/email", { email: `smoke-csrf-${run}@example.com` }],
+    ["POST", "/api/share", { stub: stub("c", "c", t) }],
+    ["POST", "/api/share/revoke", { stubId: ids.x2 }],
+    ["POST", "/api/auth/signout", {}],
+    ["POST", "/api/auth/link", { email: emailX, reason: "save" }],
+    ["POST", "/api/auth/confirm", { token: "x" }],
+  ];
+  const csrfBad = [];
+  for (const [m, path, body] of csrfRoutes) {
+    for (const origin of [null, "https://evil.example", "http://localhost.evil.example"]) {
+      const r = await X.api(m, path, body, { origin });
+      if (r.status !== 403) csrfBad.push(`${m} ${path} origin=${origin} -> ${r.status}`);
+    }
+  }
+  check("csrf: every mutating route refuses a missing or foreign Origin with 403", csrfBad.length === 0, csrfBad.join("; "));
+  check("csrf: X's session and data survived all of that", (await X.api("GET", "/api/auth/me")).json.account.email === emailX && titles(await sync(X, [])).length > 0);
+  check("csrf: art refuses a foreign Origin; a guest with no Origin still gets art", (await anon.api("POST", "/api/art", { event: { type: "concert", title: "x", facts: [] } }, { origin: "https://evil.example" })).status === 403 && (await client("art-noorigin").api("POST", "/api/art", { event: { type: "concert", title: "x", facts: [] } }, { origin: null })).status === 200);
+
+  // --- Membership revision, revocation, deletion.
+  const Z = client("Z");
+  const emailZ = `smoke-z-${run}@example.com`;
+  await Z.signIn(emailZ);
+  const z0 = (await ctxOf(Z)).json;
+  check("lifecycle: a new account starts at a membership revision and its token verifies", Number.isInteger(z0.context.membershipRevision) && (await verify(z0.token)).status === 200);
+  const zNew = `smoke-z2-${run}@example.com`;
+  const zLink = await Z.api("POST", "/api/account/email", { email: zNew, accountId: "someone-else" });
+  await anon.api("POST", "/api/auth/confirm", { token: tokenOf(zLink.json.devLink) });
+  const zAfterEmail = await verify(z0.token);
+  check("lifecycle: an email change makes earlier tokens stale", zAfterEmail.status === 401 && zAfterEmail.json.reason === "stale", JSON.stringify(zAfterEmail.json));
+  const z1 = (await ctxOf(Z)).json;
+  check("lifecycle: the revision went up and a fresh token is good", z1.context.membershipRevision > z0.context.membershipRevision && (await verify(z1.token)).status === 200);
+  const Z2 = client("Z-second-device");
+  await Z2.signIn(zNew);
+  const z2 = (await ctxOf(Z2)).json;
+  check("lifecycle: two devices, one account, one revision", z2.context.tenant.id === z1.context.tenant.id && z2.context.membershipRevision === z1.context.membershipRevision);
+  const everywhere = await Z.api("POST", "/api/auth/signout", { everywhere: true });
+  check("lifecycle: sign out everywhere ends both sessions", everywhere.status === 200 && (await Z.api("GET", "/api/auth/me")).json.account === null && (await Z2.api("GET", "/api/auth/me")).json.account === null);
+  const zv1 = await verify(z1.token);
+  const zv2 = await verify(z2.token);
+  check("lifecycle: tokens from both devices read as revoked", zv1.json.reason === "revoked" && zv2.json.reason === "revoked", `${zv1.text} ${zv2.text}`);
+  const staleCookie = await Z2.api("GET", "/api/context");
+  check("lifecycle: a revoked session's cookie is an anonymous context flagged revoked, with no token", staleCookie.json.context.revoked === true && staleCookie.json.context.actor.kind === "anonymous" && staleCookie.json.token === null);
+  check("lifecycle: sign out everywhere needs a session", (await client("nobody").api("POST", "/api/auth/signout", { everywhere: true })).status === 401);
+  const W = client("W");
+  const emailW = `smoke-w-${run}@example.com`;
+  await W.signIn(emailW);
+  const w0 = (await ctxOf(W)).json;
+  await W.api("POST", "/api/auth/signout", {});
+  check("lifecycle: plain sign-out revokes that browser's token", (await verify(w0.token)).json.reason === "revoked");
+  const D = client("D");
+  const emailD = `smoke-d-${run}@example.com`;
+  await D.signIn(emailD);
+  const d0 = (await ctxOf(D)).json;
+  await D.api("DELETE", "/api/account", { confirm: emailD });
+  check("lifecycle: deleting the account revokes its tokens", (await verify(d0.token)).json.reason === "revoked");
+
+  // --- Staff and the admin capability.
+  check("staff: a non-staff account holds no admin.view, in any context", !cX.json.context.capabilities.includes("admin.view") && !cX1.json.context.capabilities.includes("admin.view") && cX.json.context.role !== "staff");
+  if (ADMIN_EMAIL) {
+    const S = client("staff");
+    await S.signIn(ADMIN_EMAIL);
+    const s0 = await ctxOf(S);
+    check("staff: an ADMIN_EMAILS account gets role staff and admin.view", s0.status === 200 && s0.json.context.role === "staff" && s0.json.context.capabilities.includes("admin.view"), JSON.stringify(s0.json.context));
+    check("staff: staff gets no read access to anyone's stub or event", (await ctxOf(S, `stub:${ids.x2}`)).status === 404 && (await ctxOf(S, `event:${evX.eventId}`)).status === 404);
+    check("staff: gaining the staff list moved the membership revision", s0.json.context.membershipRevision >= 2);
+    try {
+      const db = new DatabaseSync(DB);
+      db.prepare("UPDATE accounts SET is_staff = 0 WHERE email = ?").run(ADMIN_EMAIL.toLowerCase());
+      db.close();
+      const s1 = await ctxOf(S);
+      check("staff: a change in staff status bumps the revision and stales earlier tokens", s1.json.context.membershipRevision > s0.json.context.membershipRevision && (await verify(s0.json.token)).json?.reason === "stale");
+    } catch (e) {
+      check("staff: a change in staff status bumps the revision", false, `(could not edit ${DB}: ${e.message})`);
+    }
+  } else {
+    console.log("skip staff-role checks: set SMOKE_ADMIN_EMAIL to an address in the server's ADMIN_EMAILS to run them");
+  }
+
+  // --- No secrets in anything the server said, and none in the client bundles.
+  const secrets = Object.entries(process.env).filter(([k, v]) => /(SECRET|API_KEY|TOKEN|PASSWORD)/.test(k) && (v ?? "").length >= 8).map(([, v]) => v);
+  const sessions = clients.flatMap((c) => [...c.jar].filter(([k]) => k === "ts_session" || k === "ts_device").map(([, v]) => v));
+  const bodies = responses.join("\n");
+  check("secrets: no configured secret, fixture key or session/device cookie value appears in any response body", ![...secrets, keyFile.key, ...sessions].some((s) => s && bodies.includes(s)));
+  check("secrets: no storage internals (hashes, revision columns, signing key material) in any response", !/token_hash|membership_revision|CONTEXT_SECRET|__ticketstubContextKey|RESEND_API_KEY/.test(bodies));
+  const graph = importGraphCheck();
+  check(`static: no client component imports src/server (${graph.roots} client files, ${graph.files} files)`, graph.roots > 10 && graph.bad.length === 0, graph.bad.join(" | "));
+  const chunks = clientChunkScan();
+  check(`static: no server marker in built client chunks (${chunks.scanned} files in ${chunks.dirs} build dirs)`, chunks.dirs > 0 && chunks.scanned > 0 && chunks.hits.length === 0, chunks.hits.slice(0, 5).join(" | "));
 }
 
 main().catch((e) => {

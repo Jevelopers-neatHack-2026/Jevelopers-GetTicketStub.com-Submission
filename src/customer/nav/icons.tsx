@@ -159,3 +159,14 @@ export function ShareIcon() {
     </svg>
   );
 }
+
+/** Admin: a ledger with a ribbon, the staff desk. */
+export function AdminIcon() {
+  return (
+    <svg {...base}>
+      <rect x="4.5" y="3.5" width="15" height="17" rx="1.6" />
+      <path d="M8 8h8M8 11.5h8M8 15h4" />
+      <path d="M15.5 15.5v5l1.5-1 1.5 1v-5" />
+    </svg>
+  );
+}

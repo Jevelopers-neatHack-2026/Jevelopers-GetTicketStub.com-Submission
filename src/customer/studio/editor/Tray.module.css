@@ -27,7 +27,23 @@
 .note {
   font: var(--type-label);
   color: var(--desk-ink-soft);
-  min-height: 1.2em;
+}
+/* What the chosen stock really is: status in a printer's mark, then the finish and the size in plain words. */
+.variant {
+  display: grid;
+  gap: 4px;
+  min-height: 3.6em;
+}
+.variantStatus {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: var(--type-ui);
+  color: var(--desk-ink);
+}
+.measure {
+  color: var(--desk-ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Tear strip ---------- */

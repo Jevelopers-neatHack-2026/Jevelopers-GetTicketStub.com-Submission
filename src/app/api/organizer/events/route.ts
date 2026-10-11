@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { requireSession } from "@/server/auth";
+import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { hashToken, newToken } from "@/server/crypto";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
 import { getStorage } from "@/server/index";
@@ -11,7 +11,9 @@ const bad = (m: string) => new HttpError(400, "bad_request", m);
 
 export const POST = route(async (req: Request) => {
   checkOrigin(req);
-  const account = await requireSession(req);
+  const ctx = await getRequestContext(req);
+  requireCapability(ctx, "event.create");
+  const account = await accountOf(ctx); // the creator becomes the event's captain; nothing in the body names an owner
   const body = await readJson(req, MAX_STUB_BODY + 256 * 1024);
   if (!isObject(body)) throw bad("Send { title, stub, guests }.");
   const now = Date.now();

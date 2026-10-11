@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { currentVersion, type Stub } from "@/customer/studio/types";
 import { readStoredFile } from "@/server/files";
+import { getRequestContext, requireCapability } from "@/server/context";
 import { getStorage } from "@/server/index";
 import { parseToken } from "@/server/validate";
 import { notFound, route } from "@/server/http";
@@ -56,7 +57,8 @@ function card(stub: Stub | null, withArt: boolean) {
 
 const headers = { "cache-control": "public, max-age=3600, s-maxage=3600" };
 
-export const GET = route(async (_req: Request, ctx: { params: Promise<{ token: string }> }) => {
+export const GET = route(async (req: Request, ctx: { params: Promise<{ token: string }> }) => {
+  requireCapability(await getRequestContext(req), "share.view");
   const token = (await ctx.params).token;
   const stub = token === "brand" ? null : await getStorage().getShare(parseToken(token));
   if (token !== "brand" && !stub) throw notFound();

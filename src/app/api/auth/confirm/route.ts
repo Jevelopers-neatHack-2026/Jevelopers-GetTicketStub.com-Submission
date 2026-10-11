@@ -1,4 +1,5 @@
 import { getSession, sessionCookie, startSession } from "@/server/auth";
+import { guestTenant, readDevice } from "@/server/context";
 import { lookupLink } from "@/server/confirm";
 import { hashToken } from "@/server/crypto";
 import { HttpError, checkOrigin, isObject, json, readJson, route } from "@/server/http";
@@ -47,6 +48,9 @@ export const POST = route(async (req: Request) => {
   const link = await storage.consumeLoginLink(hashToken(token), now, "signin");
   if (!link) return redirect("/wall?signin=expired");
   const account = await storage.findOrCreateAccount(link.email, now);
+  // The guest drafts shared from this device become the account's: it just proved the email, and the device cookie is server-issued.
+  const device = readDevice(req);
+  if (device) await storage.adoptShares(guestTenant(device), account.id);
   const session = await startSession(account.id);
   return redirect(withSignedIn(link.returnTo), sessionCookie(session));
 });

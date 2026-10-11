@@ -243,6 +243,23 @@
   box-shadow: inset 0 0 0 1px rgb(23 20 15 / 0.15), inset 0 6px 14px -8px rgb(23 20 15 / 0.5), var(--ts-shadow-lifted);
 }
 
+/* A preview is a picture of the stock, so it says so: a small printer's-mark line hung under it. */
+.frameMark {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
+/* the framed stock has a 14px border, and "top" is measured from inside it */
+.frame_framed .frameMark {
+  top: calc(100% + 20px);
+}
+
 @keyframes fade {
   from {
     opacity: 0;

@@ -1,8 +1,8 @@
 // The help questions. Every price and number is read from the same constants the app uses, so an answer cannot drift from the screen.
 import type { ReactNode } from "react";
 import { MarkLegend } from "@/customer/desk/Desk";
-import { FINISHES, SHIPPING_ESTIMATE_MINOR, SIZE_LABEL, sizesFor } from "@/customer/pages/commerce";
-import { holoAllowed } from "@/customer/studio/editor/ops";
+import { FINISHES, SHIPPING_ESTIMATE_MINOR, sizesFor } from "@/customer/pages/commerce";
+import { CAPABILITY_VERSION, SIZE_COPY, STATUS_WORDS, variantFor } from "@/customer/pages/capabilities";
 import { TearAnchor } from "@/customer/pages/ui";
 import { MATERIALS, formatMoney } from "@/customer/studio/types";
 
@@ -26,8 +26,7 @@ export interface FaqGroup {
 
 const money = (minor: number) => formatMoney(minor).replace(".00", "");
 const materialLine = MATERIALS.map((m) => `${m.label} ${money(m.priceMinor)}`).join(" · ");
-const physicalFinishes = FINISHES.filter((f) => f.upchargeMinor > 0);
-const holoOn = MATERIALS.filter((m) => m.id !== "digital" && holoAllowed(m.id)).map((m) => m.label);
+const printedFinishes = FINISHES.filter((f) => f.upchargeMinor > 0 && f.id !== "holo");
 
 export const FAQ_GROUPS: FaqGroup[] = [
   {
@@ -103,7 +102,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             <p>{materialLine}</p>
-            <p>Digital is the file and your wallet pass. Card, Print and Framed arrive in the post.</p>
+            <p>These are sandbox prices, not printer quotes. Digital is the file and your wallet pass, and you can get it in the sandbox. Card, Print and Framed are previews: we have not confirmed a printer SKU for them yet, so none can be ordered for real. {STATUS_WORDS.preview} is marked with a printer&apos;s mark wherever you pick one.</p>
           </>
         ),
       },
@@ -112,14 +111,14 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: "What finishes and add-ons are there?",
         a: (
           <p>
-            Matte is included. {physicalFinishes.map((f) => `${f.label} adds ${money(f.upchargeMinor)}`).join(", ")} on each printed stub. Digital includes every finish.
+            Matte is included. {printedFinishes.map((f) => `${f.label} adds ${money(f.upchargeMinor)}`).join(", ")} on each printed stub, as a sandbox price. Digital includes Matte and Foil, drawn on screen. Foil is a separate metallic stock at the printer we are checking, published from 4 × 6 in, so Foil on a 2 × 3 or 2 × 5.5 in stub is unverified.
           </p>
         ),
       },
       {
         id: "holo",
-        q: "Why is Holo missing on Card?",
-        a: <p>Holo only exists on {holoOn.join(" and ")}. Pick it on Card and we move you up to Print so you see the price.</p>,
+        q: "Can Holo be printed?",
+        a: <p>No. Holo is a screen effect and is not printed. You can see it on your stub, and on your wall, and it is included on every stock as a preview. The printed finishes are Matte and Foil. A printed holographic finish has not been confirmed with any printer.</p>,
       },
       {
         id: "sizes",
@@ -128,10 +127,26 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <ul>
             {MATERIALS.map((m) => (
               <li key={m.id}>
-                {m.label}: {sizesFor(m.id).map((s) => SIZE_LABEL[s]).join(" or ")}
+                {m.label}: {sizesFor(m.id).map((s) => `${SIZE_COPY[s].name} (${SIZE_COPY[s].measure})`).join(" or ")}
+                {variantFor(m.id, sizesFor(m.id)[0], "matte")?.status === "preview" ? `. ${STATUS_WORDS.preview}` : ""}
               </li>
             ))}
           </ul>
+        ),
+      },
+      {
+        id: "what-sizes-measure",
+        q: "What do the size numbers measure?",
+        a: (
+          <>
+            <p>
+              A Classic stub (2 × 5.5 in) and a Stamp (2 × 3 in) are trim sizes: the cut edge of the card or print. They are our nominal sizes and are not matched to a printer template yet, so bleed and safe area are unknown.
+            </p>
+            <p>
+              A Framed print is listed by its frame size, 8 × 10 in. That is the glazing, the glass, and it leaves out the frame width. A mat shrinks the image window, so the picture is smaller than 8 × 10. For example, 18 × 24 in glazing with a 2 in mat gives a 14 × 20 in image. The outside size depends on the frame, and we have not picked one.
+            </p>
+            <p>Capability map {CAPABILITY_VERSION}.</p>
+          </>
         ),
       },
       {
@@ -151,7 +166,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       {
         id: "quotes",
         q: "How long does a price hold?",
-        a: <p>A quote holds for {QUOTE_MINUTES} minutes. After that, check the price again before you print.</p>,
+        a: <p>A quote holds for {QUOTE_MINUTES} minutes. Change the material, finish or size and you get a new quote. After the time is up, check the price again before you print.</p>,
       },
     ],
   },

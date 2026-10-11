@@ -4,11 +4,13 @@ import { MarkLegend, SandboxStrip, SourceMark, Stamp, TearLink, Rule } from "@/c
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic } from "@/customer/studio/feedback";
 import { getStub, upsertStub } from "@/customer/studio/store";
-import { MATERIALS, formatMoney, type Stub } from "@/customer/studio/types";
+import { formatMoney, type Stub } from "@/customer/studio/types";
+import { CartLineSpec } from "@/customer/studio/editor/MaterialPicker";
 import { PageShell, EmptyState, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
 import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
 import { placeOrder, type Placed } from "@/customer/account/orders";
-import { CART_EVENT, SANDBOX_LABEL, SIZE_LABEL, billableSeats, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
+import { CART_EVENT, SANDBOX_LABEL, billableSeats, cartItemState, cartMarks, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
+import { CAPABILITY_VERSION, orderGate, runtimeMode, variantFor } from "@/customer/pages/capabilities";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "./cart.module.css";
 
@@ -62,8 +64,19 @@ export default function CartClient() {
     saveCart(next);
   }
 
+  // Every line goes back through the capability map before it can be paid: a line saved before the map, or under another
+  // version, has to be chosen again, and the gate holds back anything that can't be ordered in this mode.
+  const mode = runtimeMode();
+  const stale = items.filter((i) => cartItemState(i).state === "choose-again");
+  const blocked = items.map((i) => orderGate(variantFor(i.material, i.size, i.finish), mode)).find((g) => !g.ok);
+  const hold = stale.length > 0 ? `${stale.length === 1 ? "One stub needs" : `${stale.length} stubs need`} you to choose again before you can pay.` : blocked && !blocked.ok ? blocked.message : "";
+
   function pay() {
     if (paid) return;
+    if (hold) {
+      setEmailError(hold);
+      return;
+    }
     if (receipt.problem) {
       setEmailError(receipt.problem);
       return;
@@ -73,7 +86,8 @@ export default function CartClient() {
     const totals = cartTotals(items);
     void placeOrder({
       stubIds: items.map((i) => i.stubId),
-      lines: items.map((i) => ({ title: i.title, material: i.material, finish: i.finish, size: i.size, totalMinor: i.unitMinor * billableSeats(i) })),
+      lines: items.map((i) => ({ title: i.title, material: i.material, finish: i.finish, size: i.size, totalMinor: i.unitMinor * billableSeats(i), variantStatus: variantFor(i.material, i.size, i.finish)?.status })),
+      capabilityVersion: CAPABILITY_VERSION,
       totalMinor: totals.totalMinor,
       currency: "USD",
       // one quote names the order only when the cart holds one priced item
@@ -115,9 +129,7 @@ export default function CartClient() {
                         <div className={s.thumb}>{st ? <StubView stub={st} size="sm" /> : <div className={s.thumbEmpty} aria-hidden="true" />}</div>
                         <div className={s.itemInfo}>
                           <h2 className={s.itemTitle}>{item.title}</h2>
-                          <p className={ui.muted}>
-                            {MATERIALS.find((m) => m.id === item.material)?.label} · {item.finish} · {SIZE_LABEL[item.size]}
-                          </p>
+                          <CartLineSpec item={item} className={ui.muted} />
                           <p className={s.price}>
                             {billable > 1 ? <span className={s.each}>{`${billable} × ${formatMoney(item.unitMinor)}`}</span> : null}
                             <strong>{formatMoney(item.unitMinor * billable)}</strong>
@@ -183,10 +195,14 @@ export default function CartClient() {
               </dl>
               <p className={s.quote}>
                 Quote holds for 15 min
-                <SourceMark p="estimated" />. A quote is not a charge.
+                <SourceMark p="estimated" />. A quote is not a charge. Prices are sandbox fixtures, not printer quotes · capability map {CAPABILITY_VERSION}.
               </p>
               {paid ? null : <ReceiptField id="cart-email" r={receipt} onChange={() => setEmailError("")} />}
-              {emailError ? (
+              {hold && !paid ? (
+                <p className={ui.err} role="status">
+                  {hold}
+                </p>
+              ) : emailError ? (
                 <p className={ui.err} role="alert">
                   {emailError}
                 </p>
@@ -196,11 +212,11 @@ export default function CartClient() {
                   <AfterPay placed={placed} email={receipt.email} signedIn={receipt.signedIn} />
                 </div>
               ) : (
-                <Stamp block onClick={pay}>
+                <Stamp block onClick={pay} disabled={!!hold}>
                   Pay {formatMoney(totals.totalMinor)}
                 </Stamp>
               )}
-              <MarkLegend marks={["estimated"]} />
+              <MarkLegend marks={["estimated", ...cartMarks(items)]} />
             </aside>
           </div>
         </>

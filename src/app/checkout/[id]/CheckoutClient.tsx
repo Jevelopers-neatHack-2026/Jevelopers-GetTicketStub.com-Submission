@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MarkLegend, PaperButton, Rule, FinishSwatches, PunchTabs, SandboxStrip, SourceMark, Stamp, TearLink, type FinishValue } from "@/customer/desk/Desk";
+import { MarkLegend, PaperButton, Rule, FinishSwatches, PunchTabs, SandboxStrip, SourceMark, Stamp, TearLink, type MarkKind } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { MaterialFrame } from "@/customer/studio/editor/MaterialFrame";
-import { holoAllowed, setFinish as applyFinish, setMaterial as applyMaterial } from "@/customer/studio/editor/ops";
+import { VariantNote, pickFinish, pickMaterial } from "@/customer/studio/editor/MaterialPicker";
 import { haptic } from "@/customer/studio/feedback";
 import { getStub, upsertStub } from "@/customer/studio/store";
 import { MATERIALS, formatMoney, type Material, type Stub } from "@/customer/studio/types";
@@ -11,18 +11,16 @@ import { PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/u
 import { formatDate } from "@/customer/pages/share";
 import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
 import { placeOrder, type Placed } from "@/customer/account/orders";
-import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, cartItemFromStub, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
+import { FINISHES, SANDBOX_LABEL, cartItemFromStub, finishMarks, finishPrices, gateFor, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
+import { CAPABILITY_VERSION, HOLO_WORDS, SIZE_COPY, statusMark } from "@/customer/pages/capabilities";
 import { addToCartAndFly } from "@/customer/cart/cartStore";
 import { useMounted, nowMs } from "@/customer/pages/useMounted";
 import s from "./checkout.module.css";
 
 const MATERIAL_OPTIONS = MATERIALS.map((m) => ({ value: m.id, label: m.label, sub: formatMoney(m.priceMinor) }));
 
-/** "Classic stub · 2 × 5.5 in" becomes a tab ("Classic stub") with its dimensions beneath. */
-const sizeOption = (sz: PrintSize) => {
-  const [label, sub] = SIZE_LABEL[sz].split(" · ");
-  return { value: sz, label, sub };
-};
+/** A size is a tab ("Classic stub") with what its number measures beneath ("2 × 5.5 in trim"). */
+const sizeOption = (sz: PrintSize) => ({ value: sz, label: SIZE_COPY[sz].name, sub: SIZE_COPY[sz].measure });
 
 export default function CheckoutClient({ id }: { id: string }) {
   const mounted = useMounted();
@@ -64,8 +62,12 @@ export default function CheckoutClient({ id }: { id: string }) {
   const finishLabel = FINISHES.find((f) => f.id === finish)?.label ?? finish;
   const materialLabel = MATERIALS.find((m) => m.id === material)?.label ?? material;
 
-  const prices = Object.fromEntries(FINISHES.map((f) => [f.id, !physical || f.upchargeMinor === 0 ? "Included" : `+${formatMoney(f.upchargeMinor)}`])) as Record<FinishValue, string>;
+  // A preview can be quoted as a sandbox fixture; what the gate holds back (an unavailable finish, or a preview in live mode) can't be ordered.
+  const gate = gateFor(material, finish, size);
+  const mark = statusMark(q.variantStatus);
+  const legend: MarkKind[] = ["estimated", ...(mark ? [mark] : [])];
 
+  // Changing the material, finish or size is a different quote (its id names the choice and the capability version), so the clock restarts.
   function update(next: Stub) {
     setDraft(next);
     setSize((cur) => (sizesFor(next.material).includes(cur) ? cur : defaultSize(next)));
@@ -86,6 +88,10 @@ export default function CheckoutClient({ id }: { id: string }) {
 
   function pay() {
     if (!stub || !draft || paid) return;
+    if (!gate.ok) {
+      setError(gate.message);
+      return;
+    }
     if (expired) {
       setError("This quote has run out. Refresh it to see the current price.");
       return;
@@ -97,7 +103,8 @@ export default function CheckoutClient({ id }: { id: string }) {
     setPaid(true);
     void placeOrder({
       stubIds: [stub.id],
-      lines: [{ title: stub.event.title, material, finish, size, totalMinor: q.totalMinor }],
+      lines: [{ title: stub.event.title, material, finish, size, totalMinor: q.totalMinor, variantStatus: q.variantStatus }],
+      capabilityVersion: q.capabilityVersion,
       totalMinor: q.totalMinor,
       currency: q.currency,
       quoteId: q.quoteId,
@@ -111,6 +118,10 @@ export default function CheckoutClient({ id }: { id: string }) {
   // Stays on the page: the stub flies to the cart button in the corner and the count stamps up.
   function toCart(from: Element | null) {
     if (!stub || !draft) return;
+    if (!gate.ok) {
+      setError(gate.message);
+      return;
+    }
     addToCartAndFly(cartItemFromStub(draft, material, finish, size), draft, deskRef.current ?? from);
   }
 
@@ -143,35 +154,35 @@ export default function CheckoutClient({ id }: { id: string }) {
 
           <div className={s.group}>
             <span className="desk-label">Material</span>
-            <PunchTabs label="Material" options={MATERIAL_OPTIONS} value={material} onChange={(m: Material) => update(applyMaterial(draft, m))} />
+            <PunchTabs label="Material" options={MATERIAL_OPTIONS} value={material} onChange={(m: Material) => update(pickMaterial(draft, m))} />
           </div>
 
           <div className={s.group}>
             <span className="desk-label">Finish</span>
-            <FinishSwatches
-              value={finish}
-              prices={prices}
-              onChange={(f) => {
-                // Holo only exists on Print and Framed, so choosing it moves the stock up and the price shows it.
-                if (f === "holo" && !holoAllowed(material)) update(applyFinish(applyMaterial(draft, "print"), "holo"));
-                else update(applyFinish(draft, f));
-              }}
-            />
-            <p className={ui.status} aria-live="polite">
-              {!physical ? "On screen and on your wallet pass, every finish is included." : holoAllowed(material) ? "Holo is on Print and Framed." : "Holo comes on Print and Framed. Choosing it moves you to Print."}
-            </p>
+            <FinishSwatches value={finish} prices={finishPrices(material)} marks={finishMarks(material, size)} onChange={(f) => update(pickFinish(draft, f))} />
+            <VariantNote material={material} finish={finish} size={size} withSize={false} />
           </div>
 
           <div className={s.group}>
             <span className="desk-label">Size</span>
             {sizes.length > 1 ? (
-              <PunchTabs label="Size" options={sizes.map(sizeOption)} value={size} onChange={(v) => setSize(v)} />
+              <PunchTabs
+                label="Size"
+                options={sizes.map(sizeOption)}
+                value={size}
+                onChange={(v) => {
+                  setSize(v);
+                  setQuoteAt(nowMs());
+                  setError("");
+                }}
+              />
             ) : (
               <p className={s.sizeLine}>
                 <span>{sizeOption(size).label}</span>
                 <span className={s.sizeSub}>{sizeOption(size).sub}</span>
               </p>
             )}
+            <p className={ui.status}>{SIZE_COPY[size].caption}</p>
           </div>
 
           <Rule kind="perf" />
@@ -181,12 +192,10 @@ export default function CheckoutClient({ id }: { id: string }) {
               <dt>{materialLabel}</dt>
               <dd>{formatMoney(q.itemMinor)}</dd>
             </div>
-            {q.finishMinor ? (
-              <div className={s.line}>
-                <dt>{finishLabel} finish</dt>
-                <dd>{formatMoney(q.finishMinor)}</dd>
-              </div>
-            ) : null}
+            <div className={s.line}>
+              <dt>{finish === "holo" && physical ? HOLO_WORDS : `${finishLabel} finish`}</dt>
+              <dd>{finish === "holo" && physical ? "Not printed" : q.finishMinor ? formatMoney(q.finishMinor) : "Included"}</dd>
+            </div>
             {physical ? (
               <div className={s.line}>
                 <dt>Shipping</dt>
@@ -218,7 +227,7 @@ export default function CheckoutClient({ id }: { id: string }) {
             ) : (
               <span>
                 Quote holds for {minsLeft} min
-                <SourceMark p="estimated" />. A quote is not a charge.
+                <SourceMark p="estimated" />. A quote is not a charge. Prices are sandbox fixtures, not printer quotes · capability map {CAPABILITY_VERSION}.
               </span>
             )}
           </div>
@@ -231,21 +240,25 @@ export default function CheckoutClient({ id }: { id: string }) {
                 <AfterPay placed={placed} email={email} signedIn={receipt.signedIn} />
               </div>
             ) : (
-              <Stamp block onClick={pay}>
+              <Stamp block onClick={pay} disabled={!gate.ok}>
                 Pay {formatMoney(q.totalMinor)}
               </Stamp>
             )}
-            {error ? (
+            {!gate.ok && !paid ? (
+              <p className={ui.err} role="status">
+                {gate.message}
+              </p>
+            ) : error ? (
               <p className={ui.err} role="alert">
                 {error}
               </p>
             ) : null}
-            <PaperButton type="button" block onClick={(e) => toCart(e.currentTarget)} disabled={paid}>
+            <PaperButton type="button" block onClick={(e) => toCart(e.currentTarget)} disabled={paid || !gate.ok}>
               Add to cart
             </PaperButton>
           </div>
 
-          <MarkLegend marks={["estimated"]} />
+          <MarkLegend marks={legend} />
         </section>
       </div>
     </PageShell>

@@ -69,6 +69,10 @@ export const api = {
   signOut: () => call<{ ok: true }>("POST", "/api/auth/signout", {}),
   sync: (stubs: Stub[], deleted: string[]) => call<SyncReply>("POST", "/api/wall/sync", { stubs, deleted }),
   setPublic: (isPublic: boolean) => call<{ token: string | null }>("PUT", "/api/wall/public", { isPublic }),
+  /** "Stop sharing" the public page: private, and the old link dies for good. */
+  stopSharingWall: () => call<{ token: string | null }>("PUT", "/api/wall/public", { isPublic: false, rotate: true }),
+  /** "Stop sharing" one stub: its share link answers 404 from now on. */
+  stopSharing: (stubId: string) => call<{ ok: true; revoked: boolean }>("POST", "/api/share/revoke", { stubId }),
   publicWall: (token: string) => call<{ stubs: Stub[] }>("GET", `/api/u/${encodeURIComponent(token)}`),
   order: (order: Omit<Order, "id" | "mode" | "createdAt">) => call<{ order: Order }>("POST", "/api/orders", { order }),
   share: (stub: Stub) => call<{ token: string }>("POST", "/api/share", { stub }),

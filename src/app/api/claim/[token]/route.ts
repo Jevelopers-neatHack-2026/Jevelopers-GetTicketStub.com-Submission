@@ -1,7 +1,8 @@
-import { requireSession } from "@/server/auth";
+import { accountOf, getRequestContext, requireCapability } from "@/server/context";
 import { hashToken } from "@/server/crypto";
 import { HttpError, checkOrigin, json, notFound, route } from "@/server/http";
 import { getStorage } from "@/server/index";
+import { publicStub } from "@/server/project";
 import type { ClaimView } from "@/server/storage";
 import { parseToken } from "@/server/validate";
 import { withGuestName, type Stub } from "@/customer/studio/types";
@@ -14,11 +15,12 @@ function guestStub(view: ClaimView): Stub {
   return view.seat ? { ...named, event: { ...named.event, seat: view.seat } } : named;
 }
 
-export const GET = route(async (_req: Request, ctx: Ctx) => {
+export const GET = route(async (req: Request, ctx: Ctx) => {
+  requireCapability(await getRequestContext(req), "claim.view");
   const view = await getStorage().getClaim(hashToken(parseToken((await ctx.params).token)));
   if (!view) throw notFound();
   return json({
-    stub: guestStub(view),
+    stub: publicStub(guestStub(view)),
     guestName: view.guestName,
     ...(view.seat ? { seat: view.seat } : {}),
     claimed: view.claimedBy !== null,
@@ -28,7 +30,9 @@ export const GET = route(async (_req: Request, ctx: Ctx) => {
 
 export const POST = route(async (req: Request, ctx: Ctx) => {
   checkOrigin(req);
-  const account = await requireSession(req);
+  const rc = await getRequestContext(req);
+  requireCapability(rc, "claim.redeem");
+  const account = await accountOf(rc); // the claim lands on the verified account, never on an id from the body
   const tokenHash = hashToken(parseToken((await ctx.params).token));
   const now = Date.now();
   // Each claim gets its own stub id on the guest's wall, stable per link, so claiming twice can't duplicate it.
