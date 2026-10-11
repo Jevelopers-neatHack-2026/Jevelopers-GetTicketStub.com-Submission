@@ -190,6 +190,9 @@ const MIGRATIONS: string[] = [
   );
   CREATE TRIGGER approval_summaries_no_update BEFORE UPDATE ON approval_summaries BEGIN
     SELECT RAISE(ABORT, 'approval summaries are append-only');
+  END;
+  `,
+  `
   -- Order authorizations (ticketstub.order-authorization/1). Append-only, like approvals: an authorization is never updated, a revocation
   -- and a claim are new rows in their own tables, and rows leave only with their account. A claim is the single use of an authorization:
   -- UNIQUE on the authorization, on the logical action and on (consumer, idem_key) is what makes "first claim wins" hold across processes.
