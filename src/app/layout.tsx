@@ -33,7 +33,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" data-theme="light" className={`${fraunces.variable} ${interTight.variable}`}>
       <body>
-        <NavFrame>{children}</NavFrame>
+        <NavFrame
+          notice={
+            process.env.TICKETSTUB_RUNTIME_MODE !== "live" ? (
+              <aside className="preview-notice">Demo preview · Sample events and art · Sandbox checkout</aside>
+            ) : null
+          }
+        >
+          {children}
+        </NavFrame>
       </body>
     </html>
   );

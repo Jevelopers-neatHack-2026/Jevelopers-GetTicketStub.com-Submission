@@ -380,7 +380,9 @@ export async function POST(req: Request) {
 
   // Ticketmaster / Live Nation links go to the Discovery API first. Without a key, or on any API failure
   // (429 included), we fall through to the page parse below and say so in `ticketmaster`.
-  const tmLink = url ? parseTicketmasterUrl(url) : undefined;
+  // Demo preview (the default) never calls Ticketmaster or fetches pages; only live mode does.
+  const live = process.env.TICKETSTUB_RUNTIME_MODE === "live";
+  const tmLink = url && live ? parseTicketmasterUrl(url) : undefined;
   let tmMeta: TicketmasterMeta | undefined;
   if (tmLink) {
     const tm = await lookupTicketmaster(tmLink, { apiKey: process.env.TICKETMASTER_API_KEY });
@@ -400,8 +402,15 @@ export async function POST(req: Request) {
   const fixture = tmLink ? undefined : matchFixture(raw);
   if (fixture) {
     const e = clone(fixture);
+    if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
+      e.facts = e.facts.map((fact) => ({
+        ...fact,
+        provenance: fact.provenance === "pending" ? "pending" : "simulated",
+        source: fact.source.includes("(demo)") ? fact.source : `${fact.source} (demo)`,
+      }));
+    }
     if (url) e.sourceUrl = url.toString();
-    if (fixture === NEATHACK && url) {
+    if (fixture === NEATHACK && url && process.env.TICKETSTUB_RUNTIME_MODE === "live") {
       // Enrich: confirm the page is reachable and record its live title.
       try {
         const html = await fetchPage(url.toString());
@@ -415,6 +424,10 @@ export async function POST(req: Request) {
   }
 
   if (!url) return readError();
+
+  if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") {
+    return NextResponse.json({ error: "This preview uses demo events. Try neatHack, The Pale Hours, or Harbour FC." }, { status: 422 });
+  }
 
   // A Ticketmaster page often refuses bots; the slug still names the event, so don't dead-end the person.
   const tmFallback = () => {

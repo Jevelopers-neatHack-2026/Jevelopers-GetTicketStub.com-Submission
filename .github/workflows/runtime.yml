@@ -1,0 +1,36 @@
+name: Application runtime
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Verify production server on platform port
+        env:
+          PORT: '43121'
+          SMOKE_BASE_URL: http://127.0.0.1:43121
+          OPENAI_API_KEY: unused-preview-sentinel
+          ANTHROPIC_API_KEY: unused-preview-sentinel
+        run: |
+          npm start > /tmp/ticketstub-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; cat /tmp/ticketstub-server.log' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "$SMOKE_BASE_URL" > /dev/null; then break; fi
+            sleep 1
+          done
+          npm run smoke:production

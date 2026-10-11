@@ -37,7 +37,7 @@ export const NEATHACK: EventData = {
   programme: ["Kickoff · 10 Oct, 12:30 IST", "Build · 48 hours", "Submissions close · 12 Oct, 23:55 IST"],
   facts: [
     { id: "teams", label: "Teams: pending", value: "pending", source: "event page", confidence: 0.4, provenance: "pending" },
-    { id: "window", label: "48 hours", value: "10–12 Oct 2026", source: "event page", confidence: 0.95, provenance: "live", kept: true },
+    { id: "window", label: "48 hours", value: "10–12 Oct 2026", source: "event page (demo)", confidence: 0.95, provenance: "simulated", kept: true },
     { id: "winners", label: "Winners: pending", value: "pending", source: "event page", confidence: 0.3, provenance: "pending" },
   ],
 };

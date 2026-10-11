@@ -162,3 +162,11 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+.preview-notice {
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  background: #f4ecdd;
+  color: #17140f;
+  border-bottom: 1px solid #c8bcaa;
+}

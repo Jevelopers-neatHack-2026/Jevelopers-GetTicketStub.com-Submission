@@ -9,12 +9,15 @@ Design docs, wireframes and the coverage matrix are in `docs/studio/` (PR "Add t
 ## Run it
 
 ```sh
-npm install
+npm ci
 npm run dev          # http://localhost:3000
 npm run build && npm start
 ```
 
-Optional environment variables (`.env.local`); the app works without them:
+The deployment defaults to demo mode with external research/provider requests
+disabled, even when keys exist. See the root README for runtime versions,
+Plus Launch settings, and the separately authorized `TICKETSTUB_RUNTIME_MODE=live`
+development mode. The following optional keys apply only in live mode:
 
 | Variable | Used for | Without it |
 |---|---|---|

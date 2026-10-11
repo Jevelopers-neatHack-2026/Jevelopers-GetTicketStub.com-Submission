@@ -39,7 +39,7 @@ function order(nodes: RouteNode[], out: RouteNode[] = []): RouteNode[] {
   return out;
 }
 
-export function NavFrame({ children }: { children: ReactNode }) {
+export function NavFrame({ children, notice }: { children: ReactNode; notice?: ReactNode }) {
   const path = usePathname() ?? "/";
   const router = useRouter();
   const show = !NAV_FREE.includes(path);
@@ -352,7 +352,10 @@ export function NavFrame({ children }: { children: ReactNode }) {
         </>
       ) : null}
 
-      <div className={f.content}>{children}</div>
+      <div className={f.content}>
+        {notice}
+        {children}
+      </div>
       {show ? <CartCorner /> : null}
       <AccountRoot />
     </div>

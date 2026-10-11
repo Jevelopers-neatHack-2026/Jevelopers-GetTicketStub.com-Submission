@@ -34,6 +34,7 @@ function freshSeed(): number {
 }
 
 async function openAiImage(prompt: string): Promise<string | undefined> {
+  if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") return undefined;
   const key = process.env.OPENAI_API_KEY;
   if (!key) return undefined;
   try {
@@ -89,7 +90,7 @@ export async function POST(req: Request) {
     { key: `ip:${hashToken(clientIp(req))}`, max: PER_IP },
     ...(account ? [{ key: `acc:${account.id}`, max: PER_ACCOUNT }] : []),
   ];
-  const quota = await getStorage().useArtQuota(quotas, Date.now(), !!process.env.OPENAI_API_KEY);
+  const quota = await getStorage().useArtQuota(quotas, Date.now(), process.env.TICKETSTUB_RUNTIME_MODE === "live" && !!process.env.OPENAI_API_KEY);
   if (!quota.ok) {
     // Over the cap: say so, and hand back procedural art so the caller never has to show a broken stub.
     const art: ArtLayer = { kind: "procedural", seed, vibe, provenance: "simulated" };
