@@ -1327,6 +1327,37 @@ test('fact support must match an authorized evidence hash and issued source posi
     (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_DENIED');
 });
 
+test('model confidence cannot replace source support or count as independent verification', async (t) => {
+  const { store, createPermit, sourceText } = await createHarness(t);
+  const scope = await store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(store, scope, sourceText, createPermit);
+  const factInput = {
+    field: 'event_name',
+    status: 'sourced',
+    rawValue: 'Moon Night',
+    normalizedValue: 'Moon Night',
+    supports: [supportFor(evidence)],
+  };
+  const before = await store.listFacts(scope, request('tenant-a'));
+  assert.equal(before.length, 0);
+
+  await assert.rejects(store.appendFact(scope, { ...factInput, confidence: 0.99 }, request('tenant-a')),
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_INVALID');
+  assert.deepEqual(await store.listFacts(scope, request('tenant-a')), before,
+    'the rejected confidence-bearing input leaves the fact set unchanged');
+
+  const factHandle = await store.appendFact(scope, factInput, request('tenant-a'));
+  const fact = await store.readFact(scope, factHandle, request('tenant-a'));
+  assert.equal(fact.status, 'sourced');
+  assert.equal(fact.supports.length, 1);
+  assert.equal(fact.supports[0].independence, 'unknown');
+  assert.equal(Object.hasOwn(fact, 'independentSupportCount'), false);
+  assert.equal(Object.hasOwn(fact, 'confidence'), false);
+  const afterValid = await store.listFacts(scope, request('tenant-a'));
+  assert.equal(afterValid.length, 1);
+  assert.equal(afterValid[0].factId, fact.factId);
+});
+
 test('date precision, customer input, explicit missing values, and conflicts remain distinct', async (t) => {
   const { store, createPermit, sourceText } = await createHarness(t);
   const scope = await store.scopeForAuthenticatedRequest(request('tenant-a'));
