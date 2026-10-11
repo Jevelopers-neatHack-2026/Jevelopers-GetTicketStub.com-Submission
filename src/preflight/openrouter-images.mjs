@@ -132,7 +132,8 @@ function capturePrepareBinding(input) {
   try {
     cellId = input.cell_id;
     target = structuredClone(input.target);
-    scope = Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref });
+    scope = Object.freeze({ tenant_id: input.scope.tenant_id, project_id: input.scope.project_id,
+      budget_scope_id: input.scope.budget_scope_id, account_ref: input.scope.account_ref, project_ref: input.scope.project_ref });
     grantRef = input.grant_ref;
     deadlineAt = input.deadline_at;
     hasConfiguration = Object.hasOwn(input, 'configuration');
@@ -157,6 +158,9 @@ function capturePrepareBinding(input) {
       return candidate?.cell_id === cellId
         && candidate?.grant_ref === grantRef
         && candidate?.deadline_at === deadlineAt
+        && candidate?.scope?.tenant_id === scope.tenant_id
+        && candidate?.scope?.project_id === scope.project_id
+        && candidate?.scope?.budget_scope_id === scope.budget_scope_id
         && candidate?.scope?.account_ref === scope.account_ref
         && candidate?.scope?.project_ref === scope.project_ref
         && Object.hasOwn(candidate, 'configuration') === hasConfiguration
@@ -466,7 +470,8 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         throw error('invalid_abort_signal', 'Billable dispatch requires the runner input and metering context.');
       }
       validateOpenRouterImageTarget(input.cell_id, input.target);
-      const state = isRecord(input.prepared) ? preparedState.get(input.prepared) : undefined;
+      const preparedValue = input.prepared;
+      const state = isRecord(preparedValue) ? preparedState.get(preparedValue) : undefined;
       let targetMatches = false;
       try {
         targetMatches = Boolean(state)
@@ -476,13 +481,17 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       } catch { /* invalid binding */ }
       if (!state || state.cell_id !== input.cell_id || !targetMatches
         || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at
-        || !isRecord(input.scope) || input.scope.account_ref !== state.scope?.account_ref
+        || !isRecord(input.scope) || input.scope.tenant_id !== state.scope?.tenant_id
+        || input.scope.project_id !== state.scope?.project_id || input.scope.budget_scope_id !== state.scope?.budget_scope_id
+        || input.scope.account_ref !== state.scope?.account_ref
         || input.scope.project_ref !== state.scope?.project_ref) {
         throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, scope, and target.');
       }
       const signal = boundedTransportSignal(state.deadline_at, runnerCancellationSignal(input), now);
       // A correctly bound and validated prepared value is single use; consume it before the host port can run.
-      preparedState.delete(input.prepared);
+      if (!preparedState.delete(preparedValue)) {
+        throw error('credential_unavailable', 'Prepared credentials were already consumed.');
+      }
       const hostInput = { ...input, cell_id: state.cell_id, target: state.target, scope: state.scope,
         grant_ref: state.grant_ref, deadline_at: state.deadline_at, prepared: state.hostPrepared,
         credential: state.credential, signal };

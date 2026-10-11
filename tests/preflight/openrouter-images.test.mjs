@@ -831,6 +831,69 @@ test('a prepared value is single use and bound to the scope it was prepared for'
   assert.equal(dispatches, 1, 'the replay was refused before the host port');
 });
 
+test('a metering signal getter cannot replace the prepared identity before single-use consumption', async () => {
+  let dispatches = 0;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { dispatches += 1; return {}; } } });
+  const input = billable();
+  const prepared = await adapter.prepare(input);
+  const callerSignal = new AbortController().signal;
+  let payload;
+  payload = { ...input, prepared, metering: { get signal() {
+    payload.prepared = { prepared: true };
+    return callerSignal;
+  } } };
+
+  await adapter.dispatch(payload);
+  assert.equal(dispatches, 1, 'the authenticated prepared value reaches the host once');
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+  await assert.rejects(adapter.dispatch(payload), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 1, 'neither the consumed value nor its caller-supplied replacement can replay host dispatch');
+});
+
+test('a prepared getter changing across reads cannot retain the authenticated identity', async () => {
+  let dispatches = 0;
+  let preparedReads = 0;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { dispatches += 1; return {}; } } });
+  const input = billable();
+  const prepared = await adapter.prepare(input);
+  const payload = { ...input, metering: meteringInput() };
+  Object.defineProperty(payload, 'prepared', { enumerable: true, get() {
+    preparedReads += 1;
+    return preparedReads === 1 ? prepared : { prepared: true };
+  } });
+
+  await adapter.dispatch(payload);
+  assert.ok(preparedReads >= 2, 'the caller-owned prepared getter was read again while building host input');
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 1, 'the first authenticated identity was consumed even when later getter reads differ');
+});
+
+test('reentrant signal access allows exactly one dispatch of a prepared value', async () => {
+  let dispatches = 0;
+  let enteredSignalGetter = false;
+  let reentrantDispatch;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { dispatches += 1; return { host: 'result' }; } } });
+  const input = billable();
+  const prepared = await adapter.prepare(input);
+  let payload;
+  payload = { ...input, prepared, metering: { get signal() {
+    if (!enteredSignalGetter) {
+      enteredSignalGetter = true;
+      reentrantDispatch = adapter.dispatch(payload);
+    }
+    return new AbortController().signal;
+  } } };
+
+  await assert.rejects(adapter.dispatch(payload), (error) => error.code === 'credential_unavailable');
+  assert.deepEqual(await reentrantDispatch, { host: 'result' });
+  assert.equal(dispatches, 1, 'the inner dispatch consumes the identity and the outer dispatch cannot also reach the host');
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 1, 'the prepared value remains consumed after reentrant access');
+});
+
 test('prepare re-checks the deadline after the credential await and never calls the host prepare once it has passed', async () => {
   for (const [name, phase, change, code] of [
     ['deadline passes after resolution', 'after', (r) => r + 200_000, 'preflight_deadline_passed'],
@@ -852,24 +915,41 @@ test('prepare re-checks the deadline after the credential await and never calls 
   }
 });
 
-test('prepare stores a copy of the scope, so later mutation of the caller object does not change the binding', async () => {
+test('prepare stores and forwards a frozen copy of the full trusted scope', async () => {
   let dispatches = 0;
   const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
-    async dispatch() { dispatches += 1; return {}; } } });
-  const input = billable();
-  const original = { account_ref: input.scope.account_ref, project_ref: input.scope.project_ref };
-  const callerScope = { ...input.scope };
-  const prepared = await adapter.prepare({ ...input, scope: callerScope });
-  callerScope.project_ref = 'project:other';
-  await assert.rejects(adapter.dispatch(dispatchInput({ ...input, scope: callerScope }, prepared)), (error) => error.code === 'credential_unavailable');
-  assert.equal(dispatches, 0, 'a mutated caller scope no longer matches the stored copy');
-  await adapter.dispatch(dispatchInput({ ...input, scope: original }, prepared));
-  assert.equal(dispatches, 1);
+    async prepare(hostInput) {
+      assert.deepEqual(hostInput.scope, fixtureScope);
+      assert.ok(Object.isFrozen(hostInput.scope));
+      return {};
+    },
+    async dispatch(hostInput) {
+      dispatches += 1;
+      assert.deepEqual(hostInput.scope, fixtureScope);
+      assert.ok(Object.isFrozen(hostInput.scope));
+      return {};
+    } } });
+  for (const field of ['tenant_id', 'project_id', 'budget_scope_id', 'account_ref', 'project_ref']) {
+    const dispatchesBeforeCase = dispatches;
+    const input = billable();
+    const expectedScope = { ...input.scope };
+    const callerScope = { ...input.scope };
+    const prepared = await adapter.prepare({ ...input, scope: callerScope });
+    callerScope[field] = `test:changed-${field}`;
+    await assert.rejects(adapter.dispatch(dispatchInput({ ...input, scope: callerScope }, prepared)),
+      (error) => error.code === 'credential_unavailable', `${field} mutation is rejected before host dispatch`);
+    assert.equal(dispatches, dispatchesBeforeCase, `${field} mismatch does not consume the prepared value`);
+    await adapter.dispatch(dispatchInput({ ...input, scope: expectedScope }, prepared));
+    assert.equal(dispatches, dispatchesBeforeCase + 1, `${field} can be restored to the authenticated scope and dispatched once`);
+  }
 });
 
 test('prepare rejects each binding mutation during credential and host awaits, with unchanged positive controls', async () => {
   nowMs = Date.parse('2031-03-04T05:06:07.000Z');
   const mutations = [
+    ['tenant_id', (input) => { input.scope.tenant_id = 'tenant:changed'; }],
+    ['project_id', (input) => { input.scope.project_id = 'project:changed'; }],
+    ['budget_scope_id', (input) => { input.scope.budget_scope_id = 'budget:changed'; }],
     ['account_ref', (input) => { input.scope.account_ref = 'account:changed'; }],
     ['project_ref', (input) => { input.scope.project_ref = 'project:changed'; }],
     ['target contents', (input) => { input.target.model = 'synthetic-lab/changed-image'; }],
@@ -886,6 +966,7 @@ test('prepare rejects each binding mutation during credential and host awaits, w
     input.scope = { ...input.scope };
     if (omitConfiguration) delete input.configuration;
     const expected = {
+      scope: { ...input.scope },
       account_ref: input.scope.account_ref,
       project_ref: input.scope.project_ref,
       grant_ref: input.grant_ref,
@@ -932,6 +1013,8 @@ test('prepare rejects each binding mutation during credential and host awaits, w
     } else {
       credentialGate.resolve();
       const hostInput = await hostEntered.promise;
+      assert.deepEqual(hostInput.scope, expected.scope);
+      assert.ok(Object.isFrozen(hostInput.scope));
       assert.equal(hostInput.scope.account_ref, expected.account_ref);
       assert.equal(hostInput.scope.project_ref, expected.project_ref);
       assert.equal(hostInput.grant_ref, expected.grant_ref);
@@ -944,6 +1027,7 @@ test('prepare rejects each binding mutation during credential and host awaits, w
         assert.ok(Object.isFrozen(hostInput.configuration));
       }
       mutation?.(input);
+      assert.deepEqual(hostInput.scope, expected.scope, 'host preparation retains the complete frozen scope snapshot');
       assert.equal(hostInput.scope.account_ref, expected.account_ref, 'host receives a frozen scope snapshot');
       assert.equal(hostInput.target.model, expected.target.model, 'host receives a frozen target snapshot');
       if (expected.hasConfiguration) {
@@ -963,11 +1047,15 @@ test('prepare rejects each binding mutation during credential and host awaits, w
 
     const prepared = await preparing;
     assert.equal(hostInputs.length, 1);
+    assert.deepEqual(hostInputs[0].scope, expected.scope);
+    assert.ok(Object.isFrozen(hostInputs[0].scope));
     const dispatchPayload = { ...input, target: structuredClone(expected.target), scope: { ...input.scope }, prepared,
       metering: meteringInput() };
     if (expected.hasConfiguration) dispatchPayload.configuration = structuredClone(expected.target.configuration);
     assert.deepEqual(await adapter.dispatch(dispatchPayload), { dispatched: true });
     assert.equal(dispatchInputs.length, 1, `${context} remains dispatchable`);
+    assert.deepEqual(dispatchInputs[0].scope, expected.scope);
+    assert.ok(Object.isFrozen(dispatchInputs[0].scope));
     if (expected.hasConfiguration) {
       assert.equal(dispatchInputs[0].configuration, dispatchInputs[0].target.configuration,
         'dispatch receives the authenticated configuration from its frozen target snapshot');
