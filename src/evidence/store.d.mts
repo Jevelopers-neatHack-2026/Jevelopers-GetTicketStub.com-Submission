@@ -525,6 +525,10 @@ export interface PrivateRetrievalReceiptCompletion {
   readonly suggestions: readonly unknown[];
   readonly limitations: readonly string[];
   readonly identity: PrivateRetrievalReceiptIdentity;
+  /** Omission fields are optional for callers writing historical v1 completion shapes. */
+  readonly truncatedCount?: number;
+  readonly omittedSuggestions?: readonly unknown[];
+  readonly sourceLinkCandidatesOmittedCount?: number;
 }
 
 export interface PrivateRetrievalReceiptBinding {
@@ -545,6 +549,11 @@ export type PrivateRetrievalReceiptRead =
     readonly completionKey: string;
     readonly outcome: 'links_observed' | 'no_links' | 'failed' | 'access_restricted';
     readonly suggestions: readonly unknown[];
+    /** Zero identifies an authenticated historical v1 body without omission metadata. */
+    readonly omissionMetadataVersion: 0 | 1;
+    readonly truncatedCount: number;
+    readonly omittedSuggestions: readonly unknown[];
+    readonly sourceLinkCandidatesOmittedCount: number;
     readonly limitations: readonly string[];
     readonly identity: PrivateRetrievalReceiptIdentity;
     readonly evidenceIds: readonly string[];

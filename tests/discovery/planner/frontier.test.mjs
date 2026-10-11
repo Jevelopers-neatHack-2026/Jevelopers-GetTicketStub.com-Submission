@@ -214,6 +214,9 @@ test('actual pinned v1 frontier migrates unknown admissions without restoring tr
   assert.equal(legacyCompletedBinding.candidate, null);
   assert.deepEqual(legacyCompletedBinding.completion, {
     completionKey: 'legacy-completed-result', outcome: 'no_links',
+    payloadHash: createHash('sha256').update(JSON.stringify({
+      outcome: 'no_links', suggestions: [], truncatedCount: 0,
+    })).digest('hex'),
   });
 
   const legacyCapacity = await current.getTransportProgress(scope, attemptedInput.runId);
@@ -295,7 +298,12 @@ test('actual pinned v2 frontier migrates legacy claims without inventing a claim
     claimKey: 'v2-complete-claim', workerId: 'v2-worker', leaseToken: claim.claim.leaseToken,
     candidateId: beforeCompleted.candidates[0].candidateId, state: 'completed',
   });
-  assert.deepEqual(migrated.completion, { completionKey: 'v2-complete-result', outcome: 'no_links' });
+  assert.deepEqual(migrated.completion, {
+    completionKey: 'v2-complete-result', outcome: 'no_links',
+    payloadHash: createHash('sha256').update(JSON.stringify({
+      outcome: 'no_links', suggestions: [], truncatedCount: 0,
+    })).digest('hex'),
+  });
   const fresh = await current.claimNext(scope, queuedInput.runId, {
     workerId: 'v3-worker', claimKey: 'v3-new-claim',
   });
@@ -374,7 +382,12 @@ test('claim receipt binding reconstructs only the immutable observation prefix a
   assert.equal(afterLaterObservation.candidate.depth, 2);
   assert.equal(afterLaterObservation.candidate.suppliedUrl, target);
   assert.deepEqual(afterLaterObservation.candidate.sourceRefs.map((item) => item.evidenceId), ['evidence-intermediate']);
-  assert.deepEqual(afterLaterObservation.completion, { completionKey: 'target-complete', outcome: 'no_links' });
+  assert.deepEqual(afterLaterObservation.completion, {
+    completionKey: 'target-complete', outcome: 'no_links',
+    payloadHash: createHash('sha256').update(JSON.stringify({
+      outcome: 'no_links', suggestions: [], truncatedCount: 0,
+    })).digest('hex'),
+  });
   assert.equal(afterLaterObservation.claim.state, 'completed');
   const reopened = h.openStore();
   const reopenedScope = await reopened.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
@@ -679,6 +692,47 @@ test('reported fanout truncation leaves an explicit stop reason and keeps the bo
   assert.equal(snapshot.candidates.length, 3);
   assert.ok(snapshot.stopReasons.some(({ reason }) => reason === 'fanout_limit'));
   assert.equal(snapshot.counters.uniqueCandidates, 3);
+});
+
+test('completion hash binds supplied URL spelling, normalized target, label, and sorted multi-source provenance', async (t) => {
+  const { store, scope, openStore } = await harness(t);
+  const runId = 'completion-hash-normalized-provenance';
+  await seedRun(store, scope, runId, undefined, { maxSuggestionsPerCompletion: 1 });
+  const { claim } = await claimAndAdmit(store, scope, runId);
+  const suppliedUrl = 'https://links.example.org:443/events/../event';
+  const canonicalUrl = 'https://links.example.org/event';
+  const firstRef = sourceRef(suppliedUrl, 'source-a', HASH_A);
+  const secondRef = sourceRef(suppliedUrl, 'source-b', HASH_B);
+  const completionKey = 'normalized-provenance-completion';
+  await store.completeCandidate(scope, runId, {
+    leaseToken: claim.leaseToken,
+    completionKey,
+    outcome: 'links_observed',
+    suggestions: [{
+      url: suppliedUrl,
+      label: 'Synthetic source label',
+      sourceRefs: [secondRef, firstRef],
+    }],
+  });
+  const binding = await store.getCandidateReceiptBinding(scope, runId, claim.candidate.candidateId);
+  assert.deepEqual(binding.completion, {
+    completionKey,
+    outcome: 'links_observed',
+    payloadHash: createHash('sha256').update(JSON.stringify({
+      outcome: 'links_observed',
+      suggestions: [{
+        suppliedUrl,
+        canonicalUrl,
+        label: 'Synthetic source label',
+        sourceRefs: [firstRef, secondRef],
+      }],
+      truncatedCount: 0,
+    })).digest('hex'),
+  });
+  assert.equal(binding.candidate.canonicalUrl, 'https://events.example.com/root');
+  const reopened = openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest({ principal: { tenantId: 'tenant-a' } });
+  assert.deepEqual(await reopened.getCandidateReceiptBinding(reopenedScope, runId, claim.candidate.candidateId), binding);
 });
 
 test('authenticated tenant scopes isolate runs and snapshots are immutable; malformed input never calls getters', async (t) => {

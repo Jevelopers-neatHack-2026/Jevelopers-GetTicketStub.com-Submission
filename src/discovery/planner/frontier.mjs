@@ -1049,7 +1049,7 @@ function candidateClaimBindingInTransaction(database, tenantHash, runId, candida
     };
   }
 
-  const completionRows = database.prepare(`SELECT completion_key, candidate_id, lease_token, outcome
+  const completionRows = database.prepare(`SELECT completion_key, payload_hash, candidate_id, lease_token, outcome
     FROM frontier_completions WHERE tenant_hash = ? AND run_id = ? AND candidate_id = ?`)
     .all(tenantHash, runId, candidate.candidate_id);
   if (completionRows.length > 1) fail('FRONTIER_STORAGE');
@@ -1062,11 +1062,15 @@ function candidateClaimBindingInTransaction(database, tenantHash, runId, candida
   if (claim.state === 'completed') {
     if (!completionRow || completionRow.candidate_id !== claim.candidate_id
       || completionRow.lease_token !== claim.lease_token
-      || !validId(completionRow.completion_key, 128)
+      || !validId(completionRow.completion_key, 128) || !HEX_SHA256.test(completionRow.payload_hash)
       || !['links_observed', 'no_links', 'failed', 'access_restricted'].includes(completionRow.outcome)) {
       fail('FRONTIER_STORAGE');
     }
-    completion = { completionKey: completionRow.completion_key, outcome: completionRow.outcome };
+    completion = {
+      completionKey: completionRow.completion_key,
+      outcome: completionRow.outcome,
+      payloadHash: completionRow.payload_hash,
+    };
   } else if (completionRow) {
     fail('FRONTIER_STORAGE');
   }

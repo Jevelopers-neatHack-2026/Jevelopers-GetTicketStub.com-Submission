@@ -5,6 +5,7 @@ import { runWithSafeFetchLifecycle, safeFetchProvenance } from '../security/inte
 import { composeSourceIdentity, SourceIdentityCompositionError } from '../discovery/identity/from-extraction.mjs';
 import { compareEntityIdentity } from '../discovery/entities/identity.mjs';
 import { compareOccurrenceIdentity } from '../discovery/occurrences/identity.mjs';
+import { parseAndValidateUrl } from '../security/url-policy.mjs';
 
 const PRIVATE_DRAFT_SCHEMA = 'ei-private-retrieval-draft/v1';
 const MAX_ADMISSIONS = 8;
@@ -336,6 +337,288 @@ function digestJson(value) {
   return createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
 }
 
+function stableTextCompare(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function suggestionSortKey(suggestion) {
+  const references = Array.isArray(suggestion?.sourceRefs) ? suggestion.sourceRefs.map((reference) => {
+    const locator = reference?.locator;
+    return JSON.stringify([
+      reference?.evidenceId ?? '', reference?.contentHash ?? '', locator?.kind ?? '',
+      locator?.startByte ?? null, locator?.endByte ?? null, locator?.pointer ?? null,
+      reference?.field ?? '', reference?.value ?? '',
+    ]);
+  }).sort(stableTextCompare) : [];
+  return JSON.stringify([suggestion?.url ?? '', references, suggestion?.label ?? null]);
+}
+
+function boundCompletionSuggestions(suggestions, maximum) {
+  const ordered = [...suggestions].sort((left, right) =>
+    stableTextCompare(suggestionSortKey(left), suggestionSortKey(right)));
+  return { suggestions: ordered.slice(0, maximum), omittedSuggestions: ordered.slice(maximum) };
+}
+
+function completionObservations(snapshot, candidateId) {
+  return snapshot.observations.filter((observation) => observation.kind === 'link'
+    && observation.parentCandidateId === candidateId);
+}
+
+function observationsMatchSuggestions(observations, suggestions, outcome) {
+  if (observations.length !== suggestions.length
+    || observations.some((observation) => observation.outcome !== outcome)) return false;
+  const counts = new Map();
+  for (const suggestion of suggestions) {
+    const key = suggestionSortKey(suggestion);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const observation of observations) {
+    const key = suggestionSortKey({
+      url: observation.suppliedUrl,
+      sourceRefs: observation.sourceRefs,
+      label: observation.untrustedLabel ?? null,
+    });
+    const count = counts.get(key) ?? 0;
+    if (count < 1) return false;
+    if (count === 1) counts.delete(key);
+    else counts.set(key, count - 1);
+  }
+  return counts.size === 0;
+}
+
+function completionPayloadHashFromObservations(observations, outcome, truncatedCount) {
+  const suggestions = observations.map((observation) => ({
+    suppliedUrl: observation.suppliedUrl,
+    canonicalUrl: observation.canonicalUrl,
+    label: observation.untrustedLabel ?? null,
+    sourceRefs: observation.sourceRefs,
+  })).sort((left, right) => stableTextCompare(JSON.stringify(left), JSON.stringify(right)));
+  return digestJson({ outcome, suggestions, truncatedCount });
+}
+
+function projectionReferenceKey(reference) {
+  if (!reference || typeof reference !== 'object' || Array.isArray(reference)) return null;
+  const referenceKeys = Reflect.ownKeys(reference);
+  if (referenceKeys.length !== 5 || referenceKeys.some((key) => typeof key !== 'string')
+    || ['evidenceId', 'contentHash', 'locator', 'field', 'value'].some((key) => !Object.hasOwn(reference, key))
+    || typeof reference.evidenceId !== 'string' || reference.evidenceId.length < 1
+    || typeof reference.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(reference.contentHash)
+    || typeof reference.field !== 'string' || reference.field.length < 1
+    || typeof reference.value !== 'string' || reference.value.length < 1) return null;
+  const locator = reference.locator;
+  if (!locator || typeof locator !== 'object' || Array.isArray(locator)) return null;
+  const locatorKeys = Reflect.ownKeys(locator);
+  let normalizedLocator;
+  if (locator.kind === 'text-range' && locatorKeys.length === 3
+    && locatorKeys.every((key) => typeof key === 'string')
+    && Number.isSafeInteger(locator.startByte) && locator.startByte >= 0
+    && Number.isSafeInteger(locator.endByte) && locator.endByte > locator.startByte) {
+    normalizedLocator = { kind: 'text-range', startByte: locator.startByte, endByte: locator.endByte };
+  } else if (locator.kind === 'json-pointer' && locatorKeys.length === 2
+    && locatorKeys.every((key) => typeof key === 'string')
+    && typeof locator.pointer === 'string') {
+    normalizedLocator = { kind: 'json-pointer', pointer: locator.pointer };
+  } else {
+    return null;
+  }
+  return JSON.stringify([
+    reference.evidenceId, reference.contentHash, normalizedLocator, reference.field, reference.value,
+  ]);
+}
+
+function projectionReferenceKeys(references) {
+  if (!Array.isArray(references)) return null;
+  const keys = references.map(projectionReferenceKey);
+  if (keys.some((key) => key === null)) return null;
+  return keys.sort(stableTextCompare);
+}
+
+function projectionObservationPathExists(observations, startCandidateId, targetCandidateId, excludedIndex) {
+  if (startCandidateId === targetCandidateId) return true;
+  const edges = new Map();
+  observations.forEach((observation, index) => {
+    if (index === excludedIndex || observation.kind !== 'link') return;
+    const children = edges.get(observation.parentCandidateId) ?? [];
+    children.push(observation.targetCandidateId);
+    edges.set(observation.parentCandidateId, children);
+  });
+  const pending = [startCandidateId];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === targetCandidateId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    for (const child of edges.get(current) ?? []) pending.push(child);
+  }
+  return false;
+}
+
+function projectionSnapshotReferencesMatch(snapshot, seeds) {
+  if (!Array.isArray(snapshot?.candidates) || !Array.isArray(snapshot.observations)
+    || !Array.isArray(seeds) || !Number.isSafeInteger(snapshot.limits?.maxDepth)
+    || !Array.isArray(snapshot.stopReasons)) return false;
+  const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
+  if (candidatesById.size !== snapshot.candidates.length) return false;
+  const canonicalCandidateIds = new Map();
+  for (const candidate of snapshot.candidates) {
+    if (!candidate || typeof candidate.candidateId !== 'string' || typeof candidate.canonicalUrl !== 'string'
+      || !Number.isSafeInteger(candidate.depth) || candidate.depth < 0 || typeof candidate.seed !== 'boolean') return false;
+    const prior = canonicalCandidateIds.get(candidate.canonicalUrl);
+    if (prior !== undefined && prior !== candidate.candidateId) return false;
+    canonicalCandidateIds.set(candidate.canonicalUrl, candidate.candidateId);
+  }
+
+  const seedInputs = new Map();
+  for (const seed of seeds) {
+    let canonicalUrl;
+    try { canonicalUrl = parseAndValidateUrl(seed.url).url.href; } catch { return false; }
+    const sourceRefKeys = projectionReferenceKeys(seed.sourceRefs ?? []);
+    if (!sourceRefKeys) return false;
+    const key = JSON.stringify([seed.url, canonicalUrl, sourceRefKeys]);
+    seedInputs.set(key, (seedInputs.get(key) ?? 0) + 1);
+  }
+
+  const targetReferences = new Map();
+  const targetObservationCounts = new Map();
+  const targetOriginCounts = new Map();
+  const targetDepthLimitCounts = new Map();
+  const targetMinimumDepth = new Map();
+  const seedTargets = new Set();
+  const linkDispositions = new Set(['duplicate', 'cycle', 'depth_limit', 'queued', 'retained_after_stop']);
+  const maximumDepth = snapshot.limits.maxDepth;
+  for (const [observationIndex, observation] of snapshot.observations.entries()) {
+    if (!observation || !['seed', 'link'].includes(observation.kind)
+      || typeof observation.targetCandidateId !== 'string' || typeof observation.canonicalUrl !== 'string') return false;
+    const target = candidatesById.get(observation.targetCandidateId);
+    if (!target || target.canonicalUrl !== observation.canonicalUrl) return false;
+    const referenceKeys = projectionReferenceKeys(observation.sourceRefs);
+    if (!referenceKeys) return false;
+    targetObservationCounts.set(observation.targetCandidateId,
+      (targetObservationCounts.get(observation.targetCandidateId) ?? 0) + 1);
+    if (!Number.isSafeInteger(observation.depth) || observation.depth < 0) return false;
+    targetMinimumDepth.set(observation.targetCandidateId,
+      Math.min(targetMinimumDepth.get(observation.targetCandidateId) ?? Number.POSITIVE_INFINITY, observation.depth));
+    const accumulated = targetReferences.get(observation.targetCandidateId) ?? [];
+    accumulated.push(...referenceKeys);
+    targetReferences.set(observation.targetCandidateId, accumulated);
+
+    if (observation.kind === 'seed') {
+      if (observation.parentCandidateId !== null || observation.depth !== 0
+        || !['seed', 'duplicate'].includes(observation.disposition)
+        || (observation.outcome !== undefined && observation.outcome !== null)
+        || typeof observation.suppliedUrl !== 'string') return false;
+      const key = JSON.stringify([observation.suppliedUrl, observation.canonicalUrl, referenceKeys]);
+      const remaining = seedInputs.get(key) ?? 0;
+      if (remaining < 1) return false;
+      if (remaining === 1) seedInputs.delete(key);
+      else seedInputs.set(key, remaining - 1);
+      seedTargets.add(observation.targetCandidateId);
+      if (observation.disposition === 'seed') {
+        targetOriginCounts.set(observation.targetCandidateId,
+          (targetOriginCounts.get(observation.targetCandidateId) ?? 0) + 1);
+      }
+    } else {
+      const parent = candidatesById.get(observation.parentCandidateId);
+      if (!parent || !Number.isSafeInteger(parent.depth) || parent.depth < 0
+        || typeof observation.suppliedUrl !== 'string' || observation.outcome !== 'links_observed'
+        || !linkDispositions.has(observation.disposition)
+        || !Number.isSafeInteger(observation.depth) || observation.depth < parent.depth + 1
+        || (observation.depth > maximumDepth + 1 && observation.disposition !== 'cycle')) return false;
+      if (observation.disposition === 'depth_limit') {
+        if (observation.depth <= maximumDepth) return false;
+      } else if (observation.disposition !== 'cycle' && observation.depth > maximumDepth) {
+        return false;
+      }
+      if (observation.disposition === 'retained_after_stop'
+        && (!snapshot.stopReasons.some((stop) => stop.reason === 'attempt_limit') || snapshot.state === 'active')) {
+        return false;
+      }
+      if (['queued', 'retained_after_stop'].includes(observation.disposition)) {
+        targetOriginCounts.set(observation.targetCandidateId,
+          (targetOriginCounts.get(observation.targetCandidateId) ?? 0) + 1);
+      }
+      if (observation.disposition === 'depth_limit') {
+        targetDepthLimitCounts.set(observation.targetCandidateId,
+          (targetDepthLimitCounts.get(observation.targetCandidateId) ?? 0) + 1);
+      }
+      if (observation.disposition === 'cycle'
+        && !projectionObservationPathExists(snapshot.observations, observation.targetCandidateId,
+          observation.parentCandidateId, observationIndex)) return false;
+    }
+  }
+  if (seedInputs.size !== 0) return false;
+  for (const candidate of snapshot.candidates) {
+    if (candidate.seed !== seedTargets.has(candidate.candidateId)
+      || candidate.depth !== targetMinimumDepth.get(candidate.candidateId)
+      || (targetObservationCounts.get(candidate.candidateId) ?? 0) < 1) return false;
+    const originCount = targetOriginCounts.get(candidate.candidateId) ?? 0;
+    const depthLimitCount = targetDepthLimitCounts.get(candidate.candidateId) ?? 0;
+    if (candidate.seed ? originCount !== 1 : originCount > 1 || originCount + depthLimitCount === 0) return false;
+    const expected = [...new Set(targetReferences.get(candidate.candidateId) ?? [])].sort(stableTextCompare);
+    const actual = projectionReferenceKeys(candidate.sourceRefs);
+    if (!actual || JSON.stringify(actual) !== JSON.stringify(expected)) return false;
+  }
+  return true;
+}
+
+function projectionObservationTargetsMatch(snapshot, parentCandidateId, observations, authenticatedClaimDepth) {
+  if (!Array.isArray(snapshot?.candidates) || !Array.isArray(snapshot.observations)
+    || !Number.isSafeInteger(snapshot.limits?.maxDepth)
+    || !Number.isSafeInteger(authenticatedClaimDepth) || authenticatedClaimDepth < 0) return false;
+  const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
+  const parent = candidatesById.get(parentCandidateId);
+  if (!parent || !Number.isSafeInteger(parent.depth) || parent.depth < 0
+    || parent.depth > authenticatedClaimDepth) return false;
+  const maximumDepth = snapshot.limits.maxDepth;
+  for (const observation of observations) {
+    if (observation.parentCandidateId !== parentCandidateId
+      || typeof observation.targetCandidateId !== 'string'
+      || typeof observation.canonicalUrl !== 'string'
+      || !Number.isSafeInteger(observation.depth) || observation.depth < parent.depth + 1
+      || observation.depth > authenticatedClaimDepth + 1
+      || observation.depth > maximumDepth + 1 && observation.disposition !== 'cycle') return false;
+    const target = candidatesById.get(observation.targetCandidateId);
+    if (!target || target.canonicalUrl !== observation.canonicalUrl
+      || !Number.isSafeInteger(target.depth) || target.depth < 0 || target.depth > observation.depth) return false;
+    if (observation.disposition === 'depth_limit') {
+      if (observation.depth <= maximumDepth) return false;
+    } else if (observation.disposition !== 'cycle' && observation.depth > maximumDepth) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function completionPayloadMatches(receipt, snapshot, candidateId, completion, truncatedCount) {
+  if (!completion || typeof completion.payloadHash !== 'string'
+    || receipt?.candidate?.candidateId !== candidateId
+    || !Number.isSafeInteger(receipt.candidate.depth) || receipt.candidate.depth < 0) return false;
+  const observations = completionObservations(snapshot, candidateId);
+  return observationsMatchSuggestions(observations, receipt.suggestions, receipt.outcome)
+    && projectionObservationTargetsMatch(snapshot, candidateId, observations, receipt.candidate.depth)
+    && completionPayloadHashFromObservations(observations, receipt.outcome, truncatedCount) === completion.payloadHash;
+}
+
+function reconstructCompletedLegacyReceipt(receipt, snapshot, candidateId, completion, maximum) {
+  const full = boundCompletionSuggestions(receipt.suggestions, receipt.suggestions.length);
+  if (completionPayloadMatches({ ...receipt, suggestions: full.suggestions }, snapshot, candidateId, completion, 0)) {
+    return { ...receipt, suggestions: full.suggestions, truncatedCount: 0, omittedSuggestions: [] };
+  }
+  const bounded = boundCompletionSuggestions(receipt.suggestions, maximum);
+  if (bounded.omittedSuggestions.length > 0
+    && completionPayloadMatches({ ...receipt, suggestions: bounded.suggestions }, snapshot, candidateId,
+      completion, bounded.omittedSuggestions.length)) {
+    return {
+      ...receipt,
+      suggestions: bounded.suggestions,
+      truncatedCount: bounded.omittedSuggestions.length,
+      omittedSuggestions: bounded.omittedSuggestions,
+    };
+  }
+  return null;
+}
+
 function receiptCandidate(candidate, bindSuppliedUrl = false) {
   if (bindSuppliedUrl && (typeof candidate.suppliedUrl !== 'string' || candidate.suppliedUrl.length < 1
     || candidate.suppliedUrl.length > 8_192 || urlHasSensitiveMaterial(candidate.suppliedUrl))) {
@@ -389,7 +672,9 @@ function aggregateIdentity(candidateResults) {
   });
 }
 
-function projection(identity, selectedEvidence, selectedFacts, progress, limitations) {
+function projection(identity, selectedEvidence, selectedFacts, progress, limitations, omittedLinkCandidates,
+  truncatedSuggestionCount, sourceLinkCandidateOmittedCount, sourceLinkCandidateOmittedCountLowerBound,
+  sourceLinkCandidateOmittedCountComplete) {
   const facts = selectedFacts;
   const evidenceById = new Map(selectedEvidence.map((item) => [item.metadata.evidenceId, item]));
   const sources = [...evidenceById.values()].map((item) => Object.freeze({
@@ -471,6 +756,11 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
     unresolvedTransitions: identity.unresolvedTransitions,
     sources: Object.freeze(sources),
     linkCandidates: Object.freeze(linkCandidates),
+    omittedLinkCandidates: Object.freeze(omittedLinkCandidates.map((suggestion) => Object.freeze({
+      url: suggestion.url,
+      sourceRefs: suggestion.sourceRefs,
+      reason: 'completion_suggestion_limit',
+    }))),
     conflicts,
     sourceAuthority: 'not_evaluated',
     rights: 'not_evaluated',
@@ -483,6 +773,10 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
       completedCandidates: progress.candidates.filter((candidate) => candidate.state === 'completed').length,
       remainingCandidates: progress.candidates.filter((candidate) => candidate.state === 'queued' || candidate.state === 'leased').length,
       transportAttemptAdmissions: progress.counters.transportAttemptAdmissions,
+      truncatedSuggestionCount,
+      sourceLinkCandidateOmittedCount,
+      sourceLinkCandidateOmittedCountLowerBound,
+      sourceLinkCandidateOmittedCountComplete,
     }),
   });
 }
@@ -500,6 +794,11 @@ export async function runPrivateRetrieval(value) {
   const candidateResults = [];
   const outputFacts = new Map();
   const evidenceIds = new Set();
+  const verifiedCompletionProofs = new Map();
+  const omittedLinkCandidates = [];
+  let truncatedSuggestionCount = 0;
+  let sourceLinkCandidateOmittedCountLowerBound = 0;
+  let sourceLinkCandidateOmittedCountComplete = true;
   const activeHops = new Map();
   const controller = new AbortController();
   const runStartedAt = performance.now();
@@ -587,6 +886,11 @@ export async function runPrivateRetrieval(value) {
       }, () => {});
       return creating;
     });
+    const maxSuggestionsPerCompletion = initial.limits?.maxSuggestionsPerCompletion;
+    if (!Number.isSafeInteger(maxSuggestionsPerCompletion)
+      || maxSuggestionsPerCompletion < 1 || maxSuggestionsPerCompletion > 16) {
+      throw new RetrievalError('FRONTIER_UNAVAILABLE');
+    }
     if (!Number.isSafeInteger(initial.deadlineAtMs)) throw new RetrievalError('FRONTIER_UNAVAILABLE');
     deadlineAtMonotonic = Math.min(deadlineAtMonotonic,
       performance.now() + Math.max(0, initial.deadlineAtMs - Date.now()));
@@ -626,9 +930,106 @@ export async function runPrivateRetrieval(value) {
       return snapshot;
     };
 
+    const rememberVerifiedCompletion = async (candidateId, receipt) => {
+      let binding;
+      let snapshot;
+      try {
+        binding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+          scope, input.runId, candidateId, controller.signal,
+        ));
+        snapshot = await readActiveSnapshot();
+      } catch (error) {
+        return { valid: false, unavailable: true, error };
+      }
+      const truncatedCount = receipt.truncatedCount ?? 0;
+      if (!binding || binding.claim.candidateId !== candidateId || binding.claim.state !== 'completed'
+        || binding.claim.claimKey !== receipt.claim.claimKey
+        || binding.claim.workerId !== receipt.claim.workerId
+        || binding.claim.leaseToken !== receipt.claim.leaseToken
+        || !projectionSnapshotReferencesMatch(snapshot, input.seeds)
+        || binding.completion?.completionKey !== receipt.completionKey
+        || binding.completion?.outcome !== receipt.outcome
+        || !completionPayloadMatches(receipt, snapshot, candidateId, binding.completion, truncatedCount)) {
+        return { valid: false, unavailable: false };
+      }
+      verifiedCompletionProofs.set(candidateId, {
+        completionKey: receipt.completionKey,
+        claim: {
+          claimKey: receipt.claim.claimKey,
+          workerId: receipt.claim.workerId,
+          leaseToken: receipt.claim.leaseToken,
+        },
+        legacyReceipt: receipt.omissionMetadataVersion !== 1,
+        receipt: {
+          candidate: {
+            candidateId: receipt.candidate.candidateId,
+            depth: receipt.candidate.depth,
+          },
+          outcome: receipt.outcome,
+          suggestions: receipt.suggestions,
+          truncatedCount,
+        },
+      });
+      return { valid: true, snapshot };
+    };
+
+    const verifyProjectionObservationStream = async (snapshot) => {
+      const candidatesById = new Map(snapshot.candidates.map((candidate) => [candidate.candidateId, candidate]));
+      const parents = new Set(verifiedCompletionProofs.keys());
+      const hasLegacyReceipt = [...verifiedCompletionProofs.values()].some((proof) => proof.legacyReceipt);
+      if (!projectionSnapshotReferencesMatch(snapshot, input.seeds)) {
+        return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+      }
+      for (const observation of snapshot.observations) {
+        if (observation.kind !== 'link') continue;
+        const parentCandidateId = observation.parentCandidateId;
+        const parent = candidatesById.get(parentCandidateId);
+        const proof = verifiedCompletionProofs.get(parentCandidateId);
+        if (!parent || parent.state !== 'completed' || !proof) {
+          return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+        }
+        parents.add(parentCandidateId);
+      }
+      for (const parentCandidateId of parents) {
+        const proof = verifiedCompletionProofs.get(parentCandidateId);
+        const parent = candidatesById.get(parentCandidateId);
+        if (!parent || parent.state !== 'completed' || parent.completionOutcome !== proof.receipt.outcome) {
+          return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+        }
+        let binding;
+        try {
+          binding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
+            scope, input.runId, parentCandidateId, controller.signal,
+          ));
+        } catch (error) {
+          return { valid: false, unavailable: true, legacy: hasLegacyReceipt, error };
+        }
+        if (!binding || binding.claim.candidateId !== parentCandidateId || binding.claim.state !== 'completed'
+          || binding.claim.claimKey !== proof.claim.claimKey
+          || binding.claim.workerId !== proof.claim.workerId
+          || binding.claim.leaseToken !== proof.claim.leaseToken
+          || binding.completion?.completionKey !== proof.completionKey
+          || binding.completion?.outcome !== proof.receipt.outcome
+          || !completionPayloadMatches(proof.receipt, snapshot, parentCandidateId,
+            binding.completion, proof.receipt.truncatedCount)) {
+          return { valid: false, unavailable: false, legacy: hasLegacyReceipt };
+        }
+      }
+      return { valid: true };
+    };
+
     const retainReceipt = (receipt) => {
       for (const evidenceId of receipt.evidenceIds) evidenceIds.add(evidenceId);
       for (const fact of receipt.facts) outputFacts.set(fact.factId, fact);
+      omittedLinkCandidates.push(...(receipt.omittedSuggestions ?? []));
+      truncatedSuggestionCount += receipt.truncatedCount ?? receipt.omittedSuggestions?.length ?? 0;
+      if (receipt.omissionMetadataVersion === 1) {
+        sourceLinkCandidateOmittedCountLowerBound += receipt.sourceLinkCandidatesOmittedCount;
+      } else if (receipt.limitations.includes('some_link_candidates_omitted_by_policy_or_parser_limit')) {
+        // Historical v1 bodies retained that at least one link was omitted, but not the count.
+        sourceLinkCandidateOmittedCountLowerBound += 1;
+        sourceLinkCandidateOmittedCountComplete = false;
+      }
       for (const limitation of receipt.limitations) limitations.add(limitation);
       const identity = receipt.identity;
       if (identity.entityCandidates.length > 0 || identity.occurrenceCandidates.length > 0
@@ -715,6 +1116,52 @@ export async function runPrivateRetrieval(value) {
           runFailure = 'private_receipt_unavailable';
           return;
         }
+        let replayReceipt = receipt;
+        if (candidate.state === 'completed') {
+          if (receipt.omissionMetadataVersion === 1) {
+            const completionObservationsForReceipt = completionObservations(snapshot, candidate.candidateId);
+            if (!observationsMatchSuggestions(completionObservationsForReceipt, receipt.suggestions, receipt.outcome)) {
+              limitations.add('private_receipt_mismatch');
+              runFailure = 'private_receipt_unavailable';
+              return;
+            }
+            if (!completionPayloadMatches(receipt, snapshot, candidate.candidateId,
+              frontierBinding.completion, receipt.truncatedCount)) {
+              limitations.add('private_receipt_completion_mismatch');
+              runFailure = 'private_receipt_unavailable';
+              return;
+            }
+          } else {
+            const reconstructed = reconstructCompletedLegacyReceipt(receipt, snapshot, candidate.candidateId,
+              frontierBinding.completion, maxSuggestionsPerCompletion);
+            if (!reconstructed) {
+              limitations.add('legacy_receipt_fanout_recovery_unverified');
+              limitations.add('private_receipt_completion_mismatch');
+              runFailure = 'private_receipt_unavailable';
+              return;
+            }
+            replayReceipt = reconstructed;
+          }
+        } else if (candidate.state === 'leased') {
+          if (receipt.omissionMetadataVersion === 1 && receipt.suggestions.length > maxSuggestionsPerCompletion) {
+            limitations.add('private_receipt_completion_mismatch');
+            runFailure = 'private_receipt_unavailable';
+            return;
+          }
+          const bounded = boundCompletionSuggestions(receipt.suggestions, maxSuggestionsPerCompletion);
+          if (receipt.omissionMetadataVersion === 1 && bounded.omittedSuggestions.length > 0) {
+            limitations.add('private_receipt_completion_mismatch');
+            runFailure = 'private_receipt_unavailable';
+            return;
+          }
+          replayReceipt = {
+            ...receipt,
+            suggestions: bounded.suggestions,
+            truncatedCount: (receipt.truncatedCount ?? 0) + bounded.omittedSuggestions.length,
+            omittedSuggestions: [...(receipt.omittedSuggestions ?? []), ...bounded.omittedSuggestions],
+            sourceLinkCandidatesOmittedCount: receipt.sourceLinkCandidatesOmittedCount ?? 0,
+          };
+        }
         if (candidate.state === 'completed'
           && (candidate.completionOutcome !== receipt.outcome
             || !frontierBinding.completion
@@ -746,38 +1193,64 @@ export async function runPrivateRetrieval(value) {
           }
           if (priorClaim.state === 'claimed') {
             await awaitOperation(() => input.frontier.completeCandidate(scope, input.runId, {
-              leaseToken: receipt.claim.leaseToken,
-              completionKey: receipt.completionKey,
-              outcome: receipt.outcome,
-              suggestions: receipt.suggestions,
+              leaseToken: replayReceipt.claim.leaseToken,
+              completionKey: replayReceipt.completionKey,
+              outcome: replayReceipt.outcome,
+              suggestions: replayReceipt.suggestions,
+              truncatedCount: replayReceipt.truncatedCount ?? 0,
             }, controller.signal));
           } else {
             const completedBinding = await awaitOperation(() => input.frontier.getCandidateReceiptBinding(
               scope, input.runId, candidate.candidateId, controller.signal,
+            ));
+            const completedSnapshot = await awaitOperation(() => input.frontier.getSnapshot(
+              scope, input.runId, controller.signal,
             ));
             if (!completedBinding || completedBinding.claim.state !== 'completed'
               || completedBinding.claim.claimKey !== receipt.claim.claimKey
               || completedBinding.claim.workerId !== receipt.claim.workerId
               || completedBinding.claim.leaseToken !== receipt.claim.leaseToken
               || completedBinding.completion?.completionKey !== receipt.completionKey
-              || completedBinding.completion?.outcome !== receipt.outcome) {
+              || completedBinding.completion?.outcome !== replayReceipt.outcome
+              || !completionPayloadMatches(replayReceipt, completedSnapshot, candidate.candidateId,
+                completedBinding.completion, replayReceipt.truncatedCount ?? 0)) {
               limitations.add('private_receipt_completion_mismatch');
               runFailure = 'private_receipt_unavailable';
               return;
             }
           }
         }
-        retainReceipt(receipt);
+        const proof = await rememberVerifiedCompletion(candidate.candidateId, replayReceipt);
+        if (!proof.valid) {
+          if (proof.unavailable) limitations.add('private_receipt_unavailable');
+          else limitations.add('private_receipt_completion_mismatch');
+          if (!proof.unavailable && receipt.omissionMetadataVersion !== 1) {
+            limitations.add('legacy_receipt_fanout_recovery_unverified');
+          }
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        retainReceipt(replayReceipt);
       }
     };
 
     await recoverDurableReceipts();
+    if (!runFailure) {
+      const recoveredSnapshot = await readActiveSnapshot();
+      const streamProof = await verifyProjectionObservationStream(recoveredSnapshot);
+      if (!streamProof.valid) {
+        limitations.add(streamProof.unavailable ? 'private_receipt_unavailable' : 'private_receipt_completion_mismatch');
+        if (streamProof.legacy) limitations.add('legacy_receipt_fanout_recovery_unverified');
+        runFailure = 'private_receipt_unavailable';
+      }
+    }
 
     const processClaim = async (claim, claimProgress) => {
       const candidate = claim.candidate;
       const priorLimitations = new Set(limitations);
       const candidateEvidenceIds = new Set();
       const candidateFacts = [];
+      let selectedSourceLinkCandidatesOmittedCount = 0;
       const claimBinding = Object.freeze({
         claimKey: claim.claimKey,
         workerId: claim.workerId,
@@ -1033,7 +1506,10 @@ export async function runPrivateRetrieval(value) {
               value: link.url,
             }],
           }));
-          if (selectedResult.linkCandidatesOmitted > 0) limitations.add('some_link_candidates_omitted_by_policy_or_parser_limit');
+          selectedSourceLinkCandidatesOmittedCount = selectedResult.linkCandidatesOmitted;
+          if (selectedSourceLinkCandidatesOmittedCount > 0) {
+            limitations.add('some_link_candidates_omitted_by_policy_or_parser_limit');
+          }
           const extraction = composedSource?.extraction;
           if (extraction?.jsRequired === true) limitations.add('dynamic_rendering_required');
           if (extraction?.status === 'PARTIAL' && extraction?.termination !== null) limitations.add('extraction_incomplete');
@@ -1146,6 +1622,12 @@ export async function runPrivateRetrieval(value) {
         })
         : emptyIdentityResult();
       const candidateSuggestions = failure ? [] : selectedSuggestions;
+      const boundedSuggestions = boundCompletionSuggestions(candidateSuggestions, maxSuggestionsPerCompletion);
+      const acceptedSuggestions = boundedSuggestions.suggestions;
+      const omittedSuggestions = boundedSuggestions.omittedSuggestions;
+      const truncatedCount = omittedSuggestions.length;
+      const candidateSourceLinkCandidatesOmittedCount = failure ? 0 : selectedSourceLinkCandidatesOmittedCount;
+      if (truncatedCount > 0) limitations.add('completion_suggestion_limit');
       const evidenceHandles = [];
       for (const evidenceId of candidateEvidenceIds) {
         evidenceHandles.push(await awaitOperation(() => input.evidenceStore.lookupEvidence(evidenceScope, evidenceId, controller.signal)));
@@ -1161,7 +1643,10 @@ export async function runPrivateRetrieval(value) {
         completion: {
           completionKey,
           outcome,
-          suggestions: candidateSuggestions,
+          suggestions: acceptedSuggestions,
+          truncatedCount,
+          omittedSuggestions,
+          sourceLinkCandidatesOmittedCount: candidateSourceLinkCandidatesOmittedCount,
           limitations: candidateLimitations,
           identity: candidateIdentity,
         },
@@ -1169,13 +1654,38 @@ export async function runPrivateRetrieval(value) {
       }, input.request, controller.signal));
       for (const evidenceId of candidateEvidenceIds) evidenceIds.add(evidenceId);
       for (const fact of candidateFacts) outputFacts.set(fact.factId, fact);
+      omittedLinkCandidates.push(...omittedSuggestions);
+      truncatedSuggestionCount += truncatedCount;
+      sourceLinkCandidateOmittedCountLowerBound += candidateSourceLinkCandidatesOmittedCount;
       if (selectedResult?.sources[0]?.evidence?.evidenceId) candidateResults.push(candidateIdentity);
       await awaitOperation(() => input.frontier.completeCandidate(scope, input.runId, {
         leaseToken: claim.leaseToken,
         completionKey,
         outcome,
-        suggestions: candidateSuggestions,
+        suggestions: acceptedSuggestions,
+        truncatedCount,
       }, controller.signal));
+      let persistedReceipt;
+      try {
+        persistedReceipt = await awaitOperation(() => input.evidenceStore.readPrivateRunReceipt(
+          evidenceScope, receiptBinding, input.request, controller.signal,
+        ));
+      } catch (error) {
+        limitations.add(limitationFor(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error)));
+        limitations.add('private_receipt_unavailable');
+        runFailure = 'private_receipt_unavailable';
+        return;
+      }
+      const proof = persistedReceipt.state === 'complete'
+        ? await rememberVerifiedCompletion(candidate.candidateId, persistedReceipt)
+        : { valid: false, unavailable: false };
+      if (!proof.valid) {
+        limitations.add(proof.unavailable ? 'private_receipt_unavailable' : 'private_receipt_completion_mismatch');
+        if (!proof.unavailable && persistedReceipt.omissionMetadataVersion !== 1) {
+          limitations.add('legacy_receipt_fanout_recovery_unverified');
+        }
+        runFailure = 'private_receipt_unavailable';
+      }
     };
 
     while (!controller.signal.aborted && !runFailure) {
@@ -1245,6 +1755,12 @@ export async function runPrivateRetrieval(value) {
       if (stopCause === 'deadline') return incompleteWithProgress(input.runId, finalSnapshot, [...limitations, 'deadline_exceeded']);
       return incompleteResult(input.runId, 'cancelled', [...limitations, 'cancelled']);
     }
+    const finalStreamProof = await verifyProjectionObservationStream(finalSnapshot);
+    if (!finalStreamProof.valid) {
+      limitations.add(finalStreamProof.unavailable ? 'private_receipt_unavailable' : 'private_receipt_completion_mismatch');
+      if (finalStreamProof.legacy) limitations.add('legacy_receipt_fanout_recovery_unverified');
+      runFailure = 'private_receipt_unavailable';
+    }
     if (runFailure) return incompleteResult(input.runId, 'incomplete', [...limitations, runFailure]);
     const transport = await awaitOperation(() => input.frontier.getTransportProgress(scope, input.runId, controller.signal));
     const hasLeased = finalSnapshot.candidates.some((candidate) => candidate.state === 'leased');
@@ -1305,7 +1821,11 @@ export async function runPrivateRetrieval(value) {
       limitations.add('final_selected_snapshot_mismatch');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
     }
-    const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations);
+    const sourceLinkCandidateOmittedCount = sourceLinkCandidateOmittedCountComplete
+      ? sourceLinkCandidateOmittedCountLowerBound : null;
+    const draft = projection(identity, materialized.evidence, materialized.facts, finalSnapshot, limitations,
+      omittedLinkCandidates, truncatedSuggestionCount, sourceLinkCandidateOmittedCount,
+      sourceLinkCandidateOmittedCountLowerBound, sourceLinkCandidateOmittedCountComplete);
     return draft;
   } catch (error) {
     const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);

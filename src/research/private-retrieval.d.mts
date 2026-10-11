@@ -57,6 +57,14 @@ export interface PrivateRetrievalProgress {
   readonly completedCandidates: number;
   readonly remainingCandidates: number;
   readonly transportAttemptAdmissions: number;
+  /** Valid extracted suggestions omitted at the configured per-completion cap. */
+  readonly truncatedSuggestionCount?: number;
+  /** Exact count omitted earlier by source parsing or policy, without retained raw URLs. */
+  readonly sourceLinkCandidateOmittedCount?: number | null;
+  /** Proven minimum, including one per legacy positive marker with an unknown exact count. */
+  readonly sourceLinkCandidateOmittedCountLowerBound?: number;
+  /** False when a replayed legacy receipt reports omissions but did not persist their exact count. */
+  readonly sourceLinkCandidateOmittedCountComplete?: boolean;
 }
 
 export interface PrivateRetrievalPdfProjection {
@@ -144,6 +152,12 @@ export interface PrivateRetrievalDraft {
   }>[];
   readonly sources: readonly PrivateRetrievalSource[];
   readonly linkCandidates: readonly PrivateRetrievalLinkCandidate[];
+  /** Valid extracted links retained with provenance but not queued because of the completion cap. */
+  readonly omittedLinkCandidates: readonly Readonly<{
+    readonly url: string;
+    readonly sourceRefs: PrivateRetrievalLinkCandidate['sourceRefs'];
+    readonly reason: 'completion_suggestion_limit';
+  }>[];
   readonly conflicts: readonly PrivateRetrievalConflict[];
   readonly sourceAuthority: 'not_evaluated';
   readonly rights: 'not_evaluated';

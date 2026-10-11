@@ -104,8 +104,9 @@ include at least one reference whose `value` exactly matches its supplied URL.
 The future caller must first verify that each reference came from an available,
 same-tenant evidence record and source position; this module does not read or
 authorize EvidenceStore handles. A positive `truncatedCount` records
-`fanout_limit`, so a future extractor can retain a deterministic bounded prefix
-and disclose omitted links. Completions are idempotent by caller-supplied
+`fanout_limit`, so private retrieval can retain a deterministic bounded prefix
+and disclose omitted links with their source references in the encrypted
+receipt. Completions are idempotent by caller-supplied
 `completionKey` and payload. Results already in flight may still be recorded
 after cancellation or another stop, but new claims/admissions remain denied.
 
