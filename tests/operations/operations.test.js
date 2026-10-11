@@ -4929,6 +4929,21 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
         expected: { failureCode: 'SQLITE_BUSY', errorClass: 'RuntimeError', errorCode: 'STORE_BUSY', sqlitePrimaryCode: null }
       },
       {
+        id: 'marker-split-runtime',
+        body: '  cause:\n    RuntimeError:\n      name: RuntimeError\n    unrelated:\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'marker-split-native',
+        body: '  cause:\n    Error:\n      name: Error\n      code: ERR_SQLITE_ERROR\n    unrelated:\n      errcode: 5',
+        expected: null
+      },
+      {
+        id: 'marker-empty-then-unrelated',
+        body: '  cause:\n    RuntimeError:\n    unrelated:\n      name: RuntimeError\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
         id: 'cause-map-node-extended-262',
         body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    errcode: 262,',
         expected: { failureCode: 'SQLITE_BUSY', errorClass: 'Error', errorCode: 'ERR_SQLITE_ERROR', sqlitePrimaryCode: 6 }
@@ -4956,6 +4971,16 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       {
         id: 'unsupported-native-primary',
         body: '  cause:\n    name: Error\n    code: ERR_SQLITE_ERROR\n    errcode: 1',
+        expected: null
+      },
+      {
+        id: 'marker-duplicate-code-field',
+        body: '  cause:\n    RuntimeError:\n      name: RuntimeError\n      code: STORE_BUSY\n      code: STORE_BUSY',
+        expected: null
+      },
+      {
+        id: 'marker-malformed-scalar-value',
+        body: '  cause:\n    RuntimeError: |\n      name: RuntimeError\n      code: STORE_BUSY',
         expected: null
       }
     ];

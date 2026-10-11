@@ -156,11 +156,19 @@ function nestedStorageFailure(block, parentIndentation) {
     const directCause = storageCauseFromFields(directErrorFields(descendants, firstIndentation));
     if (directCause) return directCause;
 
-    for (const line of descendants) {
+    for (let markerIndex = 0; markerIndex < descendants.length; markerIndex += 1) {
+      const line = descendants[markerIndex];
       const marker = line.match(/^([ \t]*)(RuntimeError|Error|SQLiteError):[ \t]*$/u);
       if (!marker || marker[1].length !== firstIndentation) continue;
       const markerIndentation = marker[1].length;
-      const fields = directErrorFields(descendants, markerIndentation + 2);
+      const markerLines = [];
+      for (let nestedIndex = markerIndex + 1; nestedIndex < descendants.length; nestedIndex += 1) {
+        const nestedLine = descendants[nestedIndex];
+        const nestedIndentation = nestedLine.match(/^[ \t]*/u)?.[0].length ?? 0;
+        if (nestedLine.trim() && nestedIndentation <= markerIndentation) break;
+        markerLines.push(nestedLine);
+      }
+      const fields = directErrorFields(markerLines, markerIndentation + 2);
       if (fields?.get('name') !== marker[2]) continue;
       const markedCause = storageCauseFromFields(fields);
       if (markedCause) return markedCause;
