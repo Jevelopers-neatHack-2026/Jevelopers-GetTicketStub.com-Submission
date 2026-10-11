@@ -33,6 +33,28 @@ using the existing store's process-liveness check, not by expiring claims.
 Malformed locks, corruption, missing committed state, unsupported formats,
 and storage/access failures stop the operation.
 
+A single `claimSubmitAttempt` call can fail with `storage_busy` when a live or
+uncertain writer keeps the lock through the store's finite acquisition
+attempts. The store does not promise that every competing caller will acquire
+the lock or wait until it becomes available. In particular, a caller must not
+turn a local contention failure into a retry of `runtime.submit`, provider
+transport, budget/finance authorization, or another external effect. The
+runtime fails closed as `persistence_unavailable` / `not_dispatched` when it
+cannot persist its claim. The process-race tests use an opt-in, bounded
+fixture-only retry for exactly `storage_busy`, always with the same immutable
+claim record; that test mechanism does not change runtime behavior or grant
+external retry authority.
+
+The fixture retry deadline is a monotonic cutoff for starting the next outer
+`claimSubmitAttempt`. It does not interrupt a claim call already in progress,
+so an attempt that starts before the cutoff may finish after it. Fixture attempt
+diagnostics record the cutoff duration, decision and start offsets, completion
+offset, stop offset, and stop reason. Tests require every outer attempt to start
+before the cutoff and require no retry after it. The 200 ms and 12 s
+values are retry-start windows, not completion-time service-level guarantees.
+The per-child process watchdog and readiness/gate timeouts remain liveness
+bounds for their respective processes and harness steps.
+
 Each attempt history is limited to 1,000,000 rows. An exact repeat at the
 limit remains a safe no-op; a changed update beyond the limit fails with
 `storage_unavailable` before changing either the snapshot or commit marker.
@@ -122,7 +144,14 @@ retained ambiguity and reservation holds, expiry without claim release,
 committed-empty and missing-snapshot mutation refusal, a deterministic
 first-claim read race, malformed state/reference combinations in initial,
 intermediate, and final history rows, cross-scope privacy, corruption/version
-handling, permissions, and symlink rejection. Its runtime scenario uses the
+handling, permissions, and symlink rejection. Its process-contention fixture
+publishes lock readiness through a complete same-directory temporary record
+and an atomic no-clobber link. A real child pauses after the final link exists
+but before the temporary name is removed; the parent verifies both names
+contain identical bytes and that readiness names the live lock owner, then
+requires the temporary name to be absent after child completion. The parent
+also rejects absent, malformed, or schema-invalid readiness before treating a
+child as the live lock owner. Its runtime scenario uses the
 deterministic simulator and fixture authorization, budget, and usage ports. It
 makes no provider or external finance calls and does not represent production
 authorization or billing evidence.
