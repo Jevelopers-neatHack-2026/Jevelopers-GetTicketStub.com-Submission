@@ -150,6 +150,37 @@ test("catalog-shaped descriptors that list auto are accepted verbatim, but auto 
     "input_references is not pinnable");
 });
 
+test("capabilities are bound to the supplied n and input_references descriptors before any port is used", () => {
+  let portCalls = 0;
+  const trap = () => { portCalls += 1; throw new Error("port must not be called"); };
+  const base = (overrides) => ({ ...orProfile(), ...orAuthorityPorts(), promptPort: { render: trap },
+    credentialPort: { resolveCredential: trap }, assetPort: { read: trap }, fetchImpl: trap, configuration: {}, ...overrides });
+  const edit = (max) => ({ generation: true, edit: { max_input_references: max } });
+  const refs = (min, max) => ({ input_references: { type: "range", min, max } });
+  const denied = [
+    ["edit maximum above the descriptor maximum", { capabilities: edit(5), supported_parameters: refs(0, 4) }],
+    ["descriptor maximum zero while edit is claimed", { capabilities: edit(2), supported_parameters: refs(0, 0) }],
+    ["descriptor minimum above one while edit is claimed", { capabilities: edit(3), supported_parameters: refs(2, 8) }],
+    ["n maximum zero", { supported_parameters: { n: { type: "range", min: 0, max: 0 } } }],
+    ["n minimum above one", { supported_parameters: { n: { type: "range", min: 2, max: 4 } } }],
+  ];
+  for (const [name, overrides] of denied) {
+    assert.throws(() => createOpenRouterImagesProvider(base(overrides)),
+      (error) => error.code === "unsupported_model_profile" && error.field === "supported_parameters", name);
+  }
+  assert.equal(portCalls, 0);
+  // The same descriptors are fine when the profile makes no contradicting claim.
+  for (const overrides of [
+    { capabilities: edit(4), supported_parameters: refs(0, 4) },
+    { capabilities: edit(2), supported_parameters: refs(1, 16) },
+    { capabilities: { generation: true, edit: false }, supported_parameters: refs(0, 0) },
+    { capabilities: { generation: true, edit: false }, supported_parameters: refs(2, 8) },
+    { supported_parameters: { n: { type: "range", min: 1, max: 1 } } },
+    { supported_parameters: { n: { type: "range", min: 0, max: 10 } } },
+    { supported_parameters: { ...LIVE_DESCRIPTORS }, configuration: { quality: "low" } },
+  ]) assert.doesNotThrow(() => createOpenRouterImagesProvider(base(overrides)), JSON.stringify(overrides));
+});
+
 test("route is the exact OpenRouter endpoint and never a direct OpenAI one", () => {
   const harness = orHarness();
   for (const operation of ["generate", "edit"]) {
@@ -675,6 +706,28 @@ test("usage is raw, unknown, identity-bound, and missing values are reported, ne
       "usage.prompt_tokens_details.video_tokens", "usage.completion_tokens_details"]) assert.ok(bad.missing_fields.includes(field), field);
     const nullish = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: null });
     assert.ok(!("input_tokens_details" in nullish) && nullish.missing_fields.length === 1);
+  });
+  await t.test("a detail counter above its parent is a fixed finding and the counters are preserved", () => {
+    const over = normalizeOpenRouterImageUsage({ prompt_tokens: 5, prompt_tokens_details: { cached_tokens: 999, cache_write_tokens: 2 },
+      completion_tokens: 7, completion_tokens_details: { image_tokens: 8 } });
+    assert.deepEqual(over.input_tokens_details, { cache_write_tokens: 2, cached_tokens: 999 }, "real counters are not clamped or dropped");
+    assert.deepEqual(over.output_tokens_details, { image_tokens: 8 });
+    assert.ok(over.missing_fields.includes("usage.input_tokens_details.exceeds_parent"));
+    assert.ok(over.missing_fields.includes("usage.output_tokens_details.exceeds_parent"));
+    assert.equal(over.completeness, "unknown");
+    assert.ok(!JSON.stringify(over.missing_fields).includes("999"));
+    const equal = normalizeOpenRouterImageUsage({ prompt_tokens: 5, prompt_tokens_details: { cached_tokens: 5 } });
+    assert.ok(!equal.missing_fields.some((field) => field.endsWith(".exceeds_parent")), "equal to the parent is valid");
+    const valid = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: { cached_tokens: 1 }, completion_tokens_details: { image_tokens: 1 } });
+    assert.deepEqual(valid.missing_fields, ["usage.profile_mapping_pending"]);
+  });
+  await t.test("details without their parent counter are kept and flagged", () => {
+    const orphan = normalizeOpenRouterImageUsage({ prompt_tokens_details: { cached_tokens: 3 }, completion_tokens_details: { image_tokens: 4 } });
+    assert.deepEqual(orphan.input_tokens_details, { cached_tokens: 3 });
+    assert.deepEqual(orphan.output_tokens_details, { image_tokens: 4 });
+    assert.ok(orphan.missing_fields.includes("usage.input_tokens_details.parent_missing"));
+    assert.ok(orphan.missing_fields.includes("usage.output_tokens_details.parent_missing"));
+    assert.ok(orphan.missing_fields.includes("usage.input_tokens"));
   });
   await t.test("unknown detail keys are anonymous findings and over-wide details are bounded", async () => {
     const unknown = normalizeOpenRouterImageUsage({ ...FULL_USAGE,
