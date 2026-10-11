@@ -1305,6 +1305,14 @@ test('the whole-run deadline withholds a final materialization that never return
   const h = await harness(t);
   const runId = 'private-deadline-final-materialize';
   let materializeCalls = 0;
+  let persistedDeadlineAtMs;
+  let secondEntryAtMs;
+  let secondReleaseAtMs;
+  let secondRemainingAtMs;
+  let finalEntryAtMs;
+  let finalRemainingAtMs;
+  let secondGateEntered = false;
+  let secondGateReleased = false;
   const store = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
@@ -1312,17 +1320,39 @@ test('the whole-run deadline withholds a final materialization that never return
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.materializeSelected = async (...args) => {
     materializeCalls += 1;
+    if (materializeCalls === 2) {
+      secondEntryAtMs = Date.now();
+      secondGateEntered = true;
+      assert.ok(Number.isSafeInteger(persistedDeadlineAtMs), 'the real frontier run persisted its original deadline');
+      const releaseAtMs = persistedDeadlineAtMs - 1_400;
+      const waitMs = Math.max(0, releaseAtMs - Date.now());
+      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+      secondReleaseAtMs = Date.now();
+      secondRemainingAtMs = persistedDeadlineAtMs - secondReleaseAtMs;
+      assert.ok(secondReleaseAtMs < persistedDeadlineAtMs, 'the second source-composition phase resumes before the original deadline');
+      secondGateReleased = true;
+    }
     if (materializeCalls < 3) return h.evidenceStore.materializeSelected(...args);
+    finalEntryAtMs = Date.now();
+    finalRemainingAtMs = persistedDeadlineAtMs - finalEntryAtMs;
     materializationStarted();
     return new Promise(() => {});
   };
   const startedAt = Date.now();
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    createRun: async (...args) => {
+      const created = await h.frontier.createRun(...args);
+      persistedDeadlineAtMs = created.deadlineAtMs;
+      return created;
+    },
+  });
   const running = runPrivateRetrieval(h.makeInput({
     runId,
     server,
     store,
+    frontier,
     seeds: [{ url: sourceUrl('/event') }],
-    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: 1_000 },
+    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: 5_000 },
   }));
   const runOutcome = running.then(
     (result) => ({ kind: 'returned', result }),
@@ -1338,15 +1368,34 @@ test('the whole-run deadline withholds a final materialization that never return
       : String(phase.error);
     assert.fail(`run ended before final materialization; calls=${materializeCalls}; elapsedMs=${Date.now() - startedAt}; outcome=${outcome}`);
   }
+  assert.ok(Number.isSafeInteger(persistedDeadlineAtMs));
+  assert.ok(secondEntryAtMs <= secondReleaseAtMs && secondReleaseAtMs <= finalEntryAtMs,
+    'the second composition phase is explicitly gated before the third final materialization');
+  assert.ok(secondRemainingAtMs > 0 && secondRemainingAtMs <= 1_400,
+    'the second phase resumes in the intentionally reserved final portion of the original deadline');
+  assert.ok(finalRemainingAtMs > 0 && finalRemainingAtMs <= 1_500,
+    'the stalled final materialization begins with a measured, bounded portion of the original persisted deadline remaining');
+  assert.equal(secondGateEntered, true, 'the second composition phase reached its synchronization gate');
+  assert.equal(secondGateReleased, true, 'the second composition phase was released against the original deadline');
   const deadlineObservedAt = Date.now();
   const result = await running;
-  assert.ok(Date.now() - deadlineObservedAt < 2_000, 'the final-release phase remains covered after watcher drain');
+  const finalPhaseWaitMs = Date.now() - deadlineObservedAt;
+  assert.ok(finalPhaseWaitMs < 2_000, 'the final-release phase remains covered after watcher drain');
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('deadline_exceeded'));
   assert.equal(materializeCalls, 3);
   const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.deadlineAtMs, persistedDeadlineAtMs, 'the stored deadline was not reset by phase synchronization');
   assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'deadline'));
+  t.diagnostic(JSON.stringify({
+    persistedDeadlineAtMs,
+    secondGateWaitMs: secondReleaseAtMs - secondEntryAtMs,
+    secondRemainingAtMs,
+    finalRemainingAtMs,
+    finalPhaseWaitMs,
+    wholeRunElapsedMs: Date.now() - startedAt,
+  }));
 });
 
 test('final selected readback rechecks current retention expiry after the composer materializations', async (t) => {

@@ -79,7 +79,7 @@ function createHarness(t, overrides = {}, clock = { value: EPOCH }) {
       maxRetentionMs: 60_000,
       ...storeOverrides,
     };
-    const openStore = () => createEvidenceStore(options);
+    const openStore = (overrides = {}) => createEvidenceStore({ ...options, ...overrides });
     const store = openStore();
     const store2 = openStore();
     return { directory, store, store2, openStore, clock, createPermit, sourceText };
@@ -830,11 +830,13 @@ test('receipt expiry cancellation behind a real writer cannot clean late; ordina
 });
 
 test('SQLite busy transactions never reap a live writer and a killed staged commit leaves no partial evidence', async (t) => {
-  const { directory, store, createPermit, sourceText } = await createHarness(t, { lockTimeoutMs: 100 });
+  const { directory, store, openStore, createPermit, sourceText } = await createHarness(t, { lockTimeoutMs: 2_000 });
   const scope = await store.scopeForAuthenticatedRequest(request('tenant-a'));
   await store.integritySnapshot(scope);
   const seed = await ingest(store, scope, sourceText, createPermit);
   const before = await store.integritySnapshot(scope);
+  const contendedStore = openStore({ lockTimeoutMs: 100 });
+  const contendedScope = await contendedStore.scopeForAuthenticatedRequest(request('tenant-a'));
   const holdMarker = path.join(directory, 'held-writer');
   const held = runWorker(directory, 'hold-lock', holdMarker, path.join(directory, 'unused-barrier'));
   t.after(() => terminateWorker(held));
@@ -843,7 +845,7 @@ test('SQLite busy transactions never reap a live writer and a killed staged comm
   const heartbeat = setInterval(() => { eventLoopTicks += 1; }, 5);
   const startedAt = performance.now();
   await assert.rejects(
-    store.ingestEvidence(scope, sourceInput(sourceText, { sourceUrl: 'https://events.example.test/other', retentionHandle: createPermit('tenant-a') })),
+    contendedStore.ingestEvidence(contendedScope, sourceInput(sourceText, { sourceUrl: 'https://events.example.test/other', retentionHandle: createPermit('tenant-a') })),
     (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_BUSY',
   );
   clearInterval(heartbeat);
