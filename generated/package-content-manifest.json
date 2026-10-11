@@ -9,6 +9,7 @@
     "compatibility/checkpoint-findings.json": "sha256:8e48658ca48be0817e576a21f2378117088f21ca140cd2d082437104584ddf13",
     "compatibility/ci-findings.json": "sha256:6601db0a334979e2078980407c89253680aa546d6aa1705fda1be6036d78bfdc",
     "compatibility/consumers.json": "sha256:7fd6f4793f722f159d9e1cc2e1059e52690abcb4c57916ec93618d31a358490d",
+    "compatibility/design-integrity-findings.json": "sha256:515950289a2cb12fe28aea935ffe14fee287aedfd1daf1ef8b6d1f47bd9a80cb",
     "compatibility/downstream-observations.json": "sha256:5d6cdf80561ad10fd8d514559ee3ea48632b8150a72628758f22e460bda31162",
     "compatibility/finance-delta-findings.json": "sha256:805cb5f4609957f58acb3c45f948e1caadc7ecfe54f936848cdf934c15bf4ad2",
     "compatibility/finance-v2-impact.json": "sha256:8703c4cfd27146b11f26e0bf97149e2a8a7b4ee7ad47406e4df6b12bd757e94a",
@@ -28,7 +29,7 @@
     "docs/assets/readme/banner-night.svg": "sha256:7cc465c0fb825c1cc67434770c8f762d35e923fb8b94ce9754c5ba689dd9dabf",
     "docs/authority-dependencies.json": "sha256:d4bed3cb91e46fa0e13fb50981f6cbb7f63a6aaab23494089cb94e48f44b5293",
     "docs/capability-contracts.md": "sha256:073d6cfb36d5d311146fcce1e26775f2b3715ed68f84b35ffa28c55d1d33b311",
-    "docs/commerce-evidence-contracts.md": "sha256:3d9fa7bf179932094a62513fc7e5156e152595b3a7bbff0ca219f01c6ae3f9b9",
+    "docs/commerce-evidence-contracts.md": "sha256:6a0d0d0a0282197d3afff9ad39dd1d372b47d5e11f88178d39f75b0ae6dec460",
     "docs/consumer-handoff.md": "sha256:561885470d00a6dd3cdef4d657798e6b5f7ee81f16b70d6e60073aea1b88e4d9",
     "docs/contract-catalog.md": "sha256:3039072d723c16e2c8af41d520116d120f0713c4395fe9eac413073df3cb8457",
     "docs/dependency-handoff.md": "sha256:dcce9e3b26d6f92aa03081da58521e1a16cbacadcb75f61014c385c13a40445c",
@@ -238,7 +239,7 @@
     "tooling/capability-data.mjs": "sha256:4ac642d00b6860e26d3006f8d650d3a626eda3b58daaed7133f1b23fd498319d",
     "tooling/capability-identity.mjs": "sha256:e740cafa16f4dba394d3e9b78f4b1c7badd39edf5a9776f5bc77d2c1a9522c81",
     "tooling/capability.mjs": "sha256:ff9e31737b760196e08851a2a20fae6147a9195bd0ab947518e875ba8fc485e4",
-    "tooling/commerce-evidence.mjs": "sha256:0e6bfb76e7d7808c52457986da6d318081a442adbe653174d04b2f894a4a27d3",
+    "tooling/commerce-evidence.mjs": "sha256:395c2e0238ff3a965da952eee23b82a85ddb9bb8e3e17637d0c4e7dc5b9df19d",
     "tooling/finance-v2.mjs": "sha256:59a32db2d6d4c3aef56afa1950c275b73150d58b6f7323339fd935be88cd132a",
     "tooling/fixture-harness.mjs": "sha256:caae1104c26ba8712e8be8f7dbc23bc9de9927d9e6aca4d382a65235339192ed",
     "tooling/historical-finance-fixtures.mjs": "sha256:fd6ba9668356090ff4b2011347b0e4e5c744b946667775c0cf3586305604c85d",
@@ -246,5 +247,5 @@
     "tooling/research-creative.mjs": "sha256:e508ab30d23fb841c9f7d9c85b0978af627e854ad32cfb7c9c89763fd3d25657",
     "tooling/runtime.mjs": "sha256:66d969987a44cb106644d423e8c915b4fd07516fbf063f5120697aa91bd2333f"
   },
-  "digest": "sha256:4c0f099b62dba65fbefc9dad32d648111a1e09cd443c4569086f1ed15ac85ed1"
+  "digest": "sha256:e880ff927fe49b58ce52ada7aafabda0debf089ba6fc12da6820648a066d060c"
 }
