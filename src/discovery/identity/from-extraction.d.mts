@@ -28,7 +28,12 @@ export type SourceIdentityCompositionErrorCode =
   | "COMPOSITION_FAILED";
 
 export interface CompletedSourceInput {
-  readonly document: RetrievedDocument;
+  readonly document: RetrievedDocument & {
+    /** Original URL passed to SafeFetcher; defaults to the returned URL for legacy callers. */
+    readonly requestedUrl?: string;
+    /** Exact SafeFetcher redirect targets in order; required when redirects is nonzero. */
+    readonly redirectChain?: readonly string[];
+  };
   /** Opaque capability checked by the host's existing evidence retention resolver. */
   readonly retentionHandle: object;
 }
@@ -72,6 +77,18 @@ export interface ComposedSourceIdentitySource {
   readonly extraction: ExtractionResult;
 }
 
+export interface ComposedSourceLinkCandidate {
+  readonly url: string;
+  readonly sourceRef: Readonly<{
+    readonly evidenceId: string;
+    readonly contentHash: string;
+    readonly locator: Readonly<{ kind: "text-range"; startByte: number; endByte: number }>;
+    readonly field: "canonical.url" | "openGraph.url";
+    /** Exact normalized target used as the persisted frontier URL. */
+    readonly value: string;
+  }>;
+}
+
 export interface SourceIdentityCompositionLimits {
   readonly maxSources: 8;
   readonly maxBytesPerSource: 524288;
@@ -99,6 +116,10 @@ export interface SourceIdentityCompositionResult {
     transition: "canceled" | "rescheduled";
     reason: "source_predecessor_successor_relation_not_extracted";
   }>[];
+  /** Bounded, exact-position-bound navigation candidates; not authority or source verification. */
+  readonly linkCandidates: readonly ComposedSourceLinkCandidate[];
+  /** Number of unsupported, sensitive, malformed, or over-limit navigation candidates omitted. */
+  readonly linkCandidatesOmitted: number;
   readonly sourceAuthority: "not_evaluated";
   readonly limits: SourceIdentityCompositionLimits;
 }

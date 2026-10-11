@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { createHash, randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +14,9 @@ import {
 } from "../../../src/discovery/identity/from-extraction.mjs";
 
 const FIXTURES = new URL("../../extraction/fixtures/", import.meta.url);
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const PINNED_COMPOSER_COMMIT = "d91e08d666abc243ae456a7f9f1bc9c745ca4f8d";
+const PINNED_COMPOSER_SHA256 = "f21e0fd50bda5edb8f0bc5fb11dcd2c79ab8fc10c721f9749638c33ca832f63d";
 
 function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -32,7 +36,7 @@ async function createHarness(t, overrides = {}, { clock: suppliedClock } = {}) {
     permits.set(permit, { tenantId, expiresAtMs: clock.value + durationMs });
     return permit;
   };
-  const store = createEvidenceStore({
+  const storeOptions = {
     directory,
     resolveTenant: (authenticatedRequest) => authenticatedRequest?.principal?.tenantId,
     resolveKey({ tenantId, purpose, keyId }) {
@@ -66,12 +70,45 @@ async function createHarness(t, overrides = {}, { clock: suppliedClock } = {}) {
     maxStoredPayloadBytes: 512 * 1024,
     maxRetentionMs: 180_000,
     ...overrides,
-  });
-  return { directory, store, clock, createPermit };
+  };
+  const store = createEvidenceStore(storeOptions);
+  const openStore = () => createEvidenceStore(storeOptions);
+  return { directory, store, openStore, clock, createPermit };
 }
 
 async function fixture(name) {
   return readFile(fileURLToPath(new URL(name, FIXTURES)));
+}
+
+async function loadPinnedLegacyComposer(t) {
+  const sourcePath = "src/discovery/identity/from-extraction.mjs";
+  const extracted = spawnSync("git", ["show", `${PINNED_COMPOSER_COMMIT}:${sourcePath}`], {
+    cwd: REPO_ROOT,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.equal(extracted.status, 0, `pinned legacy composer source must exist at ${PINNED_COMPOSER_COMMIT}`);
+  assert.equal(digest(extracted.stdout), PINNED_COMPOSER_SHA256, "legacy composer bytes must match the audited pinned implementation");
+  const sourceDirectory = path.join(REPO_ROOT, "src/discovery/identity");
+  const modulePath = path.join(sourceDirectory, `.legacy-d91-composer-${process.pid}-${randomUUID()}.mjs`);
+  await writeFile(modulePath, extracted.stdout, { flag: "wx", mode: 0o600 });
+  t.after(() => rm(modulePath, { force: true }));
+  return import(pathToFileURL(modulePath).href);
+}
+
+function factFingerprint(fact) {
+  return JSON.stringify({
+    factId: fact.factId,
+    field: fact.field,
+    status: fact.status,
+    rawValue: fact.rawValue,
+    normalizedValue: fact.normalizedValue,
+    precision: fact.precision,
+    supports: fact.supports.map((support) => ({
+      contentHash: support.contentHash,
+      duplicateGroupId: support.duplicateGroupId,
+      independence: support.independence,
+    })),
+  });
 }
 
 function document(bytes, url = "https://events.example.test/calendar") {
@@ -414,6 +451,15 @@ test("idempotent replay binds facts through the store's actual reversed position
       const key = JSON.stringify([locator.kind, locator.startByte, locator.endByte]);
       positionMap.set(key, { locator, content: bytes.subarray(locator.startByte, locator.endByte) });
     }
+  }
+  for (const candidate of [
+    ...extracted.canonicalSuggestions,
+    ...extracted.pageMetadata.filter((candidate) => candidate.field === "openGraph.url"),
+  ]) {
+    if (typeof candidate.urlSuggestion !== "string") continue;
+    const locator = candidate.source.locator;
+    const key = JSON.stringify([locator.kind, locator.startByte, locator.endByte]);
+    positionMap.set(key, { locator, content: bytes.subarray(locator.startByte, locator.endByte) });
   }
   const originalPositions = [...positionMap.values()];
   assert.ok(originalPositions.length > 1);
@@ -1027,4 +1073,148 @@ test("candidate values are rebound to real source positions after the composer w
       && position.locator.startByte === reference.locator.startByte
       && position.locator.endByte === reference.locator.endByte));
   }
+});
+
+test("preserves exact original, final, and redirect URLs while binding canonical links to encrypted source positions", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = Buffer.from(`<!doctype html>
+    <link rel="canonical" href="/calendar/canonical">
+    <meta property="og:url" content="/calendar/social">
+    <script type="application/ld+json">${JSON.stringify({ "@type": "Event", name: "Final Stop" })}</script>`);
+  const finalUrl = "https://events.example.test/final/calendar";
+  const requestedUrl = "https://events.example.test/start/calendar";
+  const redirectChain = [finalUrl];
+  const doc = {
+    ...document(bytes, finalUrl),
+    requestedUrl,
+    redirectChain,
+    redirects: 1,
+  };
+  const result = await composeSourceIdentity(sourceInput(harness.store, doc, harness.createPermit()));
+  const source = result.sources[0];
+  assert.equal(source.storedSource.sourceUrl, requestedUrl);
+  assert.equal(source.storedSource.canonicalUrl, finalUrl);
+  assert.deepEqual(source.storedSource.redirectChain, redirectChain);
+  assert.equal(result.linkCandidates.length, 2);
+  assert.deepEqual(result.linkCandidates.map((candidate) => candidate.url).sort(), [
+    "https://events.example.test/calendar/canonical",
+    "https://events.example.test/calendar/social",
+  ]);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request());
+  const evidence = await harness.store.lookupEvidence(scope, source.evidence.evidenceId);
+  const positions = await harness.store.listEvidencePositions(scope, evidence, request());
+  for (const { sourceRef, url } of result.linkCandidates) {
+    assert.equal(sourceRef.value, url);
+    assert.equal(sourceRef.contentHash, digest(bytes));
+    const position = positions.find((candidate) => JSON.stringify(candidate.locator) === JSON.stringify(sourceRef.locator));
+    assert.ok(position, "the frontier source reference resolves to a real stored position");
+    const exact = bytes.subarray(sourceRef.locator.startByte, sourceRef.locator.endByte);
+    assert.equal(position.contentHash, digest(exact));
+  }
+});
+
+test("a real link-only page can continue bounded discovery without inventing facts", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = Buffer.from('<!doctype html><link rel="canonical" href="https://events.example.test/official">');
+  const result = await composeSourceIdentity(sourceInput(harness.store, document(bytes), harness.createPermit()));
+  assert.equal(result.facts.length, 0);
+  assert.equal(result.occurrenceCandidates.length, 0);
+  assert.equal(result.linkCandidates.length, 1);
+  assert.equal(result.linkCandidates[0].url, "https://events.example.test/official");
+  assert.equal(result.linkCandidates[0].sourceRef.field, "canonical.url");
+  assert.equal(result.sourceAuthority, "not_evaluated");
+});
+
+test("sensitive link targets are omitted from the frontier candidate projection beside real event facts", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = Buffer.from(`<!doctype html>
+    <link rel="canonical" href="https://events.example.test/next?access_token=secret-canary">
+    <script type="application/ld+json">${JSON.stringify({ "@type": "Event", name: "Safe sourced event" })}</script>`);
+  const result = await composeSourceIdentity(sourceInput(harness.store, document(bytes), harness.createPermit()));
+  assert.ok(result.facts.length > 0);
+  assert.deepEqual(result.linkCandidates, []);
+  assert.equal(result.linkCandidatesOmitted, 1);
+  assert.equal(JSON.stringify(result.linkCandidates).includes("secret-canary"), false);
+});
+
+test("new composer reopens and reuses an encrypted historical raw evidence record with the prior fact-only position set", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = await fixture("multi-event.html");
+  const doc = document(bytes);
+  const extraction = await extractDeterministically(doc);
+  const supportedFields = new Set([
+    "name", "series", "seriesName", "edition", "eventEdition", "location.address.addressLocality",
+    "location.name", "startDate", "endDate", "eventStatus",
+  ]);
+  const historicalPositions = new Map();
+  for (const entity of [...extraction.events, ...extraction.organizations]) {
+    for (const candidate of entity.candidates) {
+      if (candidate.suggestionOnly === true || !supportedFields.has(candidate.field)
+        || typeof candidate.normalizedValue !== "string" || candidate.normalizedValue.trim() === "") continue;
+      if (entity.kind === "organization" && candidate.field !== "name") continue;
+      const locator = candidate.source.locator;
+      const key = JSON.stringify([locator.kind, locator.startByte, locator.endByte]);
+      historicalPositions.set(key, { locator, content: bytes.subarray(locator.startByte, locator.endByte) });
+    }
+  }
+  const oldScope = await harness.store.scopeForAuthenticatedRequest(request());
+  const historicalRecord = await harness.store.ingestEvidence(oldScope, {
+    sourceUrl: doc.url,
+    content: bytes,
+    contentType: doc.contentType,
+    retrievedAt: doc.fetchedAt,
+    sourceKind: "external",
+    positions: [...historicalPositions.values()],
+    retentionHandle: harness.createPermit(),
+  });
+  const reopenedStore = harness.openStore();
+  const result = await composeSourceIdentity(sourceInput(reopenedStore, doc, harness.createPermit()));
+  assert.equal(result.sources[0].evidence.evidenceId, historicalRecord.metadata.evidenceId);
+  assert.equal(result.sources[0].evidence.positionCount, historicalPositions.size);
+  assert.deepEqual(result.linkCandidates, [], "the legacy record lacks the newly indexed canonical position");
+  assert.ok(result.linkCandidatesOmitted > 0);
+  const after = await reopenedStore.integritySnapshot(await reopenedStore.scopeForAuthenticatedRequest(request()));
+  assert.equal(after.availableEvidence, 1);
+});
+
+test("new composer reopens an AES record produced by the actual pinned d91 composer and preserves its facts and source version", async (t) => {
+  const harness = await createHarness(t);
+  const legacyComposer = await loadPinnedLegacyComposer(t);
+  const bytes = Buffer.from(`<!doctype html>
+    <link rel="canonical" href="https://events.example.test/official">
+    <script type="application/ld+json">${JSON.stringify({ "@type": "Event", name: "Pinned legacy event" })}</script>`);
+  const oldResult = await legacyComposer.composeSourceIdentity(
+    sourceInput(harness.store, document(Buffer.from(bytes)), harness.createPermit()),
+  );
+  assert.ok(oldResult.facts.length > 0, "the pinned composer must execute its real extraction and fact write path");
+  const oldEvidenceId = oldResult.sources[0].evidence.evidenceId;
+  const oldScope = await harness.store.scopeForAuthenticatedRequest(request());
+  const oldEvidenceHandle = await harness.store.lookupEvidence(oldScope, oldEvidenceId);
+  const oldEvidenceMetadata = await harness.store.getEvidenceMetadata(oldScope, oldEvidenceHandle);
+  const oldFacts = await harness.store.listFacts(oldScope, request());
+  const oldFactsById = new Map(oldFacts.map((fact) => [fact.factId, factFingerprint(fact)]));
+  assert.equal(oldFactsById.size, oldFacts.length);
+  assert.ok(oldFacts.length > 0);
+
+  const reopenedStore = harness.openStore();
+  const reopenedDocument = document(Buffer.from(bytes));
+  const newResult = await composeSourceIdentity(sourceInput(reopenedStore, reopenedDocument, harness.createPermit()));
+  assert.equal(newResult.sources[0].evidence.evidenceId, oldEvidenceId);
+  assert.equal(newResult.sources[0].evidence.positionCount, oldEvidenceMetadata.positionCount);
+  assert.deepEqual(newResult.linkCandidates, [], "the new canonical link is omitted because the immutable legacy record has no such position");
+  assert.equal(newResult.linkCandidatesOmitted, 1);
+
+  const reopenedScope = await reopenedStore.scopeForAuthenticatedRequest(request());
+  const afterEvidenceHandle = await reopenedStore.lookupEvidence(reopenedScope, oldEvidenceId);
+  const afterEvidenceMetadata = await reopenedStore.getEvidenceMetadata(reopenedScope, afterEvidenceHandle);
+  const afterFacts = await reopenedStore.listFacts(reopenedScope, request());
+  const afterFactsById = new Map(afterFacts.map((fact) => [fact.factId, factFingerprint(fact)]));
+  assert.equal(afterEvidenceMetadata.version, oldEvidenceMetadata.version, "replay must not rewrite or advance the legacy source record");
+  for (const [factId, fingerprint] of oldFactsById) {
+    assert.equal(afterFactsById.get(factId), fingerprint, `pinned legacy fact ${factId} remains immutable`);
+  }
+  assert.ok(afterFacts.length >= oldFacts.length, "the prior encrypted fact history remains available after replay");
+  const integrity = await reopenedStore.integritySnapshot(reopenedScope);
+  assert.equal(integrity.availableEvidence, 1);
+  assert.equal(integrity.availableFacts, afterFacts.length);
 });

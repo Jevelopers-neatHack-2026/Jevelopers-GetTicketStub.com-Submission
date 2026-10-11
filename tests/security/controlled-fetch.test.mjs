@@ -7,6 +7,7 @@ import { performance } from "node:perf_hooks";
 import { SafeFetcher } from "../../src/security/controlled-fetch.mjs";
 import { RetrievalError } from "../../src/security/errors.mjs";
 import { DnsWireResolver } from "../../src/security/internal/dns-wire.mjs";
+import { runWithSafeFetchLifecycle } from "../../src/security/internal/fetch-lifecycle.mjs";
 import {
   createCertificate,
   fixtureUrl,
@@ -375,5 +376,45 @@ test("rejects a TLS hostname mismatch before sending the HTTP request", async (t
     respond(response, 200, { "content-type": "text/plain" }, "unexpected");
   }, { certificate, hostnames: ["mismatch.fixture.example.test"] });
   await assert.rejects(fixture.fetcher.fetch(fixture.url("/mismatch", "mismatch.fixture.example.test")), RetrievalError);
+  assert.equal(requests, 0);
+});
+
+test("cancellation during delayed admission or dispatch-intent hooks cannot open a socket", async (t) => {
+  for (const stage of ["beforeHop", "onDispatchIntent"]) {
+    let requests = 0;
+    const fixture = await fixtureFetcher(t, (_request, response) => {
+      requests += 1;
+      respond(response, 200, { "content-type": "text/plain" }, "unexpected");
+    });
+    const controller = new AbortController();
+    let entered;
+    let resume;
+    const enteredPromise = new Promise((resolve) => { entered = resolve; });
+    const resumePromise = new Promise((resolve) => { resume = resolve; });
+    const pending = runWithSafeFetchLifecycle(fixture.fetcher, {
+      [stage]: async () => { entered(); await resumePromise; },
+      onKnownZero: async () => {},
+    }, {}, () => fixture.fetcher.fetch(fixture.url(`/cancel-${stage}`), { signal: controller.signal }));
+    await enteredPromise;
+    controller.abort();
+    resume();
+    await assert.rejects(pending, (error) => error instanceof RetrievalError && error.code === "CANCELED");
+    assert.equal(fixture.dials.length, 0, `${stage} cancellation must happen before a pinned dial`);
+    assert.equal(requests, 0);
+  }
+});
+
+test("deadline during an awaited private admission hook is checked before socket creation", async (t) => {
+  let requests = 0;
+  const fixture = await fixtureFetcher(t, (_request, response) => {
+    requests += 1;
+    respond(response, 200, { "content-type": "text/plain" }, "unexpected");
+  });
+  const pending = runWithSafeFetchLifecycle(fixture.fetcher, {
+    beforeHop: async () => new Promise((resolve) => setTimeout(resolve, 60)),
+    onKnownZero: async () => {},
+  }, { totalMilliseconds: 20 }, () => fixture.fetcher.fetch(fixture.url("/deadline-hook")));
+  await assert.rejects(pending, (error) => error instanceof RetrievalError && error.code === "DEADLINE_EXCEEDED");
+  assert.equal(fixture.dials.length, 0);
   assert.equal(requests, 0);
 });

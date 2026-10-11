@@ -52,7 +52,7 @@ export function fixtureUrl(port, pathname = "/", hostname = "fixture.example.tes
   return `${protocol}//${hostname}:${port}${pathname}`;
 }
 
-export function localTestSeam({ port, certificate, onDial, resolveOverride, hostnames = ["fixture.example.test"], addresses = ["127.0.0.1"], aliases = [] }) {
+export function localTestSeam({ port, dialPort = port, certificate, onDial, resolveOverride, hostnames = ["fixture.example.test"], addresses = ["127.0.0.1"], aliases = [] }) {
   const allowedHosts = new Set(hostnames);
   return createTestSeam({
     validateHostname(hostname) {
@@ -63,9 +63,11 @@ export function localTestSeam({ port, certificate, onDial, resolveOverride, host
       let url;
       try { url = new URL(input); }
       catch { throw new RetrievalError("POLICY_DENIED"); }
+      const defaultPort = url.protocol === "https:" ? 443 : 80;
+      const effectivePort = Number(url.port || defaultPort);
       if (allowedHosts.has(url.hostname) && url.protocol === (certificate ? "https:" : "http:")
-        && url.port === String(port) && !url.username && !url.password && !url.hash) {
-        return Object.freeze({ url, hostname: url.hostname, port });
+        && effectivePort === port && !url.username && !url.password && !url.hash) {
+        return Object.freeze({ url, hostname: url.hostname, port: dialPort });
       }
       return parseAndValidateUrl(input);
     },

@@ -158,6 +158,29 @@ export type FrontierAttemptResult =
   | { readonly state: 'already_admitted'; readonly attemptKey: string; readonly sequence: number; readonly admittedAtMs: number }
   | { readonly state: 'denied'; readonly reason: string };
 
+export interface FrontierTransportProgress {
+  readonly reservedBytes: number;
+  readonly spentBytes: number;
+  readonly availableBytes: number;
+  readonly states: Readonly<Record<string, number>>;
+  /** Runs migrated from v1 with unobservable transport exposure; their full budget remains reserved. */
+  readonly legacyUnknownRuns: number;
+}
+
+export type FrontierTransportAdmissionResult =
+  | {
+      readonly state: 'admitted';
+      readonly attemptKey: string;
+      readonly sequence: number;
+      readonly admittedAtMs: number;
+      readonly stopAfterThisAdmission: boolean;
+      readonly capacity: FrontierTransportProgress;
+    }
+  /** Historical status only; never authority to dispatch again after replay. */
+  | { readonly state: 'already_admitted'; readonly transportState: string; readonly capacity: FrontierTransportProgress }
+  | { readonly state: 'already_admitted_without_transport_state'; readonly capacity: FrontierTransportProgress }
+  | { readonly state: 'denied'; readonly reason: string; readonly capacity: FrontierTransportProgress };
+
 export interface DiscoveryFrontierOptions<Request = unknown> {
   /** Private local state root. The configured directory and its parent are trusted. */
   readonly directory: string;
@@ -180,6 +203,33 @@ export interface DiscoveryFrontierStore<Request = unknown> {
     readonly previousAttemptKey?: string;
     readonly url: string;
   }): Promise<FrontierAttemptResult>;
+  /** Atomically admits one actual hop and reserves the full 20MiB decoded ceiling before DNS/socket dispatch. */
+  admitTransportHop(scope: FrontierTenantScope, runId: string, input: {
+    readonly leaseToken: string;
+    readonly attemptKey: string;
+    readonly kind: 'initial' | 'retry' | 'redirect';
+    readonly previousAttemptKey?: string;
+    readonly url: string;
+  }): Promise<FrontierTransportAdmissionResult>;
+  /** CAS transition. A replayed transition never authorizes another dispatch. */
+  markTransportDispatchIntent(scope: FrontierTenantScope, runId: string, input: {
+    readonly leaseToken: string; readonly attemptKey: string;
+  }): Promise<Readonly<Record<string, unknown>>>;
+  markTransportResponseReceived(scope: FrontierTenantScope, runId: string, input: {
+    readonly leaseToken: string; readonly attemptKey: string;
+  }): Promise<Readonly<Record<string, unknown>>>;
+  /** Only use when local transport evidence proves body decoding never began. */
+  settleTransportHopKnownZero(scope: FrontierTenantScope, runId: string, input: {
+    readonly leaseToken: string; readonly attemptKey: string;
+  }): Promise<Readonly<Record<string, unknown>>>;
+  /** EOF-only settlement; partial or ambiguous decodes retain the full reservation. */
+  settleTransportHopBodyComplete(scope: FrontierTenantScope, runId: string, input: {
+    readonly leaseToken: string; readonly attemptKey: string;
+  }, decodedBytes: number): Promise<Readonly<Record<string, unknown>>>;
+  markTransportHopUnknown(scope: FrontierTenantScope, runId: string, input: {
+    readonly leaseToken: string; readonly attemptKey: string;
+  }): Promise<Readonly<Record<string, unknown>>>;
+  getTransportProgress(scope: FrontierTenantScope, runId: string): Promise<FrontierTransportProgress>;
   completeCandidate(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string;
     readonly completionKey: string;
@@ -192,7 +242,11 @@ export interface DiscoveryFrontierStore<Request = unknown> {
     readonly reason: 'worker_lost' | 'dispatch_state_unknown' | 'cancelled_before_dispatch';
   }): Promise<FrontierSnapshot>;
   stopRun(scope: FrontierTenantScope, runId: string,
-    reason: 'cancelled' | 'budget_denied' | 'access_restricted' | 'adequate_facts' | 'review_required'): Promise<FrontierSnapshot>;
+    reason: 'cancelled' | 'budget_denied' | 'access_restricted' | 'adequate_facts' | 'review_required' | 'deadline'): Promise<FrontierSnapshot>;
+  /** Atomic final-release/cancel race guard; an already sealed run cannot be canceled retroactively. */
+  sealPrivateDraft(scope: FrontierTenantScope, runId: string): Promise<Readonly<{
+    state: 'sealed' | 'already_sealed' | 'denied'; reason?: string;
+  }>>;
   getSnapshot(scope: FrontierTenantScope, runId: string): Promise<FrontierSnapshot>;
   close(): void;
 }

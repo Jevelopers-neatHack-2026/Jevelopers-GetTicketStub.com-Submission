@@ -1,0 +1,181 @@
+import type {
+  DiscoveryFrontierStore,
+  FrontierLimits,
+  FrontierSeedInput,
+} from '../discovery/planner/frontier.mjs';
+import type {
+  EntityIdentityDecision,
+  EntityObservation,
+} from '../discovery/entities/identity.mjs';
+import type {
+  EvidenceSelectedEvidence,
+  EvidenceStore,
+  StoredEvidenceFactRecord,
+} from '../evidence/store.mjs';
+import type {
+  OccurrenceIdentityDecision,
+  OccurrenceObservation,
+  OccurrenceTransition,
+} from '../discovery/occurrences/identity.mjs';
+import type { SafeFetcher } from '../security/index.mjs';
+
+export type PrivateRetrievalAuthorizationStage = 'start' | 'candidate' | 'release';
+
+export interface PrivateRetrievalRetentionContext {
+  readonly runId: string;
+  /** Exact URL spelling stored on the corresponding frontier observation. */
+  readonly sourceUrl: string;
+  /** Final normalized transport URL reported by SafeFetcher. */
+  readonly canonicalUrl: string;
+  readonly representation?: 'asset-source-excerpt';
+}
+
+export interface PrivateRetrievalInput<Request = unknown> {
+  readonly frontier: DiscoveryFrontierStore<Request>;
+  readonly evidenceStore: EvidenceStore<Request>;
+  readonly safeFetcher: SafeFetcher;
+  readonly request: Request;
+  readonly runId: string;
+  readonly seeds: readonly FrontierSeedInput[];
+  readonly limits?: FrontierLimits;
+  readonly retentionHandleFor: (
+    request: Request,
+    context: Readonly<PrivateRetrievalRetentionContext>,
+  ) => object | Promise<object>;
+  /** Trusted host callback; it must rederive current tenant and authorization synchronously. */
+  readonly authorizeCurrent: (
+    request: Request,
+    context: Readonly<{ runId: string; stage: PrivateRetrievalAuthorizationStage }>,
+  ) => boolean;
+  readonly signal?: AbortSignal;
+}
+
+export interface PrivateRetrievalProgress {
+  readonly state: 'active' | 'halted' | 'exhausted';
+  readonly stopReason: string | null;
+  readonly stopReasons: readonly string[];
+  readonly completedCandidates: number;
+  readonly remainingCandidates: number;
+  readonly transportAttemptAdmissions: number;
+}
+
+export interface PrivateRetrievalPdfProjection {
+  readonly pageCount: number;
+  readonly textPageCount: number;
+  readonly textBoxCount: number;
+  readonly completeness: 'incomplete';
+  readonly requiresInspection: true;
+}
+
+export interface PrivateRetrievalAssetCandidate {
+  readonly candidateId: string;
+  readonly sourceForm: string;
+  readonly field: string;
+  readonly association: NonNullable<EvidenceSelectedEvidence['source']['assetSource']>['candidates'][number]['association'];
+  readonly locator: Readonly<{ kind: 'text-range'; startByte: number; endByte: number }>;
+  readonly excerptHash: string;
+  readonly normalizedSuggestion: string | null;
+  readonly fetchSuggestion: string | null;
+  readonly quarantineReason: string | null;
+  readonly role: 'unknown';
+  readonly permission: 'unknown';
+  readonly inspection: 'pending';
+  readonly sourceRef: Readonly<{
+    evidenceId: string;
+    contentHash: string;
+    locator: Readonly<{ kind: 'text-range'; startByte: number; endByte: number }>;
+    field: string;
+  }>;
+}
+
+export interface PrivateRetrievalSource {
+  readonly evidenceId: string;
+  readonly version: number;
+  readonly representation: 'raw' | 'pdf-derived-text' | 'asset-source-excerpt';
+  readonly sourceUrl: string;
+  readonly canonicalUrl: string;
+  readonly redirectChain: readonly string[];
+  readonly contentType: string;
+  readonly retrievedAt: string;
+  readonly contentHash: string;
+  readonly sourceAuthority: 'not_evaluated';
+  readonly pdf?: PrivateRetrievalPdfProjection;
+  readonly assetCandidates?: readonly PrivateRetrievalAssetCandidate[];
+  readonly assetCompleteness?: string;
+  readonly assetLimitations?: readonly string[];
+}
+
+export interface PrivateRetrievalLinkCandidate {
+  readonly candidateId: string;
+  readonly url: string;
+  readonly depth: number;
+  readonly sourceRefs: readonly Readonly<{
+    readonly evidenceId: string;
+    readonly contentHash: string;
+    readonly locator: Readonly<{ kind: 'text-range'; startByte: number; endByte: number } | { kind: 'json-pointer'; pointer: string }>;
+    readonly field: string;
+    readonly value: string;
+  }>[];
+  readonly sourceAuthority: 'not_evaluated';
+}
+
+export interface PrivateRetrievalConflict {
+  readonly kind: 'occurrence_identity' | 'entity_identity';
+  readonly candidateIds: readonly string[];
+  readonly reasonCodes: readonly string[];
+  readonly fields?: readonly string[];
+  readonly decision: OccurrenceIdentityDecision | EntityIdentityDecision;
+}
+
+export interface PrivateRetrievalDraft {
+  readonly schema: 'ei-private-retrieval-draft/v1';
+  readonly status: 'draft' | 'incomplete';
+  readonly completeness: 'incomplete';
+  readonly facts: readonly StoredEvidenceFactRecord[];
+  readonly occurrenceCandidates: readonly OccurrenceObservation[];
+  readonly entityCandidates: readonly EntityObservation[];
+  readonly occurrenceDecisions: readonly OccurrenceIdentityDecision[];
+  readonly entityDecisions: readonly EntityIdentityDecision[];
+  readonly transitionLinks: readonly OccurrenceTransition[];
+  readonly unresolvedTransitions: readonly Readonly<{
+    candidateId: string;
+    transition: 'canceled' | 'rescheduled';
+    reason: 'source_predecessor_successor_relation_not_extracted';
+  }>[];
+  readonly sources: readonly PrivateRetrievalSource[];
+  readonly linkCandidates: readonly PrivateRetrievalLinkCandidate[];
+  readonly conflicts: readonly PrivateRetrievalConflict[];
+  readonly sourceAuthority: 'not_evaluated';
+  readonly rights: 'not_evaluated';
+  readonly usage: 'unknown';
+  readonly limitations: readonly string[];
+  readonly progress: PrivateRetrievalProgress;
+}
+
+export interface PrivateRetrievalIncomplete {
+  readonly schema: 'ei-private-retrieval-draft/v1';
+  readonly runId: string;
+  readonly status: 'incomplete' | 'cancelled' | 'denied';
+  readonly completeness: 'incomplete';
+  readonly draft: null;
+  readonly limitations: readonly string[];
+  readonly progress?: PrivateRetrievalProgress;
+}
+
+export type PrivateRetrievalResult = PrivateRetrievalDraft | PrivateRetrievalIncomplete;
+
+export type PrivateRetrievalErrorCode = 'INVALID_INPUT' | 'POLICY_DENIED';
+
+export declare class PrivateRetrievalError extends Error {
+  readonly code: PrivateRetrievalErrorCode;
+  constructor(code: PrivateRetrievalErrorCode);
+}
+
+/**
+ * Runs bounded private retrieval over the existing safe-fetch, extraction,
+ * evidence, and source-identity components. It does not establish source
+ * authority, public release, asset permission, or billable usage.
+ */
+export declare function runPrivateRetrieval<Request = unknown>(
+  input: PrivateRetrievalInput<Request>,
+): Promise<PrivateRetrievalResult>;

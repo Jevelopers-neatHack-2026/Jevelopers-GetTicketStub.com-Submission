@@ -1,14 +1,20 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { spawn, spawnSync } from 'node:child_process';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createDiscoveryFrontierStore, DiscoveryFrontierError } from '../../../src/discovery/planner/frontier.mjs';
 
 const WORKER = new URL('./frontier-worker.mjs', import.meta.url);
+const TRANSPORT_WORKER = new URL('./frontier-transport-worker.mjs', import.meta.url);
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
+const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const PINNED_V1_FRONTIER_COMMIT = 'd91e08d666abc243ae456a7f9f1bc9c745ca4f8d';
+const PINNED_V1_FRONTIER_SHA256 = '4e6cfbb88e7913984739634a69323c410dbff5ab48128b0ef70eee782de5105e';
 
 function sourceRef(url, evidenceId, contentHash = HASH_A) {
   return {
@@ -67,6 +73,21 @@ function codeIs(code) {
   return (error) => error instanceof DiscoveryFrontierError && error.code === code;
 }
 
+async function loadPinnedV1Frontier(t) {
+  const sourcePath = 'src/discovery/planner/frontier.mjs';
+  const extracted = spawnSync('git', ['show', `${PINNED_V1_FRONTIER_COMMIT}:${sourcePath}`], {
+    cwd: REPO_ROOT,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.equal(extracted.status, 0, `pinned v1 frontier source must exist at ${PINNED_V1_FRONTIER_COMMIT}`);
+  assert.equal(createHash('sha256').update(extracted.stdout).digest('hex'), PINNED_V1_FRONTIER_SHA256,
+    'legacy frontier bytes must match the audited pinned implementation');
+  const modulePath = path.join(REPO_ROOT, 'src/discovery/planner', `.legacy-d91-frontier-${process.pid}-${randomUUID()}.mjs`);
+  await writeFile(modulePath, extracted.stdout, { flag: 'wx', mode: 0o600 });
+  t.after(() => rm(modulePath, { force: true }));
+  return import(pathToFileURL(modulePath).href);
+}
+
 function runWorker(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [WORKER.pathname, ...args], {
@@ -87,6 +108,126 @@ function runWorker(args) {
     });
   });
 }
+
+function runTransportWorker(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [TRANSPORT_WORKER.pathname, ...args], {
+      cwd: path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..'),
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+    child.once('error', reject);
+    child.once('close', (exitCode) => {
+      if (exitCode !== 0) reject(new Error(`transport worker failed with ${exitCode}: ${stderr.slice(0, 500)}`));
+      else {
+        try { resolve(JSON.parse(stdout)); } catch { reject(new Error('transport worker returned invalid result')); }
+      }
+    });
+  });
+}
+
+test('actual pinned v1 frontier migrates unknown admissions without restoring transport capacity', async (t) => {
+  const h = await harness(t);
+  h.store.close();
+  const legacyModule = await loadPinnedV1Frontier(t);
+  const legacy = legacyModule.createDiscoveryFrontierStore({
+    directory: h.directory,
+    resolveTenant: (request) => request?.principal?.tenantId,
+    now: () => h.clock.value,
+    lockTimeoutMs: 10_000,
+  });
+  const legacyScope = await legacy.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
+  const attemptedInput = { runId: 'legacy-admitted', seeds: [{ url: 'https://events.example.com/legacy-admitted' }] };
+  const completedInput = { runId: 'legacy-completed', seeds: [{ url: 'https://events.example.com/legacy-completed' }] };
+  const untouchedInput = { runId: 'legacy-untouched', seeds: [{ url: 'https://events.example.com/legacy-untouched' }] };
+  await legacy.createRun(legacyScope, attemptedInput);
+  await legacy.createRun(legacyScope, completedInput);
+  await legacy.createRun(legacyScope, untouchedInput);
+  const claim = await legacy.claimNext(legacyScope, attemptedInput.runId, {
+    workerId: 'legacy-worker', claimKey: 'legacy-claim',
+  });
+  assert.equal(claim.state, 'claimed');
+  const admission = await legacy.admitAttempt(legacyScope, attemptedInput.runId, {
+    leaseToken: claim.leaseToken,
+    attemptKey: 'legacy-attempt',
+    kind: 'initial',
+    url: claim.candidate.canonicalUrl,
+  });
+  assert.equal(admission.state, 'admitted');
+  const beforeAttemptSnapshot = await legacy.getSnapshot(legacyScope, attemptedInput.runId);
+  const completedClaim = await legacy.claimNext(legacyScope, completedInput.runId, {
+    workerId: 'legacy-worker', claimKey: 'legacy-completed-claim',
+  });
+  const completedAdmission = await legacy.admitAttempt(legacyScope, completedInput.runId, {
+    leaseToken: completedClaim.leaseToken,
+    attemptKey: 'legacy-completed-attempt',
+    kind: 'initial',
+    url: completedClaim.candidate.canonicalUrl,
+  });
+  assert.equal(completedAdmission.state, 'admitted');
+  await legacy.completeCandidate(legacyScope, completedInput.runId, {
+    leaseToken: completedClaim.leaseToken,
+    completionKey: 'legacy-completed-result',
+    outcome: 'no_links',
+    suggestions: [],
+  });
+  const beforeCompletedSnapshot = await legacy.getSnapshot(legacyScope, completedInput.runId);
+  const beforeUntouchedSnapshot = await legacy.getSnapshot(legacyScope, untouchedInput.runId);
+  legacy.close();
+
+  const current = h.openStore();
+  const scope = await current.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
+  assert.deepEqual(await current.createRun(scope, attemptedInput), beforeAttemptSnapshot);
+  assert.deepEqual(await current.createRun(scope, completedInput), beforeCompletedSnapshot);
+  assert.deepEqual(await current.createRun(scope, untouchedInput), beforeUntouchedSnapshot);
+  assert.deepEqual(await current.getSnapshot(scope, attemptedInput.runId), beforeAttemptSnapshot);
+  assert.deepEqual(await current.getSnapshot(scope, completedInput.runId), beforeCompletedSnapshot);
+  assert.deepEqual(await current.getSnapshot(scope, untouchedInput.runId), beforeUntouchedSnapshot);
+
+  const legacyCapacity = await current.getTransportProgress(scope, attemptedInput.runId);
+  assert.deepEqual({
+    reservedBytes: legacyCapacity.reservedBytes,
+    spentBytes: legacyCapacity.spentBytes,
+    availableBytes: legacyCapacity.availableBytes,
+    legacyUnknownRuns: legacyCapacity.legacyUnknownRuns,
+  }, {
+    reservedBytes: 100 * 1024 * 1024,
+    spentBytes: 0,
+    availableBytes: 0,
+    legacyUnknownRuns: 1,
+  });
+  const replay = await current.admitTransportHop(scope, attemptedInput.runId, {
+    leaseToken: claim.leaseToken,
+    attemptKey: 'legacy-attempt',
+    kind: 'initial',
+    url: claim.candidate.canonicalUrl,
+  });
+  assert.equal(replay.state, 'already_admitted_without_transport_state');
+  assert.equal(replay.capacity.reservedBytes, 100 * 1024 * 1024);
+  assert.deepEqual(await current.sealPrivateDraft(scope, attemptedInput.runId), {
+    state: 'denied', reason: 'run_incomplete',
+  });
+  const completedCapacity = await current.getTransportProgress(scope, completedInput.runId);
+  assert.equal(completedCapacity.reservedBytes, 100 * 1024 * 1024);
+  assert.equal(completedCapacity.legacyUnknownRuns, 1);
+  assert.deepEqual(await current.sealPrivateDraft(scope, completedInput.runId), {
+    state: 'denied', reason: 'transport_uncertain',
+  });
+
+  const untouchedCapacity = await current.getTransportProgress(scope, untouchedInput.runId);
+  assert.equal(untouchedCapacity.legacyUnknownRuns, 0);
+  assert.equal(untouchedCapacity.availableBytes, 100 * 1024 * 1024);
+  current.close();
+  const reopened = h.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest({ principal: { tenantId: h.tenantId } });
+  assert.equal((await reopened.getTransportProgress(reopenedScope, attemptedInput.runId)).reservedBytes, 100 * 1024 * 1024);
+  assert.equal((await reopened.getTransportProgress(reopenedScope, completedInput.runId)).reservedBytes, 100 * 1024 * 1024);
+  assert.equal((await reopened.getTransportProgress(reopenedScope, untouchedInput.runId)).availableBytes, 100 * 1024 * 1024);
+});
 
 test('canonical seed permutations, cycle suppression, duplicate provenance, depth bounds, and stable URL ties', async (t) => {
   const { store, scope } = await harness(t);
@@ -221,6 +362,34 @@ test('deadline, absolute counters, and claim keys survive close/reopen without l
   assert.equal(expired.stopReason, 'deadline');
   assert.equal(expired.counters.transportAttemptAdmissions, 1);
   assert.equal(expired.counters.inFlightLeases, 1);
+});
+
+test('the persisted deadline is recorded after the final admission halts on attempt_limit', async (t) => {
+  const clock = { value: Date.UTC(2026, 9, 10) };
+  const { store, scope } = await harness(t, { clock });
+  const runId = 'deadline-after-final-admission';
+  await seedRun(store, scope, runId, undefined, {
+    maxTransportAttemptAdmissions: 1,
+    durationMs: 50,
+  });
+  const claim = await store.claimNext(scope, runId, { workerId: 'worker-deadline', claimKey: 'claim-deadline' });
+  const admission = await store.admitAttempt(scope, runId, {
+    leaseToken: claim.leaseToken,
+    attemptKey: 'deadline-final-hop',
+    kind: 'initial',
+    url: claim.candidate.canonicalUrl,
+  });
+  assert.equal(admission.state, 'admitted');
+  assert.equal(admission.stopAfterThisAdmission, true);
+  const before = await store.getSnapshot(scope, runId);
+  assert.equal(before.stopReason, 'attempt_limit');
+  assert.deepEqual(before.stopReasons.map(({ reason }) => reason), ['attempt_limit']);
+
+  clock.value += 50;
+  const after = await store.getSnapshot(scope, runId);
+  assert.equal(after.stopReason, 'attempt_limit', 'the historical primary stop reason stays stable');
+  assert.ok(after.stopReasons.some(({ reason }) => reason === 'deadline'), 'deadline is retained as an independent durable stop event');
+  assert.equal((await store.sealPrivateDraft(scope, runId)).state, 'denied');
 });
 
 test('unresolved work is durable review state and stale tokens cannot complete or requeue it', async (t) => {
@@ -520,4 +689,283 @@ test('no transport or provider is called by the frontier core and source authori
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('credential, session, token, and sensitive fragment URLs are rejected before frontier metadata persistence', async (t) => {
+  const { store, scope } = await harness(t);
+  const secrets = [
+    'https://events.example.com/private?access_token=canary-query-secret',
+    'https://events.example.com/private?%61ccess_%74oken=canary-encoded-query-secret',
+    'https://events.example.com/private?session_id=canary-session-secret',
+    'https://user:canary-password-secret@events.example.com/private',
+    'https://events.example.com/private#token=canary-fragment-secret',
+    'https://events.example.com/private#access_%74oken=canary-encoded-fragment-secret',
+    'https://events.example.com/private#%74oken=canary-encoded-fragment-secret',
+    'https://events.example.com/private#%2574oken=canary-double-encoded-fragment-secret',
+  ];
+  let deeplyEncodedToken = 'token';
+  for (let index = 0; index < 10; index += 1) deeplyEncodedToken = encodeURIComponent(deeplyEncodedToken);
+  secrets.push(`https://events.example.com/private#${deeplyEncodedToken}=canary-overencoded-fragment-secret`);
+  for (const [index, url] of secrets.entries()) {
+    await assert.rejects(store.createRun(scope, {
+      runId: `sensitive-seed-${index}`,
+      seeds: [{ url }],
+    }), (error) => error instanceof DiscoveryFrontierError && error.code === 'FRONTIER_INVALID_INPUT'
+      && !error.message.includes('canary'));
+  }
+  await assert.rejects(store.getSnapshot(scope, 'sensitive-seed-0'), codeIs('FRONTIER_NOT_FOUND'));
+  await assert.rejects(store.createRun(scope, {
+    runId: 'sensitive-source-ref-encoded',
+    seeds: [{
+      url: 'https://events.example.com/private#%74oken=canary-source-ref-secret',
+      sourceRefs: [sourceRef('https://events.example.com/private#%74oken=canary-source-ref-secret', 'source-ref', HASH_A)],
+    }],
+  }), (error) => error instanceof DiscoveryFrontierError && error.code === 'FRONTIER_INVALID_INPUT'
+    && !error.message.includes('canary'));
+  const accepted = await seedRun(store, scope, 'ordinary-query', ['https://events.example.com/public?day=2026-10-10']);
+  assert.equal(accepted.candidates.length, 1);
+});
+
+test('transport hop admission reserves before dispatch and crash replay never refunds or redispatches', async (t) => {
+  const { store, scope, openStore } = await harness(t);
+  await seedRun(store, scope, 'transport-crash');
+  const claim = await store.claimNext(scope, 'transport-crash', { workerId: 'worker-crash', claimKey: 'claim-crash' });
+  const input = {
+    leaseToken: claim.leaseToken,
+    attemptKey: 'attempt-crash',
+    kind: 'initial',
+    url: claim.candidate.canonicalUrl,
+  };
+  const admission = await store.admitTransportHop(scope, 'transport-crash', input);
+  assert.equal(admission.state, 'admitted');
+  assert.equal(admission.capacity.reservedBytes, 20 * 1024 * 1024);
+  assert.equal(admission.capacity.spentBytes, 0);
+  await store.markTransportDispatchIntent(scope, 'transport-crash', { leaseToken: claim.leaseToken, attemptKey: input.attemptKey });
+  await store.markTransportResponseReceived(scope, 'transport-crash', { leaseToken: claim.leaseToken, attemptKey: input.attemptKey });
+  // Model output produced/consumed just before a crash, before durable EOF settlement.
+  store.close();
+
+  const reopened = openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest({ principal: { tenantId: 'tenant-a' } });
+  const replay = await reopened.admitTransportHop(reopenedScope, 'transport-crash', input);
+  assert.equal(replay.state, 'already_admitted');
+  assert.equal(replay.transportState, 'response_received');
+  assert.equal(replay.capacity.reservedBytes, 20 * 1024 * 1024);
+  assert.equal(replay.capacity.spentBytes, 0);
+  const duplicateIntent = await reopened.markTransportDispatchIntent(reopenedScope, 'transport-crash', {
+    leaseToken: claim.leaseToken, attemptKey: input.attemptKey,
+  });
+  assert.equal(duplicateIntent.state, 'unchanged');
+  assert.equal(duplicateIntent.transportState, 'response_received');
+  const after = await reopened.getTransportProgress(reopenedScope, 'transport-crash');
+  assert.equal(after.reservedBytes, 20 * 1024 * 1024);
+  assert.equal(after.spentBytes, 0);
+});
+
+test('known-zero releases only a no-decode reservation and EOF converts reservation to exact decoded spend', async (t) => {
+  const { store, scope } = await harness(t);
+  await seedRun(store, scope, 'transport-settlement', [
+    'https://events.example.com/a', 'https://events.example.com/b',
+  ]);
+  let claim = await store.claimNext(scope, 'transport-settlement', { workerId: 'worker-settle', claimKey: 'claim-zero' });
+  const zero = await store.admitTransportHop(scope, 'transport-settlement', {
+    leaseToken: claim.leaseToken, attemptKey: 'attempt-zero', kind: 'initial', url: claim.candidate.canonicalUrl,
+  });
+  assert.equal(zero.state, 'admitted');
+  await store.settleTransportHopKnownZero(scope, 'transport-settlement', {
+    leaseToken: claim.leaseToken, attemptKey: 'attempt-zero',
+  });
+  let capacity = await store.getTransportProgress(scope, 'transport-settlement');
+  assert.equal(capacity.reservedBytes, 0);
+  assert.equal(capacity.spentBytes, 0);
+
+  await store.completeCandidate(scope, 'transport-settlement', {
+    leaseToken: claim.leaseToken, completionKey: 'complete-zero', outcome: 'failed', suggestions: [],
+  });
+  claim = await store.claimNext(scope, 'transport-settlement', { workerId: 'worker-settle', claimKey: 'claim-eof' });
+  const body = await store.admitTransportHop(scope, 'transport-settlement', {
+    leaseToken: claim.leaseToken, attemptKey: 'attempt-eof', kind: 'initial', url: claim.candidate.canonicalUrl,
+  });
+  assert.equal(body.state, 'admitted');
+  await store.markTransportDispatchIntent(scope, 'transport-settlement', {
+    leaseToken: claim.leaseToken, attemptKey: 'attempt-eof',
+  });
+  await store.markTransportResponseReceived(scope, 'transport-settlement', {
+    leaseToken: claim.leaseToken, attemptKey: 'attempt-eof',
+  });
+  await store.settleTransportHopBodyComplete(scope, 'transport-settlement', {
+    leaseToken: claim.leaseToken, attemptKey: 'attempt-eof',
+  }, 4_096);
+  capacity = await store.getTransportProgress(scope, 'transport-settlement');
+  assert.equal(capacity.reservedBytes, 0);
+  assert.equal(capacity.spentBytes, 4_096);
+  assert.equal(capacity.availableBytes, 100 * 1024 * 1024 - 4_096);
+});
+
+test('a sealed partial draft preserves queued candidates but permanently denies new claims and transport admissions', async (t) => {
+  const { store, scope, openStore } = await harness(t);
+  const runId = 'sealed-partial-queued';
+  await seedRun(store, scope, runId, [
+    'https://events.example.com/a', 'https://events.example.com/b',
+  ]);
+  const first = await store.claimNext(scope, runId, { workerId: 'worker-seal', claimKey: 'seal-first' });
+  assert.equal(first.state, 'claimed');
+  const admitted = await store.admitTransportHop(scope, runId, {
+    leaseToken: first.leaseToken, attemptKey: 'seal-first-hop', kind: 'initial', url: first.candidate.canonicalUrl,
+  });
+  assert.equal(admitted.state, 'admitted');
+  await store.settleTransportHopKnownZero(scope, runId, {
+    leaseToken: first.leaseToken, attemptKey: 'seal-first-hop',
+  });
+  await store.completeCandidate(scope, runId, {
+    leaseToken: first.leaseToken, completionKey: 'seal-first-complete', outcome: 'failed', suggestions: [],
+  });
+
+  const beforeSeal = await store.getSnapshot(scope, runId);
+  const queued = beforeSeal.candidates.find((candidate) => candidate.state === 'queued');
+  assert.ok(queued);
+  assert.equal((await store.getTransportProgress(scope, runId)).reservedBytes, 0);
+  assert.equal((await store.sealPrivateDraft(scope, runId)).state, 'sealed');
+
+  const postSealClaim = await store.claimNext(scope, runId, {
+    workerId: 'worker-seal', claimKey: 'seal-after-release',
+  });
+  assert.deepEqual(postSealClaim, { state: 'stopped', reason: 'private_draft_sealed' });
+  const postSealAdmission = await store.admitTransportHop(scope, runId, {
+    leaseToken: 'synthetic-after-seal', attemptKey: 'hop-after-seal', kind: 'initial', url: queued.canonicalUrl,
+  });
+  assert.equal(postSealAdmission.state, 'denied');
+  assert.equal(postSealAdmission.reason, 'private_draft_sealed');
+  assert.equal(postSealAdmission.capacity.reservedBytes, 0);
+
+  const afterSeal = await store.getSnapshot(scope, runId);
+  assert.equal(afterSeal.candidates.find((candidate) => candidate.candidateId === queued.candidateId).state, 'queued');
+  const afterSealCancel = await store.stopRun(scope, runId, 'cancelled');
+  assert.equal(afterSealCancel.candidates.find((candidate) => candidate.candidateId === queued.candidateId).state, 'queued');
+  assert.equal(afterSealCancel.stopReasons.some((entry) => entry.reason === 'cancelled'), false);
+
+  store.close();
+  const reopened = openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest({ principal: { tenantId: 'tenant-a' } });
+  assert.deepEqual(await reopened.claimNext(reopenedScope, runId, {
+    workerId: 'worker-after-restart', claimKey: 'claim-after-sealed-restart',
+  }), { state: 'stopped', reason: 'private_draft_sealed' });
+  const reopenedAdmission = await reopened.admitTransportHop(reopenedScope, runId, {
+    leaseToken: 'synthetic-after-seal', attemptKey: 'hop-after-seal-restart',
+    kind: 'initial', url: queued.canonicalUrl,
+  });
+  assert.equal(reopenedAdmission.state, 'denied');
+  assert.equal(reopenedAdmission.reason, 'private_draft_sealed');
+  assert.equal(reopenedAdmission.capacity.reservedBytes, 0);
+  const reopenedSnapshot = await reopened.getSnapshot(reopenedScope, runId);
+  assert.equal(reopenedSnapshot.candidates.find((candidate) => candidate.candidateId === queued.candidateId).state, 'queued');
+});
+
+test('independent SQLite connections cannot overspend the last decoded capacity reservation', async (t) => {
+  const { store, scope, openStore } = await harness(t);
+  await seedRun(store, scope, 'transport-capacity-race', [
+    'https://events.example.com/a', 'https://events.example.com/b',
+    'https://events.example.com/c', 'https://events.example.com/d',
+    'https://events.example.com/e', 'https://events.example.com/f',
+  ]);
+  let sequence = 0;
+  const reserveAndComplete = async (claimKey) => {
+    const claim = await store.claimNext(scope, 'transport-capacity-race', {
+      workerId: 'worker-capacity', claimKey,
+    });
+    assert.equal(claim.state, 'claimed');
+    const attemptKey = `capacity-attempt-${sequence}`;
+    sequence += 1;
+    const admission = await store.admitTransportHop(scope, 'transport-capacity-race', {
+      leaseToken: claim.leaseToken, attemptKey, kind: 'initial', url: claim.candidate.canonicalUrl,
+    });
+    assert.equal(admission.state, 'admitted');
+    await store.completeCandidate(scope, 'transport-capacity-race', {
+      leaseToken: claim.leaseToken, completionKey: `capacity-complete-${sequence}`,
+      outcome: 'failed', suggestions: [],
+    });
+  };
+  await reserveAndComplete('capacity-claim-0');
+  await reserveAndComplete('capacity-claim-1');
+  await reserveAndComplete('capacity-claim-2');
+  await reserveAndComplete('capacity-claim-3');
+  const secondStore = openStore();
+  const secondScope = await secondStore.scopeForAuthenticatedRequest({ principal: { tenantId: 'tenant-a' } });
+  const [left, right] = await Promise.all([
+    store.claimNext(scope, 'transport-capacity-race', { workerId: 'worker-left', claimKey: 'capacity-left' }),
+    secondStore.claimNext(secondScope, 'transport-capacity-race', { workerId: 'worker-right', claimKey: 'capacity-right' }),
+  ]);
+  assert.equal(left.state, 'claimed');
+  assert.equal(right.state, 'claimed');
+  const [leftResult, rightResult] = await Promise.all([
+    store.admitTransportHop(scope, 'transport-capacity-race', {
+      leaseToken: left.leaseToken, attemptKey: 'last-left', kind: 'initial', url: left.candidate.canonicalUrl,
+    }),
+    secondStore.admitTransportHop(secondScope, 'transport-capacity-race', {
+      leaseToken: right.leaseToken, attemptKey: 'last-right', kind: 'initial', url: right.candidate.canonicalUrl,
+    }),
+  ]);
+  assert.deepEqual([leftResult.state, rightResult.state].sort(), ['admitted', 'denied']);
+  const capacity = await store.getTransportProgress(scope, 'transport-capacity-race');
+  assert.equal(capacity.reservedBytes, 100 * 1024 * 1024);
+  assert.equal(capacity.spentBytes, 0);
+  assert.equal(capacity.availableBytes, 0);
+});
+
+test('separate OS processes cannot overspend the last decoded capacity reservation', async (t) => {
+  const { directory, clock, store, scope } = await harness(t);
+  const runId = 'transport-multiprocess-race';
+  await seedRun(store, scope, runId, [
+    'https://events.example.com/a', 'https://events.example.com/b',
+    'https://events.example.com/c', 'https://events.example.com/d',
+    'https://events.example.com/e', 'https://events.example.com/f',
+  ]);
+  for (let index = 0; index < 4; index += 1) {
+    const claim = await store.claimNext(scope, runId, { workerId: 'prefill-worker', claimKey: `prefill-${index}` });
+    assert.equal(claim.state, 'claimed');
+    const attemptKey = `prefill-attempt-${index}`;
+    const admission = await store.admitTransportHop(scope, runId, {
+      leaseToken: claim.leaseToken, attemptKey, kind: 'initial', url: claim.candidate.canonicalUrl,
+    });
+    assert.equal(admission.state, 'admitted');
+    await store.completeCandidate(scope, runId, {
+      leaseToken: claim.leaseToken, completionKey: `prefill-completion-${index}`,
+      outcome: 'failed', suggestions: [],
+    });
+  }
+  const left = await store.claimNext(scope, runId, { workerId: 'process-left', claimKey: 'process-left' });
+  const right = await store.claimNext(scope, runId, { workerId: 'process-right', claimKey: 'process-right' });
+  assert.equal(left.state, 'claimed');
+  assert.equal(right.state, 'claimed');
+  const barrierDirectory = path.join(directory, 'transport-race-barrier');
+  await mkdir(barrierDirectory);
+  const leftKey = 'process-last-left';
+  const rightKey = 'process-last-right';
+  const args = (claim, attemptKey) => [directory, runId, claim.leaseToken, attemptKey,
+    claim.candidate.canonicalUrl, String(clock.value), barrierDirectory];
+  const leftPending = runTransportWorker(args(left, leftKey));
+  const rightPending = runTransportWorker(args(right, rightKey));
+  const waitForReadyWorkers = async () => {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      try {
+        await Promise.all([
+          access(path.join(barrierDirectory, `${leftKey}.ready`)),
+          access(path.join(barrierDirectory, `${rightKey}.ready`)),
+        ]);
+        return;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    }
+    throw new Error('transport worker barrier did not become ready');
+  };
+  await waitForReadyWorkers();
+  await writeFile(path.join(barrierDirectory, 'release'), 'release');
+  const [leftResult, rightResult] = await Promise.all([leftPending, rightPending]);
+  assert.deepEqual([leftResult.state, rightResult.state].sort(), ['admitted', 'denied']);
+  const capacity = await store.getTransportProgress(scope, runId);
+  assert.equal(capacity.reservedBytes, 100 * 1024 * 1024);
+  assert.equal(capacity.spentBytes, 0);
+  assert.equal(capacity.availableBytes, 0);
 });
