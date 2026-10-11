@@ -1653,6 +1653,74 @@ test('a queued link child keeps provenance from its verified completed parent ac
   assert.deepEqual(replay.linkCandidates.find((item) => item.candidateId === child.candidateId).sourceRefs, child.sourceRefs);
 });
 
+test('repeated out-of-depth links retain both verified parent references across restart', async (t) => {
+  let requestCount = 0;
+  const targetUrl = 'https://links.example.org/repeated-depth-limit-child';
+  const requestedPaths = [];
+  const server = await startFixture((requestValue, response) => {
+    requestCount += 1;
+    requestedPaths.push(requestValue.url);
+    const body = Buffer.concat([
+      eventHtmlWithCanonicalLinks([targetUrl]),
+      Buffer.from(`<!-- ${requestValue.url} -->`),
+    ]);
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, body);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-repeated-depth-limit-parents';
+  const seeds = [
+    { url: sourceUrl('/depth-limit-seed-a') },
+    { url: sourceUrl('/depth-limit-seed-b') },
+  ];
+  const limits = {
+    maxDepth: 0,
+    maxTransportAttemptAdmissions: 2,
+    maxInFlightLeases: 1,
+    maxSuggestionsPerCompletion: 1,
+  };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  assert.equal(first.status, 'draft', JSON.stringify(first));
+  assert.equal(requestCount, 2, 'only the two configured seeds are fetched');
+  assert.deepEqual(requestedPaths.sort(), ['/depth-limit-seed-a', '/depth-limit-seed-b']);
+  assert.equal(first.progress.transportAttemptAdmissions, 2);
+  const firstCandidate = first.linkCandidates.find((candidate) => candidate.url === targetUrl);
+  assert.ok(firstCandidate, `the out-of-depth target remains visible as bounded frontier evidence: ${JSON.stringify(first)}`);
+  assert.equal(firstCandidate.depth, 1);
+  assert.deepEqual(firstCandidate.sourceRefs.map((reference) => reference.value), [targetUrl, targetUrl]);
+  assert.equal(new Set(firstCandidate.sourceRefs.map((reference) => reference.evidenceId)).size, 2,
+    'each completed seed contributes its independently retained source position');
+
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const evidencePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  const immutableReceiptRows = readPrivateReceiptRows(evidencePath, tenantHash);
+  const transportBefore = await h.frontier.getTransportProgress(h.scope, runId);
+  const firstSnapshot = await h.frontier.getSnapshot(h.scope, runId);
+  const firstLinkObservations = firstSnapshot.observations.filter((observation) =>
+    observation.kind === 'link' && observation.canonicalUrl === targetUrl);
+  assert.equal(firstLinkObservations.length, 2);
+  assert.deepEqual(firstLinkObservations.map((observation) => observation.disposition), ['depth_limit', 'depth_limit']);
+  assert.equal(new Set(firstLinkObservations.map((observation) => observation.targetCandidateId)).size, 1);
+  assert.deepEqual(firstLinkObservations.map((observation) => observation.sourceRefs.length), [1, 1]);
+
+  h.frontier.close();
+  const reopenedFrontier = h.openFrontier();
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const replay = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+  }));
+  assert.equal(replay.status, 'draft', JSON.stringify(replay));
+  assert.equal(replay.completeness, 'incomplete');
+  assert.equal(requestCount, 2, 'restart reuses both completed seed receipts and never fetches the child');
+  assert.deepEqual(replay.linkCandidates.find((candidate) => candidate.url === targetUrl).sourceRefs,
+    firstCandidate.sourceRefs, 'both parent references survive identical bounded replay');
+  assert.deepEqual(readPrivateReceiptRows(evidencePath, tenantHash), immutableReceiptRows,
+    'restart does not rewrite either authenticated receipt');
+  const reopenedScope = await reopenedFrontier.scopeForAuthenticatedRequest(request());
+  assert.deepEqual(await reopenedFrontier.getTransportProgress(reopenedScope, runId), transportBefore,
+    'restart preserves transport counters and settled bytes');
+});
+
 test('modern and baseline receipts reject link provenance reassigned to another candidate', async (t) => {
   let requestCount = 0;
   const firstUrl = 'https://links.example.org/a-first';

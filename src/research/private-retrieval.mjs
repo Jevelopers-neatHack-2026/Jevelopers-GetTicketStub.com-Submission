@@ -482,6 +482,7 @@ function projectionSnapshotReferencesMatch(snapshot, seeds) {
   const targetReferences = new Map();
   const targetObservationCounts = new Map();
   const targetOriginCounts = new Map();
+  const targetDepthLimitCounts = new Map();
   const targetMinimumDepth = new Map();
   const seedTargets = new Set();
   const linkDispositions = new Set(['duplicate', 'cycle', 'depth_limit', 'queued', 'retained_after_stop']);
@@ -533,9 +534,13 @@ function projectionSnapshotReferencesMatch(snapshot, seeds) {
         && (!snapshot.stopReasons.some((stop) => stop.reason === 'attempt_limit') || snapshot.state === 'active')) {
         return false;
       }
-      if (['queued', 'depth_limit', 'retained_after_stop'].includes(observation.disposition)) {
+      if (['queued', 'retained_after_stop'].includes(observation.disposition)) {
         targetOriginCounts.set(observation.targetCandidateId,
           (targetOriginCounts.get(observation.targetCandidateId) ?? 0) + 1);
+      }
+      if (observation.disposition === 'depth_limit') {
+        targetDepthLimitCounts.set(observation.targetCandidateId,
+          (targetDepthLimitCounts.get(observation.targetCandidateId) ?? 0) + 1);
       }
       if (observation.disposition === 'cycle'
         && !projectionObservationPathExists(snapshot.observations, observation.targetCandidateId,
@@ -547,7 +552,9 @@ function projectionSnapshotReferencesMatch(snapshot, seeds) {
     if (candidate.seed !== seedTargets.has(candidate.candidateId)
       || candidate.depth !== targetMinimumDepth.get(candidate.candidateId)
       || (targetObservationCounts.get(candidate.candidateId) ?? 0) < 1) return false;
-    if ((targetOriginCounts.get(candidate.candidateId) ?? 0) !== 1) return false;
+    const originCount = targetOriginCounts.get(candidate.candidateId) ?? 0;
+    const depthLimitCount = targetDepthLimitCounts.get(candidate.candidateId) ?? 0;
+    if (candidate.seed ? originCount !== 1 : originCount > 1 || originCount + depthLimitCount === 0) return false;
     const expected = [...new Set(targetReferences.get(candidate.candidateId) ?? [])].sort(stableTextCompare);
     const actual = projectionReferenceKeys(candidate.sourceRefs);
     if (!actual || JSON.stringify(actual) !== JSON.stringify(expected)) return false;
