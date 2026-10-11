@@ -28,7 +28,7 @@ No session history was fabricated or imported from elsewhere. The credential-pat
 
 ## Verification
 
-Run in a clone with the checkpoint refs fetched from `entire-checkpoints`:
+Run in any environment with the `entire` CLI and a clone with the checkpoint refs fetched from `entire-checkpoints`:
 
 ```sh
 entire checkpoint list                                    # branch docs/issue-27-entire-checkpoints, 1 checkpoint, (3358f0d)
@@ -40,7 +40,6 @@ git log -1 --format=%B 3358f0d | grep Entire-Checkpoint   # Entire-Checkpoint: 0
 ## Limitations
 
 - The checkpoint came from `session attach`, not live hook capture, so `files_touched` is empty. Live capture of a Claude session started inside an enabled checkout has not been exercised yet.
-- One session, one repository. No Codex checkpoint exists yet: Codex hooks still need approval in `/hooks`.
-- `getticketstub.com` does not have Claude hooks yet, and teammates' clones are not configured.
+- One session, one repository, captured on the owner's machine before the owner ruled out local capture. That local setup has since been removed (see [README](README.md)). Future checkpoints must come from a non-local environment, which isn't set up yet. No Codex checkpoint exists.
 - Not mirrored on entire.io. `entire repo mirror list --available` lists the 9 App-selected code repos plus `entire-checkpoints` as `available` with no clusters, and `entire repo view` reports the repo is not visible yet. `getticketstub.com` is absent from that list. Onboarding (`entire repo mirror add`) would put hosted copies on Entire's clusters, so it is left to the owner. Git-based retrieval does not depend on it.
 - Fresh-clone check: a new clone of this branch plus `git fetch https://github.com/Jevelopers-neatHack-2026/entire-checkpoints 'refs/entire/*:refs/entire/*'` gives checkpoint metadata with the same ID, session and agent. The public origin holds 0 `refs/entire/*`.
