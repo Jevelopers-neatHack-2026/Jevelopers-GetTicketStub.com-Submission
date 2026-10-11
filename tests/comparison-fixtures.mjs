@@ -49,6 +49,7 @@ export async function makeQuote({
   materials = ["paper-200gsm"],
   destination = { reference: destinationReference, digest: destinationDigest, countryCode: "US", regionCode: "CA" },
   shippingMethod = "express",
+  selectionOverrides = {},
   quoteOverrides = {},
   now = comparisonNow
 } = {}) {
@@ -66,7 +67,8 @@ export async function makeQuote({
       countryCode: destination.countryCode,
       ...(destination.regionCode === undefined ? {} : { regionCode: destination.regionCode })
     },
-    shippingMethod
+    shippingMethod,
+    ...selectionOverrides
   };
   const contracts = fixtureContracts();
   const harness = quoteHarness({

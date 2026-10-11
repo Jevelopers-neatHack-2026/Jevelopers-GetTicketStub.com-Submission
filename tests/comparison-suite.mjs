@@ -24,6 +24,19 @@ function assertNoChoiceFields(result) {
   assert.equal(Object.hasOwn(result, "ranking"), false);
 }
 
+async function assertEligibleBasisDifference(alpha, beta, label) {
+  assert.ok(beta.quote, label + ": fixture must produce a valid quote");
+  const before = JSON.stringify({ alphaQuote: alpha.quote, alphaInput: alpha.currentInput, betaQuote: beta.quote, betaInput: beta.currentInput });
+  const result = await comparePrivateQuotes(inputOf(alpha, beta), comparisonDependencies);
+  assert.equal(result.status, "not_comparable", label);
+  assert.deepEqual(result.entries.map((entry) => entry.currentness.status), ["current", "current"], label + ": both quotes remain current");
+  assert.deepEqual(result.entries.map((entry) => entry.capabilityFit.status), ["eligible", "eligible"], label + ": both selections remain eligible");
+  assert.ok(result.reasons.includes("product_basis_differs"), label + ": selected production basis difference is explicit");
+  assert.equal(JSON.stringify({ alphaQuote: alpha.quote, alphaInput: alpha.currentInput, betaQuote: beta.quote, betaInput: beta.currentInput }), before,
+    label + ": source quotes and selections remain unchanged");
+  return result;
+}
+
 async function positiveLoopbackControl() {
   const server = net.createServer((socket) => socket.end("ok"));
   await new Promise((resolve, reject) => {
@@ -157,7 +170,98 @@ add("currency, quantity, option, material, destination, shipping, tax, and valid
   assert.equal(result.entries[1].sourceReferences.quantity, 26);
   assert.deepEqual(result.entries[1].sourceReferences.options, ["gloss"]);
   assert.deepEqual(result.entries[1].sourceReferences.materials, ["paper-250gsm"]);
+  assert.deepEqual(result.entries.map((entry) => entry.capabilityFit.status), ["eligible", "eligible"]);
+  assert.ok(result.reasons.includes("product_basis_differs"));
+  assert.ok(result.reasons.includes("options_differ"));
+  assert.ok(result.reasons.includes("materials_differ"));
   assertNoChoiceFields(result);
+});
+
+add("normalized selected production facts require a matching basis across providers", async () => {
+  const alpha = await makeQuote({ catalog: sameBasisCatalog("fixture-provider-alpha") });
+  const equivalentCatalog = sameBasisCatalog("fixture-provider-beta");
+  equivalentCatalog.products[0].constraints.dimensions.value = {
+    width: "30.48", height: "45.72", depth: "0.03", unit: "cm"
+  };
+  const equivalent = await makeQuote({
+    catalog: equivalentCatalog,
+    selectionOverrides: { dimensions: { width: "30.48", height: "45.72", depth: "0.03", unit: "cm" } }
+  });
+  assert.ok(equivalent.quote);
+  const equivalentBefore = JSON.stringify({ quote: equivalent.quote, input: equivalent.currentInput });
+  const sameBasis = await comparePrivateQuotes(inputOf(alpha, equivalent), comparisonDependencies);
+  assert.equal(sameBasis.status, "comparable", "exactly equivalent dimensions expressed in different units remain comparable");
+  assert.deepEqual(sameBasis.entries.map((entry) => entry.currentness.status), ["current", "current"]);
+  assert.deepEqual(sameBasis.entries.map((entry) => entry.capabilityFit.status), ["eligible", "eligible"]);
+  assert.equal(JSON.stringify({ quote: equivalent.quote, input: equivalent.currentInput }), equivalentBefore);
+
+  const cases = [
+    ["width", (catalog) => { catalog.products[0].constraints.dimensions.value.width = "300"; },
+      { dimensions: { width: "300", height: "457.2", depth: "0.3", unit: "mm" } }],
+    ["height", (catalog) => { catalog.products[0].constraints.dimensions.value.height = "450"; },
+      { dimensions: { width: "304.8", height: "450", depth: "0.3", unit: "mm" } }],
+    ["depth", (catalog) => { catalog.products[0].constraints.dimensions.value.depth = "0.4"; },
+      { dimensions: { width: "304.8", height: "457.2", depth: "0.4", unit: "mm" } }],
+    ["selected surface", (catalog) => { catalog.products[0].constraints.surfaces.value.push("back"); },
+      { surface: "back" }],
+    ["personalization", () => {}, { personalization: null }],
+    ["bleed", () => {}, { bleed: { top: "4", right: "3", bottom: "3", left: "3", unit: "mm" } }],
+    ["safe area", () => {}, { safeArea: { top: "6", right: "5", bottom: "5", left: "5", unit: "mm" } }],
+    ["resolution", () => {}, { effectiveResolutionDpi: 600 }],
+    ["file type", () => {}, { fileType: "image/png" }],
+    ["file count", () => {}, { fileCount: 2 }],
+    ["color space", (catalog) => { catalog.products[0].constraints.color.value.spaces.push("RGB"); },
+      { colorSpace: "RGB" }],
+    ["color profile", (catalog) => { catalog.products[0].constraints.color.value.profiles.push("fixture-coated-v2"); },
+      { colorProfile: "fixture-coated-v2" }]
+  ];
+
+  for (const [label, mutateCatalog, selectionOverrides] of cases) {
+    const catalog = sameBasisCatalog("fixture-provider-beta");
+    mutateCatalog(catalog);
+    const beta = await makeQuote({ catalog, selectionOverrides });
+    await assertEligibleBasisDifference(alpha, beta, label);
+  }
+
+  const unknownBasisQuote = await makeQuote({ catalog: sameBasisCatalog("fixture-provider-beta") });
+  const unknownBasisInput = structuredClone(unknownBasisQuote.currentInput);
+  unknownBasisInput.catalogSource.products[0].constraints.dimensions = { state: "unknown", reasonCode: "not_in_source" };
+  const unknownBasis = await comparePrivateQuotes(inputOf(alpha, {
+    quote: unknownBasisQuote.quote,
+    currentInput: unknownBasisInput
+  }), comparisonDependencies);
+  assert.equal(unknownBasis.status, "not_comparable");
+  assert.ok(unknownBasis.reasons.includes("product_basis_unknown"));
+  assert.notEqual(unknownBasis.entries[1].currentness.status, "current");
+});
+
+add("reordered selected option and material sets compare without changing source order", async () => {
+  const alphaCatalog = sameBasisCatalog("fixture-provider-alpha");
+  alphaCatalog.products[0].constraints.materials.value.push("paper-250gsm");
+  const alpha = await makeQuote({
+    catalog: alphaCatalog,
+    options: ["matte", "gloss"],
+    materials: ["paper-200gsm", "paper-250gsm"]
+  });
+  const beta = await makeQuote({
+    catalog: sameBasisCatalog("fixture-provider-beta"),
+    options: ["gloss", "matte"],
+    materials: ["paper-250gsm", "paper-200gsm"]
+  });
+  const before = JSON.stringify({ alphaQuote: alpha.quote, alphaInput: alpha.currentInput, betaQuote: beta.quote, betaInput: beta.currentInput });
+  const originalQuoteIds = [alpha.quote.quoteId, beta.quote.quoteId];
+  const result = await comparePrivateQuotes(inputOf(alpha, beta), comparisonDependencies);
+  assert.equal(result.status, "comparable");
+  assert.deepEqual(result.reasons, []);
+  assert.deepEqual(result.entries.map((entry) => entry.capabilityFit.status), ["eligible", "eligible"]);
+  assert.deepEqual(result.entries[0].sourceReferences.options, ["matte", "gloss"]);
+  assert.deepEqual(result.entries[1].sourceReferences.options, ["gloss", "matte"]);
+  assert.deepEqual(result.entries[0].sourceReferences.materials, ["paper-200gsm", "paper-250gsm"]);
+  assert.deepEqual(result.entries[1].sourceReferences.materials, ["paper-250gsm", "paper-200gsm"]);
+  assert.deepEqual([result.entries[0].sourceReferences.quoteId, result.entries[1].sourceReferences.quoteId], originalQuoteIds);
+  assert.equal(result.entries[0].terms.breakdown.total.value.decimal, alpha.quote.breakdown.total.value.decimal);
+  assert.equal(result.entries[1].terms.breakdown.total.value.decimal, beta.quote.breakdown.total.value.decimal);
+  assert.equal(JSON.stringify({ alphaQuote: alpha.quote, alphaInput: alpha.currentInput, betaQuote: beta.quote, betaInput: beta.currentInput }), before);
 });
 
 add("known zero and large exact money stay distinct from unknown amounts", async () => {

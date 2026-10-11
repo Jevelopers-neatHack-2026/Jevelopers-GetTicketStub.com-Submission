@@ -1,6 +1,9 @@
 import {
   evaluateCatalogSelection,
   normalizeCatalogSnapshot,
+  type CatalogDimensions,
+  type CatalogInsets,
+  type CatalogSnapshot,
   type CatalogSelectionResult
 } from "./catalog.js";
 import {
@@ -35,6 +38,8 @@ export type ComparisonReason =
   | "quote_incomplete"
   | "capability_not_eligible"
   | "region_not_eligible"
+  | "product_basis_differs"
+  | "product_basis_unknown"
   | "currency_differs"
   | "quantity_differs"
   | "options_differ"
@@ -118,6 +123,7 @@ const MAX_STRING_LENGTH = 4_096;
 const COMPARISON_REASONS = new Set<ComparisonReason>([
   "comparison_input_invalid", "at_least_two_quotes_required", "quote_unavailable", "quote_invalid",
   "quote_not_current", "quote_incomplete", "capability_not_eligible", "region_not_eligible",
+  "product_basis_differs", "product_basis_unknown",
   "currency_differs", "quantity_differs", "options_differ", "materials_differ",
   "destination_binding_differs", "shipping_method_differs", "tax_basis_differs", "tax_basis_unknown",
   "validity_differs", "provider_expiry_unknown", "lead_time_unknown", "amount_unknown"
@@ -204,6 +210,117 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return "[" + value.map((entry) => stableJson(entry)).join(",") + "]";
   const source = value as Record<string, unknown>;
   return "{" + Object.keys(source).sort().map((key) => JSON.stringify(key) + ":" + stableJson(source[key])).join(",") + "}";
+}
+
+interface SelectedProductionBasis {
+  readonly dimensions: CatalogDimensions;
+  readonly bleed: CatalogInsets;
+  readonly safeArea: CatalogInsets;
+  readonly effectiveResolutionDpi: number;
+  readonly surface: string;
+  readonly fileType: string;
+  readonly fileCount: number;
+  readonly colorSpace: string;
+  readonly colorProfile: string;
+  readonly options: readonly string[];
+  readonly materials: readonly string[];
+  readonly personalization: unknown;
+}
+
+interface BuiltComparisonEntry {
+  readonly entry: ComparisonQuoteEntry;
+  readonly basis?: SelectedProductionBasis;
+}
+
+function exactNanometres(value: unknown, selectedUnit: unknown, allowZero: boolean): string {
+  if (typeof value !== "string" || value.length > 24) return invalid();
+  if (selectedUnit !== "mm" && selectedUnit !== "cm" && selectedUnit !== "in") return invalid();
+  if (!/^(?:0|[1-9]\d{0,11})(?:\.\d{1,3})?$/u.test(value)) return invalid();
+  const [wholeText = "0", fractionText = ""] = value.split(".");
+  const scale = selectedUnit === "mm" ? 1_000_000n : selectedUnit === "cm" ? 10_000_000n : 25_400_000n;
+  const denominator = 10n ** BigInt(fractionText.length);
+  const fractionalNumerator = fractionText.length === 0 ? 0n : BigInt(fractionText) * scale;
+  if (fractionalNumerator % denominator !== 0n) return invalid();
+  const result = BigInt(wholeText) * scale + fractionalNumerator / denominator;
+  if ((!allowZero && result <= 0n) || (allowZero && result < 0n) || result > 2_000_000_000n) return invalid();
+  return result.toString(10);
+}
+
+function selectedDimensions(value: unknown): CatalogDimensions {
+  const input = record(value);
+  exactKeys(input, ["width", "height", "depth", "unit"]);
+  const selectedUnit = ownValue(input, "unit");
+  return {
+    widthNm: exactNanometres(ownValue(input, "width"), selectedUnit, false),
+    heightNm: exactNanometres(ownValue(input, "height"), selectedUnit, false),
+    depthNm: exactNanometres(ownValue(input, "depth"), selectedUnit, false),
+    unit: "nm"
+  };
+}
+
+function selectedInsets(value: unknown): CatalogInsets {
+  const input = record(value);
+  exactKeys(input, ["top", "right", "bottom", "left", "unit"]);
+  const selectedUnit = ownValue(input, "unit");
+  return {
+    topNm: exactNanometres(ownValue(input, "top"), selectedUnit, true),
+    rightNm: exactNanometres(ownValue(input, "right"), selectedUnit, true),
+    bottomNm: exactNanometres(ownValue(input, "bottom"), selectedUnit, true),
+    leftNm: exactNanometres(ownValue(input, "left"), selectedUnit, true),
+    unit: "nm"
+  };
+}
+
+function selectedSet(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return invalid();
+  const copied = value.map((entry) => {
+    if (typeof entry !== "string") return invalid();
+    return entry;
+  });
+  return copied.sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+}
+
+function deriveSelectedProductionBasis(
+  selectionValue: unknown,
+  catalog: CatalogSnapshot,
+  catalogResult: CatalogSelectionResult
+): SelectedProductionBasis | undefined {
+  if (catalogResult.status !== "eligible") return undefined;
+  const selection = record(selectionValue);
+  const product = catalog.products.find((candidate) =>
+    candidate.sku === selection.sku && candidate.variantId === selection.variantId
+  );
+  if (product === undefined || product.constraints.dimensions.state !== "known") return undefined;
+  const dimensions = selectedDimensions(ownValue(selection, "dimensions"));
+  if (stableJson(dimensions) !== stableJson(product.constraints.dimensions.value)) return undefined;
+
+  const personalizationValue = ownValue(selection, "personalization");
+  const personalization = personalizationValue === null ? null : safeCopy(personalizationValue);
+  const effectiveResolutionDpi = ownValue(selection, "effectiveResolutionDpi");
+  const surface = ownValue(selection, "surface");
+  const fileType = ownValue(selection, "fileType");
+  const fileCount = ownValue(selection, "fileCount");
+  const colorSpace = ownValue(selection, "colorSpace");
+  const colorProfile = ownValue(selection, "colorProfile");
+  if (typeof surface !== "string" || typeof fileType !== "string" || typeof colorSpace !== "string" ||
+      typeof colorProfile !== "string") return undefined;
+  if (typeof effectiveResolutionDpi !== "number" || !Number.isSafeInteger(effectiveResolutionDpi) ||
+      typeof fileCount !== "number" || !Number.isSafeInteger(fileCount)) return undefined;
+
+  return {
+    dimensions,
+    bleed: selectedInsets(ownValue(selection, "bleed")),
+    safeArea: selectedInsets(ownValue(selection, "safeArea")),
+    effectiveResolutionDpi,
+    surface,
+    fileType,
+    fileCount,
+    colorSpace,
+    colorProfile,
+    options: selectedSet(ownValue(selection, "options")),
+    materials: selectedSet(ownValue(selection, "materials")),
+    personalization
+  };
 }
 
 function pushReason(reasons: ComparisonReason[], reason: ComparisonReason): void {
@@ -333,12 +450,27 @@ function compareEntries(entries: readonly ComparisonQuoteEntry[], reasons: Compa
       const rightRef = right.sourceReferences;
       if (left.terms.currency !== right.terms.currency) pushReason(reasons, "currency_differs");
       if (leftRef.quantity !== rightRef.quantity) pushReason(reasons, "quantity_differs");
-      if (stableJson(leftRef.options) !== stableJson(rightRef.options)) pushReason(reasons, "options_differ");
-      if (stableJson(leftRef.materials) !== stableJson(rightRef.materials)) pushReason(reasons, "materials_differ");
+      if (stableJson(selectedSet(leftRef.options)) !== stableJson(selectedSet(rightRef.options))) pushReason(reasons, "options_differ");
+      if (stableJson(selectedSet(leftRef.materials)) !== stableJson(selectedSet(rightRef.materials))) pushReason(reasons, "materials_differ");
       if (!sameDestination(leftRef.destination, rightRef.destination)) pushReason(reasons, "destination_binding_differs");
       if (leftRef.shippingMethod !== rightRef.shippingMethod) pushReason(reasons, "shipping_method_differs");
       if (left.terms.breakdown.taxBasis !== right.terms.breakdown.taxBasis) pushReason(reasons, "tax_basis_differs");
       if (stableJson(left.terms.expiry) !== stableJson(right.terms.expiry)) pushReason(reasons, "validity_differs");
+    }
+  }
+}
+
+function compareBuiltEntries(entries: readonly BuiltComparisonEntry[], reasons: ComparisonReason[]): void {
+  compareEntries(entries.map((item) => item.entry), reasons);
+  for (let leftIndex = 0; leftIndex < entries.length; leftIndex += 1) {
+    const left = entries[leftIndex];
+    if (left === undefined) continue;
+    for (let rightIndex = leftIndex + 1; rightIndex < entries.length; rightIndex += 1) {
+      const right = entries[rightIndex];
+      if (right === undefined || left.entry.sourceReferences === undefined || right.entry.sourceReferences === undefined ||
+          left.entry.terms === undefined || right.entry.terms === undefined) continue;
+      if (left.basis === undefined || right.basis === undefined) pushReason(reasons, "product_basis_unknown");
+      else if (stableJson(left.basis) !== stableJson(right.basis)) pushReason(reasons, "product_basis_differs");
     }
   }
 }
@@ -383,14 +515,14 @@ async function buildEntry(
   scope: TrustedScope,
   now: number,
   nowText: string
-): Promise<ComparisonQuoteEntry> {
+): Promise<BuiltComparisonEntry> {
   const quoteValue = value.quote;
   let snapshot: Record<string, unknown>;
   try {
     snapshot = record(quoteValue);
-    if (!scopeMatches(snapshot, scope)) return unavailableEntry(index);
+    if (!scopeMatches(snapshot, scope)) return { entry: unavailableEntry(index) };
   } catch {
-    return unavailableEntry(index);
+    return { entry: unavailableEntry(index) };
   }
 
   const currentInput = value.currentInput;
@@ -399,22 +531,34 @@ async function buildEntry(
   try {
     currentness = await evaluatePrivateQuoteCurrent(snapshot, currentInput, dependencies);
   } catch {
-    return { index, currentness: { status: "invalid", reasons: ["quote_integrity_invalid"] } };
+    return { entry: { index, currentness: { status: "invalid", reasons: ["quote_integrity_invalid"] } } };
   }
   if (currentness.reasons.includes("quote_integrity_invalid")) {
-    return { index, currentness: { status: "invalid", reasons: ["quote_integrity_invalid"] } };
+    return { entry: { index, currentness: { status: "invalid", reasons: ["quote_integrity_invalid"] } } };
   }
 
   const quote = snapshot as unknown as PrivateQuoteSnapshot;
   let catalogResult: CatalogSelectionResult | undefined;
+  let catalog: CatalogSnapshot | undefined;
+  let selection: unknown;
   try {
     const input = record(currentInput);
-    const catalog = await normalizeCatalogSnapshot(input.catalogSource);
-    catalogResult = evaluateCatalogSelection(catalog, input.selection, nowText);
+    selection = ownValue(input, "selection");
+    catalog = await normalizeCatalogSnapshot(input.catalogSource);
+    catalogResult = evaluateCatalogSelection(catalog, selection, nowText);
   } catch {
     catalogResult = undefined;
   }
-  return quoteEntry(index, quote, currentness, catalogResult);
+  const entry = quoteEntry(index, quote, currentness, catalogResult);
+  let basis: SelectedProductionBasis | undefined;
+  if (catalog !== undefined && catalogResult !== undefined) {
+    try {
+      basis = deriveSelectedProductionBasis(selection, catalog, catalogResult);
+    } catch {
+      basis = undefined;
+    }
+  }
+  return { entry, ...(basis === undefined ? {} : { basis }) };
 }
 
 /**
@@ -428,10 +572,11 @@ export async function comparePrivateQuotes(
   try {
     const request = readRequest(input);
     const { scope, now, nowText } = readDependencies(dependencies);
-    const entries = await Promise.all(request.entries.map((entry, index) => buildEntry(index, entry, scope, now, nowText)));
+    const builtEntries = await Promise.all(request.entries.map((entry, index) => buildEntry(index, entry, scope, now, nowText)));
     const reasons: ComparisonReason[] = [];
-    if (entries.length < 2) pushReason(reasons, "at_least_two_quotes_required");
-    compareEntries(entries, reasons);
+    if (builtEntries.length < 2) pushReason(reasons, "at_least_two_quotes_required");
+    compareBuiltEntries(builtEntries, reasons);
+    const entries = builtEntries.map((item) => item.entry);
     const comparable = reasons.length === 0 && entries.length >= 2;
     return freezeTree({
       localFormat: PRIVATE_COMPARISON_FORMAT,
