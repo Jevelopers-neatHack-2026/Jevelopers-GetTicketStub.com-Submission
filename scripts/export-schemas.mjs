@@ -22,7 +22,11 @@ const combinedValidators = Object.freeze({
 const entries = [
   ['shared', 'ErrorEnvelopeSchema'], ['shared', 'TrustedScopeSchema'],
   ['metering', 'UsageObservationSchema'], ['metering', 'IngestionReceiptSchema'],
-  ['pricing', 'RateCardSchema'], ['pricing', 'EstimateRequestSchema'], ['pricing', 'EstimateResultSchema'],
+  ['pricing', 'RateCardSchema'], ['pricing', 'PricingRuleSchema'], ['pricing', 'FxRateSchema'],
+  ['pricing', 'RegisterPricingRuleRequestSchema'], ['pricing', 'RegisterRateCardRequestSchema'],
+  ['pricing', 'RegisterFxRateRequestSchema'], ['pricing', 'CatalogWriteReceiptSchema'],
+  ['pricing', 'EstimateRequestSchema'], ['pricing', 'EstimateResultSchema'],
+  ['pricing', 'EstimateStatusSchema'], ['pricing', 'ExactRatioSchema'], ['pricing', 'VersionedReferenceSchema'],
   ['budgets', 'ReservationRequestSchema'], ['budgets', 'AuthorizationDecisionSchema'],
   ['budgets', 'MarkDispatchedCommandSchema'], ['budgets', 'SettleReservationCommandSchema'],
   ['budgets', 'ReleaseReservationCommandSchema'], ['budgets', 'ReservationCommandSchema'],

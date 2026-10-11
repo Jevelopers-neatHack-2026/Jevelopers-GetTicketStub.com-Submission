@@ -1,0 +1,204 @@
+{
+  "provenance": {
+    "synthetic": true,
+    "environment": "test",
+    "billing_mode": "simulated",
+    "evidence_mode": "mocked",
+    "external_calls": 0,
+    "rates_are_current_provider_prices": false
+  },
+  "selection": {
+    "published_at": "2026-10-11T03:30:00.000Z",
+    "event_time": "2026-10-11T03:30:10.000Z",
+    "revision_two_published_at": "2026-10-11T03:30:20.000Z",
+    "revision_two_effective_from": "2026-10-11T03:30:20.000Z",
+    "stale_event_time": "2026-10-11T04:53:20.000Z",
+    "contract_time": "2026-10-11T03:30:30.000Z"
+  },
+  "source_snapshots": [
+    {
+      "topic": "pricing",
+      "url": "https://developers.openai.com/api/docs/pricing",
+      "sha256": "e0767b5009dcc929a2f9eeb9ce6096a57ff12e5d8c011de9d69ff145aef2fc28"
+    },
+    {
+      "topic": "prompt_caching",
+      "url": "https://developers.openai.com/api/docs/guides/prompt-caching",
+      "sha256": "74dc45350d5de0e7eef80b0b09d67b733a73170275f1bacb0760e066a4254480"
+    },
+    {
+      "topic": "reasoning",
+      "url": "https://developers.openai.com/api/docs/guides/reasoning",
+      "sha256": "a561487dd41db8828b5b9920d77275bdced3c3c07ba1fb9f3c3230c5aaeb925b"
+    },
+    {
+      "topic": "response_usage_reference",
+      "url": "https://developers.openai.com/api/reference/resources/responses/methods/create",
+      "sha256": "9a9263ca93e192aa1c6496ad82bb5d2c8722efcc8a077d1fab1834383e681b16"
+    }
+  ],
+  "expected": {
+    "revision_one_complete_usd": "0.00035",
+    "revision_two_complete_usd": "0.00084",
+    "revision_one_input_partition": {
+      "input_tokens": "100",
+      "cached_tokens": "20",
+      "cache_write_tokens": "10",
+      "ordinary_input_tokens": "70"
+    },
+    "revision_one_fx_eur": "0.000525",
+    "one_tiny_call_usd": "0.00001",
+    "one_thousand_tiny_calls_usd": "0.01"
+  },
+  "pricing_rule": {
+    "schemaVersion": "1.0.0",
+    "id": "ci03-openai-responses-synthetic",
+    "revision": 1,
+    "provider": "openai",
+    "product": "responses",
+    "usageSource": "provider_response",
+    "usageSemantics": "The input_tokens quantity is the total input measure. cached_tokens and cache_write_tokens are disjoint included subsets of input_tokens and are subtracted before pricing ordinary input; each subset uses its own tariff. output_tokens is the total output measure and includes reasoning_tokens; reasoning is included in the output tariff and is not added as a second charge. Missing cache partitions are unknown where this version marks them required. Image input is a separate measurable category. These category rules are synthetic fixture semantics informed by the dated official source evidence.",
+    "usageUnits": [
+      {
+        "name": "input_tokens",
+        "category": "input_ordinary",
+        "unit": "token",
+        "relation": "standalone",
+        "treatment": "charge_residual",
+        "missingPolicy": "required"
+      },
+      {
+        "name": "cached_tokens",
+        "category": "cached_input",
+        "unit": "token",
+        "relation": "included_subset",
+        "includedIn": "input_tokens",
+        "treatment": "charge_subset",
+        "missingPolicy": "required"
+      },
+      {
+        "name": "cache_write_tokens",
+        "category": "cache_write",
+        "unit": "token",
+        "relation": "included_subset",
+        "includedIn": "input_tokens",
+        "treatment": "charge_subset",
+        "missingPolicy": "required"
+      },
+      {
+        "name": "output_tokens",
+        "category": "output",
+        "unit": "token",
+        "relation": "standalone",
+        "treatment": "charge_total",
+        "missingPolicy": "required"
+      },
+      {
+        "name": "reasoning_tokens",
+        "category": null,
+        "unit": "token",
+        "relation": "included_subset",
+        "includedIn": "output_tokens",
+        "treatment": "included",
+        "missingPolicy": "not_applicable"
+      },
+      {
+        "name": "image_input_units",
+        "category": "image_input",
+        "unit": "image",
+        "relation": "standalone",
+        "treatment": "charge_total",
+        "missingPolicy": "unknown"
+      },
+      {
+        "name": "file_search_calls",
+        "category": "file_search_call",
+        "unit": "call",
+        "relation": "standalone",
+        "treatment": "charge_total",
+        "missingPolicy": "not_applicable"
+      },
+      {
+        "name": "zero_tariff_calls",
+        "category": "zero_tariff_call",
+        "unit": "call",
+        "relation": "standalone",
+        "treatment": "charge_total",
+        "missingPolicy": "not_applicable"
+      }
+    ],
+    "effectiveFrom": "2026-10-11T03:30:00.000Z",
+    "effectiveTo": null,
+    "retrievedAt": "2026-10-11T03:19:02.693Z",
+    "freshnessMaxAgeSeconds": 3600,
+    "sourceUrl": "https://developers.openai.com/api/docs/guides/prompt-caching",
+    "sourceContentHash": "sha256:74dc45350d5de0e7eef80b0b09d67b733a73170275f1bacb0760e066a4254480",
+    "approvalRef": {
+      "contract": "SyntheticFixtureApproval",
+      "schema_version": "1.0.0",
+      "id": "ci03-synthetic-pricing-rule",
+      "revision": 1,
+      "content_hash": "sha256:6eae5eaa3c2a417cccd9faf5219f67489b3f7957ae31cf9f2378d5f2651f7401"
+    },
+    "provenance": "synthetic_fixture"
+  },
+  "rate_card": {
+    "schemaVersion": "1.0.0",
+    "id": "ci03-openai-synthetic-model",
+    "revision": 1,
+    "provider": "openai",
+    "product": "responses",
+    "modelOrSku": "ci03-synthetic-model",
+    "aliases": ["ci03-synthetic-model-latest"],
+    "contextTier": null,
+    "serviceTier": null,
+    "reasoningMode": null,
+    "toolClass": null,
+    "currency": "USD",
+    "unitRates": [
+      { "category": "input_ordinary", "unit": "token", "basisQuantity": "1000000", "rate": "2", "relation": "standalone" },
+      { "category": "cached_input", "unit": "token", "basisQuantity": "1000000", "rate": "0.5", "relation": "included_subset", "includedIn": "input_tokens" },
+      { "category": "cache_write", "unit": "token", "basisQuantity": "1000000", "rate": "3", "relation": "included_subset", "includedIn": "input_tokens" },
+      { "category": "output", "unit": "token", "basisQuantity": "1000000", "rate": "4", "relation": "standalone" },
+      { "category": "image_input", "unit": "image", "basisQuantity": "1", "rate": "0.002", "relation": "standalone" },
+      { "category": "file_search_call", "unit": "call", "basisQuantity": "1", "rate": "0.00001", "relation": "standalone" },
+      { "category": "zero_tariff_call", "unit": "call", "basisQuantity": "1", "rate": "0", "relation": "standalone" }
+    ],
+    "effectiveFrom": "2026-10-11T03:30:00.000Z",
+    "effectiveTo": null,
+    "retrievedAt": "2026-10-11T03:30:00.000Z",
+    "freshnessMaxAgeSeconds": 3600,
+    "sourceUrl": "https://fixtures.invalid/cost-intelligence/ci03/synthetic-tariff-source.md",
+    "sourceContentHash": "sha256:6eae5eaa3c2a417cccd9faf5219f67489b3f7957ae31cf9f2378d5f2651f7401",
+    "approvalRef": {
+      "contract": "SyntheticFixtureApproval",
+      "schema_version": "1.0.0",
+      "id": "ci03-synthetic-rate-card",
+      "revision": 1,
+      "content_hash": "sha256:6eae5eaa3c2a417cccd9faf5219f67489b3f7957ae31cf9f2378d5f2651f7401"
+    },
+    "provenance": "synthetic_fixture"
+  },
+  "fx_rate": {
+    "schemaVersion": "1.0.0",
+    "id": "ci03-synthetic-usd-eur",
+    "revision": 1,
+    "sourceCurrency": "USD",
+    "targetCurrency": "EUR",
+    "rate": "1.5",
+    "effectiveFrom": "2026-10-11T03:30:00.000Z",
+    "effectiveTo": null,
+    "retrievedAt": "2026-10-11T03:30:00.000Z",
+    "freshnessMaxAgeSeconds": 3600,
+    "sourceUrl": "https://fixtures.invalid/cost-intelligence/ci03/synthetic-tariff-source.md",
+    "sourceContentHash": "sha256:6eae5eaa3c2a417cccd9faf5219f67489b3f7957ae31cf9f2378d5f2651f7401",
+    "approvalRef": {
+      "contract": "SyntheticFixtureApproval",
+      "schema_version": "1.0.0",
+      "id": "ci03-synthetic-fx",
+      "revision": 1,
+      "content_hash": "sha256:6eae5eaa3c2a417cccd9faf5219f67489b3f7957ae31cf9f2378d5f2651f7401"
+    },
+    "provenance": "synthetic_fixture"
+  }
+}

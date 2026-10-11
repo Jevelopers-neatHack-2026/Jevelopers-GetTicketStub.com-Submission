@@ -54,9 +54,25 @@ test('public domain boundaries return explicit unavailable results and never fab
   await checkBoundary('ingestUsage', usage, 'SOURCE_UNAVAILABLE');
   const estimate = {
     ...base, usageEvent,
-    selection: { policy: 'event_time', effectiveAt: '2026-10-10T12:00:00Z', requestedCurrency: 'USD', rateCardRef: null },
+    selection: {
+      policy: 'event_time', effectiveAt: usageEvent.occurred_at, product: 'responses', requestedCurrency: 'USD',
+      rateCardRef: null, fxRateRef: null, contractTimeEvidenceRef: null, contextTier: null, serviceTier: null,
+      reasoningMode: null, toolClass: null, dimensionsEvidenceRef: null,
+    },
   };
-  await checkBoundary('estimate', estimate, 'PRICING_UNKNOWN');
+  validRequests.push({ operation: 'estimate', request: estimate });
+  const pricingPorts = {
+    ...ports,
+    database: {
+      connect: async () => ({
+        query: async () => ({ rows: [], rowCount: 0 }),
+        release: () => {},
+      }),
+    },
+  };
+  const estimateResult = await api.estimate(estimate, pricingPorts);
+  assert.equal(estimateResult.ok, true);
+  assert.equal(estimateResult.value.status, 'pricing_unknown', 'an empty catalog returns typed unknown pricing, not a zero estimate');
 
   const attemptBinding = {
     logicalOperationId: usageEvent.logical_operation_id, transportAttemptId: usageEvent.transport_attempt_id,

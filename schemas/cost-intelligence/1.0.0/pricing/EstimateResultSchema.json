@@ -9,9 +9,17 @@
     "requestId",
     "estimatedAt",
     "status",
+    "selectionPolicy",
+    "effectiveAt",
     "knownSubtotal",
+    "knownSubtotalExact",
     "currency",
     "rateCardRef",
+    "pricingRuleRef",
+    "fxRateRef",
+    "fxConvertedSubtotal",
+    "fxConvertedSubtotalExact",
+    "fxTargetCurrency",
     "missingDimensions",
     "assumptions",
     "boundedConservativeAuthorizationAmount",
@@ -28,6 +36,7 @@
     },
     "estimatedAt": {
       "format": "date-time",
+      "pattern": "Z$",
       "type": "string"
     },
     "status": {
@@ -54,15 +63,73 @@
         }
       ]
     },
-    "knownSubtotal": {
-      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
-      "maxLength": 40,
-      "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
+    "selectionPolicy": {
+      "anyOf": [
+        {
+          "const": "event_time",
+          "type": "string"
+        },
+        {
+          "const": "contract_time",
+          "type": "string"
+        }
+      ]
+    },
+    "effectiveAt": {
+      "format": "date-time",
+      "pattern": "Z$",
       "type": "string"
     },
+    "knownSubtotal": {
+      "anyOf": [
+        {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+          "maxLength": 40,
+          "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "knownSubtotalExact": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "properties": {
+            "numerator": {
+              "pattern": "^-?(?:0|[1-9][0-9]*)$",
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "denominator": {
+              "pattern": "^[1-9][0-9]*$",
+              "maxLength": 8192,
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "currency": {
-      "pattern": "^[A-Z]{3}$",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "rateCardRef": {
       "anyOf": [
@@ -79,6 +146,7 @@
           "properties": {
             "contract": {
               "minLength": 1,
+              "maxLength": 128,
               "type": "string"
             },
             "schema_version": {
@@ -87,10 +155,11 @@
             },
             "id": {
               "minLength": 1,
+              "maxLength": 128,
               "type": "string"
             },
             "revision": {
-              "minimum": 0,
+              "minimum": 1,
               "type": "integer"
             },
             "content_hash": {
@@ -104,11 +173,147 @@
         }
       ]
     },
+    "pricingRuleRef": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "contract",
+            "schema_version",
+            "id",
+            "revision",
+            "content_hash"
+          ],
+          "properties": {
+            "contract": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            "revision": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "content_hash": {
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fxRateRef": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "contract",
+            "schema_version",
+            "id",
+            "revision",
+            "content_hash"
+          ],
+          "properties": {
+            "contract": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            },
+            "revision": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "content_hash": {
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fxConvertedSubtotal": {
+      "anyOf": [
+        {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+          "maxLength": 40,
+          "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fxConvertedSubtotalExact": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "properties": {
+            "numerator": {
+              "pattern": "^-?(?:0|[1-9][0-9]*)$",
+              "maxLength": 8192,
+              "type": "string"
+            },
+            "denominator": {
+              "pattern": "^[1-9][0-9]*$",
+              "maxLength": 8192,
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fxTargetCurrency": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "missingDimensions": {
       "maxItems": 100,
       "type": "array",
       "items": {
         "minLength": 1,
+        "maxLength": 200,
         "type": "string"
       }
     },
@@ -117,6 +322,7 @@
       "type": "array",
       "items": {
         "minLength": 1,
+        "maxLength": 3000,
         "type": "string"
       }
     },
@@ -140,33 +346,69 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "usageUnit",
           "category",
           "quantity",
           "unit",
+          "basisQuantity",
           "rate",
+          "exactAmount",
           "extendedAmount",
           "relation"
         ],
         "properties": {
+          "usageUnit": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
           "category": {
             "minLength": 1,
+            "maxLength": 128,
             "type": "string"
           },
           "quantity": {
-            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+            "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
             "maxLength": 40,
-            "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
+            "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
             "type": "string"
           },
           "unit": {
             "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "basisQuantity": {
+            "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+            "maxLength": 40,
+            "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
             "type": "string"
           },
           "rate": {
-            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+            "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
             "maxLength": 40,
-            "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
+            "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
             "type": "string"
+          },
+          "exactAmount": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "properties": {
+              "numerator": {
+                "pattern": "^-?(?:0|[1-9][0-9]*)$",
+                "maxLength": 8192,
+                "type": "string"
+              },
+              "denominator": {
+                "pattern": "^[1-9][0-9]*$",
+                "maxLength": 8192,
+                "type": "string"
+              }
+            }
           },
           "extendedAmount": {
             "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",

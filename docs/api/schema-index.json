@@ -49,7 +49,49 @@
       "name": "RateCardSchema",
       "path": "schemas/cost-intelligence/1.0.0/pricing/RateCardSchema.json",
       "completeness": "complete",
-      "sha256": "dfc09f9bc6753fbacfc6c7061d52978b8091c804527abe22bc42cd3008d26c10"
+      "sha256": "e5453378b8d6d03904c746a196079584f700f263f2ff2376306553ae9d5f14dc"
+    },
+    {
+      "module": "pricing",
+      "name": "PricingRuleSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/PricingRuleSchema.json",
+      "completeness": "complete",
+      "sha256": "f818ea5a1b2f4f838d1518bbe27fb884fb12cc7cb94e904e4fea022527f74c56"
+    },
+    {
+      "module": "pricing",
+      "name": "FxRateSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/FxRateSchema.json",
+      "completeness": "complete",
+      "sha256": "56a0ac9704ea66adadb3fc5f828f05593b2ae7400c951d9840c451269ff63854"
+    },
+    {
+      "module": "pricing",
+      "name": "RegisterPricingRuleRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/RegisterPricingRuleRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "0f45cb2ddd5e00613a3912b25f5ebac4ba47191c9033f8bddeb4346cb565b2ca"
+    },
+    {
+      "module": "pricing",
+      "name": "RegisterRateCardRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/RegisterRateCardRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "7479a6c156efe41dbf70d30f5a3d5b140a059df1974280c25ce89569cb975ddd"
+    },
+    {
+      "module": "pricing",
+      "name": "RegisterFxRateRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/RegisterFxRateRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "fb475b2756d4c06d137c736b629d7cd8de5382d2441dc744061b4c298826851e"
+    },
+    {
+      "module": "pricing",
+      "name": "CatalogWriteReceiptSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/CatalogWriteReceiptSchema.json",
+      "completeness": "complete",
+      "sha256": "77768862dcfa574fa13be759ef020b55e37cb9f54bd8a26686728c3449d0e699"
     },
     {
       "module": "pricing",
@@ -57,14 +99,35 @@
       "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateEstimateRequestBoundary",
-      "sha256": "ad8e9752130cf9cf24f44c68e550ed07cc5bf647a37276278aeef5796a61ea2a"
+      "sha256": "8eba9bd8926f4a1fbd5f0c15e5685c67dfa8a22001bea3b1b10a1410ad65bae9"
     },
     {
       "module": "pricing",
       "name": "EstimateResultSchema",
       "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateResultSchema.json",
       "completeness": "complete",
-      "sha256": "9074bed6fea2fb894a7bbdcd684981e9867ce30da0f7acc10e92c9abfe502dc0"
+      "sha256": "5db0413f7674f9cbd7a073bbdb789ce9b84bf8e05d9307d88c2ed2b4f9f27b2b"
+    },
+    {
+      "module": "pricing",
+      "name": "EstimateStatusSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateStatusSchema.json",
+      "completeness": "complete",
+      "sha256": "ad2a3c250648667d5418bb641659e7f61589849472fa279b87d4714232c97d11"
+    },
+    {
+      "module": "pricing",
+      "name": "ExactRatioSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/ExactRatioSchema.json",
+      "completeness": "complete",
+      "sha256": "6c56c976b38ddecaed6f09d11b4ae5a379d512e54a722057054092c70131fb96"
+    },
+    {
+      "module": "pricing",
+      "name": "VersionedReferenceSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/VersionedReferenceSchema.json",
+      "completeness": "complete",
+      "sha256": "a853de69ed29078ea3ea1a19ea2f30aa7262bafe8a5486321ab6730aa917bcef"
     },
     {
       "module": "budgets",

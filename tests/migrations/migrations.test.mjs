@@ -128,7 +128,7 @@ async function verifyDurability(prefix) {
     assertDisposableMarker(marker.rows);
     const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 3);
+    assert.equal(Number(health.rows[0].required_migrations_present), 4);
     await client.query('CREATE TABLE IF NOT EXISTS ci_test.foundation_durable_probe (probe_id uuid PRIMARY KEY, payload text NOT NULL)');
     await client.query('INSERT INTO ci_test.foundation_durable_probe(probe_id, payload) VALUES ($1, $2)', [probeId, `verified:${prefix}`]);
   } finally {
@@ -198,10 +198,11 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     { version: '0001_foundation', status: 'already_applied' },
     { version: '0002_foundation_health', status: 'applied' },
     { version: '0003_financial_ledger', status: 'applied' },
+    { version: '0004_pricing_catalog', status: 'applied' },
   ]);
 
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 3, 'foundation migration suite must exercise fresh creation and an incremental upgrade');
+  assert.equal(names.length, 4, 'foundation migration suite must exercise fresh creation and an incremental upgrade');
   for (const prefix of ['CI_TEST_DB', 'CI_TEST_PREVIOUS_DB']) {
     const client = new Client(databaseConfigFromEnvironment(prefix));
     await client.connect();
@@ -229,6 +230,14 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       );
       assert.deepEqual(ledgerTables.rows.map(row => row.table_name), [...requiredLedgerTables].sort(),
         'fresh and upgraded schemas must include the ledger, mapping, snapshot, and quarantine tables');
+      const requiredPricingTables = ['pricing_rule_versions', 'pricing_rate_card_versions', 'pricing_fx_rate_versions'];
+      const pricingTables = await client.query(
+        `SELECT table_name FROM information_schema.tables
+         WHERE table_schema = 'cost_intelligence' AND table_name = ANY($1::text[]) ORDER BY table_name`,
+        [requiredPricingTables],
+      );
+      assert.deepEqual(pricingTables.rows.map(row => row.table_name), [...requiredPricingTables].sort(),
+        'fresh and upgraded schemas must include append-only rate, rule, and FX version catalogs');
       const requiredEventColumns = [
         'posting_mapping_version', 'source_line_id', 'transport_attempt_status', 'provider_attempt_status',
         'provider_request_status', 'billable_attempt_status', 'economic_event_type',
@@ -260,6 +269,22 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       );
       assert.deepEqual(ledgerTriggers.rows.map(row => row.trigger_name), [...requiredAppendOnlyTriggers].sort(),
         'event, mapping, snapshot, and quarantine records must install append-only triggers');
+      const requiredPricingTriggers = [
+        'pricing_rule_versions_append_only', 'pricing_rule_versions_no_truncate',
+        'pricing_rate_card_versions_append_only', 'pricing_rate_card_versions_no_truncate',
+        'pricing_fx_rate_versions_append_only', 'pricing_fx_rate_versions_no_truncate',
+      ];
+      const pricingTriggers = await client.query(
+        `SELECT t.tgname::text AS trigger_name
+         FROM pg_trigger t
+         JOIN pg_class c ON c.oid = t.tgrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'cost_intelligence' AND t.tgname::text = ANY($1::text[]) AND NOT t.tgisinternal
+         ORDER BY t.tgname`,
+        [requiredPricingTriggers],
+      );
+      assert.deepEqual(pricingTriggers.rows.map(row => row.trigger_name), [...requiredPricingTriggers].sort(),
+        'rate cards, rules, and FX records must reject update, delete, and truncate');
       const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
       assert.equal(health.rows[0].migrations_ready, true);
       assert.equal(Number(health.rows[0].required_migrations_present), names.length);

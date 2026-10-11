@@ -190,7 +190,7 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.equal(postgresVersion.slice(0, 2), '16', 'ledger acceptance must run on PostgreSQL 16');
     const health = await pool.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 3);
+    assert.equal(Number(health.rows[0].required_migrations_present), 4);
 
     const scope = makeScope('union');
     const eventCases = [
