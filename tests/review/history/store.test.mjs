@@ -2615,3 +2615,82 @@ test('legacy migration preserves available history and normalizes prior explicit
   assert.equal(repeated.invalidations, 1);
   assert.equal((await reopened.getHistory(reopenedScope, activeEventId, harness.request)).contentHash, activeSecond.contentHash);
 });
+
+for (const operationKind of ['initialize', 'correction', 'source_refresh']) {
+  test(`racing ${operationKind} idempotency replay rechecks the final disclosure boundary`, async (t) => {
+    let armed = false;
+    let nested = false;
+    let denyRead = false;
+    let nestedResult;
+    const boundaryCalls = [];
+    const f = await createHarness(t, {
+      async resolveRetention({ nowMs, sourceExpiresAtMs }) {
+        if (armed && !nested) {
+          nested = true;
+          const operationInput = inputs[operationKind];
+          nestedResult = await invoke(operationInput);
+          denyRead = true;
+        }
+        return {
+          expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+          policyId: 'synthetic-private-history',
+          policyVersion: '1',
+          accessPolicy: 'tenant_private',
+        };
+      },
+      authorizeBoundary(input) {
+        const denied = denyRead && input.action === 'private_profile.read';
+        boundaryCalls.push({ action: input.action, denied });
+        const allowed = !denied && input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+          && input.request?.principal?.tenantId === input.tenantId
+          && input.request?.principal?.actorId === input.actorId
+          && input.actorId !== 'outsider';
+        return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+          eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH }) : false;
+      },
+    });
+
+    const seed = operationKind === 'initialize' ? undefined : await createSeed(f);
+    const inputs = {
+      initialize: {
+        eventId: EVENT_ID,
+        sourceFacts: initialFacts(),
+        idempotencyKey: `racing-${operationKind}-replay`,
+        retentionHandle: f.createPermit(),
+      },
+      correction: {
+        eventId: EVENT_ID,
+        baseVersionId: seed?.snapshot.versionId,
+        baseContentHash: seed?.snapshot.contentHash,
+        field: 'event_date',
+        value: { precision: 'date', value: '2027-06-21' },
+        idempotencyKey: `racing-${operationKind}-replay`,
+        retentionHandle: f.createPermit(),
+      },
+      source_refresh: {
+        eventId: EVENT_ID,
+        baseVersionId: seed?.snapshot.versionId,
+        baseContentHash: seed?.snapshot.contentHash,
+        sourceFacts: { event_date: sourceDate('2027-06-22', `racing-${operationKind}-source`) },
+        idempotencyKey: `racing-${operationKind}-replay`,
+        retentionHandle: f.createPermit(),
+      },
+    };
+    const invoke = (input) => operationKind === 'initialize'
+      ? f.store.createHistory(f.scope, input, f.request)
+      : operationKind === 'correction'
+        ? f.store.applyCorrection(f.scope, input, f.request)
+        : f.store.refreshSources(f.scope, input, f.request);
+
+    armed = true;
+    await assert.rejects(invoke(inputs[operationKind]), assertReviewError('REVIEW_DENIED'));
+    assert.equal(nestedResult?.replayed, false, 'the nested operation committed before the outer replay check');
+    assert.ok(boundaryCalls.some((entry) => entry.action === 'private_profile.read' && entry.denied),
+      'the racing replay reaches and obeys the final synchronous disclosure guard');
+    const disk = await inspectDatabase(f.root);
+    assert.equal(disk.versions.length, operationKind === 'initialize' ? 1 : 2,
+      'the denied racing replay adds no second history version');
+    assert.equal(disk.idempotencyCount, operationKind === 'initialize' ? 1 : 2,
+      'the denied racing replay adds no idempotency row');
+  });
+}

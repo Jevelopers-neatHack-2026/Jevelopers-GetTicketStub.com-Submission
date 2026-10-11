@@ -1631,7 +1631,7 @@ export function createScopedReuseStore(options) {
     });
   }
 
-  async function validateBoundPrivateProfileInput(scope, request, inputValue, signal, capability) {
+  async function validateBoundPrivateProfileInput(scope, request, inputValue, signal, capability, callerFacts) {
     if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
     const info = scopeInfo(scope);
     const input = record(inputValue, new Set([
@@ -1640,6 +1640,7 @@ export function createScopedReuseStore(options) {
     if (!input || !Object.hasOwn(input, 'facts') || !Object.hasOwn(input, 'observation')) fail('REUSE_INVALID');
     const index = copyIndex(input);
     copyFacts(input.facts);
+    if (callerFacts !== undefined) copyFacts(callerFacts);
     if (input.freshnessTtlMs !== undefined
       && (!Number.isSafeInteger(input.freshnessTtlMs) || input.freshnessTtlMs < 1
         || input.freshnessTtlMs > limits.maxRetentionMs)) fail('REUSE_INVALID');
@@ -2997,8 +2998,8 @@ export function createScopedReuseStore(options) {
   CACHE_BINDING_PORTS.set(api, Object.freeze({
     hasBoundaryGuard: typeof config.authorizeBoundary === 'function',
     context: bindingContext,
-    validateProfileInput: (scope, request, input, signal, capability) =>
-      validateBoundPrivateProfileInput(scope, request, input, signal, capability),
+    validateProfileInput: (scope, request, input, signal, capability, callerFacts) =>
+      validateBoundPrivateProfileInput(scope, request, input, signal, capability, callerFacts),
     putProfile: (scope, request, input, binding, operation, gate, signal, capability, preflightToken) =>
       putBoundPrivateProfile(scope, request, input, binding, operation, gate, signal, capability, preflightToken),
     loadCandidate: (scope, request, binding, use, signal, capability) =>

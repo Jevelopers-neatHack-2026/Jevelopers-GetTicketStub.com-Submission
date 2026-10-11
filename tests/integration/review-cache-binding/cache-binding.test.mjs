@@ -498,6 +498,7 @@ test('invalid private bind identity or pins and rejected trusted observation lea
   const cases = [
     { name: 'missing identity coordinates', profile: () => ({ ...cacheProfile(), identity: { occurrenceId: 'only-one' } }), code: 'REUSE_INVALID' },
     { name: 'malformed policy pin', profile: () => ({ ...cacheProfile(), pins: { ...PINS, policyHash: 'bad' } }), code: 'REUSE_INVALID' },
+    { name: 'malformed ignored caller facts', profile: () => ({ ...cacheProfile(), facts: { unexpected: 'fact' } }), code: 'REUSE_INVALID' },
     { name: 'trusted observation verifier rejects', profile: () => cacheProfile(), code: 'REUSE_POLICY_UNAVAILABLE', verifier: () => { throw new Error('synthetic verifier denial'); } },
     { name: 'trusted observation verifier returns malformed result', profile: () => cacheProfile(), code: 'REUSE_POLICY_UNAVAILABLE', verifier: () => ({ status: 'body_changed', contentHash: 'bad' }) },
   ];
@@ -1936,4 +1937,141 @@ test('history mapping purge rechecks current authorization after a real SQLite w
     assert.equal(allowedSweep.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
     assert.equal(allowedSweep.prepare("SELECT state FROM heads WHERE state = 'available'").get().state, 'available');
   } finally { allowedSweep.close(); }
+});
+
+test('binding preflight accepts the cache projection maxima of 32 candidates and 64 support references', async (t) => {
+  const candidate = (value, prefix, referenceCount = 1) => Object.freeze({
+    originStatus: 'sourced',
+    value,
+    sourceEvidence: Object.freeze(Array.from({ length: referenceCount }, (_, index) =>
+      sourceEvidence(`${prefix}-${index}`, `${value}:${prefix}:${index}`))),
+  });
+
+  await t.test('exactly 32 projected candidates remain bindable', async (subtest) => {
+    const f = await fixture(subtest);
+    const facts = { ...initialFacts(), venue: Object.freeze({ status: 'conflicting',
+      candidates: Object.freeze(Array.from({ length: 32 }, (_, index) =>
+        candidate(`Venue ${index}`, `candidate-${index}`))) }) };
+    await f.store.createHistory(f.scope, { eventId: EVENT_ID, sourceFacts: facts,
+      idempotencyKey: 'initialize-exactly-32-candidates', retentionHandle: f.createPermit() }, f.authRequest);
+    const bound = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+      { idempotencyKey: 'bind-exactly-32-candidates', profile: cacheProfile() }, f.authRequest);
+    assert.equal(bound.status, 'bound');
+    const profile = await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup());
+    assert.equal(profile.status, 'hit');
+    assert.equal(profile.facts.venue.candidates.length, 32);
+  });
+
+  await t.test('exactly 64 support references on one projected candidate remain bindable', async (subtest) => {
+    const f = await fixture(subtest);
+    const facts = { ...initialFacts(), venue: Object.freeze({ status: 'conflicting', candidates: Object.freeze([
+      candidate('Civic Hall', 'civic-initial', 32),
+      candidate('River Room', 'river-initial'),
+    ]) }) };
+    const first = await f.store.createHistory(f.scope, { eventId: EVENT_ID, sourceFacts: facts,
+      idempotencyKey: 'initialize-exactly-64-support-references', retentionHandle: f.createPermit() }, f.authRequest);
+    const refreshed = await f.store.refreshSources(f.scope, {
+      eventId: EVENT_ID,
+      baseVersionId: first.snapshot.versionId,
+      baseContentHash: first.snapshot.contentHash,
+      sourceFacts: { venue: { status: 'sourced', value: 'Civic Hall',
+        sourceEvidence: Array.from({ length: 32 }, (_, index) =>
+          sourceEvidence(`civic-refresh-${index}`, `Civic Hall:refresh:${index}`)) } },
+      idempotencyKey: 'refresh-exactly-64-support-references',
+      retentionHandle: f.createPermit(),
+    }, f.authRequest);
+    const civicCandidate = refreshed.snapshot.fields.venue.candidates.find((entry) => entry.value === 'Civic Hall');
+    assert.equal(civicCandidate.sourceEvidence.length, 64, JSON.stringify({
+      claims: refreshed.snapshot.fields.venue.sourceClaims.map((claim) => claim.sourceEvidence.length),
+      candidates: refreshed.snapshot.fields.venue.candidates.map((item) => ({ value: item.value, refs: item.sourceEvidence.length })),
+    }));
+    const bound = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+      { idempotencyKey: 'bind-exactly-64-support-references', profile: cacheProfile() }, f.authRequest);
+    assert.equal(bound.status, 'bound');
+  });
+});
+
+test('unsupported accumulated projections fail before a durable bind barrier', async (t) => {
+  const f = await fixture(t);
+  let current = await createSeed(f);
+  for (const [batch, count] of [32, 32, 32, 30].entries()) {
+    const candidates = Array.from({ length: count }, (_, index) => {
+      const value = `Accumulated venue ${batch}-${index}`;
+      return { originStatus: 'sourced', value,
+        sourceEvidence: [sourceEvidence(`accumulated-${batch}-${index}`, value)] };
+    });
+    current = await f.store.refreshSources(f.scope, {
+      eventId: EVENT_ID,
+      baseVersionId: current.snapshot.versionId,
+      baseContentHash: current.snapshot.contentHash,
+      sourceFacts: { venue: { status: 'conflicting', candidates } },
+      idempotencyKey: `accumulated-candidates-${batch}`,
+      retentionHandle: f.createPermit(),
+    }, f.authRequest);
+  }
+  assert.equal(current.snapshot.fields.venue.sourceClaims.length, 128);
+  assert.equal(current.snapshot.fields.venue.candidates.length, 128);
+
+  const bindError = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-128-accumulated-candidates', profile: cacheProfile() }, f.authRequest)
+    .then(() => null, (error) => error);
+  assert.equal(bindError?.code, 'REUSE_INVALID');
+  const reopenedHistory = await f.store.getHistory(f.scope, EVENT_ID, f.authRequest);
+  assert.equal(reopenedHistory.contentHash, current.snapshot.contentHash);
+  assert.equal(reopenedHistory.fields.venue.sourceClaims.length, 128);
+  assert.equal(reopenedHistory.fields.venue.candidates.length, 128,
+    'preflight must preserve every immutable alternative rather than truncate to the cache bound');
+
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(history.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count, 0);
+    assert.equal(history.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase = 'pending_bind'").get().count, 0);
+  } finally { history.close(); }
+
+  const standaloneHistory = await historyStoreFor(f);
+  await assert.rejects(standaloneHistory.history.refreshSources(standaloneHistory.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: current.snapshot.versionId,
+    baseContentHash: current.snapshot.contentHash,
+    sourceFacts: { venue: { status: 'sourced', value: 'Overflow venue',
+      sourceEvidence: [sourceEvidence('overflow-venue-129', 'Overflow venue')] } },
+    idempotencyKey: 'history-129th-source-claim',
+    retentionHandle: f.createPermit(),
+  }, f.authRequest), (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_STORAGE_LIMIT');
+  assert.equal((await f.store.getHistory(f.scope, EVENT_ID, f.authRequest)).contentHash, current.snapshot.contentHash,
+    'the 129th source claim remains rejected without changing the 128-claim history');
+});
+
+test('unsupported accumulated support references fail before a durable bind barrier', async (t) => {
+  const f = await fixture(t);
+  let current = await createSeed(f);
+  for (let batch = 0; batch < 2; batch += 1) {
+    current = await f.store.refreshSources(f.scope, {
+      eventId: EVENT_ID,
+      baseVersionId: current.snapshot.versionId,
+      baseContentHash: current.snapshot.contentHash,
+      sourceFacts: { venue: { status: 'sourced', value: 'Civic Hall',
+        sourceEvidence: Array.from({ length: 32 }, (_, index) =>
+          sourceEvidence(`support-ref-${batch}-${index}`, `support-ref:${batch}:${index}`)) } },
+      idempotencyKey: `support-reference-refresh-${batch}`,
+      retentionHandle: f.createPermit(),
+    }, f.authRequest);
+  }
+  assert.equal(current.snapshot.fields.venue.candidates
+    .find((entry) => entry.value === 'Civic Hall').sourceEvidence.length, 65);
+
+  const bindError = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-65-accumulated-support-references', profile: cacheProfile() }, f.authRequest)
+    .then(() => null, (error) => error);
+  assert.equal(bindError?.code, 'REUSE_INVALID');
+  const reopenedHistory = await f.store.getHistory(f.scope, EVENT_ID, f.authRequest);
+  assert.equal(reopenedHistory.contentHash, current.snapshot.contentHash);
+  assert.equal(reopenedHistory.fields.venue.candidates
+    .find((entry) => entry.value === 'Civic Hall').sourceEvidence.length, 65,
+  'preflight must preserve immutable support evidence instead of truncating it');
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(history.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count, 0);
+    assert.equal(history.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase = 'pending_bind'").get().count, 0);
+  } finally { history.close(); }
 });

@@ -318,8 +318,12 @@ export function createCorrectionCacheBinding(options) {
         const historyExpiresAtMs = bindHead.expiresAtMs;
         const effectiveProfile = Object.freeze({ ...profile,
           expiresAtMs: Math.min(profile.expiresAtMs ?? historyExpiresAtMs, historyExpiresAtMs) });
+        const projection = projectHistory(bindHead.snapshot);
+        const projectionHash = sha256(canonical(projection));
+        const projectedProfile = Object.freeze({ ...effectiveProfile, facts: projection });
+        // Check cache limits against the facts that will be stored, while preserving the caller input schema.
         const preflightToken = await cachePort.validateProfileInput(scopes.cacheScope, request,
-          effectiveProfile, signal, capability);
+          projectedProfile, signal, capability, profile.facts);
         if (signal.aborted) fail('REVIEW_ABORTED');
         const operation = await historyPort.beginOperation(historyContext, {
           kind: 'bind', operationKey: input.idempotencyKey, normalizedInput: operationInput,
@@ -344,8 +348,6 @@ export function createCorrectionCacheBinding(options) {
         if (baseSnapshot.versionId !== bindHead.snapshot.versionId
           || baseSnapshot.contentHash !== bindHead.snapshot.contentHash
           || Date.parse(baseSnapshot.expiresAt) !== historyExpiresAtMs) fail('REVIEW_VERSION_CONFLICT');
-        const projection = projectHistory(baseSnapshot);
-        const projectionHash = sha256(canonical(projection));
         const fence = await historyPort.prepareFence(historyContext);
         try {
           const binding = Object.freeze({

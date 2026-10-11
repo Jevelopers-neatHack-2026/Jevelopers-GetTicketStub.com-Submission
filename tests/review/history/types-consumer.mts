@@ -26,6 +26,10 @@ const configured = createCorrectionHistoryStore<AuthenticatedRequest, RetentionP
   resolveActor: (value) => value.principal.actorId,
   authorize: ({ tenantId, actorId, request: value }) => value.principal.tenantId === tenantId
     && value.principal.actorId === actorId,
+  authorizeBoundary: ({ tenantId, actorId, eventId, action, field, request: value }) =>
+    value.principal.tenantId === tenantId && value.principal.actorId === actorId
+      ? { authorized: true, tenantId, actorId, eventId, action, field, nowMs: 1_800_000_000_000 }
+      : false,
   resolveKey: ({ purpose }) => ({ keyId: `${purpose}-v1`, key: new Uint8Array(32) }),
   resolveRetention: ({ nowMs, sourceExpiresAtMs }) => ({
     expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),

@@ -1467,17 +1467,13 @@ export function createCorrectionHistoryStore(options) {
       }, signal, undefined, { sync: true });
       if (preflight.replayRow) {
         if (preflight.replayRow.fingerprint !== fingerprintValue) fail('REVIEW_IDEMPOTENCY_CONFLICT');
-        const replay = await withTransaction(info, directory, (database) => {
-          const row = rowForVersion(database, eventKey, preflight.replayRow.version_id);
-          return row ? { row, head: database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey) } : null;
-        }, signal, undefined, { sync: true });
-        if (!replay?.row || !replay.head || replay.head.state !== 'available') fail('REVIEW_EXPIRED');
-        const snapshot = await decryptVersion(info, replay.row);
-        await reauthorizeRequest(info, request, eventId, action, actorId, field);
-        assertNotExpired(replay.head.expires_at_ms);
-        assertNotExpired(Date.parse(snapshot.expiresAt));
-        if (bindingOperation) await recordBindingHistoryTarget(bindingOperation, snapshot);
-        return Object.freeze({ snapshot, replayed: true, invalidations: snapshot.invalidations });
+        const replay = await findCommittedReplay(info, eventId, eventKey, actorId, operation, idempotencyKey,
+          normalizedInput, indexKey, request, action, field, signal, bindingOperation);
+        if (!replay) fail('REVIEW_VERSION_CONFLICT');
+        throwIfAborted(signal);
+        if (bindingOperation) await recordBindingHistoryTarget(bindingOperation, replay.snapshot);
+        throwIfAborted(signal);
+        return replay;
       }
       if (operation === 'initialize') {
         if (preflight.current?.state === 'expired') fail('REVIEW_EXPIRED');
