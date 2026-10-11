@@ -1,4 +1,5 @@
 import { gzipSync } from 'node:zlib';
+import { probeChunkedWire } from './retrieval_wire.mjs';
 
 export async function probeRetrieval(api, fixtures, metadataUrl) {
   const { SafeFetcher, RetrievalError, DEFAULT_RUN_LIMITS: limits } = api;
@@ -86,10 +87,11 @@ export async function probeRetrieval(api, fixtures, metadataUrl) {
     const budget = new SafeFetcher(seam);
     for (let index = 0; index < limits.requests; index++) await attempt(`request-${index}`, budget, url('/budget'));
     const exhausted = await attempt('request-limit', budget, url('/budget'));
+    const chunked_wire = await probeChunkedWire(api, fixtures);
     const positive = baseline.code === 'accepted' && baseline.known_bytes && baseline.allowed_connections === 1 && baseline.allowed_requests === 1;
     const denied = rejected.every(row => row.code === 'POLICY_DENIED' && row.protected_connections === 0 && row.protected_requests === 0);
     const redirected = rejected.find(row => row.id === 'redirect-private');
-    return { counters, rows, parser_rows, limits,
+    return { counters, rows, parser_rows, limits, chunked_wire,
       boundary_surface: 'SafeFetcher.fetch; parser_rows are separate unit observations.',
       observations: {
         private_targets_reached: counters.protected_connections,
@@ -98,11 +100,11 @@ export async function probeRetrieval(api, fixtures, metadataUrl) {
         resource_limits_enforced: positive && wire.code === 'RESOURCE_LIMIT' && wire.allowed_requests === 1
           && decoded.code === 'RESOURCE_LIMIT' && decoded.allowed_requests === 1
           && rows.filter(row => row.id.startsWith('request-') && row.id !== 'request-limit').every(row => row.code === 'accepted' && row.known_bytes)
-          && exhausted.code === 'REQUEST_LIMIT' && exhausted.allowed_connections === 0,
+          && exhausted.code === 'REQUEST_LIMIT' && exhausted.allowed_connections === 0 && chunked_wire.passed,
       },
-      capture_scope: 'Only these two task-local loopback servers; no external egress telemetry.',
+      capture_scope: 'Main counters cover the original two task-local loopback servers; chunked_wire records its dedicated fixtures separately. No external egress telemetry.',
       uncovered: ['DNS wire/rebinding/CNAME/mixed-answer behavior', 'deadline and concurrency limits',
-        'chunked wire-body and aggregate byte limits',
+        'gzip encoded-body and aggregate decoded-byte limits',
         'TLS and production networking', 'image/PDF intake and downstream parsers',
         'research/JEV/creative rejection handoff', 'authoritative external egress capture'],
     };

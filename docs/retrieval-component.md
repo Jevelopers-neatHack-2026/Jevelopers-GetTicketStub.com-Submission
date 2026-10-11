@@ -30,7 +30,7 @@ its existing privileged test invocation. The process layer retains `--unshare-ne
 `--unshare-pid`, read-only root, an isolated writable directory, and bounded cleanup.
 No host-network exception, firewall change, new capability or private infrastructure
 probe is part of this adapter. A missing or unusable namespace fails closed.
-The two servers are created inside the same task-local network namespace as the
+All fixture servers are created inside the same task-local network namespace as the
 fetcher. An allowed request must reach its fixture server and return known bytes.
 
 The manifest fixes Git commit/tree/lock bytes, the original fixture catalog,
@@ -48,7 +48,7 @@ component behavior. The global case modes are not narrowed.
 ## Observations and their limits
 
 The sanitized artifact records per-scenario typed result codes and incoming TCP
-connection/HTTP request counts from the two fixture servers. These are independent
+connection/HTTP request counts from the fixture servers. These are independent
 of fetcher onDial callbacks. It stores no raw URLs, headers, private payloads,
 credentials or approvals. It records the child network namespace so the integration
 test can compare it with its parent namespace.
@@ -64,12 +64,22 @@ transport containment.
 `redirects_checked` requires a successful positive transport control, rejected
 negative calls, no protected fixture connection, a received redirect response that
 is rejected before the protected endpoint, and the actual redirect-limit error.
-`resource_limits_enforced` is limited to declared wire length, actual gzip decoded
-bytes, and per-instance request count, each with the required typed error and
-fixture counters. It is not a claim about all resource limits.
+`resource_limits_enforced` is limited to declared wire length, chunked identity
+body bytes, actual gzip decoded bytes, and per-instance request count, each with
+the required typed error and fixture counters. It is not a claim about all resource
+limits.
+
+`chunked_wire` uses two dedicated owner fixture servers and a fresh SafeFetcher
+per request. Each sends identity-encoded, chunked HTTP with no Content-Length.
+Exactly 10 MiB must return the known bytes and SHA256; 10 MiB plus one byte must
+return `RESOURCE_LIMIT`. Both sizes remain below the separate decoded-text and
+aggregate caps. Incoming connections, requests, response closure and socket closure
+are observed before forced fixture cleanup. These counts cover only those fixture
+servers. The wire cap counts encoded body bytes, excluding HTTP framing; it does
+not establish packet-level byte counts, wire DNS/TLS behavior or external egress.
 
 Uncovered obligations remain explicit in every artifact: DNS wire/rebinding/CNAME
-and mixed answers; deadlines, concurrency, chunked wire and aggregate byte caps;
+and mixed answers; deadlines, concurrency, gzip encoded-body and aggregate byte caps;
 TLS/production networking; image/PDF and downstream parser limits; real rejection
 handoff into research, JEV or creative; and authoritative external egress capture.
 IE-11A.AC3 content-authority containment is a separate unchanged case. A passing
@@ -80,9 +90,13 @@ blocked. All unselected original cases remain planned, not implicitly passed.
 
 The separately invoked `component_tests` suite uses actual `execute` and `save_run`
 with clean owned snapshots and all 42 original cases. It compares a real baseline
-with two deliberately weakened owned copies: an always-reject fetcher and unchecked
-loopback fetching. The positive control must detect the former; incoming protected
-server counters must detect the latter. Original producer checkouts stay unchanged.
+with three deliberately weakened owned copies: an always-reject fetcher, unchecked
+loopback fetching, and removal of only the identity-body streaming wire counter.
+The positive control detects always-reject behavior; incoming protected server
+counters detect unchecked loopback fetching. The wire-counter mutation must accept
+the oversized body with its exact bytes/hash and fail the resource observation.
+The Content-Length, gzip, decoded and aggregate guards remain intact in that copy.
+Original producer checkouts stay unchanged.
 
 ```sh
 sudo -n env IE_EVENT_SOURCE=/pinned/event-intelligence \

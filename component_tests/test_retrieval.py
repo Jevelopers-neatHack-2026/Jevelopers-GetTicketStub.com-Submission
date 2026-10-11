@@ -3,40 +3,27 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import ClassVar, Literal, assert_never
+from typing import assert_never
 
 import pytest
-from pydantic import ConfigDict
 
+from component_tests.retrieval_wire_checks import Capture, Mutation, assert_observed_outcome
 from integration_evals.artifacts import digest, load_record, read_bytes
 from integration_evals.errors import fail
 from integration_evals.execution import Settings
-from integration_evals.models import Catalog, Outcome, Record, Run, Status, Suite
+from integration_evals.models import (
+    Catalog,
+    Outcome,
+    Run,
+    Status,
+    Suite,
+)
 from integration_evals.release import audit, export_audit
 from integration_evals.reporting import Tracker, save_run
 from integration_evals.retrieval_setup import RetrievalProfile, prepare
 from integration_evals.runner import execute
 from integration_evals.specifications import Requirements
 from integration_evals.validation import git_value
-
-type Mutation = Literal["baseline", "always-reject", "unchecked-private"]
-
-
-class Attempt(Record):
-    id: str
-    code: str
-    known_bytes: bool
-    protected_connections: int
-    protected_requests: int
-    allowed_connections: int
-    allowed_requests: int
-
-
-class Capture(Record):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, strict=True, extra="ignore")
-    network_namespace: str
-    rows: tuple[Attempt, ...]
-    uncovered: tuple[str, ...]
 
 
 def git(root: Path, arguments: tuple[str, ...]) -> None:
@@ -114,6 +101,10 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
                 + " return { bytes: Buffer.from(await reply.arrayBuffer()) }; }",
                 1,
             )
+        case "unchecked-wire":
+            guard = '        if (encoded > wireMaximum) throw new RetrievalError("RESOURCE_LIMIT");'
+            assert original.count(guard) == 1
+            changed = original.replace(guard, "", 1)
         case _:
             assert_never(mutation)
     if changed != original:
@@ -130,7 +121,9 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
     return tmp_path
 
 
-@pytest.mark.parametrize("mutation", ["baseline", "always-reject", "unchecked-private"])
+@pytest.mark.parametrize(
+    "mutation", ["baseline", "always-reject", "unchecked-private", "unchecked-wire"]
+)
 def test_real_retrieval_component_archives_observed_boundary(
     retrieval_workspace: Path, mutation: Mutation
 ) -> None:
@@ -163,22 +156,7 @@ def test_real_retrieval_component_archives_observed_boundary(
     capture = Capture.model_validate_json(data)
     assert capture.network_namespace != str(Path("/proc/self/ns/net").readlink())
     assert capture.uncovered
-    baseline = next(row for row in capture.rows if row.id == "allowed")
-    match mutation:
-        case "baseline":
-            assert selected.outcome is Outcome.PASSED, selected.reason
-            assert baseline.known_bytes
-            assert baseline.allowed_requests == 1
-            assert all(row.protected_connections == 0 for row in capture.rows)
-        case "always-reject":
-            assert selected.outcome is Outcome.FAILED
-            assert baseline.code == "POLICY_DENIED"
-            assert baseline.allowed_connections == 0
-        case "unchecked-private":
-            assert selected.outcome is Outcome.FAILED
-            assert any(row.protected_connections > 0 for row in capture.rows)
-        case _:
-            assert_never(mutation)
+    assert_observed_outcome(selected, capture, mutation)
     original_archive = read_bytes(archive / "run.json")
     with pytest.raises(FileExistsError):
         _ = save_run(run, retrieval_workspace / "reports", tracker, suite, settings.artifacts)
