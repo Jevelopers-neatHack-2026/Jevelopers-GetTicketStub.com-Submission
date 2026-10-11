@@ -255,17 +255,35 @@ test('the metadata observation never supplies permission or quota: the capabilit
   const fixture = createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter', capabilityDecision: unknownVerifier,
     now: new Date(Date.now() + 5000).toISOString() });
   // A mock-labeled wrapper stands in for the real adapter's observation; the runner must still ignore its permission/quota.
+  // The wrapper deliberately claims every positive value the observation shape allows. If the runner trusted the
+  // adapter for permission or quota, this test would fail.
   const wrapped = { ...fixture.adapter, evidence_mode: 'mock',
-    async inspect(input) { return { ...(await real.inspect(input)), evidence_mode: 'mock' }; } };
+    async inspect(input) {
+      return { ...(await real.inspect(input)), evidence_mode: 'mock', operation_permission: 'confirmed', quota: 'available' };
+    } };
   const result = await executeAuthorizedAccessCell({ ...fixture.args, adapter: wrapped });
   assert.equal(result.status, 'unknown');
   assert.equal(result.reason_code, 'operation_permission_unknown');
+  assert.equal(result.capability_observation.authentication, 'confirmed');
+  assert.equal(result.capability_observation.operation_permission, 'unknown');
+  assert.equal(result.capability_observation.quota, 'unknown');
+  // When the capability verifier cannot answer, the retained observation is the adapter's: it must still carry unknown.
+  const failing = createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter',
+    capabilityDecision: () => { throw new Error('verifier unavailable'); }, now: new Date(Date.now() + 5000).toISOString() });
+  const unverified = await executeAuthorizedAccessCell({ ...failing.args,
+    adapter: { ...failing.adapter, evidence_mode: 'mock', inspect: wrapped.inspect } });
+  assert.equal(unverified.status, 'unknown');
+  assert.equal(unverified.reason_code, 'capability_verification_unavailable');
+  assert.equal(unverified.capability_observation.operation_permission, 'unknown');
+  assert.equal(unverified.capability_observation.quota, 'unknown');
+  assert.equal(failing.calls.dispatch, 0);
+  assert.equal(failing.calls.reserve, 0);
   assert.equal(fixture.calls.dispatch, 0);
   assert.equal(fixture.calls.reserve, 0);
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 4, 'two inspections of two requests each');
 
   const live = await executeAuthorizedAccessCell({ ...createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter' }).args, adapter: real });
   assert.equal(live.status, 'blocked');
   assert.equal(live.reason_code, 'mock_requires_fixture_ports');
-  assert.equal(requests.length, 2, 'the live adapter is not invoked by a mock run');
+  assert.equal(requests.length, 4, 'the live adapter is not invoked by a mock run');
 });
