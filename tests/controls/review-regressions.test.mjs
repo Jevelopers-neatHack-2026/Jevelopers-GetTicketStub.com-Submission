@@ -204,6 +204,29 @@ test('expanded scalar privacy differential preserves all 234 reviewed cases', t 
 });
 
 
+test('Apply errors use fixed uncertainty guidance for unknown, prototype and non-string codes without coercion', () => {
+  const fallback = 'Apply did not complete. Dispatch and reservation status are not confirmed here. Check the existing operation before retrying.';
+  let hooks = 0;
+  const hostile = { toString() { hooks++; return 'permission'; }, [Symbol.toPrimitive]() { hooks++; return 'permission'; } };
+  for (const code of ['unrecognized_failure', 'ghp_SyntheticCredentialValueSyntheticCredentialValue',
+    'Bearer synthetic-private-error-token', '__proto__', 'constructor', undefined, null, 42, true, ['permission'],
+    { code: 'permission' }, hostile, Symbol('permission')]) {
+    const message = applyErrorMessage({ code, message: 'Bearer synthetic-private-backend-message',
+      backend_error: { message: 'ghp_SyntheticBackendCredentialValueSyntheticCredentialValue' } });
+    assert.equal(message, fallback);
+    assert.doesNotMatch(message, /ghp_|Bearer|__proto__|constructor|did not dispatch|no paid call/i);
+  }
+  assert.equal(hooks, 0); assert.equal(applyErrorMessage(null), fallback);
+  for (const [code, pattern] of [['stale_version', /These controls are stale/], ['permission', /Permission denied/],
+    ['unavailable', /reservation may remain held/], ['failed', /may have been dispatched/],
+    ['unknown_field', /Unsupported action fields/], ['invalid_intent', /Only explicit Apply/],
+    ['unsupported_version', /Unsupported controls version/], ['validation', /Invalid Apply request/]]) {
+    assert.match(applyErrorMessage({ code, message: 'Bearer synthetic-private-backend-message' }), pattern);
+  }
+  assert.match(applyErrorMessage({ code: 'unavailable', pending_bridge: 'creative.composition.consume/1' }), /did not dispatch an image or reserve funds/);
+  assert.match(applyErrorMessage({ code: 'unavailable', pending_bridge: 'creative.composition.consume/1', backend_error: {} }), /reservation may remain held/);
+});
+
 test('history errors retain typed recovery guidance and screen unknown/prototype/backend text', () => {
   assert.match(historyErrorMessage({ error: { code: 'stale_version' } }), /Refresh controls.*before restoring/);
   assert.match(historyErrorMessage({ error: { code: 'permission' } }), /Permission denied.*current authorized project access/);

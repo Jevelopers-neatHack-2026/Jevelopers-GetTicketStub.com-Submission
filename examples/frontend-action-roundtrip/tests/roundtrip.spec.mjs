@@ -73,9 +73,9 @@ test('stale controls reject Apply with focused accessible error; Refresh require
 for (const [name, mutate, message] of [
   ['cross-tenant action', a => { a.tenant_id = 'forged_tenant'; }, 'Permission denied'],
   ['cross-project action', a => { a.project_id = 'forged_project'; }, 'Permission denied'],
-  ['invalid action', a => { a.html = '<script>window.attack=true</script>'; }, 'unknown_field'],
-  ['privileged action', a => { a.intent = 'purchase'; }, 'invalid_intent'],
-  ['unsupported schema', a => { a.schema_version = 'creative-controls/2.0'; }, 'unsupported_version'],
+  ['invalid action', a => { a.html = '<script>window.attack=true</script>'; }, 'Unsupported action fields'],
+  ['privileged action', a => { a.intent = 'purchase'; }, 'Unsupported action. Only explicit Apply'],
+  ['unsupported schema', a => { a.schema_version = 'creative-controls/2.0'; }, 'Unsupported controls version'],
 ]) test(`${name} is rejected over actual browser Apply path without a job`, async ({ page, request }) => {
   await page.route('**/api/apply', async route => { const body = route.request().postDataJSON(); mutate(body); await route.continue({ postData: JSON.stringify(body) }); });
   await page.getByLabel('Name size', { exact: true }).selectOption('large');

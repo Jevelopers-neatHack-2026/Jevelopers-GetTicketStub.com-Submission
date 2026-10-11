@@ -1,5 +1,9 @@
 /** Outcome wording shared by the browser and actual local API fixture checks. */
 const messages = {
+  validation: 'Invalid Apply request. Refresh controls and review the draft before applying.',
+  unknown_field: 'Unsupported action fields. Refresh controls before applying.',
+  invalid_intent: 'Unsupported action. Only explicit Apply changes are allowed.',
+  unsupported_version: 'Unsupported controls version. Refresh controls before applying.',
   stale_version: 'These controls are stale. Refresh controls and review the current version before applying.',
   stale_schema: 'These controls have changed. Refresh controls and review the current options before applying.',
   permission: 'Permission denied. The application must provide current authorized project access.',
@@ -13,12 +17,15 @@ const messages = {
   cancelled: 'This operation is cancelled. It cannot be handed off.',
 };
 export function applyErrorMessage(data) {
-  if (data.code === 'unavailable' && !data.backend_error &&
+  const code = data?.code;
+  if (code === 'unavailable' && !data.backend_error &&
       ['creative.composition.consume/1', 'creative.compound.consume/1'].includes(data.pending_bridge)) {
     return 'Handoff unavailable. Required composition integration is pending; this action did not dispatch an image or reserve funds.';
   }
-  return Object.hasOwn(messages, data.code) ? messages[data.code] :
-    `Apply did not complete (${data.code}). Dispatch and reservation status are not confirmed here. Check the existing operation before retrying.`;
+  // Only recognized string codes select local text. Never coerce or render an
+  // unknown upstream value or backend message, including prototype names.
+  return typeof code === 'string' && Object.hasOwn(messages, code) ? messages[code] :
+    'Apply did not complete. Dispatch and reservation status are not confirmed here. Check the existing operation before retrying.';
 }
 
 

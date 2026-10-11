@@ -282,6 +282,17 @@ canonical owner agreements, Neatlogs ingestion/readback, production renderer,
 host evidence and authorized live release evaluation remain separate gates.
 Issue #17 and the release gate stay open.
 
+Apply alerts select fixed local guidance only for recognized string codes.
+Unknown, prototype-name and non-string error codes use fixed uncertainty and
+recovery wording; neither an upstream code nor a backend message is rendered.
+The fallback leaves dispatch and reservation status unconfirmed and directs the
+user to check the existing operation before retrying. Helper regressions and
+actual Chromium malformed-error interceptions cover synthetic credential-shaped
+codes, prototype names and non-string JSON values, focused alerts, empty handler
+exception windows, unchanged selection/counters and no canary in page text.
+These interceptions replace only failed Apply responses and prove no successful
+backend or live-provider outcome. Historical evidence remains unchanged.
+
 The native port preserves every committed historical evidence JSON from the
 source-reviewed `09335cd` candidate byte-for-byte; its source-only approval does
 not transfer to this changed base. New native evidence is separately named.

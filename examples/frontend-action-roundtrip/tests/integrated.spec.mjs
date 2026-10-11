@@ -92,11 +92,11 @@ test('lost response, concurrent duplicates and adapter restart recover same actu
 
 for (const [label, mutate, code] of [
   ['tenant', body => { body.tenant_id = 'forged'; }, 'Permission denied'], ['project', body => { body.project_id = 'forged'; }, 'Permission denied'],
-  ['unknown HTML field', body => { body.html = '<script>window.attack=true</script>'; }, 'unknown_field'],
-  ['privileged action', body => { body.intent = 'approve'; }, 'invalid_intent'],
-  ['unsupported schema', body => { body.schema_version = 'creative-controls/9'; }, 'unsupported_version'],
+  ['unknown HTML field', body => { body.html = '<script>window.attack=true</script>'; }, 'Unsupported action fields'],
+  ['privileged action', body => { body.intent = 'approve'; }, 'Unsupported action. Only explicit Apply'],
+  ['unsupported schema', body => { body.schema_version = 'creative-controls/9'; }, 'Unsupported controls version'],
   ['invalid option', body => { body.draft.selections.c04 = '<script>window.attack=true</script>'; rehash(body); }, 'Unsupported selection'],
-  ['unknown control', body => { body.draft.selections.zz = 'unrecognized'; rehash(body); }, 'validation'],
+  ['unknown control', body => { body.draft.selections.zz = 'unrecognized'; rehash(body); }, 'Invalid Apply request'],
   ['tampered lock', body => { body.draft.selections.c03 = 'bottom'; rehash(body); }, 'locked'],
 ]) test(`actual browser ${label} rejects before backend job/attempt`, async ({ page, request }) => {
   await page.route('**/api/apply', async route => { const body = route.request().postDataJSON(); mutate(body); await route.continue({ postData: JSON.stringify(body) }); });
@@ -240,6 +240,39 @@ async function captureHandlerExceptions(page) {
   session.on('Debugger.paused', async event => { exceptions.push(event.data?.description ?? event.reason); await session.send('Debugger.resume'); });
   return { exceptions, session };
 }
+
+for (const [label, code] of [
+  ['unknown', 'unrecognized_failure'], ['synthetic GitHub', 'ghp_SyntheticCredentialValueSyntheticCredentialValue'],
+  ['synthetic Bearer', 'Bearer synthetic-private-error-token'], ['prototype', '__proto__'], ['constructor', 'constructor'],
+  ['missing', undefined], ['null', null], ['number', 42], ['object', { private: 'Bearer synthetic-private-error-token' }],
+  ['array', ['ghp_SyntheticCredentialValueSyntheticCredentialValue']],
+]) test(`malformed Apply error ${label} uses focused fixed recovery text without disclosure or dispatch`, async ({ page, request }, testInfo) => {
+  const before = await counters(request), selection = (await (await request.get('/api/history')).json()).selection;
+  const pageErrors = []; page.on('pageerror', error => pageErrors.push(error.message));
+  const captured = await captureHandlerExceptions(page); let intercepted = 0;
+  // Only the failed Apply response is malformed; the actual server, schema,
+  // native bootstrap and read APIs remain unchanged. No success is fabricated.
+  await page.route('**/api/apply', route => {
+    intercepted++;
+    return route.fulfill({ json: { ok: false, code, message: 'Bearer synthetic-private-backend-message' } });
+  });
+  await page.getByLabel('Artwork style').selectOption('vibrant');
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  const alert = page.getByRole('alert');
+  await expect(alert).toHaveText('Apply did not complete. Dispatch and reservation status are not confirmed here. Check the existing operation before retrying.');
+  await expect(alert).toBeFocused(); expect(intercepted).toBe(1);
+  expect(await page.locator('body').innerText()).not.toMatch(/ghp_|Bearer|__proto__|constructor|unrecognized_failure/);
+  expect(captured.exceptions).toEqual([]); expect(pageErrors).toEqual([]);
+  await captured.session.detach(); // Close the handler window before axe.
+  expect(await counters(request)).toEqual(before);
+  expect((await (await request.get('/api/history')).json()).selection).toEqual(selection);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(pageErrors).toEqual([]);
+  await testInfo.attach('malformed-apply-error-boundary', { body: JSON.stringify({ label, alert: await alert.innerText(),
+    focused: await alert.evaluate(el => el === document.activeElement), intercepted, counters: before,
+    selection_unchanged: true, exceptions: captured.exceptions, page_errors: pageErrors, live_application_calls: 0 }), contentType: 'application/json' });
+  if (label === 'synthetic GitHub') await page.screenshot({ path: 'test-results/apply-unknown-error-fixed.png', fullPage: true });
+});
 
 test('stale old-tab Restore keeps actual selection and typed refresh guidance without a caught handler exception', async ({ page, context, request }, testInfo) => {
   await expect(page.getByLabel('Historical artwork version').locator('option')).toHaveCount(1);
