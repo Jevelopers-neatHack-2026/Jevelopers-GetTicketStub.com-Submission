@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -831,6 +832,38 @@ def _parse_caption_time(value: str) -> float:
     return hours * 3600 + minutes * 60 + seconds
 
 
+def validate_receipt_sources(root: Path, receipt: Dict[str, Any]) -> List[str]:
+    """Require each declared render input hash to match both its current bytes and source commit."""
+    errors: List[str] = []
+    source_paths = receipt.get("sourcePaths", [])
+    if not source_paths:
+        return ["render receipt is missing its source path list"]
+    source_commit = receipt.get("sourceCommit")
+    if not isinstance(source_commit, str) or not HEX40.fullmatch(source_commit):
+        return ["render receipt source commit is missing or invalid"]
+    hashes = receipt.get("fileHashes", [])
+    for relative in source_paths:
+        try:
+            path = safe_path(root, relative)
+        except (TypeError, ValueError) as exc:
+            errors.append(f"render receipt source {relative}: {exc}")
+            continue
+        matches = [row for row in hashes if row.get("path") == relative]
+        if len(matches) != 1 or not SHA256.fullmatch(str(matches[0].get("sha256", ""))):
+            errors.append(f"render receipt source {relative}: exact source SHA-256 is missing or duplicated")
+            continue
+        expected_sha = matches[0]["sha256"]
+        if not path.is_file():
+            errors.append(f"render receipt source {relative}: source file is missing")
+            continue
+        if sha256_file(path) != expected_sha:
+            errors.append(f"render receipt source {relative}: current bytes differ from the source snapshot used for rendering")
+        committed_bytes = git_bytes(root, "show", f"{source_commit}:{relative}")
+        if committed_bytes is None or sha256_bytes(committed_bytes) != expected_sha:
+            errors.append(f"render receipt source {relative}: source commit does not contain the recorded source bytes")
+    return errors
+
+
 def validate_caption_content(root: Path, caption_path: str, scenes: Sequence[Dict[str, Any]]) -> List[str]:
     errors = []
     path = safe_path(root, caption_path)
@@ -887,6 +920,11 @@ def _dynamic_video_records(root: Path, spec: Dict[str, Any], context: Dict[str, 
         stem = Path(video_path).stem
         matching = [path for path in caption_paths if Path(path).stem == stem]
         receipt = _media_receipt(root, review_root, video_path, fact.get("sha256"))
+        source_errors = validate_receipt_sources(root, receipt)
+        receipt["sourceInputStatus"] = "exact_current_source_snapshot" if not source_errors else "stale_or_invalid_source_snapshot"
+        receipt["sourceInputErrors"] = source_errors
+        for error in source_errors:
+            errors.append(error)
         if not matching and len(video_paths) == 1:
             receipt_paths = receipt.get("captionPaths", [])
             matching = [path for path in caption_paths if path in receipt_paths]
@@ -1273,6 +1311,7 @@ def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materializ
             "selectedClaimScopeOnly": True,
             "unusedClaimsAndCtasDoNotBlockCollateralPackage": True,
             "canonicalPolicyApiAvailable": canonical_blocks.get("available", False),
+            "canonicalPolicyStatus": canonical_blocks.get("status", "not_run"),
             "selectedAssetIds": selected_asset_ids,
         },
     }
@@ -1393,34 +1432,46 @@ def asset_release_blockers(
 
 def _normalise_policy_blockers(result: Any) -> List[str]:
     if isinstance(result, dict):
-        result = result.get("blockers", [])
+        if "blockers" not in result:
+            raise TypeError("policy API dictionary result must include a blockers list")
+        result = result["blockers"]
     if isinstance(result, str):
         return [result]
-    if isinstance(result, (list, tuple, set)):
-        return [str(item) for item in result if item]
-    return []
+    if isinstance(result, (list, tuple, set)) and all(isinstance(item, str) for item in result):
+        return [item for item in result if item]
+    raise TypeError("policy API must return a blocker sequence or {blockers: sequence}")
 
 
 def canonical_readiness_blockers(root: Path, selected_asset_ids: Sequence[str]) -> Dict[str, Any]:
-    """Use the MM-01/02 policy API when available; never maintain another ledger."""
+    """Use the canonical policy API; an absent or partial API always fails closed."""
     try:
         import validate_collateral as policy
-    except ImportError:
-        return {"available": False, "selected": [], "submission": []}
-    selected_fn = getattr(policy, "selected_collateral_blockers", None)
-    submission_fn = getattr(policy, "submission_blockers", None)
-    if selected_fn is None and submission_fn is None:
-        return {"available": False, "selected": [], "submission": []}
+    except Exception as exc:
+        message = f"Canonical collateral policy module could not be loaded; both readiness gates fail closed ({type(exc).__name__})."
+        return {"available": False, "status": "module_unavailable", "selected": [message], "submission": [message]}
+    required = ("validate_all", "selected_collateral_blockers", "submission_blockers")
+    missing = [name for name in required if not callable(getattr(policy, name, None))]
+    if missing:
+        message = f"Canonical readiness API is incomplete; missing callable(s): {', '.join(missing)}. Both readiness gates fail closed."
+        return {"available": False, "status": "api_incomplete", "selected": [message], "submission": [message]}
+    selected_fn = getattr(policy, "selected_collateral_blockers")
+    submission_fn = getattr(policy, "submission_blockers")
     try:
         ledger = read_json(safe_path(root, "messaging/claims.json"))
         provenance = read_json(safe_path(root, "review/provenance.json"))
         inventory = read_json(safe_path(root, "docs/collateral-inventory.json"))
-        selected = _normalise_policy_blockers(selected_fn(ledger, provenance, list(selected_asset_ids))) if selected_fn else []
-        submission = _normalise_policy_blockers(submission_fn(ledger, provenance, list(selected_asset_ids), inventory)) if submission_fn else []
-        return {"available": True, "selected": selected, "submission": submission}
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+        fixture = read_json(safe_path(root, "review/fixtures/synthetic-canaries.json"))
+        structural_errors = _normalise_policy_blockers(policy.validate_all(ledger, provenance, fixture))
+        if structural_errors:
+            message = "Canonical global validation failed; selected readiness was not evaluated."
+            failures = [message, *structural_errors]
+            return {"available": True, "status": "global_validation_failed", "selected": failures, "submission": failures}
+        selected = _normalise_policy_blockers(selected_fn(ledger, provenance, list(selected_asset_ids)))
+        submission = _normalise_policy_blockers(submission_fn(ledger, provenance, list(selected_asset_ids), inventory))
+        return {"available": True, "status": "validated", "selected": selected, "submission": submission}
+    except Exception as exc:
         fail_closed = f"Canonical selected-collateral validation failed closed: {exc}"
-        return {"available": True, "selected": [fail_closed], "submission": [fail_closed]}
+        return {"available": False, "status": "validation_error", "selected": [fail_closed], "submission": [fail_closed]}
 
 
 def evaluate_gates(
@@ -1434,12 +1485,22 @@ def evaluate_gates(
     canonical_blockers: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     canonical_active = bool(canonical_blockers and canonical_blockers.get("available"))
+    if not canonical_active:
+        missing_api = (canonical_blockers or {}).get("selected") or [
+            "Canonical collateral readiness validation was not supplied; both readiness gates fail closed."
+        ]
+        missing_submission_api = (canonical_blockers or {}).get("submission") or missing_api
+    else:
+        missing_api = []
+        missing_submission_api = []
     collateral: List[str] = []
     for record in records:
         if record.get("packageCopy", {}).get("path") or record.get("requiredForV1", True):
             collateral.extend(asset_release_blockers(record, check_selected_wording_locally=not canonical_active))
     if canonical_active:
         collateral.extend(canonical_blockers.get("selected", []))
+    else:
+        collateral.extend(missing_api)
     if brand.get("approvalStatus") != "approved":
         collateral.append("Brand allowlist/conformance and named brand/landing consumer approval remain pending.")
     for error in dynamic_errors:
@@ -1457,6 +1518,8 @@ def evaluate_gates(
     submission = list(external_blockers)
     if canonical_active:
         submission.extend(canonical_blockers.get("submission", []))
+    else:
+        submission.extend(missing_submission_api)
     if not required_submission_video.get("exists"):
         submission.append(f"Required final product video is missing at {required_submission_video.get('path')}.")
     if scene_map.get("rehearsalSatisfiesFinalDemoRequirement") is not False:
@@ -1623,13 +1686,17 @@ def package_path_collisions(manifest: Dict[str, Any]) -> List[str]:
     return _unique(duplicates)
 
 
-def verify_caption_receipt_records(manifest: Dict[str, Any]) -> List[str]:
+def verify_caption_receipt_records(manifest: Dict[str, Any], root: Optional[Path] = None) -> List[str]:
     errors: List[str] = []
     caption_by_id = {record.get("recordId"): record for record in manifest.get("captionSidecars", [])}
     for video in [record for record in manifest.get("assets", []) if record.get("assetId") == "DEMO-REHEARSAL-VIDEO-001"]:
         receipt = video.get("renderReceipt", {})
         if receipt.get("status") != "matched_video_path_and_sha256":
             errors.append(f"{video.get('file', {}).get('path')}: matching rehearsal render receipt is required")
+        if receipt.get("sourceInputStatus") != "exact_current_source_snapshot":
+            errors.extend(receipt.get("sourceInputErrors", []) or [f"{video.get('file', {}).get('path')}: render receipt source inputs are not exact current bytes"])
+        if root is not None:
+            errors.extend(validate_receipt_sources(root, receipt))
         if sorted(receipt.get("sceneIds", [])) != sorted(video.get("sceneIds", [])):
             errors.append(f"{video.get('file', {}).get('path')}: render receipt scene IDs do not match scene map")
         if receipt.get("width") != video.get("dimensions", {}).get("width") or receipt.get("height") != video.get("dimensions", {}).get("height"):
@@ -1664,12 +1731,60 @@ def build_current_cli(root: Path, version: str, materialize: bool) -> Dict[str, 
     collisions = package_path_collisions(manifest)
     if collisions:
         raise FileExistsError("; ".join(collisions))
-    receipt_errors = verify_caption_receipt_records(manifest)
+    receipt_errors = verify_caption_receipt_records(manifest, root)
     if receipt_errors:
         manifest["buildDiagnostics"]["dynamicMediaDiagnostics"] = _unique([*manifest["buildDiagnostics"].get("dynamicMediaDiagnostics", []), *receipt_errors])
         manifest["collateralPackageReadiness"]["blockers"] = _unique([*manifest["collateralPackageReadiness"].get("blockers", []), *receipt_errors])
         manifest["collateralPackageReadiness"]["decision"] = "BLOCKED"
     return manifest
+
+
+def persist_draft_manifest(root: Path, manifest_path: Path, manifest: Dict[str, Any], encoded: str) -> Optional[str]:
+    """Write a draft snapshot; archive prior draft metadata, keep approved releases immutable."""
+    if manifest.get("releaseClass") != "draft_rehearsal_only" or manifest.get("lifecycleState") != "draft_rehearsal_only":
+        raise ValueError("This builder only writes manifests explicitly classified draft_rehearsal_only.")
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    new_bytes = encoded.encode("utf-8")
+    if not manifest_path.exists():
+        with manifest_path.open("xb") as handle:
+            handle.write(new_bytes)
+        return None
+
+    old_bytes = manifest_path.read_bytes()
+    if old_bytes == new_bytes:
+        return None
+    try:
+        old_manifest = json.loads(old_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FileExistsError(f"Refusing to replace invalid existing manifest {manifest_path.relative_to(root)}") from exc
+    if not isinstance(old_manifest, dict) or old_manifest.get("releaseClass") != "draft_rehearsal_only" or old_manifest.get("lifecycleState") != "draft_rehearsal_only":
+        raise FileExistsError(f"Refusing to replace a non-draft manifest {manifest_path.relative_to(root)}; approved release metadata is immutable.")
+
+    history_name = f"manifest-{sha256_bytes(old_bytes)[:16]}.json"
+    history_relative = f"release/{manifest.get('packageVersion')}/history/{history_name}"
+    history_path = safe_path(root, history_relative)
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    if history_path.exists():
+        if history_path.read_bytes() != old_bytes:
+            raise FileExistsError(f"Draft manifest history collision at {history_relative}")
+    else:
+        with history_path.open("xb") as handle:
+            handle.write(old_bytes)
+
+    temporary_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".manifest-", suffix=".tmp", dir=manifest_path.parent, delete=False
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(new_bytes)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, manifest_path)
+    finally:
+        if temporary_path and temporary_path.exists():
+            temporary_path.unlink()
+    return history_relative
 
 
 def _cli() -> int:
@@ -1695,16 +1810,10 @@ def _cli() -> int:
                 print(f"Collateral package readiness: {manifest['collateralPackageReadiness']['decision']} ({len(manifest['collateralPackageReadiness']['blockers'])} blockers)")
                 print(f"External submission readiness: {manifest['externalSubmissionReadiness']['decision']} ({len(manifest['externalSubmissionReadiness']['blockers'])} blockers)")
                 return 0
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            if output_path.exists():
-                old = output_path.read_text(encoding="utf-8")
-                if old != encoded:
-                    print(f"ERROR: refusing to overwrite {output_path.relative_to(root)}; preserve the prior version and increment the package version.", file=sys.stderr)
-                    return 1
-            else:
-                with output_path.open("x", encoding="utf-8") as handle:
-                    handle.write(encoded)
+            archived = persist_draft_manifest(root, output_path, manifest, encoded)
             print(f"Wrote {output_path.relative_to(root)}")
+            if archived:
+                print(f"Archived prior draft manifest at {archived}")
             print(f"Collateral package readiness: {manifest['collateralPackageReadiness']['decision']} ({len(manifest['collateralPackageReadiness']['blockers'])} blockers)")
             print(f"External submission readiness: {manifest['externalSubmissionReadiness']['decision']} ({len(manifest['externalSubmissionReadiness']['blockers'])} blockers)")
             print("A BLOCKED draft manifest is still useful for review; it does not grant publication rights.")
@@ -1716,7 +1825,7 @@ def _cli() -> int:
     try:
         manifest = read_json(manifest_path)
         errors = validate_manifest_files(root, manifest)
-        errors.extend(verify_caption_receipt_records(manifest))
+        errors.extend(verify_caption_receipt_records(manifest, root))
         if errors:
             for error in errors:
                 print(f"ERROR: {error}", file=sys.stderr)

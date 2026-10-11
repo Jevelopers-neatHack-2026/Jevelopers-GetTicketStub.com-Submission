@@ -3,9 +3,11 @@ from __future__ import annotations
 import sys
 import subprocess
 import tempfile
+import types
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +33,7 @@ class PackagePolicyTests(unittest.TestCase):
         all_blockers = " ".join(manifest["collateralPackageReadiness"]["blockers"])
         self.assertRegex(all_blockers, r"inventory join is (?:stale|missing_join|missing_asset_record)")
         self.assertRegex(all_blockers, r"provenance and rights record is missing or not approved")
+        self.assertIn("demo/storyboard.md: current bytes differ from the source snapshot used for rendering", all_blockers)
 
     def test_controlled_approved_fixture_can_pass_both_gates(self) -> None:
         # Synthetic policy fixture only: this proves the gate logic, not actual
@@ -50,9 +53,93 @@ class PackagePolicyTests(unittest.TestCase):
             [],
             {"exists": True},
             [{"path": "fixture.md", "exists": True}],
+            {"available": True, "status": "validated", "selected": [], "submission": []},
         )
         self.assertEqual("PASS", package_gate["decision"])
         self.assertEqual("PASS", submission_gate["decision"])
+
+    def test_missing_or_partial_canonical_api_fails_both_readiness_gates_closed(self) -> None:
+        api_stubs = (
+            ("no canonical functions", types.SimpleNamespace()),
+            (
+                "selected only",
+                types.SimpleNamespace(
+                    validate_all=lambda *_: [],
+                    selected_collateral_blockers=lambda *_: [],
+                ),
+            ),
+        )
+        for label, stub in api_stubs:
+            with self.subTest(label=label), patch.dict(sys.modules, {"validate_collateral": stub}):
+                canonical = package.canonical_readiness_blockers(ROOT, ["FIXTURE-001"])
+                package_gate, submission_gate = package.evaluate_gates(
+                    [self.approved_record()],
+                    {
+                        "status": "draft_rehearsal_only",
+                        "rehearsalSatisfiesFinalDemoRequirement": False,
+                        "durationSeconds": 120,
+                        "maximumSeconds": 180,
+                        "scenes": [{"sceneId": "fixture-scene"}],
+                    },
+                    {"approvalStatus": "approved"},
+                    [],
+                    [],
+                    {"exists": True},
+                    [{"path": "fixture.md", "exists": True}],
+                    canonical,
+                )
+                self.assertFalse(canonical["available"])
+                self.assertEqual("BLOCKED", package_gate["decision"])
+                self.assertEqual("BLOCKED", submission_gate["decision"])
+                self.assertIn("API is incomplete", " ".join(package_gate["blockers"]))
+                self.assertIn("API is incomplete", " ".join(submission_gate["blockers"]))
+
+    def test_global_validation_errors_stop_before_selected_readiness(self) -> None:
+        calls = []
+        stub = types.SimpleNamespace(
+            validate_all=lambda *_: ["fixture structural error"],
+            selected_collateral_blockers=lambda *_: calls.append("selected") or [],
+            submission_blockers=lambda *_: calls.append("submission") or [],
+        )
+        with patch.dict(sys.modules, {"validate_collateral": stub}):
+            result = package.canonical_readiness_blockers(ROOT, ["FIXTURE-001"])
+        self.assertEqual("global_validation_failed", result["status"])
+        self.assertIn("fixture structural error", result["selected"])
+        self.assertIn("fixture structural error", result["submission"])
+        self.assertEqual([], calls)
+
+    def test_canonical_api_runs_global_checks_before_selected_and_submission_checks(self) -> None:
+        calls = []
+        stub = types.SimpleNamespace(
+            validate_all=lambda *_: calls.append("global") or [],
+            selected_collateral_blockers=lambda *_: calls.append("selected") or [],
+            submission_blockers=lambda *_: calls.append("submission") or [],
+        )
+        with patch.dict(sys.modules, {"validate_collateral": stub}):
+            result = package.canonical_readiness_blockers(ROOT, ["FIXTURE-001"])
+        self.assertEqual("validated", result["status"])
+        self.assertEqual(["global", "selected", "submission"], calls)
+
+    def test_canonical_policy_exceptions_and_unsupported_returns_fail_closed(self) -> None:
+        policy_stubs = (
+            types.SimpleNamespace(
+                validate_all=lambda *_: (_ for _ in ()).throw(RuntimeError("structural check failed")),
+                selected_collateral_blockers=lambda *_: [],
+                submission_blockers=lambda *_: [],
+            ),
+            types.SimpleNamespace(
+                validate_all=lambda *_: [],
+                selected_collateral_blockers=lambda *_: 7,
+                submission_blockers=lambda *_: [],
+            ),
+        )
+        for stub in policy_stubs:
+            with patch.dict(sys.modules, {"validate_collateral": stub}):
+                result = package.canonical_readiness_blockers(ROOT, ["FIXTURE-001"])
+            self.assertFalse(result["available"])
+            self.assertEqual("validation_error", result["status"])
+            self.assertTrue(result["selected"])
+            self.assertTrue(result["submission"])
 
     def test_pending_and_superseded_samples_are_rejected(self) -> None:
         for field, value in (("releaseStatus", "pending"), ("status", "superseded")):
@@ -170,6 +257,29 @@ class PackagePolicyTests(unittest.TestCase):
             self.assertTrue(any("packaged SHA-256 does not match" in item for item in errors))
             self.assertTrue(any("source SHA-256 differs from manifest" in item for item in errors))
 
+    def test_render_receipt_detects_changed_source_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "storyboard.md"
+            source.write_bytes(b"rendered source\n")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "storyboard.md"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "render source"], check=True)
+            commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            receipt = {
+                "sourceCommit": commit,
+                "sourcePaths": ["storyboard.md"],
+                "fileHashes": [{"path": "storyboard.md", "sha256": package.sha256_file(source)}],
+            }
+            self.assertEqual([], package.validate_receipt_sources(root, receipt))
+            source.write_bytes(b"edited after render\n")
+            errors = package.validate_receipt_sources(root, receipt)
+            self.assertTrue(any("current bytes differ from the source snapshot used for rendering" in item for item in errors))
+
     def test_duplicate_package_target_is_a_hard_collision(self) -> None:
         manifest = {
             "assets": [
@@ -179,6 +289,24 @@ class PackagePolicyTests(unittest.TestCase):
             "captionSidecars": [],
         }
         self.assertEqual(["duplicate package output path: release/assets/same.png"], package.package_path_collisions(manifest))
+
+    def test_draft_manifest_refresh_archives_prior_bytes_but_approved_manifest_is_immutable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = "release/v0.1.0-rehearsal/manifest.json"
+            target = root / relative
+            first = {"packageVersion": "v0.1.0-rehearsal", "releaseClass": "draft_rehearsal_only", "lifecycleState": "draft_rehearsal_only", "generation": 1}
+            second = {**first, "generation": 2}
+            encoded_first = package.json.dumps(first, indent=2) + "\n"
+            encoded_second = package.json.dumps(second, indent=2) + "\n"
+            self.assertIsNone(package.persist_draft_manifest(root, target, first, encoded_first))
+            archived = package.persist_draft_manifest(root, target, second, encoded_second)
+            self.assertIsNotNone(archived)
+            self.assertEqual(first, package.read_json(root / archived))
+            self.assertEqual(second, package.read_json(target))
+            approved = {**second, "releaseClass": "approved"}
+            with self.assertRaises(ValueError):
+                package.persist_draft_manifest(root, target, approved, package.json.dumps(approved))
 
     def test_package_name_encodes_asset_variant_and_destination_without_overwriting_legacy_source(self) -> None:
         spec = package.read_json(ROOT / "release/v0.1.0-rehearsal/package-spec.json")
