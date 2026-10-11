@@ -1,11 +1,18 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { hash } from "./durability.js";
 import { VerificationFailure } from "../runtime/errors.js";
+import {
+	independentCounts,
+	childDiagnostic,
+	tapFailures,
+	IndependentTestFailure,
+	diagnosticSchema,
+} from "./independent-diagnostics.js";
 
 export function independentTestEnvironment(
 	environment: NodeJS.ProcessEnv = process.env,
@@ -117,6 +124,16 @@ export async function runIndependentTests(options: {
 		"--test-reporter=tap",
 		...options.paths,
 	];
+	let phase:
+			| "child-exit"
+			| "counts"
+			| "artifact-missing"
+			| "artifact-json"
+			| "artifact-schema" = "child-exit",
+		stdout = "",
+		stderr = "",
+		artifactIndex: number | null = null,
+		artifactNameDigest: string | null = null;
 	try {
 		const result = await promisify(execFile)(
 			process.execPath,
@@ -131,10 +148,11 @@ export async function runIndependentTests(options: {
 				maxBuffer: 4 * 1024 * 1024,
 			},
 		);
-		const count = (name: string) =>
-			Number(
-				result.stdout.match(new RegExp(`^# ${name} (\\d+)$`, "m"))?.[1] ?? NaN,
-			);
+		stdout = result.stdout;
+		stderr = result.stderr;
+		phase = "counts";
+		const counts = independentCounts(stdout),
+			count = (name: string) => counts[name] ?? NaN;
 		const tests = count("tests");
 		const passed = count("pass");
 		if (
@@ -153,14 +171,19 @@ export async function runIndependentTests(options: {
 				"Independent private tests did not execute a complete passing run.",
 			);
 		const artifacts = [];
-		for (const required of options.requiredEvidence) {
+		for (const [index, required] of options.requiredEvidence.entries()) {
 			const name = typeof required === "string" ? required : required.path;
+			artifactIndex = index;
+			artifactNameDigest = hash(name);
+			phase = "artifact-missing";
 			const raw = await readFile(join(evidenceDir, name), "utf8");
+			phase = "artifact-json";
 			const evidence: unknown = JSON.parse(raw);
 			const schema =
 				typeof required === "string"
 					? z.object({ executionNonce: z.literal(executionNonce) })
 					: required.schema;
+			phase = "artifact-schema";
 			if (!schema.safeParse(evidence).success)
 				throw new VerificationFailure(
 					"RUNTIME_FAILURE",
@@ -181,11 +204,32 @@ export async function runIndependentTests(options: {
 			stderrDigest: hash(result.stderr),
 		} as const;
 	} catch (error) {
-		if (error instanceof Error)
-			throw new VerificationFailure(
-				"RUNTIME_FAILURE",
-				"Independent private tests failed or execution evidence is incomplete.",
+		if (error instanceof Error) {
+			const child = childDiagnostic(error);
+			if (phase === "child-exit") {
+				stdout = child.stdout;
+				stderr = child.stderr;
+			}
+			const diagnostic = diagnosticSchema.parse({
+				version: 1,
+				executionNonce,
+				reason: phase === "child-exit" ? child.reason : phase,
+				exitCode: phase === "child-exit" ? child.exitCode : 0,
+				signal: child.signal,
+				expectedTests: options.expectedTests ?? null,
+				counts: independentCounts(stdout),
+				stdoutDigest: hash(stdout),
+				stderrDigest: hash(stderr),
+				failures: tapFailures(stdout),
+				artifactIndex,
+				artifactNameDigest,
+			});
+			await writeFile(
+				join(evidenceDir, "independent-failure.json"),
+				JSON.stringify(diagnostic, null, 2),
 			);
+			throw new IndependentTestFailure(diagnostic);
+		}
 		throw error;
 	}
 }
