@@ -525,6 +525,8 @@ test("capabilities are bound to the supplied n and input_references descriptors 
     ["edit maximum above the descriptor maximum", { capabilities: edit(5), supported_parameters: refs(0, 4) }],
     ["descriptor maximum zero while edit is claimed", { capabilities: edit(2), supported_parameters: refs(0, 0) }],
     ["edit capability maximum below the descriptor minimum", { capabilities: { generation: false, edit: { max_input_references: 1 } }, supported_parameters: refs(2, 8) }],
+    ["generation-capable profile with a required minimum above one", { capabilities: edit(3), supported_parameters: refs(2, 8) }],
+    ["edit maximum below the required minimum", { capabilities: { generation: false, edit: { max_input_references: 2 } }, supported_parameters: refs(3, 8) }],
     ["generation-capable profile requires references", { capabilities: edit(2), supported_parameters: refs(1, 16) }],
     ["generation-only profile requires references", { capabilities: { generation: true, edit: false }, supported_parameters: refs(2, 8) }],
     ["n maximum zero", { supported_parameters: { n: { type: "range", min: 0, max: 0 } } }],
@@ -540,6 +542,9 @@ test("capabilities are bound to the supplied n and input_references descriptors 
     { capabilities: edit(4), supported_parameters: refs(0, 4) },
     { capabilities: edit(2), supported_parameters: refs(0, 16) },
     { capabilities: { generation: false, edit: { max_input_references: 2 } }, supported_parameters: refs(1, 16) },
+    { capabilities: { generation: false, edit: { max_input_references: 2 } }, supported_parameters: refs(2, 2) },
+    { capabilities: { generation: false, edit: { max_input_references: 3 } }, supported_parameters: refs(2, 3) },
+    { capabilities: { generation: false, edit: { max_input_references: 4 } }, supported_parameters: refs(2, 8) },
     { capabilities: { generation: true, edit: false }, supported_parameters: refs(0, 0) },
     { capabilities: { generation: false, edit: { max_input_references: 8 } }, supported_parameters: refs(2, 8) },
     { capabilities: { generation: false, edit: { max_input_references: 4 } }, supported_parameters: refs(2, 8) },
@@ -663,8 +668,8 @@ test("edit with only an immutable parent sends one reference", async () => {
   assert.equal(body.input_references.length, 1);
 });
 
-test("parentless concept edit sends only authorized references and fabricates no parent", async () => {
-  const referenceBytes = [makePng(), makePng({ transparent: true })];
+async function parentlessConceptScenario(profile = {}, referenceCount = 2) {
+  const referenceBytes = Array.from({ length: referenceCount }, (_, index) => makePng({ transparent: index % 2 === 1 }));
   const references = referenceBytes.map((bytes, index) => ({ source_ref: `source-concept-${index + 1}`,
     asset_id: `asset-concept-${index + 1}`, content_hash: HASH(bytes), media_type: "image/png",
     role_ref: `role-concept-${index + 1}`, width: 16, height: 16 }));
@@ -689,12 +694,20 @@ test("parentless concept edit sends only authorized references and fabricates no
     async stageConceptResponse(stage) { staged.push(stage); return { status: "staged", stage_ref: "stage-01", content_hash: stage.content_hash }; },
     assertDispatchCurrent: () => "dispatch-image-001",
   });
-  const harness = orHarness({ operation: "edit", inputOverride: ctx,
+  let readCount = 0;
+  const harness = orHarness({ operation: "edit", inputOverride: ctx, profile,
     promptPort: { async render({ prompt_template }) { return { prompt: PROMPT, template_ref: prompt_template.template_ref,
       template_version: prompt_template.template_version, template_sha256: prompt_template.template_sha256 }; } },
-    assetPort: { async readReference(args) { return referenceBytes[references.findIndex((item) => item.asset_id === args.asset_id)]; } } });
-  const inspected = await harness.provider.inspectConceptReferences({ scope: ctx.scope, references,
+    assetPort: { async readReference(args) { readCount += 1; return referenceBytes[references.findIndex((item) => item.asset_id === args.asset_id)]; } } });
+  const inspect = () => harness.provider.inspectConceptReferences({ scope: ctx.scope, references,
     maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+  return { harness, ctx, references, referenceBytes, bindingAcks, staged, inspect, get readCount() { return readCount; } };
+}
+
+test("parentless concept edit sends only authorized references and fabricates no parent", async () => {
+  const run = await parentlessConceptScenario();
+  const { harness, referenceBytes, bindingAcks, staged } = run;
+  const inspected = await run.inspect();
   assert.equal(inspected.length, 2);
   assert.deepEqual(harness.provider.getConceptConfiguration(), { model_id: OR_MODEL, provider_tag: OR_PROVIDER_TAG,
     capabilities: orProfile().capabilities, configuration: orProfile().configuration });
@@ -705,6 +718,53 @@ test("parentless concept edit sends only authorized references and fabricates no
   assert.equal(bindingAcks.length, 1);
   assert.equal(bindingAcks[0].target_binding.operation_kind, "image_reference_edit");
   assert.equal(staged.length, 1);
+});
+
+const withRefs = (min, max) => ({ ...orProfile().supported_parameters, input_references: { type: "range", min, max } });
+
+test("an edit-only profile that requires two references runs a parentless two-reference concept end to end", async (t) => {
+  for (const [name, maxInput, min, max] of [["range 2..2", 2, 2, 2], ["range 2..3", 3, 2, 3]]) await t.test(name, async () => {
+    const profile = { capabilities: { generation: false, edit: { max_input_references: maxInput } }, supported_parameters: withRefs(min, max) };
+    const run = await parentlessConceptScenario(profile);
+    const { harness } = run;
+    assert.equal((await run.inspect()).length, 2);
+    assert.deepEqual(harness.events, []);
+    await harness.provider.edit(harness.ctx);
+    assert.equal(harness.events.filter((event) => event === "credential.resolve").length, 1);
+    assert.equal(harness.fetchCount, 1);
+    const body = JSON.parse(harness.requests[0].init.body);
+    assert.equal(body.input_references.length, 2);
+    assert.deepEqual(body.input_references.map((item) => Buffer.from(item.image_url.url.split(",")[1], "base64")), run.referenceBytes);
+    assert.equal(run.bindingAcks.length, 1);
+    assert.equal(run.staged.length, 1);
+  });
+});
+
+test("a concept whose manifest count is outside the declared range costs no credential, fetch, read or stage", async (t) => {
+  const profile = { capabilities: { generation: false, edit: { max_input_references: 3 } }, supported_parameters: withRefs(3, 3) };
+  const run = await parentlessConceptScenario(profile, 2);
+  await t.test("inspection refuses a count below the minimum", async () => {
+    await assert.rejects(run.inspect(), (error) => error.code === "unsupported_operation" && error.field === "input_references");
+    assert.equal(run.readCount, 0);
+  });
+  await t.test("dispatch refuses a count below the minimum before credential, fetch or stage", async () => {
+    await assert.rejects(run.harness.provider.edit(run.harness.ctx), (error) => error.code === "unsupported_operation");
+    assert.deepEqual(run.harness.events, []);
+    assert.equal(run.harness.fetchCount, 0);
+    assert.equal(run.readCount, 0);
+    assert.equal(run.staged.length, 0);
+    assert.equal(run.bindingAcks.length, 0);
+  });
+  await t.test("inspection and dispatch refuse a count above the maximum", async () => {
+    // Initial concepts always carry exactly two references, so a one-reference profile cannot admit them.
+    const over = await parentlessConceptScenario({ capabilities: { generation: false, edit: { max_input_references: 1 } },
+      supported_parameters: withRefs(1, 1) }, 2);
+    await assert.rejects(over.inspect(), (error) => error.code === "unsupported_operation");
+    await assert.rejects(over.harness.provider.edit(over.harness.ctx), (error) => error.code === "unsupported_operation");
+    assert.deepEqual(over.harness.events, []);
+    assert.equal(over.harness.fetchCount, 0);
+    assert.equal(over.staged.length, 0);
+  });
 });
 
 test("concept edit rechecks local deadline and abort after the final same-store dispatch callback", async (t) => {
@@ -791,6 +851,24 @@ test("capability denial happens before credential resolution and transport", asy
     assert.throws(() => harness.provider.resolveRoute({ operation: "edit" }), (error) => error.code === "operation_permission_denied");
     assert.throws(() => harness.provider.getConceptConfiguration(), (error) => error.code === "operation_permission_denied");
     assert.doesNotThrow(() => harness.provider.resolveRoute({ operation: "generate" }));
+  });
+  await t.test("a parent-only edit below a required minimum of two is refused before credential and fetch", async () => {
+    const reads = [];
+    const harness = orHarness({ operation: "edit", inputOverride: orInput("edit"), assetPort: editAssets(parent, refs, reads),
+      profile: { capabilities: { generation: false, edit: { max_input_references: 3 } }, supported_parameters: withRefs(2, 3) } });
+    await assert.rejects(harness.provider.edit(harness.ctx),
+      (error) => error instanceof OpenRouterImagesProviderError && error.code === "unsupported_operation" && error.field === "input_references");
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(harness.events, []);
+    assert.deepEqual(reads, []);
+  });
+  await t.test("a parent plus one reference satisfies a required minimum of two", async () => {
+    const { ctx } = manifestEdit(refs.slice(0, 1));
+    const harness = orHarness({ operation: "edit", inputOverride: ctx, assetPort: editAssets(parent, refs),
+      profile: { capabilities: { generation: false, edit: { max_input_references: 3 } }, supported_parameters: withRefs(2, 3) } });
+    await harness.provider.edit(harness.ctx);
+    assert.equal(JSON.parse(harness.requests[0].init.body).input_references.length, 2);
+    assert.equal(harness.events.filter((event) => event === "credential.resolve").length, 1);
   });
   await t.test("exactly the maximum reference count is accepted", async () => {
     const { ctx } = manifestEdit(refs.slice(0, 2));

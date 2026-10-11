@@ -454,7 +454,7 @@ test('the host dispatch signal combines the runner cancellation signal with the 
   await assert.rejects(adapter.dispatch({ ...input, prepared: await adapter.prepare(input), metering: { signal: {} } }),
     (error) => error.code === 'adapter_unavailable');
   assert.equal(seen.length, 2);
-  // The deadline still aborts the host-facing signal (a 1 ms remaining deadline on a fixed clock that the signal timer outlives).
+  // The deadline still aborts the host-facing signal (a 5 ms remaining deadline on a fixed clock that the signal timer outlives).
   const short = billable('image_generation', { deadline_at: new Date(clock() + 5).toISOString() });
   await adapter.dispatch({ ...short, prepared: await adapter.prepare(short), metering: { signal: new AbortController().signal } });
   // AbortSignal.timeout timers are unref'd, so a ref'd timer keeps the loop alive while the abort event is awaited.
@@ -476,4 +476,40 @@ test('a prepared value is single use and bound to the scope it was prepared for'
   await adapter.dispatch({ ...input, prepared });
   await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable');
   assert.equal(dispatches, 1, 'the replay was refused before the host port');
+});
+
+test('prepare re-checks the deadline after the credential await and never calls the host prepare once it has passed', async () => {
+  for (const [name, phase, change, code] of [
+    ['deadline passes after resolution', 'after', (r) => r + 200_000, 'preflight_deadline_passed'],
+    ['clock fault during resolution fails closed in the credential step', 'before', () => NaN, 'credential_unavailable']]) {
+    let reading = clock();
+    const inner = grantCredentialPort();
+    const hostCalls = [];
+    const credentialSource = { evidence_mode: 'live', async resolveCredential(args) {
+      if (phase === 'before') reading = change(reading);
+      const result = await inner.resolveCredential(args);
+      if (phase === 'after') reading = change(reading);
+      return result;
+    } };
+    const adapter = createOpenRouterImagesAdapter({ now: () => reading, credentialPort: credentialSource, fetchImpl: interceptedFetch().fetchImpl,
+      dispatchPort: { async prepare() { hostCalls.push('prepare'); return {}; }, async dispatch() { hostCalls.push('dispatch'); return {}; } } });
+    const input = billable('image_generation', { deadline_at: new Date(reading + 120_000).toISOString() });
+    await assert.rejects(adapter.prepare(input), (error) => error.code === code, name);
+    assert.deepEqual(hostCalls, [], name);
+  }
+});
+
+test('prepare stores a copy of the scope, so later mutation of the caller object does not change the binding', async () => {
+  let dispatches = 0;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { dispatches += 1; return {}; } } });
+  const input = billable();
+  const original = { account_ref: input.scope.account_ref, project_ref: input.scope.project_ref };
+  const callerScope = { ...input.scope };
+  const prepared = await adapter.prepare({ ...input, scope: callerScope });
+  callerScope.project_ref = 'project:other';
+  await assert.rejects(adapter.dispatch({ ...input, scope: callerScope, prepared }), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 0, 'a mutated caller scope no longer matches the stored copy');
+  await adapter.dispatch({ ...input, scope: original, prepared });
+  assert.equal(dispatches, 1);
 });
