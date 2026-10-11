@@ -199,3 +199,89 @@ test("a failed widening migration reports a generic storage_version error and ke
   assert.deepEqual(after.prepare("PRAGMA foreign_key_check").all(), []);
   after.close();
 });
+
+const OR_DETAILS = { input_tokens_details: { audio_tokens: 0, cache_write_tokens: 1, cached_tokens: 2, file_tokens: 3, video_tokens: 4 },
+  output_tokens_details: { audio_tokens: 0, image_tokens: 30, reasoning_tokens: 4 } };
+
+test("OpenRouter token details are persisted with their documented keys; the OpenAI allowlist is unchanged", async (t) => {
+  const { store } = await createStore(t);
+  let id = 0;
+  const ports = createCreativeVersionApiPorts({ store, idFactory: () => `or-store-details-${++id}` });
+  const ok = await dispatchRow(store, ports, "or-details");
+  const usage = { ...USAGE, transport_attempt_id: ok.transport_attempt_id, ...OR_DETAILS,
+    missing_fields: ["usage.profile_mapping_pending", "usage.unmapped.service_tier"] };
+  assert.equal(store.recordPrivateProviderUsageAttribution(usageInput(ok, "openrouter", MODEL, usage)).status, "recorded");
+  const stored = JSON.parse(store.db.prepare("SELECT usage_json FROM private_provider_usage_attributions WHERE transport_attempt_id=?")
+    .get(ok.transport_attempt_id).usage_json);
+  assert.deepEqual(stored.input_tokens_details, OR_DETAILS.input_tokens_details);
+  assert.deepEqual(stored.output_tokens_details, OR_DETAILS.output_tokens_details);
+  const bad = [
+    { input_tokens_details: { text_tokens: 1 } },
+    { output_tokens_details: { cached_tokens: 1 } },
+    { input_tokens_details: { cached_tokens: -1 } },
+    { output_tokens_details: { image_tokens: 1.5 } },
+    { input_tokens_details: [1] },
+    { prompt_tokens_details: { cached_tokens: 1 } },
+  ];
+  for (const [index, extra] of bad.entries()) {
+    const row = await dispatchRow(store, ports, `or-bad-details-${index}`);
+    assert.throws(() => store.recordPrivateProviderUsageAttribution(usageInput(row, "openrouter", MODEL,
+      { ...USAGE, transport_attempt_id: row.transport_attempt_id, ...extra })), /supported local contract/i, JSON.stringify(extra));
+  }
+  // Direct OpenAI keeps exactly text_tokens/image_tokens and none of the OpenRouter keys or fields.
+  const model = "gpt-image-2.5-sunburst-2026-09-08";
+  const direct = await dispatchRow(store, ports, "openai-details", "openai", model);
+  const openaiBase = { ...USAGE, transport_attempt_id: direct.transport_attempt_id };
+  for (const extra of [OR_DETAILS, { input_tokens_details: { cached_tokens: 1 } }, { output_tokens_details: { reasoning_tokens: 1 } }]) {
+    assert.throws(() => store.recordPrivateProviderUsageAttribution(usageInput(direct, "openai", model, { ...openaiBase, ...extra })),
+      /supported local contract/i, JSON.stringify(extra));
+  }
+  assert.equal(store.recordPrivateProviderUsageAttribution(usageInput(direct, "openai", model, { ...openaiBase,
+    input_tokens_details: { text_tokens: 1, image_tokens: 2 }, output_tokens_details: { image_tokens: 3 } })).status, "recorded");
+});
+
+test("staged pending attribution accepts the OpenRouter cost and detail shapes only for openrouter", async (t) => {
+  const { store } = await createStore(t);
+  let id = 0;
+  const ports = createCreativeVersionApiPorts({ store, idFactory: () => `or-store-pending-${++id}` });
+  const stage = (row, provider, model, usage) => store.stagePrivateProviderAttribution({ scope: DEFAULT_SCOPE, actor_id: "actor-1",
+    job_id: row.job_id, action_id: row.action_id, request_hash: row.request_hash, operation: "generate", provider, model,
+    reservation_ref: row.reservation_ref, billable_attempt_id: row.billable_attempt_id, transport_attempt_id: row.transport_attempt_id,
+    dispatch_intent_ref: row.dispatch_intent_ref, target_binding_sha256: `sha256:${"a".repeat(64)}`, usage });
+  const row = await dispatchRow(store, ports, "or-pending");
+  const full = { ...USAGE, transport_attempt_id: row.transport_attempt_id, ...OR_DETAILS,
+    cost: { amount: "0.04", currency: "USD", provenance: "provider_reported_unsettled" },
+    cost_details: { upstream_inference_cost: "0.035" }, is_byok: false };
+  assert.equal(stage(row, "openrouter", MODEL, full).status, "staged");
+  const bad = await dispatchRow(store, ports, "or-pending-bad");
+  assert.throws(() => stage(bad, "openrouter", MODEL, { ...full, transport_attempt_id: bad.transport_attempt_id,
+    cost: { amount: "0.04", currency: "USD", provenance: "settled" } }), /supported local contract/i);
+  assert.throws(() => stage(bad, "openrouter", MODEL, { ...full, transport_attempt_id: bad.transport_attempt_id,
+    input_tokens_details: { text_tokens: 1 } }), /supported local contract/i);
+  const model = "gpt-image-2.5-sunburst-2026-09-08";
+  const direct = await dispatchRow(store, ports, "or-pending-openai", "openai", model);
+  assert.throws(() => stage(direct, "openai", model, { ...full, transport_attempt_id: direct.transport_attempt_id }),
+    /supported local contract/i, "the direct OpenAI pending allowlist is unchanged");
+});
+
+test("a busy database during the first migration BEGIN IMMEDIATE is a retryable unavailable error and leaks no connection", async (t) => {
+  const { store: original } = await createStore(t);
+  const { databasePath, objectRoot } = original;
+  original.close();
+  const holder = new DatabaseSync(databasePath);
+  holder.exec("BEGIN IMMEDIATE");
+  let caught;
+  const started = Date.now();
+  try { new CreativeVersionStore({ databasePath, objectRoot }); } catch (error) { caught = error; }
+  assert.ok(Date.now() - started >= 1000, "the store waited on the busy timeout before giving up");
+  assert.equal(caught?.code, "unavailable");
+  assert.equal(caught?.field, "storage_version");
+  assert.equal(caught?.retryable, true);
+  assert.ok(!String(caught?.message).includes(databasePath));
+  holder.exec("COMMIT");
+  holder.close();
+  // The failed opener closed its connection: the lock is free and a retry succeeds on the same files.
+  const retried = new CreativeVersionStore({ databasePath, objectRoot });
+  assert.equal(retried.db.prepare("PRAGMA user_version").get().user_version, 13);
+  retried.close();
+});

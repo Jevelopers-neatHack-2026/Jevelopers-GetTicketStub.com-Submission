@@ -8,4 +8,7 @@ test('public preflight package subpath exposes the runtime and fixed matrix', ()
   assert.equal(typeof preflight.validateAccessPlan, 'function');
   assert.equal(typeof preflight.runAccessPreflight, 'function');
   assert.equal(typeof preflight.createOpenAIImagesAdapter, 'function');
+  assert.equal(typeof preflight.createOpenRouterImagesAdapter, 'function');
+  assert.equal(typeof preflight.validateOpenRouterImageTarget, 'function');
+  assert.equal(preflight.OPENROUTER_PREFLIGHT_IMAGES_ENDPOINT, 'https://openrouter.ai/api/v1/images');
 });
