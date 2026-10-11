@@ -2417,7 +2417,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "556939b3a0b09cd4830c6f93caeefac703dc2993e9eb0d771bedea68ffda900d"
+      "sha256": "ca5008f178d22efa11ad9301b6cc7867ddfc4099baea9777ced6516844fee0bc"
     },
     {
       "fileId": "TEST-VISUAL-ACCESSIBILITY-001",
@@ -2464,7 +2464,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "8de1f254d192522add4970f5fc5270eff97a1aa0b64f1ca36d073be0b0cecb5c"
+      "sha256": "18fe4b67c46dd7ec77818b1cbedb3f237188189994e85e9c628002e9075282d8"
     },
     {
       "fileId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
