@@ -41,7 +41,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const allowedSuites = new Set(["contract", "provider-matrix", "security", "catalog", "sandbox", "release"]);
+const allowedSuites = new Set(["contract", "provider-matrix", "security", "metering", "catalog", "sandbox", "release"]);
 const allowedModes = new Set(["simulated", "sandbox"]);
 const startedAt = new Date().toISOString();
 const missingAcceptedPins = allSharedShapes.map((shape) => ({
@@ -73,6 +73,7 @@ const catalogBlockers = [
 ];
 
 let checks = [];
+let meteringReport = null;
 let failureReasons = [];
 let status = "failed";
 
@@ -86,6 +87,7 @@ if (process.version !== "v24.15.0") failureReasons.push("runtime_version_mismatc
 if (args.suite === "provider-matrix" && args.mode !== "simulated") failureReasons.push("provider_matrix_requires_simulated_mode");
 if (args.suite === "security" && args.mode !== "simulated") failureReasons.push("security_suite_requires_simulated_mode");
 if (args.suite === "catalog" && args.mode !== "simulated" && allowedModes.has(args.mode)) failureReasons.push("catalog_suite_requires_simulated_mode");
+if (args.suite === "metering" && args.mode !== "simulated") failureReasons.push("metering_fixture_suite_requires_simulated_mode");
 
 if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "simulated") {
   if (!catalogAvailable) failureReasons.push("runtime_build_prerequisite_missing");
@@ -149,6 +151,23 @@ if (failureReasons.length === 0 && args.suite === "contract" && args.mode === "s
   } catch {
     failureReasons.push("catalog_suite_prerequisite_failed");
   }
+} else if (failureReasons.length === 0 && args.suite === "metering" && args.mode === "simulated") {
+  if (!catalogAvailable) failureReasons.push("metering_build_prerequisite_missing");
+  try {
+    if (failureReasons.length === 0) {
+      const { runMeteringTests } = await import("./run-metering-tests.mjs");
+      const report = runMeteringTests();
+      meteringReport = report;
+      checks = report.results ?? [];
+      if (report.status === "passed" && checks.length > 0 && checks.every((check) => check.status === "passed")) {
+        status = "passed";
+      } else {
+        failureReasons.push("one_or_more_private_metering_fixture_checks_failed");
+      }
+    }
+  } catch {
+    failureReasons.push("metering_suite_prerequisite_failed");
+  }
 } else if (failureReasons.length === 0 && args.suite === "sandbox") {
   failureReasons.push("sandbox_adapter_and_accepted_contract_pins_unavailable");
 } else if (failureReasons.length === 0 && args.suite === "release") {
@@ -176,7 +195,9 @@ const result = {
         ? "local_private_security_policy_suite"
         : args.suite === "catalog"
           ? "local_private_catalog_fixture_suite"
-          : "local_private_fixture_contract_suite"
+          : args.suite === "metering"
+            ? "local_private_metering_fixture_suite"
+            : "local_private_fixture_contract_suite"
     : "argument_or_prerequisite_check",
   checks,
   failureReasons,
@@ -298,6 +319,23 @@ const result = {
       blockers: securityBlockers
     }
   } : {}),
+  meteringAssessment: args.suite === "metering" ? {
+    schemaVersion: "fulfillment-metering-assessment/1",
+    evidenceScope: "deterministic_private_fixtures_only",
+    completion: "partial",
+    fixtureDigest: meteringReport?.fixtureDigest ?? null,
+    externalProviderCalls: meteringReport?.externalProviderCalls ?? 0,
+    fc10_1: "local_attempt_and_observation_attribution_tested",
+    fc10_2: "exact_source_amounts_and_unknown_charge_tested",
+    fc10_3: "local_outbox_recovery_and_fail_closed_dispatch_tested",
+    fc10_4: "blocked_pending_accepted_upstream_gateway_conformance",
+    sandboxExecution: "blocked_pending_owner_product_destination_and_credential_reference",
+    blockers: [
+      "accepted shared-contracts usage and budget reservation schema pins are missing",
+      "cost-intelligence intake, gateway, reservation, and settlement interfaces and receipts are missing",
+      "the provider owner has not supplied approved SKU, destination, and secure credential reference"
+    ]
+  } : null,
   externalProviderCalls: 0,
   evidenceFile: null
 };

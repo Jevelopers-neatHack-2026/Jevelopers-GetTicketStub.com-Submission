@@ -121,6 +121,7 @@ function createHarness(options = {}) {
     authorizationCalls: [],
     budgetCalls: [],
     usagePayloads: [],
+    meteringObservations: [],
     attempts: options.sharedAttempts ?? new Map(),
     claimedAuthorizationActions: options.sharedAuthorizationActions ?? new Set(),
     validateBeforeSubmitCalls: 0,
@@ -214,6 +215,12 @@ function createHarness(options = {}) {
       } };
     }
   };
+  const usageSink = {
+    async record(contractPayload) {
+      state.usagePayloads.push(contractPayload);
+    }
+  };
+  const runtimeMode = options.runtimeOptions?.mode ?? "simulated";
   const dependencies = {
     contracts: contractValidator,
     transport,
@@ -277,11 +284,30 @@ function createHarness(options = {}) {
         return { authorized: options.budgetAllowed !== false, reference: "fixture-budget-reference" };
       }
     },
-    usageSink: {
-      async record(contractPayload) {
-        state.usagePayloads.push(contractPayload);
+    usageSink,
+    metering: async (requestedScope) => ({
+      isConfiguredFor(providerId, mode, suppliedScope) {
+        return providerId === "fixture-provider" && mode === runtimeMode &&
+          suppliedScope.tenantId === requestedScope.tenantId && suppliedScope.projectId === requestedScope.projectId;
+      },
+      async replayPending() {
+        return { pending: options.meteringReplayPending === true ? 1 : 0, failures: [] };
+      },
+      async recordObservation(observation) {
+        const copy = structuredClone(observation);
+        state.meteringObservations.push(copy);
+        const validation = await contractValidator.validateOutbound({
+          operation: copy.operation,
+          requiredShapes: ["fulfillment_usage"],
+          value: { ...copy, providerId: "fixture-provider", mode: runtimeMode },
+          trustedScope: requestedScope
+        });
+        if (!validation.ok) return { status: "blocked", reason: "contract_unavailable" };
+        if (options.meteringPending === true) return { status: "pending", reason: "usage_sink_unavailable" };
+        await usageSink.record(validation.value);
+        return { status: "recorded" };
       }
-    }
+    })
   };
   const runtime = new FulfillmentConnectorRuntime(adapter, dependencies, options.runtimeOptions);
   return { runtime, state, contractValidator, adapter, dependencies };
@@ -367,7 +393,9 @@ cases.push(["all seven typed operations run through injected ports in simulated 
   assert.equal(state.transportCalls.length, 6);
   assert.equal(state.authorizationCalls.length, 2);
   assert.equal(state.budgetCalls.length, 1);
-  assert.equal(state.usagePayloads.length, 14);
+  assert.equal(state.usagePayloads.length, 20);
+  assert.equal(state.meteringObservations.filter((event) => event.transportAttemptId !== undefined).length, 12);
+  assert.equal(state.meteringObservations.filter((event) => event.billableAttemptId !== undefined).length, 6);
   assert.equal(state.budgetCalls[0].trustedScope.tenantId, scope.tenantId);
   assert.ok(!("request" in state.budgetCalls[0]));
   assert.equal(runtime.audit().liveModeSupported, false);
@@ -747,14 +775,70 @@ cases.push(["budget denial rejects before provider transport", async () => {
   assert.equal(state.attempts.values().next().value.sideEffectState, "not_dispatched");
 }]);
 
+cases.push(["budget approval without a valid reservation reference stays unknown and blocks dispatch", async () => {
+  for (const reference of [undefined, "", " reservation-1", "reservation\n1", "x".repeat(513)]) {
+    const { runtime, state, dependencies } = createHarness({ authorizationAllowsReplay: true });
+    dependencies.budgetClient.authorize = async (check) => {
+      state.budgetCalls.push(check);
+      return { authorized: true, ...(reference === undefined ? {} : { reference }) };
+    };
+    await expectError(runtime.submit(envelope(submitCommand()), scope), "budget_unavailable", "not_dispatched");
+    const attempt = state.attempts.values().next().value;
+    assert.equal(attempt.budgetReservationState, "unknown");
+    assert.equal(attempt.budgetReservationReference, undefined);
+    assert.equal(state.budgetCalls.length, 1);
+    assert.equal(state.transportCalls.length, 0);
+    await expectError(
+      runtime.submit(envelope(submitCommand({ idempotencyKey: "new-key-after-unattributed-reservation" })), scope),
+      "reservation_unresolved",
+      "not_dispatched"
+    );
+    assert.equal(state.budgetCalls.length, 1);
+    assert.equal(state.transportCalls.length, 0);
+  }
+}]);
+
 cases.push(["dispatch usage is accepted before budget reservation", async () => {
   const { runtime, state } = createHarness({ contracts: { rejectOutboundShape: "fulfillment_usage" } });
-  await expectError(runtime.submit(envelope(submitCommand()), scope), "invalid_input", "not_dispatched");
+  await expectError(runtime.submit(envelope(submitCommand()), scope), "usage_sink_unavailable", "not_dispatched");
   assert.equal(state.usagePayloads.length, 0);
   assert.equal(state.authorizationCalls.length, 1);
   assert.equal(state.budgetCalls.length, 0);
   assert.equal(state.transportCalls.length, 0);
   assert.equal(state.attempts.values().next().value.sideEffectState, "not_dispatched");
+}]);
+
+cases.push(["durable metering outage or unresolved outbox blocks new reservation and dispatch", async () => {
+  for (const options of [{ meteringPending: true }, { meteringReplayPending: true }]) {
+    const { runtime, state } = createHarness(options);
+    await expectError(runtime.submit(envelope(submitCommand()), scope), "usage_sink_unavailable", "not_dispatched");
+    assert.equal(state.budgetCalls.length, 0);
+    assert.equal(state.transportCalls.length, 0);
+    assert.equal(state.attempts.values().next().value.sideEffectState, "not_dispatched");
+  }
+}]);
+
+cases.push(["runtime metering binds a prepared billable attempt to transport and keeps charge unknown", async () => {
+  const { runtime, state } = createHarness();
+  const submitted = await runtime.submit(envelope(submitCommand()), scope);
+  assert.equal(submitted.value.providerRequestId, "request-fixture-1");
+  const storedAttempt = state.attempts.values().next().value;
+  const prepared = state.meteringObservations.find((event) => event.outcome === "attempt_prepared");
+  const dispatching = state.meteringObservations.find((event) => event.operation === "submit" && event.outcome === "dispatching");
+  const accepted = state.meteringObservations.find((event) => event.operation === "submit" && event.outcome === "provider_accepted");
+  assert.equal(prepared.logicalOperationId, storedAttempt.actionId);
+  assert.equal(prepared.billableAttemptId, storedAttempt.claimId);
+  assert.ok(dispatching.transportAttemptId);
+  assert.equal(accepted.billableAttemptId, storedAttempt.claimId);
+  assert.equal(accepted.transportAttemptId, dispatching.transportAttemptId);
+  assert.equal(accepted.providerRequestId, "request-fixture-1");
+  assert.deepEqual(accepted.quoteAmount, {
+    amount: { representation: "minor_units", units: "1250", currency: "USD" },
+    basis: "provider_confirmed"
+  });
+  assert.deepEqual(accepted.chargeAmount, { amount: null, basis: "unknown" });
+  assert.ok(accepted.sourceRefs.some((ref) => ref.startsWith("authorization-claim:")));
+  assert.ok(accepted.sourceRefs.includes("budget-reservation:fixture-budget-reference"));
 }]);
 
 cases.push(["unsupported cancellation fails closed without silent success", async () => {

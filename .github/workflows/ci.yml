@@ -46,3 +46,6 @@ jobs:
 
       - name: Verify private local security policy fixtures
         run: npm run verify:security
+
+      - name: Verify the simulated metering and outbox suite
+        run: npm run verify:metering
