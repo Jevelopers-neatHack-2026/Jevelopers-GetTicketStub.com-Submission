@@ -4,6 +4,12 @@ import { rootCategory } from "./renderer-root-diagnostic.mjs";
 import { frameProcessIds, identifyPageRenderer } from "./page-renderer.mjs";
 import { openOfflineBrowser } from "../../dist/src/exporters/offline-browser.js";
 import { loadPins } from "../../dist/src/runtime/environment.js";
+import {
+	parseRendererGeneration,
+	requireStableRendererGeneration,
+	requireStableRoot,
+	classifyFdinfoDirectoryError,
+} from "./renderer-root-identity.mjs";
 
 test("emits only finite root categories without accepting a different root as chroot proof", () => {
 	for (const [root, category] of [
@@ -77,4 +83,73 @@ test("binds the actual fixed page renderer to the real browser process snapshot"
 	} finally {
 		await opened.browser.close();
 	}
+});
+
+test("detects PID reuse zombie and malformed generations without exposing proc text", () => {
+	const stat = (pid, state, started) =>
+		`${pid} (private ) token=secret) ${state} ${Array(18).fill("0").join(" ")} ${started}`;
+	const before = parseRendererGeneration(stat(42, "S", "1234"));
+	assert.deepEqual(before, { pid: "42", startTime: "1234" });
+	requireStableRendererGeneration(
+		before,
+		parseRendererGeneration(stat(42, "R", "1234")),
+	);
+	assert.throws(() =>
+		requireStableRendererGeneration(
+			before,
+			parseRendererGeneration(stat(42, "S", "5678")),
+		),
+	);
+	assert.throws(() =>
+		requireStableRendererGeneration(
+			before,
+			parseRendererGeneration(stat(43, "S", "1234")),
+		),
+	);
+	for (const value of [
+		stat(42, "Z", "1234"),
+		stat(42, "S", "bad"),
+		"private malformed proc stat",
+	])
+		assert.throws(
+			() => parseRendererGeneration(value),
+			(error) =>
+				error.code === "SANDBOX_POLICY_FAILURE" &&
+				!error.message.includes("secret"),
+		);
+});
+
+test("detects root replacement independently of pathname representation", () => {
+	requireStableRoot({ dev: 1n, ino: 2n }, { dev: 1n, ino: 2n });
+	assert.throws(() =>
+		requireStableRoot({ dev: 1n, ino: 2n }, { dev: 1n, ino: 3n }),
+	);
+	assert.throws(() =>
+		requireStableRoot({ dev: 1n, ino: 2n }, { dev: 2n, ino: 2n }),
+	);
+});
+
+test("classifies dead fdinfo owners only at the anchored directory stage", () => {
+	assert.equal(
+		classifyFdinfoDirectoryError(
+			Object.assign(new Error("secret=token"), { code: "ESRCH" }),
+		),
+		"FDINFO_OWNER_GONE_ESRCH",
+	);
+	assert.equal(
+		classifyFdinfoDirectoryError(
+			Object.assign(new Error("secret=token"), { code: "ENOENT" }),
+		),
+		"FDINFO_OWNER_GONE_ENOENT",
+	);
+	assert.equal(
+		classifyFdinfoDirectoryError(
+			Object.assign(new Error("secret=token"), { code: "EACCES" }),
+		),
+		"ACCESS_DENIED",
+	);
+	assert.equal(
+		classifyFdinfoDirectoryError(new Error("secret=token")),
+		"UNKNOWN_FAILURE",
+	);
 });

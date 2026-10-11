@@ -55,16 +55,49 @@ test("rejects unrelated or missing seccomp changes rather than expanding the exc
 		assert.throws(() => requireChrootOnlyDerivation(base, change));
 });
 
-test("requires actual deleted proc-fdinfo renderer root and sanitizes rejected paths", () => {
-	assert.deepEqual(requireRendererChroot("/proc/42/fdinfo (deleted)"), {
-		kind: "deleted-proc-fdinfo-chroot",
-		source: "live-renderer-proc-root",
-	});
+test("requires complete live proc-fdinfo evidence and rejects raw paths or missing isolation", () => {
+	const evidence = {
+		rootCategory: "PROC_FDINFO_LINKED",
+		filesystem: "PROCFS",
+		rootIdentity: "DISTINCT_CONTAINER_ROOT",
+		rootDirectory: "FDINFO_OWNER_GONE_ESRCH",
+		namespaceSeccomp: "ACCEPTED",
+		processLiveness: "STABLE",
+		rootStability: "STABLE",
+	};
+	assert.equal(
+		requireRendererChroot(evidence).kind,
+		"proc-fdinfo-isolated-root",
+	);
+	assert.ok(
+		!JSON.stringify(
+			requireRendererChroot({
+				...evidence,
+				extra: "/private/customer?secret=token",
+			}),
+		).includes("secret"),
+	);
+	assert.equal(
+		requireRendererChroot({
+			...evidence,
+			rootCategory: "PROC_FDINFO_DELETED",
+			rootDirectory: "FDINFO_OWNER_GONE_ENOENT",
+		}).kind,
+		"proc-fdinfo-isolated-root",
+	);
 	for (const root of [
 		"/",
-		"/proc/42/fdinfo",
+		"/proc/42/fdinfo (deleted)",
 		"/private/customer-path?token=secret",
 		undefined,
+		{ ...evidence, filesystem: "NON_PROCFS" },
+		{ ...evidence, rootIdentity: "SAME_CONTAINER_ROOT" },
+		{ ...evidence, rootDirectory: "EMPTY" },
+		{ ...evidence, rootDirectory: "TASK_OR_ROOT_GONE" },
+		{ ...evidence, rootDirectory: "ACCESS_DENIED" },
+		{ ...evidence, namespaceSeccomp: "REJECTED_OR_UNAVAILABLE" },
+		{ ...evidence, processLiveness: "UNAVAILABLE" },
+		{ ...evidence, rootStability: "CHANGED" },
 	]) {
 		assert.throws(
 			() => requireRendererChroot(root),

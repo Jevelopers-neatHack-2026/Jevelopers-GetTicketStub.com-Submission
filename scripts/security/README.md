@@ -280,3 +280,54 @@ root predicate; an earlier tracing/identity failure cannot count as that negativ
 proof. The secure positive case retains all original checks and reports finite
 diagnostics before a failed predicate. Parent CI must collect these new facts
 before the next correction; local page-binding success is not Linux root proof.
+
+### Source-backed root invariant and liveness correction
+
+Runs `38097904204` and `38097907996` on `0282c2d` observed the bound sandboxed
+page renderer as linked proc-fdinfo, procfs, distinct from the container root,
+with directory task/root unavailable and accepted namespace/seccomp state.
+The actual unsandboxed negative renderer had the container root, non-procfs,
+accessible entries and rejected namespace/seccomp state. The deleted-string-only
+predicate rejected an observed isolated root representation.
+
+The suffix is not the security property. [Proc task dcache flushing is explicitly
+an optimization](https://github.com/torvalds/linux/blob/v6.14/fs/proc/base.c#L3470)
+that does not guarantee cached entries disappear. `d_path` adds ` (deleted)` only
+when the dentry is unlinked. Chromium instead relies on its helper exiting after
+chroot: [fdinfo permission returns ESRCH for a missing owning task](https://github.com/torvalds/linux/blob/v6.14/fs/proc/fd.c#L85),
+and [fdinfo iteration returns ENOENT](https://github.com/torvalds/linux/blob/v6.14/fs/proc/fd.c#L248).
+A cached linked label can therefore coexist with an unusable fdinfo directory.
+
+The corrected observer accepts either linked/deleted fdinfo representation only
+with **all** these observed facts: procfs root, root device/inode distinct from
+the container root, anchored fdinfo directory owner gone (exact ESRCH/ENOENT),
+the existing namespace/seccomp/UID/capability guard accepted before and after,
+stable renderer generation and stable actual root identity. Empty directories,
+access denial, unknown errors and the old ambiguous `TASK_OR_ROOT_GONE` category
+are rejected. A raw pathname alone can no longer pass attestation.
+
+`renderer-root-capture.mjs` opens the original renderer proc directory and its
+root using [Linux O_PATH/O_DIRECTORY/O_CLOEXEC metadata descriptors](https://github.com/torvalds/linux/blob/v6.14/include/uapi/asm-generic/fcntl.h#L83).
+The proc anchor retains the original task identity instead of following a reused
+numeric PID. The observer checks PID/start-time generation and live running/
+sleeping state before and after the root probes. The root anchor remains open
+while probing its filesystem and one directory entry; only an error from that
+anchored directory stage can mean a dead fdinfo owner. Root inode identity is
+compared to the renderer's current root again. Both page-to-process binding and
+the complete renderer process snapshot must remain unchanged. All anchors close
+in `finally`; neither descriptors nor private stat/root values reach the receipt.
+
+Thus a genuinely exited/stale renderer or a changed/reused PID cannot be blessed
+by the fdinfo owner's expected absence. `rendererRootDiagnostic` schema 2 adds
+the exact dead-owner errno class, stable process generation and stable root
+identity. Successful `linuxSecurity.rendererChroots` records the joint isolated
+root invariant for the bound page and other observed renderers. All previous
+all-renderer checks are retained; there is no silent selection narrowing.
+
+Regressions cover linked/deleted full positive evidence, actual unsandboxed
+negative rejection at this invariant, missing fields, stale/unknown observations,
+PID reuse/zombies, root replacement, and a mandatory real Linux process that
+exits after proc/root anchors are acquired. The original/derived policy comparison,
+all native sandbox checks and all container/launch controls remain unchanged.
+The corrected Linux observer and real exit-race case still require parent-owned
+execution and fresh independent review before ROOT-R1 can close.
