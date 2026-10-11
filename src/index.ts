@@ -163,3 +163,46 @@ export type {
   PngObservedFormat,
   PngPhysicalResolution
 } from "./png-inspection.js";
+export {
+  createEnvServerSecretSource,
+  PRODIGI_SANDBOX_SECRET_BINDING,
+  SecretResolverError
+} from "./prodigi-secrets.js";
+export type {
+  CredentialClass,
+  EnvSecretSourceOptions,
+  SecretReferenceBinding,
+  SecretResolverErrorCode
+} from "./prodigi-secrets.js";
+export {
+  createFetchProdigiHttpPort,
+  createProdigiQuotePort,
+  mapOrderRequest,
+  mapQuoteRequest,
+  PRODIGI_SANDBOX_ORIGIN,
+  ProdigiSandboxClient,
+  ProdigiSandboxError,
+  projectOrderResponse,
+  projectQuoteResponse,
+  toProdigiShippingMethod,
+  toStatusResult
+} from "./prodigi-sandbox.js";
+export type {
+  ProdigiHttpPort,
+  ProdigiHttpRequest,
+  ProdigiHttpResponse,
+  ProdigiOrderCreateInput,
+  ProdigiOrderItemInput,
+  ProdigiOrderObservation,
+  ProdigiOrderRecipientInput,
+  ProdigiOrderStage,
+  ProdigiProviderQuote,
+  ProdigiQuoteMappingConfig,
+  ProdigiSandboxClientOptions,
+  ProdigiSandboxDecision,
+  ProdigiSandboxErrorCode,
+  ProdigiShippingMethod,
+  ProdigiSideEffectState,
+  ProdigiSizing,
+  ProdigiStepState
+} from "./prodigi-sandbox.js";

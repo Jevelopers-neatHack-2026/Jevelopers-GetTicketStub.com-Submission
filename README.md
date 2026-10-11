@@ -28,6 +28,7 @@ Implemented locally and exported from the package root:
 - **Security helpers (FC-11).** Provider-neutral helpers for scoped reference access, payload minimization, safe diagnostics, injected secret and asset ports, tombstones and callback hints, with synthetic policy fixtures. They are not wired to an adapter or the submit path. See [security](docs/security.md).
 - **Private fixture slices.** Offline provider matrix (FC-02, [provider matrix](docs/provider-matrix.md)), catalog normalizer (FC-03, [catalog](docs/catalog.md)), quote normalizer (FC-04, [quotes](docs/quotes.md)), local JSON attempt store (partial FC-06, [attempt store](docs/attempt-store.md)) and metering outbox (FC-10, [metering](docs/metering.md)). Their formats are private development shapes, not shared contracts.
 - **Prodigi Product Details wire decoder.** The package exports a pure private response projection and relative path helper, covered by synthetic offline fixtures. It performs no HTTP request, product selection, or orderability decision; issue 15's full acceptance still includes the supported cancellation outcome. See [Product Details](docs/prodigi-product-details.md).
+- **Prodigi v4 sandbox adapter and secret-reference resolver (offline-tested only).** `ProdigiSandboxClient` maps the private quote request and a private order-create input to `POST /v4.0/quotes`, `POST /v4.0/Orders` and `GET /v4.0/orders/{id}` on `https://api.sandbox.prodigi.com/v4.0`, and projects PII-free observations. Requests are refused unless sandbox calls are explicitly enabled, an owner sandbox decision verifies and a sandbox credential resolves. `createEnvServerSecretSource` resolves the reference `prodigi/sandbox/api-key` to `PRODIGI_SANDBOX_API_KEY` at call time; live bindings are refused and there is no `PRODIGI_API_KEY` binding. No request has been sent to Prodigi. See [Prodigi sandbox](docs/prodigi-sandbox.md).
 - **Bounded PNG byte inspection (FC-08, partial).** `inspectPngBytes` reports exact input-byte hash/length and limited facts for one static RGB8 noninterlaced PNG profile, with CRC and bounded zlib checks. Six synthetic renderer PNGs are diagnostic only and have `handoffEligible: false`; unsupported formats/profiles fail closed. This does not validate a production bundle, canonical binding, print eligibility, approval, or dispatch. See [PNG inspection](docs/png-inspection.md).
 - **Status inbox (FC-07, partial).** `LocalStatusStore` records scoped status observations, a derived projection, conflicts, poll work and an at-least-once outbox in the private `fc-status-store/2` format (format 1 is rejected). Its mapping, polling and correction policies, trusted-lookup port and outbox are development fixtures. The local commit marker detects some inconsistent loss but cannot authenticate a coordinated rollback or complete directory loss. [Issue 13](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/13) stays open: the shared-contracts #27 mapping, authenticated provider lookup and callbacks, application consumer conformance, and finance, sandbox and release acceptance are pending. See [status](docs/status.md).
 - **Quote comparison (FC-09, partial).** `comparePrivateQuotes` projects two or more private quote snapshots, preserves exact source terms and reports unknown or incompatible bases. It does not rank, choose a provider or submit an order. Currentness uses one captured trusted clock value, so a consumer must recheck at use time. [Issue 14](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/14) stays open: the shared-contracts #25 mapping and application consumer review are pending. See [comparison](docs/comparison.md).
@@ -36,7 +37,7 @@ Compiled for local tests but not exported: the deterministic simulator (FC-02-MO
 
 Blocked, and not claimed here:
 
-- **No production provider adapter.** Prodigi v4 is a documented candidate only; no SKU, destination, shipping method or sandbox account has been selected or tested ([FC-02-SANDBOX](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/15)).
+- **No production provider adapter.** The Prodigi v4 sandbox adapter is untested against an account; no SKU, destination or shipping method has been approved, and no sandbox call has been made ([FC-02-SANDBOX](https://github.com/Jevelopers-neatHack-2026/fulfillment-connectors/issues/15)).
 - **No accepted upstream schema pins.** Every cross-repository payload is owned by shared-contracts, which has not yet accepted or published a schema version ([ownership table](docs/runtime.md#cross-repository-payload-ownership)).
 - **No conformance reports.** Producer and consumer conformance with the application, print-production and cost-intelligence is missing.
 - **No live mode.** No live endpoint is allowlisted and live-class credentials are rejected. FC-11 has no production encryption, secret manager, pinned transport, callback authentication or durable replay store.
@@ -49,7 +50,7 @@ Requires Node.js 24.15.0 ([`.node-version`](.node-version), `engines`) and npm 1
 
 ```sh
 npm ci      # locked install; may need registry access
-npm test    # builds dist/ and runs all 12 local fixture suites
+npm test    # builds dist/ and runs all 13 local fixture suites
 ```
 
 No test calls a provider or another repository.
@@ -73,7 +74,7 @@ Each `verify:*` script runs `scripts/verify-fulfillment` in simulated mode again
 | `npm run verify:prodigi-product-details` | Private Product Details wire fixtures | `evidence/FC-PRODIGI-PRODUCT-DETAILS` |
 | `npm run verify:png-inspection` | Bounded private PNG byte-observation fixtures (FC-08, partial) | `evidence/FC-08-10-PNG` |
 
-Single suites: `npm run test:catalog` (needs an existing build); `test:quote`, `test:attempt-store`, `test:status`, `test:comparison`, `test:prodigi-product-details` and `test:png-inspection` build first. `--suite sandbox` and `--suite release` always fail until an adapter, accepted pins and conformance evidence exist. The [`foundation-ci`](.github/workflows/ci.yml) workflow runs the pinned toolchain check, `npm ci`, `npm test` and all 12 `verify:*` commands with read-only permissions and no secrets. The PNG wrapper writes only its fixed git-ignored `evidence/FC-08-10-PNG/result.json` path and rejects a substituted or symlinked evidence location. Result fields and blockers: [runtime](docs/runtime.md#runtime-and-commands).
+Single suites: `npm run test:catalog` (needs an existing build); `test:quote`, `test:attempt-store`, `test:status`, `test:comparison`, `test:prodigi-product-details`, `test:png-inspection` and `test:prodigi-sandbox` build first. The owner-gated `scripts/prodigi-sandbox-smoke.mjs` is never run by tests or CI ([Prodigi sandbox](docs/prodigi-sandbox.md#not-done-needs-owner-approval)). `--suite sandbox` and `--suite release` always fail until an adapter, accepted pins and conformance evidence exist. The [`foundation-ci`](.github/workflows/ci.yml) workflow runs the pinned toolchain check, `npm ci`, `npm test` and all 12 `verify:*` commands with read-only permissions and no secrets. The PNG wrapper writes only its fixed git-ignored `evidence/FC-08-10-PNG/result.json` path and rejects a substituted or symlinked evidence location. Result fields and blockers: [runtime](docs/runtime.md#runtime-and-commands).
 
 ## Docs
 
@@ -85,6 +86,7 @@ Single suites: `npm run test:catalog` (needs an existing build); `test:quote`, `
 | [Simulator](docs/simulator.md) · [Catalog](docs/catalog.md) · [Quotes](docs/quotes.md) | Private fixture shapes and evidence limits |
 | [Attempt store](docs/attempt-store.md) · [Metering](docs/metering.md) | Local persistence, outbox and finance boundaries |
 | [Status](docs/status.md) · [Comparison](docs/comparison.md) | FC-07 status inbox and FC-09 quote comparison: private shapes and evidence limits |
+| [Prodigi sandbox](docs/prodigi-sandbox.md) | Prodigi v4 sandbox adapter, secret references, gates and pending owner steps |
 | [Product Details](docs/prodigi-product-details.md) | Prodigi private wire fields, decoder behavior and evidence limits |
 | [Ownership](docs/architecture/OWNERSHIP.md) · [Acceptance view](docs/architecture/ACCEPTANCE.md) | Repository responsibilities and selected master criteria |
 
