@@ -24,9 +24,10 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node scripts/run-contract-tests.mjs && node scripts/run-provider-matrix-tests.mjs",
+    "test": "npm run build && node scripts/run-contract-tests.mjs && node scripts/run-provider-matrix-tests.mjs && node scripts/run-security-tests.mjs",
     "verify:contract": "./scripts/verify-fulfillment --suite contract --mode simulated --evidence-dir evidence/FC-01",
-    "verify:provider-matrix": "./scripts/verify-fulfillment --suite provider-matrix --mode simulated --evidence-dir evidence/FC-02"
+    "verify:provider-matrix": "./scripts/verify-fulfillment --suite provider-matrix --mode simulated --evidence-dir evidence/FC-02",
+    "verify:security": "./scripts/verify-fulfillment --suite security --mode simulated --evidence-dir evidence/FC-11"
   },
   "devDependencies": {
     "typescript": "6.0.3"

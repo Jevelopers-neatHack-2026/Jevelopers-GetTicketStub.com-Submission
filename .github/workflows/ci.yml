@@ -40,3 +40,6 @@ jobs:
 
       - name: Verify the offline provider matrix policy
         run: npm run verify:provider-matrix
+
+      - name: Verify private local security policy fixtures
+        run: npm run verify:security
