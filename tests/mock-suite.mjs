@@ -595,6 +595,65 @@ test("cancel history survives cache expiry and key reuse while replay indexes st
   assert.throws(() => createDeterministicSimulator({ snapshot: lowCancelCount }), TypeError, "cancellation history requires dispatch evidence");
 });
 
+test("historical not_found remains immutable when the same order ID is accepted later", async () => {
+  for (const acceptanceDelayMs of [0, 1]) {
+    const harness = createMockHarness({ quoteTtlMs: 100, idempotencyTtlMs: 10 });
+    const { command } = await prepareSubmit(harness);
+    const preview = createDeterministicSimulator({ snapshot: harness.simulator.snapshot() });
+    const predictedId = (await preview.adapter.submit(command, adapterContext(preview))).value.providerRequestId;
+    const cancel = cancelCommand(predictedId, "historical-not-found-" + acceptanceDelayMs);
+    const notFound = await harness.simulator.adapter.cancel(cancel, adapterContext(harness.simulator));
+    assert.equal(notFound.status, "supported");
+    assert.equal(notFound.value.outcome, "not_found");
+
+    const absentSnapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+    assert.doesNotThrow(() => createDeterministicSimulator({ snapshot: absentSnapshot }), "a still-absent target restores");
+    if (acceptanceDelayMs > 0) harness.simulator.advanceTime(acceptanceDelayMs);
+
+    const accepted = await harness.simulator.adapter.submit(command, adapterContext(harness.simulator));
+    assert.equal(accepted.value.providerRequestId, predictedId);
+    assert.equal(Date.parse(accepted.value.acceptedAt) - Date.parse(notFound.value.observedAt), acceptanceDelayMs);
+
+    const acceptedSnapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+    let restored = createDeterministicSimulator({ snapshot: acceptedSnapshot });
+    assert.deepEqual(restored.snapshot(), acceptedSnapshot);
+    assert.equal(restored.orders().length, 1);
+    assert.equal(restored.snapshot().billingEvidence.length, 1);
+    assert.equal(restored.snapshot().billingEvidence[0].charged, false);
+    assert.equal(restored.snapshot().cancellations.length, 0);
+    const notFoundReplay = await restored.adapter.cancel(cancel, adapterContext(restored));
+    assert.deepEqual(notFoundReplay.value, notFound.value, "an unexpired key replays its historical not_found result");
+    assert.deepEqual(restored.snapshot().cancelIdempotencyHistory[0].result, notFound.value);
+    assert.deepEqual(createDeterministicSimulator({ snapshot: restored.snapshot() }).snapshot(), restored.snapshot());
+
+    const impossible = JSON.parse(JSON.stringify(restored.snapshot()));
+    const impossibleObservationMs = Date.parse(accepted.value.acceptedAt) + 1;
+    impossible.nowMs = Math.max(impossible.nowMs, impossibleObservationMs);
+    const historicalRecord = impossible.cancelIdempotencyHistory[0];
+    historicalRecord.result.observedAt = new Date(impossibleObservationMs).toISOString();
+    historicalRecord.expiresAt = impossibleObservationMs + impossible.idempotencyTtlMs;
+    impossible.cancelIdempotency[0] = JSON.parse(JSON.stringify(historicalRecord));
+    assert.throws(() => createDeterministicSimulator({ snapshot: impossible }), TypeError,
+      "not_found is invalid when the retained acceptance predates the observation");
+
+    const cancelExpiryMs = Date.parse(notFound.value.observedAt) + acceptedSnapshot.idempotencyTtlMs;
+    harness.simulator.advanceTime(cancelExpiryMs - harness.simulator.now());
+    const laterCancel = await harness.simulator.adapter.cancel(cancel, adapterContext(harness.simulator));
+    assert.equal(laterCancel.value.outcome, "cancelled", "the reused key starts a new generation at expiry");
+    const finalSnapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+    assert.deepEqual(finalSnapshot.cancelIdempotencyHistory.map((entry) => entry.result.outcome), ["not_found", "cancelled"]);
+    assert.deepEqual(finalSnapshot.cancelIdempotencyHistory.map((entry) => entry.generation), [1, 2]);
+    assert.equal(finalSnapshot.cancellations.length, 1);
+    assert.equal(finalSnapshot.orders[0].status, "cancelled");
+    assert.equal(finalSnapshot.orders[0].statusOccurredAt, laterCancel.value.observedAt);
+    restored = createDeterministicSimulator({ snapshot: finalSnapshot });
+    assert.deepEqual(restored.snapshot(), finalSnapshot);
+    assert.deepEqual((await restored.adapter.cancel(cancel, adapterContext(restored))).value, laterCancel.value);
+    assert.equal(restored.orders().length, 1);
+    assert.equal(restored.snapshot().billingEvidence.length, 1);
+  }
+});
+
 test("restore derives order status and time only from applied status, shipment, and cancellation facts", async () => {
   const harness = createMockHarness();
   const { command } = await prepareSubmit(harness);

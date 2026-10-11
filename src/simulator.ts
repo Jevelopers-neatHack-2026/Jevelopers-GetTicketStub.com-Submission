@@ -561,8 +561,16 @@ function parseSnapshot(snapshot: SimulatorSnapshot): SimulatorSnapshot {
       (record.result.outcome !== "cancelled" && record.result.outcome !== "already_terminal" && record.result.outcome !== "not_found") ||
       !canonicalTimestamp(record.result.observedAt) || Date.parse(record.result.observedAt) > copy.nowMs ||
       record.expiresAt !== Date.parse(record.result.observedAt) + copy.idempotencyTtlMs) return invalid();
-    const orderExists = ordersById.has(record.result.providerRequestId);
-    if ((record.result.outcome === "not_found") === orderExists) return invalid();
+    const order = ordersById.get(record.result.providerRequestId);
+    const acceptedAtMs = order === undefined ? undefined : Date.parse(order.acceptedAt);
+    const observedAtMs = Date.parse(record.result.observedAt);
+    if (record.result.outcome === "not_found") {
+      // A retained result describes what was observed then, not what exists now.
+      // Millisecond timestamps have no within-tick sequence, so equality remains possible.
+      if (acceptedAtMs !== undefined && acceptedAtMs < observedAtMs) return invalid();
+    } else if (acceptedAtMs === undefined || acceptedAtMs > observedAtMs) {
+      return invalid();
+    }
     const generationKey = `${record.keyDigest}:${record.generation}`;
     if (cancelHistoryByGeneration.has(generationKey)) return invalid();
     cancelHistoryByGeneration.set(generationKey, record);
