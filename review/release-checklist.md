@@ -6,7 +6,7 @@ Use this checklist against the exact manifest and bytes that would be handed off
 
 - [ ] Select only intended, unique asset IDs and variants; reject empty or unknown selections.
 - [ ] Confirm every source, editable source, export, caption, transcript, alt-text file, and required support file exists, is tracked, and has the manifest SHA-256 and exact source commit.
-- [ ] Confirm source/export relationships and render receipts bind the actual output bytes, dimensions, format, and renderer/tool versions. Inspect exported pixels and metadata after rendering.
+- [ ] Confirm source/export relationships and render receipts bind the actual output bytes, dimensions, format, and renderer/tool versions. For the silent synthetic rehearsal, verify the exact HTML/scene/render-plan/caption lineage, SRT/VTT/transcript alternatives and 17 cue/20 boundary-frame author checks; do not describe boundary inspection as continuous playback or final approval.
 - [ ] Confirm each selected asset has a current MM-01 inventory row for its exact path and lifecycle; resolve missing or stale joins in the owner ledger.
 - [ ] Confirm exact selected claim wording and required qualifiers join to current ledger rows and pinned evidence. Proposed wording remains a blocker until joined.
 - [ ] Confirm selected CTAs use exact, existing destinations with route and wording review, actual reviewer identity/date, and no implied transaction capability.

@@ -4,7 +4,7 @@ Collateral inventory, draft claims and provenance policy, conceptual visuals, an
 
 ## Implementation status
 
-The repository contains maintained policy/navigation documents and a draft synthetic collateral bundle. The diagram, fictional ticket mockup, static HTML rehearsal page, X key visual, accessible text alternatives, and scoped render/redaction evidence are not product screens or approved publication assets. No application workflow, provider connection, product result, or license is implied.
+The repository contains maintained policy/navigation documents and a draft synthetic collateral bundle. The diagram, fictional ticket mockup, HTML support page, generated 150-second silent synthetic rehearsal, transcript/captions, X key visual and scoped render/redaction evidence are not product screens or approved publication assets. The rehearsal is distinct from the required final product demo, which remains absent at `demo/exports/v1-demo.mp4`. No application workflow, provider connection, product result, or license is implied.
 
 [Architecture reference](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [Implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)
 
@@ -20,9 +20,13 @@ The repository contains maintained policy/navigation documents and a draft synth
 - [Publication safety and provenance register](review/publication-safety.md) · [asset records](review/provenance.json)
 - [Draft workflow diagram](demo/diagrams/demo-workflow.svg) · [text equivalent](demo/diagrams/demo-workflow-alt-text.md)
 - [Fictional ticket mockup](demo/screenshots/synthetic-stub-mockup.svg) · [description](demo/screenshots/synthetic-stub-alt-text.md)
-- [Static rehearsal support page](demo/deck/concept-overview.html)
+- [Static concept support page](demo/deck/concept-overview.html)
+- [150-second silent synthetic rehearsal](demo/exports/silent-synthetic-rehearsal.mp4) · [scene map](demo/rehearsal-scenes.json) · [timed captions](demo/captions/silent-rehearsal.srt) / [WebVTT](demo/captions/silent-rehearsal.vtt) · [accessible transcript](demo/rehearsal-transcript.md) · [author-only verification](review/visual/rehearsal/verification.md)
 - [Draft X key visual](launch/assets/x-submission-key-visual.svg) · [accessible text alternative](launch/assets/x-submission-alt-text.md)
 - [Visual verification and exact copy mapping](review/visual/verification.md) · [handoff](review/visual/asset-handoff.json)
+- [Collateral handoff and receiver procedure](docs/collateral-handoff.md)
+- [Accessibility guide and checklist](review/accessibility.md) · [checklist](review/accessibility-checklist.md)
+- [Release checklist and blocked rehearsal decision](review/release-checklist.md) · [review record](review/releases/v0.1.0-rehearsal.md)
 - [Collateral policy validator](tools/validate_collateral.py)
 - [Architecture and diagrams](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md)
 - [Central implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)

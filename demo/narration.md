@@ -19,4 +19,4 @@ Use the `narration` field in [`rehearsal-scenes.json`](rehearsal-scenes.json) as
 | `scene-09-submission-gate` | 02:00–02:15 | Quote-post the official neatlogs post with team, name, project, public repository and demo link. The final cutoff is announced on Discord. Official submission post URL and confirmed cutoff: pending; recheck the organizer page and Discord before submission. |
 | `scene-10-status-and-docs-cta` | 02:15–02:30 | No product or sponsor results verified. Explore the repository docs. |
 
-The proposed scene wording is identified in the scene-map `ledgerJoinProposals` array. It has not been merged into `messaging/claims.json`; the supervisor must route that join. Do not treat this script as source-owner approval or as a final public voice-over.
+The five proposed scene rows are identified in the scene-map `ledgerJoinProposals` array and mapped to `messaging/claims.json`; they remain unapproved. The supervisor must route them through review before any status change. Do not treat this script as source-owner approval or as a final public voice-over.
