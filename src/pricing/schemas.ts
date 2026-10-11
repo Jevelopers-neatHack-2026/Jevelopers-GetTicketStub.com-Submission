@@ -8,12 +8,36 @@ import {
 
 export const VersionedReferenceSchema = Type.Object({
   contract: Type.String({ minLength: 1, maxLength: 128 }),
-  schema_version: Type.Literal('1.0.0'),
+  schema_version: Type.Literal('2.0.0'),
   id: Type.String({ minLength: 1, maxLength: 128 }),
   revision: Type.Integer({ minimum: 1 }),
   content_hash: Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }),
 }, { additionalProperties: false });
 export type VersionedReference = Static<typeof VersionedReferenceSchema>;
+
+/** References to pinned external contracts remain at their accepted 1.0.0 shape. */
+export const SourceReferenceSchema = Type.Object({
+  contract: Type.String({ minLength: 1, maxLength: 128 }),
+  schema_version: Type.Literal('1.0.0'),
+  id: Type.String({ minLength: 1, maxLength: 128 }),
+  revision: Type.Integer({ minimum: 1 }),
+  content_hash: Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }),
+}, { additionalProperties: false });
+export type SourceReference = Static<typeof SourceReferenceSchema>;
+
+export const PricingPartitionGroupSchema = Type.Object({
+  parent: Type.String({ minLength: 1, maxLength: 128 }),
+  separatelyPricedMembers: Type.Array(Type.String({ minLength: 1, maxLength: 128 }), { minItems: 1, maxItems: 100 }),
+  semantics: Type.Literal('pairwise_disjoint_included_subsets'),
+  conservativeBound: Type.Union([
+    Type.Object({
+      policy: Type.Literal('maximum_marginal_rate'),
+      evidenceRef: SourceReferenceSchema,
+    }, { additionalProperties: false }),
+    Type.Null(),
+  ]),
+}, { additionalProperties: false });
+export type PricingPartitionGroup = Static<typeof PricingPartitionGroupSchema>;
 
 const UtcTime = Type.String({ format: 'date-time', pattern: 'Z$' });
 const NullableDimension = Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()]);
@@ -24,7 +48,7 @@ const Relation = Type.Union([
 ]);
 
 export const RateCardSchema = Type.Object({
-  schemaVersion: Type.Literal('1.0.0'),
+  schemaVersion: Type.Literal('2.0.0'),
   id: Type.String({ minLength: 1, maxLength: 128 }),
   revision: Type.Integer({ minimum: 1 }),
   provider: Type.String({ minLength: 1, maxLength: 128 }),
@@ -51,7 +75,7 @@ export const RateCardSchema = Type.Object({
   freshnessMaxAgeSeconds: Type.Integer({ minimum: 0, maximum: 315360000 }),
   sourceUrl: Type.String({ format: 'uri', maxLength: 2048 }),
   sourceContentHash: Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }),
-  approvalRef: VersionedReferenceSchema,
+  approvalRef: SourceReferenceSchema,
   provenance: Type.Union([
     Type.Literal('synthetic_fixture'),
     Type.Literal('documented_tariff'),
@@ -61,7 +85,7 @@ export const RateCardSchema = Type.Object({
 export type RateCard = Static<typeof RateCardSchema>;
 
 export const PricingRuleSchema = Type.Object({
-  schemaVersion: Type.Literal('1.0.0'),
+  schemaVersion: Type.Literal('2.0.0'),
   id: Type.String({ minLength: 1, maxLength: 128 }),
   revision: Type.Integer({ minimum: 1 }),
   provider: Type.String({ minLength: 1, maxLength: 128 }),
@@ -74,6 +98,7 @@ export const PricingRuleSchema = Type.Object({
     Type.Literal('other'),
   ]),
   usageSemantics: Type.String({ minLength: 1, maxLength: 3000 }),
+  partitionGroups: Type.Array(PricingPartitionGroupSchema, { maxItems: 100 }),
   usageUnits: Type.Array(Type.Object({
     name: Type.String({ minLength: 1, maxLength: 128 }),
     category: Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()]),
@@ -99,7 +124,7 @@ export const PricingRuleSchema = Type.Object({
   freshnessMaxAgeSeconds: Type.Integer({ minimum: 0, maximum: 315360000 }),
   sourceUrl: Type.String({ format: 'uri', maxLength: 2048 }),
   sourceContentHash: Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }),
-  approvalRef: VersionedReferenceSchema,
+  approvalRef: SourceReferenceSchema,
   provenance: Type.Union([
     Type.Literal('synthetic_fixture'),
     Type.Literal('documented_tariff'),
@@ -109,7 +134,7 @@ export const PricingRuleSchema = Type.Object({
 export type PricingRule = Static<typeof PricingRuleSchema>;
 
 export const FxRateSchema = Type.Object({
-  schemaVersion: Type.Literal('1.0.0'),
+  schemaVersion: Type.Literal('2.0.0'),
   id: Type.String({ minLength: 1, maxLength: 128 }),
   revision: Type.Integer({ minimum: 1 }),
   sourceCurrency: CurrencySchema,
@@ -121,7 +146,7 @@ export const FxRateSchema = Type.Object({
   freshnessMaxAgeSeconds: Type.Integer({ minimum: 0, maximum: 315360000 }),
   sourceUrl: Type.String({ format: 'uri', maxLength: 2048 }),
   sourceContentHash: Type.String({ pattern: '^sha256:[a-f0-9]{64}$' }),
-  approvalRef: VersionedReferenceSchema,
+  approvalRef: SourceReferenceSchema,
   provenance: Type.Union([
     Type.Literal('synthetic_fixture'),
     Type.Literal('documented_tariff'),
@@ -131,7 +156,7 @@ export const FxRateSchema = Type.Object({
 export type FxRate = Static<typeof FxRateSchema>;
 
 const RegistrationRequest = {
-  schemaVersion: Type.Literal('1.0.0'),
+  schemaVersion: Type.Literal('2.0.0'),
   requestId: Type.String({ minLength: 1, maxLength: 128 }),
   idempotencyKey: Type.String({ minLength: 1, maxLength: 200 }),
   scope: TrustedScopeSchema,
@@ -155,7 +180,7 @@ export const RegisterFxRateRequestSchema = Type.Object({
 export type RegisterFxRateRequest = Static<typeof RegisterFxRateRequestSchema>;
 
 export const CatalogWriteReceiptSchema = Type.Object({
-  schemaVersion: Type.Literal('1.0.0'),
+  schemaVersion: Type.Literal('2.0.0'),
   requestId: Type.String({ minLength: 1 }),
   status: Type.Union([Type.Literal('accepted'), Type.Literal('duplicate')]),
   reference: VersionedReferenceSchema,
@@ -163,9 +188,8 @@ export const CatalogWriteReceiptSchema = Type.Object({
 }, { additionalProperties: false });
 export type CatalogWriteReceipt = Static<typeof CatalogWriteReceiptSchema>;
 
-const UsageEventReferenceSchema = VersionedReferenceSchema;
 export const EstimateRequestSchema = Type.Object({
-  schemaVersion: Type.Literal('1.0.0'),
+  schemaVersion: Type.Literal('2.0.0'),
   requestId: Type.String({ minLength: 1, maxLength: 128 }),
   idempotencyKey: Type.String({ minLength: 1, maxLength: 200 }),
   scope: TrustedScopeSchema,
@@ -175,14 +199,14 @@ export const EstimateRequestSchema = Type.Object({
     effectiveAt: UtcTime,
     product: Type.String({ minLength: 1, maxLength: 128 }),
     requestedCurrency: CurrencySchema,
-    rateCardRef: Type.Union([UsageEventReferenceSchema, Type.Null()]),
-    fxRateRef: Type.Union([UsageEventReferenceSchema, Type.Null()]),
-    contractTimeEvidenceRef: Type.Union([UsageEventReferenceSchema, Type.Null()]),
+    rateCardRef: Type.Union([VersionedReferenceSchema, Type.Null()]),
+    fxRateRef: Type.Union([VersionedReferenceSchema, Type.Null()]),
+    contractTimeEvidenceRef: Type.Union([SourceReferenceSchema, Type.Null()]),
     contextTier: NullableDimension,
     serviceTier: NullableDimension,
     reasoningMode: NullableDimension,
     toolClass: NullableDimension,
-    dimensionsEvidenceRef: Type.Union([UsageEventReferenceSchema, Type.Null()]),
+    dimensionsEvidenceRef: Type.Union([SourceReferenceSchema, Type.Null()]),
   }, { additionalProperties: false }),
 }, { additionalProperties: false });
 export type EstimateRequest = Omit<Static<typeof EstimateRequestSchema>, 'usageEvent'> & {
@@ -202,7 +226,7 @@ export const ExactRatioSchema = Type.Object({
 }, { additionalProperties: false });
 
 export const EstimateResultSchema = Type.Object({
-  schemaVersion: Type.Literal('1.0.0'),
+  schemaVersion: Type.Literal('2.0.0'),
   requestId: Type.String({ minLength: 1 }),
   estimatedAt: UtcTime,
   status: EstimateStatusSchema,
@@ -220,6 +244,7 @@ export const EstimateResultSchema = Type.Object({
   missingDimensions: Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 }),
   assumptions: Type.Array(Type.String({ minLength: 1, maxLength: 3000 }), { maxItems: 100 }),
   boundedConservativeAuthorizationAmount: Type.Union([DecimalAmountSchema, Type.Null()]),
+  boundedConservativeAuthorizationAmountExact: Type.Union([ExactRatioSchema, Type.Null()]),
   calculation: Type.Array(Type.Object({
     usageUnit: Type.String({ minLength: 1, maxLength: 128 }),
     category: Type.String({ minLength: 1, maxLength: 128 }),

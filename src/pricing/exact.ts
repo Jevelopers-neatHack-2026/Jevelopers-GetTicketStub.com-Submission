@@ -50,6 +50,13 @@ export function compare(left: ExactRational, right: ExactRational): number {
   return difference < 0n ? -1 : difference > 0n ? 1 : 0;
 }
 
+function formatScaledDecimal(amount: bigint, scale: number): string {
+  const factor = 10n ** BigInt(scale);
+  const whole = amount / factor;
+  const fractional = (amount % factor).toString().padStart(scale, '0').replace(/0+$/, '');
+  return fractional.length > 0 ? whole.toString() + '.' + fractional : whole.toString();
+}
+
 export function roundedDecimal(value: ExactRational, scale = 18): string {
   if (value.numerator < 0n) throw new Error('Pricing result cannot be negative.');
   const factor = 10n ** BigInt(scale);
@@ -58,9 +65,17 @@ export function roundedDecimal(value: ExactRational, scale = 18): string {
   const remainder = scaledNumerator % value.denominator;
   const doubled = remainder * 2n;
   if (doubled > value.denominator || (doubled === value.denominator && rounded % 2n !== 0n)) rounded += 1n;
-  const whole = rounded / factor;
-  const fractional = (rounded % factor).toString().padStart(scale, '0').replace(/0+$/, '');
-  return fractional.length > 0 ? whole.toString() + '.' + fractional : whole.toString();
+  return formatScaledDecimal(rounded, scale);
+}
+
+/** Serialize a nonnegative upper bound without ever rounding below its exact rational value. */
+export function conservativeCeilingDecimal(value: ExactRational, scale = 18): string {
+  if (value.numerator < 0n) throw new Error('Pricing result cannot be negative.');
+  const factor = 10n ** BigInt(scale);
+  const scaledNumerator = value.numerator * factor;
+  let ceiling = scaledNumerator / value.denominator;
+  if (scaledNumerator % value.denominator !== 0n) ceiling += 1n;
+  return formatScaledDecimal(ceiling, scale);
 }
 
 export function ratioJson(value: ExactRational): { numerator: string; denominator: string } {

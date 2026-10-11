@@ -61,8 +61,21 @@ test('public domain boundaries return explicit unavailable results and never fab
     },
   };
   validRequests.push({ operation: 'estimate', request: estimate });
+  assertError(await api.estimate(estimate, ports), 'PRICING_UNKNOWN',
+    'the retained 1.0.0 estimate boundary remains fail closed without a versioned tariff contract');
   const pricingPorts = {
     ...ports,
+    actionAuthority: {
+      authorize: async ({ scope: requestedScope, action }) => ({
+        decisionId: `smoke-pricing-${action}`,
+        action,
+        scope: requestedScope,
+        actorId: requestedScope.actorId,
+        allowed: true,
+        issuedAt: '2026-10-10T11:59:00Z',
+        expiresAt: '2026-10-10T12:01:00Z',
+      }),
+    },
     database: {
       connect: async () => ({
         query: async () => ({ rows: [], rowCount: 0 }),
@@ -70,7 +83,7 @@ test('public domain boundaries return explicit unavailable results and never fab
       }),
     },
   };
-  const estimateResult = await api.estimate(estimate, pricingPorts);
+  const estimateResult = await api.estimateV2({ ...estimate, schemaVersion: '2.0.0' }, pricingPorts);
   assert.equal(estimateResult.ok, true);
   assert.equal(estimateResult.value.status, 'pricing_unknown', 'an empty catalog returns typed unknown pricing, not a zero estimate');
 

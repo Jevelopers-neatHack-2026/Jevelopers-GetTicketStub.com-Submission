@@ -128,7 +128,7 @@ async function verifyDurability(prefix) {
     assertDisposableMarker(marker.rows);
     const health = await client.query('SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health');
     assert.equal(health.rows[0].migrations_ready, true);
-    assert.equal(Number(health.rows[0].required_migrations_present), 4);
+    assert.equal(Number(health.rows[0].required_migrations_present), 5);
     await client.query('CREATE TABLE IF NOT EXISTS ci_test.foundation_durable_probe (probe_id uuid PRIMARY KEY, payload text NOT NULL)');
     await client.query('INSERT INTO ci_test.foundation_durable_probe(probe_id, payload) VALUES ($1, $2)', [probeId, `verified:${prefix}`]);
   } finally {
@@ -199,10 +199,11 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
     { version: '0002_foundation_health', status: 'applied' },
     { version: '0003_financial_ledger', status: 'applied' },
     { version: '0004_pricing_catalog', status: 'applied' },
+    { version: '0005_pricing_valuation_history', status: 'applied' },
   ]);
 
   const names = (await readdir(join(root, 'migrations'))).filter(name => name.endsWith('.sql')).sort();
-  assert.equal(names.length, 4, 'foundation migration suite must exercise fresh creation and an incremental upgrade');
+  assert.equal(names.length, 5, 'foundation migration suite must exercise fresh creation and an incremental upgrade');
   for (const prefix of ['CI_TEST_DB', 'CI_TEST_PREVIOUS_DB']) {
     const client = new Client(databaseConfigFromEnvironment(prefix));
     await client.connect();
@@ -230,7 +231,10 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
       );
       assert.deepEqual(ledgerTables.rows.map(row => row.table_name), [...requiredLedgerTables].sort(),
         'fresh and upgraded schemas must include the ledger, mapping, snapshot, and quarantine tables');
-      const requiredPricingTables = ['pricing_rule_versions', 'pricing_rate_card_versions', 'pricing_fx_rate_versions'];
+      const requiredPricingTables = [
+        'pricing_rule_versions', 'pricing_rate_card_versions', 'pricing_fx_rate_versions',
+        'pricing_operation_idempotency', 'pricing_estimate_snapshots',
+      ];
       const pricingTables = await client.query(
         `SELECT table_name FROM information_schema.tables
          WHERE table_schema = 'cost_intelligence' AND table_name = ANY($1::text[]) ORDER BY table_name`,
@@ -273,6 +277,8 @@ test('fresh and previous foundation schemas apply checksummed upgrades, survive 
         'pricing_rule_versions_append_only', 'pricing_rule_versions_no_truncate',
         'pricing_rate_card_versions_append_only', 'pricing_rate_card_versions_no_truncate',
         'pricing_fx_rate_versions_append_only', 'pricing_fx_rate_versions_no_truncate',
+        'pricing_operation_idempotency_append_only', 'pricing_operation_idempotency_no_truncate',
+        'pricing_estimate_snapshots_append_only', 'pricing_estimate_snapshots_no_truncate',
       ];
       const pricingTriggers = await client.query(
         `SELECT t.tgname::text AS trigger_name
