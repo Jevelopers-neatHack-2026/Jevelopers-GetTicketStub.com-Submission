@@ -13,6 +13,7 @@ import {
   type ApiResult,
   type Clock,
   type ErrorEnvelope,
+  type FinanceAuthorizationDecision,
   type FinanceAuthorizationPort,
   type FinanceOperation,
   type TrustedContextPort,
@@ -761,18 +762,65 @@ async function rollback(client: LedgerTransactionPort): Promise<void> {
   await client.query('ROLLBACK').catch(() => undefined);
 }
 
+async function rollbackLedgerSavepoint(client: LedgerTransactionPort): Promise<void> {
+  await client.query('ROLLBACK TO SAVEPOINT ci04a_ledger_append').catch(() => undefined);
+  await client.query('RELEASE SAVEPOINT ci04a_ledger_append').catch(() => undefined);
+}
+
+function usageDecisionIsCurrent(
+  decision: FinanceAuthorizationDecision,
+  request: LedgerAppendRequest,
+  ports: LedgerRuntimePorts,
+): boolean {
+  if (decision.status !== 'allowed' || decision.operation !== 'metering.ingestUsage'
+      || decision.permission !== 'usage.ingest' || !sameScope(decision.scope, request.scope)
+      || decision.principal.kind !== 'service' || decision.principal.actorId !== request.scope.actorId
+      || decision.principal.serviceStatus !== 'active' || decision.principal.serviceGrantRevision.length === 0) return false;
+  const now = ports.clock.now();
+  const verified = Date.parse(decision.verifiedAt);
+  const expires = Date.parse(decision.expiresAt);
+  return now instanceof Date && Number.isFinite(now.getTime()) && Number.isFinite(verified) && Number.isFinite(expires)
+    && verified <= now.getTime() && now.getTime() - verified <= 60_000
+    && expires > now.getTime() && expires > verified && expires - verified <= 300_000;
+}
+
 /** Transactionally append an immutable event. Status outcomes never rewrite prior postings. */
 export async function appendLedgerEvent(
   value: unknown,
   ports: LedgerRuntimePorts,
 ): Promise<ApiResult<LedgerAppendReceipt>> {
-  const quarantined = await quarantineUnsupportedPayload(value, ports);
+  return appendLedgerEventInternal(value, ports);
+}
+
+/** Narrow internal bridge for an already-authorized metering transaction. */
+export async function appendUsageLedgerEventInTransaction(
+  value: unknown,
+  client: LedgerTransactionPort,
+  ports: LedgerRuntimePorts,
+  decision: FinanceAuthorizationDecision,
+): Promise<ApiResult<LedgerAppendReceipt>> {
+  return appendLedgerEventInternal(value, ports, { client, decision });
+}
+
+async function appendLedgerEventInternal(
+  value: unknown,
+  ports: LedgerRuntimePorts,
+  bridge?: { readonly client: LedgerTransactionPort; readonly decision: FinanceAuthorizationDecision },
+): Promise<ApiResult<LedgerAppendReceipt>> {
+  const quarantined = bridge ? null : await quarantineUnsupportedPayload(value, ports);
   if (quarantined !== null) return quarantined;
   const validated = validateLedgerAppendRequestBoundary(value);
   if (!validated.ok) return failure(validated.error);
   const request = validated.value;
-  const authorizationError = await trustedScope(request, ports, 'appendLedgerEvent', 'ledger.appendLedgerEvent');
-  if (authorizationError) return failure(authorizationError);
+  if (bridge) {
+    if (!usageDecisionIsCurrent(bridge.decision, request, ports)) {
+      return failure(makeError('ledger', 'appendLedgerEvent', 'FORBIDDEN_SCOPE', request.requestId,
+        'The current metering authorization does not permit this ledger append.'));
+    }
+  } else {
+    const authorizationError = await trustedScope(request, ports, 'appendLedgerEvent', 'ledger.appendLedgerEvent');
+    if (authorizationError) return failure(authorizationError);
+  }
   let now: Date;
   try {
     now = ports.clock.now();
@@ -789,10 +837,11 @@ export async function appendLedgerEvent(
   let client: LedgerTransactionPort | undefined;
   let inTransaction = false;
   try {
-    client = await ports.database.connect();
-    await client.query('BEGIN');
+    client = bridge ? bridge.client : await ports.database.connect();
+    if (bridge) await client.query('SAVEPOINT ci04a_ledger_append');
+    else await client.query('BEGIN');
     inTransaction = true;
-    await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+    if (!bridge) await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
     await bindFinancialDatabaseScope(client, scope);
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
@@ -801,7 +850,7 @@ export async function appendLedgerEvent(
 
     const legacyHistoryError = await legacyFinancialScopeError(client, scope, 'appendLedgerEvent', request.requestId);
     if (legacyHistoryError) {
-      await rollback(client);
+      if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
       inTransaction = false;
       return failure(legacyHistoryError);
     }
@@ -812,7 +861,7 @@ export async function appendLedgerEvent(
       [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.idempotencyKey],
     );
     if (idempotency.rows.length) {
-      await rollback(client);
+      if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
       inTransaction = false;
       const row = idempotency.rows[0] ?? {};
       const existingId = fromRow(row, 'event_id');
@@ -838,7 +887,7 @@ export async function appendLedgerEvent(
     );
     for (const row of lockedBindings.rows) {
       if (fromRow(row, 'logical_operation_id') !== request.identities.logicalOperationId) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'conflict');
       }
@@ -852,7 +901,7 @@ export async function appendLedgerEvent(
         const duplicate = fromRow(prior, 'event_hash') === eventHash
           && fromRow(prior, 'source_content_hash') === request.sourceIdentity.contentHash
           && Number(prior.source_revision_sequence) === request.sourceIdentity.revisionSequence;
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return { ok: true, value: receipt(request, duplicate ? 'duplicate' : 'conflict', fromRow(prior, 'event_id'), null) };
       }
@@ -864,7 +913,7 @@ export async function appendLedgerEvent(
         );
         const prior = existing.rows[0] ?? {};
         const duplicate = fromRow(prior, 'event_hash') === eventHash;
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return { ok: true, value: receipt(request, duplicate ? 'duplicate' : 'conflict', fromRow(prior, 'event_id'), null) };
       }
@@ -885,7 +934,7 @@ export async function appendLedgerEvent(
         || fromRow(authorizationRow, 'reservation_id') !== request.identities.reservationId
         || fromRow(authorizationRow, 'logical_operation_id') !== request.identities.logicalOperationId
         || fromRow(authorizationRow, 'currency')?.trim() !== request.money.currency) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'conflict', request.reservationAuthorizationEventId);
       }
@@ -911,12 +960,12 @@ export async function appendLedgerEvent(
       ? null : Number(currentSource.current_revision_sequence);
     if (currentSourceRevision !== null) {
       if (request.sourceIdentity.revisionSequence <= currentSourceRevision || request.supersedesEventId !== currentSourceEventId) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'stale_revision', currentSourceEventId);
       }
     } else if (request.supersedesEventId !== null) {
-      await rollback(client);
+      if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
       inTransaction = false;
       return conflictResult(request, 'stale_revision');
     }
@@ -932,7 +981,7 @@ export async function appendLedgerEvent(
       );
       predecessor = existing.rows[0] ?? null;
       if (!predecessor) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'stale_revision', currentSourceEventId);
       }
@@ -967,7 +1016,7 @@ export async function appendLedgerEvent(
       const consumptionDoesNotDecrease = !cumulativeConsumption || priorAmount === null || nextAmount === null
         || parseScaledDecimal(nextAmount) >= parseScaledDecimal(priorAmount);
       if (!(usageRevision || financialCorrection || cumulativeConsumption) || !sameLineage || !consumptionDoesNotDecrease) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'conflict', currentSourceEventId);
       }
@@ -1000,7 +1049,7 @@ export async function appendLedgerEvent(
         || fromRow(target, 'logical_operation_id') !== request.identities.logicalOperationId
         || fromRow(target, 'reservation_id') !== request.identities.reservationId
         || fromRow(target, 'reservation_authorization_event_id') !== request.reservationAuthorizationEventId) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'conflict', request.reversesEventId);
       }
@@ -1015,7 +1064,7 @@ export async function appendLedgerEvent(
       });
       if (targetValue === 0n || (targetValue > 0n) === (reversalValue > 0n)
         || !ancestorsRemainWithinReversalCeiling) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'conflict', request.reversesEventId);
       }
@@ -1037,7 +1086,7 @@ export async function appendLedgerEvent(
         return validEconomicNet(rootValue, nextNet);
       });
       if (!allAncestorsRemainWithinReversalCeiling) {
-        await rollback(client);
+        if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'conflict', currentSourceEventId);
       }
@@ -1118,11 +1167,11 @@ export async function appendLedgerEvent(
       [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, request.sourceIdentity.source,
         request.sourceIdentity.sourceObjectId, request.sourceIdentity.revisionSubjectId, request.sourceIdentity.revisionSequence, request.eventId],
     );
-    await client.query('COMMIT');
+    if (bridge) await client.query('RELEASE SAVEPOINT ci04a_ledger_append'); else await client.query('COMMIT');
     inTransaction = false;
     return { ok: true, value: receipt(request, 'accepted', null, ingestedAt) };
   } catch (error) {
-    if (client && inTransaction) await rollback(client);
+    if (client && inTransaction) if (bridge) await rollbackLedgerSavepoint(client); else await rollback(client);
     const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
     if (code === '23505' && client) {
       try {
@@ -1154,7 +1203,7 @@ export async function appendLedgerEvent(
     }
     return failure(makeError('ledger', 'appendLedgerEvent', 'SOURCE_UNAVAILABLE', request.requestId, 'Ledger persistence is temporarily unavailable.'));
   } finally {
-    client?.release();
+    if (!bridge) client?.release();
   }
 }
 
