@@ -4,12 +4,23 @@ from pathlib import Path
 import pytest
 
 from integration_evals.artifacts import digest, load_record, read_bytes
-from integration_evals.execution import OwnerContext, OwnerExecution
-from integration_evals.models import Case, Mode, Origin, Outcome, Run, Status, Suite
+from integration_evals.execution import OwnerContext, OwnerExecution, Settings
+from integration_evals.models import (
+    Case,
+    CaseId,
+    Catalog,
+    Mode,
+    Origin,
+    Outcome,
+    Run,
+    Status,
+    Suite,
+)
 from integration_evals.owner import execute_owner
 from integration_evals.preflight import PreflightContext
 from integration_evals.reporting import Tracker, save_run
-from integration_evals.runner import execute_case
+from integration_evals.runner import execute, execute_case
+from tests.test_assembly import synthetic_workspace
 from tests.test_evidence_claims import context_for, controlled_case
 
 
@@ -90,11 +101,27 @@ def test_owner_output_survives_when_isolated_command_and_cleanup_finish(tmp_path
     assert (archive / saved.evidence[0].path).read_bytes() == b"controlled output"
 
 
-@pytest.mark.parametrize("fault", ["wrong-digest", "missing-artifact"])
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "wrong-digest",
+        "missing-artifact",
+        "empty-permission",
+        "empty-redaction",
+        "empty-reviewer-access",
+        "naive-created-at",
+        "naive-original-cutoff",
+        "unknown-cost-with-amount",
+        "estimated-cost-without-amount",
+        "confirmed-cost-without-amount",
+        "duplicate-evidence",
+        "sensitive-metadata",
+    ],
+)
 def test_owner_error_is_archived_when_output_retention_is_rejected(
     tmp_path: Path, fault: str
 ) -> None:
-    # Given a real owner command with correct observations but invalid artifact availability.
+    # Given correct owner observations but invalid artifact bytes, metadata or cost claims.
     case = controlled_case().model_copy(update={"fault": fault})
     context = owner_context(tmp_path)
     # When the isolated owner completes and the normal immutable archive path consumes its result.
@@ -134,6 +161,59 @@ def test_component_scope_keeps_unrelated_case_pending_when_not_selected(tmp_path
     # Then no unrelated owner runs and the omitted criterion remains planned.
     assert result.result.criterion_status is Status.PLANNED
     assert result.result.reason == "not-selected"
+
+
+def test_later_owner_error_is_archived_when_evidence_id_collides(tmp_path: Path) -> None:
+    # Given two real owner invocations that emit the same evidence ID in a pinned inert workspace.
+    assembly = synthetic_workspace(tmp_path)
+    fixture = Path(__file__).parent / "fixtures/owner_output.py"
+    components = tuple(
+        component.model_copy(
+            update={
+                "command": (sys.executable, str(fixture)),
+                "cleanup_command": (sys.executable, "-c", "import sys; sys.exit(0)"),
+            }
+        )
+        if component.repository == "agent-harness"
+        else component
+        for component in assembly.components
+    )
+    catalog = Catalog(fixtures=())
+    assembly = assembly.model_copy(
+        update={
+            "components": components,
+            "fixture_digest": digest(catalog.model_dump_json().encode()),
+        }
+    )
+    manifest = tmp_path / "assembly.json"
+    _ = manifest.write_text(assembly.model_dump_json(), encoding="utf-8")
+    suite = Suite(
+        cases=(controlled_case(), controlled_case().model_copy(update={"id": CaseId("later")}))
+    )
+    settings = Settings(tmp_path / "integration-evals", tmp_path, manifest)
+    tracker = load_record(
+        Path(__file__).resolve().parents[1] / "planning/acceptance-checklist.json", Tracker
+    )
+    # When the actual run orchestration dispatches both cases and archives the entire run.
+    run = execute(suite, catalog, settings)
+    archive = save_run(run, tmp_path / "reports", tracker, suite, settings.artifacts)
+    # Then the first artifact survives and the conflicting case has a durable error receipt.
+    saved = load_record(archive / "run.json", Run)
+    assert tuple(result.outcome for result in saved.results) == (Outcome.PASSED, Outcome.ERROR)
+    assert all(result.exit_code == 0 for result in saved.results)
+    assert all(result.cleanup_status == "passed" for result in saved.results)
+    assert all(result.output_digest not in (None, digest(b"")) for result in saved.results)
+    assert saved.results[1].evidence_ids == ()
+    assert saved.results[1].cost is None
+    assert saved.results[1].cost_status == "unknown"
+    assert len(saved.evidence) == 1
+    assert saved.evidence[0].case_id == suite.cases[0].id
+    assert (archive / saved.evidence[0].path).read_bytes() == b"controlled output"
+    assert (archive / "junit.xml").read_bytes().count(b"<error ") == 1
+    original = (archive / "run.json").read_bytes()
+    with pytest.raises(FileExistsError):
+        _ = save_run(run, tmp_path / "reports", tracker, suite, settings.artifacts)
+    assert (archive / "run.json").read_bytes() == original
 
 
 def test_component_scope_blocks_when_selected_dependency_missing(tmp_path: Path) -> None:

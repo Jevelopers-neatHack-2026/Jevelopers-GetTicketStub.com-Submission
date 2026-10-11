@@ -16,6 +16,7 @@ from integration_evals.execution import OwnerContext, OwnerExecution, blocked
 from integration_evals.models import Case, CaseResult, Mode, Origin, Outcome, Status
 from integration_evals.output_evidence import check_claim, retain
 from integration_evals.processes import ProcessSettings, invoke
+from integration_evals.report_validation import validate_cost
 from integration_evals.reporting import OwnerResponse
 
 
@@ -23,6 +24,7 @@ def compare_response(
     case: Case, response: OwnerResponse, context: OwnerContext
 ) -> tuple[Outcome, str | None]:
     """Compare independent frozen observations after enforcing response identity."""
+    validate_cost(response.cost, response.cost_status, case.id)
     component = next(c for c in context.assembly.components if c.repository == case.component)
     if response.component_revision != component.revision or response.mode != context.settings.mode:
         fail("owner_response_pin_or_mode_mismatch", case.id)

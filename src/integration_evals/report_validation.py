@@ -1,22 +1,25 @@
 """Validate immutable run claims against frozen cases and accessible evidence bytes."""
 
+from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 from integration_evals.artifacts import confined_path, digest, read_bytes, reject_leaks
 from integration_evals.errors import fail
 from integration_evals.models import CaseResult, Evidence, Mode, Origin, Outcome, Run, Status, Suite
-from integration_evals.output_evidence import ClaimContext, validate_claim
+from integration_evals.output_evidence import (
+    ClaimContext,
+    validate_claim,
+    validate_evidence_metadata,
+)
 
 
 def validate_evidence(evidence: tuple[Evidence, ...], root: Path, run: Run) -> None:
     """Join every export to accessible local bytes and exact producing revision."""
-    ids: set[str] = set()
+    validate_evidence_metadata(evidence, frozenset())
     components = {component.repository: component.revision for component in run.components}
     cases = {result.case_id: result for result in run.results}
     for item in evidence:
-        if item.id in ids:
-            fail("duplicate_evidence", item.id)
-        ids.add(item.id)
         result = cases.get(item.case_id)
         if result is None or item.requirement not in result.requirements or item.run_id != run.id:
             fail("dangling_evidence_join", item.id)
@@ -24,10 +27,6 @@ def validate_evidence(evidence: tuple[Evidence, ...], root: Path, run: Run) -> N
             fail("evidence_revision_mismatch", item.id)
         if item.mode != result.mode:
             fail("evidence_mode_mismatch", item.id)
-        if not all((item.permission_ref, item.redaction_ref, item.reviewer_access_ref)):
-            fail("evidence_permission_missing", item.id)
-        if item.created_at.utcoffset() is None or item.original_cutoff.utcoffset() is None:
-            fail("evidence_timezone_missing", item.id)
         data = read_bytes(confined_path(root, item.path))
         if digest(data) != item.sha256:
             fail("evidence_digest_mismatch", item.id)
@@ -105,10 +104,7 @@ def validate_result(result: CaseResult, run_id: str, evidence: dict[str, Evidenc
         fail("synthetic_claims_real_execution", result.case_id)
     if result.criterion_status is Status.VERIFIED:
         fail("unreviewed_tracker_promotion", result.case_id)
-    if result.cost_status == "unknown" and result.cost is not None:
-        fail("unknown_cost_has_amount", result.case_id)
-    if result.cost_status != "unknown" and result.cost is None:
-        fail("known_cost_missing_amount", result.case_id)
+    validate_cost(result.cost, result.cost_status, result.case_id)
     unselected = result.criterion_status is Status.PLANNED and result.reason == "not-selected"
     if (
         result.outcome is Outcome.SKIPPED
@@ -116,3 +112,13 @@ def validate_result(result: CaseResult, run_id: str, evidence: dict[str, Evidenc
         and not unselected
     ):
         fail("skip_hidden_as_success", result.case_id)
+
+
+def validate_cost(
+    cost: Decimal | None, status: Literal["unknown", "estimated", "confirmed"], reference: str
+) -> None:
+    """Keep cost presence consistent at owner ingestion and archive validation."""
+    if status == "unknown" and cost is not None:
+        fail("unknown_cost_has_amount", reference)
+    if status != "unknown" and cost is None:
+        fail("known_cost_missing_amount", reference)

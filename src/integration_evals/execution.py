@@ -44,6 +44,7 @@ class OwnerContext:
     settings: Settings
     run_id: str
     clock: datetime
+    evidence_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

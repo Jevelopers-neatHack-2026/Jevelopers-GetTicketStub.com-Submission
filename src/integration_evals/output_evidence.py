@@ -16,6 +16,23 @@ class ClaimContext:
     pins: dict[str, str]
     run_id: str
     mode: Mode
+    evidence_ids: frozenset[str] = frozenset()
+
+
+def validate_evidence_metadata(
+    evidence: tuple[Evidence, ...], reserved_ids: frozenset[str]
+) -> None:
+    """Apply archive metadata rules before either owner acceptance or export."""
+    ids = set(reserved_ids)
+    for item in evidence:
+        if item.id in ids:
+            fail("duplicate_evidence", item.id)
+        ids.add(item.id)
+        if not all((item.permission_ref, item.redaction_ref, item.reviewer_access_ref)):
+            fail("evidence_permission_missing", item.id)
+        if item.created_at.utcoffset() is None or item.original_cutoff.utcoffset() is None:
+            fail("evidence_timezone_missing", item.id)
+        reject_leaks(item.model_dump_json().encode(), item.id)
 
 
 def check_claim(
@@ -24,7 +41,10 @@ def check_claim(
     """Require the case's own artifacts, expected producers and actual origin classes."""
     pins = {component.repository: component.revision for component in context.assembly.components}
     validate_claim(
-        case, ClaimContext(pins, context.run_id, context.settings.mode), evidence, origin
+        case,
+        ClaimContext(pins, context.run_id, context.settings.mode, context.evidence_ids),
+        evidence,
+        origin,
     )
 
 
@@ -32,6 +52,7 @@ def validate_claim(
     case: Case, context: ClaimContext, evidence: tuple[Evidence, ...], origin: Origin
 ) -> None:
     """Apply the same producer, kind and origin predicates to every evidence boundary."""
+    validate_evidence_metadata(evidence, context.evidence_ids)
     allowed = set(case.artifact_producers or (case.component,))
     kinds = {item.kind for item in evidence}
     if not set(case.required_evidence_kinds).issubset(kinds):

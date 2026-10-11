@@ -36,11 +36,15 @@ def execute(suite: Suite, catalog: Catalog, settings: Settings) -> Run:
     if not selected or not selected.issubset(case.id for case in suite.cases):
         fail("invalid_case_selection", "suite")
     executions: list[OwnerExecution] = []
+    evidence_ids: frozenset[str] = frozenset()
     preflight = PreflightContext(settings.mode, os.environ, sys.platform, settings.authorize_paid)
     for case in suite.cases:
-        context = OwnerContext(assembly, settings, run_id, clock) if assembly else None
+        context = (
+            OwnerContext(assembly, settings, run_id, clock, evidence_ids) if assembly else None
+        )
         receipt = execute_case(case, context, preflight, selected)
         executions.append(receipt)
+        evidence_ids |= frozenset(item.id for item in receipt.evidence)
     run = Run(
         id=run_id,
         started_at=datetime.now(UTC),
