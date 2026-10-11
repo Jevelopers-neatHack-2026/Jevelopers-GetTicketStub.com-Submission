@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.8.3 (unreleased)
+
+SC-CHK-009 and SC-CHK-010 candidate repairs follow the whole-PR REQUEST_CHANGES at d428365. ProductionBundle compares handoff contract, schema version, identity, revision and hash with the independently supplied manifest; a mismatch returns REFERENCE_MISMATCH at /handoff_ref. ResearchBatchReceipt requires rejected admissions to be failed members under either acceptance policy; admitted requests may still fail during execution, and genuine partial outcomes remain supported. Schemas, retained fixture bytes, Finance and consumer observer behavior are unchanged. These safety checks narrow previously permissive helper behavior and require fresh exact-candidate independent review; no consumer adoption or release approval is claimed.
+
 ## 0.8.2 (unreleased)
 
 FC-003 original-state candidate repair follows the whole-PR REQUEST_CHANGES at 4066385. Successful settle/release results now require a legal independently supplied original command state, its successor revision and a distinct event, including cached outcomes. Exact snapshot redelivery remains available at the reservation boundary. Cached validation performs no transition and does not renew eligibility after lease expiry. Adapters remain responsible for authentic historical time-dependent acceptance evidence. Retained schema, fixture, version-specific type and pin bytes are unchanged. Fresh whole-PR Astra High and Finance compatibility review of the changed candidate remain required; no prior approval transfers.

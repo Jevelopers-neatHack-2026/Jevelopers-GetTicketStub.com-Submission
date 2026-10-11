@@ -22,6 +22,8 @@ ArtifactConsumptionReceipt binds the exact manifest/approval, consumer, idempote
 
 ProductionBundle records renderer/template/font/spec revisions, exact source-artwork/displayed-preview/facts/barcode/composition data, separately identified composed preview, complete output files/media/dimensions/units/hashes and preflight report/status/reasons. File sets and specifications must equal the trusted print result; supplied exact bytes must match every file's hash/size. Source artwork, displayed preview, composed preview and print output retain separate identities and hashes.
 
+The 0.8.3 helper also binds the complete handoff reference tuple (contract, schema version, ID, revision and content hash) to the independently supplied ArtifactHandoffManifest. Rebinding a lookup entry and recomputing the bundle hash cannot certify a different contract or revision. Contradictory handoff references return REFERENCE_MISMATCH at /handoff_ref; unsupported reference versions continue to fail at the existing version boundary. Wire encodings remain unchanged.
+
 Preflight passed/failed/unsupported/unknown is explicit; presence of a bundle is not success. The semantic use helper refuses failed/unsupported/unknown preflight, missing outputs or inconsistent units. It verifies an independently supplied composition approval for the exact Composition and preview identity/revision/hash plus facts, not an unrelated source-artwork approval. Rendering, font rights, image decoding and actual preflight execution remain print-production work.
 
 ## Quotes and purchase authorization

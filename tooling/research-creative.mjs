@@ -167,6 +167,8 @@ export function checkResearchBatchReceipt(input, context) {
   if (!sameSet(context.request_receipts.map(receipt => receipt.request_id), v.request_ids) || v.request_receipt_refs.length !== context.request_receipts.length) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
   for (const receipt of context.request_receipts) {
     if (!validateContract('ResearchRequestReceipt', receipt).ok || !checkTrustedContext(receipt, context.scope).ok || !v.request_receipt_refs.some(ref => ref.contract === 'ResearchRequestReceipt' && ref.id === receipt.receipt_id && ref.content_hash === hashManifest(receipt))) return fail('INVALID_RECEIPT', '/request_receipt_refs');
+    if (receipt.status === 'rejected' && v.successful_request_ids.includes(receipt.request_id)) return fail('INVALID_BATCH', '/successful_request_ids');
+    if (receipt.status === 'rejected' && v.pending_request_ids.includes(receipt.request_id)) return fail('INVALID_BATCH', '/pending_request_ids');
   }
   if (v.acceptance_policy !== context.acceptance_policy || (v.acceptance_policy === 'all_or_nothing' && v.successful_request_ids.length && (v.failed_request_ids.length || v.pending_request_ids.length))) return fail('INVALID_BATCH', '/acceptance_policy');
   return parsed;

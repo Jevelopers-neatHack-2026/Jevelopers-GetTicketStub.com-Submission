@@ -46,5 +46,23 @@
   ],
   "note": "All eight checkpoint findings have local repair evidence; SC-CHK-002 came from finance checkpoint. Fresh exact-candidate independent review remains pending. Finance delta FC-003/004/GAP-002 is separately unresolved, and no adoption/merge/release approval is claimed.",
   "repair_checkpoint": "d969f68a13fc4c3e71d59b635ffd29b65d3205d5",
-  "repair_package_version": "0.7.0"
+  "repair_package_version": "0.7.0",
+  "followup_review": {
+    "reviewed_checkpoint": "d428365ab7a76951bf044f7c7d0653796318b148",
+    "verdict": "REQUEST_CHANGES",
+    "candidate_package_version": "0.8.3",
+    "fresh_review_of_candidate": "pending",
+    "findings": [
+      {
+        "id": "SC-CHK-009",
+        "behavior": "ProductionBundle complete handoff reference tuple",
+        "status": "locally_repaired_review_pending"
+      },
+      {
+        "id": "SC-CHK-010",
+        "behavior": "ResearchBatchReceipt rejected admission/outcome consistency",
+        "status": "locally_repaired_review_pending"
+      }
+    ]
+  }
 }

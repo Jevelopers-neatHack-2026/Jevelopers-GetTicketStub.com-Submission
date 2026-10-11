@@ -144,7 +144,9 @@ export function checkProductionBundle(input, context) {
   const v = parsed.value;
   if (!object(context.expected_spec) || !Array.isArray(context.expected_files) || !object(context.expected_composition) || !object(context.preflight)) return fail('INVALID_TRUST_CONTEXT');
   if (v.bundle_hash !== commerceContentHash(v, 'bundle_hash')) return fail('REFERENCE_MISMATCH', '/bundle_hash');
-  if (v.handoff_ref.id !== h.value.handoff_id || v.handoff_ref.content_hash !== h.value.manifest_hash || !same(v.print_spec, context.expected_spec) || !same(v.composition, context.expected_composition)) return fail('REFERENCE_MISMATCH', '/composition');
+  if (v.handoff_ref.contract !== h.value.contract || v.handoff_ref.schema_version !== h.value.schema_version ||
+      v.handoff_ref.id !== h.value.handoff_id || v.handoff_ref.revision !== h.value.revision || v.handoff_ref.content_hash !== h.value.manifest_hash) return fail('REFERENCE_MISMATCH', '/handoff_ref');
+  if (!same(v.print_spec, context.expected_spec) || !same(v.composition, context.expected_composition)) return fail('REFERENCE_MISMATCH', '/composition');
   if (!same(v.files, context.expected_files) || new Set(v.files.map(file => file.filename)).size !== v.files.length || new Set(v.files.map(file => file.artifact_id)).size !== v.files.length || !v.files.some(file => file.role === 'print_output') || !v.files.some(file => file.role === 'composed_preview')) return fail('INVALID_PAYLOAD', '/files');
   for (let i = 0; i < v.files.length; i++) {
     const file = v.files[i];
