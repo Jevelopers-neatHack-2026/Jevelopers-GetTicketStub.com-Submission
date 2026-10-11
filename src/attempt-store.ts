@@ -847,3 +847,6 @@ export async function createLocalAttemptPersistenceForTests(
     [TEST_HISTORY_LIMIT]: historyLimit
   } as InternalAttemptStoreOptions);
 }
+
+/** @internal Test-only assertion that the fixed production history cap is unchanged. */
+export const ATTEMPT_STORE_MAX_HISTORY_LENGTH_FOR_TESTS = MAX_HISTORY_LENGTH;

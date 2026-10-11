@@ -4,6 +4,7 @@ import { createConnection, createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DurableJsonStore } from "../dist/metering-store.js";
+import { ATTEMPT_STORE_MAX_HISTORY_LENGTH_FOR_TESTS } from "../dist/attempt-store.js";
 import { AttemptStoreError, ConnectorError } from "../dist/index.js";
 import {
   ATTEMPT_MODE,
@@ -199,6 +200,7 @@ test("a scoped claim and its state history survive reopening the real JSON store
 });
 
 test("history capacity allows the final valid row, keeps exact repeats safe, and rejects overflow before writing", async () => {
+  assert.equal(ATTEMPT_STORE_MAX_HISTORY_LENGTH_FOR_TESTS, 1_000_000);
   await withRoot(async (root) => {
     const directory = join(root, "attempts");
     const store = await openAttemptStoreWithHistoryLimitForTests(directory, 3);
