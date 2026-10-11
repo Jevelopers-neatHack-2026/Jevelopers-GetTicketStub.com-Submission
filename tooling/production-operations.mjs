@@ -1,6 +1,7 @@
 import { validateContract, checkTrustedContext, canonicalJson, hashManifest, ContractError } from './runtime.mjs';
-import { productionIssue, productionOk, validateProductionReference } from './production-errors.mjs';
-export { productionErrorRegistry, createProductionError, checkProductionError, validateProductionReference, adaptProductionRevision, checkProductionApproval } from './production-errors.mjs';
+import { productionIssue, productionOk, validateProductionReference, checkProductionAuthority } from './production-errors.mjs';
+import { checkProductionValueIntegrity } from './production-values.mjs';
+export { productionErrorRegistry, createProductionError, checkProductionError, validateProductionReference, adaptProductionRevision, checkProductionApproval, checkProductionAuthority, checkProductionHostApproval } from './production-errors.mjs';
 export * from './production-values.mjs';
 export * from './production-rows.mjs';
 export * from './production-bundle.mjs';
@@ -28,12 +29,21 @@ export function checkProductionRequest(operation, input, context) {
     return productionIssue(unsupportedFormatOnly ? 'OUTPUT_UNSUPPORTED' : 'INVALID_INPUT');
   }
   if (!checkTrustedContext(context?.scope, context?.scope).ok || context.policy_version !== '1.0.0') return productionIssue('INVALID_TRUST_CONTEXT');
+  const intrinsic = checkProductionValueIntegrity(contract, parsed.value, context.scope);
+  if (!intrinsic.ok) return intrinsic;
   for (const [path, reference] of productionReferences(parsed.value)) {
     const expected = context.references?.[path];
     if (!validateProductionReference(expected).ok) return productionIssue('NOT_FOUND');
     if (canonicalJson(reference) !== canonicalJson(expected)) return productionIssue('NOT_FOUND');
   }
   return parsed;
+}
+
+/** Gate host and request data before the host invokes any resolver or service port. */
+export function checkProductionHostRequest(operation, input, context, references) {
+  const authority = checkProductionAuthority(context?.authority, context?.scope);
+  if (!authority.ok) return authority;
+  return checkProductionRequest(operation, input, { scope: context.scope, policy_version: context.policy_version, references });
 }
 
 /** Validate concrete negotiated value/error constituents, never a fictitious JSON generic. */
@@ -46,7 +56,7 @@ export function validateProductionResult(operation, input, scope) {
     return productionOk(input);
   }
   if (input.ok !== true || Object.keys(input).length !== 2 || !Object.hasOwn(input, 'value') || !values[operation].includes(input.value?.contract)) return productionIssue('INVALID_INPUT');
-  const checked = validateContract(input.value.contract, input.value);
+  const checked = checkProductionValueIntegrity(input.value.contract, input.value, scope);
   return checked.ok ? productionOk(input) : checked;
 }
 
@@ -55,6 +65,8 @@ export function productionSemanticDigest(operation, input, pins) {
   const contract = productionRequests[operation];
   if (!contract || !validateContract(contract, input).ok || !validateContract('ProductionExecutionPins', pins).ok) return productionIssue('INVALID_INPUT');
   if (!checkTrustedContext(pins, { tenant_id: pins.tenant_id, project_id: pins.project_id }).ok) return productionIssue('INVALID_TRUST_CONTEXT');
+  const intrinsic = checkProductionValueIntegrity('ProductionExecutionPins', pins, { tenant_id: pins.tenant_id, project_id: pins.project_id });
+  if (!intrinsic.ok) return intrinsic;
   const { request_id, correlation_id, idempotency_key, ...semantic } = input;
   if (operation === 'personalizeArtifactBatch') semantic.acceptance_policy = input.acceptance_policy ?? 'atomic';
   return productionOk(hashManifest({ operation, input: semantic, pins }));

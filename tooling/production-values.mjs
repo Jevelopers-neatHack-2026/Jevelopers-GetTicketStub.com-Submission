@@ -1,5 +1,8 @@
 import { validateContract, checkTrustedContext, canonicalJson, hashManifest, hashBytes } from './runtime.mjs';
-import { checkPrintSpec } from './capability.mjs';
+import { checkPrintSpec, checkFulfillmentCapabilitySnapshot } from './capability.mjs';
+import { researchContentHash } from './research-creative.mjs';
+import { commerceContentHash } from './commerce-evidence.mjs';
+import { validateVersionedReference } from './operations.mjs';
 import { productionIssue, productionOk } from './production-errors.mjs';
 import { productionReferences } from './production-operations.mjs';
 
@@ -11,8 +14,95 @@ const unique = values => new Set(values).size === values.length;
 const inside = (inner, outer) => BigInt(inner.x_nm) >= BigInt(outer.x_nm) && BigInt(inner.y_nm) >= BigInt(outer.y_nm) && BigInt(inner.x_nm) + BigInt(inner.width_nm) <= BigInt(outer.x_nm) + BigInt(outer.width_nm) && BigInt(inner.y_nm) + BigInt(inner.height_nm) <= BigInt(outer.y_nm) + BigInt(outer.height_nm);
 const validNm = value => /^(?:0|-?[1-9][0-9]{0,9})$/.test(value) && BigInt(value) >= -2000000000n && BigInt(value) <= 2000000000n;
 
+/** Immutable facts only: no freshness, issuer, approval or transitive record authority. */
+export function checkProductionFacts(input, scope) {
+  const parsed = validateContract('EventIntelligencePackage', input);
+  if (!parsed.ok) return parsed;
+  if (!checkTrustedContext(input, scope).ok) return productionIssue('NOT_FOUND');
+  const kinds = { parent_ref: 'EventIntelligencePackage', request_ref: 'ResearchRequest', request_receipt_ref: 'ResearchRequestReceipt', answer_receipt_refs: 'ResearchAnswerReceipt', batch_receipt_ref: 'ResearchBatchReceipt', approval_ref: 'ApprovalReference' };
+  function references(value, path = '') {
+    if (value === null || typeof value !== 'object') return [];
+    if (Object.hasOwn(value, 'id') && Object.hasOwn(value, 'schema_version') && Object.hasOwn(value, 'content_hash')) return [[path, value]];
+    return Object.entries(value).flatMap(([key, child]) => ['value', 'candidate_values'].includes(key) ? [] : references(child, path + '/' + key));
+  }
+  for (const [path, reference] of references(input)) {
+    const kind = kinds[path.replace(/\/\d+$/, '').split('/').at(-1)];
+    if (!validateVersionedReference(reference).ok || (kind && reference.contract !== kind)) return productionIssue('FACTS_UNSUPPORTED', path);
+  }
+  if (input.package_hash !== researchContentHash(input, 'package_hash')) return productionIssue('HASH_MISMATCH', '/package_hash');
+  if (!unique(input.sources.map(source => source.source_id)) || !unique(input.facts.map(fact => fact.fact_id)) || !unique(input.facts.map(fact => fact.key)) || !unique(input.asset_candidates.map(asset => asset.asset_id)) || !unique(input.approved_assets.map(asset => asset.asset_id))) return productionIssue('FACTS_UNSUPPORTED');
+  for (const [index, fact] of input.facts.entries()) {
+    if (fact.fact_hash !== researchContentHash(fact, 'fact_hash')) return productionIssue('HASH_MISMATCH', '/facts/' + index + '/fact_hash');
+    if (fact.provenance.some(provenance => !input.sources.some(source => source.source_id === provenance.source_id && source.retrieved_at === provenance.retrieved_at)) || (fact.confidence.basis === 'not_measured') !== (fact.confidence.value === null)) return productionIssue('FACTS_UNSUPPORTED', '/facts/' + index);
+    switch (fact.status) {
+      case 'known': if (fact.value === null || fact.candidate_values.length) return productionIssue('FACTS_UNSUPPORTED'); break;
+      case 'unknown': if (fact.value !== null || fact.candidate_values.length) return productionIssue('FACTS_UNSUPPORTED'); break;
+      case 'conflicting': if (fact.value !== null || fact.candidate_values.length < 2 || !unique(fact.candidate_values.map(canonicalJson))) return productionIssue('FACTS_UNSUPPORTED'); break;
+      case 'review': break;
+      default: return productionIssue('FACTS_UNSUPPORTED');
+    }
+  }
+  if (input.readiness === 'ready' && input.facts.some(fact => fact.status !== 'known')) return productionIssue('FACTS_UNSUPPORTED');
+  for (const asset of input.asset_candidates) if (!input.sources.some(source => source.source_id === asset.source_id)) return productionIssue('FACTS_UNSUPPORTED');
+  for (const asset of input.approved_assets) if (!input.asset_candidates.some(candidate => candidate.asset_id === asset.asset_id && candidate.revision === asset.revision && candidate.original_hash === asset.original_hash && candidate.transformed_hash === asset.transformed_hash)) return productionIssue('FACTS_UNSUPPORTED');
+  return parsed;
+}
+
+/** Intrinsic commitments in supplied records, separate from resolver authenticity. */
+export function checkProductionValueIntegrity(contract, input, scope) {
+  const parsed = validateContract(contract, input);
+  if (!parsed.ok) return parsed;
+  if (Object.hasOwn(input, 'tenant_id') && !checkTrustedContext(input, scope).ok) return productionIssue('NOT_FOUND');
+  switch (contract) {
+    case 'EventIntelligencePackage': return checkProductionFacts(input, scope);
+    case 'PrintSpec': return checkPrintSpec(input, { trusted_scope: scope });
+    case 'FulfillmentCapabilitySnapshot': return checkFulfillmentCapabilitySnapshot(input, { trusted_scope: scope, now: input.freshness.fresh_until });
+    case 'DesignVersion':
+      if (input.design_hash !== researchContentHash(input, 'design_hash')) return productionIssue('HASH_MISMATCH');
+      break;
+    case 'ArtifactHandoffManifest':
+      if (input.manifest_hash !== commerceContentHash(input, 'manifest_hash')) return productionIssue('HASH_MISMATCH');
+      break;
+    case 'ApprovalReceipt':
+      if (input.receipt_hash !== commerceContentHash(input, 'receipt_hash')) return productionIssue('HASH_MISMATCH');
+      break;
+    case 'TemplateSpec': case 'Composition': case 'PersonalizationSchema': case 'ProductionPolicy': case 'ProductionRuntime': case 'ProductionResource': case 'ProductionDiagnostic': case 'CsvDialect': case 'CsvMapping':
+      if (input.content_hash !== productionContentHash(input)) return productionIssue('HASH_MISMATCH');
+      break;
+    case 'PreflightReport':
+      if (input.report_ref.content_hash !== hashManifest(input.body)) return productionIssue('HASH_MISMATCH');
+      break;
+    case 'ProductionBundle':
+      if (input.schema_version !== '2.0.0') return productionIssue('UNSUPPORTED_VERSION');
+      if (input.bundle_hash !== commerceContentHash(input, 'bundle_hash')) return productionIssue('HASH_MISMATCH');
+      break;
+    case 'ComposeArtifactRequest': case 'PersonalizeBatchRequest': case 'InspectArtifactRequest': case 'ExportBundleRequest': case 'CompareTemplateRequest': case 'ArtifactStatusRequest': case 'ProductionReference': case 'ProductionExecutionPins': case 'ProductionError': case 'ArtifactRef': case 'JobRef': case 'BatchResult': case 'RowResult': case 'CompatibilityReport': case 'ArtifactManifestStatus': case 'ProductionBundleRef': case 'ProductionBundleDetached': case 'ArtifactFile': case 'CsvCheckpoint': break;
+    default: return productionIssue('UNSUPPORTED_VERSION');
+  }
+  const kinds = contract === 'DesignVersion'
+    ? { parent_ref: 'DesignVersion', brief_ref: 'CreativeBrief', control_ref: 'DesignControlSchema', job_ref: 'JobStatus', source_artifact_ref: 'Artifact' }
+    : ['ApprovalReceipt', 'ArtifactHandoffManifest'].includes(contract)
+    ? { design_ref: 'DesignVersion', approval_ref: 'ApprovalReceipt', product_spec_ref: 'PrintSpec' }
+    : { runtime_ref: 'ProductionRuntime', renderer_ref: 'ProductionRuntime', font_refs: 'ProductionResource', allowed_font_refs: 'ProductionResource', product_ref: 'ProductionResource', template_ref: 'TemplateSpec', source_template_ref: 'TemplateSpec', target_template_ref: 'TemplateSpec', spec_ref: 'PrintSpec', capability_ref: 'FulfillmentCapabilitySnapshot', composition_ref: 'Composition', facts_ref: 'EventIntelligencePackage', design_ref: 'DesignVersion', handoff_ref: 'ArtifactHandoffManifest', approval_ref: 'ApprovalReceipt', permission_ref: 'ApprovalReceipt', report_ref: 'PreflightReport', row_schema_ref: 'PersonalizationSchema', personalization_schema_ref: 'PersonalizationSchema', dialect_ref: 'CsvDialect', mapping_ref: 'CsvMapping', checkpoint_ref: 'CsvCheckpoint', asset_ref: 'ArtifactFile', file_ref: 'ArtifactFile', normalization_policy_ref: 'ProductionPolicy', output_policy_ref: 'ProductionPolicy', formatting_policy_ref: 'ProductionPolicy', inspection_policy_ref: 'ProductionPolicy', rule_ref: 'ProductionPolicy', parser_ref: 'ProductionRuntime', job_ref: 'JobStatus' };
+  for (const [path, reference] of productionReferences(input)) {
+    const kind = kinds[path.replace(/\/\d+$/, '').split('/').at(-1)];
+    if (kind && reference.contract !== kind) return productionIssue('REFERENCE_MISMATCH', path);
+  }
+  function children(value) {
+    if (value === null || typeof value !== 'object') return productionOk(value);
+    if (value !== input && typeof value.contract === 'string' && Object.hasOwn(value, 'policy_version')) return checkProductionValueIntegrity(value.contract, value, scope);
+    for (const child of Object.values(value)) {
+      const checked = children(child);
+      if (!checked.ok) return checked;
+    }
+    return productionOk(value);
+  }
+  const nested = children(input);
+  return nested.ok ? parsed : nested;
+}
+
 export function checkTemplateSpec(input, scope) {
-  const parsed = validateContract('TemplateSpec', input);
+  const parsed = checkProductionValueIntegrity('TemplateSpec', input, scope);
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(input, scope).ok) return productionIssue('NOT_FOUND');
   if (input.content_hash !== productionContentHash(input)) return productionIssue('HASH_MISMATCH');
@@ -35,7 +125,7 @@ export function checkTemplateSpec(input, scope) {
 }
 
 export function checkPersonalizationSchema(input, template) {
-  const parsed = validateContract('PersonalizationSchema', input);
+  const parsed = checkProductionValueIntegrity('PersonalizationSchema', input, { tenant_id: template.tenant_id, project_id: template.project_id });
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(input, { tenant_id: template.tenant_id, project_id: template.project_id }).ok) return productionIssue('NOT_FOUND');
   if (input.content_hash !== productionContentHash(input) || template.personalization_schema_ref.id !== input.schema_id || template.personalization_schema_ref.revision !== input.revision || template.personalization_schema_ref.content_hash !== input.content_hash) return productionIssue('HASH_MISMATCH');
@@ -46,7 +136,7 @@ export function checkPersonalizationSchema(input, template) {
 
 /** Supported facts and resolved input commitments must be independently supplied. */
 export function checkComposition(input, context) {
-  const parsed = validateContract('Composition', input);
+  const parsed = checkProductionValueIntegrity('Composition', input, context.scope);
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(input, context.scope).ok) return productionIssue('NOT_FOUND');
   if (input.content_hash !== productionContentHash(input)) return productionIssue('HASH_MISMATCH');
@@ -59,8 +149,8 @@ export function checkComposition(input, context) {
   if (!policy.ok) return policy;
   if (input.template_ref.id !== template.value.template_id || input.template_ref.revision !== template.value.revision || input.template_ref.content_hash !== template.value.content_hash) return productionIssue('HASH_MISMATCH');
   if (input.facts_ref.contract !== 'EventIntelligencePackage' || !context.facts || context.facts.reference?.contract !== 'EventIntelligencePackage') return productionIssue('FACTS_UNSUPPORTED');
-  const facts = validateContract('EventIntelligencePackage', context.facts.package);
-  if (!facts.ok || !checkTrustedContext(facts.value, context.scope).ok || !equal(input.facts_ref, context.facts.reference) || input.facts_ref.id !== facts.value.package_id || input.facts_ref.revision !== facts.value.package_version || input.facts_ref.content_hash !== facts.value.package_hash || facts.value.package_hash !== hashManifest(Object.fromEntries(Object.entries(facts.value).filter(([key]) => key !== 'package_hash')))) return productionIssue('FACTS_UNSUPPORTED');
+  const facts = checkProductionFacts(context.facts.package, context.scope);
+  if (!facts.ok || !equal(input.facts_ref, context.facts.reference) || input.facts_ref.id !== facts.value.package_id || input.facts_ref.revision !== facts.value.package_version || input.facts_ref.content_hash !== facts.value.package_hash) return productionIssue('FACTS_UNSUPPORTED');
   if (context.expected_resolved_layout_commitment !== input.resolved_layout_commitment || !equal(input.policy_refs, context.expected_policy_refs) || !equal(input.font_refs, context.expected_font_refs) || !equal(input.runtime_ref, context.expected_runtime_ref)) return productionIssue('POLICY_MISMATCH');
   if (!equal(input.spec_ref, template.value.spec_ref) || !equal(input.capability_ref, template.value.capability_ref) || !equal(input.policy_refs.layout, template.value.layout_policy_ref) || !equal(input.policy_refs.formatting, template.value.formatting_policy_ref) || !equal(input.font_refs, template.value.font_refs)) return productionIssue('POLICY_MISMATCH');
   const rowFields = policy.value.fields.filter(field => field.source_policy === 'row_display');

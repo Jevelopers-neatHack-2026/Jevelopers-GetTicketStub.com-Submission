@@ -4,6 +4,7 @@ export type ProductionResult<T> = { readonly ok: true; readonly value: T } | { r
 export type ProductionReferenceValue = ProductionReference['reference'];
 export type ProductionOperation = ProductionError['operation'];
 export type ProductionScope = Pick<TrustedContext, 'tenant_id' | 'project_id'>;
+export type ProductionHostAuthority = { readonly actor_id: ApprovalReceipt['actor_id']; readonly audience: ApprovalReceipt['audience'] };
 export type ProductionCheck<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly errors: readonly { readonly code: string; readonly path: string; readonly keyword?: string }[] };
 export type ProductionRequestMap = { readonly composeArtifact: ComposeArtifactRequest; readonly personalizeArtifactBatch: PersonalizeBatchRequest; readonly inspectArtifact: InspectArtifactRequest; readonly exportArtifactBundle: ExportBundleRequest; readonly compareTemplateCompatibility: CompareTemplateRequest; readonly getArtifactManifestStatus: ArtifactStatusRequest };
 export type ProductionValueMap = { readonly composeArtifact: ArtifactRef; readonly personalizeArtifactBatch: JobRef | BatchResult; readonly inspectArtifact: PreflightReport; readonly exportArtifactBundle: ProductionBundleRef; readonly compareTemplateCompatibility: CompatibilityReport; readonly getArtifactManifestStatus: ArtifactManifestStatus };
@@ -31,6 +32,8 @@ export interface ProductionMeteringPort {
 /** Host implementation supplies and authenticates ports. Shared-contracts never calls them. */
 export interface ProductionContext {
   readonly scope: ProductionScope;
+  /** Authenticated independently by the host and bound before operation entry. */
+  readonly authority: ProductionHostAuthority;
   readonly clock: { readonly now: () => UtcTime };
   readonly policy_version: '1.0.0';
   readonly references: ProductionReferencePort;
@@ -55,7 +58,7 @@ export interface ProductionOperations {
 }
 export type ProductionRequestContext = { readonly scope: ProductionScope; readonly policy_version: '1.0.0'; readonly references: Readonly<Record<string, ProductionReferenceValue>> };
 export type ProductionErrorContext = { readonly scope: ProductionScope; readonly correlation_id: ContractMap['CommonEnvelope']['correlation_id']; readonly operation: ProductionOperation; readonly diagnostic_ref?: ProductionError['diagnostic_ref']; readonly blocking_condition?: ProductionError['blocking_condition']; readonly side_effects?: ProductionError['side_effects']; readonly usage_state?: ProductionError['usage_state']; readonly field_path?: ProductionError['field_path']; readonly row_id?: string };
-export type ProductionApprovalContext = { readonly scope: ProductionScope; readonly now: UtcTime; readonly expected_binding: ApprovalReceipt['binding']; readonly actor_id: string; readonly audience: string };
+export type ProductionApprovalContext = { readonly scope: ProductionScope; readonly now: UtcTime; readonly expected_binding: ApprovalReceipt['binding'] } & ProductionHostAuthority;
 export type ProductionFacts = { readonly reference: ProductionReferenceValue; readonly package: EventIntelligencePackage };
 export type CompositionContext = { readonly scope: ProductionScope; readonly template: TemplateSpec; readonly personalization: PersonalizationSchema; readonly facts: ProductionFacts | null; readonly expected_references: Readonly<Record<string, ProductionReferenceValue>>; readonly expected_resolved_layout_commitment: Sha256; readonly expected_policy_refs: Composition['policy_refs']; readonly expected_font_refs: Composition['font_refs']; readonly expected_runtime_ref: Composition['runtime_ref']; readonly asset_bytes: Readonly<Record<string, Uint8Array>> };
 export type PlanContext = { readonly scope: ProductionScope; readonly policy: PersonalizationSchema; readonly template: TemplateSpec };
@@ -78,6 +81,9 @@ export declare function checkProductionError(value: unknown, scope: ProductionSc
 export declare function validateProductionReference(value: unknown): ProductionCheck<ProductionReferenceValue>;
 export declare function adaptProductionRevision(value: unknown): ProductionCheck<ProductionReferenceValue>;
 export declare function checkProductionApproval(value: { readonly receipt: ApprovalReceipt; readonly status: ApprovalVerificationOutcome['status']; readonly checked_at: UtcTime }, context: ProductionApprovalContext): ProductionCheck<{ readonly receipt: ApprovalReceipt; readonly status: ApprovalVerificationOutcome['status']; readonly checked_at: UtcTime }>;
+export declare function checkProductionAuthority(value: unknown, scope: ProductionScope): ProductionCheck<ProductionHostAuthority>;
+export declare function checkProductionHostApproval(value: { readonly receipt: ApprovalReceipt; readonly status: ApprovalVerificationOutcome['status']; readonly checked_at: UtcTime }, context: Pick<ProductionContext, 'scope' | 'authority'>, expectedBinding: ApprovalReceipt['binding'], now: UtcTime): ProductionCheck<{ readonly receipt: ApprovalReceipt; readonly status: ApprovalVerificationOutcome['status']; readonly checked_at: UtcTime }>;
+export declare function checkProductionHostRequest<K extends ProductionOperation>(operation: K, value: unknown, context: Pick<ProductionContext, 'scope' | 'authority' | 'policy_version'>, references: ProductionRequestContext['references']): ProductionCheck<ProductionRequestMap[K]>;
 export declare function productionReferences(value: unknown): readonly (readonly [string, ProductionReferenceValue])[];
 export declare function checkProductionRequest<K extends ProductionOperation>(operation: K, value: unknown, context: ProductionRequestContext): ProductionCheck<ProductionRequestMap[K]>;
 export declare function validateProductionResult<K extends ProductionOperation>(operation: K, value: unknown, scope: ProductionScope): ProductionCheck<ProductionResult<ProductionValueMap[K]>>;
@@ -87,6 +93,8 @@ export declare function productionContentHash(value: TemplateSpec | Composition 
 export declare function checkTemplateSpec(value: unknown, scope: ProductionScope): ProductionCheck<TemplateSpec>;
 export declare function checkPersonalizationSchema(value: unknown, template: TemplateSpec): ProductionCheck<PersonalizationSchema>;
 export declare function checkComposition(value: unknown, context: CompositionContext): ProductionCheck<Composition>;
+export declare function checkProductionFacts(value: unknown, scope: ProductionScope): ProductionCheck<EventIntelligencePackage>;
+export declare function checkProductionValueIntegrity<K extends ContractName>(contract: K, value: unknown, scope: ProductionScope): ProductionCheck<ContractMap[K]>;
 export declare function nmToPrivateMillimetres(value: string, maximumNm: string): ProductionCheck<string>;
 export declare function privateMillimetresToNm(value: string, maximumNm: string): ProductionCheck<string>;
 export declare function translateProductionGeometry(value: unknown, context: { readonly scope: ProductionScope; readonly maximum_nm?: string }): ProductionCheck<{ readonly unit: 'mm'; readonly geometry: Readonly<Record<string, Readonly<Record<string, string>>>>; readonly surfaces: readonly string[]; readonly evidence_mode: 'supplied_values_only' }>;
@@ -99,6 +107,7 @@ export declare function projectBatchPartialFailure(value: readonly BatchResult[]
 export declare function projectBatchJobStatus(value: readonly BatchResult[], context: JobProjectionContext): ProductionCheck<{ readonly value: JobStatus; readonly equivalent: false; readonly loss: readonly string[] }>;
 export declare function checkCsvInput(value: unknown, context: CsvContext): ProductionCheck<{ readonly request: PersonalizeBatchRequest; readonly parser_implemented: false; readonly launch_authorized: false }>;
 export declare const productionArchiveLimits: { readonly payloads: 97; readonly zip_entries: 98; readonly outer_descriptors: 100; readonly entry_bytes: 8388608; readonly payload_bytes: 33554432; readonly archive_bytes: 41943040; readonly manifest_bytes: 4194304; readonly detached_bytes: 1048576 };
+export declare const productionJsonLimits: { readonly maximum_depth: 64; readonly maximum_tokens: 100000 };
 export declare function safeProductionFilename(value: string): boolean;
 export declare function verifyProductionZip(value: Uint8Array, expected: readonly ArtifactFile[]): ProductionCheck<readonly ProductionObservedFile[]>;
 export declare function productionBundleContentHash(value: ProductionBundle_2_0_0): Sha256;

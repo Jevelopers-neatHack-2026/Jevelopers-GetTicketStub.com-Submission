@@ -6,6 +6,27 @@ export { productionArchiveLimits, safeProductionFilename, verifyProductionZip } 
 const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 const reserved = Object.freeze({ manifest: 'manifest.json', archive: 'archive.zip', detached: 'detached.json' });
 const visuals = new Set(['image/svg+xml', 'image/png', 'image/jpeg', 'image/webp', 'application/pdf']);
+export const productionJsonLimits = Object.freeze({ maximum_depth: 64, maximum_tokens: 100000 });
+
+function jsonBudget(json) {
+  let depth = 0, tokens = 0, quoted = false, escaped = false, scalar = false;
+  for (const character of json) {
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') { quoted = true; scalar = false; tokens++; }
+    else if (character === '{' || character === '[') { scalar = false; tokens++; if (++depth > productionJsonLimits.maximum_depth) return productionIssue('RESOURCE_LIMIT'); }
+    else if (character === '}' || character === ']') { scalar = false; tokens++; if (--depth < 0) return productionIssue('INTEGRITY_FAILURE'); }
+    else if (character === ':' || character === ',') { scalar = false; tokens++; }
+    else if (/\s/.test(character)) scalar = false;
+    else if (!scalar) { scalar = true; tokens++; }
+    if (tokens > productionJsonLimits.maximum_tokens) return productionIssue('RESOURCE_LIMIT');
+  }
+  return quoted || depth !== 0 ? productionIssue('INTEGRITY_FAILURE') : productionOk(json);
+}
 export function productionBundleContentHash(value) {
   return hashManifest(Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'bundle_hash')));
 }
@@ -39,6 +60,8 @@ export function parseProductionCanonicalBytes(contract, version, bytes, maximum)
   if (!(bytes instanceof Uint8Array) || !Number.isSafeInteger(maximum) || maximum < 1 || maximum > ceiling || bytes.byteLength > maximum) return productionIssue('RESOURCE_LIMIT');
   let json;
   try { json = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes); } catch (error) { if (error instanceof TypeError) return productionIssue('INTEGRITY_FAILURE'); throw error; }
+  const budget = jsonBudget(json);
+  if (!budget.ok) return budget;
   const parsed = parseContractVersion(contract, version, json);
   if (!parsed.ok || canonicalJson(parsed.value) !== json) return productionIssue('INTEGRITY_FAILURE');
   return parsed;

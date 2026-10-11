@@ -17,6 +17,8 @@
   "retained_v1": "Exact schema/fixture bytes and explicit v1 commerce semantics",
   "v2_to_v1": "LEGACY_UNREPRESENTABLE",
   "reviewed_release": false,
+  "integrity_repair": "compatibility/production-integrity-findings.json",
+  "host_authority": {"required": true, "fields": ["actor_id", "audience"], "origin": "independently authenticated host before operation", "accepted": false},
   "producer_acknowledgement": null,
   "consumer_acknowledgement": null,
   "accepted_schema_pin": null,

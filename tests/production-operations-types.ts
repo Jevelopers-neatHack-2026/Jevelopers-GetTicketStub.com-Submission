@@ -1,5 +1,6 @@
 import type { ProductionContext as CommerceProductionContext } from '@jevelopers/shared-contracts/commerce-evidence';
-import type { ProductionContext, ProductionOperations, ProductionResult, ComposeArtifactRequest, PersonalizeBatchRequest, InspectArtifactRequest, ExportBundleRequest, CompareTemplateRequest, ArtifactStatusRequest, ArtifactRef, JobRef, BatchResult, PreflightReport, ProductionBundleRef, CompatibilityReport, ArtifactManifestStatus, ProductionReferenceValue } from '@jevelopers/shared-contracts/production-operations';
+import type { ProductionContext, ProductionHostAuthority, ProductionOperations, ProductionResult, ComposeArtifactRequest, PersonalizeBatchRequest, InspectArtifactRequest, ExportBundleRequest, CompareTemplateRequest, ArtifactStatusRequest, ArtifactRef, JobRef, BatchResult, PreflightReport, ProductionBundleRef, CompatibilityReport, ArtifactManifestStatus, ProductionReferenceValue } from '@jevelopers/shared-contracts/production-operations';
+import { checkProductionHostRequest, checkProductionHostApproval } from '@jevelopers/shared-contracts/production-operations';
 import type { ProductionBundle_1_0_0, ProductionBundle_2_0_0, Composition } from '@jevelopers/shared-contracts';
 type Assert<T extends true> = T;
 type Equal<A,B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
@@ -14,4 +15,17 @@ type OldContext = Assert<Equal<CommerceProductionContext['expected_spec'], Produ
 type NewBundle = Assert<Equal<ProductionBundle_2_0_0['schema_version'], '2.0.0'>>;
 type UnsupportedVersion = Assert<'9.0.0' extends ProductionReferenceValue['schema_version'] ? false : true>;
 type ReadonlyFacts = Assert<Equal<Composition['fact_bindings'], Readonly<Composition['fact_bindings']>>>;
+type AuthorityRequired = Assert<{} extends Pick<ProductionContext, 'authority'> ? false : true>;
+type AuthorityAudience = Assert<Equal<ProductionContext['authority']['audience'], import('@jevelopers/shared-contracts').ApprovalReceipt['audience']>>;
+type AuthorityActor = Assert<Equal<ProductionContext['authority']['actor_id'], import('@jevelopers/shared-contracts').ApprovalReceipt['actor_id']>>;
+export type ProductionAuthorityParity = readonly [AuthorityRequired, AuthorityAudience, AuthorityActor];
+const authority = { actor_id: 'authenticated_host_actor', audience: 'print-production' } satisfies ProductionHostAuthority;
+declare const context: ProductionContext;
+declare const request: ComposeArtifactRequest;
+declare const references: import('@jevelopers/shared-contracts/production-operations').ProductionRequestContext['references'];
+declare const observation: Parameters<typeof checkProductionHostApproval>[0];
+declare const binding: Parameters<typeof checkProductionHostApproval>[2];
+declare const now: Parameters<typeof checkProductionHostApproval>[3];
+checkProductionHostRequest('composeArtifact', request, { ...context, authority }, references);
+checkProductionHostApproval(observation, { ...context, authority }, binding, now);
 export type ProductionTypeParity = readonly [Compose,Personalize,Inspect,Export,Compare,Status,Contexts,OldContext,NewBundle,UnsupportedVersion,ReadonlyFacts];

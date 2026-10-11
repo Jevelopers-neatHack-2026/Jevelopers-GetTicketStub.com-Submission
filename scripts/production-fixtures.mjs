@@ -6,11 +6,14 @@ import { productionBundleContentHash, productionPayloadSetHash } from '../toolin
 import { createProductionError } from '../tooling/production-errors.mjs';
 import { crc32 } from 'node:zlib';
 import { hashPrintSpec } from '../tooling/capability.mjs';
+import { researchContentHash } from '../tooling/research-creative.mjs';
 
 const packet = resolve(process.argv[2]);
 const rootDigest = 'sha256:4d748f251360e9ddbfeec62d80699702c479c3c6ad67a9321581c546e86280ec';
 if (hashBytes(await readFile(packet + '/digest-manifest.json')) !== rootDigest) throw new Error('Wrong immutable packet');
 const read = async name => JSON.parse(await readFile(name, 'utf8'));
+const priorCalibration = await read('fixtures/ProductionCalibration.json');
+const priorProvenance = await read('fixtures/ProductionDerivedProvenance.json');
 const source = await read(packet + '/proposal.json');
 const index = await read(packet + '/fixtures/index.json');
 for (const entry of index.fixtures) {
@@ -41,11 +44,11 @@ const specRef = reference('PrintSpec',uuid(40),spec.spec_identity);
 const capture = structuredClone((await read('fixtures/FulfillmentCapabilitySnapshot.json')).valid);
 const capabilityRef = reference('FulfillmentCapabilitySnapshot',uuid(41),capture.capture_identity);
 const facts = structuredClone((await read('fixtures/EventIntelligencePackage.json')).valid); Object.assign(facts,scope);
-delete facts.package_hash; facts.package_hash = hashManifest(facts);
+facts.package_hash = researchContentHash(facts, 'package_hash');
 const factsRef = reference('EventIntelligencePackage',facts.package_id,facts.package_hash);
 const design = (await read('fixtures/DesignVersion.json')).valid, handoff = (await read('fixtures/ArtifactHandoffManifest.json')).valid;
 const approval = (await read('fixtures/ApprovalReceipt.json')).valid;
-const designRef = reference('DesignVersion',design.design_version_id,design.content_hash ?? hashManifest(design));
+const designRef = reference('DesignVersion',design.design_version_id,researchContentHash(design, 'design_hash'));
 const handoffRef = reference('ArtifactHandoffManifest',handoff.handoff_id,handoff.manifest_hash);
 const approvalRef = reference('ApprovalReceipt',approval.approval_id,approval.receipt_hash);
 const policy = (await read(packet + '/fixtures/personalization-schema.json')).wire;
@@ -123,5 +126,15 @@ for (const [contract,valid] of Object.entries(values)) {
 const evidence={scope,now,template:sealedTemplate,personalization,composition:sealedComposition,facts:{reference:factsRef,package:facts},spec,capture,pins,policy_documents:policyDocuments,resources:[font,product,lineageResource],asset_bytes:{[sourceRef.id]:bytes['output.svg'].toString('base64'),[logoRef.id]:bytes['source-logo.svg'].toString('base64')},byte_files:Object.fromEntries(Object.entries(bytes).filter(([name])=>publication.file_set.some(file=>file.filename===name)).map(([name,data])=>[name,data.toString('base64')])),trusted_commitment:publication,rows,batch,accepted:false,live_integration:false,synthetic:true};
 await writeFile('fixtures/ProductionCalibration.json',JSON.stringify(evidence,null,2)+'\n');
 const provenance={packet_root:rootDigest,source_sha:source.sourceSHA,transformation_version:'canonical-production-corrections/1',evidence_mode:'genuine_synthetic_test_doubles_and_original_calibration_bytes',accepted:false,live_integration:false,originals:index.fixtures.map(row=>({path:row.path,source_byte_size:row.byte_size,source_byte_hash:'sha256:'+row.byte_sha256,mapping:'C1..C15 canonical adaptation and corresponding negative checker; original remains private and unchanged'})),derived:await Promise.all(Object.entries(fixtures).map(async([contract,path])=>({contract,path,byte_hash:hashBytes(await readFile(path)),content_hash:values[contract].content_hash??null}))),domains:{composition:compositionRef.content_hash,render:sourceHash,batch:job.batch_input_hash,bundle:bundle.bundle_hash,manifest:manifestFile.byte_hash,archive:archiveFile.byte_hash,detached:detachedFile.byte_hash,payload_set:detached.payload_set_hash},limitations:['Calibration is not personalized production output.','Synthetic references and policy documents have no real registry or issuer authority.','Unconfirmed domain facts, fonts, geometry, approval and consumer pins remain pending.']};
+provenance.integrity_repair = {
+  transformation_version: 'canonical-production-integrity/1',
+  source_commit: 'b47defaaf630c9d64dcc315c6c4d49fadd194587',
+  before: priorProvenance.integrity_repair?.before ?? { domains: priorProvenance.domains, derived: priorProvenance.derived, facts: priorCalibration.facts.reference, design: priorCalibration.composition.design_ref },
+  after: { domains: provenance.domains, derived: provenance.derived, facts: factsRef, design: designRef },
+  mappings: ['EventIntelligencePackage.package_hash uses existing researchContentHash(package, package_hash), excluding delivery fields.', 'DesignVersion reference uses existing researchContentHash(design, design_hash).', 'Recompute composition/input, request/plan, report, lineage, payload, bundle, manifest, archive and detached commitments from the corrected dependencies.'],
+  raw_packet_unchanged: true,
+  original_expectations_unchanged: true,
+  accepted: false
+};
 await writeFile('fixtures/ProductionDerivedProvenance.json',JSON.stringify(provenance,null,2)+'\n');
 console.log(JSON.stringify({derived_contracts:Object.keys(values).length,source_vectors:index.fixtures.length,domains:provenance.domains}));

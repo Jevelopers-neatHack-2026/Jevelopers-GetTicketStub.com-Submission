@@ -1,4 +1,6 @@
-import { validateContract, validatePrimitive, checkTrustedContext, canonicalJson, hashManifest } from './runtime.mjs';
+import { validateContract, validatePrimitive, checkTrustedContext, canonicalJson } from './runtime.mjs';
+import { commerceContentHash } from './commerce-evidence.mjs';
+import { DefinitionApprovalBinding } from '../generated/validators.mjs';
 const records = {
   "INVALID_INPUT": {
     "safe_message": "The production input is invalid.",
@@ -121,10 +123,11 @@ export function adaptProductionRevision(input) {
 
 /** Supply actual current verifier observations. No cached validity is assumed. */
 export function checkProductionApproval(input, context) {
+  if (!checkProductionAuthority(context, context?.scope).ok || !validatePrimitive('UtcTime', context?.now).ok || !DefinitionApprovalBinding(context?.expected_binding)) return productionIssue('INVALID_TRUST_CONTEXT');
   const receipt = validateContract('ApprovalReceipt', input?.receipt);
-  if (!receipt.ok || !validatePrimitive('UtcTime', input.checked_at).ok || !validatePrimitive('UtcTime', context.now).ok) return productionIssue('INVALID_INPUT');
+  if (!receipt.ok || !validatePrimitive('UtcTime', input?.checked_at).ok) return productionIssue('INVALID_INPUT');
   if (!checkTrustedContext(receipt.value, context.scope).ok) return productionIssue('NOT_FOUND');
-  if (receipt.value.receipt_hash !== hashManifest(Object.fromEntries(Object.entries(receipt.value).filter(([key]) => key !== 'receipt_hash'))) || receipt.value.issuer !== 'getticketstub.com' || receipt.value.audience !== context.audience || receipt.value.actor_id !== context.actor_id || canonicalJson(receipt.value.binding) !== canonicalJson(context.expected_binding)) return productionIssue('APPROVAL_INVALID');
+  if (receipt.value.receipt_hash !== commerceContentHash(receipt.value, 'receipt_hash') || receipt.value.issuer !== 'getticketstub.com' || receipt.value.audience !== context.audience || receipt.value.actor_id !== context.actor_id || canonicalJson(receipt.value.binding) !== canonicalJson(context.expected_binding)) return productionIssue('APPROVAL_INVALID');
   const now = Date.parse(context.now), checked = Date.parse(input.checked_at);
   if (checked > now || checked !== now || Date.parse(receipt.value.issued_at) > now || Date.parse(receipt.value.expires_at) <= now) return productionIssue('APPROVAL_INVALID');
   switch (input.status) {
@@ -134,4 +137,17 @@ export function checkProductionApproval(input, context) {
     case 'rejected': case 'stale': case 'expired': return productionIssue('APPROVAL_INVALID');
     default: return productionIssue('INVALID_INPUT');
   }
+}
+
+/** Host-authenticated expectation; this check does not authenticate an identity. */
+export function checkProductionAuthority(input, scope) {
+  if (!checkTrustedContext(scope, scope).ok || typeof input?.actor_id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(input.actor_id) || !['creative-engine', 'print-production', 'getticketstub.com', 'agent-harness', 'event-intelligence'].includes(input?.audience)) return productionIssue('INVALID_TRUST_CONTEXT');
+  return productionOk({ actor_id: input.actor_id, audience: input.audience });
+}
+
+/** Bind returned verifier evidence to the host expectation, never the receipt identity. */
+export function checkProductionHostApproval(input, context, expectedBinding, now) {
+  const authority = checkProductionAuthority(context?.authority, context?.scope);
+  if (!authority.ok) return authority;
+  return checkProductionApproval(input, { scope: context.scope, now, expected_binding: expectedBinding, ...authority.value });
 }

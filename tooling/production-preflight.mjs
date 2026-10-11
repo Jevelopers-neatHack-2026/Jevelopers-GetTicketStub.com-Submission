@@ -1,6 +1,7 @@
 import { validateContract, canonicalJson, hashManifest, checkTrustedContext } from './runtime.mjs';
 import { productionIssue, productionOk, checkProductionApproval, validateProductionReference } from './production-errors.mjs';
 import { checkComposition, translateProductionGeometry } from './production-values.mjs';
+import { checkProductionBundleV2 } from './production-bundle.mjs';
 import { checkPrintSpecBinding } from './capability.mjs';
 
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
@@ -19,8 +20,8 @@ export function checkProductionPreflight(input, context) {
 
 /** Eligibility is evaluated independently of bytes with actual supplied domain evidence. */
 export function checkProductionBundleEligibility(bundle, context) {
-  const parsed = validateContract('ProductionBundle', bundle);
-  if (!parsed.ok || bundle.schema_version !== '2.0.0') return productionIssue('UNSUPPORTED_VERSION');
+  const parsed = checkProductionBundleV2(bundle, context.scope);
+  if (!parsed.ok) return parsed;
   if (!checkTrustedContext(bundle, context.scope).ok) return productionIssue('NOT_FOUND');
   const composition = checkComposition(context.composition, context.composition_context);
   if (!composition.ok) return composition;
