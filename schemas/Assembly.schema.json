@@ -44,6 +44,22 @@
           },
           "title": "Cleanup Command",
           "type": "array"
+        },
+        "supported_modes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Mode"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supported Modes"
         }
       },
       "required": [

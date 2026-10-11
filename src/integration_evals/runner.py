@@ -95,6 +95,11 @@ def execute_case(
         return OwnerExecution(
             blocked(case, preflight.mode, min(missing), "selected boundary dependency unavailable")
         )
+    component = next(c for c in context.assembly.components if c.repository == case.component)
+    if not component.supports_mode(context.settings.mode):
+        return OwnerExecution(
+            blocked(case, context.settings.mode, case.component, "owner adapter mode unsupported")
+        )
     blocker = case_blocker(case, context.assembly.providers, preflight)
     return (
         OwnerExecution(blocked(case, preflight.mode, blocker.owner, blocker.reason))

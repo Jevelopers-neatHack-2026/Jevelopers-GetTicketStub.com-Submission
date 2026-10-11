@@ -221,6 +221,11 @@ tooling suite.
 
 ## Current unresolved obligations
 
+The [source retrieval component](retrieval-component.md) selects the original
+Linux `ssrf-egress` case using a mock-only owner capability and pinned local fixture
+hooks. Its finite transport/limit observations are partial IE-11A evidence; they do
+not establish all DNS, egress or downstream handoff obligations.
+
 The per-run release-audit.json lists every exact leaf AC from all 21 launch issues and
 every original P0 criterion. Repository tooling readiness is partial; integrated product
 acceptance is blocked. No launch issue is represented as closed or complete.

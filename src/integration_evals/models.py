@@ -117,6 +117,11 @@ class Component(Record):
     lockfile_digest: Digest
     command: tuple[str, ...] = ()
     cleanup_command: tuple[str, ...] = ()
+    supported_modes: tuple[Mode, ...] | None = Field(default=None, min_length=1)
+
+    def supports_mode(self, mode: Mode) -> bool:
+        """Preserve the original unrestricted contract when capability metadata is omitted."""
+        return self.supported_modes is None or mode in self.supported_modes
 
 
 class Assembly(Record):

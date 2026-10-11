@@ -35,8 +35,8 @@ jobs:
       - name: Verify real Linux isolation and retained owner output
         run: |
           mkdir -p reports
-          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py -o cache_dir="${RUNNER_TEMP}/integration-evals-root-cache" --junitxml=reports/linux-owner-junit.xml
-      - run: uv run pytest --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --junitxml=reports/tooling-junit.xml
+          sudo -n .venv/bin/python -m pytest tests/test_owner_output.py tests/test_processes.py tests/test_retrieval_capability.py -o cache_dir="${RUNNER_TEMP}/integration-evals-root-cache" --junitxml=reports/linux-owner-junit.xml
+      - run: uv run pytest --ignore=tests/test_owner_output.py --ignore=tests/test_processes.py --ignore=tests/test_retrieval_capability.py --junitxml=reports/tooling-junit.xml
       - name: Verify complete canonical scope and controlled failures
         shell: bash
         run: |
@@ -45,6 +45,15 @@ jobs:
           sudo -n env IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" .venv/bin/python -m pytest integration_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-canonical-cache" --junitxml=reports/canonical-junit.xml
           sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/node-runtime.json --output reports/runs/contracts --candidate-scope
           sudo -n .venv/bin/integration-evals contracts --pin contracts/producer-pin.json --producer .contract-producer --runtime reports/node-runtime.json --output reports/runs/contracts
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Jevelopers-neatHack-2026/event-intelligence
+          ref: d91e08d666abc243ae456a7f9f1bc9c745ca4f8d
+          path: .event-producer
+          persist-credentials: false
+      - name: Verify source retrieval boundary in an isolated Linux component workspace
+        run: |
+          sudo -n env IE_EVENT_SOURCE="$PWD/.event-producer" IE_CONTRACT_SOURCE="$PWD/.contract-producer" IE_CONTRACT_RUNTIME="$PWD/reports/node-runtime.json" IE_COMPONENT_EVIDENCE="$PWD/reports/retrieval-component" .venv/bin/python -m pytest component_tests -o cache_dir="${RUNNER_TEMP}/integration-evals-component-cache" --junitxml=reports/component-junit.xml
       - name: Verify missing assembly is reported as blocked
         shell: bash
         run: |

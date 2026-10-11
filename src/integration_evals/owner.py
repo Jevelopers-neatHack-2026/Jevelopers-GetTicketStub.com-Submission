@@ -51,6 +51,10 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
     component = next(
         (c for c in context.assembly.components if c.repository == case.component), None
     )
+    if component is not None and not component.supports_mode(settings.mode):
+        return OwnerExecution(
+            blocked(case, settings.mode, case.component, "owner adapter mode unsupported")
+        )
     if component is None or not component.command or not component.cleanup_command:
         return OwnerExecution(
             blocked(

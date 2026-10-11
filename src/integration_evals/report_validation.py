@@ -61,7 +61,8 @@ def validate_suite_binding(run: Run, suite: Suite, evidence: dict[str, Evidence]
     definitions = {case.id: case for case in suite.cases}
     if {result.case_id for result in run.results} != set(definitions):
         fail("archived_case_scope_mismatch", run.id)
-    pins = {component.repository: component.revision for component in run.components}
+    components = {component.repository: component for component in run.components}
+    pins = {name: component.revision for name, component in components.items()}
     for result in run.results:
         case = definitions[result.case_id]
         if result.requirements != case.requirements or (
@@ -69,6 +70,9 @@ def validate_suite_binding(run: Run, suite: Suite, evidence: dict[str, Evidence]
         ):
             fail("archived_case_contract_mismatch", result.case_id)
         if result.outcome is Outcome.PASSED:
+            component = components.get(case.component)
+            if component is not None and not component.supports_mode(result.mode):
+                fail("archived_component_mode_mismatch", case.id)
             validate_claim(
                 case,
                 ClaimContext(pins, run.id, result.mode),
