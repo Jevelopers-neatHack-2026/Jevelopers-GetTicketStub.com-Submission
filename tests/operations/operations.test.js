@@ -35,7 +35,7 @@ import { operationsStoragePolicy, readOperationsConfig, validateLocalPlanWork } 
 import { createOperationsWorker } from '../../src/worker/private/worker.js';
 import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } from '../../src/health/private/health.js';
 import { runBoundedLocalPlan } from '../../src/orchestrator/internal/controller.js';
-import { buildSafeFailureDiagnostics } from './failure-diagnostics.js';
+import { buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics } from './failure-diagnostics.js';
 import { createAdmissionFailureDiagnostic } from './fixtures/admission-store-child.mjs';
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
@@ -90,7 +90,11 @@ const METRICS = {
   ci1PhaseCaptureOverflow: false,
   ci1PhaseCaptureIncomplete: false,
   ci1PhaseCaptureChildCloseUnconfirmed: false,
-  ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
+  ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false,
+  c02ControlReadFailureLines: '',
+  c02ControlReadFailureCount: 0,
+  c02ControlReadFailureBytes: 0,
+  c02ControlReadDiagnosticsComplete: true
 };
 
 const CI1_PHASES = new Set([
@@ -124,6 +128,102 @@ const CI1_LOCAL_WATCHDOG_RESULT_CLOSE_MARGIN_MS = 1_000;
 const CI1_LOCAL_WATCHDOG_CLEANUP_COMPLETION_MS = CI1_LOCAL_WATCHDOG_POLL_MS
   + (2 * CI1_LOCAL_WATCHDOG_SIGNAL_PHASE_MS)
   + CI1_LOCAL_WATCHDOG_RESULT_CLOSE_MARGIN_MS;
+const C02_CONTROL_DIAGNOSTIC_PREFIX = 'AH11_OPS_C02_CONTROL_FAILURE ';
+const C02_CONTROL_DIAGNOSTIC_MAX_RECORDS = 8;
+const C02_CONTROL_DIAGNOSTIC_MAX_LINE_BYTES = 192;
+const C02_CONTROL_DIAGNOSTIC_MAX_BYTES = 1_536;
+const C02_CONTROL_DIAGNOSTIC_BOUNDARIES = new Set([
+  'C02_RUNNER_READY', 'C02_MARKER_CONTROL_READY', 'C02_WATCHDOG_READY',
+  'C02_WATCHDOG_TARGET_ACK', 'C02_INERT_DESCENDANT_MARKER', 'C02_WATCHDOG_RESULT'
+]);
+
+function c02OriginalErrorClass(error) {
+  if (error instanceof SyntaxError) return 'SyntaxError';
+  if (error instanceof TypeError) return 'TypeError';
+  if (error instanceof RangeError) return 'RangeError';
+  return 'Error';
+}
+
+function markC02DiagnosticCaptureIncomplete(state) {
+  try { state.c02ControlReadDiagnosticsComplete = false; } catch {}
+  try { state.ci1PhaseCaptureIncomplete = true; } catch {}
+}
+
+function recordC02ControlReadFailure(boundary, error, state = METRICS) {
+  try {
+    if (!C02_CONTROL_DIAGNOSTIC_BOUNDARIES.has(boundary)
+        || !Number.isSafeInteger(state.c02ControlReadFailureCount)
+        || !Number.isSafeInteger(state.c02ControlReadFailureBytes)
+        || typeof state.c02ControlReadFailureLines !== 'string') {
+      markC02DiagnosticCaptureIncomplete(state);
+      return false;
+    }
+    const line = `${C02_CONTROL_DIAGNOSTIC_PREFIX}${JSON.stringify({
+      schema: 'agent-harness.ah11-ops-c02-control-failure.v1',
+      caseId: 'OPS04.C02', boundary, errorClass: c02OriginalErrorClass(error)
+    })}\n`;
+    const lineBytes = Buffer.byteLength(line, 'utf8');
+    if (state.c02ControlReadFailureCount >= C02_CONTROL_DIAGNOSTIC_MAX_RECORDS
+        || lineBytes > C02_CONTROL_DIAGNOSTIC_MAX_LINE_BYTES
+        || state.c02ControlReadFailureBytes + lineBytes > C02_CONTROL_DIAGNOSTIC_MAX_BYTES) {
+      markC02DiagnosticCaptureIncomplete(state);
+      return false;
+    }
+    state.c02ControlReadFailureLines += line;
+    state.c02ControlReadFailureCount += 1;
+    state.c02ControlReadFailureBytes += lineBytes;
+    return true;
+  } catch {
+    markC02DiagnosticCaptureIncomplete(state);
+    return false;
+  }
+}
+
+function readC02ControlJson(path, boundary, readFile = readFileSync, state = METRICS) {
+  try {
+    return JSON.parse(readFile(path, 'utf8'));
+  } catch (error) {
+    recordC02ControlReadFailure(boundary, error, state);
+    throw error;
+  }
+}
+
+function publishC02ControlJsonAtomically(targetPath, value, fileOps = {}) {
+  const writer = fileOps.writeFileSync ?? writeFileSync;
+  const rename = fileOps.renameSync ?? renameSync;
+  const remove = fileOps.rmSync ?? rmSync;
+  const uuid = fileOps.randomUUID ?? randomUUID;
+  const data = Buffer.from(JSON.stringify(value), 'utf8');
+  if (data.byteLength > 1_024) throw new RangeError('C02 control marker exceeds its byte bound.');
+  const temporaryPath = `${targetPath}.${uuid()}.tmp`;
+  try {
+    writer(temporaryPath, data, { flag: 'wx', mode: 0o600 });
+    rename(temporaryPath, targetPath);
+    return true;
+  } catch (primaryError) {
+    try {
+      remove(temporaryPath, { force: true });
+    } catch {
+      try { fileOps.onCleanupFailure?.(); } catch {}
+    }
+    throw primaryError;
+  }
+}
+
+function attemptC02WatchdogTargetAck({ groupId, watchAckPath, pid, state, probe, publish }) {
+  if (state.targetAckSent || state.targetAckPublicationFailed) return false;
+  try { probe(-groupId, 0); } catch { return false; }
+  try {
+    publish(watchAckPath, {
+      schema: 'ops-owned-group-watchdog-target-ack.v1', pid, groupId, verified: true
+    });
+    state.targetAckSent = true;
+    return true;
+  } catch {
+    state.targetAckPublicationFailed = true;
+    return false;
+  }
+}
 
 function ci1CaptureCanAppend(recordCount, currentBytes, nextBytes) {
   return recordCount < CI1_MAX_PHASE_RECORDS && currentBytes + nextBytes <= CI1_MAX_PHASE_BYTES;
@@ -1458,8 +1558,11 @@ function startPrelaunchedOwnedGroupWatchdog(controlPath, timeoutMs = 15_000) {
   const watchAckPath = `${controlPath}.watch-ack`;
   const resultPath = `${controlPath}.result`;
   const source = `
-import { readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
+const publishC02ControlJsonAtomically = ${publishC02ControlJsonAtomically.toString()};
+const attemptC02WatchdogTargetAck = ${attemptC02WatchdogTargetAck.toString()};
 const controlPath = process.argv[1];
 const readyPath = process.argv[2];
 const watchAckPath = process.argv[3];
@@ -1467,24 +1570,23 @@ const resultPath = process.argv[4];
 const timeoutMs = Number(process.argv[5]);
 const deadline = performance.now() + timeoutMs;
 let groupId = null;
-let targetAckSent = false;
+const targetAckState = { targetAckSent: false, targetAckPublicationFailed: false };
 const startedAt = performance.now();
-writeFileSync(readyPath, JSON.stringify({ schema: 'ops-owned-group-watchdog-ready.v1', pid: process.pid, groupId: process.pid }), { flag: 'wx', mode: 0o600 });
+publishC02ControlJsonAtomically(readyPath, {
+  schema: 'ops-owned-group-watchdog-ready.v1', pid: process.pid, groupId: process.pid
+});
 let timedOut = true;
 let cleanupRequested = false;
 while (performance.now() < deadline) {
   try {
     const control = JSON.parse(readFileSync(controlPath, 'utf8'));
     if (Number.isSafeInteger(control.groupId) && control.groupId > 1) groupId = control.groupId;
-    if (control.state === 'watch' && groupId !== null && !targetAckSent) {
-      try {
-        process.kill(-groupId, 0);
-        writeFileSync(watchAckPath, JSON.stringify({
-          schema: 'ops-owned-group-watchdog-target-ack.v1',
-          pid: process.pid, groupId, verified: true
-        }), { flag: 'wx', mode: 0o600 });
-        targetAckSent = true;
-      } catch {}
+    if (control.state === 'watch' && groupId !== null) {
+      attemptC02WatchdogTargetAck({
+        groupId, watchAckPath, pid: process.pid, state: targetAckState,
+        probe: (target, signal) => process.kill(target, signal),
+        publish: publishC02ControlJsonAtomically
+      });
     }
     if (control.state === 'done') { timedOut = false; break; }
     if (control.state === 'cleanup') { timedOut = false; cleanupRequested = true; break; }
@@ -1510,8 +1612,10 @@ if (groupId !== null && (timedOut || cleanupRequested)) {
   if (!targetGroupEmpty) targetGroupEmpty = await signalAndWait('SIGKILL', ${CI1_LOCAL_WATCHDOG_SIGNAL_PHASE_MS});
 }
 writeFileSync(resultPath, JSON.stringify({ schema: 'ops-owned-group-watchdog-result.v1', pid: process.pid,
-  groupId: process.pid, timedOut, cleanupRequested, targetAckSent, targetGroupId: groupId,
-  targetGroupEmpty, elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)) }), { flag: 'wx', mode: 0o600 });
+  groupId: process.pid, timedOut, cleanupRequested,
+  targetAckSent: targetAckState.targetAckSent, targetGroupId: groupId,
+  targetAckPublicationFailed: targetAckState.targetAckPublicationFailed, targetGroupEmpty,
+  elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)) }), { flag: 'wx', mode: 0o600 });
 `;
   const child = spawn(process.execPath, ['--input-type=module', '--eval', source, controlPath, readyPath, watchAckPath, resultPath, String(timeoutMs)], {
     cwd: ROOT, env: baseEnvironment(), stdio: 'ignore', detached: true
@@ -2979,6 +3083,151 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     }
   });
   await t.test('OPS04.C02 fixture assertion failure after pausing the owned runner executes bounded finally cleanup', async t => {
+    function runFakeAtomicPublication({ failAt = null, cleanupFails = false } = {}) {
+      const targetPath = '/private/ops-c02/control.json';
+      const files = new Map();
+      const value = { schema: 'synthetic-control.v1', complete: true };
+      const encoded = Buffer.from(JSON.stringify(value), 'utf8');
+      const primaryFailure = new Error('SYNTHETIC_PRIVATE_C02_PRIMARY');
+      const cleanupFailure = new Error('SYNTHETIC_PRIVATE_C02_CLEANUP');
+      let completedTempWrite = false;
+      let finalWasVisibleDuringTempWrite = false;
+      let renamed = false;
+      let cleanedPath = null;
+      let cleanupFailureObserved = false;
+      let caughtFailure;
+      try {
+        publishC02ControlJsonAtomically(targetPath, value, {
+          randomUUID: () => 'deterministic-token',
+          writeFileSync(path, bytes, options) {
+            assert.equal(path, '/private/ops-c02/control.json.deterministic-token.tmp',
+              'the temp is a fresh sibling of the consumer-visible marker');
+            assert.deepEqual(options, { flag: 'wx', mode: 0o600 });
+            assert.equal(files.has(targetPath), false, 'the final marker is absent before temp creation');
+            files.set(path, Buffer.alloc(0));
+            finalWasVisibleDuringTempWrite ||= files.has(targetPath);
+            files.set(path, Buffer.from(bytes).subarray(0, Math.max(1, Math.floor(bytes.byteLength / 2))));
+            finalWasVisibleDuringTempWrite ||= files.has(targetPath);
+            if (failAt === 'write') throw primaryFailure;
+            files.set(path, Buffer.from(bytes));
+            completedTempWrite = true;
+          },
+          renameSync(from, to) {
+            assert.equal(completedTempWrite, true, 'rename occurs only after the full temp content is visible');
+            assert.equal(files.has(to), false, 'the final marker stays absent through complete temp writing');
+            if (failAt === 'rename') throw primaryFailure;
+            files.set(to, files.get(from));
+            files.delete(from);
+            renamed = true;
+          },
+          rmSync(path, options) {
+            cleanedPath = path;
+            assert.deepEqual(options, { force: true });
+            if (cleanupFails) throw cleanupFailure;
+            files.delete(path);
+          },
+          onCleanupFailure() { cleanupFailureObserved = true; }
+        });
+      } catch (error) {
+        caughtFailure = error;
+      }
+      return {
+        targetPath, files, value, encoded, primaryFailure, caughtFailure,
+        completedTempWrite, finalWasVisibleDuringTempWrite, renamed,
+        cleanedPath, cleanupFailureObserved
+      };
+    }
+
+    const successfulPublication = runFakeAtomicPublication();
+    assert.equal(successfulPublication.caughtFailure, undefined);
+    assert.equal(successfulPublication.finalWasVisibleDuringTempWrite, false,
+      'the consumer-visible final path never exists while the fake filesystem creates or fills the temp');
+    assert.equal(successfulPublication.renamed, true);
+    assert.deepEqual(JSON.parse(successfulPublication.files.get(successfulPublication.targetPath).toString('utf8')),
+      successfulPublication.value);
+    assert.deepEqual(successfulPublication.files.get(successfulPublication.targetPath), successfulPublication.encoded);
+
+    const failedWrite = runFakeAtomicPublication({ failAt: 'write' });
+    assert.equal(failedWrite.caughtFailure, failedWrite.primaryFailure,
+      'a partial temp write rethrows its exact primary error');
+    assert.equal(failedWrite.files.has(failedWrite.targetPath), false);
+    assert.equal(failedWrite.files.size, 0, 'the partial temp is removed after the failed write');
+    assert.equal(failedWrite.cleanedPath, '/private/ops-c02/control.json.deterministic-token.tmp');
+
+    const failedRename = runFakeAtomicPublication({ failAt: 'rename' });
+    assert.equal(failedRename.caughtFailure, failedRename.primaryFailure,
+      'a failed rename rethrows its exact primary error');
+    assert.equal(failedRename.files.has(failedRename.targetPath), false);
+    assert.equal(failedRename.files.size, 0, 'the complete temp is removed after the failed rename');
+
+    const failedCleanup = runFakeAtomicPublication({ failAt: 'write', cleanupFails: true });
+    assert.equal(failedCleanup.caughtFailure, failedCleanup.primaryFailure,
+      'a temp cleanup error cannot replace the original write error');
+    assert.equal(failedCleanup.cleanupFailureObserved, true,
+      'an unremoved private temp is surfaced to the caller as an incomplete cleanup state');
+    assert.equal(failedCleanup.files.has(failedCleanup.targetPath), false);
+    assert.equal(failedCleanup.files.size, 1, 'the fake cleanup failure remains explicit instead of claiming removal');
+
+    const failedAckState = { targetAckSent: false, targetAckPublicationFailed: false };
+    let failedAckProbeCalls = 0;
+    let failedAckPublishCalls = 0;
+    const failedAckProbe = () => { failedAckProbeCalls += 1; };
+    const failedAckPublish = () => { failedAckPublishCalls += 1; throw new Error('SYNTHETIC_PRIVATE_ACK_PUBLISH'); };
+    assert.equal(attemptC02WatchdogTargetAck({
+      groupId: 812_345, watchAckPath: '/private/ops-c02/ack.json', pid: 812_346,
+      state: failedAckState, probe: failedAckProbe, publish: failedAckPublish
+    }), false);
+    assert.equal(failedAckState.targetAckSent, false,
+      'a failed ACK publication never claims targetAckSent');
+    assert.equal(failedAckState.targetAckPublicationFailed, true,
+      'a failed ACK publication is an explicit terminal publication state');
+    assert.equal(attemptC02WatchdogTargetAck({
+      groupId: 812_345, watchAckPath: '/private/ops-c02/ack.json', pid: 812_346,
+      state: failedAckState, probe: failedAckProbe, publish: failedAckPublish
+    }), false);
+    assert.equal(failedAckProbeCalls, 1, 'the failed one-shot ACK does not probe or publish again');
+    assert.equal(failedAckPublishCalls, 1, 'the failed one-shot ACK does not create repeated temps');
+    const successfulAckState = { targetAckSent: false, targetAckPublicationFailed: false };
+    let publishedAck = null;
+    assert.equal(attemptC02WatchdogTargetAck({
+      groupId: 812_347, watchAckPath: '/private/ops-c02/ack.json', pid: 812_348,
+      state: successfulAckState, probe: () => {}, publish: (path, value) => { publishedAck = { path, value }; }
+    }), true);
+    assert.equal(successfulAckState.targetAckSent, true);
+    assert.equal(successfulAckState.targetAckPublicationFailed, false);
+    assert.deepEqual(publishedAck, {
+      path: '/private/ops-c02/ack.json',
+      value: { schema: 'ops-owned-group-watchdog-target-ack.v1', pid: 812_348, groupId: 812_347, verified: true }
+    });
+
+    const diagnosticState = {
+      c02ControlReadFailureLines: '', c02ControlReadFailureCount: 0,
+      c02ControlReadFailureBytes: 0, c02ControlReadDiagnosticsComplete: true,
+      ci1PhaseCaptureIncomplete: false
+    };
+    const privateReadError = new SyntaxError('SYNTHETIC_PRIVATE_C02 /private/marker.json pid=912345');
+    let caughtReadError;
+    try {
+      readC02ControlJson('/private/marker.json', 'C02_WATCHDOG_READY', () => { throw privateReadError; }, diagnosticState);
+    } catch (error) { caughtReadError = error; }
+    assert.equal(caughtReadError, privateReadError, 'diagnostic recording preserves the original parse/read error');
+    const safeControlDiagnostics = parseC02ControlReadDiagnostics({
+      lines: diagnosticState.c02ControlReadFailureLines,
+      count: diagnosticState.c02ControlReadFailureCount,
+      bytes: diagnosticState.c02ControlReadFailureBytes,
+      diagnosticsComplete: diagnosticState.c02ControlReadDiagnosticsComplete
+    });
+    assert.deepEqual(safeControlDiagnostics, {
+      complete: true, recordCount: 1,
+      records: [{ caseId: 'OPS04.C02', boundary: 'C02_WATCHDOG_READY', errorClass: 'SyntaxError' }]
+    });
+    assert.doesNotMatch(JSON.stringify(safeControlDiagnostics), /SYNTHETIC_PRIVATE|private|912345|marker\.json/u);
+    assert.equal(parseC02ControlReadDiagnostics({
+      lines: `${C02_CONTROL_DIAGNOSTIC_PREFIX}{"schema":"agent-harness.ah11-ops-c02-control-failure.v1","caseId":"OPS04.C02","boundary":"C02_WATCHDOG_READY","errorClass":"SyntaxError","path":"/private"}\n`,
+      count: 1, bytes: Buffer.byteLength(`${C02_CONTROL_DIAGNOSTIC_PREFIX}{"schema":"agent-harness.ah11-ops-c02-control-failure.v1","caseId":"OPS04.C02","boundary":"C02_WATCHDOG_READY","errorClass":"SyntaxError","path":"/private"}\n`),
+      diagnosticsComplete: true
+    }).complete, false, 'extra diagnostic fields fail closed instead of leaking raw details');
+
     const failureDir = tempDirectory('ah11-jev-fixture-failure-', { ci1OwnedGroups: true });
     registerCi1OwnedTemporaryDirectoryFinalizer(t, cleanupCi1OwnedTemporaryDirectory, failureDir, METRICS);
     const markerDirectory = join(failureDir.directory, 'marker-is-a-directory');
@@ -3019,7 +3268,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       assert.equal(ownership.stage, 'ready', 'the failure fixture process group was verified and registered before release');
       const runnerMarker = `${metricsPath}.runner`;
       await waitForPath(runnerMarker, child, 5_000);
-      runnerPid = Number(JSON.parse(readFileSync(runnerMarker, 'utf8')).runnerPid);
+      runnerPid = Number(readC02ControlJson(runnerMarker, 'C02_RUNNER_READY').runnerPid);
       assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
       const exit = await waitForCloseBounded(closed, 3_000);
       assert.ok(exit, `The failing owned fixture did not close within its bound: ${stderr.slice(0, 2048)}`);
@@ -3090,14 +3339,17 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         ownedGroupId = ownership.groupId;
         assert.equal(ownership.stage, 'ready', 'the marker-control group was verified and registered before release');
         await waitForPath(markerPath, child, 5_000);
-        assert.deepEqual(JSON.parse(readFileSync(markerPath, 'utf8')), {
+        assert.deepEqual(readC02ControlJson(markerPath, 'C02_MARKER_CONTROL_READY'), {
           phase: mode, stage: 'runner-marker-ready'
         });
         const runnerMarker = `${metricsPath}.runner`;
         if (markerMode === 'missing') assert.equal(existsSync(runnerMarker), false);
         else assert.equal(readFileSync(runnerMarker, 'utf8'), '{"runnerPid":');
+        const expectedNegativeParseLines = METRICS.c02ControlReadFailureLines;
         assert.throws(() => JSON.parse(readFileSync(runnerMarker, 'utf8')),
           markerMode === 'missing' ? error => error.code === 'ENOENT' : SyntaxError);
+        assert.equal(METRICS.c02ControlReadFailureLines, expectedNegativeParseLines,
+          'the intentional missing/partial runner-marker assertion remains silent in unexpected-read diagnostics');
         assert.equal(runnerPid, null, 'marker failure occurs before runner PID assignment');
 
         runnerPid = readRunnerPidFromOwnedDatabase(databasePath, `jev-composition-${mode}`);
@@ -3585,7 +3837,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     rememberCi1OwnedGroupChild(inertGroupDir.ci1Custody, watchdogLaunchToken, watchdog.child, watchdog.closed);
     const watchdogSpawnedAt = performance.now();
     await waitForPath(watchdog.readyPath, watchdog.child, 2_000);
-    const watchdogReady = JSON.parse(readFileSync(watchdog.readyPath, 'utf8'));
+    const watchdogReady = readC02ControlJson(watchdog.readyPath, 'C02_WATCHDOG_READY');
     assert.deepEqual(watchdogReady, {
       schema: 'ops-owned-group-watchdog-ready.v1',
       pid: watchdog.child.pid,
@@ -3608,9 +3860,11 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const inertReadyPath = join(inertGroupDir.directory, 'inert-group-ready.json');
     const descendantSource = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000);";
     const inertParentSource = `
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
+const publishC02ControlJsonAtomically = ${publishC02ControlJsonAtomically.toString()};
 const markerPath = process.argv[1];
 const readyPath = process.argv[2];
 const readyDeadline = performance.now() + 2000;
@@ -3619,7 +3873,9 @@ if (!existsSync(readyPath)) process.exit(24);
 const descendant = spawn(process.execPath, ['--input-type=module', '--eval', ${JSON.stringify(descendantSource)}], { stdio: 'ignore' });
 descendant.once('spawn', () => {
   process.kill(descendant.pid, 'SIGSTOP');
-  writeFileSync(markerPath, JSON.stringify({ parentPid: process.pid, descendantPid: descendant.pid, groupId: process.pid }), { mode: 0o600 });
+  publishC02ControlJsonAtomically(markerPath, {
+    parentPid: process.pid, descendantPid: descendant.pid, groupId: process.pid
+  });
   process.exit(23);
 });
 `;
@@ -3649,7 +3905,7 @@ descendant.once('spawn', () => {
         releaseReady: async (readyPath, ready) => {
           writeFileSync(watchdogControlPath, JSON.stringify({ state: 'watch', groupId: ready.groupId }), { mode: 0o600 });
           await waitForPath(watchdog.watchAckPath, watchdog.child, 2_000);
-          assert.deepEqual(JSON.parse(readFileSync(watchdog.watchAckPath, 'utf8')), {
+          assert.deepEqual(readC02ControlJson(watchdog.watchAckPath, 'C02_WATCHDOG_TARGET_ACK'), {
             schema: 'ops-owned-group-watchdog-target-ack.v1',
             pid: watchdog.child.pid, groupId: ready.groupId, verified: true
           }, 'the external watchdog confirms the exact registered target before the fixture gate opens');
@@ -3658,12 +3914,12 @@ descendant.once('spawn', () => {
       });
       inertGroupId = inertOwnership.groupId;
       assert.equal(inertOwnership.stage, 'ready', 'the inert group is registered before releasing its descendant gate');
-      assert.deepEqual(JSON.parse(readFileSync(watchdog.watchAckPath, 'utf8')), {
+      assert.deepEqual(readC02ControlJson(watchdog.watchAckPath, 'C02_WATCHDOG_TARGET_ACK'), {
         schema: 'ops-owned-group-watchdog-target-ack.v1',
         pid: watchdog.child.pid, groupId: inertGroupId, verified: true
       });
       await waitForPath(inertMarkerPath, inertParent, 2_000);
-      const inertMarker = JSON.parse(readFileSync(inertMarkerPath, 'utf8'));
+      const inertMarker = readC02ControlJson(inertMarkerPath, 'C02_INERT_DESCENDANT_MARKER');
       assert.equal(inertMarker.parentPid, inertParent.pid);
       assert.equal(inertMarker.groupId, inertGroupId);
       assert.equal(processGroupId(inertMarker.descendantPid), inertGroupId,
@@ -3772,13 +4028,14 @@ descendant.once('spawn', () => {
       }
       try {
         if (existsSync(watchdog.resultPath)) {
-          const result = JSON.parse(readFileSync(watchdog.resultPath, 'utf8'));
+          const result = readC02ControlJson(watchdog.resultPath, 'C02_WATCHDOG_RESULT');
           watchdogResultValid = !watchdogCompletionWaitExpired
             && result.schema === 'ops-owned-group-watchdog-result.v1'
             && result.pid === watchdog.child.pid
             && result.groupId === watchdog.child.pid
             && result.timedOut === false
             && result.targetAckSent === true
+            && result.targetAckPublicationFailed === false
             && result.cleanupRequested === (controlState === 'cleanup')
             && result.targetGroupId === (inertGroupId === inertParent.pid ? inertGroupId : null)
             && (result.targetGroupEmpty === null || result.targetGroupEmpty === true);

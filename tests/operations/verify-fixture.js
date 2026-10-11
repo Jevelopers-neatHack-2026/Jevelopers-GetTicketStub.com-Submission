@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
-import { buildSafeFailureDiagnostics } from './failure-diagnostics.js';
+import { buildSafeFailureDiagnostics, parseC02ControlReadDiagnostics } from './failure-diagnostics.js';
 import { parseOperationsCaptureFromTap } from '../../src/internal/private-ops-diagnostics.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -249,6 +249,18 @@ const tapText = `${testResult.stdout ?? ''}${testResult.stderr ?? ''}`;
 const tapSummary = parseTAP(tapText);
 const tapArtifact = writeArtifact(join(artifactDirectory, `${stem}.tap`), Buffer.from(safeTap(tapText), 'utf8'));
 const ops07CaptureResult = parseOps07Capture(tapText);
+let metrics = null;
+try {
+  metrics = JSON.parse(readFileSync(metricsPath, 'utf8'));
+} catch {
+  try { process.stderr.write('AH-11-OPS runtime metrics were not produced.\n'); } catch {}
+}
+const c02ControlReadDiagnostics = parseC02ControlReadDiagnostics({
+  lines: metrics?.c02ControlReadFailureLines,
+  count: metrics?.c02ControlReadFailureCount,
+  bytes: metrics?.c02ControlReadFailureBytes,
+  diagnosticsComplete: metrics !== null && metrics.c02ControlReadDiagnosticsComplete === true
+});
 const suiteDiagnostics = buildSafeFailureDiagnostics({
   scenario: fixture,
   phase: 'operation-suite',
@@ -258,14 +270,14 @@ const suiteDiagnostics = buildSafeFailureDiagnostics({
   error: testResult.error,
   stdout: testResult.stdout,
   stderr: testResult.stderr,
-  missingCases: tapSummary.missingLocalCases
+  missingCases: tapSummary.missingLocalCases,
+  c02ControlReadDiagnostics
 });
-let metrics = null;
-try {
-  metrics = JSON.parse(readFileSync(metricsPath, 'utf8'));
-} catch {
-  try { process.stderr.write('AH-11-OPS runtime metrics were not produced.\n'); } catch {}
-}
+const publicMetrics = { ...(metrics ?? {}) };
+delete publicMetrics.c02ControlReadFailureLines;
+delete publicMetrics.c02ControlReadFailureCount;
+delete publicMetrics.c02ControlReadFailureBytes;
+delete publicMetrics.c02ControlReadDiagnosticsComplete;
 
 let runbookArtifact = null;
 let runbookRecoveryArtifact = null;
@@ -404,6 +416,8 @@ const diagnosticsIncludedInUpload = diagnosticMembers.every(artifact =>
   && EXPECTED_UPLOAD_MEMBERS.includes(`.runtime-artifacts/${basename(artifact.path)}`))
   && uploadUsesExactAllowlist && hiddenArtifactUploadConfigured && requiredEvidenceSetComplete;
 const resourceMetricsComplete = metrics !== null
+  && metrics.c02ControlReadDiagnosticsComplete === true
+  && c02ControlReadDiagnostics.complete === true
   && metrics.ci1PhaseCaptureOverflow === false
   && metrics.ci1PhaseCaptureIncomplete === false
   && metrics.ci1PhaseCaptureChildCloseUnconfirmed === false
@@ -485,7 +499,7 @@ const manifest = {
   },
   diagnostics: diagnosticsValue,
   resourceAndNetworkEvidence: {
-    ...metrics,
+    ...publicMetrics,
     verifierRssBytes: process.memoryUsage().rss,
     resourceMetricsComplete,
     controlScope: 'Node DNS/HTTPS API guard and synthetic responders inside the JEV boundary child; not OS-wide or host egress enforcement',

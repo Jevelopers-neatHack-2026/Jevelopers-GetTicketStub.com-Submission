@@ -9,6 +9,15 @@ const MAX_INPUT_BYTES = 1_000_000;
 const SAFE_ERROR_NAMES = new Set([
   'AssertionError', 'Error', 'RangeError', 'RuntimeError', 'SyntaxError', 'TimeoutError', 'TypeError'
 ]);
+const C02_CONTROL_FAILURE_PREFIX = 'AH11_OPS_C02_CONTROL_FAILURE ';
+const C02_CONTROL_FAILURE_MAX_RECORDS = 8;
+const C02_CONTROL_FAILURE_MAX_LINE_BYTES = 192;
+const C02_CONTROL_FAILURE_MAX_BYTES = 1_536;
+const C02_CONTROL_FAILURE_BOUNDARIES = new Set([
+  'C02_RUNNER_READY', 'C02_MARKER_CONTROL_READY', 'C02_WATCHDOG_READY',
+  'C02_WATCHDOG_TARGET_ACK', 'C02_INERT_DESCENDANT_MARKER', 'C02_WATCHDOG_RESULT'
+]);
+const C02_CONTROL_FAILURE_ERROR_CLASSES = new Set(['Error', 'RangeError', 'SyntaxError', 'TypeError']);
 const SAFE_ERROR_CODES = new Set([
   'EACCES', 'EISDIR', 'ENOENT', 'ETIMEDOUT', 'ERR_ASSERTION',
   'ERR_CHILD_PROCESS_STDIO_MAXBUFFER', 'ERR_SQLITE_ERROR', 'ERR_TEST_FAILURE',
@@ -32,6 +41,82 @@ function safeErrorCode(value) {
 
 function safeSignal(value) {
   return SAFE_SIGNALS.has(value) ? value : null;
+}
+
+export function parseC02ControlReadDiagnostics({
+  lines = '', count = 0, bytes = 0, diagnosticsComplete = true
+} = {}) {
+  let complete = typeof lines === 'string'
+    && Number.isSafeInteger(count) && count >= 0 && count <= C02_CONTROL_FAILURE_MAX_RECORDS
+    && Number.isSafeInteger(bytes) && bytes >= 0 && bytes <= C02_CONTROL_FAILURE_MAX_BYTES
+    && diagnosticsComplete === true;
+  const actualBytes = typeof lines === 'string' ? Buffer.byteLength(lines, 'utf8') : -1;
+  if (actualBytes !== bytes || (lines.length > 0 && !lines.endsWith('\n'))) complete = false;
+  const rawLines = typeof lines === 'string' && lines.length > 0 ? lines.slice(0, C02_CONTROL_FAILURE_MAX_BYTES).split('\n') : [];
+  if (rawLines.at(-1) === '') rawLines.pop();
+  if (rawLines.length !== count || rawLines.length > C02_CONTROL_FAILURE_MAX_RECORDS) complete = false;
+  const records = [];
+  for (const rawLine of rawLines.slice(0, C02_CONTROL_FAILURE_MAX_RECORDS)) {
+    if (Buffer.byteLength(rawLine, 'utf8') + 1 > C02_CONTROL_FAILURE_MAX_LINE_BYTES
+        || !rawLine.startsWith(C02_CONTROL_FAILURE_PREFIX)) {
+      complete = false;
+      break;
+    }
+    let value;
+    try { value = JSON.parse(rawLine.slice(C02_CONTROL_FAILURE_PREFIX.length)); } catch {
+      complete = false;
+      break;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      complete = false;
+      break;
+    }
+    const keys = Object.keys(value).sort();
+    if (keys.length !== 4 || keys[0] !== 'boundary' || keys[1] !== 'caseId'
+        || keys[2] !== 'errorClass' || keys[3] !== 'schema'
+        || value.schema !== 'agent-harness.ah11-ops-c02-control-failure.v1'
+        || value.caseId !== 'OPS04.C02'
+        || !C02_CONTROL_FAILURE_BOUNDARIES.has(value.boundary)
+        || !C02_CONTROL_FAILURE_ERROR_CLASSES.has(value.errorClass)) {
+      complete = false;
+      break;
+    }
+    records.push(Object.freeze({
+      caseId: 'OPS04.C02', boundary: value.boundary, errorClass: value.errorClass
+    }));
+  }
+  return Object.freeze({
+    complete,
+    recordCount: complete ? records.length : 0,
+    records: Object.freeze(complete ? records : [])
+  });
+}
+
+function safeC02ControlReadDiagnostics(value) {
+  let complete = value?.complete === true
+    && Number.isSafeInteger(value?.recordCount)
+    && value.recordCount >= 0 && value.recordCount <= C02_CONTROL_FAILURE_MAX_RECORDS
+    && Array.isArray(value?.records) && value.records.length === value.recordCount;
+  const records = [];
+  for (const record of (Array.isArray(value?.records) ? value.records : []).slice(0, C02_CONTROL_FAILURE_MAX_RECORDS)) {
+    const keys = record && typeof record === 'object' && !Array.isArray(record)
+      ? Object.keys(record).sort() : [];
+    if (keys.length !== 3 || keys[0] !== 'boundary' || keys[1] !== 'caseId' || keys[2] !== 'errorClass'
+        || record.caseId !== 'OPS04.C02'
+        || !C02_CONTROL_FAILURE_BOUNDARIES.has(record.boundary)
+        || !C02_CONTROL_FAILURE_ERROR_CLASSES.has(record.errorClass)) {
+      complete = false;
+      break;
+    }
+    records.push(Object.freeze({
+      caseId: 'OPS04.C02', boundary: record.boundary, errorClass: record.errorClass
+    }));
+  }
+  return Object.freeze({
+    complete,
+    recordCount: complete ? records.length : 0,
+    records: Object.freeze(complete ? records : [])
+  });
 }
 
 function safeScenario(value) {
@@ -249,7 +334,7 @@ function makeRecord({
 
 export function buildSafeFailureDiagnostics({
   scenario, phase, stage, status = null, signal = null, error = null,
-  stdout = '', stderr = '', missingCases = []
+  stdout = '', stderr = '', missingCases = [], c02ControlReadDiagnostics = undefined
 }) {
   const combined = `${typeof stdout === 'string' ? stdout : ''}\n${typeof stderr === 'string' ? stderr : ''}`;
   const outputBytes = Buffer.byteLength(combined, 'utf8');
@@ -345,6 +430,9 @@ export function buildSafeFailureDiagnostics({
     timedOut: error?.code === 'ETIMEDOUT',
     outputBytes,
     outputTruncated: truncatedByLimit || lines.length >= 20_000,
-    records: Object.freeze(records)
+    records: Object.freeze(records),
+    ...(c02ControlReadDiagnostics === undefined ? {} : {
+      c02ControlReadDiagnostics: safeC02ControlReadDiagnostics(c02ControlReadDiagnostics)
+    })
   });
 }
