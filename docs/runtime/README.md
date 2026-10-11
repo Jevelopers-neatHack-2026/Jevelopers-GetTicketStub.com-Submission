@@ -60,9 +60,9 @@ complete build/typecheck/format/test/runtime phase after installation.
 
 Linux rendering enables Chromium sandboxing and fails closed on launch or
 effective-state probe failure. CI uses a non-root identity, private IPC with
-1 GiB shared memory, zero capabilities, no new privileges, and Docker's enforced
-AppArmor policy with a byte-pinned policy derived from the original Playwright
-profile by adding only Chromium's required chroot syscall. The original profile
+1 GiB shared memory, zero capabilities, no new privileges, Docker's enforced
+`docker-default` AppArmor policy, and a byte-pinned seccomp policy derived from
+the original Playwright profile by adding only Chromium's required chroot syscall. The original profile
 and exact derived difference are preserved and audited. Docker inspect,
 host/container namespace comparisons, live `/proc` observations and Chromium's
 `chrome://sandbox` report provide separate configuration and effective-state
@@ -73,13 +73,19 @@ Linux namespace/seccomp observations.
 Sandbox launch failures expose only fixed diagnostic categories. Linux CI also
 records bounded namespace and temporary-filesystem diagnostic probes without
 printing raw Chrome/utility errors. Diagnostics do not replace effective sandbox
-checks or authorize policy relaxation. Both secure candidates failed in Linux CI.
-The second candidate reported `ZYGOTE_START_FAILURE`; generic namespace probes
-passed. The underlying zygote cause remains unknown. A bounded subprocess now
-observes the same adapter launch through Playwright's browser debug stream,
-retaining only finite Chrome source, operation, errno and signal categories.
-Raw subprocess streams stay private in memory and are discarded. No launch flags,
-container policy, browser pins or effective sandbox requirements change.
+checks or authorize policy relaxation. Both initial secure candidates failed in
+Linux CI; the second reported `ZYGOTE_START_FAILURE` while generic namespace
+probes passed. A bounded subprocess observes the same adapter launch through
+Playwright's browser debug stream, retaining only finite Chrome source,
+operation, errno and signal categories. Raw subprocess streams stay private in
+memory and are discarded. Later Linux runs traced the failure to
+`SANDBOX_CHROOT_CHECK_FAILURE` (the original profile's conditional `chroot`
+rule is absent once all capabilities are dropped), which led to the derived
+seccomp policy above; subsequent runs recorded successful secure browser startup
+and then corrected the live renderer-root observer. No launch flags, container
+capabilities, browser pins or effective sandbox requirements were relaxed. The
+run-by-run record, and what the latest observer revision still requires, is in
+[the security policy README](../../scripts/security/README.md).
 
 The unmodified Latin normal 400 WOFF2 comes from `@fontsource/noto-sans@5.3.0`
 (upstream Google Fonts metadata v42, last modified 2025-09-11). npm locks tarball
