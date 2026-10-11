@@ -1,0 +1,67 @@
+{
+  "name": "@jevelopers/team-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "npm": ">=11.12.1 <12"
+  },
+  "packageManager": "npm@11.12.1",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./integration": {
+      "types": "./dist/integration/index.d.ts",
+      "import": "./dist/integration.js"
+    },
+    "./style.css": {
+      "types": "./dist/style.css.d.ts",
+      "default": "./dist/team-dashboard.css"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "peerDependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "scripts": {
+    "dev": "npm run build && node scripts/prepare-fixture.mjs && vite --config integration/fixture-host/vite.config.ts",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/check-package.mjs",
+    "test:e2e": "playwright test --project=e2e",
+    "test:integration": "playwright test --project=integration",
+    "test:host": "node scripts/host-gate.mjs"
+  },
+  "devDependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/node": "24.19.2",
+    "vite": "8.3.4",
+    "@vitejs/plugin-react": "6.1.2",
+    "vitest": "5.0.3",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "eslint": "9.39.5",
+    "@eslint/js": "9.39.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "@playwright/test": "1.64.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "7.0.1",
+    "jsdom": "30.1.2"
+  }
+}

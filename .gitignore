@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.fixture-package/
+*.tgz
+playwright-report/
+test-results/
+.vitest/

@@ -1,0 +1,23 @@
+/* Local subset of brand-kit tokens/tokens.css at
+   3822635aff507cd5918a08a0c636bb0e41705261; blob 5201162d0c05062cb909e54b2176157a74cecfd1.
+   Values are unchanged; selector is isolated. Remote font import is intentionally excluded. */
+.team-dashboard {
+  --ts-orange: #E4572E;
+  --ts-copper: #B4693E;
+  --ts-moss: #26302A;
+  --ts-cyan: #7CC6D2;
+  --ts-cream: #F4ECDD;
+  --ts-ink: #17140F;
+  --ts-bg: var(--ts-cream);
+  --ts-surface: rgb(23 20 15 / 0.05);
+  --ts-text: var(--ts-ink);
+  --ts-text-muted: rgb(23 20 15 / 0.66);
+  --ts-focus: var(--ts-ink);
+  --ts-font-ui: "Inter Tight", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --ts-lh-body: 1.5;
+  --ts-space-4: 16px;
+  --ts-space-5: 24px;
+  --ts-space-6: 32px;
+  --ts-radius-control: 12px;
+  --ts-radius-sheet: 20px;
+}

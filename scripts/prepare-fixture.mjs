@@ -1,0 +1,24 @@
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { mkdir, rm, readFile, writeFile, symlink } from 'node:fs/promises';
+const destination = '.fixture-package';
+await rm(destination, { recursive: true, force: true });
+await mkdir(destination);
+const output = execFileSync('npm', ['pack', '--json', '--pack-destination', destination], { encoding: 'utf8' });
+const [{ filename, files }] = JSON.parse(output);
+if (files.some(({ path }) => /^(integration\/fixture-host|tests|node_modules)\//.test(path))) throw new Error('Fixture content leaked into package.');
+execFileSync('tar', ['-xzf', `${destination}/${filename}`, '-C', destination]);
+const pkg = JSON.parse(await readFile(`${destination}/package/package.json`, 'utf8'));
+console.log(`Fixture consumes packed ${pkg.name}@${pkg.version}; ${files.length} package files.`);
+
+await mkdir(`${destination}/node_modules/@jevelopers`, { recursive: true });
+await symlink(resolve(destination, 'package'), `${destination}/node_modules/@jevelopers/team-dashboard`, 'dir');
+await writeFile(`${destination}/consumer.ts`, `import { Dashboard, type HostAccess, type RouteProvider } from '@jevelopers/team-dashboard';
+import { routeHref } from '@jevelopers/team-dashboard/integration';
+import '@jevelopers/team-dashboard/style.css';
+const access: HostAccess = { status: 'restricted' };
+const provider: RouteProvider<string> = { mode: 'integrated', async readRoute() { return { status: 'unavailable' }; } };
+Dashboard({ basePath: '/admin/finance', pathname: routeHref('/admin/finance', 'overview'), navigate() {}, access, provider });
+`);
+execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '--ignoreConfig', '--noEmit', '--strict', '--moduleResolution', 'bundler', '--module', 'esnext', '--target', 'es2022', '--jsx', 'react-jsx', '--skipLibCheck', 'false', `${destination}/consumer.ts`], { stdio: 'inherit' });
+console.log('Packed exports and declarations passed isolated TypeScript consumer compilation.');

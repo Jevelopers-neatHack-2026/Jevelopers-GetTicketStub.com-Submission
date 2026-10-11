@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": [
+      "react"
+    ]
+  },
+  "include": [
+    "src",
+    "integration/index.ts",
+    "integration/routes.ts"
+  ],
+  "exclude": [
+    "integration/fixture-host",
+    "tests",
+    "src/package.ts"
+  ]
+}
