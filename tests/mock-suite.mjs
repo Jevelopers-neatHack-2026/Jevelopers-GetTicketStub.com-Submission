@@ -58,6 +58,15 @@ function cancelCommand(providerRequestId, idempotencyKey = "mock-cancel-key-1") 
   };
 }
 
+function permutations(items) {
+  if (items.length < 2) return [items.slice()];
+  return items.flatMap((item, index) => permutations([...items.slice(0, index), ...items.slice(index + 1)]).map((rest) => [item, ...rest]));
+}
+
+function simulatorTransportRequest(operation, method, path, body, idempotencyKey) {
+  return { operation, method, path, body, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) };
+}
+
 test("all seven runtime operations use deterministic simulated capabilities and results", async () => {
   const harness = createMockHarness();
   const { runtime, simulator, store } = harness;
@@ -130,6 +139,61 @@ test("provider unsupported response and descriptor rejection both avoid dispatch
   );
   assert.equal(descriptorHarness.simulator.dispatchCounters().cancel, 0);
   assert.equal(descriptorHarness.store.authorizationClaims.length, 0);
+});
+
+test("fault plans are rejected when discovery has no boundary and every supported matrix entry fires", async () => {
+  for (const kind of ["refuse_before_dispatch", "unsupported", "rate_limit", "accepted_then_timeout", "crash_after_acceptance", "malformed_response"]) {
+    assert.throws(() => createDeterministicSimulator({
+      seed: "invalid-discovery-fault",
+      startAt: MOCK_START_AT,
+      faults: [{ operation: "discover_capabilities", kind }]
+    }), TypeError);
+  }
+  for (const operation of ["quote", "preflight", "submit", "shipment", "cancel"]) {
+    assert.throws(() => createDeterministicSimulator({
+      seed: "invalid-unknown-status-fault",
+      startAt: MOCK_START_AT,
+      faults: [{ operation, kind: "unknown_status" }]
+    }), TypeError, `unknown_status is valid only for status, received ${operation}`);
+  }
+
+  const operations = ["quote", "preflight", "submit", "status", "shipment", "cancel"];
+  const kinds = ["refuse_before_dispatch", "unsupported", "rate_limit", "accepted_then_timeout", "crash_after_acceptance", "malformed_response"];
+  for (const operation of operations) {
+    for (const kind of kinds) {
+      const harness = createMockHarness({ faults: [{ operation, kind }] });
+      let providerRequestId;
+      let submitCommand;
+      if (["submit", "status", "shipment", "cancel"].includes(operation)) {
+        const prepared = await prepareSubmit(harness);
+        submitCommand = prepared.command;
+        if (operation !== "submit") {
+          providerRequestId = (await harness.runtime.submit(envelope(submitCommand), MOCK_SCOPE)).value.providerRequestId;
+        }
+      }
+      const call = {
+        quote: () => harness.runtime.quote(envelope(makeQuoteCommand()), MOCK_SCOPE),
+        preflight: () => harness.runtime.preflight(envelope({ productionBundle: MOCK_BUNDLE, printSpecification: MOCK_SPECIFICATION }), MOCK_SCOPE),
+        submit: () => harness.runtime.submit(envelope(submitCommand), MOCK_SCOPE),
+        status: () => harness.runtime.getStatus(envelope({ providerRequestId }), MOCK_SCOPE),
+        shipment: () => harness.runtime.observeShipment(envelope({ providerRequestId }), MOCK_SCOPE),
+        cancel: () => harness.runtime.cancel(envelope(cancelCommand(providerRequestId, `matrix-cancel-${kind}`)), MOCK_SCOPE)
+      }[operation];
+      await assert.rejects(call(), `${operation}/${kind} must fail at its declared boundary`);
+      assert.deepEqual(harness.simulator.snapshot().triggeredFaults, [{ operation, kind }]);
+      assert.equal(harness.simulator.snapshot().faults.length, 0);
+      const preDispatch = kind === "refuse_before_dispatch" || kind === "unsupported";
+      assert.equal(harness.simulator.dispatchCounters()[operation], preDispatch ? 0 : 1);
+      assert.ok(harness.simulator.snapshot().billingEvidence.every((record) => record.billingMode === "simulated" && record.charged === false));
+    }
+  }
+
+  const statusHarness = createMockHarness({ faults: [{ operation: "status", kind: "unknown_status" }] });
+  const statusPrepared = await prepareSubmit(statusHarness);
+  const submitted = await statusHarness.runtime.submit(envelope(statusPrepared.command), MOCK_SCOPE);
+  const observed = await statusHarness.runtime.getStatus(envelope({ providerRequestId: submitted.value.providerRequestId }), MOCK_SCOPE);
+  assert.equal(observed.value.normalizedState, "unknown");
+  assert.deepEqual(statusHarness.simulator.snapshot().triggeredFaults, [{ operation: "status", kind: "unknown_status" }]);
 });
 
 test("authorization and simulated budget denials stop before provider dispatch", async () => {
@@ -273,6 +337,62 @@ test("provider idempotency handles replay, key conflict, variation, and expiry d
   assert.equal(quoteResponse.value.expiresAt, command.quote.expiresAt);
 });
 
+test("active provider key replays after quote expiry across JSON restart without new acceptance", async () => {
+  const harness = createMockHarness({ quoteTtlMs: 10, idempotencyTtlMs: 100 });
+  const { command } = await prepareSubmit(harness);
+  const first = await harness.simulator.adapter.submit(command, adapterContext(harness.simulator));
+  harness.simulator.advanceTime(10);
+  const atQuoteExpiry = await harness.simulator.adapter.submit(command, adapterContext(harness.simulator));
+  assert.deepEqual(atQuoteExpiry.value, first.value);
+
+  const restored = createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(harness.simulator.snapshot())) });
+  const atEqualityAfterRestart = await restored.adapter.submit(command, adapterContext(restored));
+  assert.deepEqual(atEqualityAfterRestart.value, first.value);
+  restored.advanceTime(40);
+  const beyondQuoteExpiry = await restored.adapter.submit(command, adapterContext(restored));
+  assert.deepEqual(beyondQuoteExpiry.value, first.value);
+  await assert.rejects(
+    restored.adapter.submit({ ...command, amountMinor: command.amountMinor + 1 }, adapterContext(restored)),
+    (error) => error.code === "IDEMPOTENCY_CONFLICT"
+  );
+  await assert.rejects(
+    restored.adapter.submit({ ...command, quote: { ...command.quote, expiresAt: "2026-10-10T14:00:00.011Z" } }, adapterContext(restored)),
+    (error) => error.code === "IDEMPOTENCY_CONFLICT"
+  );
+  await assert.rejects(
+    restored.adapter.submit({ ...command, idempotencyKey: "fresh-key-after-stale-quote" }, adapterContext(restored)),
+    (error) => error.code === "STALE_QUOTE"
+  );
+  assert.equal(restored.orders().length, 1);
+  assert.equal(restored.snapshot().billingEvidence.length, 1);
+  assert.equal(restored.snapshot().billingEvidence[0].charged, false);
+
+  restored.advanceTime(50);
+  await assert.rejects(restored.adapter.submit(command, adapterContext(restored)), (error) => error.code === "STALE_QUOTE");
+  assert.equal(restored.orders().length, 1);
+  assert.equal(restored.snapshot().billingEvidence.length, 1);
+});
+
+test("accepted-then-timeout key resolves from restored provider state after quote expiry", async () => {
+  const firstHarness = createMockHarness({
+    quoteTtlMs: 10,
+    idempotencyTtlMs: 100,
+    faults: [{ operation: "submit", kind: "accepted_then_timeout" }]
+  });
+  const { command } = await prepareSubmit(firstHarness);
+  await expectConnectorError(firstHarness.runtime.submit(envelope(command), MOCK_SCOPE), "ambiguous_submission", "possible");
+  assert.equal(firstHarness.simulator.orders().length, 1);
+  assert.equal(firstHarness.simulator.snapshot().billingEvidence.length, 1);
+  const restored = createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(firstHarness.simulator.snapshot())) });
+  restored.advanceTime(20);
+  const replay = await restored.adapter.submit(command, adapterContext(restored));
+  assert.equal(replay.value.providerRequestId, firstHarness.simulator.orders()[0].providerRequestId);
+  assert.equal(replay.value.acceptedAt, firstHarness.simulator.orders()[0].acceptedAt);
+  assert.equal(restored.orders().length, 1);
+  assert.equal(restored.snapshot().billingEvidence.length, 1);
+  assert.equal(restored.snapshot().billingEvidence[0].charged, false);
+});
+
 test("runtime authorization action claim prevents a second order with a distinct idempotency key", async () => {
   const harness = createMockHarness();
   const { command } = await prepareSubmit(harness);
@@ -300,6 +420,57 @@ test("cancel idempotency returns the same terminal observation on replay", async
   assert.equal(harness.simulator.orders().length, 1);
   assert.equal(harness.simulator.snapshot().cancelIdempotency.length, 1);
   assert.equal(harness.simulator.dispatchCounters().cancel, 2);
+});
+
+test("first transport cancellation result, adapter result, and runtime result cannot mutate persisted replay state", async () => {
+  const harness = createMockHarness();
+  const { command } = await prepareSubmit(harness);
+  const submitted = await harness.runtime.submit(envelope(command), MOCK_SCOPE);
+  const providerRequestId = submitted.value.providerRequestId;
+  const rawRequest = simulatorTransportRequest(
+    "cancel", "POST", "/simulator/orders/cancel",
+    { providerRequestId, requestFingerprint: "transport-cancel-fingerprint" },
+    "transport-cancel-key"
+  );
+  const expectedRaw = await harness.simulator.transport.request(rawRequest);
+  const firstRaw = await harness.simulator.transport.request(rawRequest);
+  firstRaw.providerRequestId = "sim-order-mutated";
+  firstRaw.outcome = "not_found";
+  firstRaw.observedAt = "2000-01-01T00:00:00.000Z";
+  assert.deepEqual(harness.simulator.snapshot().cancelIdempotency[0].result, expectedRaw);
+  assert.deepEqual(await harness.simulator.transport.request(rawRequest), expectedRaw);
+  const restart = createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(harness.simulator.snapshot())) });
+  assert.deepEqual(await restart.transport.request(rawRequest), expectedRaw);
+  assert.deepEqual(restart.snapshot().cancelIdempotency[0].result, expectedRaw);
+
+  const adapterCommand = cancelCommand(providerRequestId, "adapter-cancel-key");
+  const adapterFirst = await harness.simulator.adapter.cancel(adapterCommand, adapterContext(harness.simulator));
+  assert.equal(adapterFirst.status, "supported");
+  const expectedAdapter = { ...adapterFirst.value };
+  adapterFirst.value.providerRequestId = "sim-order-adapter-mutated";
+  adapterFirst.value.outcome = "not_found";
+  const adapterReplay = await harness.simulator.adapter.cancel(adapterCommand, adapterContext(harness.simulator));
+  assert.equal(adapterReplay.status, "supported");
+  assert.deepEqual(adapterReplay.value, expectedAdapter);
+
+  const runtimeCommand = cancelCommand(providerRequestId, "runtime-cancel-key");
+  const runtimeFirst = await harness.runtime.cancel(envelope(runtimeCommand), MOCK_SCOPE);
+  const expectedRuntime = { ...runtimeFirst.value };
+  runtimeFirst.value.providerRequestId = "sim-order-runtime-mutated";
+  runtimeFirst.value.outcome = "not_found";
+  const runtimeReplay = await harness.runtime.cancel(envelope(runtimeCommand), MOCK_SCOPE);
+  assert.deepEqual(runtimeReplay.value, expectedRuntime);
+
+  const statusCommand = { providerRequestId };
+  const statusFirst = await harness.simulator.adapter.getStatus(statusCommand, adapterContext(harness.simulator));
+  assert.equal(statusFirst.status, "supported");
+  statusFirst.value.normalizedState = "failed";
+  const statusReplay = await harness.simulator.adapter.getStatus(statusCommand, adapterContext(harness.simulator));
+  assert.equal(statusReplay.status, "supported");
+  assert.equal(statusReplay.value.normalizedState, "cancelled");
+  assert.equal(harness.simulator.orders()[0].status, "cancelled");
+  assert.equal(harness.simulator.snapshot().billingEvidence.length, 1);
+  assert.equal(harness.simulator.orders().length, 1);
 });
 
 test("concurrent same-key and distinct-key attempts allow only one synthetic order", async () => {
@@ -374,6 +545,71 @@ test("delayed, duplicate, out-of-order callbacks keep status monotonic and split
   assert.equal(harness.simulator.dispatchCounters().submit, 1);
 });
 
+test("terminal conflicts, repeated statuses, timestamps, and split shipments converge across all permutations and restart", async () => {
+  const harness = createMockHarness();
+  const { command } = await prepareSubmit(harness);
+  const submitted = await harness.runtime.submit(envelope(command), MOCK_SCOPE);
+  const requestId = submitted.value.providerRequestId;
+  const queued = [
+    harness.simulator.queueStatusCallback({ providerRequestId: requestId, status: "cancelled", occurredAt: "2026-10-10T14:00:01.000Z" }),
+    harness.simulator.queueStatusCallback({ providerRequestId: requestId, status: "failed", occurredAt: "2026-10-10T14:00:02.000Z" }),
+    harness.simulator.queueStatusCallback({ providerRequestId: requestId, status: "cancelled", occurredAt: "2026-10-10T14:00:02.000Z" }),
+    harness.simulator.queueStatusCallback({ providerRequestId: requestId, status: "failed", occurredAt: "2026-10-10T14:00:03.000Z" }),
+    harness.simulator.queueStatusCallback({ providerRequestId: requestId, status: "delivered", occurredAt: "2026-10-10T14:00:00.000Z" }),
+    harness.simulator.queueShipmentCallback({
+      providerRequestId: requestId,
+      shipment: { providerShipmentId: "sim-package-a", trackingNumber: "SIM-PACKAGE-A", carrier: "Synthetic", occurredAt: "2026-10-10T14:00:04.000Z" }
+    }),
+    harness.simulator.queueShipmentCallback({
+      providerRequestId: requestId,
+      shipment: { providerShipmentId: "sim-package-b", trackingNumber: "SIM-PACKAGE-B", carrier: "Synthetic", occurredAt: "2026-10-10T14:00:05.000Z" }
+    })
+  ];
+  const shipmentReplayId = queued[5];
+  const queuedSnapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+  let runs = 0;
+
+  for (const deliveryOrder of permutations(queued)) {
+    let simulator = createDeterministicSimulator({ snapshot: queuedSnapshot });
+    const restartAfter = Math.floor(deliveryOrder.length / 2);
+    for (let index = 0; index < deliveryOrder.length; index += 1) {
+      if (index === restartAfter) simulator = createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(simulator.snapshot())) });
+      assert.equal(simulator.deliverCallback(deliveryOrder[index]).outcome, "delivered");
+    }
+    assert.equal(simulator.deliverCallback(shipmentReplayId).outcome, "duplicate");
+    assert.deepEqual(simulator.orders()[0], {
+      ...simulator.orders()[0],
+      status: "delivered",
+      statusOccurredAt: "2026-10-10T14:00:05.000Z",
+      shipments: [
+        { providerShipmentId: "sim-package-a", trackingNumber: "SIM-PACKAGE-A", carrier: "Synthetic", occurredAt: "2026-10-10T14:00:04.000Z" },
+        { providerShipmentId: "sim-package-b", trackingNumber: "SIM-PACKAGE-B", carrier: "Synthetic", occurredAt: "2026-10-10T14:00:05.000Z" }
+      ]
+    });
+    assert.equal(simulator.orders().length, 1);
+    assert.equal(simulator.snapshot().billingEvidence.length, 1);
+    assert.equal(simulator.snapshot().dispatchCounters.submit, 1);
+    assert.equal(simulator.snapshot().duplicateCallbacks, 1);
+    runs += 1;
+  }
+  assert.equal(runs, 5_040);
+});
+
+test("conflicting data cannot reuse a synthetic shipment identity", async () => {
+  const harness = createMockHarness();
+  const { command } = await prepareSubmit(harness);
+  const submitted = await harness.runtime.submit(envelope(command), MOCK_SCOPE);
+  const providerRequestId = submitted.value.providerRequestId;
+  harness.simulator.queueShipmentCallback({
+    providerRequestId,
+    shipment: { providerShipmentId: "sim-package-conflict", trackingNumber: "SIM-FIRST", carrier: "Synthetic", occurredAt: "2026-10-10T14:00:01.000Z" }
+  });
+  assert.throws(() => harness.simulator.queueShipmentCallback({
+    providerRequestId,
+    shipment: { providerShipmentId: "sim-package-conflict", trackingNumber: "SIM-SECOND", carrier: "Synthetic", occurredAt: "2026-10-10T14:00:02.000Z" }
+  }), /cannot be reused with different details/);
+});
+
 test("quote destination and authorization data are omitted from provider state and usage evidence", async () => {
   const privateAddress = "44 Fictional Avenue, Synthetic City";
   const harness = createMockHarness();
@@ -403,6 +639,105 @@ test("serialized simulator snapshot resumes fixed time, identities, callback sta
   );
   assert.equal(status.value.normalizedState, "accepted");
   assert.equal(restored.dispatchCounters().status, 1);
+});
+
+test("versioned snapshot validation rejects malformed nested state before any provider dispatch", async () => {
+  const harness = createMockHarness({
+    faults: [
+      { operation: "status", kind: "unknown_status" },
+      { operation: "shipment", kind: "rate_limit" }
+    ]
+  });
+  const { command } = await prepareSubmit(harness);
+  const submitted = await harness.runtime.submit(envelope(command), MOCK_SCOPE);
+  const providerRequestId = submitted.value.providerRequestId;
+  const observed = await harness.runtime.getStatus(envelope({ providerRequestId }), MOCK_SCOPE);
+  assert.equal(observed.value.normalizedState, "unknown");
+  await harness.simulator.adapter.cancel(cancelCommand(providerRequestId, "snapshot-cancel-key"), adapterContext(harness.simulator));
+  harness.simulator.queueStatusCallback({
+    providerRequestId,
+    status: "delivered",
+    occurredAt: "2026-10-10T14:00:04.000Z",
+    delayMs: 100
+  });
+  const shipmentEvent = harness.simulator.queueShipmentCallback({
+    providerRequestId,
+    shipment: { providerShipmentId: "sim-snapshot-package", trackingNumber: "SIM-SNAPSHOT-PACKAGE", carrier: "Synthetic", occurredAt: "2026-10-10T14:00:03.000Z" }
+  });
+  assert.equal(harness.simulator.deliverCallback(shipmentEvent).outcome, "delivered");
+
+  const snapshot = JSON.parse(JSON.stringify(harness.simulator.snapshot()));
+  const restored = createDeterministicSimulator({ snapshot });
+  assert.deepEqual(restored.snapshot(), snapshot);
+  const replay = await restored.adapter.submit(command, adapterContext(restored));
+  assert.equal(replay.value.providerRequestId, providerRequestId);
+  assert.equal(restored.orders().length, 1);
+  assert.equal(restored.snapshot().billingEvidence.length, 1);
+  assert.equal(restored.snapshot().billingEvidence[0].charged, false);
+  restored.advanceTime(100);
+  const pendingStatus = snapshot.callbacks.find((callback) => callback.kind === "status");
+  assert.ok(pendingStatus);
+  assert.equal(restored.deliverCallback(pendingStatus.eventId).outcome, "delivered");
+  assert.equal(restored.orders()[0].status, "delivered");
+  assert.equal(restored.shipments(providerRequestId).length, 1);
+  assert.doesNotThrow(() => createDeterministicSimulator({ snapshot: JSON.parse(JSON.stringify(restored.snapshot())) }));
+
+  const corruptions = [
+    ["format version", (state) => { state.format = "fc-mock-development/999"; }],
+    ["unknown top-level field", (state) => { state.extra = true; }],
+    ["duplicate unsupported operation", (state) => { state.unsupportedOperations = ["cancel", "cancel"]; }],
+    ["quote null expiry", (state) => { state.quotes[0].expiresAt = null; }],
+    ["quote NaN amount serialized as null", (state) => { state.quotes[0].totalMinor = Number.NaN; }],
+    ["duplicate quote identity", (state) => { state.quotes.push({ ...state.quotes[0] }); }],
+    ["quote identity does not bind to seed and terms", (state) => { state.quotes[0].providerQuoteId = "sim-quote-00000000000000000000"; }],
+    ["dangling order quote reference", (state) => { state.orders[0].quoteId = "sim-quote-absent"; }],
+    ["unknown order status", (state) => { state.orders[0].status = "returned"; }],
+    ["nonsynthetic order identity", (state) => { state.orders[0].providerRequestId = "real-provider-order-123"; }],
+    ["order null amount", (state) => { state.orders[0].amountMinor = null; }],
+    ["malformed order timestamp", (state) => { state.orders[0].statusOccurredAt = "not-a-date"; }],
+    ["duplicate order identity", (state) => { state.orders.push({ ...state.orders[0], shipments: state.orders[0].shipments.map((shipment) => ({ ...shipment })) }); }],
+    ["nonsynthetic shipment identity", (state) => { state.orders[0].shipments[0].providerShipmentId = "real-carrier-shipment"; }],
+    ["shipment tracking identifier is not a fixture identifier", (state) => { state.orders[0].shipments[0].trackingNumber = "9400111899223856923456"; }],
+    ["unknown nested order field", (state) => { state.orders[0].supplierResponse = "live"; }],
+    ["null active key expiry", (state) => { state.idempotency[0].expiresAt = null; }],
+    ["dangling idempotency order reference", (state) => { state.idempotency[0].providerRequestId = "sim-order-00000000000000000000"; }],
+    ["duplicate idempotency key", (state) => { state.idempotency.push({ ...state.idempotency[0] }); }],
+    ["cancel result has unsupported outcome", (state) => { state.cancelIdempotency[0].result.outcome = "charged"; }],
+    ["cancel result has dangling order reference", (state) => { state.cancelIdempotency[0].result.providerRequestId = "sim-order-absent"; }],
+    ["duplicate cancellation idempotency key", (state) => { state.cancelIdempotency.push({ ...state.cancelIdempotency[0], result: { ...state.cancelIdempotency[0].result } }); }],
+    ["callback has unknown status", (state) => { state.callbacks[0].status = "unknown"; }],
+    ["status callback event identity binds its timestamp", (state) => { state.callbacks[0].occurredAt = "2026-10-10T14:00:09.000Z"; }],
+    ["callback has dangling order reference", (state) => { state.callbacks[0].providerRequestId = "sim-order-absent"; }],
+    ["callback has a non-finite availability time", (state) => { state.callbacks[0].availableAt = Number.NaN; }],
+    ["callback shipment is malformed", (state) => { state.callbacks[1].shipment.providerShipmentId = "real-tracking-id"; }],
+    ["callback identity is duplicated", (state) => { state.callbacks[1].eventId = state.callbacks[0].eventId; }],
+    ["fault kind is unrecognized", (state) => { state.faults[0].kind = "live_charge"; }],
+    ["unreachable discovery fault is rejected", (state) => { state.faults.push({ operation: "discover_capabilities", kind: "unsupported" }); }],
+    ["unknown-status fault is restricted to status", (state) => { state.faults.push({ operation: "quote", kind: "unknown_status" }); }],
+    ["triggered fault kind is unrecognized", (state) => { state.triggeredFaults[0].kind = "live_charge"; }],
+    ["billing mode must remain simulated", (state) => { state.billingEvidence[0].billingMode = "live"; }],
+    ["simulator never records a charge", (state) => { state.billingEvidence[0].charged = true; }],
+    ["billing evidence has dangling order reference", (state) => { state.billingEvidence[0].providerRequestId = "sim-order-absent"; }],
+    ["billing amount must be a finite minor-unit integer", (state) => { state.billingEvidence[0].amountMinor = null; }],
+    ["duplicate billing evidence", (state) => { state.billingEvidence.push({ ...state.billingEvidence[0] }); }],
+    ["missing accepted-order evidence", (state) => { state.billingEvidence = []; }],
+    ["counter key is required", (state) => { delete state.dispatchCounters.cancel; }],
+    ["counter must be a safe integer", (state) => { state.dispatchCounters.submit = 1.5; }],
+    ["counter object rejects extra fields", (state) => { state.dispatchCounters.live = 1; }],
+    ["duplicate callback counter must be a safe integer", (state) => { state.duplicateCallbacks = Number.NaN; }]
+  ];
+  let dispatchesAfterRestore = 0;
+  function restoreThenProbe(snapshotToRestore) {
+    const candidate = createDeterministicSimulator({ snapshot: snapshotToRestore });
+    dispatchesAfterRestore += 1;
+    return candidate.transport.request(simulatorTransportRequest("discover_capabilities", "GET", "/simulator/capabilities", {}));
+  }
+  for (const [name, corrupt] of corruptions) {
+    const candidate = JSON.parse(JSON.stringify(snapshot));
+    corrupt(candidate);
+    assert.throws(() => restoreThenProbe(candidate), TypeError, name);
+    assert.equal(dispatchesAfterRestore, 0, `${name} must fail before a restored simulator can dispatch`);
+  }
 });
 
 test("fixed seed and clock reproduce normalized results and state hashes", async () => {

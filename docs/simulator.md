@@ -15,7 +15,7 @@ node tests/mock-suite.mjs
 
 The suite uses the existing runtime with synthetic development-only contract, authorization, budget, persistence, and usage ports. It does not change the canonical schema catalog or claim those private ports are accepted production integrations. The fixture state and provider state are JSON serializable; the restart cases copy them through JSON before creating a new runtime and simulator instance.
 
-The suite guards `globalThis.fetch`, checks the simulator source for HTTP, DNS, socket, TLS, `fetch`, and environment access, and verifies that no fetch call occurs. It was also run on macOS under `sandbox-exec` with the `network*` rule denied and an empty environment, which provides OS-level network denial for that run:
+The suite guards `globalThis.fetch`, checks the simulator source for HTTP, DNS, socket, TLS, `fetch`, and environment access, and verifies that no fetch call occurs. It was also run on macOS under `sandbox-exec` with the `network*` rule denied, which denies network operations for that process tree:
 
 ```sh
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
@@ -23,7 +23,7 @@ The suite guards `globalThis.fetch`, checks the simulator source for HTTP, DNS, 
   /opt/homebrew/bin/node tests/mock-suite.mjs
 ```
 
-The executable paths may need adjustment on another host. The suite starts with no credentials and the simulator accepts only a synthetic seed and fixed start time.
+The executable paths may need adjustment on another host. `env -i` explicitly supplies only `PATH`; macOS may add its native `__CF_USER_TEXT_ENCODING` variable when launching Node. No credentials are supplied or read, and the simulator accepts only a synthetic seed and fixed start time. This is process-scoped sandbox evidence, not a machine-wide packet-capture claim.
 
 ## Determinism and synthetic quote terms
 
@@ -42,7 +42,9 @@ The clock is synthetic and advances only through `advanceTime()`. Synthetic quot
 
 The simulator hashes the production bundle and print-specification inputs for comparison, but does not store their original contents. It omits the destination and authorization envelope from provider requests and simulator state. Submit requests carry only local quote terms, the bundle digest, amount/currency, an opaque request fingerprint and the provider idempotency key. The test verifies a synthetic address is absent from provider snapshots and usage events. Do not use real customer material in fixtures.
 
-Quote terms expire according to the stored synthetic clock. The default quote lifetime is one hour. Provider idempotency records have a local 30-day lifetime by default; tests can set shorter intervals and advance the clock. Reusing a live key with the same normalized request returns its original synthetic order. Reusing it with different terms fails with a provider-style conflict. After the simulator's configured key expiry, the fixture permits a new synthetic order generation. This is a deliberate local fault model, not a statement about a real supplier's retention policy.
+Quote terms expire according to the stored synthetic clock. The default quote lifetime is one hour. Provider idempotency records have a local 30-day lifetime by default; tests can set shorter intervals and advance the clock. At the provider transport boundary, reusing an active key with the same normalized request returns its original synthetic order even after the quote expires. Reusing it with different terms fails with a provider-style conflict. A stale quote with a fresh or expired key cannot create a new order. The connector runtime keeps conservative quote-expiry validation before dispatch and may reject an expired retry before it reaches provider replay; previously persisted accepted runtime results remain governed by the runtime's own replay path. After the simulator's configured key expiry, the fixture permits a new synthetic order generation when the quote remains fresh. This is a deliberate local fault model, not a statement about a real supplier's retention policy.
+
+Restoration accepts only the exact `fc-mock-development/1` snapshot shape. It validates nested records, finite safe counters and dates, deterministic synthetic identifiers, record references, idempotency generations, unique evidence, and simulated uncharged billing rows before constructing the transport. Invalid or inconsistent JSON state fails closed. A JSON round trip is supported; this private fixture format is not an accepted shared persistence schema.
 
 Accepted simulator orders append an evidence record with `billingMode: "simulated"` and `charged: false`. Runtime budget and usage ports in `tests/mock-fixtures.mjs` are also synthetic and stay in serialized test state. A reserved or uncertain test record does not authorize, reserve, or charge real funds.
 
@@ -50,21 +52,21 @@ Accepted simulator orders append an evidence record with `billingMode: "simulate
 
 The runtime exercises capability discovery, quote, preflight, submit, status, shipment observation, and cancellation. Quote, preflight, status, shipment, submit, and cancel dispatch only to the simulator's local transport. `validateBeforeSubmit` checks the local quote record and does not dispatch. Capability discovery reports the adapter descriptor without a transport call.
 
-Pass one-shot faults to a new simulator. Faults are part of the serializable state and are removed when triggered.
+Pass one-shot faults to a new simulator. Faults are part of the serializable state and are removed when triggered. The six general fault kinds below are supported for quote, preflight, submit, status, shipment, and cancel. `unknown_status` is supported only for status. Capability discovery returns the adapter descriptor without crossing a local adapter or transport boundary, so fault plans targeting `discover_capabilities` are rejected during construction instead of remaining unused.
 
 | Fault | Behavior | Expected evidence |
 | --- | --- | --- |
 | `refuse_before_dispatch` | Adapter rejects before its transport call | Provider dispatch count remains zero; submit remains `not_dispatched` |
 | `unsupported` | Adapter reports an unsupported result before transport | Runtime returns `unsupported`; dispatch count remains zero |
 | `rate_limit` | Local transport returns a 429-shaped failure before changing provider state | One dispatch, no new order; submit remains conservatively `possible` in the runtime |
-| `accepted_then_timeout` | Simulator persists one accepted order and then loses the response | One order and one dispatch; runtime preserves an ambiguous attempt and blocks retry |
-| `crash_after_acceptance` | Simulator exposes a crash barrier after persisting the order and before returning the response | Test captures provider plus runtime durable snapshots at that boundary, then restarts from them; the attempt is still `unknown`, status lookup can reconcile it, and a new key cannot dispatch again |
+| `accepted_then_timeout` | Local operation effects occur, then the transport loses the response; submit persists one accepted order and uncharged evidence | Submit stays ambiguous and the runtime blocks retry; cancellation keeps its persisted idempotent result |
+| `crash_after_acceptance` | Simulator invokes the crash barrier after computing the local operation response and before returning it; submit has already persisted the order | For submit, the test captures provider plus runtime durable snapshots at that boundary, then restarts from them; the attempt is still `unknown`, status lookup can reconcile it, and a new key cannot dispatch again |
 | `malformed_response` | Simulator performs the operation and supplies an invalid response shape | Submit stays ambiguous if an order was accepted; malformed output is not treated as success |
 | `unknown_status` | Status lookup returns an explicit unknown observation | Unknown remains unknown; it is not promoted to accepted or completed |
 
 The crash test models the durable boundary with an in-process snapshot callback rather than killing the operating system process. It resumes from the captured snapshot taken before runtime error handling can update the attempt. This verifies restart behavior at the relevant persistence boundary without claiming process-kill testing.
 
-Callbacks can be queued with an optional delivery delay and delivered in any order. Re-delivery of one event ID is deduplicated. Status rank never moves backward when an older status arrives after a newer one, and delivered remains terminal against a later cancellation observation. Shipment callbacks are additive and deduplicated by synthetic shipment identity, so a split order retains each package exactly once. The current runtime `ShipmentResult` is singular; `simulator.shipments(providerRequestId)` exposes all local split-shipment records for tests.
+Callbacks can be queued with an optional delivery delay and delivered in any order. Re-delivery of one event ID is deduplicated. Status observations use a deterministic precedence: delivered, failed, cancelled, shipped, in production, accepted, then pending. Thus delivered wins conflicts with cancelled and failed wins conflicts with cancelled regardless of arrival order. `statusOccurredAt` is the maximum timestamp among applied authoritative status and shipment observations, so older callbacks do not rewind it. A synthetic shipment identity cannot be queued with conflicting details; duplicate observations are deduplicated, and split shipments are sorted by their synthetic identity. The current runtime `ShipmentResult` is singular; `simulator.shipments(providerRequestId)` exposes all local split-shipment records for tests.
 
 ## Scope limits
 

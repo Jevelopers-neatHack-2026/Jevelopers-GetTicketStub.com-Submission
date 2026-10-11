@@ -36,10 +36,11 @@ export type SimulatorFaultKind =
   | "malformed_response"
   | "unknown_status";
 
-export interface SimulatorFault {
-  readonly operation: Operation;
-  readonly kind: SimulatorFaultKind;
-}
+type SimulatorFaultOperation = Exclude<Operation, "discover_capabilities">;
+type SimulatorGeneralFaultKind = Exclude<SimulatorFaultKind, "unknown_status">;
+export type SimulatorFault =
+  | { readonly operation: SimulatorFaultOperation; readonly kind: SimulatorGeneralFaultKind }
+  | { readonly operation: "status"; readonly kind: "unknown_status" };
 
 export interface SimulatorShipmentRecord {
   readonly providerShipmentId: string;
@@ -136,7 +137,7 @@ export interface SimulatorSnapshot {
   readonly idempotencyTtlMs: number;
   readonly unsupportedOperations: Operation[];
   faults: SimulatorFault[];
-  readonly triggeredFaults: { readonly operation: Operation; readonly kind: SimulatorFaultKind }[];
+  readonly triggeredFaults: SimulatorFault[];
   quotes: SimulatorQuoteRecord[];
   orders: SimulatorOrderRecord[];
   idempotency: SimulatorIdempotencyRecord[];
@@ -164,15 +165,15 @@ export interface SimulatorOptions {
 const OPERATIONS: readonly Operation[] = [
   "discover_capabilities", "quote", "preflight", "submit", "status", "shipment", "cancel"
 ];
-const ORDER_STATUS_RANK: Readonly<Record<SimulatorOrderStatus, number>> = {
+const ORDER_STATUS_PRECEDENCE: Readonly<Record<SimulatorOrderStatus, number>> = {
   pending: 0,
+  unknown: -1,
   accepted: 1,
   in_production: 2,
   shipped: 3,
   cancelled: 4,
-  failed: 4,
-  delivered: 5,
-  unknown: -1
+  failed: 5,
+  delivered: 6
 };
 const CURRENCY = "USD";
 const UNIT_PRODUCTION_MINOR = 1_200;
@@ -262,6 +263,62 @@ function validOperation(value: unknown): value is Operation {
   return typeof value === "string" && OPERATIONS.includes(value as Operation);
 }
 
+function hasExactKeys(value: unknown, expected: readonly string[]): value is Record<string, unknown> {
+  if (!isPlainRecord(value)) return false;
+  const keys = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return keys.length === sortedExpected.length && keys.every((key, index) => key === sortedExpected[index]);
+}
+
+function validFaultPlan(value: unknown): value is SimulatorFault {
+  if (!hasExactKeys(value, ["operation", "kind"]) || !validOperation(value.operation) ||
+    value.operation === "discover_capabilities" || typeof value.kind !== "string") return false;
+  const kinds: readonly string[] = [
+    "refuse_before_dispatch", "unsupported", "rate_limit", "accepted_then_timeout",
+    "crash_after_acceptance", "malformed_response", "unknown_status"
+  ];
+  return kinds.includes(value.kind) && (value.kind !== "unknown_status" || value.operation === "status");
+}
+
+function validSafeInteger(value: unknown, minimum = Number.MIN_SAFE_INTEGER): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= minimum;
+}
+
+function canonicalTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && Math.abs(parsed) <= MAX_DATE_EPOCH_MS && new Date(parsed).toISOString() === value;
+}
+
+function isHexDigest(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+function isSha256Digest(value: unknown): value is string {
+  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/.test(value);
+}
+
+function isSyntheticOrderId(value: unknown): value is string {
+  return typeof value === "string" && /^sim-order-(?:[0-9a-f]{20}|[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(value);
+}
+
+function isSyntheticShipmentId(value: unknown): value is string {
+  return typeof value === "string" && /^sim-[A-Za-z0-9][A-Za-z0-9._-]{0,100}$/.test(value);
+}
+
+function validShipmentRecord(value: unknown): value is SimulatorShipmentRecord {
+  return hasExactKeys(value, ["providerShipmentId", "trackingNumber", "carrier", "occurredAt"]) &&
+    isSyntheticShipmentId(value.providerShipmentId) && typeof value.trackingNumber === "string" &&
+    /^SIM-[A-Za-z0-9][A-Za-z0-9._-]{0,100}$/.test(value.trackingNumber) &&
+    typeof value.carrier === "string" && /^Synthetic(?:[ A-Za-z0-9._-]{0,80})$/.test(value.carrier) &&
+    canonicalTimestamp(value.occurredAt);
+}
+
+function mergeStatusObservation(order: SimulatorOrderRecord, incoming: SimulatorOrderStatus, occurredAt: string): void {
+  if (ORDER_STATUS_PRECEDENCE[incoming] > ORDER_STATUS_PRECEDENCE[order.status]) order.status = incoming;
+  if (Date.parse(occurredAt) > Date.parse(order.statusOccurredAt)) order.statusOccurredAt = occurredAt;
+}
+
 function descriptorFor(unsupported: readonly Operation[]): ProviderDescriptor {
   const disabled = new Set(unsupported);
   return Object.freeze({
@@ -298,11 +355,12 @@ function makeInitialState(options: SimulatorOptions): SimulatorSnapshot {
   const unsupportedOperations = [...new Set(options.unsupportedOperations ?? [])];
   if (unsupportedOperations.some((operation) => !validOperation(operation))) throw new TypeError("unknown unsupported simulator operation");
   const faults = (options.faults ?? []).map((fault) => {
-    if (fault === null || typeof fault !== "object" || !validOperation(fault.operation) ||
-      !["refuse_before_dispatch", "unsupported", "rate_limit", "accepted_then_timeout", "crash_after_acceptance", "malformed_response", "unknown_status"].includes(fault.kind)) {
+    if (!validFaultPlan(fault)) {
       throw new TypeError("invalid simulator fault plan");
     }
-    return { operation: fault.operation, kind: fault.kind };
+    return fault.kind === "unknown_status"
+      ? { operation: "status" as const, kind: "unknown_status" as const }
+      : { operation: fault.operation, kind: fault.kind };
   });
   return {
     format: SIMULATOR_FIXTURE_VERSION,
@@ -329,25 +387,183 @@ function makeInitialState(options: SimulatorOptions): SimulatorSnapshot {
 }
 
 function parseSnapshot(snapshot: SimulatorSnapshot): SimulatorSnapshot {
-  let copy: SimulatorSnapshot;
+  let parsed: unknown;
   try {
-    copy = JSON.parse(JSON.stringify(snapshot)) as SimulatorSnapshot;
+    parsed = JSON.parse(JSON.stringify(snapshot)) as unknown;
   } catch {
     throw new TypeError("simulator snapshot must be JSON serializable");
   }
-  if (copy === null || typeof copy !== "object" || copy.format !== SIMULATOR_FIXTURE_VERSION ||
-    copy.billingMode !== "simulated" || typeof copy.seed !== "string" || copy.seed.trim() === "" ||
-    !Number.isSafeInteger(copy.nowMs) || Math.abs(copy.nowMs) > MAX_DATE_EPOCH_MS || !Number.isSafeInteger(copy.quoteTtlMs) || copy.quoteTtlMs < 1 ||
-    !Number.isSafeInteger(copy.idempotencyTtlMs) || copy.idempotencyTtlMs < 1 ||
+  const invalid = (): never => { throw new TypeError("simulator snapshot is invalid or has an unsupported version"); };
+  const snapshotKeys = [
+    "format", "billingMode", "seed", "nowMs", "quoteTtlMs", "idempotencyTtlMs", "unsupportedOperations", "faults",
+    "triggeredFaults", "quotes", "orders", "idempotency", "cancelIdempotency", "callbacks", "dispatchCounters",
+    "duplicateSubmissions", "duplicateCallbacks", "billingEvidence"
+  ];
+  if (!hasExactKeys(parsed, snapshotKeys)) return invalid();
+  const copy = parsed as unknown as SimulatorSnapshot;
+  if (copy.format !== SIMULATOR_FIXTURE_VERSION || copy.billingMode !== "simulated" ||
+    typeof copy.seed !== "string" || copy.seed.trim() === "" || copy.seed.length > 200 ||
+    !validSafeInteger(copy.nowMs) || Math.abs(copy.nowMs) > MAX_DATE_EPOCH_MS ||
+    !validSafeInteger(copy.quoteTtlMs, 1) || !validSafeInteger(copy.idempotencyTtlMs, 1) ||
     !Array.isArray(copy.unsupportedOperations) || copy.unsupportedOperations.some((op) => !validOperation(op)) ||
-    !Array.isArray(copy.faults) || !Array.isArray(copy.triggeredFaults) || !Array.isArray(copy.quotes) ||
-    !Array.isArray(copy.orders) || !Array.isArray(copy.idempotency) || !Array.isArray(copy.cancelIdempotency) || !Array.isArray(copy.callbacks) ||
-    !Array.isArray(copy.billingEvidence) || copy.dispatchCounters === null || typeof copy.dispatchCounters !== "object" ||
-    OPERATIONS.some((operation) => !Number.isSafeInteger(copy.dispatchCounters[operation]) || copy.dispatchCounters[operation] < 0) ||
-    !Number.isSafeInteger(copy.duplicateSubmissions) || copy.duplicateSubmissions < 0 ||
-    !Number.isSafeInteger(copy.duplicateCallbacks) || copy.duplicateCallbacks < 0) {
-    throw new TypeError("simulator snapshot is invalid or has an unsupported version");
+    new Set(copy.unsupportedOperations).size !== copy.unsupportedOperations.length ||
+    !Array.isArray(copy.faults) || !copy.faults.every(validFaultPlan) ||
+    !Array.isArray(copy.triggeredFaults) || !copy.triggeredFaults.every(validFaultPlan) ||
+    !Array.isArray(copy.quotes) || !Array.isArray(copy.orders) || !Array.isArray(copy.idempotency) ||
+    !Array.isArray(copy.cancelIdempotency) || !Array.isArray(copy.callbacks) || !Array.isArray(copy.billingEvidence) ||
+    !hasExactKeys(copy.dispatchCounters, OPERATIONS) ||
+    OPERATIONS.some((operation) => !validSafeInteger(copy.dispatchCounters[operation], 0)) ||
+    !validSafeInteger(copy.duplicateSubmissions, 0) || !validSafeInteger(copy.duplicateCallbacks, 0)) {
+    return invalid();
   }
+
+  const quoteKeys = ["providerQuoteId", "productionBundleDigest", "quantity", "totalMinor", "currency", "termsFingerprint", "createdAt", "expiresAt"];
+  const quotesById = new Map<string, SimulatorQuoteRecord>();
+  for (const value of copy.quotes as unknown[]) {
+    if (!hasExactKeys(value, quoteKeys)) return invalid();
+    const quote = value as unknown as SimulatorQuoteRecord;
+    const createdAtMs = canonicalTimestamp(quote.createdAt) ? Date.parse(quote.createdAt) : Number.NaN;
+    const expiresAtMs = canonicalTimestamp(quote.expiresAt) ? Date.parse(quote.expiresAt) : Number.NaN;
+    if (typeof quote.providerQuoteId !== "string" || !/^sim-quote-[0-9a-f]{20}$/.test(quote.providerQuoteId) ||
+      !isSha256Digest(quote.productionBundleDigest) || !validSafeInteger(quote.quantity, 1) || quote.quantity > MAX_QUANTITY ||
+      !validSafeInteger(quote.totalMinor, 1) || quote.currency !== CURRENCY || !isSha256Digest(quote.termsFingerprint) ||
+      !Number.isFinite(createdAtMs) || createdAtMs > copy.nowMs || !Number.isFinite(expiresAtMs) ||
+      expiresAtMs !== createdAtMs + copy.quoteTtlMs || expiresAtMs > MAX_DATE_EPOCH_MS) return invalid();
+    const production = UNIT_PRODUCTION_MINOR * quote.quantity;
+    const tax = Math.floor((production * SIMULATED_TAX_BASIS_POINTS + 5_000) / 10_000);
+    const expectedTotal = production + FLAT_SHIPPING_MINOR + tax;
+    const expectedId = `sim-quote-${hashText(`${copy.seed}|${quote.productionBundleDigest}|${quote.quantity}|${expectedTotal}|${CURRENCY}|${createdAtMs}|${copy.quoteTtlMs}`).slice(0, 20)}`;
+    const expectedTerms = simulatorQuoteTermsFingerprint({
+      providerQuoteId: expectedId,
+      totalMinor: expectedTotal,
+      currency: CURRENCY,
+      expiresAt: quote.expiresAt,
+      productionBundleDigest: quote.productionBundleDigest
+    });
+    if (!Number.isSafeInteger(expectedTotal) || quote.totalMinor !== expectedTotal || quote.providerQuoteId !== expectedId ||
+      quote.termsFingerprint !== expectedTerms || quotesById.has(quote.providerQuoteId)) return invalid();
+    quotesById.set(quote.providerQuoteId, quote);
+  }
+
+  const orderKeys = ["providerRequestId", "quoteId", "productionBundleDigest", "requestFingerprintDigest", "amountMinor", "currency", "acceptedAt", "status", "statusOccurredAt", "shipments"];
+  const ordersById = new Map<string, SimulatorOrderRecord>();
+  for (const value of copy.orders as unknown[]) {
+    if (!hasExactKeys(value, orderKeys)) return invalid();
+    const order = value as unknown as SimulatorOrderRecord;
+    const acceptedAtMs = canonicalTimestamp(order.acceptedAt) ? Date.parse(order.acceptedAt) : Number.NaN;
+    const statusAtMs = canonicalTimestamp(order.statusOccurredAt) ? Date.parse(order.statusOccurredAt) : Number.NaN;
+    const quote = typeof order.quoteId === "string" ? quotesById.get(order.quoteId) : undefined;
+    if (!isSyntheticOrderId(order.providerRequestId) || !/^sim-order-[0-9a-f]{20}$/.test(order.providerRequestId) ||
+      quote === undefined || !isSha256Digest(order.productionBundleDigest) || !isSha256Digest(order.requestFingerprintDigest) ||
+      !validSafeInteger(order.amountMinor, 1) || order.currency !== CURRENCY || !Number.isFinite(acceptedAtMs) ||
+      acceptedAtMs > copy.nowMs || !Number.isFinite(statusAtMs) || statusAtMs < acceptedAtMs ||
+      !validStatus(order.status) || order.status === "unknown" || order.status === "pending" ||
+      !Array.isArray(order.shipments) || ordersById.has(order.providerRequestId) ||
+      order.productionBundleDigest !== quote.productionBundleDigest || order.amountMinor !== quote.totalMinor || order.currency !== quote.currency) {
+      return invalid();
+    }
+    const shipmentIds = new Set<string>();
+    for (const shipment of order.shipments as unknown[]) {
+      if (!validShipmentRecord(shipment) || shipmentIds.has(shipment.providerShipmentId)) return invalid();
+      shipmentIds.add(shipment.providerShipmentId);
+    }
+    ordersById.set(order.providerRequestId, order);
+  }
+
+  const idempotencyKeys = new Set<string>();
+  const idempotencyOrders = new Set<string>();
+  for (const value of copy.idempotency as unknown[]) {
+    if (!hasExactKeys(value, ["keyDigest", "requestDigest", "providerRequestId", "expiresAt", "generation"])) return invalid();
+    const record = value as unknown as SimulatorIdempotencyRecord;
+    const order = typeof record.providerRequestId === "string" ? ordersById.get(record.providerRequestId) : undefined;
+    const acceptedAtMs = order === undefined ? Number.NaN : Date.parse(order.acceptedAt);
+    const expectedId = isHexDigest(record.keyDigest) && isHexDigest(record.requestDigest) && validSafeInteger(record.generation, 1)
+      ? `sim-order-${hashText(`${copy.seed}|${record.keyDigest}|${record.requestDigest}|${record.generation}`).slice(0, 20)}`
+      : "";
+    if (!isHexDigest(record.keyDigest) || idempotencyKeys.has(record.keyDigest) || !isHexDigest(record.requestDigest) ||
+      !isSyntheticOrderId(record.providerRequestId) || order === undefined || idempotencyOrders.has(record.providerRequestId) ||
+      !validSafeInteger(record.expiresAt) || !validSafeInteger(record.generation, 1) || record.providerRequestId !== expectedId ||
+      order.requestFingerprintDigest !== `sha256:${record.requestDigest}` ||
+      record.expiresAt !== acceptedAtMs + copy.idempotencyTtlMs) return invalid();
+    idempotencyKeys.add(record.keyDigest);
+    idempotencyOrders.add(record.providerRequestId);
+  }
+
+  const cancelKeys = new Set<string>();
+  for (const value of copy.cancelIdempotency as unknown[]) {
+    if (!hasExactKeys(value, ["keyDigest", "requestDigest", "result", "expiresAt", "generation"])) return invalid();
+    const record = value as unknown as SimulatorCancelIdempotencyRecord;
+    if (!isHexDigest(record.keyDigest) || cancelKeys.has(record.keyDigest) || !isHexDigest(record.requestDigest) ||
+      !validSafeInteger(record.expiresAt) || !validSafeInteger(record.generation, 1) ||
+      !hasExactKeys(record.result, ["providerRequestId", "outcome", "observedAt"]) ||
+      !isSyntheticOrderId(record.result.providerRequestId) ||
+      (record.result.outcome !== "cancelled" && record.result.outcome !== "already_terminal" && record.result.outcome !== "not_found") ||
+      !canonicalTimestamp(record.result.observedAt) || Date.parse(record.result.observedAt) > copy.nowMs ||
+      record.expiresAt !== Date.parse(record.result.observedAt) + copy.idempotencyTtlMs) return invalid();
+    const orderExists = ordersById.has(record.result.providerRequestId);
+    if ((record.result.outcome === "not_found") === orderExists) return invalid();
+    cancelKeys.add(record.keyDigest);
+  }
+
+  const callbackKeys = new Set<string>();
+  const appliedShipments = new Map<string, Map<string, SimulatorShipmentRecord>>();
+  const callbackBaseKeys = ["eventId", "providerRequestId", "occurredAt", "availableAt", "deliveryAttempts", "applied"];
+  for (let index = 0; index < copy.callbacks.length; index += 1) {
+    const value = copy.callbacks[index] as unknown;
+    if (!isPlainRecord(value) || typeof value.kind !== "string") return invalid();
+    const callback = value as unknown as SimulatorCallbackRecord;
+    const expectedKeys = callback.kind === "status"
+      ? [...callbackBaseKeys, "kind", "status"]
+      : callback.kind === "shipment" ? [...callbackBaseKeys, "kind", "shipment"] : [];
+    if (expectedKeys.length === 0 || !hasExactKeys(value, expectedKeys) ||
+      !isSyntheticOrderId(callback.providerRequestId) || !ordersById.has(callback.providerRequestId) ||
+      !canonicalTimestamp(callback.occurredAt) || !validSafeInteger(callback.availableAt) ||
+      Math.abs(callback.availableAt) > MAX_DATE_EPOCH_MS || !validSafeInteger(callback.deliveryAttempts, 0) ||
+      typeof callback.applied !== "boolean" || (callback.applied && callback.deliveryAttempts === 0)) return invalid();
+    const content = callback.kind === "status"
+      ? { status: callback.status, occurredAt: callback.occurredAt }
+      : callback.shipment;
+    if (callback.kind === "status") {
+      if (!validStatus(callback.status) || callback.status === "unknown") return invalid();
+    } else {
+      if (!validShipmentRecord(callback.shipment) || callback.shipment.occurredAt !== callback.occurredAt) return invalid();
+      if (callback.applied) {
+        let shipments = appliedShipments.get(callback.providerRequestId);
+        if (shipments === undefined) {
+          shipments = new Map<string, SimulatorShipmentRecord>();
+          appliedShipments.set(callback.providerRequestId, shipments);
+        }
+        const previous = shipments.get(callback.shipment.providerShipmentId);
+        if (previous !== undefined && canonicalJson(previous) !== canonicalJson(callback.shipment)) return invalid();
+        shipments.set(callback.shipment.providerShipmentId, callback.shipment);
+      }
+    }
+    const expectedEventId = `sim-event-${hashText(`${copy.seed}|${index + 1}|${callback.providerRequestId}|${callback.kind}|${canonicalJson(content)}`).slice(0, 16)}`;
+    if (callback.eventId !== expectedEventId || callbackKeys.has(callback.eventId)) return invalid();
+    callbackKeys.add(callback.eventId);
+  }
+
+  for (const order of ordersById.values()) {
+    const expectedShipments = [...(appliedShipments.get(order.providerRequestId)?.values() ?? [])]
+      .sort((left, right) => left.providerShipmentId < right.providerShipmentId ? -1 : left.providerShipmentId > right.providerShipmentId ? 1 : 0);
+    if (order.shipments.length !== expectedShipments.length || order.shipments.some((shipment, index) =>
+      canonicalJson(shipment) !== canonicalJson(expectedShipments[index]))) return invalid();
+  }
+
+  const evidenceByOrder = new Set<string>();
+  if (copy.billingEvidence.length !== copy.orders.length) return invalid();
+  for (const value of copy.billingEvidence as unknown[]) {
+    if (!hasExactKeys(value, ["billingMode", "event", "providerRequestId", "amountMinor", "currency", "observedAt", "charged"])) return invalid();
+    const evidence = value as unknown as SimulatorBillingEvidence;
+    const order = isSyntheticOrderId(evidence.providerRequestId) ? ordersById.get(evidence.providerRequestId) : undefined;
+    if (evidence.billingMode !== "simulated" || evidence.event !== "order_accepted" || evidence.charged !== false ||
+      order === undefined || evidenceByOrder.has(evidence.providerRequestId) || !validSafeInteger(evidence.amountMinor, 1) ||
+      evidence.amountMinor !== order.amountMinor || evidence.currency !== order.currency ||
+      !canonicalTimestamp(evidence.observedAt) || evidence.observedAt !== order.acceptedAt) return invalid();
+    evidenceByOrder.add(evidence.providerRequestId);
+  }
+  if (evidenceByOrder.size !== ordersById.size) return invalid();
+
   return copy;
 }
 
@@ -476,6 +692,16 @@ export class DeterministicSimulator implements Clock {
       carrier: requireString(input.shipment.carrier, "carrier"),
       occurredAt
     };
+    if (!validShipmentRecord(shipment)) throw new TypeError("shipment callbacks require synthetic shipment details");
+    const order = this.findOrder(providerRequestId);
+    if (order === undefined) throw new TypeError("callbacks require a known synthetic order");
+    const priorShipments = [
+      ...order.shipments,
+      ...this.state.callbacks.flatMap((entry) => entry.kind === "shipment" && entry.providerRequestId === providerRequestId ? [entry.shipment] : [])
+    ];
+    if (priorShipments.some((prior) => prior.providerShipmentId === shipment.providerShipmentId && canonicalJson(prior) !== canonicalJson(shipment))) {
+      throw new TypeError("a synthetic shipment identity cannot be reused with different details");
+    }
     return this.addCallback({
       kind: "shipment",
       providerRequestId,
@@ -497,23 +723,15 @@ export class DeterministicSimulator implements Clock {
     const order = this.findOrder(callback.providerRequestId);
     if (order === undefined) return { eventId, outcome: "not_found" };
     if (callback.kind === "status") {
-      const currentRank = ORDER_STATUS_RANK[order.status];
-      const nextRank = ORDER_STATUS_RANK[callback.status];
-      if (nextRank >= currentRank) {
-        order.status = callback.status;
-        order.statusOccurredAt = callback.occurredAt;
-      }
+      mergeStatusObservation(order, callback.status, callback.occurredAt);
     } else {
       if (!order.shipments.some((entry) => entry.providerShipmentId === callback.shipment.providerShipmentId)) {
         order.shipments.push({ ...callback.shipment });
-        order.shipments.sort((left, right) => left.providerShipmentId.localeCompare(right.providerShipmentId));
+        order.shipments.sort((left, right) => left.providerShipmentId < right.providerShipmentId ? -1 : left.providerShipmentId > right.providerShipmentId ? 1 : 0);
       } else {
         this.state.duplicateCallbacks += 1;
       }
-      if (ORDER_STATUS_RANK[order.status] < ORDER_STATUS_RANK.shipped) {
-        order.status = "shipped";
-        order.statusOccurredAt = callback.occurredAt;
-      }
+      mergeStatusObservation(order, "shipped", callback.occurredAt);
     }
     callback.applied = true;
     return { eventId, outcome: "delivered" };
@@ -521,6 +739,7 @@ export class DeterministicSimulator implements Clock {
 
   private callbackTime(candidate?: string): string {
     if (candidate === undefined) return iso(this.state.nowMs);
+    if (typeof candidate !== "string") throw new TypeError("callback time must be an ISO-compatible timestamp");
     const parsed = Date.parse(candidate);
     if (!Number.isFinite(parsed) || Math.abs(parsed) > MAX_DATE_EPOCH_MS) throw new TypeError("callback time must be an ISO-compatible timestamp");
     return iso(parsed);
@@ -541,14 +760,20 @@ export class DeterministicSimulator implements Clock {
   }): string {
     if (!Number.isSafeInteger(input.delayMs) || input.delayMs < 0) throw new TypeError("callback delay must be a non-negative safe integer");
     if (this.findOrder(input.providerRequestId) === undefined) throw new TypeError("callbacks require a known synthetic order");
+    const availableAt = this.state.nowMs + input.delayMs;
+    if (!Number.isSafeInteger(availableAt) || Math.abs(availableAt) > MAX_DATE_EPOCH_MS) {
+      throw new TypeError("callback availability must be a finite simulator date");
+    }
     const sequence = this.state.callbacks.length + 1;
-    const content = input.kind === "status" ? input.status : input.shipment;
+    const content = input.kind === "status"
+      ? { status: input.status, occurredAt: input.occurredAt }
+      : input.shipment;
     const eventId = `sim-event-${hashText(`${this.state.seed}|${sequence}|${input.providerRequestId}|${input.kind}|${canonicalJson(content)}`).slice(0, 16)}`;
     const base = {
       eventId,
       providerRequestId: input.providerRequestId,
       occurredAt: input.occurredAt,
-      availableAt: this.state.nowMs + input.delayMs,
+      availableAt,
       deliveryAttempts: 0,
       applied: false
     };
@@ -683,7 +908,7 @@ export class DeterministicSimulator implements Clock {
     if (index < 0) return undefined;
     const [fault] = this.state.faults.splice(index, 1);
     if (fault === undefined) return undefined;
-    this.state.triggeredFaults.push({ operation: fault.operation, kind: fault.kind });
+    this.state.triggeredFaults.push({ operation: fault.operation, kind: fault.kind } as SimulatorFault);
     return fault.kind === "refuse_before_dispatch" || fault.kind === "unsupported" ? fault.kind : undefined;
   }
 
@@ -693,7 +918,7 @@ export class DeterministicSimulator implements Clock {
     if (index < 0) return undefined;
     const [fault] = this.state.faults.splice(index, 1);
     if (fault === undefined) return undefined;
-    this.state.triggeredFaults.push({ operation: fault.operation, kind: fault.kind });
+    this.state.triggeredFaults.push({ operation: fault.operation, kind: fault.kind } as SimulatorFault);
     return fault.kind;
   }
 
@@ -811,22 +1036,28 @@ export class DeterministicSimulator implements Clock {
     const requestFingerprint = requireString(body.requestFingerprint, "requestFingerprint");
     const key = requireString(idempotencyKey, "idempotencyKey");
     const quote = this.state.quotes.find((entry) => entry.providerQuoteId === quoteId);
-    if (quote === undefined || Date.parse(quote.expiresAt) <= this.state.nowMs || Date.parse(quoteExpiresAt) <= this.state.nowMs) {
-      throw new SimulatedProviderError("The simulated quote is stale.", "STALE_QUOTE");
-    }
-    if (quote.productionBundleDigest !== productionBundleDigest || quote.totalMinor !== amountMinor || quote.currency !== currency ||
-      quote.termsFingerprint !== termsFingerprint) {
-      throw new SimulatedProviderError("The simulated quote terms differ.", "QUOTE_MISMATCH");
-    }
     const keyDigest = hashText(`${this.state.seed}|provider-idempotency|${key}`);
     const requestDigest = hashText(canonicalJson({ quoteId, productionBundleDigest, amountMinor, currency, requestFingerprint }));
     const active = this.state.idempotency.find((entry) => entry.keyDigest === keyDigest && entry.expiresAt > this.state.nowMs);
     if (active !== undefined) {
-      if (active.requestDigest !== requestDigest) throw new SimulatedProviderError("The simulated idempotency key conflicts.", "IDEMPOTENCY_CONFLICT");
+      if (active.requestDigest !== requestDigest || quote === undefined || quote.productionBundleDigest !== productionBundleDigest ||
+        quote.totalMinor !== amountMinor || quote.currency !== currency || quote.termsFingerprint !== termsFingerprint || quote.expiresAt !== quoteExpiresAt) {
+        throw new SimulatedProviderError("The simulated idempotency key conflicts.", "IDEMPOTENCY_CONFLICT");
+      }
       this.state.duplicateSubmissions += 1;
       const existingOrder = this.findOrder(active.providerRequestId);
       if (existingOrder === undefined) throw new SimulatedProviderError();
       return { providerRequestId: existingOrder.providerRequestId, acceptedAt: existingOrder.acceptedAt };
+    }
+    if (quote === undefined) {
+      throw new SimulatedProviderError("The simulated quote is stale.", "STALE_QUOTE");
+    }
+    if (quote.productionBundleDigest !== productionBundleDigest || quote.totalMinor !== amountMinor || quote.currency !== currency ||
+      quote.termsFingerprint !== termsFingerprint || quote.expiresAt !== quoteExpiresAt) {
+      throw new SimulatedProviderError("The simulated quote terms differ.", "QUOTE_MISMATCH");
+    }
+    if (Date.parse(quote.expiresAt) <= this.state.nowMs || Date.parse(quoteExpiresAt) <= this.state.nowMs) {
+      throw new SimulatedProviderError("The simulated quote is stale.", "STALE_QUOTE");
     }
     const prior = this.state.idempotency.find((entry) => entry.keyDigest === keyDigest);
     const generation = (prior?.generation ?? 0) + 1;
@@ -891,6 +1122,7 @@ export class DeterministicSimulator implements Clock {
   private cancelResponse(body: unknown, idempotencyKey: string | undefined): CancelResult {
     if (!isPlainRecord(body)) throw new SimulatedProviderError();
     const providerRequestId = requireString(body.providerRequestId, "providerRequestId");
+    if (!isSyntheticOrderId(providerRequestId)) throw new SimulatedProviderError();
     const key = requireString(idempotencyKey, "idempotencyKey");
     const requestDigest = hashText(canonicalJson({ providerRequestId, requestFingerprint: requireString(body.requestFingerprint, "requestFingerprint") }));
     const keyDigest = hashText(`${this.state.seed}|cancel-idempotency|${key}`);
@@ -915,7 +1147,7 @@ export class DeterministicSimulator implements Clock {
     if (!Number.isSafeInteger(idempotencyExpiry)) throw new SimulatedProviderError();
     this.state.cancelIdempotency = this.state.cancelIdempotency.filter((entry) => entry.keyDigest !== keyDigest);
     this.state.cancelIdempotency.push({ keyDigest, requestDigest, result, expiresAt: idempotencyExpiry, generation });
-    return result;
+    return JSON.parse(JSON.stringify(result)) as CancelResult;
   }
 
   private parseQuote(value: unknown): QuoteResult {
