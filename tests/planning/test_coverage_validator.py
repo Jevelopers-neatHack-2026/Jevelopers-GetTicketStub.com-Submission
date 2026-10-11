@@ -13,7 +13,9 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -229,6 +231,90 @@ class CoverageValidatorTests(unittest.TestCase):
         release = self.release_manifest()
         self.release_path.write_bytes(_canonical_bytes(release))
         return self.validate(release_path=self.release_path, **kwargs)
+
+    def validate_release_with_fake_io(
+        self,
+        *,
+        evidence_total_limit: int,
+        evidence_file_limit: int = 128,
+        read_actions: dict[str, list[Any]] | None = None,
+        close_failures: set[str] | None = None,
+        fstat_sizes: dict[str, int] | None = None,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, int]]:
+        self.write_inputs()
+        self.release_path.write_bytes(_canonical_bytes(self.release_manifest()))
+        read_actions = {} if read_actions is None else read_actions
+        close_failures = set() if close_failures is None else close_failures
+        fstat_sizes = {} if fstat_sizes is None else fstat_sizes
+        real_open = os.open
+        real_read = os.read
+        real_fstat = os.fstat
+        real_close = os.close
+        evidence_paths: dict[int, str] = {}
+        read_indexes: dict[str, int] = {}
+        read_events: list[dict[str, Any]] = []
+        close_counts: dict[str, int] = {}
+        failed_closes: set[str] = set()
+
+        def tracked_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+            fd = real_open(path, flags, *args, **kwargs)
+            candidate = Path(os.fsdecode(path))
+            if candidate.parent == self.evidence_dir:
+                evidence_paths[fd] = candidate.name
+            return fd
+
+        def tracked_fstat(fd: int) -> Any:
+            info = real_fstat(fd)
+            name = evidence_paths.get(fd)
+            if name in fstat_sizes:
+                return SimpleNamespace(st_mode=info.st_mode, st_size=fstat_sizes[name])
+            return info
+
+        def tracked_read(fd: int, requested: int) -> bytes:
+            name = evidence_paths.get(fd)
+            if name is None:
+                return real_read(fd, requested)
+            index = read_indexes.get(name, 0)
+            read_indexes[name] = index + 1
+            actions = read_actions.get(name, [])
+            action = actions[index] if index < len(actions) else None
+            if isinstance(action, BaseException):
+                read_events.append({"file": name, "requested": requested, "status": "error", "returned": 0})
+                raise action
+            if isinstance(action, int):
+                chunk = real_read(fd, min(requested, action))
+            elif isinstance(action, bytes):
+                if len(action) > requested:
+                    raise AssertionError("fake read returned more bytes than requested")
+                chunk = action
+            else:
+                chunk = real_read(fd, requested)
+            read_events.append({"file": name, "requested": requested, "status": "returned", "returned": len(chunk)})
+            return chunk
+
+        def tracked_close(fd: int) -> None:
+            name = evidence_paths.get(fd)
+            if name is None:
+                real_close(fd)
+                return
+            close_counts[name] = close_counts.get(name, 0) + 1
+            real_close(fd)
+            evidence_paths.pop(fd, None)
+            if name in close_failures and name not in failed_closes:
+                failed_closes.add(name)
+                raise OSError("synthetic evidence close failure")
+
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.dict(
+                validator.LIMITS,
+                {"evidence-total": evidence_total_limit, "evidence-file": evidence_file_limit},
+            ))
+            stack.enter_context(mock.patch.object(validator.os, "open", side_effect=tracked_open))
+            stack.enter_context(mock.patch.object(validator.os, "fstat", side_effect=tracked_fstat))
+            stack.enter_context(mock.patch.object(validator.os, "read", side_effect=tracked_read))
+            stack.enter_context(mock.patch.object(validator.os, "close", side_effect=tracked_close))
+            report = self.validate(release_path=self.release_path)
+        return report, read_events, close_counts
 
     def codes(self, report: dict[str, Any]) -> set[str]:
         return {issue["code"] for issue in report["issues"]}
@@ -496,13 +582,147 @@ class CoverageValidatorTests(unittest.TestCase):
 
     def test_positive_release_branch_is_scoped_and_never_acceptance_claim(self) -> None:
         self.write_inputs()
-        report = self.validate_release()
+        release = self.release_manifest()
+        expected_evidence_bytes = sum(Path(item["path"]).stat().st_size for item in release["evidence"])
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
         self.assertEqual(report["status"], "SCOPED_RELEASE_EVIDENCE_READY", report)
         self.assertEqual(report["coordination_status"], "pending")
         self.assertEqual(report["release_status"], "SCOPED_RELEASE_EVIDENCE_READY")
         self.assertFalse(report["whole_program_acceptance"])
         self.assertEqual(report["global_acceptance"], "not_asserted")
         self.assertEqual(report["release_counts"]["outcomes"], 3)
+        self.assertEqual(report["release_counts"]["evidence_bytes_read"], expected_evidence_bytes)
+        self.assertEqual(report["release_counts"]["verified_evidence_bytes"], expected_evidence_bytes)
+
+    def test_required_stage_edge_requirements_are_shared_by_both_endpoints(self) -> None:
+        def make_edge() -> dict[str, Any]:
+            return {
+                "edge_type": "evidence_stage",
+                "edge_id": "EDGE-MULTI-REQUIREMENT",
+                "consumer_key": "CE-LEAF",
+                "prerequisite_key": "EI-LEAF",
+                "consumer_stage": "runnable",
+                "prerequisite_stage": "contract",
+                "status": "pending",
+                "required_for_v1": True,
+                "requirement_ids": ["GLOBAL-A", "LOCAL-A"],
+                "required_evidence_ids": [],
+                "required_owner_receipt_ids": [],
+            }
+
+        def required_requirement_issues(report: dict[str, Any]) -> set[tuple[str, str, str]]:
+            return {
+                (issue["code"], issue["record"], issue["related_record"])
+                for issue in report["issues"]
+                if issue["code"] in {
+                    "STAGED_EDGE_CONSUMER_REQUIREMENT_NOT_DECLARED",
+                    "STAGED_EDGE_PREREQUISITE_REQUIREMENT_NOT_DECLARED",
+                }
+            }
+
+        def add_local_contribution(mapping: dict[str, Any], leaf_key: str) -> None:
+            leaf = next(row for row in mapping["entries"] if row["key"] == leaf_key)
+            if "LOCAL-A" not in leaf["requirement_ids"]:
+                leaf["requirement_ids"].append("LOCAL-A")
+            ownership = next(row for row in mapping["ownership_rows"] if row["requirement_id"] == "LOCAL-A")
+            if leaf_key not in ownership["required_contributors"]:
+                ownership["required_contributors"].append(leaf_key)
+            mapping["source_contribution_rows"].append({
+                "row_id": f"ROW-LOCAL-{leaf_key}",
+                "requirement_id": "LOCAL-A",
+                "owning_leaf_key": leaf_key,
+                "scope": "local",
+            })
+
+        mapping = copy.deepcopy(self.map)
+        mapping["staged_edges"].append(make_edge())
+        self.write_inputs(mapping)
+        neither_report = self.validate()
+        self.assertEqual(required_requirement_issues(neither_report), {
+            ("STAGED_EDGE_CONSUMER_REQUIREMENT_NOT_DECLARED", "EDGE-MULTI-REQUIREMENT", "LOCAL-A"),
+            ("STAGED_EDGE_PREREQUISITE_REQUIREMENT_NOT_DECLARED", "EDGE-MULTI-REQUIREMENT", "LOCAL-A"),
+        })
+
+        mapping = copy.deepcopy(self.map)
+        add_local_contribution(mapping, "CE-LEAF")
+        mapping["staged_edges"].append(make_edge())
+        self.write_inputs(mapping)
+        one_endpoint_report = self.validate()
+        self.assertEqual(required_requirement_issues(one_endpoint_report), {
+            ("STAGED_EDGE_PREREQUISITE_REQUIREMENT_NOT_DECLARED", "EDGE-MULTI-REQUIREMENT", "LOCAL-A"),
+        })
+
+        mapping = copy.deepcopy(self.map)
+        ce = next(row for row in mapping["entries"] if row["key"] == "CE-LEAF")
+        ce["requirement_ids"] = ["LOCAL-A"]
+        global_ownership = next(row for row in mapping["ownership_rows"] if row["requirement_id"] == "GLOBAL-A")
+        global_ownership["required_contributors"].remove("CE-LEAF")
+        mapping["source_contribution_rows"] = [
+            row for row in mapping["source_contribution_rows"]
+            if row["row_id"] != "ROW-3"
+        ]
+        add_local_contribution(mapping, "CE-LEAF")
+        mapping["staged_edges"].append(make_edge())
+        self.write_inputs(mapping)
+        disjoint_report = self.validate()
+        self.assertEqual(required_requirement_issues(disjoint_report), {
+            ("STAGED_EDGE_CONSUMER_REQUIREMENT_NOT_DECLARED", "EDGE-MULTI-REQUIREMENT", "GLOBAL-A"),
+            ("STAGED_EDGE_PREREQUISITE_REQUIREMENT_NOT_DECLARED", "EDGE-MULTI-REQUIREMENT", "LOCAL-A"),
+        })
+
+        mapping = copy.deepcopy(self.map)
+        add_local_contribution(mapping, "CE-LEAF")
+        add_local_contribution(mapping, "EI-LEAF")
+        mapping["staged_edges"].append(make_edge())
+        self.write_inputs(mapping)
+        shared_report = self.validate()
+        self.assertEqual(shared_report["status"], "BACKLOG_READY", shared_report)
+        self.assertEqual(required_requirement_issues(shared_report), set())
+
+    def test_evidence_read_budget_counts_partial_reads_and_stops_before_later_files(self) -> None:
+        report, read_events, close_counts = self.validate_release_with_fake_io(
+            evidence_total_limit=40,
+            read_actions={"evidence-ah.txt": [12, OSError("synthetic read failure")]},
+        )
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIn("EVIDENCE_READ_FAILED", self.codes(report))
+        self.assertIn("EVIDENCE_TOTAL_SIZE", self.codes(report))
+        self.assertEqual(report["release_counts"]["evidence_bytes_read"], 12)
+        self.assertEqual(report["release_counts"]["verified_evidence_bytes"], 0)
+        self.assertEqual(sum(event["returned"] for event in read_events), 12)
+        self.assertEqual({event["file"] for event in read_events}, {"evidence-ah.txt"})
+        self.assertEqual(set(close_counts.values()), {1})
+
+    def test_evidence_read_budget_counts_bytes_when_close_fails(self) -> None:
+        report, read_events, close_counts = self.validate_release_with_fake_io(
+            evidence_total_limit=100,
+            close_failures={"evidence-ah.txt"},
+        )
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIn("EVIDENCE_CLOSE_FAILED", self.codes(report))
+        self.assertIn("EVIDENCE_TOTAL_SIZE", self.codes(report))
+        self.assertEqual(report["release_counts"]["evidence_bytes_read"], 72)
+        self.assertEqual(report["release_counts"]["verified_evidence_bytes"], 36)
+        self.assertEqual(sum(event["returned"] for event in read_events), 72)
+        self.assertEqual([event["file"] for event in read_events if event["returned"]], [
+            "evidence-ah.txt", "evidence-ei.txt",
+        ])
+        self.assertEqual(set(close_counts.values()), {1})
+
+    def test_evidence_read_budget_allows_only_one_growth_overflow_byte(self) -> None:
+        report, read_events, close_counts = self.validate_release_with_fake_io(
+            evidence_total_limit=40,
+            fstat_sizes={"evidence-ah.txt": 0},
+            read_actions={"evidence-ah.txt": [None, b"extra"]},
+        )
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIn("EVIDENCE_TOTAL_SIZE", self.codes(report))
+        self.assertEqual(report["release_counts"]["evidence_bytes_read"], 41)
+        self.assertEqual(report["release_counts"]["verified_evidence_bytes"], 0)
+        self.assertEqual(sum(event["returned"] for event in read_events), 41)
+        self.assertEqual({event["file"] for event in read_events}, {"evidence-ah.txt"})
+        self.assertEqual(close_counts, {"evidence-ah.txt": 1})
 
     def test_applicable_stage_prerequisites_need_revision_bound_evidence(self) -> None:
         mapping = copy.deepcopy(self.map)

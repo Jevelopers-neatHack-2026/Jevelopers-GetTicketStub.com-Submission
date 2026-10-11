@@ -1059,15 +1059,22 @@ def _validate_graph(
         elif required_for_v1 is True:
             if not requirement_ids:
                 _add_issue(issues, "STAGED_EDGE_REQUIREMENT_IDS_REQUIRED", record)
-            for endpoint in (consumer, prerequisite):
+            safe_edge_id = edge_id if _safe_key(edge_id) else record
+            for endpoint_role, endpoint in (("consumer", consumer), ("prerequisite", prerequisite)):
                 endpoint_leaf = leaf_by_key.get(endpoint) if isinstance(endpoint, str) else None
                 endpoint_requirement_ids = endpoint_leaf.get("requirement_ids") if endpoint_leaf is not None else None
-                if (
-                    endpoint_leaf is None
-                    or not isinstance(endpoint_requirement_ids, list)
-                    or not any(value in endpoint_requirement_ids for value in requirement_ids)
-                ):
-                    _add_issue(issues, "STAGED_EDGE_REQUIREMENT_NOT_DECLARED", edge_id or record)
+                for requirement_id in requirement_ids:
+                    if (
+                        endpoint_leaf is None
+                        or not isinstance(endpoint_requirement_ids, list)
+                        or requirement_id not in endpoint_requirement_ids
+                    ):
+                        code = (
+                            "STAGED_EDGE_CONSUMER_REQUIREMENT_NOT_DECLARED"
+                            if endpoint_role == "consumer"
+                            else "STAGED_EDGE_PREREQUISITE_REQUIREMENT_NOT_DECLARED"
+                        )
+                        _add_relation_issue(issues, code, safe_edge_id, requirement_id)
         required_evidence = edge.get("required_evidence_ids", [])
         if (
             not isinstance(required_evidence, list)
@@ -1133,6 +1140,8 @@ def _validate_release(
         return {
             "tested_revisions": 0,
             "evidence_files": 0,
+            "evidence_bytes_read": 0,
+            "verified_evidence_bytes": 0,
             "outcomes": 0,
             "manifest_sha256": _sha256(manifest_raw),
         }
@@ -1163,7 +1172,8 @@ def _validate_release(
         tested.add(pair)
 
     evidence_by_id: dict[str, dict[str, Any]] = {}
-    total_bytes = 0
+    evidence_bytes_read = 0
+    verified_evidence_bytes = 0
     for index, item in enumerate(evidence_raw):
         record = f"evidence-{index}"
         if not isinstance(item, dict):
@@ -1194,6 +1204,9 @@ def _validate_release(
         if not isinstance(expected_hash, str) or HASH_RE.fullmatch(expected_hash) is None:
             _add_issue(issues, "EVIDENCE_DIGEST_INVALID", ident)
             continue
+        if evidence_bytes_read > LIMITS["evidence-total"]:
+            _add_issue(issues, "EVIDENCE_TOTAL_SIZE", ident)
+            continue
         artifact_path = _relative_artifact(item.get("path"), ident)
         try:
             flags = os.O_RDONLY
@@ -1213,28 +1226,30 @@ def _validate_release(
             if not stat.S_ISREG(info.st_mode) or info.st_size > LIMITS["evidence-file"]:
                 _add_issue(issues, "EVIDENCE_TYPE_OR_SIZE", ident)
                 readable = False
-            elif total_bytes + info.st_size > LIMITS["evidence-total"]:
+            elif evidence_bytes_read + info.st_size > LIMITS["evidence-total"]:
                 _add_issue(issues, "EVIDENCE_TOTAL_SIZE", ident)
                 readable = False
             while readable:
                 remaining_file = LIMITS["evidence-file"] - size
-                remaining_total = LIMITS["evidence-total"] - total_bytes - size
+                remaining_total = LIMITS["evidence-total"] - evidence_bytes_read
                 read_size = min(64 * 1024, max(1, remaining_file + 1), max(1, remaining_total + 1))
                 chunk = os.read(fd, read_size)
                 if not chunk:
                     break
                 size += len(chunk)
+                evidence_bytes_read += len(chunk)
                 if size > LIMITS["evidence-file"]:
                     _add_issue(issues, "EVIDENCE_TYPE_OR_SIZE", ident)
                     readable = False
                     break
-                if total_bytes + size > LIMITS["evidence-total"]:
+                if evidence_bytes_read > LIMITS["evidence-total"]:
                     _add_issue(issues, "EVIDENCE_TOTAL_SIZE", ident)
                     readable = False
                     break
                 digest.update(chunk)
             if readable and (size != info.st_size or digest.hexdigest() != expected_hash):
                 _add_issue(issues, "EVIDENCE_DIGEST_MISMATCH", ident)
+                readable = False
         except OSError:
             _add_issue(issues, "EVIDENCE_READ_FAILED", ident)
             readable = False
@@ -1245,7 +1260,7 @@ def _validate_release(
                 _add_issue(issues, "EVIDENCE_CLOSE_FAILED", ident)
                 readable = False
         if readable:
-            total_bytes += size
+            verified_evidence_bytes += size
 
     receipt_by_id: dict[str, dict[str, Any]] = {}
     for index, item in enumerate(receipts_raw):
@@ -1502,6 +1517,8 @@ def _validate_release(
     return {
         "tested_revisions": len(tested),
         "evidence_files": len(evidence_by_id),
+        "evidence_bytes_read": evidence_bytes_read,
+        "verified_evidence_bytes": verified_evidence_bytes,
         "outcomes": len(outcomes),
         "manifest_sha256": _sha256(manifest_raw),
     }

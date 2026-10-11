@@ -9,7 +9,7 @@ The checked-in [coverage input pin reference](../../planning/agent-creative-v1/c
 Run the focused synthetic suite:
 
 ```sh
-python3 -m unittest discover -s tests/planning -p 'test_coverage_validator.py'
+python3 -B -m unittest discover -s tests/planning -p 'test_coverage_validator.py'
 ```
 
 Planning validation requires explicit input paths:
@@ -55,7 +55,7 @@ JSON object keys must be unique at every depth. Each root must be an object, eac
 | Blocker owner/action text | 512 characters each |
 | Reported blocker rows | 250 (the report marks truncation) |
 
-These are parser and resource bounds, separate from program scope. The observed 59 required leaves, 555 contribution rows, 91 mapped requirement IDs, 47 canonical criteria, and 16 criteria outside the scoped map are snapshot dimensions, not fixed quotas. Distinct contribution rows remain distinct even when they reference the same requirement ID. The validator compares every recomputed dimension to the caller's pin and accepts a later, correctly pinned snapshot with different counts.
+The evidence reader accounts every returned read byte against the aggregate limit, including bytes read before a later read, digest, size, or close failure. It may consume one additional byte as a bounded overflow detector, then stops reading later evidence files. A release report records `evidence_bytes_read` (including such a detection byte) separately from `verified_evidence_bytes` (regular evidence files fully read, size-checked, digest-matched, and closed). The latter is a content-read metric, not evidence of agreement or a passing release. These are parser and resource bounds, separate from program scope. The observed 59 required leaves, 555 contribution rows, 91 mapped requirement IDs, 47 canonical criteria, and 16 criteria outside the scoped map are snapshot dimensions, not fixed quotas. Distinct contribution rows remain distinct even when they reference the same requirement ID. The validator compares every recomputed dimension to the caller's pin and accepts a later, correctly pinned snapshot with different counts.
 
 The pin manifest uses `acv1.coverage-source-reference/v1`. It pins the exact map bytes by SHA-256, the canonical checklist by Git blob ID and byte count, and issue readbacks by SHA-256, capture ID, timestamp, observed source revision, and page-completeness flag. It names the source adapter, repository, revision, and path. A missing, unknown, repeated, incomplete, or mismatched source role blocks validation. The digest proves byte identity, not source authorization or signer identity.
 
@@ -98,7 +98,7 @@ No output can assert `SUBSYSTEM_COMPLETE`, whole-program acceptance, or global a
 | RL-04 | `test_release_digest_model_policy_and_prerequisite_fail_closed`; `test_release_configuration_expectations_are_pinned_by_the_leaf`; `test_invalid_map_configuration_pin_types_are_reported` |
 | RL-05 | `test_release_requires_exact_revisions_modes_tests_and_receipts`; `test_pending_external_blocker_keeps_planning_visible_and_fails_release` |
 | RL-06 | `test_release_requires_exact_revisions_modes_tests_and_receipts` |
-| RL-07 | `test_positive_release_branch_is_scoped_and_never_acceptance_claim`; `test_pending_external_blocker_keeps_planning_visible_and_fails_release`; `test_applicable_stage_prerequisites_need_revision_bound_evidence`; `test_outcome_cannot_lower_required_stage_and_final_gate_stays_outside_scope`; `test_stage_status_enum_and_required_evidence_fail_closed` |
+| RL-07 | `test_positive_release_branch_is_scoped_and_never_acceptance_claim`; `test_pending_external_blocker_keeps_planning_visible_and_fails_release`; `test_applicable_stage_prerequisites_need_revision_bound_evidence`; `test_outcome_cannot_lower_required_stage_and_final_gate_stays_outside_scope`; `test_stage_status_enum_and_required_evidence_fail_closed`; `test_required_stage_edge_requirements_are_shared_by_both_endpoints`; `test_evidence_read_budget_counts_partial_reads_and_stops_before_later_files`; `test_evidence_read_budget_counts_bytes_when_close_fails`; `test_evidence_read_budget_allows_only_one_growth_overflow_byte` |
 | RL-08 | `test_readback_capture_pin_drift_is_explicit`; `test_issue_readback_mismatch_and_incomplete_pages_fail` |
 | Provenance, JSON and bounds | `test_duplicate_json_keys_are_rejected_and_pin_mismatch_fails`; `test_nested_duplicate_json_keys_and_unknown_source_alias_fail`; `test_missing_readback_pin_is_blocked_and_report_does_not_guess`; `test_malformed_json_returns_fixed_diagnostic`; `test_input_byte_limit_is_checked_before_parse` |
 
