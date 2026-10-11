@@ -52,7 +52,7 @@ export function PageShell({
   if (known > 0) back = undefined; // the tree knows this route: no back link needed
   return (
     <div className={cx("desk-surface", s.shell, className)} data-theme="light">
-      <header className={cx(s.top, !crumbs && !back && !title && !right && s.logoOnly)}>
+      <header className={cx(s.top, !crumbs && !back && !title && !right && s.logoOnly)} style={{ paddingRight: "max(16px, var(--corner-reserve, 0px))" }}>
         {crumbs ? (
           <Breadcrumbs />
         ) : back ? (

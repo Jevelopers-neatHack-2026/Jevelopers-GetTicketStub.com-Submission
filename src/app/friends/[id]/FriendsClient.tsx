@@ -1,13 +1,13 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Field, PaperButton, PunchTabs, Rule, SandboxStrip, Stamp, Tag, Tags } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play, haptic } from "@/customer/studio/feedback";
 import { encodeStub, getStub, upsertStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
-import { LeavesMark, PageShell, CopyField, EmptyArt, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
-import { SANDBOX_LABEL, addToCart, cartItemFromStub, quote, defaultSize } from "@/customer/pages/commerce";
+import { PageShell, CopyField, EmptyArt, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
+import { SANDBOX_LABEL, cartItemFromStub, quote, defaultSize } from "@/customer/pages/commerce";
+import { addToCartAndFly } from "@/customer/cart/cartStore";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "./friends.module.css";
 
@@ -19,7 +19,6 @@ const MODES = [
 ];
 
 export default function FriendsClient({ id }: { id: string }) {
-  const router = useRouter();
   const mounted = useMounted();
   const [stub, setStub] = useState<Stub | null | undefined>(undefined);
   const [name, setName] = useState("");
@@ -147,13 +146,9 @@ export default function FriendsClient({ id }: { id: string }) {
             <Stamp
               block
               price={`${seats} × ${formatMoney(unit)}`}
-              onClick={() => {
-                addToCart(cartItemFromStub(stub, material, stub.finish, size));
-                router.push("/cart");
-              }}
+              onClick={(e) => addToCartAndFly(cartItemFromStub(stub, material, stub.finish, size), stub, e.currentTarget)}
             >
-              Add the set and open your cart
-              <LeavesMark />
+              Add the set to your cart
             </Stamp>
           </>
         )}

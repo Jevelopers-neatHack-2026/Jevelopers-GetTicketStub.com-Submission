@@ -1,0 +1,113 @@
+/* The corner cart button: a small paper button, fixed top right, above every stage (the sidebar's layer).
+   Its width is fixed (72px) so --corner-reserve on <html> can name exactly how much room it takes. */
+.btn {
+  position: fixed;
+  z-index: 112;
+  top: max(6px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 72px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 2px 0 var(--desk-ledge);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 600ms ease,
+    color 600ms ease,
+    box-shadow var(--desk-release) ease,
+    transform var(--desk-press) ease;
+}
+.btn:hover {
+  box-shadow:
+    inset 0 0 0 1px var(--desk-ink-soft),
+    0 2px 0 var(--desk-ledge);
+}
+.btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 0 0 var(--desk-ledge);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+}
+.btn svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+.count {
+  min-width: 1.4ch;
+  font: var(--type-label);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.btn[data-empty="true"] {
+  color: var(--desk-ink-soft);
+}
+.count[data-bump="true"] {
+  animation: stampUp 420ms var(--desk-spring);
+}
+@keyframes stampUp {
+  0% {
+    opacity: 0;
+    transform: scale(1.9) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.9) rotate(2deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* stage moments: the same night tokens the sidebar takes */
+:global(html[data-nav-stage]) .btn {
+  --desk-paper-raised: #26302a;
+  --desk-ink: #f4ecdd;
+  --desk-ink-soft: rgb(244 236 221 / 0.66);
+  --desk-rule-strong: rgb(244 236 221 / 0.4);
+  --desk-ledge: rgb(0 0 0 / 0.45);
+}
+
+/* the stub in the air */
+.flight {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 140;
+  --stub-max: 76px;
+  width: 76px;
+  pointer-events: none;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 8px 10px rgb(23 20 15 / 0.35));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition-duration: 0.01ms;
+  }
+  /* a crossfade and a bump instead of the flight and the stamp */
+  .count[data-bump="true"] {
+    animation: countFade 300ms ease;
+  }
+  @keyframes countFade {
+    from {
+      opacity: 0;
+    }
+  }
+}

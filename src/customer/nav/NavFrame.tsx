@@ -4,17 +4,17 @@
 // same sidebar over the content as a drawer. Every route is in it, nested by parent (see routes.ts).
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
 import { SoundIcon } from "@/customer/desk/icons";
 import { AccountLine } from "@/customer/account/AccountLine";
 import { AccountRoot } from "@/customer/account/AccountRoot";
 import { useAccount } from "@/customer/account/useAccount";
 import { sharePath } from "@/customer/account/share";
-import { loadCart } from "@/customer/pages/commerce";
+import { CartCorner } from "@/customer/cart/CartCorner";
 import { memoryPath } from "@/customer/pages/share";
 import { getStub } from "@/customer/studio/store";
 import { play, useMuted } from "@/customer/studio/feedback";
-import { AccountIcon, CartIcon, ChevronIcon, HandleIcon, MakeIcon, MapIcon, OrganizerIcon, WallIcon } from "./icons";
+import { AccountIcon, CartIcon, ChevronIcon, HandleIcon, MakeIcon, OrganizerIcon, WallIcon } from "./icons";
 import { useDesktop, useNavOpen } from "./navState";
 import { NAV_FREE, buildTree, chainOf, useLocation, type IconKey, type RouteNode } from "./routes";
 import f from "./NavFrame.module.css";
@@ -23,23 +23,12 @@ const ICONS: Record<IconKey, ComponentType> = {
   make: MakeIcon,
   wall: WallIcon,
   cart: CartIcon,
-  map: MapIcon,
   organizer: OrganizerIcon,
   account: AccountIcon,
 };
 
 /** The widths the CSS gives the sidebar (open, folded, the phone's rail); --nav-w on <html> follows them. */
 const WIDTHS = { open: 244, rail: 68, phone: 56 };
-
-function subscribeStorage(cb: () => void) {
-  window.addEventListener("storage", cb);
-  return () => window.removeEventListener("storage", cb);
-}
-
-/** Cart count: re-read on every render (route changes re-render the frame) and on the storage event. */
-function useCartCount(): number {
-  return useSyncExternalStore(subscribeStorage, () => loadCart().length, () => 0);
-}
 
 /** The depth-first order of the visible-or-not tree: the direction a navigation sounds in. */
 function order(nodes: RouteNode[], out: RouteNode[] = []): RouteNode[] {
@@ -58,7 +47,6 @@ export function NavFrame({ children }: { children: ReactNode }) {
   const desktop = useDesktop();
   const [open, toggleOpen] = useNavOpen(inStudio);
   const [muted, setMuted] = useMuted();
-  const count = useCartCount();
   const { keys, stubs } = useLocation(path);
   // The drawer belongs to the route it was opened on, so any navigation closes it.
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
@@ -108,9 +96,15 @@ export function NavFrame({ children }: { children: ReactNode }) {
     document.documentElement.style.setProperty("--nav-w", `${w}px`);
   }, [show, desktop, open]);
 
+  // --corner-reserve on <html>: how much of the top-right corner the cart button takes (its width, its inset
+  // and a gap), so a header's right-side content never sits under it. 0 where there is no button.
+  useEffect(() => {
+    document.documentElement.style.setProperty("--corner-reserve", show ? "calc(72px + 12px + 12px + env(safe-area-inset-right, 0px))" : "0px");
+  }, [show]);
+
   const { status: accountStatus } = useAccount();
   const unsaved = accountStatus === "out" && stubs.length > 0;
-  const tree = useMemo(() => buildTree({ keys, stubs, cartCount: count, path, unsaved }), [keys, stubs, count, path, unsaved]);
+  const tree = useMemo(() => buildTree({ keys, stubs, cartCount: 0, path, unsaved }), [keys, stubs, path, unsaved]);
   const chain = useMemo(() => chainOf(tree, keys), [tree, keys]);
   const current = chain[chain.length - 1];
   const trail = new Set(chain.slice(0, -1));
@@ -244,7 +238,8 @@ export function NavFrame({ children }: { children: ReactNode }) {
       ...(k.children && isOpen(k.key) ? flyRows(k, depth + 1) : []),
     ]);
 
-  const rule = tree.findIndex((n) => n.key === "map");
+  const places = tree.filter((n) => !n.hidden);
+  const rule = places.findIndex((n) => n.key === "organizer");
 
   return (
     <div className={f.frame} data-nav={show ? "on" : "off"} data-full={show ? full : undefined} data-drawer={drawer}>
@@ -298,7 +293,7 @@ export function NavFrame({ children }: { children: ReactNode }) {
             </div>
             <nav className={f.list} ref={navRef} aria-label="Places">
               <ul className={f.tree}>
-                {tree.map((n, i) => {
+                {places.map((n, i) => {
                   const hasFly = !full && !!n.children?.length;
                   return (
                     <Fragment key={n.key}>
@@ -358,6 +353,7 @@ export function NavFrame({ children }: { children: ReactNode }) {
       ) : null}
 
       <div className={f.content}>{children}</div>
+      {show ? <CartCorner /> : null}
       <AccountRoot />
     </div>
   );

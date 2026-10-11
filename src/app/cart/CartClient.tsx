@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MarkLegend, SandboxStrip, SourceMark, Stamp, TearLink, Rule } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic } from "@/customer/studio/feedback";
@@ -8,7 +8,7 @@ import { MATERIALS, formatMoney, type Stub } from "@/customer/studio/types";
 import { PageShell, EmptyState, PaperLink, StampLink, TearAnchor, ui } from "@/customer/pages/ui";
 import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
 import { placeOrder, type Placed } from "@/customer/account/orders";
-import { SANDBOX_LABEL, SIZE_LABEL, billableSeats, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
+import { CART_EVENT, SANDBOX_LABEL, SIZE_LABEL, billableSeats, cartTotals, loadCart, saveCart, type CartItem, type CartSeat } from "@/customer/pages/commerce";
 import { useMounted } from "@/customer/pages/useMounted";
 import s from "./cart.module.css";
 
@@ -25,6 +25,8 @@ export default function CartClient() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [stubs, setStubs] = useState<Record<string, Stub | undefined>>({});
   const [paid, setPaid] = useState(false);
+  // set before the cart is cleared, so the page keeps its receipt instead of following the cart to empty
+  const paidRef = useRef(false);
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [emailError, setEmailError] = useState("");
   const receipt = useReceiptEmail();
@@ -36,6 +38,23 @@ export default function CartClient() {
     setItems(cart);
     setStubs(Object.fromEntries(cart.map((c) => [c.stubId, getStub(c.stubId)])));
   }
+
+  // The mini cart edits the same cart: follow it, until the order is placed (then this page keeps its receipt).
+  useEffect(() => {
+    if (!loaded) return;
+    const sync = () => {
+      if (paidRef.current) return;
+      const cart = loadCart();
+      setItems(cart);
+      setStubs(Object.fromEntries(cart.map((c) => [c.stubId, getStub(c.stubId)])));
+    };
+    window.addEventListener(CART_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(CART_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, [loaded]);
 
   function remove(id: string) {
     const next = items.filter((c) => c.id !== id);
@@ -49,6 +68,7 @@ export default function CartClient() {
       setEmailError(receipt.problem);
       return;
     }
+    paidRef.current = true;
     setPaid(true);
     const totals = cartTotals(items);
     void placeOrder({
@@ -138,7 +158,7 @@ export default function CartClient() {
               </div>
             </section>
 
-            <aside className={s.summary} aria-labelledby="sum-h">
+            <aside id="pay" className={s.summary} aria-labelledby="sum-h">
               <h2 id="sum-h" className={s.sumTitle}>
                 Summary
               </h2>

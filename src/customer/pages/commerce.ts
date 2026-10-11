@@ -6,6 +6,8 @@ import { MATERIALS, currentVersion, type Finish, type Material, type Stub } from
 
 export const ORDERS_KEY = "ticketstub.orders.v1";
 export const CART_KEY = "ticketstub.cart.v1";
+/** Fired on window after every cart write in this tab (the storage event only reaches other tabs). */
+export const CART_EVENT = "ticketstub:cart";
 export const SANDBOX_LABEL = "Sandbox · no real charge";
 
 export type PrintSize = "classic" | "stamp" | "framed" | "file";
@@ -141,7 +143,17 @@ export function addOrder(order: Omit<Order, "id" | "mode" | "createdAt">): Order
 }
 
 export const loadCart = () => read<CartItem>(CART_KEY);
-export const saveCart = (items: CartItem[]) => write(CART_KEY, items);
+export function saveCart(items: CartItem[]): void {
+  write(CART_KEY, items);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(CART_EVENT));
+}
+
+/** Put a removed line back where it was (the mini cart's undo). */
+export function restoreCartItem(item: CartItem, index: number): void {
+  const cart = loadCart().filter((c) => c.id !== item.id);
+  cart.splice(Math.min(index, cart.length), 0, item);
+  saveCart(cart);
+}
 
 export function cartItemFromStub(stub: Stub, material: Material, finish: Finish, size: PrintSize): CartItem {
   const q = quote(material, finish, size);

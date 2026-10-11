@@ -31,7 +31,8 @@
 }
 /* /make: the section is the whole page, and its content is centred in the height that is there */
 .fill {
-  --pad-t: 28px;
+  /* clear the fixed cart button in the top-right corner (--corner-reserve is 0 without the nav) */
+  --pad-t: max(28px, calc(var(--corner-reserve, 0px) * 0.66));
   --pad-b: 40px;
   min-height: 100dvh;
   box-sizing: border-box;

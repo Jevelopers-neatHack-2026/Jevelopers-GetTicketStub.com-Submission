@@ -101,6 +101,7 @@
 }
 
 .summary {
+  scroll-margin-top: 72px;
   display: grid;
   gap: 14px;
   align-content: start;

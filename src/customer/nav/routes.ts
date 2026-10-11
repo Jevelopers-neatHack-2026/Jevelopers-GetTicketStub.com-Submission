@@ -9,7 +9,7 @@ export interface StubRow {
   title: string;
 }
 
-export type IconKey = "make" | "wall" | "cart" | "map" | "organizer" | "account";
+export type IconKey = "make" | "wall" | "cart" | "organizer" | "account";
 
 export interface RouteNode {
   key: string;
@@ -24,6 +24,8 @@ export interface RouteNode {
   dot?: boolean;
   /** Never marked as the current page (an anchor inside a page, or a link that only looks like a destination). */
   anchor?: boolean;
+  /** In the tree for the breadcrumbs, but not drawn in the sidebar (the cart lives in the top-right corner). */
+  hidden?: boolean;
 }
 
 /** The stub's own places, in the order of the flow. */
@@ -69,7 +71,8 @@ export function locate(path: string, stubs: StubRow[], shareStubId?: string): st
     case "cart":
       return seg[1] === "unclaimed" ? ["cart", "unclaimed"] : ["cart"];
     case "map":
-      return ["map"];
+    case "help":
+      return ["account", "help"];
     case "organizer":
       return seg[1] === "claim" ? ["organizer", "guests"] : ["organizer"];
     case "account":
@@ -127,6 +130,7 @@ export function buildTree({ keys, stubs, cartCount, path, unsaved }: TreeInput):
   const orgKids: RouteNode[] = [{ key: "guests", label: "Guest claims", href: "/organizer/claim" }];
   const acctKids: RouteNode[] = [
     ...(has("account") ? [{ key: "orders", label: "Orders", href: "/account#acct-orders", anchor: true }] : []),
+    { key: "help", label: "Help", href: "/help" },
     { key: "privacy", label: "Privacy", href: "/privacy" },
     { key: "terms", label: "Terms", href: "/terms" },
   ];
@@ -134,8 +138,7 @@ export function buildTree({ keys, stubs, cartCount, path, unsaved }: TreeInput):
   return [
     { key: "make", label: "Make", href: "/make", icon: "make", children: makeKids },
     { key: "wall", label: "Wall", href: "/wall", icon: "wall", children: wallKids },
-    { key: "cart", label: "Cart", href: "/cart", icon: "cart", count: cartCount, children: cartKids },
-    { key: "map", label: "Desk map", href: "/map", icon: "map" },
+    { key: "cart", label: "Cart", href: "/cart", icon: "cart", count: cartCount, hidden: true, children: cartKids },
     { key: "organizer", label: "Organizer", href: "/organizer", icon: "organizer", children: orgKids },
     { key: "account", label: "Account", href: "/account", icon: "account", dot: unsaved, children: acctKids },
   ];

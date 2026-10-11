@@ -1,6 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MarkLegend, PaperButton, Rule, FinishSwatches, PunchTabs, SandboxStrip, SourceMark, Stamp, TearLink, type FinishValue } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { MaterialFrame } from "@/customer/studio/editor/MaterialFrame";
@@ -8,11 +7,12 @@ import { holoAllowed, setFinish as applyFinish, setMaterial as applyMaterial } f
 import { haptic } from "@/customer/studio/feedback";
 import { getStub, upsertStub } from "@/customer/studio/store";
 import { MATERIALS, formatMoney, type Material, type Stub } from "@/customer/studio/types";
-import { LeavesMark, PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
+import { PageShell, EmptyState, OnDesk, StampLink, ui } from "@/customer/pages/ui";
 import { formatDate } from "@/customer/pages/share";
 import { AfterPay, ReceiptField, useReceiptEmail } from "@/customer/account/Receipt";
 import { placeOrder, type Placed } from "@/customer/account/orders";
-import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, addToCart, cartItemFromStub, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
+import { FINISHES, SANDBOX_LABEL, SIZE_LABEL, cartItemFromStub, quote, sizesFor, defaultSize, type PrintSize } from "@/customer/pages/commerce";
+import { addToCartAndFly } from "@/customer/cart/cartStore";
 import { useMounted, nowMs } from "@/customer/pages/useMounted";
 import s from "./checkout.module.css";
 
@@ -25,7 +25,6 @@ const sizeOption = (sz: PrintSize) => {
 };
 
 export default function CheckoutClient({ id }: { id: string }) {
-  const router = useRouter();
   const mounted = useMounted();
   const [stub, setStub] = useState<Stub | null | undefined>(undefined);
   const [size, setSize] = useState<PrintSize>("classic");
@@ -38,6 +37,7 @@ export default function CheckoutClient({ id }: { id: string }) {
   const [now, setNow] = useState(nowMs);
   // The stub being priced: material and finish live on it, exactly as in the editor.
   const [draft, setDraft] = useState<Stub | null>(null);
+  const deskRef = useRef<HTMLDivElement>(null);
 
   if (mounted && stub === undefined) {
     const st = getStub(id) ?? null;
@@ -108,10 +108,10 @@ export default function CheckoutClient({ id }: { id: string }) {
     haptic([18, 40, 28]);
   }
 
-  function toCart() {
+  // Stays on the page: the stub flies to the cart button in the corner and the count stamps up.
+  function toCart(from: Element | null) {
     if (!stub || !draft) return;
-    addToCart(cartItemFromStub(draft, material, finish, size));
-    router.push("/cart");
+    addToCartAndFly(cartItemFromStub(draft, material, finish, size), draft, deskRef.current ?? from);
   }
 
   const e = stub.event;
@@ -121,7 +121,7 @@ export default function CheckoutClient({ id }: { id: string }) {
     <PageShell back={{ href: `/studio/${stub.id}`, label: "Back to your stub" }}>
       <SandboxStrip>{SANDBOX_LABEL}</SandboxStrip>
       <div className={s.layout}>
-        <div className={s.desk}>
+        <div className={s.desk} ref={deskRef}>
           <OnDesk>
             <MaterialFrame material={material} finish={finish}>
               <StubView stub={draft} size="md" tilt />
@@ -240,9 +240,8 @@ export default function CheckoutClient({ id }: { id: string }) {
                 {error}
               </p>
             ) : null}
-            <PaperButton type="button" block onClick={toCart} disabled={paid}>
-              Add to cart and open it
-              <LeavesMark />
+            <PaperButton type="button" block onClick={(e) => toCart(e.currentTarget)} disabled={paid}>
+              Add to cart
             </PaperButton>
           </div>
 
