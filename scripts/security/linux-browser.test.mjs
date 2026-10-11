@@ -1,4 +1,6 @@
 import { test } from "node:test";
+import { once } from "node:events";
+import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import {
@@ -11,6 +13,7 @@ import {
 } from "../../dist/src/runtime/environment.js";
 import { VerificationFailure } from "../../dist/src/runtime/errors.js";
 import { observeRendererChroots } from "./renderer-chroot.mjs";
+import { captureRendererRoot } from "./renderer-root-capture.mjs";
 
 assert.equal(process.platform, "linux");
 
@@ -54,7 +57,7 @@ test("rejects an actual browser when its renderer sandbox is deliberately disabl
 				error instanceof VerificationFailure &&
 				error.code === "SANDBOX_POLICY_FAILURE" &&
 				error.message ===
-					"Renderer filesystem root is not Chromium's deleted proc-fdinfo chroot.",
+					"Renderer filesystem root does not satisfy the live proc-fdinfo isolation invariant.",
 		);
 		await assert.rejects(
 			inspectLinuxSandbox(browser),
@@ -64,6 +67,36 @@ test("rejects an actual browser when its renderer sandbox is deliberately disabl
 		);
 	} finally {
 		await browser.close();
+	}
+});
+
+test("rejects a genuinely exited process after acquiring proc and root anchors", async () => {
+	const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+		stdio: "ignore",
+	});
+	let capture;
+	try {
+		await once(child, "spawn");
+		capture = await captureRendererRoot(child.pid);
+		const exited = once(child, "exit");
+		child.kill("SIGTERM");
+		await exited;
+		await assert.rejects(
+			capture.verify(),
+			(error) =>
+				error instanceof VerificationFailure &&
+				error.code === "SANDBOX_POLICY_FAILURE" &&
+				[
+					"Renderer process or anchored root became unavailable during observation.",
+					"Renderer process generation is stale or unavailable.",
+				].includes(error.message),
+		);
+	} finally {
+		try {
+			await capture?.close();
+		} finally {
+			child.kill("SIGKILL");
+		}
 	}
 });
 
