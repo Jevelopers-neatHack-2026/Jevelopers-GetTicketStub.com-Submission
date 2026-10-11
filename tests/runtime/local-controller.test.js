@@ -226,7 +226,9 @@ function expectedLocalCompletionDiskDebit(controllerState) {
   return Math.max(16_384, checkpointBytes * 3 + 32_768);
 }
 
-function syntheticSqliteBusy({ code = 'ERR_SQLITE_ERROR', errcode = 5 } = {}) {
+function syntheticSqliteBusy(options = {}) {
+  const code = Object.hasOwn(options, 'code') ? options.code : 'ERR_SQLITE_ERROR';
+  const errcode = Object.hasOwn(options, 'errcode') ? options.errcode : 5;
   const error = new Error('synthetic SQLite busy control');
   error.code = code;
   if (errcode !== undefined) error.errcode = errcode;
@@ -1446,93 +1448,100 @@ test('an unresolved external attempt before pending-outcome observation stays un
 
 test('pending completion rechecks cancellation, lease fence, and external custody before its next write', async t => {
   const controls = [
-    { name: 'cancel', expectedReason: 'CANCELLATION_REQUESTED' },
+    { name: 'cancel', expectedReason: 'WORKFLOW_TERMINAL' },
     { name: 'fence', expectedReason: 'WORKFLOW_SNAPSHOT_CHANGED' },
     { name: 'external', expectedReason: 'EXTERNAL_OUTCOME_UNRESOLVED' }
   ];
   for (const control of controls) {
-    const temporary = temporaryDatabase('bounded-local-completion-after-pending-' + control.name + '-');
-    const store = openStore(temporary.databasePath, Date.now, 20);
-    const workflowId = 'completion-after-pending-' + control.name;
-    const lease = createRunningWorkflow(store, workflowId);
-    makeAdmission(store, lease, SINGLE_PLAN, '{}', workflowId + ':admit');
-    const blockers = [];
-    try {
-      const originalComplete = store._localControllerComplete.bind(store);
-      const originalResolve = store._localControllerResolveCompletion.bind(store);
-      let completeCalls = 0;
-      let resolverCalls = 0;
-      let changedAfterPending = false;
-      store._localControllerComplete = (...args) => {
-        completeCalls += 1;
-        const blocker = sqliteWriterBlockerSync(temporary.databasePath);
-        blockers.push(blocker);
-        try {
-          return originalComplete(...args);
-        } catch (error) {
-          blocker.releaseAndWait();
-          throw error;
-        }
-      };
-      store._localControllerResolveCompletion = (...args) => {
-        resolverCalls += 1;
-        const resolution = originalResolve(...args);
-        if (resolution.kind === 'pending' && !changedAfterPending) {
-          changedAfterPending = true;
-          const workflow = store.getWorkflow(workflowId);
-          if (control.name === 'cancel') {
-            const cancellation = store.requestCancellation({
-              workflowId, ownerId: lease.ownerId, fence: lease.fence,
-              expectedRevision: workflow.revision,
-              eventId: workflowId + ':cancel-after-pending'
-            });
-            assert.equal(cancellation.accepted, true);
-          } else if (control.name === 'fence') {
-            store.releaseLease({
-              workflowId, ownerId: lease.ownerId, fence: lease.fence,
-              eventId: workflowId + ':release-after-pending'
-            });
-            store.acquireLease({
-              workflowId, ownerId: 'replacement-after-pending', ttlMs: 60_000,
-              eventId: workflowId + ':takeover-after-pending'
-            });
-          } else {
-            store.recordDispatchIntent({
-              workflowId, ownerId: lease.ownerId, fence: lease.fence,
-              expectedRevision: workflow.revision,
-              attemptId: workflowId + ':attempt',
-              logicalOperationRef: workflowId + ':operation',
-              authorityHoldRef: workflowId + ':hold',
-              transportAttemptId: workflowId + ':transport',
-              eventId: workflowId + ':intent'
-            });
+    await t.test(`post-pending ${control.name} blocks the next local write`, async () => {
+      const temporary = temporaryDatabase('bounded-local-completion-after-pending-' + control.name + '-');
+      const store = openStore(temporary.databasePath, Date.now, 20);
+      const workflowId = 'completion-after-pending-' + control.name;
+      const lease = createRunningWorkflow(store, workflowId);
+      makeAdmission(store, lease, SINGLE_PLAN, '{}', workflowId + ':admit');
+      const blockers = [];
+      try {
+        const originalComplete = store._localControllerComplete.bind(store);
+        const originalResolve = store._localControllerResolveCompletion.bind(store);
+        let completeCalls = 0;
+        let resolverCalls = 0;
+        let changedAfterPending = false;
+        store._localControllerComplete = (...args) => {
+          completeCalls += 1;
+          const blocker = sqliteWriterBlockerSync(temporary.databasePath);
+          blockers.push(blocker);
+          try {
+            return originalComplete(...args);
+          } catch (error) {
+            blocker.releaseAndWait();
+            throw error;
           }
-        }
-        return resolution;
-      };
+        };
+        store._localControllerResolveCompletion = (...args) => {
+          resolverCalls += 1;
+          const resolution = originalResolve(...args);
+          if (resolution.kind === 'pending' && !changedAfterPending) {
+            changedAfterPending = true;
+            const workflow = store.getWorkflow(workflowId);
+            if (control.name === 'cancel') {
+              const cancellation = store.requestCancellation({
+                workflowId, ownerId: lease.ownerId, fence: lease.fence,
+                expectedRevision: workflow.revision,
+                eventId: workflowId + ':cancel-after-pending'
+              });
+              assert.equal(cancellation.accepted, true);
+            } else if (control.name === 'fence') {
+              store.releaseLease({
+                workflowId, ownerId: lease.ownerId, fence: lease.fence,
+                eventId: workflowId + ':release-after-pending'
+              });
+              store.acquireLease({
+                workflowId, ownerId: 'replacement-after-pending', ttlMs: 60_000,
+                eventId: workflowId + ':takeover-after-pending'
+              });
+            } else {
+              store.recordDispatchIntent({
+                workflowId, ownerId: lease.ownerId, fence: lease.fence,
+                expectedRevision: workflow.revision,
+                attemptId: workflowId + ':attempt',
+                logicalOperationRef: workflowId + ':operation',
+                authorityHoldRef: workflowId + ':hold',
+                transportAttemptId: workflowId + ':transport',
+                eventId: workflowId + ':intent'
+              });
+            }
+          }
+          return resolution;
+        };
 
-      const result = await runBoundedLocalPlan({
-        store, workflowId, ownerId: lease.ownerId, fence: lease.fence,
-        ...localCompletionRetryBudget()
-      });
-      assert.equal(changedAfterPending, true, control.name);
-      assert.equal(result.status, 'stopped', control.name);
-      assert.equal(result.reason, control.expectedReason, control.name);
-      assert.equal(completeCalls, 1, control.name);
-      assert.equal(resolverCalls, 1, control.name);
-      const checkpoint = store.getCheckpoint(workflowId).data;
-      assert.equal(checkpoint.pendingStepId, 'only', control.name);
-      assert.equal(checkpoint.budget.stepsAdmitted, 1, control.name);
-      assert.equal(checkpoint.budget.stepAttempts, 1, control.name);
-      assert.equal(store.listEvents({ workflowId }).filter(event =>
-        event.type === 'private_local_step_admitted').length, 1, control.name);
-      assert.equal(store.listEvents({ workflowId }).some(event =>
-        event.type === 'private_local_step_completed'), false, control.name);
-    } finally {
-      await Promise.all(blockers.map(blocker => blocker.cleanup()));
-      store.close();
-      temporary.cleanup();
-    }
+        const result = await runBoundedLocalPlan({
+          store, workflowId, ownerId: lease.ownerId, fence: lease.fence,
+          ...localCompletionRetryBudget()
+        });
+        assert.equal(changedAfterPending, true, control.name);
+        assert.equal(result.status, 'stopped', control.name);
+        assert.equal(result.reason, control.expectedReason, control.name);
+        assert.equal(completeCalls, 1, control.name);
+        assert.equal(resolverCalls, 1, control.name);
+        const checkpoint = store.getCheckpoint(workflowId).data;
+        assert.equal(checkpoint.pendingStepId, 'only', control.name);
+        assert.equal(checkpoint.budget.stepsAdmitted, 1, control.name);
+        assert.equal(checkpoint.budget.stepAttempts, 1, control.name);
+        assert.equal(store.listEvents({ workflowId }).filter(event =>
+          event.type === 'private_local_step_admitted').length, 1, control.name);
+        assert.equal(store.listEvents({ workflowId }).some(event =>
+          event.type === 'private_local_step_completed'), false, control.name);
+        if (control.name === 'cancel') {
+          const cancelled = store.getWorkflow(workflowId);
+          assert.equal(cancelled.state, 'cancelled');
+          assert.equal(cancelled.cancellationRequested, true);
+        }
+      } finally {
+        await Promise.all(blockers.map(blocker => blocker.cleanup()));
+        store.close();
+        temporary.cleanup();
+      }
+    });
   }
 });
 
@@ -1849,80 +1858,78 @@ test('a confirmed pending completion is not retried after the absolute parent de
 test('pending completion does not retry when lease, wall, or elapsed headroom cannot cover busy wait', async t => {
   const startAtMs = 1_790_000_000_000;
   const controls = [
-    { name: 'lease', leaseTtlMs: 1_000 },
+    { name: 'lease', leaseTtlMs: 200 },
     { name: 'wall', leaseTtlMs: 60_000 },
     { name: 'elapsed', leaseTtlMs: 60_000 }
   ];
   for (const control of controls) {
-    const temporary = temporaryDatabase('bounded-local-completion-window-' + control.name + '-');
-    const clock = mutableClock(startAtMs);
-    const store = openStore(temporary.databasePath, clock.read, 20);
-    const lease = createRunningWorkflow(
-      store, 'completion-window-' + control.name, 'worker-local', control.leaseTtlMs
-    );
-    makeAdmission(store, lease, SINGLE_PLAN, '{}', 'completion-window-' + control.name + ':admit');
-    const initial = store.getCheckpoint(lease.workflowId).data;
-    if (control.name === 'wall') {
-      const lastWallMs = initial.budget.deadlineWallMs - 200;
-      rewriteLatestPrivateCheckpoint(temporary.databasePath, lease.workflowId, {
-        ...initial,
-        budget: { ...initial.budget, lastWallMs, elapsedMs: 0 }
-      });
-      clock.set(lastWallMs);
-    } else if (control.name === 'elapsed') {
-      rewriteLatestPrivateCheckpoint(temporary.databasePath, lease.workflowId, {
-        ...initial,
-        budget: { ...initial.budget, elapsedMs: initial.budget.deadlineWallMs
-          - initial.budget.startedWallMs - 200 }
-      });
-    }
+    await t.test(`completion does not retry with insufficient ${control.name} headroom`, async () => {
+      const temporary = temporaryDatabase('bounded-local-completion-window-' + control.name + '-');
+      const clock = mutableClock(startAtMs);
+      const store = openStore(temporary.databasePath, clock.read, 20);
+      const lease = createRunningWorkflow(
+        store, 'completion-window-' + control.name, 'worker-local', control.leaseTtlMs
+      );
+      makeAdmission(store, lease, SINGLE_PLAN, '{}', 'completion-window-' + control.name + ':admit');
+      const initial = store.getCheckpoint(lease.workflowId).data;
+      if (control.name === 'wall') {
+        const lastWallMs = initial.budget.deadlineWallMs - 200;
+        rewriteLatestPrivateCheckpoint(temporary.databasePath, lease.workflowId, {
+          ...initial,
+          budget: { ...initial.budget, lastWallMs, elapsedMs: 0 }
+        });
+        clock.set(lastWallMs);
+      } else if (control.name === 'elapsed') {
+        rewriteLatestPrivateCheckpoint(temporary.databasePath, lease.workflowId, {
+          ...initial,
+          budget: { ...initial.budget, elapsedMs: initial.budget.deadlineWallMs
+            - initial.budget.startedWallMs - 200 }
+        });
+      }
 
-    const blockers = [];
-    try {
-      const originalComplete = store._localControllerComplete.bind(store);
-      const originalResolve = store._localControllerResolveCompletion.bind(store);
-      let completeCalls = 0;
-      let resolverCalls = 0;
-      store._localControllerComplete = (...args) => {
-        completeCalls += 1;
-        const blocker = sqliteWriterBlockerSync(temporary.databasePath);
-        blockers.push(blocker);
-        try {
-          return originalComplete(...args);
-        } catch (error) {
-          blocker.releaseAndWait();
-          throw error;
-        }
-      };
-      store._localControllerResolveCompletion = (...args) => {
-        resolverCalls += 1;
-        const resolution = originalResolve(...args);
-        if (resolution.kind === 'pending' && control.name === 'lease') {
-          clock.set(lease.expiresAtMs - 200);
-        }
-        return resolution;
-      };
+      const blockers = [];
+      try {
+        const originalComplete = store._localControllerComplete.bind(store);
+        const originalResolve = store._localControllerResolveCompletion.bind(store);
+        let completeCalls = 0;
+        let resolverCalls = 0;
+        store._localControllerComplete = (...args) => {
+          completeCalls += 1;
+          const blocker = sqliteWriterBlockerSync(temporary.databasePath);
+          blockers.push(blocker);
+          try {
+            return originalComplete(...args);
+          } catch (error) {
+            blocker.releaseAndWait();
+            throw error;
+          }
+        };
+        store._localControllerResolveCompletion = (...args) => {
+          resolverCalls += 1;
+          return originalResolve(...args);
+        };
 
-      const result = await runBoundedLocalPlan({
-        store,
-        workflowId: lease.workflowId,
-        ownerId: lease.ownerId,
-        fence: lease.fence,
-        busyTimeoutMs: 250,
-        runtimeDeadlineNs: process.hrtime.bigint() + 5_000_000_000n
-      });
-      assert.equal(result.status, 'stopped', control.name);
-      assert.equal(result.reason, 'LOCAL_COMPLETION_BUSY', control.name);
-      assert.equal(completeCalls, 1, control.name);
-      assert.equal(resolverCalls, 1, control.name);
-      assert.equal(store.getCheckpoint(lease.workflowId).data.pendingStepId, 'only', control.name);
-      assert.equal(store.listEvents({ workflowId: lease.workflowId }).some(event =>
-        event.type === 'private_local_step_completed'), false, control.name);
-    } finally {
-      await Promise.all(blockers.map(blocker => blocker.cleanup()));
-      store.close();
-      temporary.cleanup();
-    }
+        const result = await runBoundedLocalPlan({
+          store,
+          workflowId: lease.workflowId,
+          ownerId: lease.ownerId,
+          fence: lease.fence,
+          busyTimeoutMs: 250,
+          runtimeDeadlineNs: process.hrtime.bigint() + 5_000_000_000n
+        });
+        assert.equal(result.status, 'stopped', control.name);
+        assert.equal(result.reason, 'LOCAL_COMPLETION_BUSY', control.name);
+        assert.equal(completeCalls, 1, control.name);
+        assert.equal(resolverCalls, 1, control.name);
+        assert.equal(store.getCheckpoint(lease.workflowId).data.pendingStepId, 'only', control.name);
+        assert.equal(store.listEvents({ workflowId: lease.workflowId }).some(event =>
+          event.type === 'private_local_step_completed'), false, control.name);
+      } finally {
+        await Promise.all(blockers.map(blocker => blocker.cleanup()));
+        store.close();
+        temporary.cleanup();
+      }
+    });
   }
 });
 
