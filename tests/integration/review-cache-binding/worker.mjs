@@ -102,7 +102,21 @@ const store = createCorrectionCacheBinding({
 const scope = await store.scopeForAuthenticatedRequest(request);
 if (mode === 'compete') writeFileSync(markerPath, 'ready-before-composed-correction');
 
-if (mode === 'read-history') {
+if (mode === 'hold-history-writer') {
+  const tenantHash = createHash('sha256').update('event-intelligence:review-tenant:v1:tenant-binding').digest('hex');
+  const database = new DatabaseSync(`${root}/history/${tenantHash}/history.sqlite`);
+  try {
+    database.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
+    writeFileSync(markerPath, 'history writer acquired');
+    const delayMs = Number(idempotencyKey);
+    if (!Number.isSafeInteger(delayMs) || delayMs < 1 || delayMs > 5_000) throw new Error('invalid lock duration');
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    database.exec('COMMIT');
+    process.stdout.write(JSON.stringify({ outcome: 'released', delayMs }));
+  } finally {
+    database.close();
+  }
+} else if (mode === 'read-history') {
   try {
     const result = await store.getHistory(scope, eventId, request);
     process.stdout.write(JSON.stringify({ outcome: 'read', revision: result.revision }));

@@ -1253,24 +1253,32 @@ export function createCorrectionHistoryStore(options) {
           () => fail('REVIEW_DENIED'));
       }
       const guardedTransactionNow = boundaryToken?.nowMs ?? nowMs();
-      const effectiveTransactionNow = boundaryToken ? localBoundaryEffectiveNow(boundaryToken) : guardedTransactionNow;
+      let effectiveTransactionNow = boundaryToken ? localBoundaryEffectiveNow(boundaryToken) : guardedTransactionNow;
       if (!Number.isSafeInteger(effectiveTransactionNow) || effectiveTransactionNow < guardedTransactionNow
         || effectiveTransactionNow > MAX_TIME) fail(boundaryToken ? 'REVIEW_EXPIRED' : 'REVIEW_STORAGE');
       if (transactionOptions.boundary?.mustBeBeforeMs !== undefined
         && effectiveTransactionNow >= transactionOptions.boundary.mustBeBeforeMs) fail('REVIEW_EXPIRED');
       throwIfAborted(signal);
-      const preBeginTime = Object.freeze({ now: guardedTransactionNow, effectiveNow: effectiveTransactionNow });
+      const materializationTime = Object.freeze({ now: guardedTransactionNow, effectiveNow: effectiveTransactionNow });
       let prepared;
       if (transactionOptions.prepareBeforeBegin) {
-        prepared = transactionOptions.prepareBeforeBegin(database, preBeginTime, boundaryToken);
+        prepared = transactionOptions.prepareBeforeBegin(database, materializationTime, boundaryToken);
         if (prepared && typeof prepared.then === 'function') fail('REVIEW_STORAGE');
+      }
+      throwIfAborted(signal);
+      if (boundaryToken) {
+        effectiveTransactionNow = localBoundaryEffectiveNow(boundaryToken);
+        if (!Number.isSafeInteger(effectiveTransactionNow) || effectiveTransactionNow < guardedTransactionNow
+          || effectiveTransactionNow > MAX_TIME
+          || (transactionOptions.boundary?.mustBeBeforeMs !== undefined
+            && effectiveTransactionNow >= transactionOptions.boundary.mustBeBeforeMs)) fail('REVIEW_EXPIRED');
       }
       throwIfAborted(signal);
       database.exec('BEGIN IMMEDIATE');
       open = true;
       advanceHistoryClock(database, guardedTransactionNow);
       preBeginRejected = false;
-      const transactionTime = Object.freeze({ ...preBeginTime, prepared });
+      const transactionTime = Object.freeze({ now: guardedTransactionNow, effectiveNow: effectiveTransactionNow, prepared });
       const result = transactionOptions.sync ? operation(database, transactionTime)
         : await operation(database, transactionTime);
       if (transactionOptions.sync && result && typeof result.then === 'function') fail('REVIEW_STORAGE');
@@ -1533,7 +1541,7 @@ export function createCorrectionHistoryStore(options) {
     const fingerprintValue = fingerprint(indexKey, info, eventKey, actorId, operation, normalizedInput);
     let keepPayloadKey = false;
     try {
-      const preflight = await withTransaction(info, directory, (database, time) => {
+      const readPreflight = (database, time) => {
         const now = time.now;
         const current = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
         const replayRow = database.prepare('SELECT fingerprint, version_id FROM idempotency WHERE event_key = ? AND key_hash = ?')
@@ -1549,7 +1557,28 @@ export function createCorrectionHistoryStore(options) {
             .all(eventKey, current.version_id, current.content_hash);
         }
         return { current, replayRow, refRows };
-      }, signal, undefined, { sync: true });
+      };
+      let preflight;
+      if (prepareOnly) {
+        const preflightAction = operation === 'correction'
+          ? 'review.history.apply_correction' : 'review.history.refresh_source_facts';
+        const preflightBoundary = boundaryFor(info, actorId, eventId, preflightAction, field, request, {
+          operation,
+          stage: 'revision_projection_preflight',
+          idempotencyFingerprint: fingerprintValue,
+          baseVersionId: baseVersion?.versionId ?? null,
+          baseContentHash: baseVersion?.contentHash ?? null,
+        }, expiresAtMs);
+        const authorizePreflight = async () => {
+          throwIfAborted(signal);
+          await reauthorizeRequest(info, request, eventId, action, actorId, field);
+          throwIfAborted(signal);
+        };
+        preflight = await withBindingTransaction(info, directory, readPreflight, signal,
+          authorizePreflight, preflightBoundary);
+      } else {
+        preflight = await withTransaction(info, directory, readPreflight, signal, undefined, { sync: true });
+      }
       if (preflight.replayRow) {
         if (preflight.replayRow.fingerprint !== fingerprintValue) fail('REVIEW_IDEMPOTENCY_CONFLICT');
         if (prepareOnly) fail('REVIEW_BUSY');
@@ -2721,8 +2750,8 @@ export function createCorrectionHistoryStore(options) {
       || revisionPlan.bindingBaseVersionId !== spec.baseVersionId
       || revisionPlan.bindingBaseContentHash !== spec.baseContentHash)) fail('REVIEW_INVALID');
     const phase = spec.kind === 'bind' ? 'pending_bind' : 'pending_correction';
-    const preflightAction = spec.kind === 'correction'
-      ? 'review.history.apply_correction' : 'review.history.refresh_source_facts';
+    const preflightAction = spec.kind === 'bind' ? 'review.history.cache_bind_begin'
+      : spec.kind === 'correction' ? 'review.history.apply_correction' : 'review.history.refresh_source_facts';
     const preflightBoundary = boundaryFor(context.info, context.actorId, context.eventId, preflightAction, spec.field, request, {
       operationFingerprint,
       kind: spec.kind,

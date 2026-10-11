@@ -889,6 +889,255 @@ test('revision and operation candidate preflights retry zero-timeout writer conf
   }
 });
 
+test('revision projection preflight retries a real SQLite writer and reauthorizes before creating a barrier', async (t) => {
+  let f;
+  let retentionPermit;
+  let holder;
+  let allowAuthorization = true;
+  let projectionBoundaryAttempts = 0;
+  let matchingAuthorizationsAfterBusy = 0;
+  let watchBegin = false;
+  let busyBeginCount = 0;
+  let writerReady = false;
+  const markerPath = path.join(os.tmpdir(), `ei-projection-preflight-${process.pid}-${Date.now()}.ready`);
+  const execDescriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'exec');
+  Object.defineProperty(DatabaseSync.prototype, 'exec', {
+    ...execDescriptor,
+    value(sql, ...args) {
+      if (watchBegin && sql === 'BEGIN IMMEDIATE') {
+        try { return Reflect.apply(execDescriptor.value, this, [sql, ...args]); }
+        catch (error) {
+          if (error?.code === 'ERR_SQLITE_BUSY' || /busy|locked/i.test(error?.message ?? '')) {
+            busyBeginCount += 1;
+            allowAuthorization = false;
+            watchBegin = false;
+          }
+          throw error;
+        }
+      }
+      return Reflect.apply(execDescriptor.value, this, [sql, ...args]);
+    },
+  });
+  const history = {
+    async resolveRetention({ nowMs, sourceExpiresAtMs, retentionHandle }) {
+      if (retentionHandle === retentionPermit && !holder) {
+        holder = runWorker(['hold-history-writer', f.root, EVENT_ID, '', '', markerPath, '3000']);
+        await waitForFile(markerPath);
+        writerReady = true;
+      }
+      return { expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+        policyId: 'projection-preflight-policy', policyVersion: '1', accessPolicy: 'tenant_private' };
+    },
+    authorize({ tenantId, actorId, action, request: value }) {
+      if (value === f?.authRequest && action === 'apply_correction' && busyBeginCount > 0) {
+        matchingAuthorizationsAfterBusy += 1;
+      }
+      return allowAuthorization && value?.serverContextToken === TRUSTED_TOKEN
+        && value?.principal?.tenantId === tenantId && value?.principal?.actorId === actorId
+        && actorId !== 'outsider';
+    },
+    authorizeBoundary(input) {
+      if (input.request === f?.authRequest && input.details?.stage === 'revision_projection_preflight') {
+        projectionBoundaryAttempts += 1;
+        watchBegin = true;
+      }
+      const allowed = allowAuthorization && input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH }) : false;
+    },
+  };
+  f = await fixture(t, { history });
+  retentionPermit = f.createPermit();
+  t.after(async () => {
+    if (holder?.child.exitCode === null && holder.child.signalCode === null) holder.child.kill('SIGKILL');
+    if (holder) await holder.exit;
+    Object.defineProperty(DatabaseSync.prototype, 'exec', execDescriptor);
+    try { await rm(markerPath, { force: true }); } catch { /* The marker is test-local. */ }
+  });
+
+  const seeded = await createSeed(f);
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: seeded.snapshot.versionId,
+    baseContentHash: seeded.snapshot.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-26' },
+    idempotencyKey: 'projection-preflight-writer-retry',
+    retentionHandle: retentionPermit,
+  };
+  const before = new DatabaseSync(historyDatabasePath(f.root));
+  let beforeState;
+  try {
+    beforeState = {
+      head: before.prepare('SELECT version_id, revision FROM heads WHERE event_key IS NOT NULL').get(),
+      versions: before.prepare('SELECT COUNT(*) AS count FROM versions').get().count,
+      idempotency: before.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count,
+      operations: before.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations').get().count,
+      invalidations: before.prepare('SELECT COUNT(*) AS count FROM invalidations').get().count,
+      pending: before.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase != 'complete'").get().count,
+    };
+  } finally { before.close(); }
+
+  const startedAt = process.hrtime.bigint();
+  const rejection = await awaitWithTimeout(f.store.applyCorrection(f.scope, input, f.authRequest),
+    'revision projection preflight writer retry authorization', 2_000).then(() => null, (error) => error);
+  const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+  assert.equal(rejection?.code, 'REVIEW_DENIED', JSON.stringify({
+    code: rejection?.code, writerReady, projectionBoundaryAttempts, busyBeginCount,
+    matchingAuthorizationsAfterBusy, elapsedMs,
+  }));
+  assert.equal(writerReady, true, 'the separate process acquired the SQLite writer before projection preflight');
+  assert.equal(projectionBoundaryAttempts, 1, 'the intended projection-preflight boundary was reached once');
+  assert.equal(busyBeginCount, 1, 'the projection-preflight BEGIN IMMEDIATE encountered the actual held writer');
+  assert.ok(matchingAuthorizationsAfterBusy >= 1, 'retry reauthorization ran after the busy BEGIN');
+  assert.ok(elapsedMs < 1_500, `projection preflight stayed bounded (${elapsedMs.toFixed(1)}ms)`);
+
+  holder.child.kill('SIGKILL');
+  const holderExit = await holder.exit;
+  assert.equal(holderExit.signal, 'SIGKILL');
+  holder = null;
+  allowAuthorization = true;
+  const after = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.deepEqual({
+      head: after.prepare('SELECT version_id, revision FROM heads WHERE event_key IS NOT NULL').get(),
+      versions: after.prepare('SELECT COUNT(*) AS count FROM versions').get().count,
+      idempotency: after.prepare('SELECT COUNT(*) AS count FROM idempotency').get().count,
+      operations: after.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations').get().count,
+      invalidations: after.prepare('SELECT COUNT(*) AS count FROM invalidations').get().count,
+      pending: after.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase != 'complete'").get().count,
+    }, beforeState);
+  } finally { after.close(); }
+  assert.equal((await f.store.getHistory(f.scope, EVENT_ID, f.authRequest)).versionId, seeded.snapshot.versionId);
+  const retried = await f.store.applyCorrection(f.scope, input, f.authRequest);
+  assert.equal(retried.snapshot.revision, seeded.snapshot.revision + 1);
+});
+
+test('bind preflight uses its exact history action and cannot borrow refresh authority', async (t) => {
+  const seen = [];
+  const allowedActions = new Set([
+    'review.history.initialize',
+    'private_profile.read',
+    'review.history.cache_bind_begin',
+    'review.history.cache_bind_reference',
+    'review.history.cache_operation_state',
+    'review.history.retention_purge',
+  ]);
+  const f = await fixture(t, { history: {
+    authorizeBoundary(input) {
+      seen.push(input.action);
+      const allowed = allowedActions.has(input.action)
+        && input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH }) : false;
+    },
+  } });
+  await createSeed(f);
+  const bound = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-exact-history-action', profile: cacheProfile() }, f.authRequest);
+  assert.equal(bound.status, 'bound');
+  assert.ok(seen.includes('review.history.cache_bind_begin'));
+  assert.equal(seen.includes('review.history.refresh_source_facts'), false);
+});
+
+test('revision expiry is rechecked after materialization and before the first write', async (t) => {
+  let f;
+  let finalBoundaryReached = false;
+  let materializationDelayReached = false;
+  let watchedBeginAttempts = 0;
+  let watchBegin = false;
+  const prepareDescriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'prepare');
+  const execDescriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'exec');
+  Object.defineProperty(DatabaseSync.prototype, 'prepare', {
+    ...prepareDescriptor,
+    value(sql, ...args) {
+      if (!materializationDelayReached && finalBoundaryReached && String(sql).includes('SELECT * FROM heads')
+        && new Error().stack.includes('materializeBindingRevision')) {
+        materializationDelayReached = true;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_100);
+      }
+      return Reflect.apply(prepareDescriptor.value, this, [sql, ...args]);
+    },
+  });
+  Object.defineProperty(DatabaseSync.prototype, 'exec', {
+    ...execDescriptor,
+    value(sql, ...args) {
+      if (watchBegin && sql === 'BEGIN IMMEDIATE') watchedBeginAttempts += 1;
+      return Reflect.apply(execDescriptor.value, this, [sql, ...args]);
+    },
+  });
+  const fHistory = {
+    authorizeBoundary(input) {
+      if (input.action === 'review.history.revision_begin' && input.details?.operationId) {
+        finalBoundaryReached = true;
+        watchBegin = true;
+      } else if (input.action === 'review.history.retention_purge') {
+        watchBegin = false;
+      }
+      const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: f?.clock.value ?? EPOCH }) : false;
+    },
+  };
+  f = await fixture(t, { history: fHistory });
+  t.after(() => {
+    Object.defineProperty(DatabaseSync.prototype, 'prepare', prepareDescriptor);
+    Object.defineProperty(DatabaseSync.prototype, 'exec', execDescriptor);
+  });
+  const seeded = await createSeed(f);
+  const before = new DatabaseSync(historyDatabasePath(f.root));
+  try { assert.equal(before.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 1); }
+  finally { before.close(); }
+  const cacheState = async () => {
+    const databasePath = cacheDatabasePath(f.root);
+    try { await access(databasePath); }
+    catch (error) { if (error?.code === 'ENOENT') return null; throw error; }
+    const database = new DatabaseSync(databasePath);
+    try {
+      return {
+        entries: database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count,
+        reservations: database.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count,
+        outbox: database.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count,
+        receipts: database.prepare('SELECT COUNT(*) AS count FROM reuse_history_invalidation_ops').get().count,
+      };
+    } finally { database.close(); }
+  };
+  const cacheBefore = await cacheState();
+  f.clock.value = EPOCH + 59_000;
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: seeded.snapshot.versionId,
+    baseContentHash: seeded.snapshot.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-27' },
+    idempotencyKey: 'revision-expiry-before-first-write',
+    retentionHandle: f.createPermit(),
+  };
+  await assert.rejects(f.store.applyCorrection(f.scope, input, f.authRequest),
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_EXPIRED');
+  assert.equal(finalBoundaryReached, true, 'the final revision guard ran before materialization');
+  assert.equal(materializationDelayReached, true, 'the test delayed actual revision materialization after that guard');
+  assert.equal(watchedBeginAttempts, 0, 'expiry rejected the transaction before BEGIN IMMEDIATE');
+  assert.deepEqual(await cacheState(), cacheBefore, 'pre-BEGIN expiry has no cache or outbox effects');
+  const after = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    const head = after.prepare('SELECT version_id, revision, expires_at_ms, state FROM heads WHERE event_key IS NOT NULL').get();
+    assert.equal(head.version_id, seeded.snapshot.versionId);
+    assert.equal(head.revision, seeded.snapshot.revision);
+    assert.equal(head.expires_at_ms, Date.parse(seeded.snapshot.expiresAt));
+    assert.equal(head.state, 'available', 'the pre-barrier rejection leaves the prior row intact for normal retention cleanup');
+    assert.equal(after.prepare('SELECT COUNT(*) AS count FROM versions WHERE revision = 2').get().count, 0);
+    assert.equal(after.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations').get().count, 0);
+    assert.equal(after.prepare('SELECT COUNT(*) AS count FROM correction_cache_state').get().count, 0);
+  } finally { after.close(); }
+});
+
 test('composed correction never invokes the configured history clock while holding its SQLite writer lock', async (t) => {
   let armed = false;
   let historyDatabasePath;
