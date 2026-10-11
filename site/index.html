@@ -1534,14 +1534,14 @@ function placeFigure(sceneEl, i, left, W, H, phone){
   } else {
     const img = stage.querySelector('.athlete'); const [u, v] = s.anchor;
     const ar = (img.naturalWidth / img.naturalHeight) || .8;
-    const big = s.key === 'hockey' ? .9 : s.key === 'festival' ? .66 : s.key === 'theater' ? .78 : s.key === 'soccer' ? .9 : .95;
+    const big = s.key === 'hockey' ? .9 : s.key === 'festival' ? .66 : s.key === 'theater' ? .68 : s.key === 'soccer' ? .9 : .95;
     let h = H * (phone ? big * .5 : big);
     let w = h * ar; const maxW = W * (phone ? .92 : .56); if (w > maxW){ w = maxW; h = w / ar; }
     let top = phone ? H * .24 : H - h * .97;
     if (s.key === 'hockey') top = H - h - H * (phone ? .3 : .08);
     if (s.key === 'festival') top = H - h - H * (phone ? .3 : .02);
     if (s.key === 'basketball' && !phone) top = H * .12;
-    if (s.key === 'theater') top = phone ? H * .26 : H * .14;
+    if (s.key === 'theater') top = phone ? H * .26 : H * .04;   // keep her back foot clear of the info panel
     if (s.key === 'soccer') top = phone ? H * .22 : H * .05;
     hx = left ? W * (phone ? .8 : .42) : W * (phone ? .2 : .58);
     if (s.key === 'hockey') hx = W * (phone ? .16 : .4);   // the stick blade: the player follows through to the right of it
