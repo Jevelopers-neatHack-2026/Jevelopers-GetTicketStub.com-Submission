@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import https from 'node:https';
 import { Resolver } from 'node:dns/promises';
 import { EventEmitter } from 'node:events';
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
 import '../../decisions/jev-adapter.contract/network-guard.js';
@@ -13,7 +13,7 @@ import { recordSyntheticMetric } from '../../decisions/jev-adapter.contract/synt
 import { createOperationsWorker } from '../../../src/worker/private/worker.js';
 
 const [databasePath, phase, markerPath, resultPath, metricsPath] = process.argv.slice(2);
-if (!['before-marker', 'after-marker-before-bytes', 'after-write', 'response-before-observation', 'observation-before-checkpoint'].includes(phase)
+if (!['before-marker', 'after-marker-before-bytes', 'after-write', 'response-before-observation', 'observation-before-checkpoint', 'failure-after-runner-pause'].includes(phase)
     || ![databasePath, markerPath, resultPath, metricsPath].every(value => typeof value === 'string')) process.exit(2);
 
 const API_KEY_FIXTURE = 'synthetic-offline-key';
@@ -30,6 +30,7 @@ let operationsLoop;
 let operationsStopPromise;
 let removeOperationsSignals;
 let restartedWorker;
+let store;
 let tokenizer;
 let exporter;
 let sinkCalls = 0;
@@ -39,7 +40,34 @@ const keepalive = setInterval(() => {}, 1_000);
 async function publishMarker(value) {
   const temporaryPath = `${markerPath}.${process.pid}.tmp`;
   await writeFile(temporaryPath, JSON.stringify(value), { flag: 'wx' });
-  await rename(temporaryPath, markerPath);
+  try {
+    await rename(temporaryPath, markerPath);
+  } catch (error) {
+    try { await unlink(temporaryPath); } catch {}
+    throw error;
+  }
+}
+async function waitWithin(promise, timeoutMs) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve(promise).then(() => true, () => true),
+      new Promise(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function stopOwnedWorker(worker) {
+  if (!worker || worker.lifecycle === 'stopped') return;
+  let stopping;
+  try { stopping = worker.stop('test'); } catch { return; }
+  if (await waitWithin(stopping, 2_000)) return;
+  if (runnerPid) {
+    try { process.kill(runnerPid, 'SIGCONT'); } catch {}
+    try { process.kill(runnerPid, 'SIGKILL'); } catch {}
+  }
+  await waitWithin(stopping, 500);
 }
 const record = name => {
   metrics[name] += 1;
@@ -54,9 +82,10 @@ const onSigterm = () => {
 };
 process.on('SIGTERM', onSigterm);
 
+try {
 t:
 {
-  const store = DurableWorkflowStore.open({ databasePath, clock: () => 1000, busyTimeoutMs: 20 });
+  store = DurableWorkflowStore.open({ databasePath, clock: () => 1000, busyTimeoutMs: 20 });
   tokenizer = createHmacTokenizer(Buffer.alloc(32, 29));
   exporter = createTelemetryExporter({
     store,
@@ -98,6 +127,10 @@ t:
   runnerPid = Number(pgrep.stdout.trim().split(/\s+/u).at(-1));
   if (!Number.isSafeInteger(runnerPid) || runnerPid < 2 || !process.kill(runnerPid, 'SIGSTOP')) {
     throw new Error('The JEV composition fixture could not pause its actual owned runner.');
+  }
+  await writeFile(`${metricsPath}.runner`, JSON.stringify({ runnerPid }));
+  if (phase === 'failure-after-runner-pause') {
+    await publishMarker({ phase, stage: 'force-rename-failure-after-runner-pause' });
   }
   store.createWorkflow({ workflowId, checkpoint: { local: 'synthetic-before-send' }, eventId: `${workflowId}:created` });
   const lease = store.acquireLease({ workflowId, ownerId, ttlMs: 60_000, eventId: `${workflowId}:lease` });
@@ -297,11 +330,17 @@ t:
   await writeFile(resultPath, JSON.stringify(summary));
   store.close();
 }
-
-clearInterval(keepalive);
-process.removeListener('SIGTERM', onSigterm);
-try { removeOperationsSignals?.(); } catch {}
-try { if (operationsWorker && operationsWorker.lifecycle !== 'stopped') await operationsWorker.stop('test'); } catch {}
-try { if (restartedWorker && restartedWorker.lifecycle !== 'stopped') await restartedWorker.stop('test'); } catch {}
-try { tokenizer?.destroy(); } catch {}
+} finally {
+  releasePhase();
+  abortController.abort();
+  clearInterval(keepalive);
+  process.removeListener('SIGTERM', onSigterm);
+  try { removeOperationsSignals?.(); } catch {}
+  await stopOwnedWorker(operationsWorker);
+  await stopOwnedWorker(restartedWorker);
+  if (operationsLoop) await waitWithin(operationsLoop, 500);
+  if (operationsStopPromise) await waitWithin(operationsStopPromise, 500);
+  try { store?.close(); } catch {}
+  try { tokenizer?.destroy(); } catch {}
+}
 process.exitCode = 0;

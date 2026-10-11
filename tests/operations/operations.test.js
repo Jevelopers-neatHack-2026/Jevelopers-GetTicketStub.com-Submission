@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -726,6 +726,8 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 0);
     raw.close();
   });
+
+
 });
 
 test('OPS03_FAIRNESS_BACKPRESSURE protects a second tenant and persists hierarchical turns across claims', async t => {
@@ -1129,6 +1131,57 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       assert.ok(result.controlledHttpsWrites <= 1, result.phase);
     }
   });
+  await t.test('OPS04.C02 fixture assertion failure after pausing the owned runner executes bounded finally cleanup', async t => {
+    const failureDir = tempDirectory('ah11-jev-fixture-failure-');
+    t.after(() => failureDir.cleanup());
+    const markerDirectory = join(failureDir.directory, 'marker-is-a-directory');
+    mkdirSync(markerDirectory);
+    const resultPath = join(failureDir.directory, 'failure-result.json');
+    const metricsPath = join(failureDir.directory, 'failure-metrics.json');
+    const child = spawn(process.execPath, [
+      join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
+      join(failureDir.directory, 'failure.sqlite'), 'failure-after-runner-pause',
+      markerDirectory, resultPath, metricsPath
+    ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+    let runnerPid = null;
+    try {
+      const runnerMarker = `${metricsPath}.runner`;
+      await waitForPath(runnerMarker, child, 5_000);
+      runnerPid = Number(JSON.parse(readFileSync(runnerMarker, 'utf8')).runnerPid);
+      assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
+      const exit = await waitForCloseBounded(closed, 3_000);
+      assert.ok(exit, `The failing owned fixture did not close within its bound: ${stderr.slice(0, 2048)}`);
+      assert.equal(exit.code, 1, stderr.slice(0, 2048));
+      assert.match(stderr, /EISDIR/u);
+      assert.equal(existsSync(resultPath), false);
+      assert.equal(existsSync(metricsPath), false);
+      assert.equal(existsSync(`${markerDirectory}.${child.pid}.tmp`), false);
+      assert.deepEqual(readdirSync(markerDirectory), []);
+      assert.throws(() => process.kill(runnerPid, 0), error => error.code === 'ESRCH');
+      const raw = new DatabaseSync(join(failureDir.directory, 'failure.sqlite'), { readOnly: true });
+      const job = raw.prepare("SELECT job_id, workflow_id, state, runner_pid FROM operations_work WHERE idempotency_key='jev-composition-failure-after-runner-pause'").get();
+      assert.equal(job.state, 'queued');
+      assert.equal(job.runner_pid, null);
+      assert.deepEqual({ ...raw.prepare('SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1').get() }, {
+        pending_records: 1, in_flight: 0
+      });
+      assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(job.workflow_id).count), 0);
+      raw.close();
+    } finally {
+      if (runnerPid !== null) {
+        try { process.kill(runnerPid, 'SIGCONT'); } catch {}
+        try { process.kill(runnerPid, 'SIGKILL'); } catch {}
+      }
+      if (child.exitCode === null && child.signalCode === null) {
+        try { child.kill('SIGKILL'); } catch {}
+        await waitForCloseBounded(closed, 1_000);
+      }
+    }
+  });
   const reopened = openStore(temporary.databasePath);
   for (const result of results.filter(item => item.attemptCount > 0)) {
     const attempt = reopened.getAttempt(`ops-attempt-${result.phase}`);
@@ -1389,6 +1442,363 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     });
     assert.equal(Number(current.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 1);
     current.close();
+  });
+
+  await t.test('OPS05.C09 expired recovery reuses an occupied global slot before another tenant claims', () => {
+    const recoveryDir = tempDirectory('ah11-global-recovery-slot-');
+    t.after(() => recoveryDir.cleanup());
+    const configInput = {
+      workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1
+    };
+    const config = readOperationsConfig(configInput);
+    const policy = operationsStoragePolicy(config);
+    let now = 50_000;
+    const store = openStore(recoveryDir.databasePath, { clock: () => now });
+    t.after(() => store.close());
+    const first = admit(store, 'tenant-a', 'project-a', 'expired-slot-a', PLAN, configInput);
+    const oldClaim = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-owner-a', policy
+    }).claim;
+    assert.equal(oldClaim.jobId, first.jobId);
+    const oldRunnerPid = unusedProcessId();
+    store._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: oldClaim.jobId, ownerId: oldClaim.ownerId,
+      generation: oldClaim.generation, fence: oldClaim.fence, runnerPid: oldRunnerPid
+    });
+    const second = admit(store, 'tenant-b', 'project-b', 'expired-slot-b', PLAN, configInput);
+
+    now = oldClaim.leaseExpiresAtMs + 1;
+    assert.throws(() => process.kill(oldRunnerPid, 0), error => error.code === 'ESRCH');
+    const expired = store._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy });
+    assert.equal(expired.incomplete, false);
+    assert.equal(expired.items[0].jobId, first.jobId);
+    assert.equal(expired.items[0].runnerPid, oldRunnerPid);
+    assert.equal(store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-owner-b', policy
+    }), null);
+
+    const recovered = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-owner-b', policy, recoverableJobIds: [first.jobId]
+    });
+    assert.equal(recovered.claim.jobId, first.jobId);
+    assert.equal(recovered.claim.generation, oldClaim.generation + 1);
+    assert.equal(recovered.claim.fence, oldClaim.fence + 1);
+    const afterRecovery = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    assert.equal(afterRecovery.prepare('SELECT state FROM operations_work WHERE job_id=?').get(second.jobId).state, 'queued');
+    assert.deepEqual({ ...afterRecovery.prepare('SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 2, in_flight: 1
+    });
+    assert.deepEqual({ ...afterRecovery.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('tenant-a') }, { in_flight: 1 });
+    assert.deepEqual({ ...afterRecovery.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('tenant-b') }, { in_flight: 0 });
+    afterRecovery.close();
+    store.close();
+
+    const reopened = openStore(recoveryDir.databasePath, { clock: () => now });
+    assert.equal(reopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'tenant-a', projectId: 'project-a', jobId: first.jobId
+    }).state, 'running');
+    assert.equal(reopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'tenant-b', projectId: 'project-b', jobId: second.jobId
+    }).state, 'queued');
+    const reopenedDb = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    assert.deepEqual({ ...reopenedDb.prepare('SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 2, in_flight: 1
+    });
+    assert.equal(reopened._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-owner-after-reopen', policy, recoverableJobIds: [first.jobId]
+    }), null, 'An exact recovery ID cannot claim queued work while the reclaimed lease occupies the global slot.');
+    reopenedDb.close();
+    reopened.close();
+  });
+
+  await t.test('OPS05.C10 expired cancellation recovery atomically cancels workflow and releases reservations', () => {
+    const recoveryDir = tempDirectory('ah11-cancel-expired-recovery-');
+    t.after(() => recoveryDir.cleanup());
+    const configInput = {
+      workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1
+    };
+    const config = readOperationsConfig(configInput);
+    const policy = operationsStoragePolicy(config);
+    let now = 70_000;
+    const store = openStore(recoveryDir.databasePath, { clock: () => now });
+    t.after(() => store.close());
+    const accepted = admit(store, 'cancel-tenant', 'cancel-project', 'cancel-expired', PLAN, configInput);
+    const claim = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-cancel-owner', policy
+    }).claim;
+    const runnerPid = unusedProcessId();
+    store._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: claim.jobId, ownerId: claim.ownerId,
+      generation: claim.generation, fence: claim.fence, runnerPid
+    });
+    assert.deepEqual(store._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'cancel-tenant', projectId: 'cancel-project',
+      jobId: accepted.jobId, expectedGeneration: claim.generation
+    }), {
+      accepted: true, state: 'cancellation_requested', generation: claim.generation,
+      ownerId: claim.ownerId, fence: claim.fence
+    });
+    now = claim.leaseExpiresAtMs + 1;
+    assert.equal(store._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy }).items[0].jobId, accepted.jobId);
+    assert.equal(store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-cancel-recovery', policy, recoverableJobIds: [accepted.jobId]
+    }), null);
+
+    store.close();
+    const reopened = openStore(recoveryDir.databasePath, { clock: () => now });
+    t.after(() => reopened.close());
+    const workflow = reopened.getWorkflow(accepted.workflowId);
+    assert.equal(workflow.state, 'cancelled');
+    assert.equal(workflow.cancellationRequested, true);
+    assert.equal(workflow.leaseOwner, null);
+    assert.equal(workflow.leaseExpiresAtMs, null);
+    const raw = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    assert.deepEqual({ ...raw.prepare('SELECT state, worker_id, runner_pid, lease_expires_ms, reserved_event_slots, reserved_disk_bytes FROM operations_work WHERE job_id=?').get(accepted.jobId) }, {
+      state: 'cancelled', worker_id: null, runner_pid: null, lease_expires_ms: null,
+      reserved_event_slots: 0, reserved_disk_bytes: 0
+    });
+    assert.deepEqual({ ...raw.prepare('SELECT pending_records, pending_bytes, in_flight, reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 0, pending_bytes: 0, in_flight: 0, reserved_event_slots: 0, reserved_disk_bytes: 0
+    });
+    assert.equal(Number(raw.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_cancelled' AND from_state='running' AND to_state='cancelled'").get(accepted.workflowId).count), 1);
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(accepted.workflowId).count), 0);
+    raw.close();
+    reopened.close();
+    const afterCloseReopen = openStore(recoveryDir.databasePath, { clock: () => now });
+    assert.equal(afterCloseReopen.getWorkflow(accepted.workflowId).state, 'cancelled');
+    assert.equal(afterCloseReopen.getWorkflow(accepted.workflowId).leaseOwner, null);
+    assert.equal(afterCloseReopen._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'cancel-tenant', projectId: 'cancel-project', jobId: accepted.jobId
+    }).state, 'cancelled');
+    afterCloseReopen.close();
+  });
+
+  await t.test('OPS05.C11 exact expired-row recovery cannot bypass a tenant cap across projects', () => {
+    const recoveryDir = tempDirectory('ah11-tenant-recovery-slot-');
+    t.after(() => recoveryDir.cleanup());
+    const configInput = {
+      workerCount: 2, maxInFlightGlobal: 2, maxInFlightTenant: 1, maxInFlightProject: 1
+    };
+    const config = readOperationsConfig(configInput);
+    const policy = operationsStoragePolicy(config);
+    let now = 60_000;
+    const store = openStore(recoveryDir.databasePath, { clock: () => now });
+    t.after(() => store.close());
+    const expired = admit(store, 'tenant-a', 'project-a-first', 'tenant-expired', PLAN, configInput);
+    const prior = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'tenant-slot-owner', policy
+    }).claim;
+    assert.equal(prior.jobId, expired.jobId);
+    const queued = admit(store, 'tenant-a', 'project-z-queued', 'tenant-queued', PLAN, configInput);
+    now = prior.leaseExpiresAtMs + 1;
+    const recovered = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'tenant-slot-recovery', policy, recoverableJobIds: [expired.jobId]
+    });
+    assert.equal(recovered.claim.jobId, expired.jobId);
+    assert.equal(recovered.claim.generation, prior.generation + 1);
+    const raw = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    assert.equal(raw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(queued.jobId).state, 'queued');
+    assert.deepEqual({ ...raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get() }, { in_flight: 1 });
+    assert.deepEqual({ ...raw.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('tenant-a') }, { in_flight: 1 });
+    assert.deepEqual({ ...raw.prepare('SELECT in_flight FROM operations_projects WHERE tenant_id=? AND project_id=?').get('tenant-a', 'project-a-first') }, { in_flight: 1 });
+    assert.deepEqual({ ...raw.prepare('SELECT in_flight FROM operations_projects WHERE tenant_id=? AND project_id=?').get('tenant-a', 'project-z-queued') }, { in_flight: 0 });
+    raw.close();
+    store.close();
+    const reopened = openStore(recoveryDir.databasePath, { clock: () => now });
+    assert.equal(reopened._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'tenant-slot-after-reopen', policy, recoverableJobIds: [expired.jobId]
+    }), null);
+    reopened.close();
+  });
+
+  await t.test('OPS05.C12 two actual SQLite connections race exact expired recoveries under all three caps', async t => {
+    const recoveryDir = tempDirectory('ah11-concurrent-recovery-');
+    t.after(() => recoveryDir.cleanup());
+    const configInput = {
+      workerCount: 2, maxInFlightGlobal: 2, maxInFlightTenant: 1, maxInFlightProject: 1
+    };
+    const config = readOperationsConfig(configInput);
+    const policy = operationsStoragePolicy(config);
+    let now = 80_000;
+    const store = openStore(recoveryDir.databasePath, { clock: () => now });
+    t.after(() => store.close());
+    const first = admit(store, 'tenant-a', 'project-a', 'race-expired-a', PLAN, configInput);
+    const second = admit(store, 'tenant-b', 'project-b', 'race-expired-b', PLAN, configInput);
+    const third = admit(store, 'tenant-c', 'project-c', 'race-queued-c', PLAN, configInput);
+    const firstClaim = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'race-original-a', policy }).claim;
+    const secondClaim = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'race-original-b', policy }).claim;
+    assert.equal(firstClaim.jobId, first.jobId);
+    assert.equal(secondClaim.jobId, second.jobId);
+    now = Math.max(firstClaim.leaseExpiresAtMs, secondClaim.leaseExpiresAtMs) + 1;
+    store.close();
+
+    const gatePath = join(recoveryDir.directory, 'release-recovery-race');
+    const processes = [
+      { ownerId: 'race-recovery-a', jobId: first.jobId },
+      { ownerId: 'race-recovery-b', jobId: second.jobId }
+    ].map(({ ownerId, jobId }) => {
+      const readyPath = join(recoveryDir.directory, `${ownerId}.ready`);
+      const child = spawn(process.execPath, [
+        join(ROOT, 'tests/operations/fixtures/recovery-claim-child.mjs'),
+        recoveryDir.databasePath, String(now), ownerId, jobId, readyPath, gatePath, JSON.stringify(configInput)
+      ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', chunk => { stdout += chunk; });
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+      return { ownerId, jobId, readyPath, child, closed, get stdout() { return stdout; }, get stderr() { return stderr; } };
+    });
+    METRICS.processRuns += processes.length;
+    try {
+      for (const processInfo of processes) await waitForPath(processInfo.readyPath, processInfo.child, 5_000);
+      writeFileSync(gatePath, 'released');
+      const exits = await Promise.all(processes.map(async processInfo =>
+        waitForCloseBounded(processInfo.closed, 5_000)));
+      assert.ok(exits.every(Boolean), 'Both independent claim processes must close within their bound.');
+      for (const [index, processInfo] of processes.entries()) {
+        assert.equal(exits[index].code, 0, processInfo.stderr);
+        assert.deepEqual(JSON.parse(processInfo.stdout.trim()), {
+          ownerId: processInfo.ownerId,
+          claim: { jobId: processInfo.jobId, generation: 2, fence: 2 },
+          incomplete: false,
+          ownedRunnerCount: 0
+        });
+      }
+    } finally {
+      if (!existsSync(gatePath)) writeFileSync(gatePath, 'released');
+      for (const processInfo of processes) {
+        if (processInfo.child.exitCode === null && processInfo.child.signalCode === null) {
+          try { processInfo.child.kill('SIGKILL'); } catch {}
+          await waitForCloseBounded(processInfo.closed, 1_000);
+        }
+      }
+    }
+
+    const check = openStore(recoveryDir.databasePath, { clock: () => now });
+    const after = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    assert.deepEqual({ ...after.prepare('SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 3, in_flight: 2
+    });
+    assert.deepEqual({ ...after.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('tenant-a') }, { in_flight: 1 });
+    assert.deepEqual({ ...after.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('tenant-b') }, { in_flight: 1 });
+    assert.deepEqual({ ...after.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('tenant-c') }, { in_flight: 0 });
+    for (const job of [first, second]) {
+      const row = after.prepare('SELECT state, generation, fence_token FROM operations_work WHERE job_id=?').get(job.jobId);
+      assert.deepEqual({ ...row }, { state: 'running', generation: 2, fence_token: 2 });
+      assert.equal(Number(after.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_claimed'").get(job.workflowId).count), 2);
+    }
+    assert.equal(after.prepare('SELECT state FROM operations_work WHERE job_id=?').get(third.jobId).state, 'queued');
+    after.close();
+    assert.equal(check._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'race-repeat-no-extra-slot', policy, recoverableJobIds: [first.jobId, second.jobId]
+    }), null);
+    check.close();
+    const reopened = openStore(recoveryDir.databasePath, { clock: () => now });
+    assert.equal(reopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'tenant-c', projectId: 'project-c', jobId: third.jobId
+    }).state, 'queued');
+    reopened.close();
+  });
+
+  await t.test('OPS05.C13 expired cancellation reconciliation releases capacity before later queued work', () => {
+    const recoveryDir = tempDirectory('ah11-cancel-recovery-next-claim-');
+    t.after(() => recoveryDir.cleanup());
+    const configInput = { workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1 };
+    const config = readOperationsConfig(configInput);
+    const policy = operationsStoragePolicy(config);
+    let now = 90_000;
+    const store = openStore(recoveryDir.databasePath, { clock: () => now });
+    t.after(() => store.close());
+    const expired = admit(store, 'a-tenant', 'a-project', 'cancel-before-queued', PLAN, configInput);
+    const prior = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'cancel-prior-owner', policy }).claim;
+    const queued = admit(store, 'z-tenant', 'z-project', 'queued-after-cancel', PLAN, configInput);
+    assert.equal(store._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'a-tenant', projectId: 'a-project', jobId: expired.jobId,
+      expectedGeneration: prior.generation
+    }).accepted, true);
+    now = prior.leaseExpiresAtMs + 1;
+    const next = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'queued-after-cancel-owner', policy, recoverableJobIds: [expired.jobId]
+    });
+    assert.equal(next.claim.jobId, queued.jobId);
+    const raw = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    assert.deepEqual({ ...raw.prepare('SELECT state, cancellation_requested, lease_owner, lease_expires_ms FROM workflows WHERE workflow_id=?').get(expired.workflowId) }, {
+      state: 'cancelled', cancellation_requested: 1, lease_owner: null, lease_expires_ms: null
+    });
+    assert.equal(raw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(expired.jobId).state, 'cancelled');
+    assert.equal(raw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(queued.jobId).state, 'running');
+    assert.deepEqual({ ...raw.prepare('SELECT pending_records, in_flight FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 1, in_flight: 1
+    });
+    assert.deepEqual({ ...raw.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('a-tenant') }, { in_flight: 0 });
+    assert.deepEqual({ ...raw.prepare('SELECT in_flight FROM operations_tenants WHERE tenant_id=?').get('z-tenant') }, { in_flight: 1 });
+    assert.equal(Number(raw.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_cancelled'").get(expired.workflowId).count), 1);
+    raw.close();
+  });
+
+  await t.test('OPS05.C14 unknown expired work keeps its hold and releases only its local slot before queued work', () => {
+    const recoveryDir = tempDirectory('ah11-unknown-recovery-next-claim-');
+    t.after(() => recoveryDir.cleanup());
+    const configInput = { workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1 };
+    const config = readOperationsConfig(configInput);
+    const policy = operationsStoragePolicy(config);
+    let now = 100_000;
+    const store = openStore(recoveryDir.databasePath, { clock: () => now });
+    t.after(() => store.close());
+    const expired = admit(store, 'a-tenant', 'a-project', 'unknown-before-queued', PLAN, configInput);
+    const prior = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'unknown-prior-owner', policy }).claim;
+    store.recordDispatchIntent({
+      workflowId: prior.workflowId, ownerId: prior.ownerId, fence: prior.fence,
+      expectedRevision: prior.revision, attemptId: 'unknown-recovery-attempt',
+      logicalOperationRef: 'unknown-recovery-logical',
+      authorityHoldRef: 'synthetic-local-bookkeeping:unknown-recovery-hold',
+      transportAttemptId: 'unknown-recovery-transport', eventId: 'unknown-recovery-intent'
+    });
+    const queued = admit(store, 'z-tenant', 'z-project', 'queued-after-unknown', PLAN, configInput);
+    assert.equal(store._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'a-tenant', projectId: 'a-project', jobId: expired.jobId,
+      expectedGeneration: prior.generation
+    }).accepted, true);
+    now = prior.leaseExpiresAtMs + 1;
+    const next = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'queued-after-unknown-owner', policy, recoverableJobIds: [expired.jobId]
+    });
+    assert.equal(next.claim.jobId, queued.jobId);
+    const unknown = store._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'a-tenant', projectId: 'a-project', jobId: expired.jobId
+    });
+    assert.equal(unknown.state, 'unknown');
+    assert.equal(store.getWorkflow(expired.workflowId).state, 'reconciliation_pending');
+    assert.equal(store.getWorkflow(expired.workflowId).cancellationRequested, true);
+    const attempt = store.getAttempt('unknown-recovery-attempt');
+    assert.equal(attempt.state, 'intent');
+    assert.equal(attempt.authorityHoldRef, 'synthetic-local-bookkeeping:unknown-recovery-hold');
+    const raw = new DatabaseSync(recoveryDir.databasePath, { readOnly: true });
+    const reservations = raw.prepare(`SELECT
+      (SELECT SUM(reserved_disk_bytes) FROM operations_work) AS work_disk,
+      (SELECT SUM(reserved_event_slots) FROM operations_work) AS work_events,
+      reserved_disk_bytes, reserved_event_slots FROM operations_meta WHERE singleton=1`).get();
+    assert.equal(Number(reservations.reserved_disk_bytes), Number(reservations.work_disk));
+    assert.equal(Number(reservations.reserved_event_slots), Number(reservations.work_events));
+    assert.equal(Number(raw.prepare('SELECT reserved_disk_bytes FROM operations_work WHERE job_id=?').get(expired.jobId).reserved_disk_bytes) > 0, true);
+    assert.equal(Number(raw.prepare('SELECT reserved_event_slots FROM operations_work WHERE job_id=?').get(expired.jobId).reserved_event_slots) > 0, true);
+    assert.equal(Number(raw.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_unknown'").get(expired.workflowId).count), 1);
+    raw.close();
+    store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: next.claim.jobId, ownerId: next.claim.ownerId,
+      generation: next.claim.generation, fence: next.claim.fence, outcome: 'stopped', childExited: true
+    });
+    assert.equal(store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'no-unknown-redispatch', policy, recoverableJobIds: [expired.jobId]
+    }), null);
+    assert.equal(store.getAttempt('unknown-recovery-attempt').authorityHoldRef,
+      'synthetic-local-bookkeeping:unknown-recovery-hold');
+    assert.equal(store._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'a-tenant', projectId: 'a-project', jobId: expired.jobId
+    }).state, 'unknown');
   });
 
   await t.test('OPS05.C06 cancellation of already-reconciliation-pending unknown work persists its flag without settling its hold', () => {
@@ -2251,6 +2661,101 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
     assert.equal(restartStop.stopped, true);
     raw.close();
   });
+  await t.test('OPS07.C05 the CLI stays open after an incomplete stop and succeeds after a second signal', async t => {
+    const cliStop = tempDirectory('ah11-cli-incomplete-stop-');
+    t.after(() => cliStop.cleanup());
+    const scope = { tenantId: 'cli-busy-tenant', projectId: 'cli-busy-project' };
+    const setup = openStore(cliStop.databasePath);
+    const planJson = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: Array.from({ length: 32 }, (_, index) => ({
+        id: `c${String(index).padStart(2, '0')}`, operation: 'text.concat',
+        dependsOn: index % 12 === 0 ? [] : [`c${String(index - 1).padStart(2, '0')}`],
+        args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `c${String(index - 1).padStart(2, '0')}` }, ''] }
+      }))
+    });
+    const accepted = admit(setup, scope.tenantId, scope.projectId, 'cli-busy-work', planJson);
+    assert.equal(accepted.accepted, true);
+    setup.close();
+
+    const child = spawn(process.execPath, [
+      join(ROOT, 'src/worker/private/worker.js'), '--mode', 'mock', '--database-path', cliStop.databasePath
+    ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
+    METRICS.processRuns += 1;
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', chunk => { stdout += chunk; });
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    let closeResult = null;
+    const closed = new Promise(resolvePromise => child.once('close', (code, signal) => {
+      closeResult = { code, signal };
+      resolvePromise(closeResult);
+    }));
+    const raw = new DatabaseSync(cliStop.databasePath, { readOnly: true });
+    t.after(() => { try { raw.close(); } catch {} });
+    let runnerPid = null;
+    let writerLock = null;
+    try {
+      const runnerDeadline = Date.now() + 4_000;
+      while (Date.now() < runnerDeadline && runnerPid === null) {
+        const row = raw.prepare('SELECT state, runner_pid FROM operations_work WHERE job_id=?').get(accepted.jobId);
+        if (row?.state === 'running' && Number.isSafeInteger(row.runner_pid)) runnerPid = row.runner_pid;
+        else await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+      }
+      assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1, stderr);
+      assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
+      writerLock = new DatabaseSync(cliStop.databasePath, { timeout: 20 });
+      writerLock.exec('BEGIN IMMEDIATE');
+      assert.equal(child.kill('SIGTERM'), true);
+      const incompleteDeadline = Date.now() + 10_000;
+      while (!stdout.split(/\r?\n/u).some(line => {
+        try { return JSON.parse(line).event === 'operations_worker_stop_incomplete'; } catch { return false; }
+      }) && Date.now() < incompleteDeadline && child.exitCode === null) {
+        await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
+      }
+      const incomplete = stdout.split(/\r?\n/u).map(line => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).find(record => record?.event === 'operations_worker_stop_incomplete');
+      assert.ok(incomplete, `${stdout}\n${stderr}`);
+      assert.equal(incomplete.stopped, false);
+      assert.equal(incomplete.storeClosed, false);
+      assert.equal(child.exitCode, null, 'CLI remains alive while its store and retry signal handler are needed');
+      const retained = raw.prepare('SELECT state, runner_pid FROM operations_work WHERE job_id=?').get(accepted.jobId);
+      assert.equal(retained.state, 'running');
+      assert.equal(retained.runner_pid, runnerPid);
+
+      writerLock.exec('ROLLBACK');
+      writerLock.close();
+      writerLock = null;
+      assert.equal(child.kill('SIGTERM'), true);
+      const finalClose = await waitForCloseBounded(closed, 3_000);
+      assert.ok(finalClose, `${stdout}\n${stderr}`);
+      assert.deepEqual(finalClose, { code: 0, signal: null });
+      const records = stdout.split(/\r?\n/u).map(line => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean);
+      assert.equal(records.filter(record => record.event === 'operations_worker_stop_incomplete').length, 1);
+      const finalRecord = records.find(record => record.event === 'operations_worker_stopped');
+      assert.equal(finalRecord?.stopped, true);
+      assert.equal(finalRecord?.storeClosed, true);
+      const settled = raw.prepare('SELECT state, runner_pid FROM operations_work WHERE job_id=?').get(accepted.jobId);
+      assert.equal(settled.state, 'queued');
+      assert.equal(settled.runner_pid, null);
+      assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 0);
+    } finally {
+      try { writerLock?.exec('ROLLBACK'); } catch {}
+      try { writerLock?.close(); } catch {}
+      if (runnerPid !== null) {
+        try { process.kill(runnerPid, 'SIGCONT'); } catch {}
+      }
+      if (!closeResult && child.exitCode === null && child.signalCode === null) {
+        const reaped = await killOwnedChildAndReap(child, closed);
+        assert.ok(reaped, 'the test reaped its owned CLI child');
+      }
+    }
+  });
 });
 
 test('OPS08_HEALTH_FAIL_CLOSED reports unavailable authority, provider, stale data, and secret-free status', async t => {
@@ -2626,7 +3131,29 @@ test('OPS09_MIGRATION_COMPATIBILITY migrates schema 5 atomically, preserves olde
       databasePath: retained.databasePath, ownerId: 'migration-resumed-worker'
     });
     assert.equal(readStoreCompatibility(retained.databasePath).status, 'supported');
-    assert.deepEqual(snapshot(retained.databasePath), beforeMigration);
+    const afterMigration = snapshot(retained.databasePath);
+    const withoutReservationCounters = value => {
+      const copy = JSON.parse(JSON.stringify(value));
+      for (const row of copy.meta) {
+        delete row.reserved_disk_bytes;
+        delete row.reserved_event_slots;
+      }
+      for (const row of copy.work) {
+        delete row.reserved_disk_bytes;
+        delete row.reserved_event_slots;
+      }
+      return copy;
+    };
+    assert.deepEqual(withoutReservationCounters(afterMigration), withoutReservationCounters(beforeMigration));
+    const rebound = new DatabaseSync(retained.databasePath, { readOnly: true });
+    const reservationState = rebound.prepare(`
+      SELECT m.reserved_disk_bytes AS meta_disk, m.reserved_event_slots AS meta_events,
+        SUM(w.reserved_disk_bytes) AS work_disk, SUM(w.reserved_event_slots) AS work_events
+      FROM operations_meta m CROSS JOIN operations_work w WHERE m.singleton=1
+    `).get();
+    assert.equal(Number(reservationState.meta_disk), Number(reservationState.work_disk));
+    assert.equal(Number(reservationState.meta_events), Number(reservationState.work_events));
+    rebound.close();
     const check = new DatabaseSync(retained.databasePath, { readOnly: true });
     assert.deepEqual(check.prepare('SELECT job_id, state, runner_pid FROM operations_work ORDER BY job_id').all().map(row => ({ ...row })), [
       { job_id: queued.jobId, state: 'queued', runner_pid: null },
@@ -2654,6 +3181,365 @@ test('OPS09_MIGRATION_COMPATIBILITY migrates schema 5 atomically, preserves olde
     assert.deepEqual(afterRollback.prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name').all().map(row => ({ ...row })), beforeRollback);
     assert.equal(Number(afterRollback.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('operations_meta') WHERE name='policy_json'").get().count), 0);
     afterRollback.close();
+  });
+
+  await t.test('OPS09.C03 upgrades actual predecessor reservations atomically and keeps blocked work recoverable', async t => {
+    const fixtureDirectory = tempDirectory('ah11-v6-actual-reservation-migration-');
+    t.after(() => fixtureDirectory.cleanup());
+    const fixturePath = join(ROOT, 'tests/operations/fixtures/legacy-v6-populated-32-step.sqlite');
+    const originalConfig = readOperationsConfig();
+    const originalPolicy = operationsStoragePolicy(originalConfig);
+    const fixtureManifest = JSON.parse(readFileSync(join(ROOT,
+      'tests/operations/fixtures/legacy-v6-states/fixture-manifest.json'), 'utf8'));
+    const fixtureEntry = fixtureManifest.fixtures.find(fixture => fixture.path ===
+      'tests/operations/fixtures/legacy-v6-populated-32-step.sqlite');
+    const fixtureBytes = readFileSync(fixturePath);
+    assert.equal(fixtureBytes.byteLength, fixtureEntry?.bytes);
+    assert.equal(createHash('sha256').update(fixtureBytes).digest('hex'), fixtureEntry?.sha256);
+    const copyFixture = name => {
+      const path = join(fixtureDirectory.directory, name);
+      copyFileSync(fixturePath, path);
+      return path;
+    };
+    const readRetained = path => {
+      const db = new DatabaseSync(path, { readOnly: true });
+      const policyColumn = Number(db.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('operations_meta') WHERE name='policy_json'").get().count) === 1;
+      const result = {
+        version: Number(db.prepare('PRAGMA user_version').get().user_version),
+        meta: { ...db.prepare(`SELECT pending_records, in_flight, reserved_disk_bytes, reserved_event_slots,
+          ${policyColumn ? 'policy_json' : 'NULL AS policy_json'} FROM operations_meta WHERE singleton=1`).get() },
+        work: { ...db.prepare('SELECT job_id, workflow_id, state, generation, reserved_disk_bytes, reserved_event_slots FROM operations_work').get() },
+        workflow: { ...db.prepare('SELECT state, checkpoint_sequence, cancellation_requested, lease_owner, lease_expires_ms FROM workflows').get() }
+      };
+      db.close();
+      return result;
+    };
+    const resourceInput = (config, policy) => ({
+      maxStoreBytes: config.maxStoreBytes,
+      maxWalBytes: config.maxWalBytes,
+      minFreeDiskBytes: config.minFreeDiskBytes,
+      policy
+    });
+
+    const completionPath = copyFixture('legacy-v6-completes.sqlite');
+    const original = readRetained(completionPath);
+    assert.equal(original.version, 6);
+    assert.equal(original.meta.policy_json, null);
+    assert.equal(Number(original.meta.reserved_disk_bytes), 524_288);
+    assert.equal(original.work.state, 'queued');
+    const completion = DurableWorkflowStore.open({ databasePath: completionPath, busyTimeoutMs: 20 });
+    completion._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, resourceInput(originalConfig, originalPolicy));
+    const rebound = readRetained(completionPath);
+    assert.equal(rebound.meta.policy_json !== null, true);
+    assert.ok(Number(rebound.meta.reserved_disk_bytes) > Number(original.meta.reserved_disk_bytes));
+    assert.equal(Number(rebound.meta.reserved_disk_bytes), Number(rebound.work.reserved_disk_bytes));
+    assert.equal(rebound.work.state, 'queued');
+    const claim = completion._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'legacy-v6-migration-worker', policy: originalPolicy
+    }).claim;
+    const work = completion._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: claim.jobId, ownerId: claim.ownerId, generation: claim.generation, fence: claim.fence
+    });
+    const localResult = await runBoundedLocalPlan({
+      store: completion, workflowId: claim.workflowId, ownerId: claim.ownerId,
+      fence: claim.fence, planJson: work.work.planJson, limitsJson: work.work.limitsJson
+    });
+    assert.equal(localResult.status, 'completed');
+    assert.equal(localResult.results.length, 32);
+    completion._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: claim.jobId, ownerId: claim.ownerId, generation: claim.generation,
+      fence: claim.fence, outcome: 'completed', childExited: true
+    });
+    completion.close();
+    const completed = DurableWorkflowStore.open({ databasePath: completionPath, busyTimeoutMs: 20 });
+    const completedRow = completed._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'legacy-v6-fixture-tenant', projectId: 'legacy-v6-fixture-project',
+      jobId: original.work.job_id
+    });
+    assert.equal(completedRow.state, 'completed');
+    const completedDb = new DatabaseSync(completionPath, { readOnly: true });
+    assert.equal(completedDb.prepare('SELECT state FROM workflows WHERE workflow_id=?').get(original.work.workflow_id).state, 'succeeded');
+    assert.deepEqual({ ...completedDb.prepare('SELECT pending_records, in_flight, reserved_disk_bytes, reserved_event_slots FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 0, in_flight: 0, reserved_disk_bytes: 0, reserved_event_slots: 0
+    });
+    completedDb.close();
+    completed.close();
+
+    const capacityPath = copyFixture('legacy-v6-capacity-refusal.sqlite');
+    const capacityBefore = readRetained(capacityPath);
+    const capacityStore = DurableWorkflowStore.open({ databasePath: capacityPath, busyTimeoutMs: 20 });
+    const narrowConfig = readOperationsConfig({ maxStoreBytes: 16_777_216 });
+    const narrowPolicy = operationsStoragePolicy(narrowConfig);
+    assert.throws(() => capacityStore._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY,
+      resourceInput(narrowConfig, narrowPolicy)), error => error.code === 'INVALID_INPUT');
+    const capacityAfter = readRetained(capacityPath);
+    assert.equal(capacityAfter.meta.policy_json, null);
+    assert.equal(Number(capacityAfter.meta.reserved_disk_bytes), Number(capacityBefore.meta.reserved_disk_bytes));
+    assert.equal(Number(capacityAfter.work.reserved_disk_bytes), Number(capacityBefore.work.reserved_disk_bytes));
+    assert.equal(capacityAfter.work.state, capacityBefore.work.state);
+    assert.equal(capacityAfter.workflow.state, capacityBefore.workflow.state);
+    capacityStore._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY,
+      resourceInput(originalConfig, originalPolicy));
+    assert.equal(readRetained(capacityPath).meta.policy_json !== null, true);
+    capacityStore.close();
+
+    const rollbackPath = copyFixture('legacy-v6-write-rollback.sqlite');
+    const rollbackBefore = readRetained(rollbackPath);
+    const rollbackStore = DurableWorkflowStore.open({ databasePath: rollbackPath, busyTimeoutMs: 20 });
+    const injected = new DatabaseSync(rollbackPath);
+    injected.exec(`CREATE TRIGGER injected_legacy_reservation_failure
+      BEFORE UPDATE OF reserved_disk_bytes ON operations_meta
+      WHEN NEW.reserved_disk_bytes > OLD.reserved_disk_bytes
+      BEGIN SELECT RAISE(ABORT, 'synthetic retained-reservation write failure'); END;`);
+    injected.close();
+    assert.throws(() => rollbackStore._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY,
+      resourceInput(originalConfig, originalPolicy)), error => error.code === 'STORE_WRITE_FAILED');
+    const rollbackAfterFailure = readRetained(rollbackPath);
+    assert.equal(rollbackAfterFailure.meta.policy_json, null);
+    assert.equal(Number(rollbackAfterFailure.meta.reserved_disk_bytes), Number(rollbackBefore.meta.reserved_disk_bytes));
+    assert.equal(Number(rollbackAfterFailure.work.reserved_disk_bytes), Number(rollbackBefore.work.reserved_disk_bytes));
+    assert.equal(rollbackAfterFailure.work.state, rollbackBefore.work.state);
+    assert.equal(rollbackAfterFailure.workflow.state, rollbackBefore.workflow.state);
+    const removeInjection = new DatabaseSync(rollbackPath);
+    removeInjection.exec('DROP TRIGGER injected_legacy_reservation_failure;');
+    removeInjection.close();
+    rollbackStore._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY,
+      resourceInput(originalConfig, originalPolicy));
+    assert.equal(readRetained(rollbackPath).meta.policy_json !== null, true);
+    rollbackStore.close();
+  });
+
+  await t.test('OPS09.C04 real predecessor binaries bind custody and resume eligible expired running work', async t => {
+    const fixtureDirectory = tempDirectory('ah11-v6-state-migration-');
+    t.after(() => fixtureDirectory.cleanup());
+    const config = readOperationsConfig();
+    const policy = operationsStoragePolicy(config);
+    const fixtures = new Map([
+      ['queued', 'queued'], ['running', 'running'], ['partial-running', 'running'], ['partial', 'parked'],
+      ['parked', 'parked'], ['unknown', 'unknown'], ['terminal', 'completed'], ['empty', null]
+    ]);
+    const fixtureManifest = JSON.parse(readFileSync(join(ROOT,
+      'tests/operations/fixtures/legacy-v6-states/fixture-manifest.json'), 'utf8'));
+    assert.equal(fixtureManifest.sourceRevision, 'af8ddbcd3543d8576c23bc43a6af5d1d4ae40544');
+    assert.equal(fixtureManifest.sourceTree, 'e9f697d1c46b46b42920da2138421ee1e97f19b9');
+    assert.equal(fixtureManifest.sourceFiles.find(file => file.path === 'src/internal/durable-store.js')?.sha256,
+      'ee231508165fcd5038adce6c806797062edd0c46610094d09d641a7cefece611');
+    assert.equal(fixtureManifest.sourceFiles.find(file => file.path === 'src/orchestrator/internal/controller.js')?.sha256,
+      'c094162ab276c92532d9f7a7a294c47d03da3475a93f65c89e790253847e9c55');
+    assert.equal(fixtureManifest.sourceFiles.find(file => file.path === 'src/worker/private/config.js')?.sha256,
+      'aaec3c53ba02213564cbb543ed0615ece8389993d20ca9aa97157d55559114ae');
+    const fixtureByPath = new Map(fixtureManifest.fixtures.map(fixture => [fixture.path, fixture]));
+    const snapshot = databasePath => {
+      const db = new DatabaseSync(databasePath, { readOnly: true });
+      const rows = sql => db.prepare(sql).all().map(row => ({ ...row }));
+      const hasPolicy = Number(db.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('operations_meta') WHERE name='policy_json'").get().count) === 1;
+      const result = {
+        version: Number(db.prepare('PRAGMA user_version').get().user_version),
+        meta: rows(`SELECT pending_records, pending_bytes, in_flight, reserved_event_slots,
+          reserved_disk_bytes, last_tenant_id, ${hasPolicy ? 'policy_json' : 'NULL AS policy_json'}
+          FROM operations_meta WHERE singleton=1`),
+        tenants: rows('SELECT * FROM operations_tenants ORDER BY tenant_id'),
+        projects: rows('SELECT * FROM operations_projects ORDER BY tenant_id, project_id'),
+        work: rows('SELECT * FROM operations_work ORDER BY job_id'),
+        workflows: rows('SELECT * FROM workflows ORDER BY workflow_id'),
+        checkpoints: rows('SELECT * FROM workflow_checkpoints ORDER BY workflow_id, sequence'),
+        events: rows('SELECT * FROM workflow_events ORDER BY sequence'),
+        outbox: rows('SELECT * FROM outbox ORDER BY event_sequence'),
+        attempts: rows('SELECT * FROM operation_attempts ORDER BY attempt_id'),
+        cursors: rows('SELECT * FROM telemetry_cursors ORDER BY consumer_id')
+      };
+      db.close();
+      return JSON.parse(JSON.stringify(result));
+    };
+    const retainedPayload = value => {
+      const copy = JSON.parse(JSON.stringify(value));
+      delete copy.meta[0]?.policy_json;
+      for (const row of copy.meta) {
+        delete row.reserved_disk_bytes;
+        delete row.reserved_event_slots;
+      }
+      for (const row of copy.work) {
+        delete row.reserved_disk_bytes;
+        delete row.reserved_event_slots;
+      }
+      return copy;
+    };
+
+    for (const [fixtureName, expectedState] of fixtures) {
+      const sourcePath = join(ROOT, 'tests/operations/fixtures/legacy-v6-states', `legacy-v6-${fixtureName}.sqlite`);
+      const databasePath = join(fixtureDirectory.directory, `migrated-${fixtureName}.sqlite`);
+      const relativeSourcePath = `tests/operations/fixtures/legacy-v6-states/legacy-v6-${fixtureName}.sqlite`;
+      const fixtureEntry = fixtureByPath.get(relativeSourcePath);
+      const fixtureBytes = readFileSync(sourcePath);
+      assert.ok(fixtureEntry, fixtureName);
+      assert.equal(fixtureBytes.byteLength, fixtureEntry.bytes, fixtureName);
+      assert.equal(createHash('sha256').update(fixtureBytes).digest('hex'), fixtureEntry.sha256, fixtureName);
+      copyFileSync(sourcePath, databasePath);
+      assert.equal(readStoreCompatibility(databasePath).status, 'migration_required', fixtureName);
+      const before = snapshot(databasePath);
+      assert.equal(before.version, 6, fixtureName);
+      assert.equal(before.meta[0].policy_json, null, fixtureName);
+      assert.equal(before.work[0]?.state ?? null, expectedState, fixtureName);
+      if (fixtureName === 'partial' || fixtureName === 'partial-running') {
+        const checkpoint = before.checkpoints.filter(row => row.workflow_id === before.work[0].workflow_id)
+          .sort((left, right) => Number(right.sequence) - Number(left.sequence))[0];
+        assert.ok(checkpoint, 'predecessor partial checkpoint exists');
+        const retainedCheckpoint = JSON.parse(checkpoint.payload_json);
+        assert.equal(retainedCheckpoint.schemaVersion, 2);
+        assert.equal(JSON.parse(retainedCheckpoint.data.completedResultsJson).one.output, 5);
+        assert.equal(before.work[0].state, fixtureName === 'partial-running' ? 'running' : 'parked');
+      }
+      if (fixtureName === 'unknown') {
+        assert.equal(before.attempts[0].state, 'intent');
+        assert.equal(before.attempts[0].authority_hold_ref, 'synthetic-local-bookkeeping:legacy-unknown-hold');
+      }
+      if (fixtureName === 'running') assert.equal(before.work[0].runner_pid, 2_147_483_647);
+
+      const store = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20 });
+      store._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+        maxStoreBytes: config.maxStoreBytes, maxWalBytes: config.maxWalBytes,
+        minFreeDiskBytes: config.minFreeDiskBytes, policy
+      });
+      const after = snapshot(databasePath);
+      assert.equal(readStoreCompatibility(databasePath).status, 'supported', fixtureName);
+      assert.equal(after.version, 6, fixtureName);
+      assert.notEqual(after.meta[0].policy_json, null, fixtureName);
+      assert.deepEqual(retainedPayload(after), retainedPayload(before), fixtureName);
+      const activeRows = after.work.filter(row => ['queued', 'running', 'parked', 'unknown'].includes(row.state));
+      assert.equal(Number(after.meta[0].reserved_disk_bytes), activeRows.reduce((sum, row) => sum + Number(row.reserved_disk_bytes), 0), fixtureName);
+      assert.equal(Number(after.meta[0].reserved_event_slots), activeRows.reduce((sum, row) => sum + Number(row.reserved_event_slots), 0), fixtureName);
+      if (activeRows.length > 0) {
+        assert.ok(Number(after.meta[0].reserved_disk_bytes) >= Number(before.meta[0].reserved_disk_bytes), fixtureName);
+        assert.ok(Number(after.meta[0].reserved_event_slots) >= Number(before.meta[0].reserved_event_slots), fixtureName);
+      }
+      if (fixtureName === 'unknown') {
+        assert.equal(after.attempts[0].state, 'intent');
+        assert.equal(after.attempts[0].authority_hold_ref, 'synthetic-local-bookkeeping:legacy-unknown-hold');
+      }
+      store.close();
+
+      const reopened = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20 });
+      const afterReopen = snapshot(databasePath);
+      assert.deepEqual(afterReopen, after, fixtureName);
+      if (fixtureName === 'running') {
+        reopened._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+          maxStoreBytes: config.maxStoreBytes, maxWalBytes: config.maxWalBytes,
+          minFreeDiskBytes: config.minFreeDiskBytes, policy
+        });
+        const expired = reopened._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy });
+        assert.ok(expired.items.some(item => item.jobId === after.work[0].job_id));
+        const recovered = reopened._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+          ownerId: 'legacy-v6-running-recovery', policy, recoverableJobIds: [after.work[0].job_id]
+        });
+        assert.equal(recovered.claim.jobId, after.work[0].job_id);
+        const work = reopened._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
+          jobId: recovered.claim.jobId, ownerId: recovered.claim.ownerId,
+          generation: recovered.claim.generation, fence: recovered.claim.fence
+        });
+        const localResult = await runBoundedLocalPlan({
+          store: reopened, workflowId: recovered.claim.workflowId, ownerId: recovered.claim.ownerId,
+          fence: recovered.claim.fence, planJson: work.work.planJson, limitsJson: work.work.limitsJson
+        });
+        assert.equal(localResult.status, 'completed');
+        reopened._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+          jobId: recovered.claim.jobId, ownerId: recovered.claim.ownerId,
+          generation: recovered.claim.generation, fence: recovered.claim.fence,
+          outcome: 'completed', childExited: true
+        });
+        const completed = snapshot(databasePath);
+        assert.equal(completed.work[0].state, 'completed');
+        assert.equal(completed.work[0].runner_pid, null);
+        assert.equal(completed.work[0].reserved_disk_bytes, 0);
+        assert.equal(completed.work[0].reserved_event_slots, 0);
+        assert.equal(completed.work[0].generation, 2);
+        assert.equal(completed.work[0].fence_token, 2);
+        assert.equal(completed.work[0] && completed.work[0].workflow_id, after.work[0].workflow_id);
+        assert.equal(Number(completed.meta[0].pending_records), 0);
+        assert.equal(Number(completed.meta[0].in_flight), 0);
+        assert.equal(Number(completed.meta[0].reserved_disk_bytes), 0);
+        assert.equal(Number(completed.meta[0].reserved_event_slots), 0);
+        reopened.close();
+        const completedReopen = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20 });
+        assert.deepEqual(snapshot(databasePath), completed);
+        completedReopen.close();
+      } else {
+        reopened.close();
+      }
+    }
+  });
+
+  await t.test('OPS09.C05 a later legacy-row reservation failure rolls back earlier row upgrades and retries cleanly', t => {
+    const fixtureDirectory = tempDirectory('ah11-v6-multi-row-rollback-');
+    t.after(() => fixtureDirectory.cleanup());
+    const config = readOperationsConfig();
+    const policy = operationsStoragePolicy(config);
+    const databasePath = join(fixtureDirectory.directory, 'multi-row.sqlite');
+    const fixturePath = join(ROOT, 'tests/operations/fixtures/legacy-v6-states/legacy-v6-multi.sqlite');
+    const manifest = JSON.parse(readFileSync(join(ROOT,
+      'tests/operations/fixtures/legacy-v6-states/fixture-manifest.json'), 'utf8'));
+    const entry = manifest.fixtures.find(fixture => fixture.path === 'tests/operations/fixtures/legacy-v6-states/legacy-v6-multi.sqlite');
+    const fixtureBytes = readFileSync(fixturePath);
+    assert.equal(fixtureBytes.byteLength, entry?.bytes);
+    assert.equal(createHash('sha256').update(fixtureBytes).digest('hex'), entry?.sha256);
+    copyFileSync(fixturePath, databasePath);
+    const snapshot = () => {
+      const db = new DatabaseSync(databasePath, { readOnly: true });
+      const rows = sql => db.prepare(sql).all().map(row => ({ ...row }));
+      const hasPolicy = Number(db.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('operations_meta') WHERE name='policy_json'").get().count) === 1;
+      const result = {
+        version: Number(db.prepare('PRAGMA user_version').get().user_version),
+        meta: rows(`SELECT pending_records, pending_bytes, in_flight, reserved_event_slots,
+          reserved_disk_bytes, last_tenant_id, ${hasPolicy ? 'policy_json' : 'NULL AS policy_json'}
+          FROM operations_meta WHERE singleton=1`),
+        tenants: rows('SELECT * FROM operations_tenants ORDER BY tenant_id'),
+        projects: rows('SELECT * FROM operations_projects ORDER BY tenant_id, project_id'),
+        work: rows(`SELECT job_id, state, generation, worker_id, runner_pid, fence_token,
+          lease_expires_ms, reserved_event_slots, reserved_disk_bytes FROM operations_work ORDER BY job_id`),
+        workflows: rows('SELECT * FROM workflows ORDER BY workflow_id'),
+        checkpoints: rows('SELECT * FROM workflow_checkpoints ORDER BY workflow_id, sequence'),
+        events: rows('SELECT * FROM workflow_events ORDER BY sequence'),
+        outbox: rows('SELECT * FROM outbox ORDER BY event_sequence'),
+        attempts: rows('SELECT * FROM operation_attempts ORDER BY attempt_id')
+      };
+      db.close();
+      return JSON.parse(JSON.stringify(result));
+    };
+    const before = snapshot();
+    assert.equal(before.version, 6);
+    assert.equal(before.meta[0].policy_json, null);
+    assert.equal(before.work.length, 2);
+    assert.ok(before.work.every(row => row.state === 'queued' && Number(row.reserved_disk_bytes) === 524_288));
+    const failingJobId = before.work[1].job_id;
+    const store = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20 });
+    const injected = new DatabaseSync(databasePath);
+    injected.exec(`CREATE TRIGGER injected_later_legacy_row_failure
+      BEFORE UPDATE OF reserved_disk_bytes ON operations_work
+      WHEN NEW.job_id = '${failingJobId}' AND NEW.reserved_disk_bytes > OLD.reserved_disk_bytes
+      BEGIN SELECT RAISE(ABORT, 'synthetic second-row reservation failure'); END;`);
+    injected.close();
+    assert.throws(() => store._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+      maxStoreBytes: config.maxStoreBytes, maxWalBytes: config.maxWalBytes,
+      minFreeDiskBytes: config.minFreeDiskBytes, policy
+    }), error => error.code === 'STORE_WRITE_FAILED');
+    assert.deepEqual(snapshot(), before, 'a successful first-row increase and aggregate counters roll back together');
+
+    const removeInjection = new DatabaseSync(databasePath);
+    removeInjection.exec('DROP TRIGGER injected_later_legacy_row_failure;');
+    removeInjection.close();
+    store._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+      maxStoreBytes: config.maxStoreBytes, maxWalBytes: config.maxWalBytes,
+      minFreeDiskBytes: config.minFreeDiskBytes, policy
+    });
+    const rebound = snapshot();
+    assert.notEqual(rebound.meta[0].policy_json, null);
+    assert.ok(rebound.work.every(row => row.state === 'queued'
+      && Number(row.reserved_disk_bytes) > 524_288 && Number(row.reserved_event_slots) >= 94));
+    assert.equal(Number(rebound.meta[0].reserved_disk_bytes), rebound.work.reduce((sum, row) => sum + Number(row.reserved_disk_bytes), 0));
+    assert.equal(Number(rebound.meta[0].reserved_event_slots), rebound.work.reduce((sum, row) => sum + Number(row.reserved_event_slots), 0));
+    store.close();
+    const reopened = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20 });
+    assert.deepEqual(snapshot(), rebound);
+    reopened.close();
   });
 });
 

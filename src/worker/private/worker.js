@@ -683,16 +683,54 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.stderr.write('Usage: node src/worker/private/worker.js --mode mock --database-path PATH\n');
     process.exitCode = 2;
   } else {
+    let worker;
+    let signalWaiter = null;
+    let pendingSignal = null;
+    let keepAlive = null;
+    const signalNames = ['SIGTERM', 'SIGINT'];
+    const requestStop = signal => {
+      if (signalWaiter) {
+        const resolveSignal = signalWaiter;
+        signalWaiter = null;
+        resolveSignal(signal);
+      } else {
+        pendingSignal = signal;
+      }
+    };
+    const waitForStopRequest = () => {
+      if (pendingSignal) {
+        const signal = pendingSignal;
+        pendingSignal = null;
+        return Promise.resolve(signal);
+      }
+      return new Promise(resolvePromise => { signalWaiter = resolvePromise; });
+    };
+    const removeCliSignals = () => {
+      for (const signal of signalNames) process.off(signal, requestStop);
+      if (keepAlive !== null) clearInterval(keepAlive);
+      keepAlive = null;
+    };
     try {
-      const worker = createOperationsWorker({ databasePath: cli.databasePath, config: { mode: 'mock' } });
-      const removeHandlers = worker.installSignalHandlers();
+      worker = createOperationsWorker({ databasePath: cli.databasePath, config: { mode: 'mock' } });
+      for (const signal of signalNames) process.on(signal, requestStop);
+      keepAlive = setInterval(() => {}, 60_000);
       process.stdout.write(JSON.stringify({ event: 'operations_worker_started', mode: 'mock', schema: 6 }) + '\n');
-      await worker.start();
-      const result = await worker.stop('requested');
-      removeHandlers();
+      const loop = worker.start();
+      let result;
+      while (!result?.stopped) {
+        await waitForStopRequest();
+        result = await worker.stop('signal');
+        if (!result.stopped) {
+          process.exitCode = 2;
+          process.stdout.write(JSON.stringify({ event: 'operations_worker_stop_incomplete', ...result }) + '\n');
+        }
+      }
+      await loop;
+      removeCliSignals();
       process.stdout.write(JSON.stringify({ event: 'operations_worker_stopped', ...result }) + '\n');
       process.exitCode = result.stopped ? 0 : 2;
     } catch {
+      removeCliSignals();
       process.stderr.write('The local operations worker could not start safely.\n');
       process.exitCode = 2;
     }

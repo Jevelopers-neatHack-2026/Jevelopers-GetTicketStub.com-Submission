@@ -1129,8 +1129,10 @@ function validateUnboundOperationsStore(db, policy, operation, databasePath, res
   const meta = db.prepare('SELECT * FROM operations_meta WHERE singleton = 1').get();
   if (!meta) fail(operation, 'CHECKPOINT_CORRUPT', 'The worker operations store is incomplete.');
   const rows = db.prepare(`
-    SELECT state, work_bytes FROM operations_work INDEXED BY operations_work_state_idx
-    WHERE state IN ('queued','running','parked','unknown') LIMIT ?
+    SELECT job_id, workflow_id, tenant_id, project_id, limits_version, state,
+      work_json, work_bytes, work_sha256, reserved_event_slots, reserved_disk_bytes
+    FROM operations_work INDEXED BY operations_work_state_idx
+    WHERE state IN ('queued','running','parked','unknown') ORDER BY job_id LIMIT ?
   `).all(policy.maxQueueRecords + 1);
   const pendingBytes = rows.reduce((sum, item) => sum + Number(item.work_bytes), 0);
   const inFlight = rows.reduce((sum, item) => sum + (item.state === 'running' ? 1 : 0), 0);
@@ -1173,18 +1175,91 @@ function validateUnboundOperationsStore(db, policy, operation, databasePath, res
     fail(operation, 'INVALID_INPUT', 'The retained event reservations exceed this worker policy.');
   }
 
+  const reservationUpgrades = [];
+  let additionalDiskBytes = 0;
+  let additionalEventSlots = 0;
+  for (const row of rows) {
+    const workBytes = Number(row.work_bytes);
+    if (!Number.isSafeInteger(workBytes) || workBytes < 0 || workBytes > policy.maxJobBytes
+        || Buffer.byteLength(row.work_json, 'utf8') !== workBytes
+        || digest(JSON.stringify([
+          'agent-harness.operations-work.v1', row.tenant_id, row.project_id,
+          row.limits_version, row.work_json
+        ])) !== row.work_sha256) {
+      fail(operation, 'CHECKPOINT_CORRUPT', 'A retained local work item failed its integrity check.');
+    }
+    let work;
+    let normalized;
+    let lifecycleBudget;
+    try {
+      work = parseBoundedJson(row.work_json, { maxBytes: workBytes, maxDepth: 24, maxNodes: 2048 });
+      normalized = readOwnDataRecord(work, ['type', 'version', 'planJson', 'limitsJson'], operation);
+      if (normalized.type !== 'local_plan' || normalized.version !== 1
+          || typeof normalized.planJson !== 'string' || typeof normalized.limitsJson !== 'string') {
+        throw new Error('unsupported retained work');
+      }
+      lifecycleBudget = operationsLifecycleBudget(normalized.planJson, normalized.limitsJson, policy, operation);
+    } catch {
+      fail(operation, 'CHECKPOINT_CORRUPT', 'A retained local work item cannot be safely rebound to this policy.');
+    }
+    const currentDisk = Number(row.reserved_disk_bytes);
+    const currentEvents = Number(row.reserved_event_slots);
+    if (!Number.isSafeInteger(currentDisk) || currentDisk < 0
+        || !Number.isSafeInteger(currentEvents) || currentEvents < 0) {
+      fail(operation, 'CHECKPOINT_CORRUPT', 'A retained local work reservation is invalid.');
+    }
+    const nextDisk = Math.max(currentDisk, lifecycleBudget.diskBytes);
+    const nextEvents = Math.max(currentEvents, lifecycleBudget.eventSlots);
+    additionalDiskBytes += nextDisk - currentDisk;
+    additionalEventSlots += nextEvents - currentEvents;
+    if (nextDisk !== currentDisk || nextEvents !== currentEvents) {
+      reservationUpgrades.push({
+        jobId: row.job_id,
+        state: row.state,
+        currentDisk,
+        currentEvents,
+        nextDisk,
+        nextEvents
+      });
+    }
+  }
+
+  if (reservationUpgrades.length > 0 && (!databasePath || !resourceCeilings)) {
+    fail(operation, 'INVALID_INPUT', 'The retained work cannot be rebound without an active resource ceiling.');
+  }
   if (databasePath && resourceCeilings) {
     const resources = operationsResourceSnapshot(databasePath);
     const capacity = operationsResourceCapacity(resources, meta, policy, {
       pendingEvents,
-      additionalDiskBytes: 0,
-      additionalWalBytes: 0,
-      additionalEventSlots: 0
+      additionalDiskBytes,
+      additionalWalBytes: policy.completionHeadroomBytes,
+      additionalEventSlots
     });
     if (!capacity.ok || policy.maxStoreBytes !== resourceCeilings.maxStoreBytes
         || policy.maxWalBytes !== resourceCeilings.maxWalBytes
         || policy.minFreeDiskBytes !== resourceCeilings.minFreeDiskBytes) {
-      fail(operation, 'INVALID_INPUT', 'The retained operations reservations exceed this worker resource policy.');
+      fail(operation, 'INVALID_INPUT', 'The retained work cannot be rebound within this worker resource policy.');
+    }
+  }
+
+  for (const upgrade of reservationUpgrades) {
+    const changed = db.prepare(`
+      UPDATE operations_work SET reserved_disk_bytes = ?, reserved_event_slots = ?
+      WHERE job_id = ? AND state = ? AND reserved_disk_bytes = ? AND reserved_event_slots = ?
+    `).run(upgrade.nextDisk, upgrade.nextEvents, upgrade.jobId, upgrade.state,
+      upgrade.currentDisk, upgrade.currentEvents);
+    if (Number(changed.changes) !== 1) {
+      fail(operation, 'STORE_WRITE_FAILED', 'A retained work reservation changed during policy binding.');
+    }
+  }
+  if (additionalDiskBytes !== 0 || additionalEventSlots !== 0) {
+    const changed = db.prepare(`
+      UPDATE operations_meta SET reserved_disk_bytes = reserved_disk_bytes + ?,
+        reserved_event_slots = reserved_event_slots + ?
+      WHERE singleton = 1
+    `).run(additionalDiskBytes, additionalEventSlots);
+    if (Number(changed.changes) !== 1) {
+      fail(operation, 'STORE_WRITE_FAILED', 'The retained work reservations could not be rebound.');
     }
   }
 }
@@ -1286,20 +1361,20 @@ function consumeOperationsStorageReservation(db, databasePath, ceilings, workflo
     SELECT job_id, state, reserved_disk_bytes FROM operations_work WHERE workflow_id = ?
   `).get(workflowId);
   if (!row) return false;
-  if (!ceilings) fail(operation, 'STORE_HEADROOM', 'The local operation has no active storage ceiling.');
+  if (!ceilings) fail(operation, 'STORE_WRITE_FAILED', 'The local operation has no active storage ceiling.');
   const reserved = Number(row.reserved_disk_bytes);
   if (reserved < charge + remainingFloor) {
-    fail(operation, 'STORE_HEADROOM', 'The accepted local operation exhausted its reserved durable capacity.');
+    fail(operation, 'STORE_WRITE_FAILED', 'The accepted local operation exhausted its reserved durable capacity.');
   }
   const meta = db.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton = 1').get();
   const resources = operationsResourceSnapshot(databasePath);
-  if (!meta || !resources) fail(operation, 'STORE_HEADROOM', 'The local operation storage status is unavailable.');
+  if (!meta || !resources) fail(operation, 'STORE_WRITE_FAILED', 'The local operation storage status is unavailable.');
   const reservedTotal = Number(meta.reserved_disk_bytes);
   const storeBytes = resources.databaseBytes + resources.walBytes + resources.shmBytes;
   if (storeBytes + reservedTotal > ceilings.maxStoreBytes
       || resources.walBytes + charge > ceilings.maxWalBytes
       || resources.availableBytes < ceilings.minFreeDiskBytes + reservedTotal) {
-    fail(operation, 'STORE_HEADROOM', 'The durable store no longer has the capacity reserved for this operation.');
+    fail(operation, 'STORE_WRITE_FAILED', 'The durable store no longer has the capacity reserved for this operation.');
   }
   db.prepare(`
     UPDATE operations_work SET reserved_disk_bytes = reserved_disk_bytes - ? WHERE job_id = ?
@@ -2001,6 +2076,8 @@ export class DurableWorkflowStore {
         this.#db, policy, operation, true, this.#databasePath, this.#operationsResourceCeilings
       );
       const now = this.#now(operation);
+      for (let pass = 0; pass <= policy.maxQueueRecords; pass += 1) {
+      let reconciledInPass = false;
       const meta = this.#db.prepare('SELECT * FROM operations_meta WHERE singleton = 1').get();
       if (!meta) return null;
       const recoverableRows = recoverableJobIds.length === 0 ? [] : this.#db.prepare(`
@@ -2010,8 +2087,6 @@ export class DurableWorkflowStore {
         ORDER BY job_id LIMIT ?
       `).all(now, ...recoverableJobIds, policy.maxInFlightGlobal);
       const recoverableByJob = new Map(recoverableRows.map(row => [row.job_id, row]));
-      const recoverableByTenant = new Set(recoverableRows.map(row => row.tenant_id));
-      if (Number(meta.in_flight) >= policy.maxInFlightGlobal && recoverableRows.length === 0) return null;
       const tenants = this.#db.prepare(`
         SELECT tenant_id, in_flight, last_project_id
         FROM operations_tenants WHERE pending_records > 0
@@ -2034,7 +2109,6 @@ export class DurableWorkflowStore {
         ? tenants
         : [...tenants.filter(item => item.tenant_id > lastTenant), ...tenants.filter(item => item.tenant_id <= lastTenant)];
       for (const tenant of tenantOrder) {
-        if (Number(tenant.in_flight) >= policy.maxInFlightTenant && !recoverableByTenant.has(tenant.tenant_id)) continue;
         const projects = projectsByTenant.get(tenant.tenant_id) ?? [];
         const projectOrder = tenant.last_project_id === null
           ? projects
@@ -2042,7 +2116,6 @@ export class DurableWorkflowStore {
         for (const project of projectOrder) {
           const recoverable = [...recoverableByJob.values()].find(row =>
             row.tenant_id === tenant.tenant_id && row.project_id === project.project_id);
-          if (Number(project.in_flight) >= policy.maxInFlightProject && !recoverable) continue;
           let workRow = recoverable
             ? this.#db.prepare(`
               SELECT * FROM operations_work WHERE job_id = ? AND state = 'running'
@@ -2055,6 +2128,16 @@ export class DurableWorkflowStore {
             `).get(tenant.tenant_id, project.project_id);
           if (!workRow) continue;
           let workflow = this.#workflow(workRow.workflow_id, operation);
+          if (Number(workRow.fence_token) !== Number(workflow.fence_token)) continue;
+          if (workRow.state === 'running') {
+            if (!['running', 'awaiting_response'].includes(workflow.state)
+                || workflow.lease_owner !== workRow.worker_id || workflow.lease_expires_ms === null
+                || workRow.lease_expires_ms === null
+                || Number(workflow.lease_expires_ms) !== Number(workRow.lease_expires_ms)) continue;
+          } else if (!['queued', 'running'].includes(workflow.state) || workflow.lease_owner !== null
+              || workflow.lease_expires_ms !== null) {
+            continue;
+          }
           const unresolved = this.#db.prepare(`
             SELECT 1 FROM operation_attempts
             WHERE workflow_id = ? AND state IN ('intent','outcome_unknown','response_received')
@@ -2067,11 +2150,16 @@ export class DurableWorkflowStore {
               if (!['reconciliation_pending', 'review_required', 'succeeded', 'failed', 'cancelled'].includes(workflow.state)) {
                 nextRevision += 1;
                 nextWorkflowState = 'reconciliation_pending';
-                this.#db.prepare(`
+                const changed = this.#db.prepare(`
                   UPDATE workflows SET state = 'reconciliation_pending', revision = ?,
                     lease_owner = NULL, lease_expires_ms = NULL, updated_at_ms = ?
-                  WHERE workflow_id = ? AND revision = ?
-                `).run(nextRevision, now, workflow.workflow_id, Number(workflow.revision));
+                  WHERE workflow_id = ? AND revision = ? AND fence_token = ?
+                    AND lease_owner = ? AND lease_expires_ms = ?
+                `).run(nextRevision, now, workflow.workflow_id, Number(workflow.revision),
+                  Number(workflow.fence_token), workflow.lease_owner, Number(workflow.lease_expires_ms));
+                if (Number(changed.changes) !== 1) {
+                  fail(operation, 'STALE_FENCE', 'The expired unresolved operation no longer owns its workflow revision.');
+                }
               }
               this.#appendEvent({
                 eventId: 'ops-expired-unknown:' + workRow.job_id + ':' + Number(workRow.generation),
@@ -2083,14 +2171,20 @@ export class DurableWorkflowStore {
                 fence: Number(workflow.fence_token),
                 atMs: now
               });
-              this.#db.prepare(`
+              const changedWork = this.#db.prepare(`
                 UPDATE operations_work SET state = 'unknown', worker_id = NULL, runner_pid = NULL,
                   lease_expires_ms = NULL, updated_at_ms = ?, reason_code = 'EXTERNAL_OUTCOME_UNRESOLVED'
-                WHERE job_id = ? AND generation = ?
-              `).run(now, workRow.job_id, Number(workRow.generation));
+                WHERE job_id = ? AND state = 'running' AND generation = ? AND fence_token = ?
+                  AND worker_id = ? AND lease_expires_ms = ?
+              `).run(now, workRow.job_id, Number(workRow.generation), Number(workRow.fence_token),
+                workRow.worker_id, Number(workRow.lease_expires_ms));
+              if (Number(changedWork.changes) !== 1) {
+                fail(operation, 'STALE_FENCE', 'The expired unresolved queue claim changed before reconciliation.');
+              }
               adjustOperationsCounters(this.#db, {
                 tenantId: workRow.tenant_id, projectId: workRow.project_id, inFlight: -1
               });
+              reconciledInPass = true;
             }
             continue;
           }
@@ -2098,22 +2192,50 @@ export class DurableWorkflowStore {
             const terminal = workflow.state === 'succeeded' ? 'completed'
               : workflow.state === 'failed' ? 'failed' : 'cancelled';
             const wasRunning = workRow.state === 'running';
+            const cancelledWorkflow = workflow.cancellation_requested && !TERMINAL.has(workflow.state);
+            const nextWorkflowState = cancelledWorkflow ? 'cancelled' : workflow.state;
+            const nextRevision = cancelledWorkflow ? Number(workflow.revision) + 1 : Number(workflow.revision);
+            if (cancelledWorkflow) {
+              consumeOperationsStorageReservation(
+                this.#db, this.#databasePath, this.#operationsResourceCeilings,
+                workflow.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
+                OPS_GENERATION_WRITE_RESERVE_BYTES
+              );
+              const changed = this.#db.prepare(`
+                UPDATE workflows SET state = 'cancelled', cancellation_requested = 1,
+                  revision = ?, lease_owner = NULL, lease_expires_ms = NULL, updated_at_ms = ?
+                WHERE workflow_id = ? AND revision = ? AND fence_token = ?
+                  AND lease_owner = ? AND lease_expires_ms = ?
+              `).run(nextRevision, now, workflow.workflow_id,
+                Number(workflow.revision), Number(workflow.fence_token),
+                workflow.lease_owner, Number(workflow.lease_expires_ms));
+              if (Number(changed.changes) !== 1) {
+                fail(operation, 'STALE_FENCE', 'The expired cancellation no longer owns its workflow revision.');
+              }
+            }
             const eventId = 'ops-reconcile:' + workRow.job_id + ':' + Number(workRow.generation);
             this.#appendEvent({
               eventId,
               workflowId: workRow.workflow_id,
-              revision: Number(workflow.revision),
+              revision: nextRevision,
               type: 'operations_work_' + terminal,
               fromState: workflow.state,
-              toState: workflow.state,
+              toState: nextWorkflowState,
               fence: Number(workflow.fence_token),
               atMs: now
             });
             workRow = this.#db.prepare('SELECT * FROM operations_work WHERE job_id = ?').get(workRow.job_id);
-            this.#db.prepare(`
+            const changedWork = this.#db.prepare(`
               UPDATE operations_work SET state = ?, worker_id = NULL, runner_pid = NULL, lease_expires_ms = NULL,
-                updated_at_ms = ?, reason_code = ? WHERE job_id = ?
-            `).run(terminal, now, workflow.cancellation_requested ? 'CANCELLED' : null, workRow.job_id);
+                updated_at_ms = ?, reason_code = ? WHERE job_id = ? AND state = ?
+                  AND generation = ? AND fence_token = ?
+                  AND worker_id IS ? AND lease_expires_ms IS ?
+            `).run(terminal, now, workflow.cancellation_requested ? 'CANCELLED' : null,
+              workRow.job_id, workRow.state, Number(workRow.generation), Number(workRow.fence_token),
+              workRow.worker_id, workRow.lease_expires_ms);
+            if (Number(changedWork.changes) !== 1) {
+              fail(operation, 'STALE_FENCE', 'The expired terminal queue claim changed before reconciliation.');
+            }
             adjustOperationsCounters(this.#db, {
               tenantId: workRow.tenant_id,
               projectId: workRow.project_id,
@@ -2127,9 +2249,43 @@ export class DurableWorkflowStore {
               UPDATE operations_work SET reserved_event_slots = 0, reserved_disk_bytes = 0
               WHERE job_id = ?
             `).run(workRow.job_id);
+            reconciledInPass = true;
             continue;
           }
           if (!['queued', 'running'].includes(workflow.state)) continue;
+          const wasRunning = workRow.state === 'running';
+          const currentMeta = this.#db.prepare(
+            'SELECT in_flight FROM operations_meta WHERE singleton = 1'
+          ).get();
+          const currentTenant = this.#db.prepare(
+            'SELECT in_flight FROM operations_tenants WHERE tenant_id = ?'
+          ).get(workRow.tenant_id);
+          const currentProject = this.#db.prepare(`
+            SELECT in_flight FROM operations_projects WHERE tenant_id = ? AND project_id = ?
+          `).get(workRow.tenant_id, workRow.project_id);
+          if (!currentMeta || !currentTenant || !currentProject) {
+            fail(operation, 'CHECKPOINT_CORRUPT', 'The worker concurrency counters are incomplete.');
+          }
+          const globalInFlight = Number(currentMeta.in_flight);
+          const tenantInFlight = Number(currentTenant.in_flight);
+          const projectInFlight = Number(currentProject.in_flight);
+          if (![globalInFlight, tenantInFlight, projectInFlight].every(value => Number.isSafeInteger(value) && value >= 0)) {
+            fail(operation, 'CHECKPOINT_CORRUPT', 'The worker concurrency counters are invalid.');
+          }
+          if (wasRunning) {
+            if (globalInFlight === 0 || tenantInFlight === 0 || projectInFlight === 0) {
+              fail(operation, 'CHECKPOINT_CORRUPT', 'An expired worker claim has no reserved concurrency slot.');
+            }
+            if (globalInFlight > policy.maxInFlightGlobal
+                || tenantInFlight > policy.maxInFlightTenant
+                || projectInFlight > policy.maxInFlightProject) continue;
+          } else if (globalInFlight >= policy.maxInFlightGlobal
+              || tenantInFlight >= policy.maxInFlightTenant
+              || projectInFlight >= policy.maxInFlightProject) {
+            // A recovery ID never grants a different queued job an additional slot.
+            // Counters are reread after any earlier terminal/unknown reconciliation.
+            continue;
+          }
           if (Number(workRow.generation) >= OPS_MAX_WORKER_GENERATIONS) {
             consumeOperationsStorageReservation(
               this.#db, this.#databasePath, this.#operationsResourceCeilings,
@@ -2163,6 +2319,7 @@ export class DurableWorkflowStore {
                 inFlight: -1
               });
             }
+            reconciledInPass = true;
             continue;
           }
           if (workflow.lease_owner !== null && Number(workflow.lease_expires_ms) > now) continue;
@@ -2176,7 +2333,6 @@ export class DurableWorkflowStore {
             workflow.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
             OPS_GENERATION_WRITE_RESERVE_BYTES
           );
-          const wasRunning = workRow.state === 'running';
           let revision = Number(workflow.revision);
           if (workflow.state === 'queued') {
             revision += 1;
@@ -2235,6 +2391,8 @@ export class DurableWorkflowStore {
             incomplete: false
           });
         }
+      }
+      if (!reconciledInPass) return null;
       }
       return null;
     });
