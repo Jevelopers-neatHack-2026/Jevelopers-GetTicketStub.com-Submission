@@ -5584,8 +5584,14 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       'reservedEventHighWaterSlots', 'resourceHighWaterSamples',
       'ownedRunnerCountHighWater', 'supervisorOpenFileDescriptors', 'runnerOpenFileDescriptors',
       'processSigintSignalsSent', 'maxSupervisorRssBytes', 'maxRunnerRssBytes',
-      'ci1PhaseCaptures', 'ci1PhaseCaptureBytes', 'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete'
+      'ci1PhaseCaptures', 'ci1PhaseCaptureBytes', 'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete',
+      'ci1PhaseCaptureChildCloseUnconfirmed'
   ].sort());
+  for (const key of [
+    'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete', 'ci1PhaseCaptureChildCloseUnconfirmed'
+  ]) {
+    assert.equal(typeof METRICS[key], 'boolean', `${key} must remain an explicit boolean custody metric`);
+  }
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
   await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', () => {
