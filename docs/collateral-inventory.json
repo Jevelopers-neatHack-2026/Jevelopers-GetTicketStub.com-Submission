@@ -2240,13 +2240,13 @@
     "entireCheckpointIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10",
     "currentProductRuntimeStatus": {
       "repository": "Jevelopers-neatHack-2026/getticketstub.com",
-      "revision": "7f59d33922a0585205547d490b288b49eed32419",
+      "revision": "eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073",
       "path": "README.md",
-      "sha256": "896457d9b29f1ced4b326143648261a15d047348a364e7375335164c5a1cee4b",
-      "mergedPullRequest": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/22",
-      "checkedAt": "2026-10-11T01:00:16Z",
-      "sourceScope": "README in the exact merge commit; confirms a Next.js App Router preview runtime and its documented modes, not a deployed run or product-release acceptance.",
-      "status": "prototype runtime source exists; default preview is simulated/demo mode; complete product capability and GT-12 #6 acceptance remain pending"
+      "sha256": "bc8beb6f077034d126756c064ea2b06c9dd1d755758be866bf47492c1442098c",
+      "mergedPullRequest": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20",
+      "checkedAt": "2026-10-11T17:36:16Z",
+      "sourceScope": "README and cited source at a revision after runtime PR #20 merged, read-only; demo-mode sign-in with sandbox mail, local SQLite/file storage and sandbox order routes exist in source. Not a deployed run, producer acceptance or product-release acceptance. Earlier pin 7f59d339 (PR #22, checked 2026-10-11T01:00:16Z) is historical.",
+      "status": "prototype runtime source exists; default preview is simulated/demo mode (simulated art, /api/agent 204 outside live mode, arbitrary links demo-only, sandbox checkout); no real payment, email, fulfillment, live upstream or hosted persistence shown; GT-10B/GT-12 #6 owner acceptance and approved wording remain pending"
     }
   },
   "visualJoin": {
