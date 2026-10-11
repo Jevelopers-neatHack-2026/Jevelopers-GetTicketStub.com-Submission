@@ -1,6 +1,6 @@
 # API foundation
 
-The public package exposes typed schemas and ESM functions for metering, pricing, budget authorization and lifecycle, financial ledger, reporting, reconciliation, and export. V2 pricing implements immutable catalog writes and exact non-posting estimates through injected host ports. The ledger append and projection APIs are implemented as PostgreSQL-backed operations. Budget, reporting, reconciliation, and export leaves that have not landed remain typed unavailable operations. Pricing estimates do not authorize budget capacity, post provider charges, or send data to external services.
+The public package exposes typed schemas and ESM functions for metering, pricing, budget authorization and lifecycle, financial ledger, reporting, reconciliation, and export. V2 pricing implements immutable catalog writes and exact non-posting estimates through injected host ports. The ledger append and projection APIs (`appendLedgerEvent`, `rebuildLedgerProjection`) are implemented as PostgreSQL-backed operations. Leaves that have not landed remain typed unavailable operations: metering `ingestUsage`, the retained pricing 1.0.0 `estimate`, all budget operations, ledger `ingestFinancial`, reporting `querySummary`, reconciliation, and `exportSummary`. Pricing estimates do not authorize budget capacity, post provider charges, or send data to external services.
 
 ## Version and error behavior
 
