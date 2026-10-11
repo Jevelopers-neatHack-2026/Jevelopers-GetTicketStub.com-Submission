@@ -1,0 +1,14 @@
+{
+  "reviewed_checkpoint": "d0b9badfade50daa4089ec8345c3628666f8e7da",
+  "reviewer_session": "01a12c75-6706-79b1-8139-32acc0f48492",
+  "historical_verdict": "REQUEST_CHANGES",
+  "candidate_package_version": "0.9.3",
+  "fresh_review": "pending_exact_candidate",
+  "findings": [
+    { "id": "SC-CHK-018", "status": "locally_repaired_review_pending", "repair": "Validate required outer eligibility and preflight context before dereference/comparison; explicit null row scope is retained." },
+    { "id": "SC-CHK-019", "status": "locally_repaired_review_pending", "repair": "Require production intended use at eligibility, preserving generic approval verification." },
+    { "id": "SC-CHK-020", "status": "unsafe_acceptance_blocked_supported_bridge_still_missing", "repair": "Reject substituted legacy preview descriptors and block the unestablished Preview/1 to ArtifactFile/2 relationship with LEGACY_UNREPRESENTABLE." }
+  ],
+  "cross_version_binding": { "status": "unsupported_owner_interface_required", "authority_or_registry_mapping_issued": false, "previous_synthetic_positive": "Input and original expectation retained in prior reports; now explicitly blocked as an unsupported relationship." },
+  "acceptance": "Current v2 eligibility is intentionally unavailable until a reviewed compatible preview/approval binding exists. No model approval, owner acceptance, consumer adoption or release is claimed."
+}

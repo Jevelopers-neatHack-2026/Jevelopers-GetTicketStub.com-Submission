@@ -20,6 +20,29 @@ function resealApproval(input) {
   bundle.bundle_hash = productionBundleContentHash(bundle);
 }
 function eligibility(input) { const { bundle, context } = hydrate(input); return checkProductionBundleEligibility(bundle, context); }
+
+for (const purpose of ['design_preview', 'asset_display', 'asset_reproduce', 'asset_modify', 'asset_publish']) test('SC-CHK-019 refuses non-production purpose ' + purpose, () => {
+  const input = copy(seed.valid);
+  input.context.current_approval.receipt.binding.intended_use = purpose;
+  resealApproval(input);
+  const result = eligibility(input);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'APPROVAL_INVALID');
+});
+for (const field of ['artifact_ref', 'capture', 'expected_row_scope', 'inspection_policy_ref', 'parser_ref']) test('SC-CHK-018 refuses missing ' + field, () => {
+  const input = hydrate(seed.valid);
+  delete input.context[field];
+  const result = checkProductionBundleEligibility(input.bundle, input.context);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'INVALID_TRUST_CONTEXT');
+});
+for (const field of ['artifact_ref', 'capture']) for (const value of [null, false, {}]) test('SC-CHK-018 refuses malformed ' + field + ' / ' + JSON.stringify(value), () => {
+  const input = hydrate(seed.valid);
+  input.context[field] = value;
+  const result = checkProductionBundleEligibility(input.bundle, input.context);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'INVALID_TRUST_CONTEXT');
+});
 function resealComposition(input) {
   const { bundle, context } = input, value = context.composition, expected = context.composition_context;
   expected.facts.package.package_hash = researchContentHash(expected.facts.package, 'package_hash');
@@ -45,9 +68,10 @@ function resealComposition(input) {
   resealApproval(input);
 }
 
-test('eligibility supports the complete explicitly synthetic control', () => {
+test('complete synthetic control remains blocked on the unestablished preview bridge', () => {
   assert.equal(hashManifest(seed.valid), seed.provenance.input_hash);
-  assert.equal(eligibility(seed.valid).value.state, 'eligible');
+  const result = eligibility(seed.valid);
+  assert.deepEqual(result.errors[0], { code: 'LEGACY_UNREPRESENTABLE', path: '/approval_ref/preview_ref' });
 });
 for (const [field, value] of [['id', '123e4567-e89b-42d3-a456-000000008502'], ['revision', 9], ['content_hash', hashManifest('different factual package')], ['contract', 'DesignVersion']]) test('SC-CHK-015 rejects independently contradictory bundle facts ' + field, () => {
   const input = copy(seed.valid);
@@ -81,11 +105,19 @@ for (const field of ['tenant_id', 'project_id']) test('SC-CHK-016 rejects foreig
   assert.equal(result.ok, false);
   assert.equal(result.errors[0].code, 'NOT_FOUND');
 });
-test('eligibility supports correctly rebound facts and composition', () => {
+test('correctly rebound facts preserve the unsupported preview bridge boundary', () => {
   const input = copy(seed.valid);
   input.context.composition_context.facts.package.policy_ref.content_hash = hashManifest('new legitimate policy descriptor');
   resealComposition(input);
-  assert.equal(eligibility(input).value.state, 'eligible');
+  assert.deepEqual(eligibility(input).errors[0], { code: 'LEGACY_UNREPRESENTABLE', path: '/approval_ref/preview_ref' });
+});
+for (const [field, value] of [['id', '123e4567-e89b-42d3-a456-000000008502'], ['revision', 9], ['contract', 'OrderAuthorization'], ['content_hash', hashManifest('another preview')]]) test('SC-CHK-020 refuses substituted approval preview ' + field, () => {
+  const input = copy(seed.valid);
+  input.context.current_approval.receipt.binding.preview_ref[field] = value;
+  resealApproval(input);
+  const result = eligibility(input);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, 'APPROVAL_INVALID');
 });
 for (const field of ['expected_policy_refs', 'expected_font_refs', 'expected_runtime_ref']) for (const invalid of [undefined, null, false, 1]) test('SC-CHK-017 rejects malformed ' + field + ' / ' + invalid, () => {
   const input = hydrate(seed.valid);

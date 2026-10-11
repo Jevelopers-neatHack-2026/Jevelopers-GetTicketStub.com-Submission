@@ -1,13 +1,17 @@
-import { validateContract, canonicalJson, hashManifest, checkTrustedContext } from './runtime.mjs';
+import { validateContract, canonicalJson, hashManifest, checkTrustedContext, ContractError } from './runtime.mjs';
 import { productionIssue, productionOk, checkProductionApproval, validateProductionReference } from './production-errors.mjs';
 import { checkComposition, translateProductionGeometry } from './production-values.mjs';
 import { checkProductionBundleV2 } from './production-bundle.mjs';
 import { checkPrintSpecBinding } from './capability.mjs';
 
 const same = (a,b) => canonicalJson(a) === canonicalJson(b);
+const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 export function checkProductionPreflight(input, context) {
   const parsed = validateContract('PreflightReport', input);
   if (!parsed.ok) return parsed;
+  if (!object(context) || !validateContract('ArtifactRef', context.artifact_ref).ok ||
+      ![context.spec_ref, context.rule_ref, context.parser_ref].every(ref => validateProductionReference(ref).ok) ||
+      !Array.isArray(context.files) || context.files.some(file => !object(file) || typeof file.role !== 'string' || typeof file.byte_hash !== 'string')) return productionIssue('INVALID_TRUST_CONTEXT');
   if (input.report_ref.content_hash !== hashManifest(input.body) || !same(input.body.artifact_ref, context.artifact_ref) || !same(input.body.spec_ref, context.spec_ref) || !same(input.body.rule_ref, context.rule_ref)) return productionIssue('HASH_MISMATCH');
   if (input.body.status !== 'passed' || !input.body.model_ready || !input.body.files_ready || input.body.findings.some(finding => finding.state !== 'passed')) return productionIssue('PREFLIGHT_FAILED');
   const expected = context.files.filter(file => file.role === 'print_output');
@@ -20,6 +24,7 @@ export function checkProductionPreflight(input, context) {
 
 /** Eligibility is evaluated independently of bytes with actual supplied domain evidence. */
 export function checkProductionBundleEligibility(bundle, context) {
+  if (!object(context) || !checkTrustedContext(context.scope, context.scope).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const parsed = checkProductionBundleV2(bundle, context.scope);
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(bundle, context.scope).ok) return productionIssue('NOT_FOUND');
@@ -33,6 +38,10 @@ export function checkProductionBundleEligibility(bundle, context) {
   if (!same(bundle.facts_ref, composition.value.facts_ref)) return productionIssue('FACTS_UNSUPPORTED', '/facts_ref');
   const facts = context.composition_context.facts?.package;
   if (!facts || facts.readiness !== 'ready' || Date.parse(facts.expires_at) <= Date.parse(context.now)) return productionIssue('FACTS_UNSUPPORTED');
+  if (!validateContract('ArtifactRef', context.artifact_ref).ok || !validateContract('FulfillmentCapabilitySnapshot', context.capture).ok ||
+      ![context.inspection_policy_ref, context.parser_ref].every(ref => validateProductionReference(ref).ok)) return productionIssue('INVALID_TRUST_CONTEXT');
+  try { canonicalJson(context.expected_row_scope); }
+  catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_TRUST_CONTEXT'); throw error; }
   if (!same(bundle.composition_ref, context.artifact_ref.composition_ref) || bundle.composition.composition_hash !== composition.value.content_hash || bundle.composition.render_hash !== context.artifact_ref.render_hash || bundle.composition.private_revision_hash !== context.artifact_ref.private_revision_hash || !same(bundle.composition.source_artwork_hashes, context.artifact_ref.source_artwork_hashes)) return productionIssue('HASH_MISMATCH');
   if (!same(bundle.template_ref,composition.value.template_ref) || !same(bundle.spec_ref,composition.value.spec_ref) || !same(bundle.capability_ref,composition.value.capability_ref) || !same(bundle.policy_refs,composition.value.policy_refs) || !same(bundle.font_refs,composition.value.font_refs) || !same(bundle.renderer_ref,composition.value.runtime_ref)) return productionIssue('POLICY_MISMATCH');
   if (bundle.composition.input_binding_hash!==composition.value.input_binding_hash || bundle.composition.barcode_hash!==(composition.value.barcode.state==='bound'?composition.value.barcode.input_hash:null)) return productionIssue('HASH_MISMATCH');
@@ -49,8 +58,15 @@ export function checkProductionBundleEligibility(bundle, context) {
   const approval=checkProductionApproval(context.current_approval,context);
   if (!approval.ok) return approval;
   const receipt=approval.value.receipt,binding=receipt.binding;
+  if (binding.intended_use !== 'production') return productionIssue('APPROVAL_INVALID');
+  const preview = context.artifact_ref.preview_ref;
+  if (binding.preview_ref.contract !== 'Preview' || binding.preview_ref.schema_version !== '1.0.0' ||
+      binding.preview_ref.id !== preview.id || binding.preview_ref.revision !== preview.revision ||
+      binding.preview_ref.content_hash !== preview.content_hash) return productionIssue('APPROVAL_INVALID', '/approval_ref/preview_ref');
   if (bundle.approval_ref.id!==receipt.approval_id||bundle.approval_ref.content_hash!==receipt.receipt_hash||binding.subject_type!=='composition'||!same(binding.subject_ref,bundle.composition_ref)||!same(binding.composition_ref,bundle.composition_ref)||!same(binding.facts_ref,bundle.facts_ref)||binding.facts_hash!==bundle.composition.facts_hash||binding.composition_hash!==bundle.composition.composition_hash||binding.preview_ref.content_hash!==bundle.composition.composed_preview_hash||!same(binding.asset_hashes,bundle.composition.source_artwork_hashes)) return productionIssue('APPROVAL_INVALID');
   if (!same(bundle.row_scope,context.expected_row_scope)) return productionIssue('ROW_BINDING_MISMATCH');
   if (!validateProductionReference(context.accepted_domain_pin).ok || !validateProductionReference(context.accepted_consumer_pin).ok) return productionIssue('OWNER_ACCEPTANCE_PENDING');
+  // Equal IDs and bytes cannot establish an unreviewed cross-version registry relationship.
+  if (preview.contract === 'ArtifactFile' && preview.schema_version === '2.0.0') return productionIssue('LEGACY_UNREPRESENTABLE', '/approval_ref/preview_ref');
   return productionOk({state:'eligible',evidence_mode:'independently_supplied_domain_values',authority_issued:false});
 }
