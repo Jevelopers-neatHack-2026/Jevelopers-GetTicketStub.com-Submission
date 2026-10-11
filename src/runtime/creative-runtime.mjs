@@ -3272,7 +3272,18 @@ export function createCreativeApi(options = {}) {
         publicationPermissionProofs = await refreshPermissionFence();
         if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
       }
-      const prepared = typeof prepare === "function" ? await prepare(saveInput) : null;
+      const makePublicationFence = (proofs) => creativeContextFence(brief, baseDesign, branchMode ? undefined
+        : (operation === "generate" ? expectedSelection.design_version_id : (baseDesign?.design_version_id ?? null)),
+      branchMode ? undefined
+        : (operation === "generate" ? expectedSelection.design_hash : (baseDesign?.design_hash ?? null)), {
+        inspection_rights: Object.freeze({ proofs: Object.freeze([...proofs]) }),
+        ...(repairAuthorization ? { inspection_repair: Object.freeze({ ...repairAuthorization.proof,
+          result_hash: repairResultHash }) } : {}),
+      });
+      const prepareInput = typeof prepare === "function"
+        ? Object.freeze({ ...saveInput, publication_fence: makePublicationFence(publicationPermissionProofs) })
+        : saveInput;
+      const prepared = typeof prepare === "function" ? await prepare(prepareInput) : null;
       if (prepared !== null && (!isRecord(prepared) || prepared.status !== "prepared" ||
         prepared.action_id !== request.action_id || prepared.job_id !== started.job_id || typeof prepared.payload_hash !== "string")) {
         throw new CreativeApiError("unavailable", operation, "storage.version_intent");
@@ -3281,14 +3292,7 @@ export function createCreativeApi(options = {}) {
         publicationPermissionProofs = await refreshPermissionFence();
         if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
       }
-      const publicationFence = creativeContextFence(brief, baseDesign, branchMode ? undefined
-        : (operation === "generate" ? expectedSelection.design_version_id : (baseDesign?.design_version_id ?? null)),
-      branchMode ? undefined
-        : (operation === "generate" ? expectedSelection.design_hash : (baseDesign?.design_hash ?? null)), {
-        inspection_rights: Object.freeze({ proofs: Object.freeze([...publicationPermissionProofs]) }),
-        ...(repairAuthorization ? { inspection_repair: Object.freeze({ ...repairAuthorization.proof,
-          result_hash: repairResultHash }) } : {}),
-      });
+      const publicationFence = makePublicationFence(publicationPermissionProofs);
       const job = await publish(principal, request, started, publishedOutput, async (transaction) => {
         if (repairAuthorization) {
           let outcome;

@@ -17,7 +17,7 @@ import {
 } from "../storage/content-addressed.mjs";
 import { createCreativeBriefStore } from "../planning/index.mjs";
 import { initializeCreativeBriefDatabase } from "../planning/store.mjs";
-import { inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
+import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 
 const STORAGE_VERSION = 7;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
@@ -191,7 +191,10 @@ function validateCommitIntentRow(row, expectedScope) {
     if (!isRecord(row) || typeof row.intent_json !== "string" || typeof row.payload_hash !== "string" ||
       !HASH_PATTERN.test(row.payload_hash)) reject("integrity_error", "creation.intent");
     const intent = JSON.parse(row.intent_json);
-    if (!isRecord(intent) || canonicalSerialize(intent) !== row.intent_json ||
+    if (!isRecord(intent) || Object.keys(intent).some((key) => ![
+      "storage_contract", "schema_version", "scope", "actor_id", "brief_id", "design_version", "artifact",
+      "context", "evidence", "selection", "created_at", "job_result", "publication_fence",
+    ].includes(key)) || canonicalSerialize(intent) !== row.intent_json ||
       intent.storage_contract !== "CreativeVersionCommitIntent" || intent.schema_version !== "1.0") {
       reject("integrity_error", "creation.intent");
     }
@@ -250,8 +253,12 @@ function validateCommitIntentRow(row, expectedScope) {
     const selection = selectionRequest(intent.selection, design);
     if (canonicalSerialize(selection) !== canonicalSerialize(intent.selection)) reject("integrity_error", "creation.intent.selection");
     if (intent.job_result !== null && (!isRecord(intent.job_result) ||
-      intent.job_result.design?.design_version_id !== design.design_version_id)) {
+      intent.job_result.design?.design_version_id !== design.design_version_id ||
+      canonicalSerialize(intent.job_result.design) !== canonicalSerialize(design))) {
       reject("integrity_error", "creation.intent.job_result");
+    }
+    if (Object.hasOwn(intent, "publication_fence") && !isRecord(intent.publication_fence)) {
+      reject("integrity_error", "creation.intent.publication_fence");
     }
     return intent;
   } catch (error) {
@@ -306,7 +313,7 @@ export function creativeAssetRightsFenceCurrent(database, now, scope, rights) {
   }
 }
 
-function publicationFenceCurrent(store, scope, fence, { requireRecordedRepair = false } = {}) {
+function publicationFenceCurrent(store, scope, fence, { requireRecordedRepair = false, afterPublication = false } = {}) {
   const allowed = ["brief_id", "brief_hash", "design_version_id", "design_hash",
     "expected_current_design_version_id", "expected_current_design_hash", "inspection_repair", "inspection_rights"];
   if (!isRecord(fence) || Object.keys(fence).some((key) => !allowed.includes(key)) ||
@@ -320,7 +327,7 @@ function publicationFenceCurrent(store, scope, fence, { requireRecordedRepair = 
         design_version_id: reference(fence.design_version_id, "publication_fence.design_version_id") });
       if (!design || design.design_hash !== fence.design_hash) return false;
     }
-    if (Object.hasOwn(fence, "expected_current_design_version_id")) {
+    if (!afterPublication && Object.hasOwn(fence, "expected_current_design_version_id")) {
       const selection = store.getSelection({ scope, brief_id: scope.brief_id });
       if ((selection?.design_version_id ?? null) !== fence.expected_current_design_version_id ||
         (selection?.design_hash ?? null) !== fence.expected_current_design_hash) return false;
@@ -340,6 +347,171 @@ function publicationFenceCurrent(store, scope, fence, { requireRecordedRepair = 
   } catch {
     return false;
   }
+}
+
+function comparableRecoveryFence(fence) {
+  if (!isRecord(fence)) return null;
+  const comparable = snapshotJson(fence);
+  if (isRecord(comparable.inspection_repair)) {
+    delete comparable.inspection_repair.result_hash;
+  }
+  if (isRecord(comparable.inspection_rights) && Array.isArray(comparable.inspection_rights.proofs)) {
+    comparable.inspection_rights.proofs = comparable.inspection_rights.proofs.map((proof) => {
+      if (!isRecord(proof)) return proof;
+      const { checked_at: _checkedAt, expires_at: _expiresAt, ...identity } = proof;
+      return identity;
+    });
+  }
+  return canonicalSerialize(comparable);
+}
+
+function recoveryRepairResultHash(intent) {
+  const repair = intent.job_result?.inspection_repair;
+  if (repair === undefined) return null;
+  const creation = intent.evidence.creation;
+  const telemetry = intent.job_result.telemetry_evidence;
+  if (!isRecord(repair) || !isRecord(telemetry) ||
+    repair.repair_action !== "image.edit" || repair.inspection_id === undefined ||
+    typeof repair.inspection_action_id !== "string" || typeof repair.source_report_hash !== "string" ||
+    repair.output_design_version_id !== intent.design_version.design_version_id ||
+    repair.output_design_hash !== intent.design_version.design_hash ||
+    repair.billable_attempt_id !== creation.billable_attempt_id ||
+    intent.evidence.creation.action_id === repair.inspection_id) {
+    reject("integrity_error", "creation.intent.job_result.inspection_repair");
+  }
+  return canonicalHash({ design_hash: intent.design_version.design_hash,
+    billable_attempt_id: creation.billable_attempt_id, telemetry_evidence: telemetry });
+}
+
+function assertRepairSourceRecord(store, scope, intent) {
+  const repair = intent.job_result?.inspection_repair;
+  if (repair === undefined) return;
+  let session;
+  try {
+    session = store.db.prepare(`SELECT status,result_json,result_hash,brief_id,brief_hash,design_version_id,
+      design_hash,root_design_version_id,root_design_hash FROM creative_inspection_sessions_v1
+      WHERE tenant_id=? AND project_id=? AND action_id=?`)
+      .get(scope.tenant_id, scope.project_id, repair.inspection_action_id);
+  } catch { reject("integrity_error", "creation.intent.inspection_session"); }
+  let result;
+  try {
+    if (!session || session.status !== "completed" || typeof session.result_json !== "string" ||
+      canonicalHash(JSON.parse(session.result_json)) !== session.result_hash) {
+      reject("integrity_error", "creation.intent.inspection_session");
+    }
+    result = JSON.parse(session.result_json);
+  } catch { reject("integrity_error", "creation.intent.inspection_session"); }
+  if (session.brief_id !== scope.brief_id || session.brief_hash !== intent.context.brief_hash ||
+    session.root_design_version_id !== repair.root_design_version_id ||
+    session.root_design_hash !== repair.root_design_hash ||
+    result.inspection_id !== repair.inspection_id || !isRecord(result.report) ||
+    canonicalHash(result.report) !== repair.source_report_hash) {
+    reject("integrity_error", "creation.intent.inspection_session");
+  }
+  const rootDesign = store.getDesignVersion({ scope, brief_id: scope.brief_id,
+    design_version_id: repair.root_design_version_id });
+  if (!rootDesign || rootDesign.design_hash !== repair.root_design_hash) {
+    reject("integrity_error", "creation.intent.inspection_session");
+  }
+}
+
+function assertRecoveryFenceMatchesIntent(store, fence, scope, intent, { allowMissingRepairResultHash = false } = {}) {
+  if (!isRecord(fence) || fence.brief_id !== scope.brief_id ||
+    fence.brief_hash !== intent.context.brief_hash || !isRecord(fence.inspection_rights) ||
+    !Array.isArray(fence.inspection_rights.proofs)) reject("integrity_error", "creation.intent.publication_fence");
+  const selection = intent.selection;
+  if (selection.mode === "advance") {
+    if (fence.expected_current_design_version_id !== selection.expected_selected_design_version_id ||
+      fence.expected_current_design_hash !== selection.expected_selected_design_hash) {
+      reject("integrity_error", "creation.intent.publication_fence");
+    }
+  } else if (Object.hasOwn(fence, "expected_current_design_version_id") ||
+    Object.hasOwn(fence, "expected_current_design_hash")) {
+    reject("integrity_error", "creation.intent.publication_fence");
+  }
+  if (fence.design_version_id !== undefined &&
+    (fence.design_version_id !== intent.design_version.parent_version_id ||
+      fence.design_hash !== intent.evidence.creation.parent_design_hash)) {
+    reject("integrity_error", "creation.intent.publication_fence");
+  }
+  if (intent.design_version.parent_version_id !== null &&
+    (fence.design_version_id !== intent.design_version.parent_version_id ||
+      fence.design_hash !== intent.evidence.creation.parent_design_hash)) {
+    reject("integrity_error", "creation.intent.publication_fence");
+  }
+  if (intent.job_result?.inspection_repair !== undefined) {
+    const proof = fence.inspection_repair;
+    const repair = intent.job_result.inspection_repair;
+    const creation = intent.evidence.creation;
+    const resultHash = recoveryRepairResultHash(intent);
+    if (!isRecord(proof) || !isRecord(repair) ||
+      proof.inspection_id !== repair.inspection_id || proof.action_id !== creation.action_id ||
+      proof.request_hash !== creation.request_hash || proof.claim_ref !== repair.claim_ref ||
+      proof.root_design_version_id !== repair.root_design_version_id ||
+      proof.root_design_hash !== repair.root_design_hash ||
+      repair.repair_action !== "image.edit" ||
+      repair.output_design_version_id !== intent.design_version.design_version_id ||
+      repair.output_design_hash !== intent.design_version.design_hash ||
+      repair.billable_attempt_id !== creation.billable_attempt_id ||
+      (allowMissingRepairResultHash
+        ? proof.result_hash !== undefined && proof.result_hash !== resultHash
+        : proof.result_hash !== resultHash)) {
+      reject("integrity_error", "creation.intent.publication_fence");
+    }
+    assertRepairSourceRecord(store, scope, intent);
+  } else if (Object.hasOwn(fence, "inspection_repair") ||
+    intent.job_result?.inspection_repair !== undefined) {
+    reject("integrity_error", "creation.intent.publication_fence");
+  }
+  return fence;
+}
+
+function recoveryPublicationFence(store, scope, job, intent) {
+  const creation = intent.evidence.creation;
+  const repairResultHash = recoveryRepairResultHash(intent);
+  if (typeof job.attempt_evidence_json !== "string" ||
+    job.attempt_evidence_json !== canonicalSerialize(creation) ||
+    typeof creation.billable_attempt_id !== "string" || !Array.isArray(creation.transport_attempt_ids) ||
+    creation.transport_attempt_ids.length === 0 || new Set(creation.transport_attempt_ids).size !== creation.transport_attempt_ids.length) {
+    reject("integrity_error", "creation.intent.evidence");
+  }
+  const dispatchRows = store.db.prepare(`SELECT transport_attempt_id,billable_attempt_id,context_fence_json
+    FROM creative_dispatch_intents WHERE tenant_id=? AND project_id=? AND job_id=?
+    ORDER BY transport_attempt_id`).all(scope.tenant_id, scope.project_id, job.job_id);
+  const expectedTransportIds = new Set(creation.transport_attempt_ids);
+  if (dispatchRows.length !== expectedTransportIds.size ||
+    dispatchRows.some((row) => !expectedTransportIds.has(row.transport_attempt_id) ||
+      row.billable_attempt_id !== creation.billable_attempt_id)) {
+    reject("integrity_error", "creation.intent.dispatch_identity");
+  }
+  let dispatchFence;
+  for (const row of dispatchRows) {
+    let parsed;
+    try { parsed = JSON.parse(row.context_fence_json); } catch { reject("integrity_error", "creation.intent.dispatch_fence"); }
+    if (!isRecord(parsed) || canonicalSerialize(parsed) !== row.context_fence_json ||
+      Object.hasOwn(parsed.inspection_repair ?? {}, "result_hash")) {
+      reject("integrity_error", "creation.intent.dispatch_fence");
+    }
+    if (dispatchFence === undefined) dispatchFence = parsed;
+    else if (comparableRecoveryFence(dispatchFence) !== comparableRecoveryFence(parsed)) {
+      reject("integrity_error", "creation.intent.dispatch_fence");
+    }
+  }
+  assertRecoveryFenceMatchesIntent(store, dispatchFence, scope, intent, { allowMissingRepairResultHash: true });
+  const reconstructed = repairResultHash === null ? dispatchFence : {
+    ...dispatchFence,
+    inspection_repair: { ...dispatchFence.inspection_repair, result_hash: repairResultHash },
+  };
+  if (Object.hasOwn(intent, "publication_fence")) {
+    const persisted = assertRecoveryFenceMatchesIntent(store, intent.publication_fence, scope, intent);
+    if (comparableRecoveryFence(dispatchFence) !== comparableRecoveryFence(persisted)) {
+      reject("integrity_error", "creation.intent.publication_fence");
+    }
+    return persisted;
+  }
+  // Existing intents predate the publication_fence field. Their complete authority
+  // is reconstructed only from the canonical, job-bound dispatch intents above.
+  return reconstructed;
 }
 
 function rowScope(row, scope) {
@@ -1507,6 +1679,15 @@ export class CreativeVersionStore {
     if (jobResult !== null && (!isRecord(jobResult) || jobResult.design?.design_version_id !== design.design_version_id)) {
       reject("invalid_request", "job_result");
     }
+    const publicationFence = input.publication_fence === undefined ? null
+      : deepFreeze(snapshotJson(input.publication_fence, "invalid_request", "publication_fence"));
+    if (jobResult !== null) {
+      if (publicationFence === null) reject("invalid_request", "publication_fence");
+      assertRecoveryFenceMatchesIntent(this, publicationFence, scope, {
+        context: { brief_hash: briefHash }, evidence: { creation }, selection, design_version: design, job_result: jobResult,
+      });
+      if (!publicationFenceCurrent(this, scope, publicationFence)) reject("stale_version", "publication_fence");
+    }
     const intent = deepFreeze({
       storage_contract: "CreativeVersionCommitIntent",
       schema_version: "1.0",
@@ -1514,6 +1695,7 @@ export class CreativeVersionStore {
       artifact: { content_hash: contentHash, byte_length: artifactBytes.byteLength },
       context, evidence, selection, created_at: now,
       job_result: jobResult,
+      ...(publicationFence !== null ? { publication_fence: publicationFence } : {}),
     });
     const { created_at: _createdAt, ...stableIntent } = intent;
     const payload_hash = canonicalHash(stableIntent);
@@ -1948,6 +2130,7 @@ export class CreativeVersionStore {
 
   async recover() {
     this.assertOpen();
+    if (this.db.isTransaction) reject("unavailable", "database", true);
     const pending = this.db.prepare(`SELECT tenant_id,project_id,brief_id,action_id,job_id FROM creation_actions WHERE state='commit_intent'
       ORDER BY created_at,action_id`).all();
     const outcomes = [];
@@ -1956,6 +2139,10 @@ export class CreativeVersionStore {
       const action = this.db.prepare(`SELECT * FROM creation_actions
         WHERE tenant_id=? AND project_id=? AND action_id=?`)
         .get(row.tenant_id, row.project_id, row.action_id);
+      if (!action || action.state !== "commit_intent") {
+        outcomes.push({ status: "already_final" });
+        continue;
+      }
       let intent;
       try {
         intent = validateCommitIntentRow(action, scope);
@@ -1989,6 +2176,15 @@ export class CreativeVersionStore {
         let transaction;
         this.db.exec("BEGIN IMMEDIATE");
         try {
+          const currentAction = this.db.prepare(`SELECT * FROM creation_actions
+            WHERE tenant_id=? AND project_id=? AND action_id=?`)
+            .get(row.tenant_id, row.project_id, row.action_id);
+          if (!currentAction || currentAction.state !== "commit_intent") {
+            this.db.exec("ROLLBACK");
+            outcomes.push({ status: "already_final" });
+            continue;
+          }
+          const currentIntent = validateCommitIntentRow(currentAction, scope);
           const freshJob = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(row.tenant_id, row.project_id, row.job_id);
           if (!freshJob || freshJob.status !== "running" || Date.parse(freshJob.lease_expires_at) <= this.now() ||
@@ -1999,20 +2195,41 @@ export class CreativeVersionStore {
             outcomes.push({ status: "unknown" });
             continue;
           }
-          const currentAction = this.db.prepare(`SELECT * FROM creation_actions
-            WHERE tenant_id=? AND project_id=? AND action_id=?`)
-            .get(row.tenant_id, row.project_id, row.action_id);
-          const currentIntent = validateCommitIntentRow(currentAction, scope);
+          const recoveryFence = recoveryPublicationFence(this, scope, freshJob, currentIntent);
+          const repairProof = recoveryFence.inspection_repair;
+          if (!publicationFenceCurrent(this, scope, recoveryFence)) {
+            reject("stale_version", "creative_context");
+          }
           transaction = this.createPublicationTransaction({
             scope, actor_id: freshJob.actor_id, job_id: freshJob.job_id,
             lease_token: "recovery:" + freshJob.job_id, action_id: freshJob.action_id,
             request_hash: freshJob.request_hash, result: currentIntent.job_result,
-            publication_fence: { brief_id: scope.brief_id, brief_hash: currentIntent.context.brief_hash },
+            publication_fence: recoveryFence,
           });
+          if (!publicationFenceCurrent(this, scope, recoveryFence)) {
+            reject("stale_version", "creative_context");
+          }
           const completed = await this.finalizeAction(scope, row.action_id, undefined, transaction);
           if (completed.status === "saved" && currentIntent.job_result !== null) {
-            const committedBriefIsCurrent = publicationFenceCurrent(this, scope, {
-              brief_id: scope.brief_id, brief_hash: currentIntent.context.brief_hash,
+            if (repairProof) {
+              let outcome;
+              try {
+                const { result_hash: resultHash, ...unrecordedProof } = repairProof;
+                outcome = createSqliteInspectionRepairController({ database: this.db, now: this.now })
+                  .recordRepairOutcomeInPublication({
+                    scope: { ...scope, design_version_id: repairProof.root_design_version_id },
+                    inspection_id: repairProof.inspection_id, action_id: repairProof.action_id,
+                    result_hash: resultHash, proof: unrecordedProof,
+                  });
+              } catch {
+                reject("stale_version", "inspection_repair.outcome");
+              }
+              if (outcome?.status !== "recorded" || outcome.result_hash !== repairProof.result_hash) {
+                reject("stale_version", "inspection_repair.outcome");
+              }
+            }
+            const committedAuthorityIsCurrent = publicationFenceCurrent(this, scope, recoveryFence, {
+              requireRecordedRepair: repairProof !== undefined, afterPublication: true,
             });
             const finalJob = this.db.prepare(`SELECT * FROM creative_jobs
               WHERE tenant_id=? AND project_id=? AND job_id=?`)
@@ -2032,7 +2249,7 @@ export class CreativeVersionStore {
                 selection?.design_hash === completed.selection?.design_hash &&
                 selection?.revision === completed.selection?.revision;
             }
-            if (!activeLease || !committedBriefIsCurrent || !selectionIsCurrent) {
+            if (!activeLease || !committedAuthorityIsCurrent || !selectionIsCurrent) {
               this.db.exec("ROLLBACK");
               this.markRecoveryUnknown(row, activeLease ? "stale_version" : "unavailable",
                 activeLease ? "creative_context" : "job.lease_expired");

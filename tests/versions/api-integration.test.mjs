@@ -22,6 +22,7 @@ const NOW = Date.parse("2026-10-10T12:30:00.000Z");
 const SCOPE = Object.freeze({ tenant_id: "tenant-api-1", project_id: "project-api-1", brief_id: "brief-api-1" });
 const API_CRASH_WORKER = new URL("../../fixtures/versions/api-crash-worker.mjs", import.meta.url);
 const INSPECTION_CRASH_WORKER = new URL("../../fixtures/versions/inspection-crash-worker.mjs", import.meta.url);
+const RECOVERY_PUBLICATION_MATRIX = new URL("../../fixtures/versions/recovery-publication-matrix.mjs", import.meta.url);
 
 async function fixture(name) {
   return JSON.parse(await readFile(new URL(`../../fixtures/api/${name}.json`, import.meta.url), "utf8"));
@@ -3183,6 +3184,57 @@ test("actual API process crashes preserve attempt evidence and recover without p
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  }
+});
+
+test("inspection repair hard-exit recovery preserves complete and legacy authority atomically", async (t) => {
+  const evidenceRoot = await mkdtemp(join(tmpdir(), "creative-recovery-publication-matrix-"));
+  t.after(async () => rm(evidenceRoot, { recursive: true, force: true }));
+  const scenarios = ["repair-valid", "legacy-repair", "root-deadline", "root-cancel", "rights-ttl",
+    "rights-revoked", "rights-dispatch-ttl-new", "rights-dispatch-ttl-legacy", "ordinary-valid",
+    "legacy-ordinary", "legacy-ordinary-generate", "missing-dispatch", "corrupt-dispatch", "tampered-dispatch",
+    "tampered-publication-fence", "missing-rights-proof", "corrupt-inspection-session", "atomic-outcome-failure",
+    "borrowed-transaction", "concurrent-recover"];
+  for (const mode of scenarios) {
+    await t.test(mode, async (subtest) => {
+      const out = join(evidenceRoot, mode);
+      const matrix = spawnSync(process.execPath, [RECOVERY_PUBLICATION_MATRIX.pathname, mode, out], {
+        cwd: process.cwd(), encoding: "utf8", timeout: 45_000,
+      });
+      assert.equal(matrix.status, 0, `${mode}: ${matrix.stderr}\n${matrix.stdout}`);
+      const result = JSON.parse(await readFile(join(out, "result.json"), "utf8"));
+      assert.equal(result.runtime, process.version);
+      assert.equal(result.child_exit, 86, "the child exits only after durable prepareDesignVersion returns");
+      assert.equal(result.recoveryTxnOpen, false, "recovery leaves no borrowed or open SQLite transaction");
+      if (["legacy-ordinary", "legacy-ordinary-generate"].includes(mode)) {
+        assert.equal(result.recovered.committed, 1);
+        assert.ok(result.dispatchAuthorityUsed.length > 0,
+          "legacy ordinary recovery was reconstructed from exact durable dispatch rows");
+      }
+      if (mode === "atomic-outcome-failure") {
+        assert.equal(result.recovered.committed, 0);
+        assert.equal(result.repairs[0].status, "claimed");
+        assert.equal(result.repairs[0].result_hash, null);
+      }
+      if (mode === "borrowed-transaction") {
+        assert.equal(result.borrowedRecovery.code, "unavailable");
+        assert.equal(result.borrowedRecovery.transactionOpen, true);
+        assert.equal(result.borrowedRecovery.actionState, "commit_intent");
+        assert.equal(result.borrowedRecovery.jobStatus, "running");
+        assert.equal(result.borrowedRecovery.versionsForAction, 0);
+        assert.equal(result.recovered.committed, 1, "recovery can proceed after the caller releases its transaction");
+      }
+      if (mode === "concurrent-recover") {
+        assert.equal(result.recovered.committed, 1);
+        assert.equal(result.recovered.unknown, 0);
+        assert.equal(result.concurrentRecoveryRuns.length, 2);
+        assert.ok(result.concurrentRecoveryRuns.every((entry) => entry.exit_code === 0 &&
+          entry.result.recoveryTxnOpen === false));
+      }
+      if (mode.startsWith("legacy-") && result.recovered.committed === 1) {
+        assert.equal(result.finalIntent?.publication_fence, undefined);
+      }
+    });
   }
 });
 
