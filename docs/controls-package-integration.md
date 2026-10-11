@@ -1,0 +1,9 @@
+# Controls package integration
+
+`creative-engine/controls` is a public package subpath for the controls runtime, its declarations, and the inspection-consumer helpers. The root package allowlists the checked-in public and runtime source paths, with exact model runtime files plus the codec runtime manifest and lock, so `npm pack` includes implementation and public self-import targets while leaving tests, fixtures, examples, execution evidence, developer scripts, and installed native codec dependencies out of the tarball.
+
+`make build` checks every controls runtime module, the existing package-export runtime prerequisite, and the strict type consumers. `make check TARGET=controls MODE=mock` runs the existing controls fixtures, source typecheck, and a real `npm pack` installation check. That check installs the candidate tarball into a fresh offline consumer, imports every current public package subpath, exercises durable SQLite replay and zero-call counters through `creative-engine/controls`, and typechecks a separate NodeNext/ES2022 consumer with TypeScript 5.9.3. Its positive and expected-negative assertions resolve through the installed package declarations without a repository source alias.
+
+The controls workflow runs on Node 22.23.3 and 24.15.0. It caches and installs the root, example, and locked `src/models/codec-runtime` dependency sets before the full build, aggregate offline checks, and existing Chromium plus axe roundtrip. Codec install scripts remain disabled. The existing native controls tests decode fixture PNG, JPEG, and WebP bytes with the installed codec; the installed controls consumer verifies its package boundary and SQLite behavior without loading the codec.
+
+This package gate verifies a locally packed tarball and consumer compatibility. It does not publish a registry package or close external producer, application, host, or release acceptance.

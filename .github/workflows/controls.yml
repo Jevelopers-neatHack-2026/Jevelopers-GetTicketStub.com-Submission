@@ -8,6 +8,8 @@ permissions:
 jobs:
   controls:
     runs-on: ubuntu-24.04
+    env:
+      CONTROLS_PACKAGE_EVIDENCE: examples/frontend-action-roundtrip/test-results/controls-package-evidence
     strategy:
       fail-fast: false
       matrix:
@@ -19,12 +21,23 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-          cache-dependency-path: examples/frontend-action-roundtrip/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            examples/frontend-action-roundtrip/package-lock.json
+            src/models/codec-runtime/package-lock.json
+      - name: Locked root dependencies
+        run: npm ci --ignore-scripts
       - name: Locked fixture dependencies
         run: npm ci --prefix examples/frontend-action-roundtrip
+      - name: Locked native codec dependencies
+        run: npm ci --prefix src/models/codec-runtime --ignore-scripts
       - name: Browser runtime
         working-directory: examples/frontend-action-roundtrip
         run: npx playwright install --with-deps chromium
+      - name: Full build and types
+        run: make build
+      - name: Aggregate offline mock checks
+        run: make check TARGET=all MODE=mock
       - name: Validate server, public types and browser roundtrip (mock boundaries)
         run: node fixtures/controls/check.mjs --browser --out examples/frontend-action-roundtrip/test-results/controls-evidence.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 tag verified 2026-10-10
