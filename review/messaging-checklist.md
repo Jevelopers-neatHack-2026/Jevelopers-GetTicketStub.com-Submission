@@ -29,7 +29,9 @@ This is an executable review brief for MM-02. A checked item needs a source link
 - [ ] Reject “verified savings” without an EVAL-02 comparable and finance-reviewed result.
 - [ ] Accept a synthetic/concept example only when its label and limitations remain visible in the derivative and accessible alternative; verify the current exact files and status in `docs/collateral-inventory.json` and `review/provenance.json`.
 - [ ] Reject a CTA with missing target or unavailable/unconfirmed route.
+- [ ] Verify `--mode selected --select ASSET_ID` requires a nonempty, unique known selection and evaluates only its mapped copy, qualifier contexts, CTAs, and rights/lineage.
+- [ ] Verify `--mode submission --select ASSET_ID` additionally requires the inventory's named final outputs, product/EVAL/SPN claims and evidence, and brand/organizer gates. Unused internal guardrail rows and the synthetic canary are not global approval prerequisites.
 
 ## Current draft outcome
 
-The ledger has no approved product capability, live integration, sponsor usage, financial result, or transaction CTA. Product and sponsor records are blocked/pending. The repository docs CTA points only to the pinned public README and awaits exact wording review. This outcome can change only with pinned upstream evidence and the relevant owner review; user-assigned marketing accountability does not substitute for product, sponsor, finance, brand, or route-owner evidence.
+The ledger has no approved product capability, live integration, sponsor usage, financial result, or transaction CTA. Product and sponsor records are blocked/pending. Repository-documentation CTAs point only to the pinned public README and await exact wording review; the local text-equivalent CTA also awaits wording and route review. Submission readiness adds only the named final outputs and owner evidence, not every unused ledger row. This outcome can change only with pinned upstream evidence and the relevant owner review; user-assigned marketing accountability does not substitute for product, sponsor, finance, brand, organizer, or route-owner evidence.

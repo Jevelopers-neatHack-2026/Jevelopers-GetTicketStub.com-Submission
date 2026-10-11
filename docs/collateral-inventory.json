@@ -1809,9 +1809,9 @@
     "MM-02-D": "CTA records contain exact wording, action, destination class/owner, target/availability, review status and triggers. Only pinned README docs are confirmed as a destination; product route and availability remain pending.",
     "MM-02-status": "Policy draft implemented; source evidence, exact copy review and independent candidate review remain outstanding.",
     "MM-05-A": "Provenance schema records source/revision or digest, creator/tool/model, consent, rights, destination, attribution, expiry, redaction, lineage/checksum, reviewer and publishability. No visual/media destination-specific right is approved.",
-    "MM-05-B": "Synthetic text/JSON fixture lists dummy canaries across text, metadata, notes, alt, transcript, QR and links; tests assert the expected sanitized representation and unknown/revoked rights rejection. Actual rendered pixels, metadata and notes were not inspected by this policy worker; criterion remains blocked until format-specific evidence is joined.",
+    "MM-05-B": "The synthetic text/JSON fixture and controlled SVG/PNG pixel, metadata and canary checks are joined to scoped author receipts for the pinned formats, 16 local browser views, contrast results and text alternatives. Independent content/accessibility approval and rights remain pending; this is not generic media proof.",
     "MM-05-C": "Reuse, attribution, expiry, revocation, derivative lineage and restricted-original rules are documented. No real customer, secret or financial data was introduced.",
-    "MM-05-status": "Nonvisual policy slice delivered as draft; actual media rights, pixel/redaction/metadata review and destination approval remain required."
+    "MM-05-status": "Visual sources, exports, HTML and alternatives have scoped author evidence joined in this candidate; independent review, brand/source-owner rights, final destination approval, product/evaluation evidence and final submission outputs remain pending."
   },
   "links": {
     "officialEventRequirements": {
@@ -2597,5 +2597,53 @@
       "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-768-001",
       "sha256": "aed63563590ea40a4185fcfe3f1e84caa1de0a10a487ad7ad8367adaa3cf0b99"
     }
-  ]
+  ],
+  "submissionScope": {
+    "requiredAssetIds": [
+      "DEMO-EXPLAINER-001",
+      "DEMO-SUBMISSION-NARRATIVE-001",
+      "DEMO-SUBMISSION-VIDEO-001",
+      "LAUNCH-X-COPY-001",
+      "LAUNCH-X-CTA-001",
+      "LAUNCH-X-KEY-VISUAL-001",
+      "LAUNCH-X-ALT-TEXT-001"
+    ],
+    "requiredClaimIds": [
+      "CLAIM-PRODUCT-CAPABILITY-001",
+      "CLAIM-EVAL02-COMPARISON-001",
+      "CLAIM-SPN-01-NEATLOGS-001",
+      "CLAIM-SPN-02-ENTIRE-001",
+      "CLAIM-SPN-03-CFO-001"
+    ],
+    "requiredEvidenceClassIds": [
+      "EVAL-02",
+      "EVAL-03",
+      "EVAL-04",
+      "SPN-01",
+      "SPN-02",
+      "SPN-03"
+    ],
+    "requiredOwnerGates": [
+      {
+        "id": "BRAND-CONSUMPTION-001",
+        "status": "pending",
+        "reviewer": null,
+        "reviewDate": null,
+        "evidenceRef": null,
+        "owner": "brand-kit source owner",
+        "reReviewTrigger": "Brand-kit revision, crop, export, destination or identity change."
+      },
+      {
+        "id": "ORGANIZER-RULES-AND-CUTOFF-001",
+        "status": "pending",
+        "reviewer": null,
+        "reviewDate": null,
+        "evidenceRef": null,
+        "owner": "organizer/source owner",
+        "source": "https://neatlogs.com/hackathon",
+        "reReviewTrigger": "Official post, event format, demo requirements, X destination or confirmed cutoff changes."
+      }
+    ],
+    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals."
+  }
 }

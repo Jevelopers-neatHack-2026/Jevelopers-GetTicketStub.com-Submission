@@ -28,6 +28,31 @@ SPONSOR_REFS = {
     "SPN-03": "SPN-CFOAI-001",
 }
 SPONSORS = {"SPN-01": "Neatlogs", "SPN-02": "Entire", "SPN-03": "CFO.ai"}
+EXPECTED_VISUAL_COPY_SOURCES = {
+    "demo/diagrams/demo-workflow.svg": "DEMO-WORKFLOW-DIAGRAM-001",
+    "demo/diagrams/demo-workflow-alt-text.md": "DEMO-WORKFLOW-DIAGRAM-001",
+    "demo/screenshots/synthetic-stub-mockup.svg": "DEMO-SCREENSHOT-SET-001",
+    "demo/screenshots/synthetic-stub-alt-text.md": "DEMO-SCREENSHOT-SET-001",
+    "demo/deck/concept-overview.html": "DEMO-DECK-SUPPORT-001",
+    "launch/assets/x-submission-key-visual.svg": "LAUNCH-X-KEY-VISUAL-001",
+    "launch/assets/x-submission-alt-text.md": "LAUNCH-X-ALT-TEXT-001",
+    "examples/synthetic/redaction-after-alt-text.md": "PROV-REDACTION-AFTER-ALT-001",
+}
+SELECTABLE_COLLATERAL_ASSET_IDS = {
+    "DEMO-WORKFLOW-DIAGRAM-001",
+    "DEMO-SCREENSHOT-SET-001",
+    "DEMO-DECK-SUPPORT-001",
+    "LAUNCH-X-KEY-VISUAL-001",
+    "LAUNCH-X-ALT-TEXT-001",
+}
+DEFAULT_SUBMISSION_SELECTION = sorted(SELECTABLE_COLLATERAL_ASSET_IDS)
+REQUIRED_SUBMISSION_CLAIM_IDS = (
+    "CLAIM-PRODUCT-CAPABILITY-001",
+    "CLAIM-EVAL02-COMPARISON-001",
+    "CLAIM-SPN-01-NEATLOGS-001",
+    "CLAIM-SPN-02-ENTIRE-001",
+    "CLAIM-SPN-03-CFO-001",
+)
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 RISK_PATTERNS = [
@@ -54,6 +79,24 @@ def _sha256_bytes(value: bytes) -> str:
 
 def _sha256_path(path: Path) -> str:
     return _sha256_bytes(path.read_bytes())
+
+
+def _is_tracked_repo_file(path_text: str) -> bool:
+    candidate = Path(path_text)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return False
+    local_path = ROOT / candidate
+    if local_path.is_symlink() or not local_path.is_file():
+        return False
+    try:
+        local_path.resolve(strict=True).relative_to(ROOT.resolve())
+    except (OSError, RuntimeError, ValueError):
+        return False
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", path_text], cwd=ROOT,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
 
 
 def _pinned_file(revision: str, path: str) -> bytes | None:
@@ -296,10 +339,27 @@ def validate_claims(ledger: dict[str, Any]) -> list[str]:
             continue
         errors.extend(f"{identifier}: {problem}" for problem in _unsafe_positive_copy(row["exactText"]))
         availability = row.get("availability", {})
-        if row.get("wordingReview") == "approved" and availability.get("status") != "confirmed_for_pinned_documentation_only":
-            errors.append(f"{identifier}: CTA wording cannot be approved with unavailable/unconfirmed destination")
-        if row.get("wordingReview") == "approved" and row.get("routeReview") != "confirmed_by_assigned_supervisor_for_repository_docs_only":
-            errors.append(f"{identifier}: CTA cannot be approved without destination-owner confirmation")
+        if row.get("wordingReview") == "approved":
+            if not row.get("reviewer") or not row.get("reviewDate"):
+                errors.append(f"{identifier}: approved CTA wording requires reviewer and reviewDate")
+            if row.get("routeReview") == "confirmed_by_assigned_supervisor_for_repository_docs_only":
+                if availability.get("status") != "confirmed_for_pinned_documentation_only":
+                    errors.append(f"{identifier}: CTA wording cannot be approved with unavailable/unconfirmed destination")
+                if not row.get("routeReviewer") or not row.get("routeReviewDate"):
+                    errors.append(f"{identifier}: confirmed documentation route requires reviewer and routeReviewDate")
+            elif row.get("routeReview") == "confirmed_static_repository_file_only":
+                target = row.get("target")
+                if (
+                    row.get("destinationClass") != "repository_accessible_text_alternative"
+                    or availability.get("status") != "confirmed_local_repository_file_only"
+                    or not isinstance(target, str)
+                    or not _is_tracked_repo_file(target)
+                ):
+                    errors.append(f"{identifier}: confirmed local-file CTA must name an existing repository text alternative")
+                if not row.get("routeReviewer") or not row.get("routeReviewDate"):
+                    errors.append(f"{identifier}: confirmed local-file route requires reviewer and routeReviewDate")
+            else:
+                errors.append(f"{identifier}: CTA cannot be approved without a confirmed destination-owner route")
         if row.get("destinationClass") != "none" and availability.get("status") == "confirmed_for_pinned_documentation_only":
             target = row.get("target")
             if not isinstance(target, str) or not target.startswith("https://github.com/"):
@@ -379,6 +439,67 @@ def validate_provenance(register: dict[str, Any]) -> list[str]:
                 errors.append(f"{identifier}: public approval requires an explicit destination")
     if "PROV-SYNTHETIC-CANARY-001" not in ids:
         errors.append("required synthetic canary provenance record is missing")
+    errors.extend(validate_provenance_lineage(register))
+    return errors
+
+
+def validate_provenance_lineage(register: dict[str, Any]) -> list[str]:
+    """Require known, reciprocal source-to-derivative edges and an acyclic graph."""
+    errors: list[str] = []
+    rows = [row for row in register.get("records", []) if isinstance(row, dict)]
+    by_id = {row.get("assetId"): row for row in rows if isinstance(row.get("assetId"), str)}
+    parents: dict[str, set[str]] = {}
+    children: dict[str, set[str]] = {}
+    for identifier, row in by_id.items():
+        lineage = row.get("lineage", {})
+        if not isinstance(lineage, dict):
+            errors.append(f"{identifier}: lineage must be an object")
+            continue
+        raw_parents = lineage.get("derivedFrom", [])
+        raw_children = lineage.get("derivatives", [])
+        if not isinstance(raw_parents, list) or not all(isinstance(item, str) for item in raw_parents):
+            errors.append(f"{identifier}: lineage.derivedFrom must be an array of IDs")
+            raw_parents = []
+        if not isinstance(raw_children, list) or not all(isinstance(item, str) for item in raw_children):
+            errors.append(f"{identifier}: lineage.derivatives must be an array of IDs")
+            raw_children = []
+        if len(raw_parents) != len(set(raw_parents)) or len(raw_children) != len(set(raw_children)):
+            errors.append(f"{identifier}: lineage references must be unique")
+        parents[identifier] = set(raw_parents)
+        children[identifier] = set(raw_children)
+        if identifier in parents[identifier] or identifier in children[identifier]:
+            errors.append(f"{identifier}: lineage cannot reference itself")
+    for child, source_ids in parents.items():
+        for source_id in source_ids:
+            if source_id not in by_id:
+                errors.append(f"{child}: unknown lineage source {source_id}")
+            elif child not in children.get(source_id, set()):
+                errors.append(f"{child}: lineage source {source_id} does not list this derivative")
+    for source_id, derivative_ids in children.items():
+        for child in derivative_ids:
+            if child not in by_id:
+                errors.append(f"{source_id}: unknown lineage derivative {child}")
+            elif source_id not in parents.get(child, set()):
+                errors.append(f"{source_id}: derivative {child} does not list this source")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(identifier: str) -> None:
+        if identifier in visiting:
+            errors.append(f"{identifier}: provenance lineage contains a cycle")
+            return
+        if identifier in visited:
+            return
+        visiting.add(identifier)
+        for child in children.get(identifier, set()):
+            if child in by_id:
+                visit(child)
+        visiting.remove(identifier)
+        visited.add(identifier)
+
+    for identifier in by_id:
+        visit(identifier)
     return errors
 
 
@@ -563,13 +684,28 @@ def validate_visual_copy(
         else:
             errors.append(f"{map_id}: mappingKind must be block or span")
 
-    for path_text in sorted({row.get("path") for row in mappings if isinstance(row, dict) and row.get("path")}):
+    mapped_paths = {
+        row.get("path") for row in mappings
+        if isinstance(row, dict) and isinstance(row.get("path"), str)
+    }
+    for path_text, expected_asset_id in EXPECTED_VISUAL_COPY_SOURCES.items():
+        if not (ROOT / path_text).is_file():
+            errors.append(f"expected visual-copy source path is missing: {path_text}")
+        if path_text not in mapped_paths:
+            errors.append(f"expected visual-copy source path has no copy mappings: {path_text}")
+        for row in mappings:
+            if isinstance(row, dict) and row.get("path") == path_text and row.get("assetId") != expected_asset_id:
+                errors.append(f"{path_text}: expected copy owner {expected_asset_id}, found {row.get('assetId')}")
+    for path_text in sorted(mapped_paths - set(EXPECTED_VISUAL_COPY_SOURCES)):
+        errors.append(f"unexpected visual-copy source path is not in the independent source manifest: {path_text}")
+
+    for path_text in sorted(set(EXPECTED_VISUAL_COPY_SOURCES) | mapped_paths):
         try:
             actual = _extract_copy_units(ROOT / path_text)
         except (OSError, ET.ParseError) as exc:
             errors.append(f"visual source copy cannot be extracted for {path_text}: {exc}")
             continue
-        for surface in {surface for _, surface in actual}:
+        for surface in {surface for surface, _ in actual}:
             actual_set = {text for actual_surface, text in actual if actual_surface == surface}
             mapped_set = mapped_units.get((path_text, surface), set())
             for missing in sorted(actual_set - mapped_set):
@@ -585,8 +721,18 @@ def validate_visual_copy(
             if _norm(text) not in mapped:
                 errors.append(f"asset handoff line is missing an exact copy join for {asset_id}: {text}")
     for context_id, context in qualifier_contexts.items():
-        if context.get("reviewStatus") != "pending_independent_exact_copy_review" or context.get("releaseDisposition") != "blocked":
-            errors.append(f"{context_id}: qualifier context must remain pending and release-blocked")
+        review_status = context.get("reviewStatus")
+        disposition = context.get("releaseDisposition")
+        if review_status == "pending_independent_exact_copy_review":
+            if disposition != "blocked":
+                errors.append(f"{context_id}: pending qualifier review must remain blocked")
+        elif review_status == "approved":
+            if disposition != "approved_for_selected_collateral":
+                errors.append(f"{context_id}: approved qualifier review requires selected-collateral disposition")
+            if not context.get("reviewer") or not context.get("reviewDate"):
+                errors.append(f"{context_id}: approved qualifier context requires reviewer and reviewDate")
+        else:
+            errors.append(f"{context_id}: unsupported qualifier-context review state {review_status!r}")
         for mapping_id in context.get("visibleOrAccessibleQualifierCopyIds", []):
             if mapping_id not in mapping_ids:
                 errors.append(f"{context_id}: contextual qualifier references missing copy mapping {mapping_id}")
@@ -640,85 +786,264 @@ def validate_inventory(inventory: dict[str, Any]) -> list[str]:
             errors.append(f"unlisted tracked collateral/supporting file: {path_text}")
         for path_text in sorted(indexed - tracked):
             errors.append(f"inventory lists an untracked path: {path_text}")
+    scope = inventory.get("submissionScope")
+    if not isinstance(scope, dict):
+        errors.append("submissionScope must explicitly define required final assets, claims, evidence classes, and owner gates")
+    else:
+        for field in ("requiredAssetIds", "requiredClaimIds", "requiredEvidenceClassIds", "requiredOwnerGates"):
+            value = scope.get(field)
+            if not isinstance(value, list) or not value:
+                errors.append(f"submissionScope.{field} must be a nonempty array")
+            elif not all(isinstance(item, (str, dict)) for item in value):
+                errors.append(f"submissionScope.{field} contains an invalid value")
+        planned = {row.get("assetId") for row in inventory.get("plannedDeliverables", []) if isinstance(row, dict)}
+        required_assets = scope.get("requiredAssetIds", [])
+        if all(isinstance(item, str) for item in required_assets):
+            if len(required_assets) != len(set(required_assets)):
+                errors.append("submissionScope.requiredAssetIds must be unique")
+            for asset_id in sorted(set(required_assets) - planned):
+                errors.append(f"submissionScope references an asset absent from plannedDeliverables: {asset_id}")
+        for field in ("requiredClaimIds", "requiredEvidenceClassIds"):
+            values = scope.get(field, [])
+            if all(isinstance(item, str) for item in values) and len(values) != len(set(values)):
+                errors.append(f"submissionScope.{field} must be unique")
+        gates = scope.get("requiredOwnerGates", [])
+        gate_ids = [row.get("id") for row in gates if isinstance(row, dict)]
+        if len(gate_ids) != len(set(gate_ids)):
+            errors.append("submissionScope owner gate IDs must be unique")
+        required_gate_ids = {"BRAND-CONSUMPTION-001", "ORGANIZER-RULES-AND-CUTOFF-001"}
+        if set(gate_ids) != required_gate_ids:
+            errors.append("submissionScope must retain the explicit brand and organizer owner gates")
+        for gate in gates:
+            if not isinstance(gate, dict) or gate.get("status") not in {"pending", "approved"}:
+                errors.append("submissionScope owner gate status must be pending or approved")
+            elif gate.get("status") == "approved" and not all(gate.get(field) for field in ("reviewer", "reviewDate", "evidenceRef")):
+                errors.append(f"submissionScope owner gate {gate.get('id')}: approval requires reviewer, reviewDate and evidenceRef")
     return errors
 
 
-def release_blockers(ledger: dict[str, Any], register: dict[str, Any]) -> list[str]:
-    blockers: list[str] = []
-    if ledger.get("status") != "approved":
-        blockers.append("MM-02 claim ledger is draft/unapproved")
-    visual_copy_pending = 0
-    for row in ledger.get("claims", []):
-        if row.get("id", "").startswith("CLAIM-VISUAL-COPY-"):
-            if row.get("reviewStatus") != "approved":
-                visual_copy_pending += 1
-            continue
-        if row.get("reviewStatus") != "approved":
-            blockers.append(f"{row.get('id')}: exact-copy review is not approved")
-        if not isinstance(row.get("source", {}).get("revision"), str):
-            blockers.append(f"{row.get('id')}: source revision is not immutably pinned")
-        if row.get("state") in {"blocked", "planned", "assumed"}:
-            blockers.append(f"{row.get('id')}: claim state is {row.get('state')}")
-    if visual_copy_pending:
-        blockers.append(f"{visual_copy_pending} exact visual/HTML/alternative copy rows await independent exact-copy review")
-    for row in ledger.get("evidenceClasses", []):
-        if row.get("status") != "approved":
-            blockers.append(f"{row.get('id')}: source evidence remains {row.get('status')}")
-    for row in ledger.get("ctas", []):
-        if row.get("wordingReview") != "approved":
-            blockers.append(f"{row.get('id')}: exact CTA wording is not approved")
-        if row.get("availability", {}).get("status") != "confirmed_for_pinned_documentation_only":
-            blockers.append(f"{row.get('id')}: target availability is not confirmed")
-        if not row.get("target"):
-            blockers.append(f"{row.get('id')}: destination target is missing")
-    if register.get("status") != "approved":
-        blockers.append("MM-05 provenance register is draft/unapproved")
-    visual_rights_pending: list[str] = []
-    for row in register.get("records", []):
-        if row.get("kind") in {
-            "editable_visual_source",
-            "synthetic_mockup_source",
-            "visual_export",
-            "accessible_text_alternative",
-            "static_html_rehearsal_support",
-        }:
-            if row.get("publishability") != "approved" or row.get("permission", {}).get("status") != "approved":
-                visual_rights_pending.append(row.get("assetId", "unknown-asset"))
-            continue
-        if row.get("kind") in {
-            "synthetic_fixture",
-            "sanitized_synthetic_fixture",
-            "accessible_synthetic_fixture_alternative",
-            "internal_render_preview",
-            "verification_evidence",
-            "accessibility_evidence",
-            "renderer_tooling",
-            "validation_test",
-        }:
-            continue
-        if row.get("publishability") != "approved":
-            blockers.append(f"{row.get('assetId')}: publishability is {row.get('publishability')}")
-        if row.get("permission", {}).get("status") != "approved":
-            blockers.append(f"{row.get('assetId')}: destination permission is not approved")
-        if not row.get("reviewDate") or not row.get("reviewer"):
-            blockers.append(f"{row.get('assetId')}: independent publication review is missing")
-    if visual_rights_pending:
-        blockers.append(
-            "MM-05-A: destination-specific rights approval is pending for visual sources/exports/alternatives: "
-            + ", ".join(visual_rights_pending)
-        )
-    visual_review = register.get("visualReview", {})
-    if not visual_review:
-        blockers.append("MM-05-B: exact visual-format inspection evidence is missing")
+def _selection_errors(selected_asset_ids: list[str] | tuple[str, ...] | None) -> list[str]:
+    if not selected_asset_ids:
+        return ["selected collateral scope requires at least one --select asset ID"]
+    if len(selected_asset_ids) != len(set(selected_asset_ids)):
+        return ["selected collateral scope cannot contain duplicate asset IDs"]
+    unknown = sorted(set(selected_asset_ids) - SELECTABLE_COLLATERAL_ASSET_IDS)
+    if unknown:
+        return ["unknown or nonselectable collateral asset IDs: " + ", ".join(unknown)]
+    return []
+
+
+def _expand_selected_assets(
+    ledger: dict[str, Any], register: dict[str, Any], selected_asset_ids: list[str] | tuple[str, ...]
+) -> set[str]:
+    selected = set(selected_asset_ids)
+    mappings = ledger.get("visualCopy", {}).get("mappings", [])
+    records = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
+    contexts = ledger.get("visualCopy", {}).get("qualifierContexts", [])
+    changed = True
+    while changed:
+        before = set(selected)
+        for context in contexts:
+            related = set(context.get("relatedAssetIds", []))
+            if related & selected:
+                selected.update(related & SELECTABLE_COLLATERAL_ASSET_IDS)
+        for mapping in mappings:
+            if mapping.get("assetId") not in selected:
+                continue
+            record = records.get(mapping.get("provenanceRecordId"))
+            if not record:
+                continue
+            for parent_id in record.get("lineage", {}).get("derivedFrom", []):
+                if parent_id in SELECTABLE_COLLATERAL_ASSET_IDS:
+                    selected.add(parent_id)
+        changed = before != selected
+    return selected
+
+
+def _cta_blockers(cta: dict[str, Any]) -> list[str]:
+    identifier = cta.get("id", "unknown-CTA")
+    problems: list[str] = []
+    if cta.get("wordingReview") != "approved":
+        problems.append(f"{identifier}: exact CTA wording is not approved")
+        return problems
+    if not cta.get("reviewer") or not cta.get("reviewDate"):
+        problems.append(f"{identifier}: approved CTA wording lacks reviewer/date")
+    availability = cta.get("availability", {})
+    target = cta.get("target")
+    if cta.get("routeReview") == "confirmed_by_assigned_supervisor_for_repository_docs_only":
+        if availability.get("status") != "confirmed_for_pinned_documentation_only" or not isinstance(target, str) or not target.startswith("https://github.com/"):
+            problems.append(f"{identifier}: repository documentation target is unavailable or unpinned")
+    elif cta.get("routeReview") == "confirmed_static_repository_file_only":
+        if (
+            cta.get("destinationClass") != "repository_accessible_text_alternative"
+            or availability.get("status") != "confirmed_local_repository_file_only"
+            or not isinstance(target, str)
+            or not _is_tracked_repo_file(target)
+        ):
+            problems.append(f"{identifier}: confirmed local-file CTA must name an existing repository text alternative")
     else:
-        if visual_review.get("independentReview") != "passed":
-            blockers.append("MM-05-B: independent visual/content/accessibility review is pending")
-        if visual_review.get("brandAndSourceOwnerRights", "").startswith("pending"):
-            blockers.append("MM-05-A: visual/media destination-specific rights and brand/source-owner approval remain pending")
-        for expected in ("SVG", "PNG", "HTML", "Markdown accessible alternatives", "audio/video", "office/deck exports"):
-            if not any(row.get("format") == expected for row in visual_review.get("formats", []) if isinstance(row, dict)):
-                blockers.append(f"MM-05-B: format-aware review record is missing for {expected}")
+        problems.append(f"{identifier}: CTA destination-owner route is not confirmed")
+    if not cta.get("routeReviewer") or not cta.get("routeReviewDate"):
+        problems.append(f"{identifier}: CTA route confirmation lacks reviewer/date")
+    return problems
+
+
+def selected_collateral_blockers(
+    ledger: dict[str, Any], register: dict[str, Any], selected_asset_ids: list[str] | tuple[str, ...]
+) -> list[str]:
+    """Evaluate only a nonempty, known selection and its copy, qualifier, CTA, and rights joins."""
+    errors = _selection_errors(selected_asset_ids)
+    if errors:
+        return errors
+    selected = _expand_selected_assets(ledger, register, selected_asset_ids)
+    mappings = [
+        row for row in ledger.get("visualCopy", {}).get("mappings", [])
+        if isinstance(row, dict) and row.get("assetId") in selected
+    ]
+    blockers: list[str] = []
+    if not mappings:
+        return ["selected collateral has no exact copy mapping"]
+
+    claims_by_id = {row.get("id"): row for row in ledger.get("claims", []) if isinstance(row, dict)}
+    ctas_by_id = {row.get("id"): row for row in ledger.get("ctas", []) if isinstance(row, dict)}
+    claim_ids = {row.get("claimId") for row in mappings if row.get("claimId")}
+    cta_ids = {row.get("ctaId") for row in mappings if row.get("ctaId")}
+    for claim_id in sorted(claim_ids):
+        claim = claims_by_id.get(claim_id)
+        if not claim:
+            blockers.append(f"{claim_id}: selected copy references a missing claim")
+            continue
+        if claim.get("reviewStatus") != "approved":
+            blockers.append(f"{claim_id}: selected exact-copy review is not approved")
+        if not claim.get("reviewer") or not claim.get("reviewDate"):
+            blockers.append(f"{claim_id}: selected claim approval lacks reviewer/date")
+        if not _pinned_revision(claim.get("source", {})) or not claim.get("source", {}).get("revision"):
+            blockers.append(f"{claim_id}: selected claim source is not immutably pinned")
+        if claim.get("state") in {"blocked", "planned", "assumed"}:
+            blockers.append(f"{claim_id}: selected claim state is {claim.get('state')}")
+        blockers.extend(f"{claim_id}: {item}" for item in _unsafe_positive_copy(claim.get("allowedWording", "")))
+    for cta_id in sorted(cta_ids):
+        cta = ctas_by_id.get(cta_id)
+        if not cta:
+            blockers.append(f"{cta_id}: selected copy references a missing CTA")
+        else:
+            blockers.extend(_cta_blockers(cta))
+
+    contexts_by_id = {
+        row.get("qualifierId"): row
+        for row in ledger.get("visualCopy", {}).get("qualifierContexts", [])
+        if isinstance(row, dict)
+    }
+    required_context_ids = {
+        row.get("contextQualifierId")
+        for row in mappings
+        if row.get("claimId") in claims_by_id and claims_by_id[row["claimId"]].get("requiredQualifier")
+    }
+    for context_id in sorted(required_context_ids):
+        context = contexts_by_id.get(context_id)
+        if not context:
+            blockers.append(f"{context_id}: selected claim has no per-asset qualifier review")
+            continue
+        if context.get("reviewStatus") != "approved" or context.get("releaseDisposition") != "approved_for_selected_collateral":
+            blockers.append(f"{context_id}: selected per-asset qualifier review is pending or blocked")
+        if not context.get("reviewer") or not context.get("reviewDate"):
+            blockers.append(f"{context_id}: selected qualifier approval lacks reviewer/date")
+
+    record_by_id = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
+    required_record_ids = {row.get("provenanceRecordId") for row in mappings if row.get("provenanceRecordId")}
+    relevant_kinds = {"editable_visual_source", "synthetic_mockup_source", "visual_export", "accessible_text_alternative", "static_html_rehearsal_support"}
+    queue = list(required_record_ids)
+    seen: set[str] = set()
+    while queue:
+        record_id = queue.pop()
+        if record_id in seen:
+            continue
+        seen.add(record_id)
+        record = record_by_id.get(record_id)
+        if not record:
+            blockers.append(f"{record_id}: selected provenance record is missing")
+            continue
+        if record.get("kind") not in relevant_kinds:
+            continue
+        for parent_id in record.get("lineage", {}).get("derivedFrom", []):
+            if record_by_id.get(parent_id, {}).get("kind") in relevant_kinds:
+                queue.append(parent_id)
+        for child_id in record.get("lineage", {}).get("derivatives", []):
+            if record_by_id.get(child_id, {}).get("kind") in relevant_kinds:
+                queue.append(child_id)
+        if record.get("publishability") != "approved" or record.get("permission", {}).get("status") != "approved":
+            blockers.append(f"{record_id}: selected destination rights/publishability are not approved")
+        if not record.get("reviewer") or not record.get("reviewDate"):
+            blockers.append(f"{record_id}: selected source/export review lacks reviewer/date")
+        if not record.get("allowedDestinations") or not record.get("permission", {}).get("approvedDestinations"):
+            blockers.append(f"{record_id}: selected record has no explicit approved destination")
     return blockers
+
+
+def submission_blockers(
+    ledger: dict[str, Any],
+    register: dict[str, Any],
+    selected_asset_ids: list[str] | tuple[str, ...],
+    inventory: dict[str, Any] | None = None,
+) -> list[str]:
+    """Require selected content plus the explicit final-event deliverables and producer gates."""
+    blockers = selected_collateral_blockers(ledger, register, selected_asset_ids)
+    if blockers and blockers[0].startswith(("selected collateral scope", "unknown or nonselectable")):
+        return blockers
+    if inventory is None:
+        inventory = _read_json(ROOT / "docs/collateral-inventory.json")
+    scope = inventory.get("submissionScope", {})
+    for field in ("requiredAssetIds", "requiredClaimIds", "requiredEvidenceClassIds", "requiredOwnerGates"):
+        if not isinstance(scope.get(field), list) or not scope.get(field):
+            blockers.append(f"submission scope is incomplete: {field} must be explicitly populated")
+    deliverables = {row.get("assetId"): row for row in inventory.get("plannedDeliverables", []) if isinstance(row, dict)}
+    tracked = {row.get("path"): row for row in inventory.get("trackedFiles", []) if isinstance(row, dict)}
+    selected = set(selected_asset_ids)
+    for asset_id in scope.get("requiredAssetIds", []):
+        row = deliverables.get(asset_id)
+        if not row:
+            blockers.append(f"submission asset {asset_id}: missing from inventory")
+            continue
+        if asset_id in SELECTABLE_COLLATERAL_ASSET_IDS and asset_id not in selected:
+            blockers.append(f"submission asset {asset_id}: required collateral was not selected")
+        path_text = row.get("path")
+        if not isinstance(path_text, str) or not (ROOT / path_text).is_file():
+            blockers.append(f"submission asset {asset_id}: required output is absent ({path_text})")
+            continue
+        indexed = tracked.get(path_text, {})
+        if row.get("pathAvailability") not in {"tracked_at_baseline", "created_in_candidate"} or row.get("lifecycleState") != "released" or indexed.get("releaseEligible") is not True:
+            blockers.append(f"submission asset {asset_id}: exact output is not inventoried as released/eligible")
+
+    claims_by_id = {row.get("id"): row for row in ledger.get("claims", []) if isinstance(row, dict)}
+    evidence_by_id = {row.get("id"): row for row in ledger.get("evidenceClasses", []) if isinstance(row, dict)}
+    for claim_id in scope.get("requiredClaimIds", []):
+        claim = claims_by_id.get(claim_id)
+        if not claim:
+            blockers.append(f"required submission claim {claim_id}: missing from claim ledger")
+        elif claim.get("reviewStatus") != "approved" or claim.get("state") in {"blocked", "planned", "assumed"} or not claim.get("source", {}).get("revision"):
+            blockers.append(f"required submission claim {claim_id}: product/evidence approval is not complete")
+    for evidence_id in scope.get("requiredEvidenceClassIds", []):
+        evidence = evidence_by_id.get(evidence_id)
+        if not evidence or evidence.get("status") != "approved":
+            blockers.append(f"required submission evidence {evidence_id}: producer evidence is not approved")
+    for gate in scope.get("requiredOwnerGates", []):
+        gate_id = gate.get("id", "unknown-owner-gate")
+        if gate.get("status") != "approved" or not gate.get("reviewer") or not gate.get("reviewDate") or not gate.get("evidenceRef"):
+            blockers.append(f"required submission owner gate {gate_id}: source-owner/organizer confirmation is pending")
+    gate_ids = {gate.get("id") for gate in scope.get("requiredOwnerGates", []) if isinstance(gate, dict)}
+    for required_gate in ("BRAND-CONSUMPTION-001", "ORGANIZER-RULES-AND-CUTOFF-001"):
+        if required_gate not in gate_ids:
+            blockers.append(f"required submission owner gate {required_gate}: missing from submission scope")
+    if register.get("visualReview", {}).get("independentReview") != "passed":
+        blockers.append("required submission review: independent visual/content/accessibility review is pending")
+    if str(register.get("visualReview", {}).get("brandAndSourceOwnerRights", "")).startswith("pending"):
+        blockers.append("required submission rights gate: brand/source-owner destination rights are pending")
+    return blockers
+
+
+def release_blockers(ledger: dict[str, Any], register: dict[str, Any]) -> list[str]:
+    """Backward-compatible alias for final-submission readiness over the default visual set."""
+    return submission_blockers(ledger, register, DEFAULT_SUBMISSION_SELECTION)
 
 
 def validate_all(
@@ -742,13 +1067,25 @@ def validate_all(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("draft", "release"), default="draft")
+    parser.add_argument("--mode", choices=("draft", "selected", "submission", "release"), default="draft")
+    parser.add_argument("--select", action="append", dest="selected_assets", metavar="ASSET_ID", help="asset to evaluate; repeat for a multi-asset scope")
     parser.add_argument("--claims", type=Path, default=ROOT / "messaging/claims.json")
     parser.add_argument("--provenance", type=Path, default=ROOT / "review/provenance.json")
     parser.add_argument("--fixture", type=Path, default=ROOT / "review/fixtures/synthetic-canaries.json")
     parser.add_argument("--handoff", type=Path, default=ROOT / "review/visual/asset-handoff.json")
     parser.add_argument("--inventory", type=Path, default=ROOT / "docs/collateral-inventory.json")
     args = parser.parse_args(argv)
+
+    if args.mode in {"selected", "submission"} and not args.selected_assets:
+        print("ERROR: selected and submission modes require at least one --select ASSET_ID", file=sys.stderr)
+        return 1
+    selected_assets = args.selected_assets or DEFAULT_SUBMISSION_SELECTION
+    if args.mode in {"selected", "submission", "release"}:
+        selection_errors = _selection_errors(selected_assets)
+        if selection_errors:
+            for error in selection_errors:
+                print(f"ERROR: {error}", file=sys.stderr)
+            return 1
 
     try:
         ledger = _read_json(args.claims)
@@ -768,14 +1105,19 @@ def main(argv: list[str] | None = None) -> int:
 
     print("Draft policy validation: PASS (claims, provenance/checksum pins, copy joins, full tracked-file inventory, and synthetic text canary)")
     print("Visual evidence: scoped author SVG/PNG pixel and metadata checks, browser renders, contrast, and alternatives are recorded; this validator does not scan arbitrary media or grant rights.")
-    if args.mode == "release":
-        blockers = release_blockers(ledger, register)
+    if args.mode in {"selected", "submission", "release"}:
+        if args.mode == "selected":
+            blockers = selected_collateral_blockers(ledger, register, selected_assets)
+            mode_name = "Selected collateral"
+        else:
+            blockers = submission_blockers(ledger, register, selected_assets, inventory)
+            mode_name = "Final submission" if args.mode == "submission" else "Final submission (legacy --mode release alias)"
         for blocker in blockers:
             print(f"BLOCKED: {blocker}")
-        print(f"Release readiness: BLOCKED ({len(blockers)} blockers)")
+        print(f"{mode_name} readiness: {'BLOCKED' if blockers else 'READY'} ({len(blockers)} blockers)")
         return 2 if blockers else 0
 
-    print("Release readiness: BLOCKED; run --mode release for the current blocker list")
+    print("Readiness: not evaluated; use --mode selected --select ASSET_ID or --mode submission --select ASSET_ID")
     return 0
 
 
