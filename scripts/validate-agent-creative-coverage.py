@@ -29,6 +29,7 @@ LIMITS = {
 }
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+JSON_POINTER_RE = re.compile(r"^/(?:[A-Za-z0-9_.:-]|~[01])*(?:/(?:[A-Za-z0-9_.:-]|~[01])*)*$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 ISSUE_PATH_RE = re.compile(r"^/([^/]+)/([^/]+)/issues/([1-9][0-9]*)/?$")
 MODES = {"mock", "recorded", "sandbox", "shadow", "live"}
@@ -88,6 +89,13 @@ def _safe_key(value: Any) -> bool:
 
 def _label(value: Any) -> str:
     return value if _safe_key(value) else "<invalid>"
+
+
+def _json_pointer_label(value: Any) -> str:
+    """Preserve bounded JSON Pointer provenance without widening identifier labels."""
+    if isinstance(value, str) and len(value) <= 4096 and JSON_POINTER_RE.fullmatch(value):
+        return value
+    return "<invalid>"
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -606,8 +614,12 @@ def _validate_map_v2(
                 if tests != []:
                     _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
                 _add_issue(issues, "ENTRY_REQUIRED_TESTS_UNDECLARED", key)
-            elif required_test_status in (None, "declared_in_source"):
-                tests = entry.get("required_tests", entry.get("tests", []))
+            elif required_test_status == "declared_in_source":
+                if "required_tests" not in entry:
+                    _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
+                    tests = []
+                else:
+                    tests = entry.get("required_tests")
             else:
                 _add_issue(issues, "ENTRY_REQUIRED_TEST_DECLARATION_STATUS_INVALID", key)
                 tests = entry.get("required_tests", [])
@@ -616,7 +628,7 @@ def _validate_map_v2(
             elif any(not isinstance(value, (str, dict)) for value in tests):
                 _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
             else:
-                test_ids = _required_test_ids(entry)
+                test_ids = _required_test_ids(entry, fallback_to_legacy_tests=False)
                 if len(test_ids) != len(tests) or any(not _safe_key(value) for value in test_ids):
                     _add_issue(issues, "ENTRY_REQUIRED_TESTS_INVALID", key)
                 if len(test_ids) != len(set(test_ids)):
@@ -648,7 +660,9 @@ def _validate_map_v2(
                 _add_issue(issues, "ENTRY_STATE_INVALID", key)
             elif state in {"deferred", "not_planned", "not-planned"}:
                 _add_issue(issues, "REQUIRED_LEAF_NOT_DELIVERED", key)
-            elif state == "closed" and not _has_exact_closure_evidence(entry.get("closure_evidence"), _required_test_ids(entry)):
+            elif state == "closed" and not _has_exact_closure_evidence(
+                entry.get("closure_evidence"), _required_test_ids(entry, fallback_to_legacy_tests=False)
+            ):
                 _add_issue(issues, "CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", key)
             blockers = entry.get("blockers", [])
             if not isinstance(blockers, list) or len(blockers) > MAX_GRAPH_ROWS:
@@ -1234,6 +1248,8 @@ def _validate_issue_readbacks_v2(
         _add_issue(issues, "ISSUE_READBACK_CAPTURE_MISMATCH", "issue-readbacks")
     if pin is not None and readbacks.get("captured_at") != pin.get("captured_at"):
         _add_issue(issues, "ISSUE_READBACK_TIME_MISMATCH", "issue-readbacks")
+    if pin is not None and readbacks.get("observed_revision") != pin.get("observed_revision"):
+        _add_issue(issues, "ISSUE_READBACK_REVISION_MISMATCH", "issue-readbacks")
     if readbacks.get("pages_complete") is not True or pin is None or pin.get("pages_complete") is not True:
         _add_issue(issues, "ISSUE_READBACK_PAGES_INCOMPLETE", "issue-readbacks")
     try:
@@ -1305,7 +1321,9 @@ def _validate_issue_readbacks_v2(
                 "planned", "in_progress", "blocked", "deferred", "not_planned", "not-planned"
             }:
                 _add_issue(issues, "ISSUE_READBACK_STATE_MISMATCH", key)
-            if not _has_exact_closure_evidence(entry.get("closure_evidence"), _required_test_ids(entry)):
+            if not _has_exact_closure_evidence(
+                entry.get("closure_evidence"), _required_test_ids(entry, fallback_to_legacy_tests=False)
+            ):
                 _add_issue(issues, "CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", key)
         current = entry.get("current_readback")
         if isinstance(current, dict):
@@ -2413,7 +2431,9 @@ def _validate_release(
             _add_issue(issues, "OUTCOME_REVISION_UNTESTED", leaf)
         if item.get("prerequisites_satisfied") is not True:
             _add_issue(issues, "OUTCOME_PREREQUISITE_UNSATISFIED", leaf)
-        required_tests = _required_test_ids(leaves[leaf])
+        required_tests = _required_test_ids(
+            leaves[leaf], fallback_to_legacy_tests=expected_format == "acv1.release-manifest/v1"
+        )
         required_evidence = leaves[leaf].get("required_evidence", [])
         if not isinstance(required_evidence, list) or any(not isinstance(value, str) for value in required_evidence):
             _add_issue(issues, "REQUIRED_EVIDENCE_LIST_INVALID", leaf)
@@ -3180,8 +3200,8 @@ def _validated_internal_relation_receipt_contexts(
     return contexts, safe_evidence_bindings
 
 
-def _required_test_ids(entry: dict[str, Any]) -> list[str]:
-    raw = entry.get("required_tests", entry.get("tests", []))
+def _required_test_ids(entry: dict[str, Any], *, fallback_to_legacy_tests: bool = True) -> list[str]:
+    raw = entry.get("required_tests", entry.get("tests", []) if fallback_to_legacy_tests else [])
     if not isinstance(raw, list):
         return []
     result: list[str] = []
@@ -3303,8 +3323,8 @@ def validate(
                         "status": _label(node.get("status")),
                         "action_status": _label(node.get("action_status")),
                         "action": node.get("action") if isinstance(node.get("action"), str) else None,
-                        "source_pointer": _label(node.get("source_pointer")),
-                        "upstream_source_pointer": _label(node.get("upstream_source_pointer")),
+                        "source_pointer": _json_pointer_label(node.get("source_pointer")),
+                        "upstream_source_pointer": _json_pointer_label(node.get("upstream_source_pointer")),
                         "independent_artifact": node.get("independent_artifact") is True,
                     })
                     if node.get("status") == "pending_external":
@@ -3339,7 +3359,7 @@ def validate(
                         "applicability": _label(relation.get("applicability")),
                         "application_scope": _label(relation.get("application_scope")),
                         "reason": str(relation.get("reason", ""))[:MAX_BLOCKER_TEXT],
-                        "source_pointer": _label(relation.get("source_pointer")),
+                        "source_pointer": _json_pointer_label(relation.get("source_pointer")),
                     })
         result = {
             "schema": "acv1.coverage-validation/v2" if projection_v2 else "acv1.coverage-validation/v1",

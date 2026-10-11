@@ -233,7 +233,7 @@ class CoverageProjectionV2Tests(unittest.TestCase):
                 "issue_pinned_revision": "1" * 40, "captured_main_revision": "2" * 40,
                 "source_path": "planning/checklist.json", "git_blob_sha1": _blob(canonical_raw), "bytes": len(canonical_raw)}],
             "issue_readbacks": {"adapter": "agent-harness.issue-readbacks/v2", "capture_id": readbacks["capture_id"],
-                "captured_at": readbacks["captured_at"], "observed_revision": readbacks["observed_revision"],
+                "captured_at": readbacks["captured_at"], "observed_revision": readbacks.get("observed_revision"),
                 "pages_complete": readbacks["pages_complete"], "bytes": len(readbacks_raw), "sha256": _sha(readbacks_raw)},
             "projection_inputs": projection_inputs,
         }))
@@ -254,6 +254,101 @@ class CoverageProjectionV2Tests(unittest.TestCase):
         self.assertEqual(report["pending_blockers"][0]["record"], "EXT-CANONICAL")
         self.assertIsNone(self.coverage["external_artifact_nodes"][0]["action"])
         self.assertNotIn("ACV1-RELEASE-GATE", self.coverage["ownership_rows"][1]["required_contributors"])
+
+    def test_report_preserves_valid_json_pointer_provenance(self) -> None:
+        report = self.validate(require_specialists=False)
+        self.assertEqual(report["stage_relation_obligations"][0]["source_pointer"], "/staged_edges/0")
+        self.assertEqual(report["external_artifact_obligations"][0]["source_pointer"], "/nodes/0")
+        self.assertEqual(
+            report["external_artifact_obligations"][0]["upstream_source_pointer"],
+            "/external_artifact_nodes/EXT-CANONICAL",
+        )
+
+    def test_malformed_json_pointers_are_redacted_from_v2_obligations(self) -> None:
+        cases = (
+            ("stage_relations", "source_pointer", "/staged_edges/0~2", "stage_relation_obligations", "source_pointer",
+             "STAGE_RELATION_SOURCE_NOT_FOUND"),
+            ("external_artifact_nodes", "source_pointer", "/nodes/0\n", "external_artifact_obligations", "source_pointer",
+             "EXTERNAL_ARTIFACT_SOURCE_POINTER_INVALID"),
+            ("external_artifact_nodes", "upstream_source_pointer", [], "external_artifact_obligations", "upstream_source_pointer",
+             "EXTERNAL_ARTIFACT_SOURCE_POINTER_INVALID"),
+            ("external_artifact_nodes", "upstream_source_pointer", "/external_artifact_nodes/" + "x" * 4096,
+             "external_artifact_obligations", "upstream_source_pointer", "EXTERNAL_ARTIFACT_SOURCE_POINTER_INVALID"),
+        )
+        for family, field, bad_value, result_family, result_field, issue_code in cases:
+            with self.subTest(family=family, field=field, bad_value=repr(bad_value)):
+                changed = copy.deepcopy(self.coverage)
+                changed[family][0][field] = bad_value
+                self.write(coverage=changed)
+                report = self.validate(require_specialists=False)
+                self.assertEqual(report["status"], "BLOCKED")
+                self.assertEqual(report[result_family][0][result_field], "<invalid>")
+                self.assertIn(issue_code, self.codes(report))
+
+    def test_v2_readback_revision_must_match_the_pinned_observation(self) -> None:
+        cases = (
+            ("f" * 40, "e" * 40, True),
+            ("f" * 40, None, True),
+            ("f" * 40, "<missing>", True),
+            ("f" * 40, "f" * 40, False),
+            (None, None, False),
+        )
+        for pinned, observed, mismatch in cases:
+            with self.subTest(pinned=pinned, observed=observed):
+                readbacks = copy.deepcopy(self.readbacks)
+                if observed == "<missing>":
+                    readbacks.pop("observed_revision", None)
+                else:
+                    readbacks["observed_revision"] = observed
+                self.write(readbacks=readbacks)
+                pins = json.loads(self.paths["pins"].read_text(encoding="utf-8"))
+                if pinned is None:
+                    pins["issue_readbacks"].pop("observed_revision", None)
+                else:
+                    pins["issue_readbacks"]["observed_revision"] = pinned
+                self.paths["pins"].write_bytes(_bytes(pins))
+
+                report = self.validate(require_specialists=False)
+                if mismatch:
+                    self.assertEqual(report["status"], "BLOCKED")
+                    self.assertIn("ISSUE_READBACK_REVISION_MISMATCH", self.codes(report))
+                else:
+                    self.assertNotIn("ISSUE_READBACK_REVISION_MISMATCH", self.codes(report))
+
+    def test_v2_required_tests_need_explicit_declaration_for_planning_and_release(self) -> None:
+        original_coverage = copy.deepcopy(self.coverage)
+        cases = (
+            ("missing_status", "missing", False),
+            ("null_status", None, False),
+            ("declared_without_list", "declared_in_source", True),
+        )
+        for label, declaration_status, declared_without_list in cases:
+            with self.subTest(case=label):
+                self.coverage = copy.deepcopy(original_coverage)
+                release, expected_paths = self._release_manifest()
+                for path, content in expected_paths.items():
+                    path.write_text(content, encoding="utf-8")
+                entry = self.coverage["entries"][0]
+                if declaration_status == "missing":
+                    entry.pop("required_test_declaration_status", None)
+                else:
+                    entry["required_test_declaration_status"] = declaration_status
+                entry.pop("required_tests", None)
+                # The historical tests field deliberately remains present in all three cases.
+                self.write()
+                self.paths["release"].write_bytes(_bytes(release))
+
+                planning = self.validate(require_specialists=False)
+                self.assertEqual(planning["status"], "BLOCKED")
+                if declared_without_list:
+                    self.assertIn("ENTRY_REQUIRED_TESTS_INVALID", self.codes(planning))
+                else:
+                    self.assertIn("ENTRY_REQUIRED_TEST_DECLARATION_STATUS_INVALID", self.codes(planning))
+
+                released = self.validate(release_path=self.paths["release"], require_specialists=False)
+                self.assertEqual(released["status"], "BLOCKED")
+                self.assertEqual(released["planning_status"], "BLOCKED")
+                self.assertEqual(released["release_status"], "BLOCKED")
 
     def test_missing_required_association_fails_from_independent_ownership_declarations(self) -> None:
         self.coverage["source_contribution_rows"] = [row for row in self.coverage["source_contribution_rows"]
