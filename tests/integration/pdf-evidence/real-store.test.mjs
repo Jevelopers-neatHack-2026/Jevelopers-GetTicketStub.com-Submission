@@ -770,12 +770,17 @@ test('cancellation during delayed key resolution and the final current hook crea
 });
 
 test('the final synchronous authorizer can reenter SQLite; a changed snapshot fails the CAS without partial derived evidence', async (t) => {
+  if (process.platform !== 'linux' || !existsSync('/usr/bin/prlimit')) {
+    t.skip('the production PDF reader requires Linux prlimit isolation; Linux CI runs this CAS regression');
+    return;
+  }
   const root = await mkdtemp(path.join(os.tmpdir(), 'ei-pdf-derived-cas-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const clock = { value: EPOCH };
   const tenantId = 'tenant-pdf';
   const hash = tenantHash(tenantId);
   let currentHookCalls = 0;
+  let mutatedManifest = false;
   const harness = await createHarness(t, {
     storeOptions: { directory: root },
     authorizePrivateAccessCurrent({ action, tenantId: authorizedTenant }) {
@@ -784,8 +789,14 @@ test('the final synchronous authorizer can reenter SQLite; a changed snapshot fa
         currentHookCalls += 1;
         const database = new DatabaseSync(path.join(root, hash, 'evidence.sqlite'));
         try {
-          database.prepare('INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)')
-            .run(hash, JSON.stringify({ schemaVersion: 1, tenantHash: hash, records: {}, families: {}, facts: {} }));
+          if (!mutatedManifest) {
+            database.prepare('INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)')
+              .run(hash, JSON.stringify({ schemaVersion: 1, tenantHash: hash, records: {}, families: {}, facts: {} }));
+            mutatedManifest = true;
+          } else {
+            assert.equal(database.prepare('SELECT COUNT(*) AS count FROM evidence_manifest WHERE tenant_hash = ?')
+              .get(hash).count, 1, 'each current authorization callback can reenter SQLite outside the writer transaction');
+          }
         } finally {
           database.close();
         }
@@ -799,7 +810,8 @@ test('the final synchronous authorizer can reenter SQLite; a changed snapshot fa
   const content = await readFile(fileURLToPath(new URL('text-multipage.pdf', FIXTURES)));
   await assert.rejects(store.ingestDerivedPdfEvidence(scope, pdfInput(content, harness.createPermit(tenantId)), request()),
     (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_BUSY');
-  assert.equal(currentHookCalls, 1);
+  assert.ok(currentHookCalls >= 2, 'the callback is rechecked after the snapshot changed');
+  assert.equal(mutatedManifest, true, 'the fixture changes the manifest once so the final CAS reports EVIDENCE_BUSY');
   const integrity = await store.integritySnapshot(scope);
   assert.equal(integrity.availableEvidence, 0);
   assert.equal(integrity.encryptedPayloadRecords, 0);

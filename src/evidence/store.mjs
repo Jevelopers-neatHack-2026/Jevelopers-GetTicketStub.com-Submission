@@ -1494,13 +1494,11 @@ export function createEvidenceStore(options) {
     try { serialized = JSON.stringify(value); } catch { fail('EVIDENCE_INVALID'); }
     if (typeof serialized !== 'string') fail('EVIDENCE_INVALID');
     const plaintext = Buffer.from(serialized, 'utf8');
-    if (plaintext.byteLength <= 0 || plaintext.byteLength > PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES) {
-      plaintext.fill(0);
-      fail('EVIDENCE_INVALID');
-    }
-    const payloadHash = digest(plaintext);
-    const key = await resolveKey(info, 'payload', undefined, signal);
+    let key;
     try {
+      if (plaintext.byteLength <= 0 || plaintext.byteLength > PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES) fail('EVIDENCE_INVALID');
+      const payloadHash = digest(plaintext);
+      key = await resolveKey(info, 'payload', undefined, signal);
       const sealed = encodeSealedPayload(info.tenantHash, receiptKey, PRIVATE_RECEIPT_KIND, serialized, key.keyId, key.key);
       if (sealed.byteLength > PRIVATE_RECEIPT_MAX_ENVELOPE_BYTES) {
         sealed.fill(0);
@@ -1508,7 +1506,7 @@ export function createEvidenceStore(options) {
       }
       return { keyId: key.keyId, payloadHash, payloadBytes: plaintext.byteLength, sealed };
     } finally {
-      key.key.fill(0);
+      key?.key.fill(0);
       plaintext.fill(0);
     }
   }
@@ -1524,15 +1522,21 @@ export function createEvidenceStore(options) {
     const encryptedBytes = base64DecodedByteLength(envelope.ciphertext);
     if (encryptedBytes !== row.payload_bytes) fail('EVIDENCE_INTEGRITY');
     const key = await resolveKey(info, 'payload', envelope.keyId, signal);
+    let value;
+    let hashBytes;
+    let transferred = false;
     try {
-      const value = decryptSealedPayload(envelope, info.tenantHash, receiptKey, PRIVATE_RECEIPT_KIND, key.key, row.payload_bytes);
-      if (digest(Buffer.from(JSON.stringify(value), 'utf8')) !== row.payload_hash) {
-        wipePrivateTree(value);
-        fail('EVIDENCE_INTEGRITY');
-      }
+      value = decryptSealedPayload(envelope, info.tenantHash, receiptKey, PRIVATE_RECEIPT_KIND, key.key, row.payload_bytes);
+      const serialized = JSON.stringify(value);
+      if (typeof serialized !== 'string') fail('EVIDENCE_INTEGRITY');
+      hashBytes = Buffer.from(serialized, 'utf8');
+      if (digest(hashBytes) !== row.payload_hash) fail('EVIDENCE_INTEGRITY');
+      transferred = true;
       return value;
     } finally {
+      hashBytes?.fill(0);
       key.key.fill(0);
+      if (!transferred && value !== undefined) wipePrivateTree(value);
     }
   }
 
@@ -2601,11 +2605,11 @@ export function createEvidenceStore(options) {
             for (const record of factRecords) record.sealed?.fill(0);
           }
         }
-      });
+      }, signal);
 
       checkCancellation(signal);
       const evidenceIds = snapshot.evidence.map((record) => record.id);
-      await authorize(info, request, action, evidenceIds, factIds);
+      await authorize(info, request, action, evidenceIds, factIds, signal);
       checkCancellation(signal);
 
       const evidenceViews = [];

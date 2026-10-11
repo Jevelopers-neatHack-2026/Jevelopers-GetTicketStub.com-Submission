@@ -136,6 +136,74 @@ function createRetentionGate() {
   };
 }
 
+function createReceiptKeyGate() {
+  let signalEntered;
+  let signalReleased;
+  let signalSettled;
+  const entered = new Promise((resolve) => { signalEntered = resolve; });
+  const released = new Promise((resolve) => { signalReleased = resolve; });
+  const settled = new Promise((resolve) => { signalSettled = resolve; });
+  let calls = 0;
+  return {
+    entered,
+    settled,
+    release() { signalReleased(); },
+    async resolve({ tenantId, purpose, keyId }) {
+      calls += 1;
+      if (calls === 1) {
+        signalEntered();
+        await released;
+        signalSettled();
+      }
+      const selectedId = `${purpose}-v1`;
+      if (keyId && keyId !== selectedId) throw new Error('KEY-CANARY-DO-NOT-LOG');
+      return { keyId: selectedId, key: createHash('sha256').update(`${tenantId}:${purpose}:synthetic-test-key`).digest() };
+    },
+  };
+}
+
+async function captureReceiptOwnedBufferAllocations(operation) {
+  const originalBufferFrom = Buffer.from;
+  const allocations = [];
+  Buffer.from = function capturedBufferFrom(...args) {
+    const result = Reflect.apply(originalBufferFrom, this, args);
+    const firstStoreFrame = new Error().stack?.split('\n')
+      .find((frame) => frame.includes('/src/evidence/store.mjs:'));
+    const owner = firstStoreFrame?.match(/\bat (sealPrivateReceipt|openPrivateReceipt) \(/)?.[1];
+    if (owner) allocations.push({ owner, buffer: result });
+    return result;
+  };
+  try {
+    return { value: await operation(), error: null, allocations };
+  } catch (error) {
+    return { value: undefined, error, allocations };
+  } finally {
+    Buffer.from = originalBufferFrom;
+  }
+}
+
+function privateReceiptBinding(runId) {
+  return {
+    runId,
+    configHash: createHash('sha256').update(`config:${runId}`).digest('hex'),
+    candidate: {
+      candidateId: createHash('sha256').update(`candidate:${runId}`).digest('hex'),
+      canonicalUrl: `https://events.example.test/${runId}`,
+      depth: 0,
+      seed: true,
+      sourceRefs: [],
+    },
+    claim: { claimKey: `${runId}-claim`, workerId: 'receipt-test', leaseToken: randomUUID() },
+  };
+}
+
+function privateReceiptRowKey(tenantId, binding) {
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
+  return createHash('sha256')
+    .update(`event-intelligence:private-receipt:v1\0${tenantHash}\0${binding.runId}\0${binding.candidate.candidateId}`)
+    .digest('hex');
+}
+
 function inspectTenantDatabase(directory, tenantId = 'tenant-a') {
   const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${tenantId}`).digest('hex');
   const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'));
@@ -398,6 +466,142 @@ test('separate Node processes serialize the first commit and return one immutabl
   const outputB = JSON.parse(resultB.stdout);
   assert.equal(outputA.evidenceId, outputB.evidenceId);
   assert.deepEqual([outputA.created, outputB.created].sort(), [false, true]);
+});
+
+test('private receipt plaintext and JSON hash buffers are wiped after successful seal and reopen', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const binding = privateReceiptBinding('receipt-owned-buffer-success');
+
+  const sealed = await captureReceiptOwnedBufferAllocations(() =>
+    harness.store.beginPrivateRunReceipt(scope, binding, request('tenant-a')));
+  assert.deepEqual(sealed.value, { state: 'pending', created: true });
+  assert.equal(sealed.error, null);
+  assert.deepEqual(sealed.allocations.map(({ owner }) => owner), ['sealPrivateReceipt']);
+  assert.ok(sealed.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'the store-owned serialized receipt is zeroed before the successful seal call returns');
+
+  const opened = await captureReceiptOwnedBufferAllocations(() =>
+    harness.store.readPrivateRunReceipt(scope, {
+      runId: binding.runId,
+      configHash: binding.configHash,
+      candidate: binding.candidate,
+    }, request('tenant-a')));
+  assert.equal(opened.error, null);
+  assert.equal(opened.value.state, 'pending');
+  assert.equal(opened.value.claim.claimKey, binding.claim.claimKey);
+  assert.deepEqual(opened.allocations.map(({ owner }) => owner), ['openPrivateReceipt']);
+  assert.ok(opened.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'the temporary JSON hash buffer is zeroed after receipt verification');
+});
+
+test('private receipt plaintext is wiped on key failure, cancellation, and size rejection', { timeout: 5_000 }, async (t) => {
+  const failedKeyHarness = await createHarness(t, {
+    resolveKey() { throw new Error('RECEIPT-KEY-CANARY'); },
+  });
+  const failedKeyScope = await failedKeyHarness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const failedKey = await captureReceiptOwnedBufferAllocations(() =>
+    failedKeyHarness.store.beginPrivateRunReceipt(
+      failedKeyScope, privateReceiptBinding('receipt-owned-buffer-key-failure'), request('tenant-a')));
+  assert.ok(failedKey.error instanceof EvidenceStoreError && failedKey.error.code === 'EVIDENCE_KEY_UNAVAILABLE');
+  assert.deepEqual(failedKey.allocations.map(({ owner }) => owner), ['sealPrivateReceipt']);
+  assert.ok(failedKey.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'key resolver failure still wipes the serialized receipt before rejection');
+
+  const gatedKey = createReceiptKeyGate();
+  const cancelledHarness = await createHarness(t, { resolveKey: (args) => gatedKey.resolve(args) });
+  const cancelledScope = await cancelledHarness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const controller = new AbortController();
+  const startedAt = performance.now();
+  const cancelledOperation = captureReceiptOwnedBufferAllocations(() => cancelledHarness.store.beginPrivateRunReceipt(
+    cancelledScope,
+    privateReceiptBinding('receipt-owned-buffer-cancel'),
+    request('tenant-a'),
+    controller.signal,
+  ));
+  await Promise.race([
+    gatedKey.entered,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('receipt key resolver was not reached')), 1_000)),
+  ]);
+  controller.abort();
+  const cancelled = await cancelledOperation;
+  assert.ok(cancelled.error instanceof EvidenceStoreError && cancelled.error.code === 'EVIDENCE_CANCELLED');
+  assert.ok(performance.now() - startedAt < 1_000, 'cancelled key acquisition returns within the bounded host-operation window');
+  assert.deepEqual(cancelled.allocations.map(({ owner }) => owner), ['sealPrivateReceipt']);
+  assert.ok(cancelled.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'the plaintext is zeroed before cancellation is returned');
+  gatedKey.release();
+  await Promise.race([
+    gatedKey.settled,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('late receipt key callback did not settle')), 1_000)),
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(cancelled.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'late key callback release cannot restore or retain the store-owned plaintext buffer');
+  assert.deepEqual(await cancelledHarness.store.readPrivateRunReceipt(cancelledScope, {
+    runId: 'receipt-owned-buffer-cancel',
+    configHash: createHash('sha256').update('config:receipt-owned-buffer-cancel').digest('hex'),
+    candidate: {
+      candidateId: createHash('sha256').update('candidate:receipt-owned-buffer-cancel').digest('hex'),
+      canonicalUrl: 'https://events.example.test/receipt-owned-buffer-cancel',
+      depth: 0,
+      seed: true,
+      sourceRefs: [],
+    },
+  }, request('tenant-a')), { state: 'missing' }, 'cancelled seal never creates a receipt row after late key completion');
+
+  let sizeKeyCalls = 0;
+  const sizeHarness = await createHarness(t, {
+    resolveKey(args) {
+      sizeKeyCalls += 1;
+      const selectedId = `${args.purpose}-v1`;
+      return { keyId: selectedId, key: createHash('sha256').update(`${args.tenantId}:${args.purpose}:synthetic-test-key`).digest() };
+    },
+  });
+  const sizeScope = await sizeHarness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const oversizedBinding = privateReceiptBinding('receipt-owned-buffer-size-limit');
+  oversizedBinding.candidate.sourceRefs = Array.from({ length: 65 }, () => ({
+    evidenceId: '123e4567-e89b-42d3-a456-426614174000',
+    contentHash: 'a'.repeat(64),
+    locator: { kind: 'text-range', startByte: 0, endByte: 1 },
+    field: 'source_excerpt',
+    value: 'x'.repeat(8_192),
+  }));
+  const oversized = await captureReceiptOwnedBufferAllocations(() =>
+    sizeHarness.store.beginPrivateRunReceipt(sizeScope, oversizedBinding, request('tenant-a')));
+  assert.ok(oversized.error instanceof EvidenceStoreError && oversized.error.code === 'EVIDENCE_INVALID');
+  assert.deepEqual(oversized.allocations.map(({ owner }) => owner), ['sealPrivateReceipt']);
+  assert.ok(oversized.allocations[0].buffer.byteLength > 512 * 1024,
+    'the regression reached the serialized receipt size guard');
+  assert.ok(oversized.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'oversize rejection zeroes the complete store-owned serialization');
+  assert.equal(sizeKeyCalls, 0, 'an oversize receipt is rejected before resolving encryption key material');
+});
+
+test('private receipt open wipes its JSON hash buffer when the stored digest is invalid', async (t) => {
+  const harness = await createHarness(t);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const binding = privateReceiptBinding('receipt-open-hash-failure');
+  await harness.store.beginPrivateRunReceipt(scope, binding, request('tenant-a'));
+  const tenantHash = createHash('sha256').update('event-intelligence:tenant:v1:tenant-a').digest('hex');
+  const receiptKey = privateReceiptRowKey('tenant-a', binding);
+  const database = new DatabaseSync(path.join(harness.directory, tenantHash, 'evidence.sqlite'));
+  try {
+    database.prepare(`UPDATE private_retrieval_receipts SET payload_hash = ?
+      WHERE tenant_hash = ? AND receipt_key = ?`).run('0'.repeat(64), tenantHash, receiptKey);
+  } finally {
+    database.close();
+  }
+
+  const opened = await captureReceiptOwnedBufferAllocations(() => harness.store.readPrivateRunReceipt(scope, {
+    runId: binding.runId,
+    configHash: binding.configHash,
+    candidate: binding.candidate,
+  }, request('tenant-a')));
+  assert.ok(opened.error instanceof EvidenceStoreError && opened.error.code === 'EVIDENCE_INTEGRITY');
+  assert.deepEqual(opened.allocations.map(({ owner }) => owner), ['openPrivateReceipt']);
+  assert.ok(opened.allocations.every(({ buffer }) => buffer.every((byte) => byte === 0)),
+    'receipt integrity failure wipes the temporary JSON hash bytes');
 });
 
 test('SQLite busy transactions never reap a live writer and a killed staged commit leaves no partial evidence', async (t) => {
@@ -1896,6 +2100,81 @@ test('selected materialization honors cancellation while a key resolver is pendi
   assert.equal(returned, undefined, 'aborted preparation never publishes a partial result');
   await assert.rejects(pending,
     (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED');
+});
+
+test('selected materialization cancellation interrupts a held host authorizer without publishing a draft', { timeout: 5_000 }, async (t) => {
+  const authorizationGate = createRetentionGate();
+  const harness = await createHarness(t, {
+    authorizePrivateAccess({ action }) {
+      return action === 'materialize_selected' ? authorizationGate.invoke() : true;
+    },
+  });
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const evidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit);
+  const before = inspectTenantDatabase(harness.directory);
+  const controller = new AbortController();
+  const pending = harness.store.materializeSelected(scope, {
+    evidence: [evidence.evidence], facts: [],
+  }, request('tenant-a'), controller.signal);
+  await Promise.race([
+    authorizationGate.entered,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('materialization authorizer was not reached')), 1_000)),
+  ]);
+  const startedAt = performance.now();
+  controller.abort();
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED');
+  assert.ok(performance.now() - startedAt < 1_000,
+    'the store bounds its wait even when the host authorizer ignores the abort signal');
+  authorizationGate.release(true);
+  await Promise.race([
+    authorizationGate.settled,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('late materialization authorizer did not settle')), 1_000)),
+  ]);
+  assert.deepEqual(inspectTenantDatabase(harness.directory), before,
+    'late authorization completion cannot change the manifest or publish selected evidence');
+});
+
+test('selected materialization cancellation releases an OS SQLite wait without a later expiry sweep', { timeout: 5_000 }, async (t) => {
+  const clock = { value: EPOCH };
+  const harness = await createHarness(t, { lockTimeoutMs: 3_000 }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  await harness.store.integritySnapshot(scope);
+  const selected = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, {
+    durationMs: 10_000,
+    sourceUrl: 'https://events.example.test/selected-live',
+    canonicalUrl: 'https://events.example.test/selected-live',
+  });
+  await ingest(harness.store, scope, 'Event: Unrelated short-lived evidence', harness.createPermit, {
+    durationMs: 100,
+    sourceUrl: 'https://events.example.test/unrelated-short-lived',
+    canonicalUrl: 'https://events.example.test/unrelated-short-lived',
+  });
+  const before = inspectTenantDatabase(harness.directory);
+  const marker = path.join(harness.directory, 'materialization-held-writer');
+  const held = runWorker(harness.directory, 'hold-lock', marker, path.join(harness.directory, 'unused-barrier'));
+  t.after(() => terminateWorker(held));
+  await waitForPath(marker);
+
+  const controller = new AbortController();
+  const pending = harness.store.materializeSelected(scope, {
+    evidence: [selected.evidence], facts: [],
+  }, request('tenant-a'), controller.signal);
+  let settled = false;
+  pending.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  assert.equal(settled, false, 'the operation remains waiting while the separate process owns BEGIN IMMEDIATE');
+  const startedAt = performance.now();
+  controller.abort();
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED');
+  assert.ok(performance.now() - startedAt < 1_000,
+    'cancellation interrupts the real external SQLite writer-lock wait promptly');
+  clock.value = EPOCH + 101;
+  await terminateWorker(held);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(inspectTenantDatabase(harness.directory), before,
+    'the cancelled lock waiter cannot commit an expiry tombstone or delete a sealed bundle after release');
 });
 
 test('selected materialization rejects a shorter-lived earlier fact after a later fact decrypt and commits only tombstones', async (t) => {

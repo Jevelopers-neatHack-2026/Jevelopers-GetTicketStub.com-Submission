@@ -703,8 +703,15 @@ test('credential, session, token, and sensitive fragment URLs are rejected befor
     'https://events.example.com/private#%74oken=canary-encoded-fragment-secret',
     'https://events.example.com/private#%2574oken=canary-double-encoded-fragment-secret',
   ];
-  let deeplyEncodedToken = 'token';
-  for (let index = 0; index < 10; index += 1) deeplyEncodedToken = encodeURIComponent(deeplyEncodedToken);
+  let deeplyEncodedToken = '%74oken';
+  for (let index = 0; index < 8; index += 1) deeplyEncodedToken = encodeURIComponent(deeplyEncodedToken);
+  assert.notEqual(deeplyEncodedToken, 'token', 'the over-encoded fixture contains real nested percent escapes');
+  assert.ok(deeplyEncodedToken.includes('%25'));
+  let afterFourDecodes = deeplyEncodedToken;
+  for (let index = 0; index < 4; index += 1) afterFourDecodes = decodeURIComponent(afterFourDecodes);
+  assert.notEqual(afterFourDecodes, 'token', 'the sensitive name remains encoded beyond the production decoding bound');
+  for (let index = 0; index < 8; index += 1) afterFourDecodes = decodeURIComponent(afterFourDecodes);
+  assert.equal(afterFourDecodes, 'token', 'the fixture eventually decodes to the sensitive token name');
   secrets.push(`https://events.example.com/private#${deeplyEncodedToken}=canary-overencoded-fragment-secret`);
   for (const [index, url] of secrets.entries()) {
     await assert.rejects(store.createRun(scope, {
