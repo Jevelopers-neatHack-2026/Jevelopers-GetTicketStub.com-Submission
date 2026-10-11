@@ -1,0 +1,58 @@
+{
+  "checker": "Local sRGB relative-luminance checker 1.0 (WCAG 2 formula), Python standard library",
+  "positive": [
+    {
+      "foreground": "#F4ECDD",
+      "background": "#26302A",
+      "ratio": 11.6265,
+      "threshold": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "#17140F",
+      "background": "#F4ECDD",
+      "ratio": 15.6455,
+      "threshold": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "#17140F",
+      "background": "#E4572E",
+      "ratio": 4.9865,
+      "threshold": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "#F4ECDD",
+      "background": "#17140F",
+      "ratio": 15.6455,
+      "threshold": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "#7CC6D2",
+      "background": "#17140F",
+      "ratio": 9.5027,
+      "threshold": 3,
+      "pass": true
+    }
+  ],
+  "negative": [
+    {
+      "foreground": "#7CC6D2",
+      "background": "#F4ECDD",
+      "ratio": 1.6464,
+      "threshold": 4.5,
+      "pass": false
+    },
+    {
+      "foreground": "#E4572E",
+      "background": "#F4ECDD",
+      "ratio": 3.1376,
+      "threshold": 4.5,
+      "pass": false
+    }
+  ],
+  "normalTextPolicy": "All SVG text tested at 4.5:1, including large text. Essential strokes at 3:1.",
+  "releaseApproval": "pending"
+}

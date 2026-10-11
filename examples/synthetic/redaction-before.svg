@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-labelledby="title description">
+<title id="title">Synthetic redaction test before</title><desc id="description">DUMMY_ALT_CANARY_E5</desc>
+<metadata>Draft only. Canonical brand reference: https://github.com/Jevelopers-neatHack-2026/brand-kit/tree/3822635aff507cd5918a08a0c636bb0e41705261. Palette: tokens/tokens.json; type fallbacks: SPEC.md. No font or logo binaries copied. Claim references: CLAIM-SIMULATION-001; CLAIM-PRODUCT-CAPABILITY-001 blocked. Approval pending.DUMMY_METADATA_CANARY_C3</metadata>
+<style>text {font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-weight:500} .display {font-family:'Iowan Old Style','Palatino Linotype',Georgia,serif;font-weight:600}</style>
+<rect x="0" y="0" width="800" height="500" rx="2" fill="#F4ECDD"/><text x="40" y="62" font-size="32" fill="#17140F" data-bg="#F4ECDD">Synthetic redaction test • draft</text><text x="40" y="116" font-size="24" fill="#17140F" data-bg="#F4ECDD">All markers below are obvious fake test data.</text><g data-sensitive="true"><text x="80" y="234" font-size="27" fill="#17140F" data-bg="#F4ECDD">DUMMY_PERSON_CANARY_A1</text><text x="80" y="302" font-size="27" fill="#17140F" data-bg="#F4ECDD">DUMMY_SECRET_CANARY_B2</text></g><text x="40" y="420" font-size="24" fill="#17140F" data-bg="#F4ECDD">Review checkpoint: inspect flattened export and text.</text>
+<!-- DUMMY_NOTES_CANARY_D4 -->
+</svg>

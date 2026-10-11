@@ -40,7 +40,19 @@
       "docs/collateral-inventory.json",
       "docs/collateral-organization.md"
     ],
-    "candidateAddsAreDrafts": true
+    "candidateAddsAreDrafts": true,
+    "policyCandidateBaseRevision": "05ed6ca6db94b6384fa9ef7ee965271be071264b",
+    "policyCandidateAdds": [
+      "messaging/README.md",
+      "messaging/claims.json",
+      "review/messaging-checklist.md",
+      "review/provenance.json",
+      "review/publication-safety.md",
+      "review/fixtures/synthetic-canaries.json",
+      "tools/validate_collateral.py",
+      "tests/test_collateral_validation.py"
+    ],
+    "policyCandidateAddsAreDrafts": true
   },
   "execution": {
     "issue": {
@@ -50,9 +62,23 @@
     },
     "executionOwner": "Assigned MM-01 general-worker session, tracked in the supervisor execution record",
     "accountableMarketingContentAndReviewOwner": "User-assigned marketing-material supervisor, confirmed 2026-10-11",
-    "independentCandidateReview": "Fresh Astra High review to be assigned by the supervisor after candidate freeze; pending.",
-    "contentApprovalState": "The user-assigned supervisor is the accountable marketing content/review owner; this candidate is not yet approved. Upstream brand, product, evidence, privacy, and rights approvals remain with their source owners.",
-    "status": "Draft candidate; issue acceptance is not complete until the frozen candidate is independently reviewed and required evidence is recorded."
+    "independentCandidateReview": "Astra High review and post-merge evidence were recorded by the supervisor for PR #12; this inventory preserves the merged state.",
+    "contentApprovalState": "The user-assigned supervisor is accountable marketing content/review owner. MM-01 closure evidence is recorded; brand, product, evidence, privacy, and rights approvals remain producer-owned.",
+    "status": "Merged in PR #12 at 05ed6ca6db94b6384fa9ef7ee965271be071264b; MM-01 #4 closed with evidence.",
+    "historicalCandidateStatus": "Draft candidate; issue acceptance is not complete until the frozen candidate is independently reviewed and required evidence is recorded.",
+    "mergedRevision": "05ed6ca6db94b6384fa9ef7ee965271be071264b",
+    "pullRequest": "https://github.com/Jevelopers-neatHack-2026/marketing-material/pull/12",
+    "issueState": "closed with evidence",
+    "followOnPolicyExecution": {
+      "issues": [
+        "MM-02 #5",
+        "MM-05 #6"
+      ],
+      "executionOwner": "Assigned general-worker session for this policy task; execution identity tracked by supervisor.",
+      "accountableMarketingContentAndReviewOwner": "User-assigned marketing-material supervisor, confirmed 2026-10-11.",
+      "independentCandidateReview": "Pending fresh Astra High review of the frozen combined candidate.",
+      "status": "Draft policy candidate; MM-02 evidence approvals and MM-05 rendered-media/rights acceptance remain incomplete."
+    }
   },
   "statusDefinitions": {
     "disposition": {
@@ -72,35 +98,43 @@
       "draft": "Exists but has not completed its required review.",
       "reviewed": "The named role reviewed this exact revision; reviewer and date must be recorded.",
       "released": "Destination-specific rights, claims, accessibility, and approval checks passed for the exact revision.",
-      "deprecated": "Retained for history, superseded by a recorded asset/path mapping, and no longer reusable."
+      "deprecated": "Retained for history, superseded by a recorded asset/path mapping, and no longer reusable.",
+      "not_applicable": "Supporting or control material outside release eligibility; it cannot be used as a released submission deliverable."
+    },
+    "releaseEligibilityByLifecycle": {
+      "draft": false,
+      "reviewed": false,
+      "released": true,
+      "deprecated": false,
+      "not_applicable": false
     },
     "uncreatedAssetLifecycle": "null means no asset exists, so draft/reviewed/released/deprecated cannot yet apply."
   },
   "moduleMap": [
     {
       "path": "messaging/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Positioning, audience/value proposition, approved claims and message source references."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Positioning guidance and exact-copy claim ledger; current product, sponsor, financial and transaction claims remain pending or blocked."
     },
     {
       "path": "demo/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Storyboard, narration, recording checklist, submission narrative and evidence-linked support assets."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Draft conceptual diagram, synthetic mockup and static HTML support only; the required product explainer, story, final video and producer evidence are still absent."
     },
     {
       "path": "launch/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Social/announcement drafts and product descriptions; copy handoff to landing-page-repo, never the primary landing runtime."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Draft X key visual and accessible alternative with repository-documentation CTA; final post, destination and publication approvals are pending."
     },
     {
       "path": "examples/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Approved demonstration outputs with destination-specific permission and attribution records."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Controlled synthetic redaction before/after fixture only; never represent it as a customer/product sample or release the dirty before fixture."
     },
     {
       "path": "review/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Claim, provenance, brand-consumption, accessibility and review records; not a substitute for upstream evidence."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Messaging, provenance, publication safety, accessibility and exact visual evidence; release approvals remain pending."
     }
   ],
   "accountabilityByIssue": {
@@ -305,15 +339,216 @@
       "dependencies": [
         "MM-01 inventory and navigation acceptance; later revisions require linked review evidence."
       ]
+    },
+    {
+      "assetId": "DOC-MSG-README-001",
+      "type": "messaging guidance",
+      "disposition": "existing",
+      "path": "messaging/README.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "messaging/README.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "CLAIM-POSITIONING-001",
+        "CLAIM-PRODUCT-CAPABILITY-001"
+      ],
+      "provenanceReferences": [],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-MSG-CLAIMS-001",
+      "type": "machine-readable exact-copy ledger",
+      "disposition": "existing",
+      "path": "messaging/claims.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "messaging/claims.json"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-MSG-CHECKLIST-001",
+      "type": "messaging review checklist",
+      "disposition": "existing",
+      "path": "review/messaging-checklist.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/messaging-checklist.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-PROVENANCE-001",
+      "type": "asset provenance register",
+      "disposition": "existing",
+      "path": "review/provenance.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/provenance.json"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-03",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-PUBLICATION-SAFETY-001",
+      "type": "publication safety and reuse guide",
+      "disposition": "existing",
+      "path": "review/publication-safety.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/publication-safety.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-SYNTHETIC-CANARY-001",
+      "type": "synthetic text/JSON policy fixture",
+      "disposition": "existing",
+      "path": "review/fixtures/synthetic-canaries.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/fixtures/synthetic-canaries.json"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "CLAIM-SIMULATION-001",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
     }
   ],
   "families": [
     {
       "familyId": "FAM-DEMO-001",
       "family": "Hackathon demo assets",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "DEMO-SCREENSHOT-SET-001",
+        "DEMO-DECK-SUPPORT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
       "usageNeed": "One truthful journey, timed demo narrative and submission story. The official event page checked 2026-10-11 UTC requires a video of at most three minutes covering neatlogs, Entire and cfo.ai (architecture, implementation, runtime, reasoning and result for each), a public code repository and supporting evidence.",
       "v1": true,
@@ -341,7 +576,8 @@
         "integration-evals evidence index; recheck before final demo"
       ],
       "dependencies": [
-        "Approved claims and evidence from MM-02 and upstream owners; no sponsor result is inferred from this plan."
+        "Approved claims and evidence from MM-02 and upstream owners; no sponsor result is inferred from this plan.",
+        "Current diagram/mockup/HTML are draft synthetic support only; the required product explainer, storyboard, narration, and ≤3-minute final video remain uncreated and need producer-owned evidence and approval."
       ],
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
@@ -353,9 +589,12 @@
     {
       "familyId": "FAM-SOCIAL-001",
       "family": "Social posts and cards",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "LAUNCH-X-KEY-VISUAL-001",
+        "LAUNCH-X-ALT-TEXT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "launch/",
       "usageNeed": "The official event page checked 2026-10-11 UTC requires an X quote-post of the official submission post with team, name, project, public repository and demo link. Building-in-public evidence is tagged #neatHack. Reuse the same v1 copy/visual/alt-text records as the announcement family; do not create duplicate source assets or imply other-platform cadence.",
       "v1": true,
@@ -388,9 +627,11 @@
     {
       "familyId": "FAM-EXPLAINER-001",
       "family": "Product explainers and system diagrams",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-WORKFLOW-DIAGRAM-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "messaging/ and demo/",
       "usageNeed": "A truthful product explanation is required by MM-03; a separate workflow/system diagram is conditional on the approved storyboard identifying a useful, evidence-backed scene.",
       "v1": true,
@@ -421,11 +662,13 @@
     {
       "familyId": "FAM-DECK-001",
       "family": "Pitch and demo deck support",
-      "disposition": "deferred",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-DECK-SUPPORT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
-      "usageNeed": "No current official submission requirement or story-confirmed need for a slide deck is recorded. Activate only if the approved MM-03 storyboard or a refreshed official organizer requirement calls for deck support.",
+      "usageNeed": "A single static HTML rehearsal support page exists and reuses the conceptual diagram; no slide deck, final demo, or product screen is represented. Keep it deferred from release unless the approved story or organizer requirement calls for it.",
       "v1": false,
       "plannedAssetIds": [
         "DEMO-DECK-SUPPORT-001"
@@ -445,18 +688,24 @@
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
       "editableSourceLocations": [
-        "demo/"
+        "demo/deck/concept-overview.html"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "review/visual/previews/deck-presentation-1440.png",
+        "review/visual/previews/deck-mobile-390.png",
+        "review/visual/previews/deck-mobile-full.png"
+      ]
     },
     {
       "familyId": "FAM-SCREENSHOT-001",
       "family": "Screenshots and mockups",
-      "disposition": "deferred",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "DEMO-SCREENSHOT-SET-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "demo/",
-      "usageNeed": "No approved screenshots or mockups exist. Add only if an MM-03 scene needs one; use a sanitized, authorized source or clearly labeled conceptual mockup, with demonstrated/simulated/planned status visible.",
+      "usageNeed": "A clearly labeled fictional SVG/PNG mockup is present for concept review; it is not a product screenshot. No captured product screenshot is approved. Any real screenshot still requires an MM-03 scene, sanitized owner-authorized source, and exact destination rights/redaction review.",
       "v1": false,
       "plannedAssetIds": [
         "DEMO-SCREENSHOT-SET-001"
@@ -478,18 +727,24 @@
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/9",
       "editableSourceLocations": [
-        "demo/"
+        "demo/screenshots/synthetic-stub-mockup.svg"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "demo/screenshots/synthetic-stub-mockup.png",
+        "demo/screenshots/synthetic-stub-alt-text.md"
+      ]
     },
     {
       "familyId": "FAM-ANNOUNCEMENT-001",
       "family": "Launch and update announcements",
-      "disposition": "planned",
-      "currentAssets": [],
-      "pathAvailability": "proposed_not_created",
+      "disposition": "existing",
+      "currentAssets": [
+        "LAUNCH-X-KEY-VISUAL-001",
+        "LAUNCH-X-ALT-TEXT-001"
+      ],
+      "pathAvailability": "created_in_candidate",
       "proposedPathPrefix": "launch/",
-      "usageNeed": "MM-04 requires one reusable announcement set for the official X quote-post use. Include the official post, team, name, project, public repository, demo link and confirmed cutoff. Other launch/update graphics, recaps and feature callouts are deferred until a real use, owner and evidence are recorded.",
+      "usageNeed": "Draft X visual and accessible alternative exist; final announcement copy/post, official post link, submitter, final cutoff, demo link, exact destination and publication approval remain pending.",
       "v1": true,
       "plannedAssetIds": [
         "LAUNCH-X-COPY-001",
@@ -514,37 +769,46 @@
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
       "editableSourceLocations": [
-        "launch/"
+        "launch/assets/x-submission-key-visual.svg"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "launch/assets/x-submission-key-visual.png",
+        "launch/assets/x-submission-alt-text.md"
+      ]
     }
   ],
   "plannedDeliverables": [
     {
       "assetId": "MSG-POSITIONING-001",
-      "type": "positioning and approved-message guide",
-      "disposition": "planned",
+      "type": "messaging source precedence and positioning guidance",
+      "disposition": "existing",
       "path": "messaging/README.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Approved positioning and message source for collateral.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Explain source precedence, positioning-only slogan treatment, claim boundaries, labels and CTA route separation.",
       "destination": "Marketing collateral and landing-page-repo copy handoff",
       "requiredForV1": true,
       "implementationIssue": "MM-02",
       "ownerRole": "Product and frontend — messaging owner",
       "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-POSITIONING-001",
+        "CLAIM-PRODUCT-CAPABILITY-001",
+        "CLAIM-SIMULATION-001",
+        "CLAIM-EVAL02-COMPARISON-001",
+        "CLAIM-SPN-01-NEATLOGS-001",
+        "CLAIM-SPN-02-ENTIRE-001",
+        "CLAIM-SPN-03-CFO-001"
       ],
       "provenanceReferences": [
-        "brand-kit vocabulary; product/evaluation sources pinned by MM-02"
+        "PROV-SYNTHETIC-CANARY-001"
       ],
       "v1": true,
       "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
       "familyIds": [],
       "dependencies": [
-        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+        "Pinned upstream evidence and source-owner approvals; supervisor exact-copy review; product/landing route owner confirmation for any transaction CTA."
       ],
       "editableSourceLocations": [
         "messaging/README.md"
@@ -553,33 +817,35 @@
     },
     {
       "assetId": "MSG-CLAIMS-001",
-      "type": "machine-readable approved-claim ledger",
-      "disposition": "planned",
+      "type": "machine-readable exact-copy claims and CTA ledger",
+      "disposition": "existing",
       "path": "messaging/claims.json",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Record exact allowed wording, claim state, audience, source revision, evidence, mode, limitations and review trigger.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Map exact allowed/prohibited wording to evidence classes, immutable source references, provider modes, limitations, owner review, and re-review triggers.",
       "destination": "Collateral authors and reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-02",
       "ownerRole": "Product and frontend — messaging owner",
       "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
       "claimReferences": [
-        "EVAL-03",
         "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
         "SPN-01",
         "SPN-02",
         "SPN-03"
       ],
       "provenanceReferences": [
-        "Pinned product, integration-evals, sponsor and cost-intelligence source records; currently pending"
+        "PROV-SYNTHETIC-CANARY-001",
+        "MM-05 publication rights and redaction review, pending"
       ],
       "v1": true,
       "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
       "familyIds": [],
       "dependencies": [
-        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+        "Source-owner evidence and exact wording review; sponsor classes remain separate; transaction CTA route remains product/landing-owned."
       ],
       "editableSourceLocations": [
         "messaging/claims.json"
@@ -588,29 +854,34 @@
     },
     {
       "assetId": "MSG-REVIEW-001",
-      "type": "claim review checklist",
-      "disposition": "planned",
+      "type": "messaging claim and CTA review checklist",
+      "disposition": "existing",
       "path": "review/messaging-checklist.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Reject unsupported automation, live-integration and savings claims; keep simulations labeled.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Exercise exact-copy mapping, canonical evidence labels, sponsor separation, unsafe wording rejection, and CTA target/availability checks.",
       "destination": "Collateral reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-02",
       "ownerRole": "Product and frontend — messaging owner",
       "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
       ],
       "provenanceReferences": [
-        "MM-05 provenance register, pending"
+        "PROV-SYNTHETIC-CANARY-001"
       ],
       "v1": true,
       "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
       "familyIds": [],
       "dependencies": [
-        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+        "Independent candidate review and upstream evidence owner approvals."
       ],
       "editableSourceLocations": [
         "review/messaging-checklist.md"
@@ -650,7 +921,8 @@
       "editableSourceLocations": [
         "demo/product-explanation.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "DEMO-STORYBOARD-001",
@@ -791,7 +1063,8 @@
       "editableSourceLocations": [
         "demo/submission-narrative.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "DEMO-SUBMISSION-VIDEO-001",
@@ -830,15 +1103,16 @@
       ],
       "exportLocations": [
         "demo/exports/v1-demo.mp4"
-      ]
+      ],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
       "type": "workflow diagram support asset",
-      "disposition": "deferred",
+      "disposition": "existing",
       "path": "demo/diagrams/demo-workflow.svg",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Only create if approved storyboard confirms a diagram improves the journey explanation.",
       "destination": "Demo video or deck if selected",
       "requiredForV1": false,
@@ -846,10 +1120,13 @@
       "ownerRole": "Product and frontend — demo producer",
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-SIMULATION-001",
+        "CLAIM-PROCESS-CONCEPT-001"
       ],
       "provenanceReferences": [
-        "Product behavior source must be pinned before depiction"
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "PROV-DEMO-WORKFLOW-PNG-001",
+        "PROV-DEMO-WORKFLOW-ALT-001"
       ],
       "v1": false,
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
@@ -863,15 +1140,19 @@
       "editableSourceLocations": [
         "demo/diagrams/demo-workflow.svg"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "demo/diagrams/demo-workflow.png",
+        "demo/diagrams/demo-workflow-alt-text.md"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "DEMO-SCREENSHOT-SET-001",
       "type": "screenshot or labeled mockup set",
-      "disposition": "deferred",
-      "path": "demo/screenshots/",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "disposition": "existing",
+      "path": "demo/screenshots/synthetic-stub-mockup.svg",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Only add if an approved scene needs a screenshot/mockup and a sanitized source or clearly conceptual brief is available.",
       "destination": "Demo video or supporting handoff if selected",
       "requiredForV1": false,
@@ -879,12 +1160,13 @@
       "ownerRole": "Product and frontend — demo producer",
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
-        "MM-02 claims ledger, pending",
-        "EVAL-03",
-        "EVAL-04"
+        "CLAIM-SIMULATION-001",
+        "CLAIM-PRODUCT-CAPABILITY-001"
       ],
       "provenanceReferences": [
-        "MM-05 source, rights, consent and redaction review, pending"
+        "DEMO-SCREENSHOT-SET-001",
+        "PROV-DEMO-SCREENSHOT-PNG-001",
+        "PROV-DEMO-SCREENSHOT-ALT-001"
       ],
       "v1": false,
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
@@ -898,15 +1180,19 @@
       "editableSourceLocations": [
         "demo/screenshots/"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "demo/screenshots/synthetic-stub-mockup.png",
+        "demo/screenshots/synthetic-stub-alt-text.md"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "DEMO-DECK-SUPPORT-001",
       "type": "pitch/demo deck support",
-      "disposition": "deferred",
-      "path": "demo/deck/",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "disposition": "existing",
+      "path": "demo/deck/concept-overview.html",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "No confirmed deck requirement; activate only when the story or official organizer asks for it.",
       "destination": "Event demo or teammate handoff if selected",
       "requiredForV1": false,
@@ -914,10 +1200,19 @@
       "ownerRole": "Product and frontend — demo producer",
       "reviewerRole": "Product and frontend — product owner; Finance and reliability/Agent and research for relevant evidence",
       "claimReferences": [
-        "MM-02 claims ledger, pending if activated"
+        "CLAIM-SIMULATION-001",
+        "CLAIM-PRODUCT-CAPABILITY-001"
       ],
       "provenanceReferences": [
-        "MM-05 asset approval, pending if activated"
+        "DEMO-DECK-SUPPORT-001",
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "PROV-DEMO-WORKFLOW-ALT-001",
+        "PROV-VISUAL-BROWSER-001",
+        "PROV-VISUAL-ACCESSIBILITY-001"
+      ],
+      "compositionDependencies": [
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "PROV-DEMO-WORKFLOW-ALT-001"
       ],
       "v1": false,
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
@@ -931,7 +1226,12 @@
       "editableSourceLocations": [
         "demo/deck/"
       ],
-      "exportLocations": []
+      "exportLocations": [
+        "review/visual/previews/deck-presentation-1440.png",
+        "review/visual/previews/deck-mobile-390.png",
+        "review/visual/previews/deck-mobile-full.png"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "LAUNCH-X-COPY-001",
@@ -966,15 +1266,16 @@
       "editableSourceLocations": [
         "launch/announcement-copy.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "LAUNCH-X-KEY-VISUAL-001",
       "type": "editable X key visual and export variants",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "launch/assets/x-submission-key-visual.svg",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Provide the key visual required by MM-04 after brand, claim, rights and destination review.",
       "destination": "X post; no public post is authorized by this inventory",
       "requiredForV1": true,
@@ -982,16 +1283,22 @@
       "ownerRole": "Product and frontend — campaign/content owner",
       "reviewerRole": "Product and frontend — destination owner",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-PRODUCT-NAME-001",
+        "CLAIM-KEEPSAKE-CONCEPT-001",
+        "CLAIM-PROCESS-CONCEPT-001",
+        "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
-        "MM-05 rights/redaction, pending; MM-06 brand consumption, pending"
+        "LAUNCH-X-KEY-VISUAL-001",
+        "PROV-LAUNCH-X-KEY-PNG-001",
+        "LAUNCH-X-ALT-TEXT-001"
       ],
       "v1": true,
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
       "familyIds": [
-        "FAM-SOCIAL-001",
         "FAM-ANNOUNCEMENT-001"
       ],
       "dependencies": [
@@ -1001,16 +1308,20 @@
         "launch/assets/x-submission-key-visual.svg"
       ],
       "exportLocations": [
-        "launch/exports/x-submission/ (proposed; format and dimensions require current destination check)"
+        "launch/assets/x-submission-key-visual.png"
+      ],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "LAUNCH-X-KEY-VISUAL-001"
       ]
     },
     {
       "assetId": "LAUNCH-X-ALT-TEXT-001",
       "type": "accessible description for X visual",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "launch/assets/x-submission-alt-text.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Provide accessible text equivalent for the selected visual.",
       "destination": "X post and package manifest",
       "requiredForV1": true,
@@ -1018,17 +1329,21 @@
       "ownerRole": "Product and frontend — campaign/content owner",
       "reviewerRole": "Product and frontend — destination owner",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-PRODUCT-NAME-001",
+        "CLAIM-KEEPSAKE-CONCEPT-001",
+        "CLAIM-PROCESS-CONCEPT-001",
+        "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+        "CLAIM-NO-RESULTS-VERIFIED-001",
+        "CLAIM-SIMULATION-001"
       ],
       "provenanceReferences": [
-        "MM-08 accessibility review, pending"
+        "LAUNCH-X-ALT-TEXT-001"
       ],
       "v1": true,
       "intendedAudience": "The named event-submission audience and the target social channel audience.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/10",
       "familyIds": [
-        "FAM-SOCIAL-001",
-        "FAM-ANNOUNCEMENT-001"
+        "FAM-SOCIAL-001"
       ],
       "dependencies": [
         "MM-02 approved wording; MM-03 demo link/story; MM-05 asset rights; MM-06 brand review; MM-08 accessibility; current organizer post/cutoff and destination-owner confirmation."
@@ -1036,8 +1351,10 @@
       "editableSourceLocations": [
         "launch/assets/x-submission-alt-text.md"
       ],
-      "exportLocations": [
-        "Included with the approved X variant and package manifest; exact destination format to be checked."
+      "exportLocations": [],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "LAUNCH-X-ALT-TEXT-001"
       ]
     },
     {
@@ -1072,13 +1389,14 @@
       "editableSourceLocations": [
         "launch/announcement-copy.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "LAUNCH-UPDATE-RECAP-001",
       "type": "launch/update, recap and feature-callout variants",
       "disposition": "deferred",
-      "path": "launch/",
+      "path": "launch/update-recap.md",
       "pathAvailability": "proposed_not_created",
       "lifecycleState": null,
       "intendedUse": "Produce only after an actual usage, owner and supporting evidence are confirmed.",
@@ -1110,29 +1428,30 @@
     {
       "assetId": "PROVENANCE-REGISTER-001",
       "type": "asset provenance and permission register",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "review/provenance.json",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Record source revision/URL, creator, date, evidence class, consent, permission, destination, attribution, redaction, reviewer and expiry.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Record source/revision or content digest, creator/tool/model, evidence class, consent, permission, destination, attribution, expiry, redaction, lineage, checksum, reviewer and publishability.",
       "destination": "Collateral reviewers and release gate",
       "requiredForV1": true,
       "implementationIssue": "MM-05",
       "ownerRole": "Product and frontend — asset steward",
       "reviewerRole": "Finance and reliability — privacy/evidence reviewer",
       "claimReferences": [
-        "EVAL-04",
-        "EVAL-03"
+        "EVAL-03",
+        "EVAL-04"
       ],
       "provenanceReferences": [
-        "Sanitized integration-evals evidence references; no restricted original belongs in this repository"
+        "PROV-SYNTHETIC-CANARY-001",
+        "Visual/media provenance records and destination rights, pending."
       ],
       "v1": true,
       "intendedAudience": "Collateral producers, privacy/evidence reviewers and approved downstream consumers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
       "familyIds": [],
       "dependencies": [
-        "Source-owner rights, consent and sanitized source references for each selected asset."
+        "Source-owner rights, consent, and sanitized source references for each selected asset; rendered export review."
       ],
       "editableSourceLocations": [
         "review/provenance.json"
@@ -1141,12 +1460,12 @@
     },
     {
       "assetId": "PROVENANCE-REDACTION-001",
-      "type": "redaction safety guide and synthetic fixture",
-      "disposition": "planned",
-      "path": "review/redaction-safety.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Define format-aware redaction checks and a synthetic test fixture without real personal or secret data.",
+      "type": "publication safety, reuse, redaction policy",
+      "disposition": "existing",
+      "path": "review/publication-safety.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Define destination-specific reuse, attribution, expiry, revocation, lineage and format-aware redaction review without overstating text-only tests.",
       "destination": "Asset producers and privacy reviewer",
       "requiredForV1": true,
       "implementationIssue": "MM-05",
@@ -1156,17 +1475,18 @@
         "EVAL-04"
       ],
       "provenanceReferences": [
-        "Asset lineage and destination-specific permission records, pending"
+        "PROV-SYNTHETIC-CANARY-001",
+        "Actual visual/media review evidence remains pending."
       ],
       "v1": true,
       "intendedAudience": "Collateral producers, privacy/evidence reviewers and approved downstream consumers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
       "familyIds": [],
       "dependencies": [
-        "Source-owner rights, consent and sanitized source references for each selected asset."
+        "Source-owner rights, consent, sanitized sources, exact derivative checksums and rendered media inspection."
       ],
       "editableSourceLocations": [
-        "review/redaction-safety.md"
+        "review/publication-safety.md"
       ],
       "exportLocations": []
     },
@@ -1204,21 +1524,19 @@
     {
       "assetId": "ACCESSIBILITY-GUIDE-001",
       "type": "collateral readability/accessibility guide",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "review/accessibility.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Define measurable size/contrast checks, reading order, plain language and accessible alternatives by format.",
       "destination": "Collateral authors and reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-08",
       "ownerRole": "Product and frontend — content accessibility reviewer",
       "reviewerRole": "Product and frontend — collateral designer",
-      "claimReferences": [
-        "EVAL-03"
-      ],
+      "claimReferences": [],
       "provenanceReferences": [
-        "Format-specific export/review records, pending"
+        "PROV-VISUAL-ACCESSIBILITY-001"
       ],
       "v1": true,
       "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
@@ -1230,26 +1548,25 @@
       "editableSourceLocations": [
         "review/accessibility.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "ACCESSIBILITY-CHECKLIST-001",
       "type": "per-export accessibility checklist",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "review/accessibility-checklist.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
       "intendedUse": "Record viewing size, contrast, alt text/reading order and captions/transcript checks per export.",
       "destination": "Collateral package and release gate",
       "requiredForV1": true,
       "implementationIssue": "MM-08",
       "ownerRole": "Product and frontend — content accessibility reviewer",
       "reviewerRole": "Product and frontend — collateral designer",
-      "claimReferences": [
-        "EVAL-03"
-      ],
+      "claimReferences": [],
       "provenanceReferences": [
-        "Exact export and review date, to be recorded"
+        "PROV-VISUAL-ACCESSIBILITY-001"
       ],
       "v1": true,
       "intendedAudience": "People consuming the selected collateral format, including people using text alternatives.",
@@ -1261,7 +1578,8 @@
       "editableSourceLocations": [
         "review/accessibility-checklist.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
     },
     {
       "assetId": "HANDOFF-GUIDE-001",
@@ -1399,13 +1717,126 @@
         "review/releases/VERSION.md"
       ],
       "exportLocations": []
+    },
+    {
+      "assetId": "PROV-SYNTHETIC-CANARY-001",
+      "type": "synthetic text/JSON redaction canary",
+      "disposition": "existing",
+      "path": "review/fixtures/synthetic-canaries.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Exercise text/JSON canary removal expectations and explicit unknown/revoked-rights rejection without real data.",
+      "destination": "Repository policy review and validation",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — asset steward",
+      "reviewerRole": "Finance and reliability — privacy/evidence reviewer",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "familyIds": [],
+      "dependencies": [
+        "Synthetic only; actual pixels, flattened media metadata and notes are not checked by this fixture."
+      ],
+      "editableSourceLocations": [
+        "review/fixtures/synthetic-canaries.json"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "VALIDATOR-COLLATERAL-001",
+      "type": "claim/provenance policy validator",
+      "disposition": "existing",
+      "path": "tools/validate_collateral.py",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Check ledger shape, unsafe positive copy, EVAL labels, sponsor separation, CTA availability, permission state, and synthetic copy mapping.",
+      "destination": "Repository policy review and validation",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02 and MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence reviewer",
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "familyIds": [],
+      "dependencies": [
+        "Text/JSON validation only; no rendering, media scanning, pixel inspection, or rights grants."
+      ],
+      "editableSourceLocations": [
+        "tools/validate_collateral.py"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "TEST-COLLATERAL-POLICY-001",
+      "type": "semantic acceptance tests for collateral validation",
+      "disposition": "existing",
+      "path": "tests/test_collateral_validation.py",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Exercise positive labeled-simulation acceptance and rejection of unsupported claims, sponsor collapse, unavailable CTA, missing pins, and unknown/revoked rights.",
+      "destination": "Repository policy review and validation",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02 and MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence reviewer",
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "familyIds": [],
+      "dependencies": [
+        "Tests use only synthetic text/JSON and do not establish pixel/media acceptance."
+      ],
+      "editableSourceLocations": [
+        "tests/test_collateral_validation.py"
+      ],
+      "exportLocations": []
     }
   ],
   "acceptance": {
     "MM-01-A": "All tracked candidate documentation files have a record above; each of the six required families has a disposition, usage need or defer reason, and planned asset IDs.",
     "MM-01-B": "Baseline paths, candidate-created paths and proposed uncreated paths are distinguished. Existing documentation is draft until reviewed; every v1/future record links to its implementation issue and accountable roles.",
     "MM-01-C": "The linked organization guide documents all five proposed modules, canonical-source boundaries, dated visibility evidence and migration/retention policy.",
-    "masterCriteria": "EVAL-03/EVAL-04 remain owned by integration-evals; this inventory supports classification and safe asset handling but does not verify either criterion."
+    "masterCriteria": "EVAL-03/EVAL-04 remain owned by integration-evals; this inventory supports classification and safe asset handling but does not verify either criterion.",
+    "MM-02-A": "Draft claim ledger records exact safe wording, prohibited variants, audience/destination, state, source repository/path/revision or explicit pending source pin, evidence class, provider mode, review state, limitations and re-review triggers. No product, live sponsor, savings or transaction claim is approved.",
+    "MM-02-B": "Source precedence and source-change invalidation are documented. Repository documentation CTA is separated from product/landing route confirmation; app/landing transaction route remains unconfirmed.",
+    "MM-02-C": "Semantic tests reject unsupported fully automated/live integration/verified savings statements, accept qualified synthetic copy, preserve EVAL-03 canonical labels, and keep Neatlogs, Entire and CFO.ai evidence distinct and pending.",
+    "MM-02-D": "CTA records contain exact wording, action, destination class/owner, target/availability, review status and triggers. Only pinned README docs are confirmed as a destination; product route and availability remain pending.",
+    "MM-02-status": "Policy draft implemented; source evidence, exact copy review and independent candidate review remain outstanding.",
+    "MM-05-A": "Provenance schema records source/revision or digest, creator/tool/model, consent, rights, destination, attribution, expiry, redaction, lineage/checksum, reviewer and publishability. No visual/media destination-specific right is approved.",
+    "MM-05-B": "The synthetic text/JSON fixture and controlled SVG/PNG pixel, metadata and canary checks are joined to scoped author receipts for the pinned formats, 16 local browser views, contrast results and text alternatives. Independent content/accessibility approval and rights remain pending; this is not generic media proof.",
+    "MM-05-C": "Reuse, attribution, expiry, revocation, derivative lineage and restricted-original rules are documented. No real customer, secret or financial data was introduced.",
+    "MM-05-status": "Visual sources, exports, HTML and alternatives have scoped author evidence joined in this candidate; independent review, brand/source-owner rights, final destination approval, product/evaluation evidence and final submission outputs remain pending."
   },
   "links": {
     "officialEventRequirements": {
@@ -1424,6 +1855,820 @@
     "brandKit": "https://github.com/Jevelopers-neatHack-2026/brand-kit",
     "productBehavior": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
     "landingCopyConsumer": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo",
-    "financialDefinitions": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence"
+    "financialDefinitions": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence",
+    "MM-02": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+    "MM-05": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+    "productScopedAdapterEvidence": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/19",
+    "productWholeAppReleaseEvidence": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/6",
+    "comparisonEvidenceIssue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
+    "financeQueryIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+    "cfoBusinessPlanIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3",
+    "entireCheckpointIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10"
+  },
+  "visualJoin": {
+    "handoffPath": "review/visual/asset-handoff.json",
+    "handoffCommit": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+    "handoffSha256": "4d622f13e3bda7b364599d205676d724445a90adaf87abc9d2929cbeaf58c871",
+    "claimLedgerPath": "messaging/claims.json",
+    "copyMappingCount": 70,
+    "provenancePath": "review/provenance.json",
+    "provenanceRecordIds": [
+      "DEMO-WORKFLOW-DIAGRAM-001",
+      "PROV-DEMO-WORKFLOW-PNG-001",
+      "PROV-DEMO-WORKFLOW-ALT-001",
+      "DEMO-SCREENSHOT-SET-001",
+      "PROV-DEMO-SCREENSHOT-PNG-001",
+      "PROV-DEMO-SCREENSHOT-ALT-001",
+      "DEMO-DECK-SUPPORT-001",
+      "LAUNCH-X-KEY-VISUAL-001",
+      "PROV-LAUNCH-X-KEY-PNG-001",
+      "LAUNCH-X-ALT-TEXT-001",
+      "PROV-REDACTION-BEFORE-SVG-001",
+      "PROV-REDACTION-BEFORE-PNG-001",
+      "PROV-REDACTION-AFTER-SVG-001",
+      "PROV-REDACTION-AFTER-PNG-001",
+      "PROV-REDACTION-AFTER-ALT-001",
+      "PROV-REDACTION-CANARIES-001",
+      "PROV-PREVIEW-DECK-MOBILE-001",
+      "PROV-PREVIEW-DECK-FULL-001",
+      "PROV-PREVIEW-DECK-DESKTOP-001",
+      "PROV-PREVIEW-MOCKUP-001",
+      "PROV-PREVIEW-WORKFLOW-001",
+      "PROV-PREVIEW-X-FEED-001",
+      "PROV-VISUAL-HANDOFF-001",
+      "PROV-VISUAL-BROWSER-001",
+      "PROV-VISUAL-CONTRAST-001",
+      "PROV-VISUAL-ACCESSIBILITY-001",
+      "PROV-VISUAL-VERIFICATION-001",
+      "PROV-ACCESSIBILITY-GUIDE-001",
+      "PROV-ACCESSIBILITY-CHECKLIST-001",
+      "TOOL-RENDER-COLLATERAL-001",
+      "TEST-VISUAL-REDACTION-001",
+      "TEST-VISUAL-ACCESSIBILITY-001",
+      "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-600-001",
+      "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-601-001",
+      "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-768-001",
+      "PROV-PREVIEW-DECK-RESP-768-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-1038-001",
+      "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-1039-001",
+      "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+      "PROV-PREVIEW-DECK-RESP-1040-001",
+      "PROV-PREVIEW-DECK-RESP-1040-FULL-001"
+    ],
+    "releaseState": "draft; no publication permission or independent approval is implied",
+    "visualPaths": [
+      "demo/diagrams/demo-workflow.svg",
+      "demo/diagrams/demo-workflow.png",
+      "demo/diagrams/demo-workflow-alt-text.md",
+      "demo/screenshots/synthetic-stub-mockup.svg",
+      "demo/screenshots/synthetic-stub-mockup.png",
+      "demo/screenshots/synthetic-stub-alt-text.md",
+      "demo/deck/concept-overview.html",
+      "launch/assets/x-submission-key-visual.svg",
+      "launch/assets/x-submission-key-visual.png",
+      "launch/assets/x-submission-alt-text.md"
+    ],
+    "note": "No generic screenshots directory or actual product screenshot is claimed. DEMO-SCREENSHOT-SET-001 is explicitly a fictional SVG/PNG mockup."
+  },
+  "trackedFiles": [
+    {
+      "fileId": "DOC-README-001",
+      "path": "README.md",
+      "classification": "repository_navigation",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "c7949fad78a40d1aae4d812f48c057c101df3cee3df6ad96fbe83583bf9272e2"
+    },
+    {
+      "fileId": "DEMO-DECK-SUPPORT-001",
+      "path": "demo/deck/concept-overview.html",
+      "classification": "visual_rehearsal_html",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "DEMO-DECK-SUPPORT-001",
+      "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770"
+    },
+    {
+      "fileId": "PROV-DEMO-WORKFLOW-ALT-001",
+      "path": "demo/diagrams/demo-workflow-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-WORKFLOW-ALT-001",
+      "sha256": "9e635bd37e6c7490971cb14c65d149201973dbc1ad40fb7af018476174ca0ad1"
+    },
+    {
+      "fileId": "PROV-DEMO-WORKFLOW-PNG-001",
+      "path": "demo/diagrams/demo-workflow.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-WORKFLOW-PNG-001",
+      "sha256": "9e69d9fe1c6a097ef26fc6eefa473c4fee4b5bca8f075392740698988f6355fe"
+    },
+    {
+      "fileId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "path": "demo/diagrams/demo-workflow.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "DEMO-WORKFLOW-DIAGRAM-001",
+      "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971"
+    },
+    {
+      "fileId": "PROV-DEMO-SCREENSHOT-ALT-001",
+      "path": "demo/screenshots/synthetic-stub-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-SCREENSHOT-ALT-001",
+      "sha256": "80886891c077c685ee0080a85691ad83dc04f13fae0be55462647bda906fc186"
+    },
+    {
+      "fileId": "PROV-DEMO-SCREENSHOT-PNG-001",
+      "path": "demo/screenshots/synthetic-stub-mockup.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-DEMO-SCREENSHOT-PNG-001",
+      "sha256": "dc78487e912bd973681af285980fe87b631ca44e6656f981e169f4a284ffd578"
+    },
+    {
+      "fileId": "DEMO-SCREENSHOT-SET-001",
+      "path": "demo/screenshots/synthetic-stub-mockup.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "DEMO-SCREENSHOT-SET-001",
+      "sha256": "2e0109baed36145184f7a75ae5a2e6b5637221dd1ebeb46c7111f0d5cec34df2"
+    },
+    {
+      "fileId": "DOC-ACCEPTANCE-001",
+      "path": "docs/architecture/ACCEPTANCE.md",
+      "classification": "architecture_documentation",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "b4d60d9ce1b4d32fde62461c297b51853a89da7c5a60c690d29fd6fa9f042dc0"
+    },
+    {
+      "fileId": "DOC-OWNERSHIP-001",
+      "path": "docs/architecture/OWNERSHIP.md",
+      "classification": "architecture_documentation",
+      "pathAvailability": "tracked_at_baseline",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "721ca07fd6e3dba5892802259de1c92772814d450fafde5e1e4903253429a07e"
+    },
+    {
+      "fileId": "INV-MM01-001",
+      "path": "docs/collateral-inventory.json",
+      "classification": "inventory_registry",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
+      "sha256": null
+    },
+    {
+      "fileId": "NAV-MM01-001",
+      "path": "docs/collateral-organization.md",
+      "classification": "navigation_documentation",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "89da9ce07c97d33cdf482e1e28d7aa078cc3f88459393b6077a49db96d2f5b23"
+    },
+    {
+      "fileId": "PROV-REDACTION-AFTER-ALT-001",
+      "path": "examples/synthetic/redaction-after-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-AFTER-ALT-001",
+      "sha256": "40b233ce0e5fe2957e03ece9c953034acc1a6f1432e562938cfc0d66df0f11e6"
+    },
+    {
+      "fileId": "PROV-REDACTION-AFTER-PNG-001",
+      "path": "examples/synthetic/redaction-after.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-AFTER-PNG-001",
+      "sha256": "5fe36c9934933874a988c60b4837bdb0c2a8cab95bbc6064cc2267cb7afc42b6"
+    },
+    {
+      "fileId": "PROV-REDACTION-AFTER-SVG-001",
+      "path": "examples/synthetic/redaction-after.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-AFTER-SVG-001",
+      "sha256": "c2a8a07b4daa3cb63151c1a5051ba07fcec065b0780ca48c4f5b1c3c55ebec58"
+    },
+    {
+      "fileId": "PROV-REDACTION-BEFORE-PNG-001",
+      "path": "examples/synthetic/redaction-before.png",
+      "classification": "negative_synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-BEFORE-PNG-001",
+      "sha256": "93747429f5b72e63c426ac33f976293d4cb3486136e53a9c22d0ab3cf6764325"
+    },
+    {
+      "fileId": "PROV-REDACTION-BEFORE-SVG-001",
+      "path": "examples/synthetic/redaction-before.svg",
+      "classification": "negative_synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-BEFORE-SVG-001",
+      "sha256": "1fa090e3957d392ca114fa298e6904e7195444920961f4af25429555c0c36ac5"
+    },
+    {
+      "fileId": "PROV-REDACTION-CANARIES-001",
+      "path": "examples/synthetic/redaction-canaries.json",
+      "classification": "negative_synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-REDACTION-CANARIES-001",
+      "sha256": "adcb62d9d5bfb3ee87a511e32649251a0aae346f27d2d729951ddfa750e2fa20"
+    },
+    {
+      "fileId": "LAUNCH-X-ALT-TEXT-001",
+      "path": "launch/assets/x-submission-alt-text.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "LAUNCH-X-ALT-TEXT-001",
+      "sha256": "b2a1476a5138d702cf59b544944ef78ccf567c000d432ae2e60729ed77bac554"
+    },
+    {
+      "fileId": "PROV-LAUNCH-X-KEY-PNG-001",
+      "path": "launch/assets/x-submission-key-visual.png",
+      "classification": "visual_export",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-LAUNCH-X-KEY-PNG-001",
+      "sha256": "7b0fd59eaa903c4765cdabbc47a9ddc2202cc010d3ac3169d51dafda40c262ee"
+    },
+    {
+      "fileId": "LAUNCH-X-KEY-VISUAL-001",
+      "path": "launch/assets/x-submission-key-visual.svg",
+      "classification": "visual_source",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "LAUNCH-X-KEY-VISUAL-001",
+      "sha256": "a900eaa6f9ba444160761910b791a5044cd6fb50fa510721c760142fb1fd4699"
+    },
+    {
+      "fileId": "MSG-POSITIONING-001",
+      "path": "messaging/README.md",
+      "classification": "claim_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "2d634b9d6a86ef89f186ae660da77089baedd858688a77054a5754f43a5486d1"
+    },
+    {
+      "fileId": "MSG-CLAIMS-001",
+      "path": "messaging/claims.json",
+      "classification": "claim_ledger",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
+      "sha256": null
+    },
+    {
+      "fileId": "PROV-ACCESSIBILITY-CHECKLIST-001",
+      "path": "review/accessibility-checklist.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-ACCESSIBILITY-CHECKLIST-001",
+      "sha256": "bb205339ef9d8a72d528740171c2dda9b3f4583e134923e2094daa33120af1b5"
+    },
+    {
+      "fileId": "PROV-ACCESSIBILITY-GUIDE-001",
+      "path": "review/accessibility.md",
+      "classification": "accessible_alternative",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-ACCESSIBILITY-GUIDE-001",
+      "sha256": "ddfc6296a810ccc6c0b3add73803b228ee3664b3e48af485b348642a6cf075e7"
+    },
+    {
+      "fileId": "PROV-SYNTHETIC-CANARY-001",
+      "path": "review/fixtures/synthetic-canaries.json",
+      "classification": "synthetic_test_fixture",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-SYNTHETIC-CANARY-001",
+      "sha256": "b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3"
+    },
+    {
+      "fileId": "MSG-REVIEW-001",
+      "path": "review/messaging-checklist.md",
+      "classification": "review_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "805f207fb52c5f48a641aacc552de2036485af94334fa99d588cb12cde2dd193"
+    },
+    {
+      "fileId": "PROV-REGISTER-001",
+      "path": "review/provenance.json",
+      "classification": "provenance_registry",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "checksumStatus": "self-referential registry; exact source/receipt pins are recorded in its subordinate rows",
+      "sha256": null
+    },
+    {
+      "fileId": "PUB-SAFETY-001",
+      "path": "review/publication-safety.md",
+      "classification": "reuse_policy",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "ce092eb260a4d0f5cccd2edcf7c441757157c91ac20dba65ab2e52f3dc6d7252"
+    },
+    {
+      "fileId": "PROV-VISUAL-ACCESSIBILITY-001",
+      "path": "review/visual/accessibility-results.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-ACCESSIBILITY-001",
+      "sha256": "c7353156b2a0c0135a5b6fbf45e767b2f1d9d63e2a3f50b47f40f5c97e83f6d0"
+    },
+    {
+      "fileId": "PROV-VISUAL-HANDOFF-001",
+      "path": "review/visual/asset-handoff.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-HANDOFF-001",
+      "sha256": "4d622f13e3bda7b364599d205676d724445a90adaf87abc9d2929cbeaf58c871"
+    },
+    {
+      "fileId": "PROV-VISUAL-BROWSER-001",
+      "path": "review/visual/browser-render-evidence.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-BROWSER-001",
+      "sha256": "83c46e31d6dea7bf52a2ca399bf3d939ff81118a80d676a4090f03342a078275"
+    },
+    {
+      "fileId": "PROV-VISUAL-CONTRAST-001",
+      "path": "review/visual/contrast-evidence.json",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-CONTRAST-001",
+      "sha256": "9552e809332821f8851ea2961f00e0818fc4c956da1ebc816c23f434c2f867ae"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-MOBILE-001",
+      "path": "review/visual/previews/deck-mobile-390.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-MOBILE-001",
+      "sha256": "266126d53623b4b9207f4a52ad3154d3f02b54bc54ecacc63f5d6b9c6af63882"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-FULL-001",
+      "path": "review/visual/previews/deck-mobile-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-FULL-001",
+      "sha256": "52f0d462cd8cab6f42c45a715756432d5732a8789e1e6f3fe17f4686e3473b95"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-DESKTOP-001",
+      "path": "review/visual/previews/deck-presentation-1440.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-DESKTOP-001",
+      "sha256": "a390204fd455ddfeea8c867672a2452d2d043d4111e9246c0b9f8faa1bcd045f"
+    },
+    {
+      "fileId": "PROV-PREVIEW-MOCKUP-001",
+      "path": "review/visual/previews/mockup-presentation-720.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-MOCKUP-001",
+      "sha256": "444a73d443dfc9342c50cb8d3b753609bbbdda974c18adc872b1c35b48c40e7d"
+    },
+    {
+      "fileId": "PROV-PREVIEW-WORKFLOW-001",
+      "path": "review/visual/previews/workflow-presentation-960.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-WORKFLOW-001",
+      "sha256": "660e36ab0e1960a151c2ca441e779ab009a4c48378931e4133501f0d7812f6c4"
+    },
+    {
+      "fileId": "PROV-PREVIEW-X-FEED-001",
+      "path": "review/visual/previews/x-feed-390.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-PREVIEW-X-FEED-001",
+      "sha256": "5ae620dc2927c968556231bc48de629df3d7f5fb1a21c711f4bdb89be65d5dcd"
+    },
+    {
+      "fileId": "PROV-VISUAL-VERIFICATION-001",
+      "path": "review/visual/verification.md",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "PROV-VISUAL-VERIFICATION-001",
+      "sha256": "f3f628a7c462b98a339c8be089d47a92421e71ca5e9a824e694fcbab371ec9e1"
+    },
+    {
+      "fileId": "TEST-COLLATERAL-POLICY-001",
+      "path": "tests/test_collateral_validation.py",
+      "classification": "validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "8ec4a394e9789330919d2be50411f35137392576cc0ed3b90b9f42ab707d01f4"
+    },
+    {
+      "fileId": "TEST-VISUAL-ACCESSIBILITY-001",
+      "path": "tests/test_visual_accessibility.py",
+      "classification": "visual_validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "TEST-VISUAL-ACCESSIBILITY-001",
+      "sha256": "ff4c383cebeed6c9d055d961df536906da423b8105b76fe0477917644af15050"
+    },
+    {
+      "fileId": "TEST-VISUAL-REDACTION-001",
+      "path": "tests/test_visual_collateral.py",
+      "classification": "visual_validation_test",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "TEST-VISUAL-REDACTION-001",
+      "sha256": "eb4959099a72166f1cababf23bca51d8cb62dc1a1e5109943eb2c6de787d5dec"
+    },
+    {
+      "fileId": "TOOL-RENDER-COLLATERAL-001",
+      "path": "tools/render_collateral.mjs",
+      "classification": "visual_tooling",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "provenanceRecordId": "TOOL-RENDER-COLLATERAL-001",
+      "sha256": "6cb251aa3f10167ab39aab5eb492e386a9831b64146e63a6ff3642ea54ee59a5"
+    },
+    {
+      "fileId": "TOOL-COLLATERAL-VALIDATOR-001",
+      "path": "tools/validate_collateral.py",
+      "classification": "validation_tool",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
+      "sha256": "ff306b0a781917540e950a3d5f93c3eed7f67cf1eccbe479a1cece0014837022"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+      "path": "review/visual/previews/deck-presentation-1440-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
+      "sha256": "aaca5455e7ab6493761a81efe74f9d663082337285e02e5fdb44aed64463c5cf"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+      "path": "review/visual/previews/deck-responsive-1038-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1038-FULL-001",
+      "sha256": "ddcd908ee8e1bc4d5dbbab428edf4e5bf739b5dfa25a1c9c8afcda35f72a9aaa"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1038-001",
+      "path": "review/visual/previews/deck-responsive-1038.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1038-001",
+      "sha256": "e2e1e04cae82958d117ae139b4d2f38b0f46294fa9214ea563af81b3941e653e"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+      "path": "review/visual/previews/deck-responsive-1039-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1039-FULL-001",
+      "sha256": "cd7515ba1f8cdff02bc2c05c902510b453fbcc8a00294b2ea54f83daf19eb4d2"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1039-001",
+      "path": "review/visual/previews/deck-responsive-1039.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1039-001",
+      "sha256": "b839cd9022d02b1c79b31e9d5a8eb463378a2e7c819c2c10f974fd813779503a"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
+      "path": "review/visual/previews/deck-responsive-1040-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1040-FULL-001",
+      "sha256": "987e04db04c0305857f33fc861b4b8f5d0d876439b194f093016e6102ccb86f6"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-1040-001",
+      "path": "review/visual/previews/deck-responsive-1040.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-1040-001",
+      "sha256": "1599879a9d81c85e25315647cd4f789c2ef63b9f027db5a8d7406eb6a2a19639"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+      "path": "review/visual/previews/deck-responsive-600-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-600-FULL-001",
+      "sha256": "54ad8423920df32d03d6f1291631f7dd9b69391cd7f134d9ea0fcb32525cd3a6"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-600-001",
+      "path": "review/visual/previews/deck-responsive-600.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-600-001",
+      "sha256": "50e72ef3dc41be82b9f86d822c3e108153c12a618f62ed5629ed600fca1de409"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+      "path": "review/visual/previews/deck-responsive-601-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-601-FULL-001",
+      "sha256": "191dbf36db0d1b2d4e881baf80421f12ec942798e120bb1a5e7ea0f44df8ff87"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-601-001",
+      "path": "review/visual/previews/deck-responsive-601.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-601-001",
+      "sha256": "6f898f026e3c505d03ab095bda526f54f8982a741ee080297b897b6139a1df34"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-768-FULL-001",
+      "path": "review/visual/previews/deck-responsive-768-full.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-768-FULL-001",
+      "sha256": "14e7af082dfe616f8db854f2599d5872c0e7ea78f36b6f8d0274ee8215c7722e"
+    },
+    {
+      "fileId": "PROV-PREVIEW-DECK-RESP-768-001",
+      "path": "review/visual/previews/deck-responsive-768.png",
+      "classification": "author_verification_or_preview",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "f8160d5b36c7cb3d07c7be39877fa22d375db915",
+      "provenanceRecordId": "PROV-PREVIEW-DECK-RESP-768-001",
+      "sha256": "aed63563590ea40a4185fcfe3f1e84caa1de0a10a487ad7ad8367adaa3cf0b99"
+    }
+  ],
+  "submissionScope": {
+    "requiredAssetIds": [
+      "DEMO-EXPLAINER-001",
+      "DEMO-SUBMISSION-NARRATIVE-001",
+      "DEMO-SUBMISSION-VIDEO-001",
+      "LAUNCH-X-COPY-001",
+      "LAUNCH-X-CTA-001",
+      "LAUNCH-X-KEY-VISUAL-001",
+      "LAUNCH-X-ALT-TEXT-001"
+    ],
+    "requiredClaimIds": [
+      "CLAIM-PRODUCT-CAPABILITY-001",
+      "CLAIM-EVAL02-COMPARISON-001",
+      "CLAIM-SPN-01-NEATLOGS-001",
+      "CLAIM-SPN-02-ENTIRE-001",
+      "CLAIM-SPN-03-CFO-001"
+    ],
+    "requiredEvidenceClassIds": [
+      "EVAL-02",
+      "EVAL-03",
+      "EVAL-04",
+      "SPN-01",
+      "SPN-02",
+      "SPN-03"
+    ],
+    "requiredOwnerGates": [
+      {
+        "id": "BRAND-CONSUMPTION-001",
+        "status": "pending",
+        "reviewer": null,
+        "reviewDate": null,
+        "evidenceRef": null,
+        "owner": "brand-kit source owner",
+        "reReviewTrigger": "Brand-kit revision, crop, export, destination or identity change."
+      },
+      {
+        "id": "ORGANIZER-RULES-AND-CUTOFF-001",
+        "status": "pending",
+        "reviewer": null,
+        "reviewDate": null,
+        "evidenceRef": null,
+        "owner": "organizer/source owner",
+        "source": "https://neatlogs.com/hackathon",
+        "reReviewTrigger": "Official post, event format, demo requirements, X destination or confirmed cutoff changes."
+      }
+    ],
+    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Every selected or submission root's intended destinations must also be explicitly approved on each consumed source, export and composition dependency; destination requirements stay scoped to each root's own provenance closure. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals."
   }
 }

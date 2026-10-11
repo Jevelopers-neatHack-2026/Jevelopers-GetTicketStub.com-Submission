@@ -1,0 +1,25 @@
+# Publication safety and asset reuse
+
+This policy governs each source and derivative: SVG/PNG artwork, HTML rehearsal material, previews, accessible alternatives, screenshots, mockups, slides, audio/video, captions, QR codes, and linked resources. The current tracked visuals are synthetic draft concepts and author-reviewed evidence, not approved publication assets.
+
+## Provenance, rights, and reuse
+
+`review/provenance.json` records exact source paths and pinned source commits, SHA-256 checksums, derived-file lineage, creator/tool evidence, synthetic classification, consent, permission, allowed destinations and modifications, expiry/re-review triggers, redaction scope, reviewer state, and publishability. `docs/collateral-inventory.json` indexes every tracked path with a stable ID, classification, existence, lifecycle, and release eligibility.
+
+External-use permission is not granted by a public repository, synthetic content, a successful redaction, a clean scan, or a task assignment. Asset/source owners must confirm rights and consent for the exact destination, crop, and modifications. Unknown, expired, revoked, or rejected rights block reuse; preserve a safe decision record and stop/deprecate derivatives if permission is revoked. Do not invent a rights, privacy, brand, sponsor, or product approver. The user-assigned supervisor owns marketing wording; independent review and producer/source-owner approvals remain separate.
+
+Treat every derivative as a new exact-file join. Preserve editable source, parent ID, transformation, dimensions/format, accessible alternative, checksum, exact claim/CTA references, destination, and review result. A change to source, words, crop, export, brand/evidence revision, accessibility alternative, rights, or destination returns the derivative to draft. Keep before/after redaction inputs only as obvious synthetic test fixtures; never store a real restricted original here.
+
+## Scoped visual evidence
+
+`review/visual/verification.md`, `asset-handoff.json`, `browser-render-evidence.json`, `contrast-evidence.json`, and `accessibility-results.json` record the present candidate and author checks. The integrated provenance register pins each exact source, PNG export, HTML page, alternative, preview, fixture, evidence file, renderer, and test. The claim ledger maps each substantive handoff line, HTML text/accessible attribute, and Markdown alternative block to an exact claim or CTA; its validator rejects missing IDs, file/checksum drift, and unlisted tracked paths.
+
+Author evidence covers only the pinned files: native SVG/PNG/HTML render inspection, 16 local browser views, no external page requests, actual visible focus, recorded contrast tests, accessibility alternatives, and Pillow metadata inspection. The controlled synthetic before/after fixture verifies removal of a known 640×180 fake-text region from flattened pixels, canary removal from SVG/alt/PNG bytes, and empty PNG metadata after reconstruction; the negative “before” fixture intentionally retains a dummy metadata marker and is release-excluded. This is not generic OCR, privacy, security, or arbitrary-media redaction proof. SVG speaker notes and PNG notes containers are not applicable; HTML has no slide-notes container. Audio/video and PPTX/PDF exports do not exist and remain explicitly not applicable until created. Re-review every new or changed format.
+
+A preliminary Gitleaks history scan was reported by the supervisor on the integrated `90b0865bd6bc4e6198f36b760b2691ff45e12064` tree: Gitleaks 8.30.1, nine commits and approximately 446,203 scanned bytes, exit 0 with no findings. Repeat against the frozen candidate before publication. This limited secret-pattern scan is not a general privacy, rights, or content approval.
+
+## Validation and release gate
+
+Run `python3 tools/validate_collateral.py --mode draft` and `python3 -m unittest discover -s tests -p 'test_*.py'`. Draft validation checks structured claim/provenance records, source pins and hashes, reciprocal acyclic lineage, exact-copy joins, tracked file coverage, and recorded visual evidence. `--mode selected --select ASSET_ID` evaluates a nonempty known selection and its copy, qualifier, CTA and rights joins. `--mode submission --select ASSET_ID` adds the named final assets, product/EVAL/SPN evidence, brand and organizer gates. Legacy `--mode release` is a fail-closed submission alias over the default visual set. Readiness does not require unused guardrail claims/CTAs or the internal canary to be approved. Draft validation does not independently approve evidence or scan arbitrary media.
+
+The current submission remains BLOCKED until selected exact claims and CTAs have required review, independent candidate review passes, rights and consent are approved for the exact destination, and the explicitly required product/EVAL/SPN, brand, organizer, video, narrative and X deliverables are complete. Preserve explicit N/A status for absent formats; when any such format is created, perform its own source, output, metadata/notes, accessibility, checksum, rights, and destination review before release.

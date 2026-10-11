@@ -1,0 +1,72 @@
+{
+  "fixtureId": "SYNTHETIC-CANARY-FIXTURE-001",
+  "classification": "synthetic",
+  "purpose": "Text-only test data for policy validation. It is not a product screenshot, export, sponsor trace, customer record, or pixel-redaction test.",
+  "warning": "Every marker below is invented test text. Never replace it with real personal, customer, financial, or secret data.",
+  "canaryPrefix": "SYNTHETIC_CANARY_",
+  "sourceSurfaces": {
+    "visibleText": "SYNTHETIC_CANARY_VISIBLE_LABEL_DO_NOT_PUBLISH",
+    "fileMetadata": "SYNTHETIC_CANARY_METADATA_COMMENT_DO_NOT_PUBLISH",
+    "speakerNotes": "SYNTHETIC_CANARY_SPEAKER_NOTE_DO_NOT_PUBLISH",
+    "altText": "SYNTHETIC_CANARY_ALT_TEXT_DO_NOT_PUBLISH",
+    "audioTranscript": "SYNTHETIC_CANARY_TRANSCRIPT_DO_NOT_PUBLISH",
+    "qrTarget": "https://example.invalid/SYNTHETIC_CANARY_QR_TARGET",
+    "linkedResource": "SYNTHETIC_CANARY_LINKED_RESOURCE_DO_NOT_PUBLISH",
+    "extractedExportText": "SYNTHETIC_CANARY_EXPORTED_TEXT_DO_NOT_PUBLISH"
+  },
+  "expectedRedactedSurfaces": {
+    "visibleText": "[removed in sanitized output]",
+    "fileMetadata": "[removed in sanitized output]",
+    "speakerNotes": "[removed in sanitized output]",
+    "altText": "[removed in sanitized output]",
+    "audioTranscript": "[removed in sanitized output]",
+    "qrTarget": null,
+    "linkedResource": "[removed in sanitized output]",
+    "extractedExportText": "[removed in sanitized output]"
+  },
+  "expectedValidation": {
+    "syntheticMarkerDetectedInSource": true,
+    "markerAbsentFromSanitizedTextSurfaces": true,
+    "unknownRightsReleaseRejected": true,
+    "revokedPermissionReleaseRejected": true,
+    "visualPixelInspection": "not_performed",
+    "metadataAndNotesInspectionOfRenderedExports": "not_performed"
+  },
+  "safeConceptCopy": [
+    {
+      "text": "TicketStub",
+      "claimId": "CLAIM-PRODUCT-NAME-001",
+      "requiredQualifier": "Project name only; product availability is unverified."
+    },
+    {
+      "text": "A keepsake concept",
+      "claimId": "CLAIM-KEEPSAKE-CONCEPT-001",
+      "requiredQualifier": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated."
+    },
+    {
+      "text": "Context → design → human review",
+      "claimId": "CLAIM-PROCESS-CONCEPT-001",
+      "requiredQualifier": "Conceptual only; implementation is unverified."
+    },
+    {
+      "text": "Approval before production",
+      "claimId": "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+      "requiredQualifier": "This is a proposed review rule, not a verified product feature."
+    },
+    {
+      "text": "No product or sponsor results verified.",
+      "claimId": "CLAIM-NO-RESULTS-VERIFIED-001",
+      "requiredQualifier": null
+    },
+    {
+      "text": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+      "claimId": "CLAIM-SIMULATION-001",
+      "requiredQualifier": null
+    },
+    {
+      "text": "Explore the repository docs.",
+      "ctaId": "CTA-REPOSITORY-DOCS-001",
+      "requiredQualifier": null
+    }
+  ]
+}
