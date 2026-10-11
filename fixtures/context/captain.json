@@ -1,0 +1,19 @@
+{
+  "fixture": "captain",
+  "description": "The captain (creator) of an organizer event.",
+  "verifyAt": "2026-10-10T12:00:00.000Z",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InRpY2tldHN0dWIuY29udGV4dCJ9.eyJjdHgiOnsic2NoZW1hIjoidGlja2V0c3R1Yi5jb250ZXh0LzEiLCJhY3RvciI6eyJraW5kIjoiYWNjb3VudCIsImlkIjoiYWNjX0ZJWFRVUkVfY2FwdGFpbjEifSwidGVuYW50Ijp7ImlkIjoiYWNjX0ZJWFRVUkVfY2FwdGFpbjEifSwicHJvamVjdCI6eyJraW5kIjoiZXZlbnQiLCJpZCI6ImV2dF9meF8xIn0sInJvbGUiOiJjYXB0YWluIiwiY2FwYWJpbGl0aWVzIjpbImFjY291bnQuZGVsZXRlIiwiYWNjb3VudC5lbWFpbC5jaGFuZ2UiLCJhY2NvdW50LnJlYWQiLCJhZ2VudC51c2UiLCJhcnQuZ2VuZXJhdGUiLCJjbGFpbS5yZWRlZW0iLCJjbGFpbS52aWV3IiwiY2xhaW1zLnJlYWQiLCJldmVudC5jcmVhdGUiLCJldmVudC5wdWJsaXNoIiwiZXZlbnQucmVhZCIsImZpbGUucmVhZCIsIm9yZGVyLmNyZWF0ZSIsIm9yZGVyLnJlYWQiLCJzZXNzaW9uLnJldm9rZSIsInNoYXJlLmNyZWF0ZSIsInNoYXJlLnZpZXciLCJzdHViLmRyYWZ0Iiwid2FsbC5wdWJsaWMudmlldyIsIndhbGwucHVibGlzaCIsIndhbGwuc3luYyJdLCJtZW1iZXJzaGlwUmV2aXNpb24iOjIsInJldm9rZWQiOmZhbHNlLCJlbnZpcm9ubWVudCI6ImRldmVsb3BtZW50IiwibW9kZSI6ImZpeHR1cmUiLCJpc3N1ZWRBdCI6IjIwMjYtMTAtMTBUMTI6MDA6MDAuMDAwWiIsImV4cGlyZXNBdCI6IjIwMjYtMTAtMTBUMTI6MDU6MDAuMDAwWiJ9LCJzaWQiOiJmeDAwMDAwMDAwMDAwMDAwMDAwMDAwMDIifQ.ImFAqHVIqHF1T1YS9gt8aqlndDFZrxxMcVlyB3OvNmE",
+  "state": {
+    "membershipRevision": 2,
+    "sessionLive": true
+  },
+  "expect": {
+    "ok": true,
+    "role": "captain",
+    "tenant": "acc_FIXTURE_captain1",
+    "project": {
+      "kind": "event",
+      "id": "evt_fx_1"
+    }
+  }
+}

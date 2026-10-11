@@ -1,0 +1,525 @@
+/* The nav frame. The sidebar is always there: open or folded to a rail on the desktop, a 56px rail on the
+   phone with the full sidebar sliding over the content as a drawer. Stacking: the sidebar sits at 110, above
+   every stage (the lowest is 40, the highest 100), because the stages start at its right edge (--nav-w on
+   <html>) and the flyout must reach over them. The drawer and its scrim sit at 120-121. Paper and ink come
+   from the desk tokens, and it never changes: there is no dark stage. */
+
+.frame {
+  --side-w: 244px;
+  --rail-w: 56px;
+  min-height: 100dvh;
+}
+.frame[data-full="false"] {
+  --side-w: 68px;
+}
+.content {
+  min-width: 0;
+  /* a layer that sweeps past the edge (the foil's spectrum) never makes the page scroll sideways */
+  overflow-x: clip;
+}
+
+/* ---------- the sidebar ---------- */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--desk-paper);
+  color: var(--desk-ink);
+  font: var(--type-ui);
+  z-index: 110;
+  transition:
+    background-color 600ms ease,
+    color 600ms ease;
+}
+/* the right edge is a tear line */
+.side::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 3px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 0.9px, transparent 1.1px);
+  background-size: 3px 6px;
+  background-repeat: repeat-y;
+  pointer-events: none;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 4px 0 10px;
+}
+.mark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+}
+.wordmark {
+  height: 22px;
+  width: auto;
+  display: block;
+}
+.stampMark {
+  display: none;
+  height: 30px;
+  width: auto;
+}
+.handle {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink-soft);
+  transition:
+    background var(--desk-release) ease,
+    color var(--desk-release) ease;
+}
+.handle svg {
+  width: 20px;
+  height: 20px;
+}
+.handle:hover {
+  background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
+  color: var(--desk-ink);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.list::-webkit-scrollbar {
+  display: none;
+}
+.tree,
+.kids,
+.fly ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tree {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  align-content: start;
+}
+.top,
+.node {
+  display: block;
+  min-width: 0;
+}
+.rule {
+  height: 6px;
+  margin: 6px 10px;
+  border: 0;
+  list-style: none;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 0.9px, transparent 1.1px);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 50%;
+}
+.foot {
+  display: grid;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ---------- one place: icon, name, and (the cart) its count ---------- */
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px 0 20px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink-soft);
+  font: var(--type-ui);
+  text-align: left;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--desk-release) ease,
+    color var(--desk-release) ease,
+    box-shadow var(--desk-release) ease;
+}
+.item:hover {
+  background: color-mix(in srgb, var(--desk-ink) 5%, transparent);
+  color: var(--desk-ink);
+}
+.item[data-trail="true"] {
+  color: var(--desk-ink);
+}
+/* the group's name leaves room for its fold */
+.row:has(.chev) .item {
+  padding-right: 40px;
+}
+.row:has(.chev) .count {
+  margin-right: 0;
+}
+/* the current place: a pressed card with a punched hole through it */
+.item[aria-current="page"] {
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 1px 0 var(--desk-ledge);
+}
+.item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1px 1px var(--desk-ledge);
+}
+.item[aria-pressed="true"] {
+  color: var(--desk-ink-soft);
+}
+.item:focus-visible,
+.chev:focus-visible,
+.handle:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: -2px;
+}
+.icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+.icon svg {
+  width: 24px;
+  height: 24px;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.item:hover .icon svg {
+  transform: translateY(-1px);
+}
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.count {
+  margin-left: auto;
+  min-width: 24px;
+  padding: 1px 7px;
+  border: 1px solid var(--desk-rule-strong);
+  border-radius: 10px;
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--desk-ink);
+}
+.dot {
+  display: none;
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--desk-stamp);
+  box-shadow: 0 0 0 2px var(--desk-paper);
+}
+
+/* the fold: a chevron that turns down when the group is open */
+.chev {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink-soft);
+  transition:
+    background var(--desk-release) ease,
+    color var(--desk-release) ease;
+}
+.chev:hover {
+  background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
+  color: var(--desk-ink);
+}
+.chev svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.chev[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+/* children: indented, smaller, joined to the parent by a dotted tear line */
+.kids {
+  position: relative;
+  margin-left: 21px;
+  padding-left: 12px;
+}
+.kids::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 19px;
+  left: 0;
+  width: 2px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 0.9px, transparent 1.1px);
+  background-size: 2px 5px;
+  background-repeat: repeat-y;
+}
+.row[data-kid] .item {
+  min-height: 38px;
+  gap: 8px;
+  padding-left: 14px;
+  font: var(--type-label);
+  font-size: 0.9rem;
+}
+.row[data-kid]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  width: 9px;
+  height: 2px;
+  margin-top: -1px;
+  background-image: radial-gradient(circle, var(--desk-rule-strong) 0.9px, transparent 1.1px);
+  background-size: 4px 2px;
+  background-repeat: repeat-x;
+}
+.row[data-kid] .item[aria-current="page"]::before {
+  left: 5px;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+}
+.row[data-kid] .chev {
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+}
+.row[data-kid]:has(.chev) .item {
+  padding-right: 34px;
+}
+.kids .kids {
+  margin-left: 14px;
+}
+
+/* ---------- the flyout: a folded group's places, a card beside the rail ---------- */
+.fly {
+  position: fixed;
+  left: var(--nav-w, 68px);
+  z-index: 111;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule-strong),
+    0 1px 0 var(--desk-ledge),
+    0 14px 30px -14px rgb(23 20 15 / 0.55);
+  animation: flyIn 160ms var(--desk-spring);
+}
+@keyframes flyIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+.flyHead {
+  padding: 4px 12px 6px;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--desk-ink-soft);
+}
+.flyRow .item {
+  min-height: 38px;
+  padding: 0 12px;
+  font: var(--type-label);
+  font-size: 0.9rem;
+}
+.frame[data-full="false"] .flyRow .item {
+  justify-content: flex-start;
+  padding: 0 12px;
+}
+.frame[data-full="false"] .fly .label {
+  display: block;
+}
+.flyRow .item[data-depth="2"] {
+  padding-left: 26px;
+}
+.flyRow .item[aria-current="page"]::before {
+  display: none;
+}
+
+/* ---------- the rail: icons only, children in the flyout ---------- */
+.frame[data-full="false"] .head {
+  flex-direction: column;
+  justify-content: center;
+  padding: 0;
+  gap: 4px;
+}
+.frame[data-full="false"] .wordmark,
+.frame[data-full="false"] .label,
+.frame[data-full="false"] .count,
+.frame[data-full="false"] .chev,
+.frame[data-full="false"] .kids {
+  display: none;
+}
+.frame[data-full="false"] .stampMark {
+  display: block;
+}
+/* The mark and the handle stack in the rail, each centred on the icon column below. */
+.frame[data-full="false"] .mark {
+  justify-content: center;
+  align-self: stretch;
+}
+.frame[data-full="false"] .handle {
+  align-self: center;
+}
+.frame[data-full="false"] .item {
+  justify-content: center;
+  padding: 0;
+}
+.frame[data-full="false"] .row:has(.chev) .item {
+  padding-right: 0;
+}
+.frame[data-full="false"] .item[aria-current="page"]::before {
+  top: 5px;
+  left: 50%;
+  margin: 0 0 0 -3px;
+}
+.frame[data-full="false"] .dot {
+  display: block;
+}
+.frame[data-full="false"] .rule {
+  margin: 6px 14px;
+}
+
+/* ---------- the phone: a 56px rail on the left, the sidebar as a drawer over the content ---------- */
+@media (max-width: 959px) {
+  .frame[data-nav="on"] .content {
+    padding-left: var(--rail-w);
+  }
+  .side {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--rail-w);
+    padding: 12px 6px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    touch-action: pan-y;
+    transition:
+      width 320ms cubic-bezier(0.2, 0.9, 0.25, 1),
+      background-color 600ms ease,
+      color 600ms ease;
+  }
+  .frame[data-full="true"] .side {
+    z-index: 121;
+    width: min(300px, 84vw);
+    padding: 12px 10px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    box-shadow: 16px 0 40px -18px rgb(23 20 15 / 0.55);
+  }
+  .frame[data-full="false"] .side::after {
+    width: 2px;
+  }
+  .frame[data-full="true"] .side::after {
+    display: none;
+  }
+  .frame[data-full="false"] .handle {
+    width: 40px;
+    height: 40px;
+  }
+  .frame[data-full="false"] .item {
+    min-height: 48px;
+  }
+  .frame[data-full="false"] .fly {
+    display: none;
+  }
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    border: 0;
+    padding: 0;
+    background: var(--desk-scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 260ms ease;
+  }
+  .frame[data-drawer="true"] .scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ---------- the desktop: a grid with the sidebar beside the content ---------- */
+@media (min-width: 960px) {
+  .frame[data-nav="on"] {
+    display: grid;
+    grid-template-columns: var(--side-w) minmax(0, 1fr);
+    transition: grid-template-columns 300ms cubic-bezier(0.2, 0.9, 0.25, 1);
+  }
+  .side {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+  }
+  .frame[data-full="true"] .side {
+    overflow: hidden;
+  }
+  .scrim {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame,
+  .side,
+  .scrim,
+  .fly {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

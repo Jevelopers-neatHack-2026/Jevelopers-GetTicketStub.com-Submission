@@ -1,55 +1,82 @@
 "use client";
-import Link from "next/link";
-import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Stub } from "../types";
-import { encodeStub } from "../store";
+import { upsertStub } from "../store";
 import { TearGesture } from "@/customer/studio/stub/TearGesture";
-import { Sheet } from "./Sheet";
-import { ctaLabel } from "./MaterialPicker";
-import styles from "./overlays.module.css";
+import { PathTrack } from "@/customer/wayfinding/PathTrack";
+import { PaperButton } from "@/customer/desk/Desk";
+import { announce } from "@/customer/a11y/announce";
+import { useDialogFocus } from "@/customer/a11y/focus";
+import styles from "./TearFlow.module.css";
 
-/** Full-screen night stage for the tear. */
-export function TearStage({ stub, onTorn, onCancel }: { stub: Stub; onTorn: () => void; onCancel: () => void }) {
+const FADE_MS = 600;
+
+/**
+ * Full-screen stage for the tear. The paper desk fades in, you tear the stub off, it flies up and out,
+ * and the wall takes over (/wall?pinned=<id> plays the landing and the pin). No sheet, no dimmed
+ * editor: the torn state is saved here, so the Editor's onTorn is not needed for the hand-off.
+ */
+export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; onCancel: () => void }) {
+  const router = useRouter();
+  const [leaving, setLeaving] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  // a dialog: focus lands on the tear handle, Tab stays here, and "Back to styling" returns it to the tear strip
+  useDialogFocus(stageRef, true, '[role="slider"]');
+
+  useEffect(() => {
+    router.prefetch("/wall");
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [router]);
+
+  // the desk fades back out, then the editor is back
+  const cancel = useCallback(() => {
+    setLeaving((was) => {
+      if (!was) timer.current = setTimeout(onCancel, FADE_MS);
+      return true;
+    });
+  }, [onCancel]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") cancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [cancel]);
+
+  const torn = () => {
+    upsertStub({ ...stub, torn: true });
+    announce("Torn off. Pinning it to your wall.");
+    router.push(`/wall?pinned=${encodeURIComponent(stub.id)}`);
+  };
 
   return (
-    <div className={`ts-night ${styles.tearStage}`} role="dialog" aria-modal="true" aria-label="Tear to finish">
-      <p className={styles.tearHint}>Drag along the perforation to tear it off.</p>
-      <div className={styles.tearArea}>
-        <TearGesture stub={stub} onTorn={onTorn} />
+    <div ref={stageRef} className={`desk-surface ${styles.stage} ${leaving ? styles.leaving : ""}`} role="dialog" aria-modal="true" aria-label="Tear off your stub">
+      <PathTrack current="tear" stubId={stub.id} className={styles.track} />
+      <div className={styles.area}>
+        <TearGesture stub={stub} onTorn={torn} />
       </div>
-      <button type="button" className="btn" onClick={onCancel}>
-        Not yet
-      </button>
+      <PaperButton type="button" onClick={cancel}>
+        Back to styling
+      </PaperButton>
     </div>
   );
 }
 
-/** After the tear: share it, print it, or put it in the wallet. */
+/**
+ * Opening "On your wall" on a stub that is already torn goes to the wall with the stub lifted.
+ * The old sheet over a dimmed editor is gone; the wall is where the next steps live.
+ */
 export function FinishSheet({ stub, open, onClose }: { stub: Stub; open: boolean; onClose: () => void }) {
-  return (
-    <Sheet title="Pinned to your wall" open={open} onClose={onClose}>
-      <div className={styles.stack}>
-        <p className={styles.muted}>Your stub is finished. Share it, print it or keep it on your phone.</p>
-        <Link className="btn btn-primary btn-block" href={`/s/${encodeStub(stub)}`}>
-          Share your stub
-        </Link>
-        <Link className="btn btn-block" href={`/checkout/${stub.id}`}>
-          {ctaLabel(stub.material)}
-        </Link>
-        <Link className="btn btn-block" href={`/wallet/${stub.id}`}>
-          Add to wallet
-        </Link>
-        <Link className={styles.textLink} href="/wall">
-          See your wall
-        </Link>
-      </div>
-    </Sheet>
-  );
+  const router = useRouter();
+  useEffect(() => {
+    if (!open) return;
+    onClose();
+    router.push(`/wall?lift=${encodeURIComponent(stub.id)}`);
+  }, [open, onClose, router, stub.id]);
+  return null;
 }

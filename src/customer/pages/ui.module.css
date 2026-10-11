@@ -1,7 +1,12 @@
+/* Page chrome for the secondary screens (memory, claim, checkout, cart, friends, gift, wallet,
+   organizer). Paper by day: every colour comes from the desk tokens, every control is a desk part. */
+
 .shell {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  max-width: 100%;
+  overflow-x: clip;
 }
 .top {
   position: sticky;
@@ -13,9 +18,9 @@
   min-height: 56px;
   padding: 6px 16px;
   padding-top: max(6px, env(safe-area-inset-top));
-  background: color-mix(in srgb, var(--ts-bg) 88%, transparent);
+  background: color-mix(in srgb, var(--desk-paper) 90%, transparent);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid color-mix(in srgb, var(--ts-text) 10%, transparent);
+  border-bottom: 1px solid var(--desk-rule);
 }
 .home {
   display: inline-flex;
@@ -24,23 +29,52 @@
   min-width: 44px;
 }
 .home img {
-  height: 22px;
+  height: 24px;
   width: auto;
   display: block;
+}
+/* The sidebar (or the phone rail) carries the mark, so the page header never repeats it. */
+@media all {
+  :global([data-nav="on"]) .home {
+    display: none;
+  }
+  :global([data-nav="on"]) .logoOnly {
+    display: none;
+  }
 }
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 44px;
-  padding: 0 8px 0 0;
+  padding-right: 4px;
   text-decoration: none;
-  font-weight: 500;
+  font: var(--type-ui);
+  color: var(--desk-ink);
+}
+.backText {
+  padding: 2px 0;
+  background-image: radial-gradient(circle, currentColor 0.9px, transparent 1.1px);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+}
+.back svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.back:hover svg {
+  transform: translateX(-3px);
 }
 .topTitle {
   flex: 1;
   min-width: 0;
-  font-weight: 600;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--desk-ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -54,134 +88,284 @@
 .main {
   flex: 1;
   width: 100%;
+  min-width: 0;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px 16px 48px;
+  padding: 24px 16px 56px;
 }
 .narrow {
   max-width: 560px;
 }
+@media (min-width: 960px) {
+  .main {
+    padding: 40px 32px 72px;
+  }
+}
 
+/* Type lockups */
+.h1 {
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.h2 {
+  font: var(--type-h2);
+  font-variation-settings: "SOFT" 30, "opsz" 48;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.h3 {
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+  letter-spacing: -0.02em;
+}
+.lede {
+  font: var(--type-lede);
+  color: var(--desk-ink-soft);
+  text-wrap: pretty;
+  max-width: 34rem;
+}
+.muted {
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+  text-wrap: pretty;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.status {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+  min-height: 1.3em;
+}
+
+/* Sandbox note for screens that can't use the strip (kept quiet, one per screen) */
 .sandbox {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--ts-radius-pill);
-  border: 1.5px dashed var(--ts-orange);
-  color: var(--ts-text);
-  background: color-mix(in srgb, var(--ts-orange) 12%, transparent);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.sandbox::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ts-orange);
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
 }
 
+/* Layout helpers */
+.stack {
+  display: grid;
+  gap: 16px;
+}
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.card {
+  display: grid;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: 6px;
+  background: var(--desk-paper-raised);
+  box-shadow: inset 0 0 0 1px var(--desk-rule), 0 1px 0 var(--desk-ledge), 0 14px 24px -18px rgb(23 20 15 / 0.45);
+}
+.hairlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border-top: 1px solid var(--desk-rule);
+}
+.hairlist > li {
+  border-bottom: 1px solid var(--desk-rule);
+}
+
+/* Link-flavoured desk buttons share the desk part's own classes (see ui.tsx) */
+.linkReset {
+  text-decoration: none;
+}
+/* The small → on a control that leaves the screen. It sits at the icons' weight and nudges on hover. */
+.leaves {
+  flex: none;
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.2em;
+  transition: transform var(--desk-release) var(--desk-spring);
+}
+.anchorMark .leaves {
+  margin-left: 0.3em;
+}
+a:hover > .leaves,
+a:hover > span > .leaves {
+  transform: translateX(3px);
+}
+
+/* Copy field: read-only link, then a paper button */
 .copy {
   display: flex;
-  gap: 8px;
-  align-items: stretch;
+  gap: 12px;
+  align-items: flex-end;
   width: 100%;
 }
-.copyInput {
+.copyField {
   flex: 1;
   min-width: 0;
+}
+.copyInput {
+  width: 100%;
   min-height: 44px;
-  padding: 0 12px;
-  border-radius: var(--ts-radius-control);
-  border: 1px solid color-mix(in srgb, var(--ts-text) 25%, transparent);
-  background: var(--ts-surface);
-  color: var(--ts-text);
-  font: inherit;
-  font-size: 14px;
+  padding: 8px 0 6px;
+  border: 0;
+  border-bottom: 1.5px dotted var(--desk-rule-strong);
+  background: transparent;
+  color: var(--desk-ink);
+  font: var(--type-body);
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
 }
-.status {
-  font-size: 13px;
-  color: var(--ts-text-muted);
-  min-height: 1.4em;
+.copyInput:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 3px;
+  border-bottom-color: var(--desk-focus);
 }
 
+/* QR (a drawn placeholder, labelled as one) */
 .qr {
   display: block;
-  background: #fff;
-  padding: 8px;
-  border-radius: 8px;
+  background: var(--desk-paper-raised);
+  padding: 10px;
+  border-radius: 4px;
   width: 100%;
   height: auto;
   max-width: 200px;
+  box-shadow: inset 0 0 0 1px var(--desk-rule), 0 1px 0 var(--desk-ledge);
 }
 .qrWrap {
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: 10px;
   text-align: center;
 }
+.qrWrap figcaption {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
 
+/* Raw form leftovers kept for screens that still need a textarea or select */
 .field {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 .fieldLabel {
-  font-weight: 600;
-  font-size: 14px;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--desk-ink-soft);
 }
 .input {
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: var(--ts-radius-control);
-  border: 1.5px solid color-mix(in srgb, var(--ts-text) 30%, transparent);
-  background: transparent;
-  color: var(--ts-text);
-  font: inherit;
   width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1px 2px var(--desk-ledge);
+  color: var(--desk-ink);
+  font: var(--type-body);
 }
 .input:focus-visible {
-  border-color: var(--ts-text);
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 2px;
+}
+.input[aria-invalid="true"] {
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 -2px 0 var(--desk-error);
 }
 textarea.input {
-  padding: 10px 12px;
   min-height: 88px;
   resize: vertical;
 }
+.err {
+  font: var(--type-label);
+  color: var(--desk-error);
+  padding-left: 10px;
+  border-left: 3px solid var(--desk-error);
+  overflow-wrap: anywhere;
+}
 
-.card {
-  border-radius: var(--ts-radius-sheet);
-  background: var(--ts-surface);
-  padding: 16px;
+/* Stub on the desk: the stub is lit by the window and rests on a contact shadow */
+.deskStub {
+  position: relative;
   display: grid;
-  gap: 12px;
+  justify-items: center;
+  width: 100%;
+  padding: 12px 0 26px;
 }
-.stack {
+.deskStub::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: min(72%, 360px);
+  height: 22px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(23 20 15 / 0.28), transparent);
+  filter: blur(4px);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Empty and error states */
+.empty {
   display: grid;
-  gap: 12px;
-}
-.row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.muted {
-  color: var(--ts-text-muted);
-  font-size: 14px;
-}
-.h1 {
-  font-size: var(--ts-step-4);
-}
-.h2 {
-  font-size: var(--ts-step-2);
-}
-.error {
-  display: grid;
-  gap: 16px;
+  gap: 14px;
   justify-items: start;
-  max-width: 480px;
-  margin: 15vh auto 0;
+  max-width: 30rem;
+  margin: clamp(24px, 8vh, 80px) auto 0;
+}
+.emptyArt {
+  width: 140px;
+  height: 112px;
+  color: var(--desk-ink);
+  margin-bottom: 4px;
+}
+.draw {
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: draw 900ms var(--ts-ease-standard) 120ms forwards;
+}
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  align-items: center;
+  margin-top: 4px;
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Page enter: things are dealt onto the desk, not popped in */
+.enter {
+  animation: dealIn 520ms var(--ts-ease-enter) both;
+}
+@keyframes dealIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter,
+  .draw {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .back svg {
+    transition: none;
+  }
 }

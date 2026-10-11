@@ -1,0 +1,66 @@
+/* Privacy and terms: a single column of short paragraphs. Desk tokens only. */
+.wrap {
+  display: grid;
+  gap: 28px;
+  width: 100%;
+  padding-block: 8px 48px;
+}
+.wrap > * {
+  min-width: 0;
+}
+.head {
+  display: grid;
+  gap: 8px;
+}
+.title {
+  margin: 0;
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lede {
+  margin: 0;
+  font: var(--type-lede);
+  color: var(--desk-ink);
+  text-wrap: pretty;
+}
+.section {
+  display: grid;
+  gap: 8px;
+}
+.body {
+  display: grid;
+  gap: 10px;
+  font: var(--type-body);
+  color: var(--desk-ink);
+}
+.body p {
+  margin: 0;
+  text-wrap: pretty;
+}
+.body ul {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 4px;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.foot {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+}
+.plain,
+.body a {
+  color: var(--desk-ink);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.plain:focus-visible,
+.body a:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+}

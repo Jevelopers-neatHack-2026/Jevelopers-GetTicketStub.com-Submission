@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter_Tight } from "next/font/google";
+import { DemoPill } from "@/customer/nav/DemoPill";
+import { NavFrame } from "@/customer/nav/NavFrame";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -25,20 +27,16 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F4ECDD" },
-    { media: "(prefers-color-scheme: dark)", color: "#17140F" },
-  ],
+  themeColor: "#F4ECDD", // paper by day: the OS theme never flips the chrome
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${interTight.variable}`}>
+    <html lang="en" data-theme="light" className={`${fraunces.variable} ${interTight.variable}`}>
       <body>
-        {process.env.TICKETSTUB_RUNTIME_MODE !== "live" && (
-          <aside className="preview-notice">Demo preview · Sample events and art · Sandbox checkout</aside>
-        )}
-        {children}
+        <NavFrame notice={process.env.TICKETSTUB_RUNTIME_MODE !== "live" ? <DemoPill /> : null}>
+          {children}
+        </NavFrame>
       </body>
     </html>
   );

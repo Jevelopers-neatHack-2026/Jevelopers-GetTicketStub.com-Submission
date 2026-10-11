@@ -2,6 +2,8 @@
 
 The customer-facing studio. Give it an event link, watch the agent research the night, then shuffle styles, edit, tilt the foil, tear the stub off and pin it to your wall.
 
+The studio is always cream paper. There is no dark stage: printing, the finish picker, the tear and a lifted stub all stay on the desk.
+
 Design docs, wireframes and the coverage matrix are not on `main`; they are in `docs/studio/` on the [`docs/studio-design`](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/tree/docs/studio-design/docs/studio) branch. Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
 
 ## Run it
@@ -71,5 +73,5 @@ Stubs live in the browser (`localStorage`). Share links encode the stub in the U
 ## Brand rules applied
 
 - **Foil never pops:** eased per frame (`stub/useTilt.ts`, `stub/Foil.tsx`), following brand-kit `docs/material-foil.md`.
-- **Sound is on by default.** The cues are synthesized placeholders in `feedback.ts`, to be replaced with cuelume.dev assets.
+- **Sound is on by default.** Cues are synthesized in `feedback.ts` the way cuelume builds sounds (brand-kit `docs/motion-sound-haptics.md`). Audition them at `/parts`.
 - **Mobile first,** with a desktop layout from 960 px.

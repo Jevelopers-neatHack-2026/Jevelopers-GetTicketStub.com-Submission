@@ -1,16 +1,17 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
+import d from "@/customer/desk/Desk.module.css";
+import { Field, MarkLegend, PunchTabs, Rule, Stamp, TearLink } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
-import { FitBox } from "@/customer/pages/FitBox";
-import { play, haptic } from "@/customer/studio/feedback";
+import { haptic, play } from "@/customer/studio/feedback";
 import { encodeStub, upsertStub } from "@/customer/studio/store";
-import type { Edition } from "@/customer/studio/types";
-import { PageShell, FriendlyError, ui } from "@/customer/pages/ui";
+import { withGuestName, type Edition } from "@/customer/studio/types";
+import { PageShell, FriendlyError, OnDesk, ui } from "@/customer/pages/ui";
 import { decodeDesign, designEvent, designStub } from "@/customer/pages/organizer";
 import { photoToDataUrl } from "@/customer/pages/storyImage";
 import { useMounted } from "@/customer/pages/useMounted";
-import { LockIcon } from "../LockIcon";
+import { Padlock } from "../LockSwitch";
 import s from "./orgclaim.module.css";
 
 const EDITION_LABEL: Record<Edition, string> = {
@@ -24,7 +25,6 @@ const EDITION_LABEL: Record<Edition, string> = {
 export default function OrganizerClaimClient({ token }: { token?: string }) {
   const router = useRouter();
   const mounted = useMounted();
-  const nameId = useId();
   const noteId = useId();
   const photoId = useId();
   const design = useMemo(() => (mounted ? decodeDesign(token) : null), [mounted, token]);
@@ -36,7 +36,7 @@ export default function OrganizerClaimClient({ token }: { token?: string }) {
   const [claiming, setClaiming] = useState(false);
 
   const chosen = edition ?? design?.allowed[0] ?? "researched";
-  const preview = useMemo(() => (design ? designStub(design, { id: "claim-preview", name: name.trim() || "Your name", edition: chosen }) : null), [design, name, chosen]);
+  const preview = useMemo(() => (design ? withGuestName(designStub(design, { id: "claim-preview", edition: chosen }), name.trim() || "Your name") : null), [design, name, chosen]);
 
   if (!mounted) return <PageShell>{null}</PageShell>;
   if (!design || !preview) {
@@ -56,25 +56,42 @@ export default function OrganizerClaimClient({ token }: { token?: string }) {
       return;
     }
     setClaiming(true);
-    const st = designStub(design!, { name: n, edition: chosen });
+    const st = withGuestName(designStub(design!, { edition: chosen }), n);
     st.id = Math.random().toString(36).slice(2, 10);
     st.torn = true;
     st.wallAngle = Math.round((Math.random() * 8 - 4) * 10) / 10;
     st.personal = { ...st.personal, note: note.trim() || undefined };
     st.photos = photo ? [photo] : [];
     upsertStub(st);
-    play("stamp");
     haptic([20]);
     router.push(`/s/${encodeStub(st)}`);
   }
 
+  const locked = [design.locks.logo ? "Logo" : null, design.locks.title ? "Title" : null].filter(Boolean) as string[];
+
   return (
-    <PageShell>
+    <PageShell right={design.organizer ? <span className="desk-label">{design.organizer}</span> : undefined}>
       <div className={s.layout}>
-        <div className={s.preview}>
-          <FitBox>
+        <div className={s.desk}>
+          <OnDesk>
             <StubView stub={preview} size="md" tilt />
-          </FitBox>
+          </OnDesk>
+          {locked.length ? (
+            <ul className={s.locked} aria-label="Set by the organizer">
+              {design.locks.logo ? (
+                <li>
+                  <Padlock locked />
+                  Logo set by the organizer
+                </li>
+              ) : null}
+              {design.locks.title ? (
+                <li>
+                  <Padlock locked />
+                  Title: {ev.title}
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
         </div>
 
         <form
@@ -84,103 +101,80 @@ export default function OrganizerClaimClient({ token }: { token?: string }) {
             claim();
           }}
         >
-          <p className="label">{design.organizer ? `From ${design.organizer}` : "Your event stub"}</p>
-          <h1 className={ui.h1}>Claim your stub from {ev.title}.</h1>
+          <header className={s.head}>
+            <p className="desk-label">{design.organizer ? `From ${design.organizer}` : "Your event stub"}</p>
+            <h1 className={s.title}>Claim your stub.</h1>
+            <p className={s.lede}>{ev.title}</p>
+          </header>
 
-          <ul className={s.locked} aria-label="Set by the organizer">
-            {design.locks.logo ? (
-              <li>
-                <LockIcon title="Locked" /> Logo · set by the organizer
-              </li>
-            ) : null}
-            {design.locks.title ? (
-              <li>
-                <LockIcon title="Locked" /> Title: {ev.title}
-              </li>
-            ) : null}
-          </ul>
+          <Field
+            id="claim-name"
+            label="Name on your stub"
+            placeholder="Your name"
+            value={name}
+            maxLength={32}
+            autoComplete="name"
+            onChange={(e) => {
+              setName(e.target.value);
+              setError("");
+            }}
+            aria-invalid={!!error}
+            hint={error || undefined}
+          />
 
-          <div className={ui.field}>
-            <label htmlFor={nameId} className={ui.fieldLabel}>
-              Name on your stub
-            </label>
-            <input
-              id={nameId}
-              className={ui.input}
-              value={name}
-              maxLength={32}
-              autoComplete="name"
-              onChange={(e) => {
-                setName(e.target.value);
-                setError("");
-              }}
-              aria-invalid={!!error}
-              aria-describedby={error ? `${nameId}-err` : undefined}
-            />
-            {error ? (
-              <p id={`${nameId}-err`} className={s.err}>
-                {error}
-              </p>
-            ) : null}
-          </div>
-
-          <div className={ui.field}>
-            <span className={ui.fieldLabel} id="style-l">
-              Style
-            </span>
-            <div className={ui.row} role="group" aria-labelledby="style-l">
-              {design.allowed.map((ed) => (
-                <button
-                  key={ed}
-                  type="button"
-                  className={`chip ${s.tall}`}
-                  aria-pressed={chosen === ed}
-                  onClick={() => {
-                    setEdition(ed);
-                    play("flick");
-                  }}
-                >
-                  {EDITION_LABEL[ed]}
-                </button>
-              ))}
+          {design.allowed.length > 1 ? (
+            <div className={s.group}>
+              <span className="desk-label">Style</span>
+              <PunchTabs label="Style" options={design.allowed.map((ed) => ({ value: ed, label: EDITION_LABEL[ed] }))} value={chosen} onChange={(ed) => setEdition(ed)} />
             </div>
-          </div>
+          ) : null}
 
-          <div className={ui.field}>
-            <span className={ui.fieldLabel}>
-              Photo <span className={ui.muted}>(optional)</span>
-            </span>
+          <Rule kind="perf" />
+
+          <div className={s.group}>
+            <span className="desk-label">Photo, if you like</span>
             <div className={ui.row}>
-              <label htmlFor={photoId} className="btn btn-quiet">
+              <label className={`${d.paper} ${s.filePick}`}>
                 {photo ? "Change photo" : "Add a photo"}
+                <input
+                  id={photoId}
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const f = e.currentTarget.files?.[0];
+                    if (f) {
+                      setPhoto(await photoToDataUrl(f));
+                      play("drop");
+                    }
+                  }}
+                />
               </label>
-              <input
-                id={photoId}
-                type="file"
-                accept="image/*"
-                className="visually-hidden"
-                onChange={async (e) => {
-                  const f = e.currentTarget.files?.[0];
-                  if (f) setPhoto(await photoToDataUrl(f));
-                }}
-              />
               {photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photo} alt="Your photo" className={s.thumb} />
+                <>
+                  <span className={s.thumbFrame}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} alt="Your photo" className={s.thumb} />
+                  </span>
+                  <TearLink type="button" onClick={() => setPhoto(null)}>
+                    Remove
+                  </TearLink>
+                </>
               ) : null}
             </div>
           </div>
 
-          <div className={ui.field}>
-            <label htmlFor={noteId} className={ui.fieldLabel}>
-              Note on the back <span className={ui.muted}>(optional)</span>
+          <div className={s.group}>
+            <label htmlFor={noteId} className="desk-label">
+              Note on the back, if you like
             </label>
-            <textarea id={noteId} className={ui.input} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
+            <textarea id={noteId} className={`${ui.input} ${s.note}`} value={note} maxLength={200} placeholder="Who you were with, what you remember." onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <button type="submit" className="btn btn-primary btn-block" disabled={claiming}>
+          <Stamp type="submit" block disabled={claiming}>
             Claim my stub
-          </button>
+          </Stamp>
+          <p className={ui.status}>This claim link is a simulated demo. The stub is saved on this device only.</p>
+          <MarkLegend marks={["simulated"]} />
         </form>
       </div>
     </PageShell>

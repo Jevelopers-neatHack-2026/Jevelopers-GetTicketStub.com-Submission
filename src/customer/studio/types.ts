@@ -20,6 +20,31 @@ export interface Fact {
   alternatives?: string[]; // top guesses for an unsure fact
   provenance: Provenance;
   kept?: boolean; // studio-only: user tapped "Keep on stub"
+  retrievedAt?: string; // ISO time the source was read, when known (live research only)
+}
+
+/** A permission-sensitive asset found while researching (an image on a page whose rights we can't confirm). Never "allowed" unless a source says so. */
+export interface ReviewAsset {
+  id: string;
+  label: string;
+  sourceUrl?: string;
+  status: "allowed" | "blocked" | "unknown";
+  reason?: string; // plain-language explanation shown to the person
+}
+
+/** One entry in a stub's correction history. Entries are never edited or removed; an undo is a new entry (GT-05). */
+export interface Correction {
+  id: string;
+  factId: string;
+  kind: "correct" | "confirm" | "undo";
+  /** The fact as it was before this entry. */
+  original: { value: string; label: string; source: string; provenance: Provenance; confidence: number; kept?: boolean };
+  /** The fact after this entry. */
+  corrected: { value: string; label: string };
+  by: "you";
+  at: string; // ISO
+  reason?: string;
+  undoes?: string; // id of the entry an undo reverses
 }
 
 export interface GameMoment {
@@ -43,6 +68,7 @@ export interface EventData {
   cast?: { name: string; starred?: boolean }[];
   programme?: string[];
   facts: Fact[];
+  assets?: ReviewAsset[];
 }
 
 export type Edition = "classic" | "letterpress" | "risograph" | "minimal" | "researched";
@@ -68,6 +94,14 @@ export interface ArtLayer {
   provenance: Provenance; // "live" only when a real image model produced it
 }
 
+/** The stub's settings when a version was made: lets two versions be compared in words (GT-06A). Absent on older versions. */
+export interface VersionContext {
+  material: Material;
+  finish: Finish;
+  keptFacts: string[]; // labels of the facts kept on the stub
+  personal: { titleFont: number; titleColor: string; foilTitle: boolean; hiddenFields: string[]; note?: string };
+}
+
 /** DesignVersion: art changes only. Type, chips and material are personalization on the same version. */
 export interface DesignVersion {
   id: string;
@@ -75,6 +109,7 @@ export interface DesignVersion {
   edition: Edition;
   art: ArtLayer;
   createdAt: string;
+  context?: VersionContext;
 }
 
 export interface Personalization {
@@ -84,6 +119,8 @@ export interface Personalization {
   hiddenFields: string[];
   note?: string;
   friends: { name: string; seat?: string; claimed: boolean }[];
+  /** Whose stub this is, when it was issued to a named guest (organizer runs, claimed stubs). Printed "Admit · name" on the front and back. A fan's own stub has none. */
+  guestName?: string;
 }
 
 export interface Stub {
@@ -97,12 +134,25 @@ export interface Stub {
   finish: Finish;
   torn: boolean; // finished and pinned to the wall
   wallAngle: number; // -4..4 degrees
+  /** Where the stub is pinned on the wall canvas, in canvas px. Unset until it is first placed. */
+  wallX?: number;
+  wallY?: number;
   photos: string[]; // data urls (local only)
   setId?: string; // matching set / claim set
+  /** Immutable history of fact corrections, oldest first. */
+  corrections?: Correction[];
+  /** Epoch ms of the last change. Set on every upsert; the newer one wins when a device and an account merge. */
+  updatedAt?: number;
 }
 
 export function currentVersion(s: Stub): DesignVersion {
   return s.versions.find((v) => v.id === s.currentVersionId) ?? s.versions[0];
+}
+
+/** The stub issued to one named guest: the name prints on the front and back, and the seat stays on the event. */
+export function withGuestName(s: Stub, name: string | undefined): Stub {
+  const guestName = name?.trim() || undefined;
+  return { ...s, personal: { ...s.personal, guestName, friends: [] } };
 }
 
 export function formatMoney(minor: number, currency = "USD"): string {

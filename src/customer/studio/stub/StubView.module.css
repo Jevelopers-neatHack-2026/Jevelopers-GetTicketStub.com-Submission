@@ -8,7 +8,8 @@
   position: relative;
   display: block;
   margin: 0;
-  width: var(--w);
+  /* never wider than the screen minus its gutter (frames shrink --stub-max by their mat) */
+  width: min(var(--w), var(--stub-max, calc(100vw - var(--nav-w, 0px) - 32px)));
   max-width: 100%;
   aspect-ratio: var(--aspect);
   container-type: inline-size;
@@ -36,7 +37,9 @@
   inset: 0;
   transform: rotateY(0deg);
   transition: transform 380ms cubic-bezier(0.45, 0, 0.55, 1);
-  filter: drop-shadow(0 0.4cqw 0 rgb(23 20 15 / 0.06)) drop-shadow(0 3cqw 3.5cqw rgb(23 20 15 / 0.32));
+  /* contact shadow on the desk, plus a soft cast shadow that slides away from the light as it tilts */
+  filter: drop-shadow(0 0.25cqw 0.3cqw rgb(23 20 15 / 0.22))
+    drop-shadow(calc(var(--px) * -1.4cqw) calc(1.6cqw + var(--py) * 1cqw) 2.6cqw rgb(23 20 15 / 0.26));
 }
 .flipped .flipper {
   transform: rotateY(180deg);
@@ -54,6 +57,21 @@
 }
 .front {
   visibility: visible;
+}
+/* window light from the top left, turning slightly with the tilt: the stub is lit, not flat */
+.face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(
+    calc(135deg + var(--px) * 18deg),
+    rgb(255 250 238 / 0.16) 0%,
+    transparent 46%,
+    rgb(23 20 15 / 0.1) 100%
+  );
+  mix-blend-mode: soft-light;
 }
 .back {
   visibility: hidden;
@@ -135,9 +153,13 @@
 .artButton:hover {
   box-shadow: inset 0 0 0 1px rgb(228 87 46 / 0.6);
 }
-.artButton:focus-visible,
 .artButton.selected {
   box-shadow: inset 0 0 0 max(2px, 0.6cqw) #e4572e;
+  outline: none;
+}
+/* Focus is a two-tone ring (light inside, ink outside) so it reads on any art, light or dark. */
+.artButton:focus-visible {
+  box-shadow: inset 0 0 0 max(2px, 0.6cqw) #fff, inset 0 0 0 max(4px, 1.2cqw) var(--desk-focus);
   outline: none;
 }
 
@@ -167,8 +189,11 @@
 .pickBtn:hover {
   outline-color: rgb(228 87 46 / 0.55);
 }
+/* Focus is two-tone (a light halo, then ink) so it reads on the paper and on any art behind the type. */
 .pickBtn:focus-visible {
-  outline: 2px solid #e4572e;
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9);
 }
 .selected {
   outline: max(2px, 0.5cqw) solid #e4572e !important;
@@ -970,4 +995,66 @@ button.chip:focus-visible {
   mix-blend-mode: multiply;
   opacity: 0.88;
   flex: none;
+}
+
+/* ======================================================================
+   ADMIT LINE: "Admit · Jamie R." when the stub was issued to a named guest.
+   Always the last item inside the edition's type block (never positioned over the title or art),
+   in that edition's own small type and ink. data-guest on the figure gives the block a little more room.
+   ====================================================================== */
+.admit {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+.admitName {
+  font-weight: 800;
+}
+.researched .admit {
+  font-size: 2.7cqw;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  opacity: 0.8;
+  margin-top: 0.8cqw;
+}
+.researched[data-guest] .type {
+  bottom: 5cqw;
+}
+.letterpress .lpAdmitName {
+  font-family: var(--font-ui), sans-serif;
+  font-size: 1.35cqw;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  max-width: 50cqw;
+}
+.risograph .admit {
+  font-size: 2.8cqw;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+  color: var(--ink);
+}
+.minimal .admit {
+  font-size: 2.6cqw;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  color: var(--ink);
+}
+.classic .admit {
+  font-family: var(--body);
+  font-size: 1.6cqw;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+.backAdmit {
+  font-size: calc(2.6 * var(--u));
+  letter-spacing: 0.16em;
+  color: var(--ink);
+  opacity: 0.85;
 }

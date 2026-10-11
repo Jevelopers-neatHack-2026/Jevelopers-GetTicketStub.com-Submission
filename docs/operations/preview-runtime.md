@@ -9,7 +9,7 @@ detailed build, deployment, runtime-mode and provider settings.
 The existing Next.js App Router studio from PR [#5](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/5) is the runtime for the
 deployment fix ([#21](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/21)). Its routes and brand assets are preserved. This is a
 hackathon prototype; integrating it does not complete [#7](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/7), [#1](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1), or the product
-release criteria. PR [#20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20) remains a separate stacked implementation.
+release criteria. PR [#20](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/20) adds magic-link identity, SQLite storage and file-backed artwork; target-host persistence and real email acceptance remain pending.
 The fix merged in PR [#22](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/22) and was verified on the Plus Launch
 preview at `660cc5e`; [#21](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/21) is closed with that evidence.
 
@@ -59,9 +59,12 @@ By default, the preview uses demo research fixtures and simulated art/agent
 responses, even if provider keys happen to be configured. Arbitrary event URL
 fetching is disabled. The visible banner identifies demo mode. Try the home
 page's neatHack, The Pale Hours, or Harbour FC shortcuts. Checkout remains
-sandbox; sign-in, wallet passes, and QR codes remain simulated. Stubs remain
-in browser storage and share links carry their payload; do not use private
-customer data in this prototype.
+sandbox; wallet passes and QR codes remain simulated. Magic-link sign-in and
+server-side saving use SQLite when storage is available; production sign-in
+requires email delivery unless sandbox mail is explicitly enabled. Keep
+`TICKETSTUB_SANDBOX_MAIL` unset on the deployed site. Demo mode gates AI and
+Ticketmaster calls; it does not disable Resend delivery when a mail key is set.
+Use synthetic data until the complete deployment is verified.
 
 `TICKETSTUB_RUNTIME_MODE=live` (set consistently at build and start) restores
 the original prototype's external research/provider paths. Any other value,
@@ -184,3 +187,22 @@ The GitHub Actions [runtime workflow](../../.github/workflows/runtime.yml)
 installs, lints, tests, typechecks, builds, and checks production routes, built
 assets and demo APIs using a non-default port. It does not verify phone
 gestures, upstream integration, or platform deployment.
+
+## Private storage on Plus Launch
+
+The host File Manager documents `/private` as durable across deployments,
+excluded from code downloads and never served publicly. Both Preview and
+Publish are configured with:
+
+```dotenv
+TICKETSTUB_DB=/private/ticketstub.sqlite
+TICKETSTUB_FILES=/private/files
+```
+
+These settings require a restart or deployment to reach the running process.
+After integration, check `/api/health` for `storage: "ok"` and
+`persistence: "configured"`, then verify a synthetic saved stub and its artwork
+survive a restart and redeployment. A configured health value proves only that
+paths were set, not that data survived. Back up the database and artwork as a
+consistent set and prove restore before enabling customer use. Never place
+SQLite in `public/assets`, which is publicly served.

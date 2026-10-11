@@ -1,0 +1,11 @@
+{
+  "fixture": "guest",
+  "description": "A server-bound guest device. Drafts only: no account capabilities.",
+  "verifyAt": "2026-10-10T12:00:00.000Z",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InRpY2tldHN0dWIuY29udGV4dCJ9.eyJjdHgiOnsic2NoZW1hIjoidGlja2V0c3R1Yi5jb250ZXh0LzEiLCJhY3RvciI6eyJraW5kIjoiZ3Vlc3QiLCJpZCI6ImZ4Z3Vlc3QwMDAwMDAwMDAxIn0sInRlbmFudCI6eyJpZCI6Imd1ZXN0OmZ4Z3Vlc3QwMDAwMDAwMDAxIn0sInJvbGUiOiJub25lIiwiY2FwYWJpbGl0aWVzIjpbImFnZW50LnVzZSIsImFydC5nZW5lcmF0ZSIsImNsYWltLnZpZXciLCJmaWxlLnJlYWQiLCJvcmRlci5jcmVhdGUiLCJzaGFyZS5jcmVhdGUiLCJzaGFyZS52aWV3Iiwic3R1Yi5kcmFmdCIsIndhbGwucHVibGljLnZpZXciXSwibWVtYmVyc2hpcFJldmlzaW9uIjowLCJyZXZva2VkIjpmYWxzZSwiZW52aXJvbm1lbnQiOiJkZXZlbG9wbWVudCIsIm1vZGUiOiJmaXh0dXJlIiwiaXNzdWVkQXQiOiIyMDI2LTEwLTEwVDEyOjAwOjAwLjAwMFoiLCJleHBpcmVzQXQiOiIyMDI2LTEwLTEwVDEyOjA1OjAwLjAwMFoifSwic2lkIjpudWxsfQ.0AR0qPsfx9EY-Wec9bPJ0RGtTfVVgbV4vPeI8P_hvUs",
+  "expect": {
+    "ok": true,
+    "role": "none",
+    "tenant": "guest:fxguest0000000001"
+  }
+}

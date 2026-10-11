@@ -1,0 +1,257 @@
+/* Help. The headline, the desk map, then the questions as paper index cards. Desk tokens only.
+   Phone: one column with a 16px gutter (the shell supplies it). Desktop: the map spreads, the questions sit centred at a reading width. */
+
+.page {
+  display: grid;
+  gap: 32px;
+  width: 100%;
+  padding-bottom: 24px;
+}
+.page > * {
+  min-width: 0;
+}
+.head {
+  display: grid;
+  gap: 8px;
+}
+.title {
+  margin: 0;
+  font: var(--type-h1);
+  font-variation-settings: "SOFT" 30, "opsz" 72;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lede {
+  margin: 0;
+  font: var(--type-lede);
+  color: var(--desk-ink);
+  text-wrap: pretty;
+}
+
+.faq {
+  display: grid;
+  gap: 28px;
+  width: 100%;
+  max-width: 680px;
+  margin-inline: auto;
+}
+.faq > *,
+.group {
+  min-width: 0;
+}
+.faq [hidden] {
+  display: none;
+}
+
+/* search */
+.search {
+  display: grid;
+  gap: 6px;
+}
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--desk-rule-strong);
+  border-radius: 8px;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  font: var(--type-body);
+  box-shadow: inset 0 1px 0 var(--desk-rule);
+  transition: border-color var(--desk-release) ease;
+}
+.input::placeholder {
+  color: var(--desk-ink-soft);
+}
+.input:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+  border-color: var(--desk-ink);
+}
+.count {
+  margin: 0;
+  min-height: 1.4em;
+  font: var(--type-ui);
+  color: var(--desk-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.empty {
+  margin: 0;
+  padding: 20px 16px;
+  border: 1px dashed var(--desk-rule-strong);
+  border-radius: 8px;
+  font: var(--type-body);
+  text-wrap: pretty;
+  animation: deal 320ms var(--ts-ease-enter) both;
+}
+
+/* groups of cards */
+.group {
+  display: grid;
+  gap: 12px;
+}
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+/* an index card: raised paper, ledge shadow, a ruled line under the question once it is open */
+.card {
+  position: relative;
+  min-width: 0;
+  scroll-margin-top: 76px;
+  border: 1px solid var(--desk-rule-strong);
+  border-radius: 8px;
+  background: var(--desk-paper-raised);
+  box-shadow: 0 2px 0 var(--desk-ledge);
+  transition:
+    transform var(--desk-release) var(--desk-spring),
+    box-shadow var(--desk-release) ease,
+    border-color var(--desk-release) ease;
+}
+.card:hover {
+  border-color: var(--desk-ink);
+}
+.card[data-open="true"] {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 0 var(--desk-ledge);
+  border-color: var(--desk-ink);
+}
+.card:target {
+  border-color: var(--desk-ink);
+}
+.q {
+  margin: 0;
+}
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink);
+  font: var(--type-h3);
+  font-variation-settings: "SOFT" 30, "opsz" 24;
+  letter-spacing: -0.02em;
+  text-align: left;
+  text-wrap: pretty;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.trigger:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: -4px;
+}
+.chevron {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  transition: transform 320ms var(--desk-spring);
+}
+.card[data-open="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+/* the fold: height eases between 0 and its content, the answer settles in after it */
+.fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 320ms var(--ts-ease-enter);
+}
+.card[data-open="true"] .fold {
+  grid-template-rows: 1fr;
+}
+.foldInner {
+  overflow: hidden;
+  min-height: 0;
+}
+.answer {
+  display: grid;
+  gap: 10px;
+  margin: 0 16px;
+  padding: 14px 0 16px;
+  border-top: 1px solid var(--desk-stamp);
+  font: var(--type-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--desk-ink);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 220ms ease,
+    transform 320ms var(--ts-ease-enter);
+}
+.card[data-open="true"] .answer {
+  opacity: 1;
+  transform: none;
+  transition-delay: 90ms;
+}
+.answer p {
+  margin: 0;
+  text-wrap: pretty;
+}
+.answer ul {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 4px;
+}
+.answer p > a + a {
+  margin-left: 16px;
+}
+.answer a,
+.empty a,
+.foot a {
+  color: var(--desk-ink);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.answer a:focus-visible,
+.empty a:focus-visible,
+.foot a:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
+}
+.foot {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--desk-ink-soft);
+}
+
+@keyframes deal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (min-width: 960px) {
+  .page {
+    gap: 40px;
+  }
+  .trigger {
+    padding-inline: 20px;
+  }
+  .answer {
+    margin-inline: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .chevron,
+  .fold,
+  .answer {
+    transition: none;
+  }
+  .empty {
+    animation: none;
+  }
+}

@@ -1,0 +1,112 @@
+/* The path strip. Paper tokens only, so it reads on the cream desk, wherever it sits. */
+.track {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0 auto;
+  color: var(--desk-ink-soft);
+}
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(100%, 320px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+}
+.step {
+  flex: none;
+  min-width: 0;
+}
+.stepLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.stepLink:hover .name {
+  color: var(--desk-ink);
+}
+/* the perforation between steps: a dotted tear line that is inked once you have crossed it */
+.perf {
+  flex: 1 1 8px;
+  min-width: 6px;
+  height: 2px;
+  background-image: radial-gradient(circle, currentColor 0.9px, transparent 1.1px);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  opacity: 0.55;
+}
+.perf[data-done="true"] {
+  opacity: 1;
+  color: var(--desk-ink);
+}
+/* punch: a hole through the paper (done), an inked dot (current), a faint dot (next) */
+.punch {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--desk-paper-sunk);
+  box-shadow: inset 0 1.5px 1.5px rgb(23 20 15 / 0.45), 0 0.5px 0 rgb(255 255 255 / 0.5);
+}
+.step[data-state="current"] .punch {
+  background: var(--desk-ink);
+  box-shadow: none;
+}
+.step[data-state="next"] .punch {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--desk-rule-strong);
+}
+.step[data-state="current"] {
+  color: var(--desk-ink);
+  font-weight: 700;
+}
+.step[data-state="done"] {
+  color: var(--desk-ink-soft);
+}
+.name {
+  transition: color 220ms ease;
+}
+
+.fork {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0;
+  font: var(--type-label);
+  font-variant-caps: all-small-caps;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+}
+.forkLead,
+.forkOr {
+  color: var(--desk-ink-soft);
+}
+.forkLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  color: var(--desk-ink);
+  text-decoration: none;
+  background-image: radial-gradient(circle, currentColor 0.9px, transparent 1.1px);
+  background-size: 5px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 calc(100% - 4px);
+}
+.forkLink svg {
+  width: 14px;
+  height: 14px;
+}

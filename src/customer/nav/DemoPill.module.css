@@ -1,0 +1,105 @@
+/* A yellow pill floating just right of the sidebar, bottom-left, clear of the corner cart and the home bar. */
+.pill {
+  position: fixed;
+  left: calc(var(--nav-w, 0px) + 12px);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 39; /* over the page, under every sheet, scrim and stage (40 and up) */
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(100vw - var(--nav-w, 0px) - 24px);
+  border-radius: 999px;
+  background: #f5cf3c;
+  color: #17140f;
+  border: 1px solid #c9a21d;
+  box-shadow:
+    0 1px 0 rgba(23, 20, 15, 0.08),
+    0 6px 16px -8px rgba(23, 20, 15, 0.35);
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* while the pill is up, the page can scroll its last line clear of it; a screen-high view (the studio)
+   shrinks by --demo-reserve instead, so it never scrolls */
+:global(#content):has(> .pill) {
+  --demo-reserve: calc(48px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--demo-reserve);
+}
+
+.tag {
+  all: unset;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+/* the rest unrolls to the right: a 0fr -> 1fr grid column, so it opens to its own width */
+.more {
+  display: grid;
+  grid-template-columns: 0fr;
+  opacity: 0;
+}
+.pill[data-open] .more {
+  grid-template-columns: 1fr;
+  opacity: 1;
+}
+.inner {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 2px;
+}
+
+.close {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin: 0 4px 0 6px;
+  border-radius: 999px;
+}
+.close:hover {
+  background: rgba(23, 20, 15, 0.12);
+}
+
+.tag:focus-visible,
+.close:focus-visible {
+  outline: 2px solid #17140f;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .more {
+    transition:
+      grid-template-columns 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 160ms ease;
+  }
+}
+
+/* a 375px phone fits the whole line instead of trimming "checkout" */
+@media (max-width: 420px) {
+  .pill {
+    font-size: 11px;
+  }
+  .tag {
+    padding: 7px 9px;
+  }
+}
+
+@media print {
+  .pill {
+    display: none;
+  }
+}

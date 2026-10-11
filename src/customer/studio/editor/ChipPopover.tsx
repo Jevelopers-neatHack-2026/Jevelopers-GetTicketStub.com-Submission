@@ -1,9 +1,9 @@
 "use client";
-import Link from "next/link";
 import type { Stub } from "../types";
-import { play, haptic } from "@/customer/studio/feedback";
-import { altLabel, setFactValue, toggleKept } from "./ops";
-import { Sheet } from "./Sheet";
+import { PaperSheet, SourceMark, Tag, Tags } from "@/customer/desk/Desk";
+import { FactQuestion, SourceLine } from "../facts/FactsReview";
+import { activeCorrection, openQuestions } from "../facts/corrections";
+import { toggleKept } from "./ops";
 import styles from "./overlays.module.css";
 
 interface Props {
@@ -13,58 +13,28 @@ interface Props {
   onClose: () => void;
 }
 
-/** Fix a fact: the top guesses as chips. No text field. */
+/** Tapping a chip on the stub: where the fact came from, and the short question when it needs an answer. The same question the Facts panel asks. */
 export function ChipPopover({ stub, factId, onChange, onClose }: Props) {
   const fact = factId ? stub.event.facts.find((f) => f.id === factId) : undefined;
-  const isDate = fact?.id === "date" || /^\d{4}-\d{2}-\d{2}$/.test(fact?.value ?? "");
-  const question = isDate ? "Which date was it?" : "Which value was it?";
-  const alternatives = fact?.alternatives ?? [];
-  const unsure = (fact?.confidence ?? 1) < 0.8;
+  const question = fact ? openQuestions(stub).find((q) => q.factId === fact.id) : undefined;
+  const mine = fact ? activeCorrection(stub, fact.id) : undefined;
 
   return (
-    <Sheet title={fact ? (alternatives.length ? question : fact.label) : "Fact"} open={!!fact} onClose={onClose}>
+    <PaperSheet title={fact ? (question ? question.text : fact.label) : "Fact"} open={!!fact} onClose={onClose}>
       {fact && (
         <div className={styles.stack}>
           <p className={styles.muted}>
-            {unsure ? "We're not sure about this one. Tap the right one." : `From ${fact.source}.`}{" "}
-            <span className="provenance">{fact.provenance === "simulated" ? "Sample data" : fact.provenance}</span>
+            {mine ? (mine.kind === "confirm" ? "You confirmed this one." : "Your correction.") : null} <SourceLine f={fact} />
+            {mine ? null : <SourceMark p={fact.provenance} />}
           </p>
-          {alternatives.length > 0 && (
-            <div className={styles.chipRow} role="group" aria-label={question}>
-              {alternatives.map((alt) => (
-                <button
-                  key={alt}
-                  type="button"
-                  className={`chip ${styles.bigChip}`}
-                  aria-pressed={fact.value === alt && fact.confidence >= 1}
-                  onClick={() => {
-                    onChange(setFactValue(stub, fact.id, alt));
-                    play("stamp");
-                    haptic([12]);
-                    onClose();
-                  }}
-                >
-                  {altLabel(alt)}
-                </button>
-              ))}
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn btn-quiet"
-            aria-pressed={!!fact.kept}
-            onClick={() => {
-              onChange(toggleKept(stub, fact.id));
-              play("tick");
-            }}
-          >
-            {fact.kept ? "On the stub · Take it off" : "Keep on stub"}
-          </button>
-          <Link className={styles.textLink} href="/search">
-            None of these · search
-          </Link>
+          {question && <FactQuestion stub={stub} q={question} onChange={onChange} onDone={onClose} />}
+          <Tags>
+            <Tag pressed={!!fact.kept} onClick={() => onChange(toggleKept(stub, fact.id))}>
+              {fact.kept ? "On the stub" : "Keep on stub"}
+            </Tag>
+          </Tags>
         </div>
       )}
-    </Sheet>
+    </PaperSheet>
   );
 }
