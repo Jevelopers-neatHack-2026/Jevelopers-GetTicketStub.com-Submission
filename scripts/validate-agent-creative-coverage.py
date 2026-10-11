@@ -2366,6 +2366,23 @@ def _validate_release(
             continue
         receipt_by_id[item["id"]] = item
 
+    # An internal relation can select a separately versioned prerequisite
+    # artifact. Its declared owner receipt is revision-scoped to that exact
+    # artifact, while the producer outcome can remain at an earlier revision.
+    # Only fully bound relation receipts receive this narrow exception from the
+    # ordinary outcome revision checks below.
+    relation_outcomes: dict[str, dict[str, Any]] = {}
+    for item in outcomes_raw:
+        if not isinstance(item, dict):
+            continue
+        candidate_leaf = item.get("leaf_key")
+        if _safe_key(candidate_leaf) and candidate_leaf in leaves:
+            relation_outcomes.setdefault(candidate_leaf, item)
+    relation_receipt_contexts, relation_receipt_evidence_contexts = _validated_internal_relation_receipt_contexts(
+        manifest, projection_relations, evidence_by_id, relation_outcomes,
+        leaves, receipt_by_id, tested,
+    )
+
     outcomes: dict[str, dict[str, Any]] = {}
     for index, item in enumerate(outcomes_raw):
         record = f"outcome-{index}"
@@ -2441,9 +2458,21 @@ def _validate_release(
                 if evidence is None:
                     _add_issue(issues, "OUTCOME_EVIDENCE_UNKNOWN", leaf)
                     continue
-                if evidence.get("source_revision") != revision:
+                relation_receipt_context = (
+                    relation_receipt_evidence_contexts.get((leaf, evidence_id))
+                    if isinstance(evidence_id, str) else None
+                )
+                expected_evidence_revision = (
+                    relation_receipt_context["source_revision"]
+                    if relation_receipt_context is not None else revision
+                )
+                expected_evidence_mode = (
+                    relation_receipt_context["mode"]
+                    if relation_receipt_context is not None else required_mode
+                )
+                if evidence.get("source_revision") != expected_evidence_revision:
                     _add_issue(issues, "EVIDENCE_REVISION_MISMATCH", leaf)
-                if evidence.get("mode") != required_mode:
+                if evidence.get("mode") != expected_evidence_mode:
                     _add_issue(issues, "EVIDENCE_MODE_MISMATCH", leaf)
                 if evidence.get("kind") == "test":
                     test_id = evidence.get("test_id")
@@ -2520,15 +2549,27 @@ def _validate_release(
             receipt = receipt_by_id.get(receipt_id) if isinstance(receipt_id, str) else None
             receipt_evidence_id = receipt.get("evidence_id") if receipt is not None else None
             receipt_evidence = evidence_by_id.get(receipt_evidence_id) if isinstance(receipt_evidence_id, str) else None
+            relation_receipt_context = (
+                relation_receipt_contexts.get((leaf, receipt_id))
+                if isinstance(receipt_id, str) else None
+            )
+            expected_receipt_revision = (
+                relation_receipt_context["source_revision"]
+                if relation_receipt_context is not None else revision
+            )
             if (
                 receipt is None
                 or receipt_id not in provided_receipts
                 or receipt.get("status") != "accepted"
-                or receipt.get("source_revision") != revision
+                or receipt.get("source_revision") != expected_receipt_revision
                 or receipt_evidence is None
                 or receipt_evidence_id not in evidence_ids
-                or receipt_evidence.get("source_revision") != revision
+                or receipt_evidence.get("source_revision") != expected_receipt_revision
                 or receipt_evidence.get("kind") != "receipt"
+                or (
+                    relation_receipt_context is not None
+                    and receipt_evidence.get("mode") != relation_receipt_context["mode"]
+                )
                 or not isinstance(receipt.get("owner_role"), str)
                 or not isinstance(receipt.get("action"), str)
                 or not receipt.get("owner_role").strip()
@@ -2794,12 +2835,28 @@ def _validate_projection_relation_evidence(
             receipt_evidence_id = receipt.get("evidence_id") if isinstance(receipt, dict) else None
             receipt_evidence = evidence_by_id.get(receipt_evidence_id) if isinstance(receipt_evidence_id, str) else None
             receipt_binding = receipt_evidence.get("receipt_binding") if isinstance(receipt_evidence, dict) else None
-            expected_receipt_binding = {
-                "relation_id": relation_id,
-                "receipt_id": receipt_id,
-                "owner_leaf_key": receipt_owner,
-                "external_artifact_id": external_id,
-            }
+            if external_id is not None:
+                expected_receipt_binding = {
+                    "relation_id": relation_id,
+                    "receipt_id": receipt_id,
+                    "owner_leaf_key": receipt_owner,
+                    "external_artifact_id": external_id,
+                }
+                expected_receipt_revision = receipt_outcome.get("revision") if isinstance(receipt_outcome, dict) else None
+                expected_receipt_mode = receipt_outcome.get("required_mode") if isinstance(receipt_outcome, dict) else None
+            else:
+                expected_receipt_binding = {
+                    "relation_id": relation_id,
+                    "receipt_id": receipt_id,
+                    "owner_leaf_key": receipt_owner,
+                    "external_artifact_id": None,
+                    "producer_evidence_id": proof.get("producer_evidence_id"),
+                    "producer_revision": proof.get("producer_revision"),
+                    "producer_mode": proof.get("producer_mode"),
+                    "producer_content_sha256": proof.get("producer_content_sha256"),
+                }
+                expected_receipt_revision = proof.get("producer_revision")
+                expected_receipt_mode = proof.get("producer_mode")
             if (
                 not isinstance(receipt, dict)
                 or not isinstance(receipt_outcome, dict)
@@ -2808,11 +2865,11 @@ def _validate_projection_relation_evidence(
                 or receipt.get("stage_relation_id") != relation_id
                 or receipt.get("owner_leaf_key") != receipt_owner
                 or receipt.get("external_artifact_id") != external_id
-                or receipt.get("source_revision") != receipt_outcome.get("revision")
+                or receipt.get("source_revision") != expected_receipt_revision
                 or receipt_evidence is None
                 or receipt_evidence_id not in receipt_evidence_ids
-                or receipt_evidence.get("source_revision") != receipt_outcome.get("revision")
-                or receipt_evidence.get("mode") != receipt_outcome.get("required_mode")
+                or receipt_evidence.get("source_revision") != expected_receipt_revision
+                or receipt_evidence.get("mode") != expected_receipt_mode
                 or receipt_evidence.get("kind") != "receipt"
                 or receipt_binding != expected_receipt_binding
                 or not isinstance(receipt.get("owner_role"), str)
@@ -2821,6 +2878,233 @@ def _validate_projection_relation_evidence(
                 or not receipt.get("action", "").strip()
             ):
                 _add_issue(issues, "STAGE_RELATION_OWNER_RECEIPT_MISSING", relation_id)
+
+
+def _validated_internal_relation_receipt_contexts(
+    manifest: dict[str, Any],
+    relations: list[dict[str, Any]] | None,
+    evidence_by_id: dict[str, dict[str, Any]],
+    outcomes: dict[str, dict[str, Any]],
+    leaves: dict[str, dict[str, Any]],
+    receipt_by_id: dict[str, dict[str, Any]],
+    tested: set[tuple[str, str]],
+) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[tuple[str, str], dict[str, Any]]]:
+    """Return only completely validated internal-relation receipt bindings.
+
+    This map supplies the narrow exception to ordinary outcome revision/mode
+    checks. A relation receipt earns that exception only when the selected
+    artifact, relation proof, owner receipt, and receipt evidence all identify
+    the same artifact bytes and tested revision.
+    """
+    if not isinstance(relations, list):
+        return {}, {}
+    rows = manifest.get("stage_evidence", [])
+    if not isinstance(rows, list) or len(rows) > MAX_RELEASE_RECORDS:
+        return {}, {}
+    by_relation: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        if isinstance(row, dict) and _safe_key(row.get("relation_id")):
+            by_relation.setdefault(row["relation_id"], []).append(row)
+
+    candidates: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for relation in relations:
+        if not isinstance(relation, dict):
+            continue
+        relation_id = relation.get("relation_id")
+        consumer = relation.get("consumer_key")
+        producer = relation.get("producer_key")
+        if (
+            not _safe_key(relation_id)
+            or relation.get("applicability") != "required"
+            or relation.get("status") != "satisfied"
+            or relation.get("external_artifact_id") is not None
+            or not _safe_key(consumer)
+            or not _safe_key(producer)
+        ):
+            continue
+        consumer_outcome = outcomes.get(consumer)
+        producer_outcome = outcomes.get(producer)
+        consumer_leaf = leaves.get(consumer)
+        producer_leaf = leaves.get(producer)
+        if not isinstance(consumer_outcome, dict) or not isinstance(producer_outcome, dict):
+            continue
+        if not isinstance(consumer_leaf, dict) or not isinstance(producer_leaf, dict):
+            continue
+        producer_outcome_revision = producer_outcome.get("revision")
+        producer_repo = producer_leaf.get("repository")
+        producer_outcome_mode = producer_outcome.get("required_mode")
+        if (
+            producer_outcome.get("status") != "verified"
+            or producer_outcome.get("prerequisites_satisfied") is not True
+            or producer_outcome.get("evaluated_stage") != producer_leaf.get("required_release_stage")
+            or not isinstance(producer_outcome_revision, str)
+            or re.fullmatch(r"[0-9a-f]{40}", producer_outcome_revision) is None
+            or not isinstance(producer_repo, str)
+            or (producer_repo, producer_outcome_revision) not in tested
+            or not isinstance(producer_outcome_mode, str)
+            or producer_outcome_mode not in MODES
+            or (producer_leaf.get("required_mode") is not None and producer_leaf.get("required_mode") != producer_outcome_mode)
+        ):
+            continue
+        consumer_stage = relation.get("consumer_stage")
+        selected_stage = consumer_outcome.get("evaluated_stage")
+        if (
+            not isinstance(consumer_stage, str)
+            or consumer_stage not in PROJECTION_STAGE_ORDER
+            or not isinstance(selected_stage, str)
+            or selected_stage not in PROJECTION_STAGE_ORDER
+            or PROJECTION_STAGE_ORDER[consumer_stage] > PROJECTION_STAGE_ORDER[selected_stage]
+            or (relation.get("application_scope") == "live_only" and consumer_outcome.get("required_mode") != "live")
+        ):
+            continue
+
+        proof_rows = by_relation.get(relation_id, [])
+        if len(proof_rows) != 1:
+            continue
+        proof = proof_rows[0]
+        if (
+            proof.get("consumer_key") != consumer
+            or proof.get("consumer_requirement_ids") != relation.get("consumer_requirement_ids")
+            or proof.get("consumer_stage") != relation.get("consumer_stage")
+            or proof.get("producer_key") != producer
+            or proof.get("producer_requirement_ids") != relation.get("producer_requirement_ids")
+            or proof.get("external_artifact_id") is not None
+            or proof.get("producer_stage") != relation.get("prerequisite_stage")
+        ):
+            continue
+
+        consumer_evidence_id = proof.get("evidence_id")
+        consumer_evidence = evidence_by_id.get(consumer_evidence_id) if isinstance(consumer_evidence_id, str) else None
+        consumer_ids = consumer_outcome.get("evidence_ids")
+        if not isinstance(consumer_ids, list):
+            continue
+        if (
+            consumer_evidence is None
+            or consumer_evidence_id not in consumer_ids
+            or proof.get("content_sha256") != consumer_evidence.get("sha256")
+            or proof.get("source_revision") != consumer_evidence.get("source_revision")
+            or proof.get("source_revision") != consumer_outcome.get("revision")
+            or proof.get("mode") != consumer_evidence.get("mode")
+            or proof.get("mode") != consumer_outcome.get("required_mode")
+        ):
+            continue
+
+        producer_evidence_id = proof.get("producer_evidence_id")
+        producer_evidence = evidence_by_id.get(producer_evidence_id) if isinstance(producer_evidence_id, str) else None
+        producer_binding = producer_evidence.get("stage_binding") if isinstance(producer_evidence, dict) else None
+        producer_revision = proof.get("producer_revision")
+        producer_mode = proof.get("producer_mode")
+        producer_digest = proof.get("producer_content_sha256")
+        producer_ids = producer_outcome.get("evidence_ids")
+        expected_stage_binding = {
+            "relation_id": relation_id,
+            "leaf_key": producer,
+            "requirement_ids": relation.get("producer_requirement_ids"),
+            "stage": relation.get("prerequisite_stage"),
+        }
+        if (
+            producer_evidence is None
+            or not isinstance(producer_ids, list)
+            or producer_binding != expected_stage_binding
+            or producer_evidence.get("source_revision") != producer_revision
+            or producer_evidence.get("mode") != producer_mode
+            or producer_evidence.get("sha256") != producer_digest
+            or not isinstance(producer_revision, str)
+            or re.fullmatch(r"[0-9a-f]{40}", producer_revision) is None
+            or not isinstance(producer_repo, str)
+            or (producer_repo, producer_revision) not in tested
+            or not isinstance(producer_mode, str)
+            or producer_mode not in MODES
+            or not isinstance(producer_digest, str)
+            or HASH_RE.fullmatch(producer_digest) is None
+            or (producer_leaf.get("required_mode") is not None and producer_leaf.get("required_mode") != producer_mode)
+            or (
+                producer_evidence_id in producer_ids
+                and (
+                    producer_outcome.get("revision") != producer_revision
+                    or producer_outcome.get("required_mode") != producer_mode
+                )
+            )
+        ):
+            continue
+
+        receipt_ids = relation.get("required_owner_receipt_ids", [])
+        if not isinstance(receipt_ids, list) or any(not _safe_key(value) for value in receipt_ids):
+            continue
+        owner_receipt_ids = producer_outcome.get("owner_receipt_ids")
+        owner_evidence_ids = producer_outcome.get("evidence_ids")
+        if not isinstance(owner_receipt_ids, list) or not isinstance(owner_evidence_ids, list):
+            continue
+        for receipt_id in receipt_ids:
+            receipt = receipt_by_id.get(receipt_id)
+            receipt_evidence_id = receipt.get("evidence_id") if isinstance(receipt, dict) else None
+            receipt_evidence = evidence_by_id.get(receipt_evidence_id) if isinstance(receipt_evidence_id, str) else None
+            expected_receipt_binding = {
+                "relation_id": relation_id,
+                "receipt_id": receipt_id,
+                "owner_leaf_key": producer,
+                "external_artifact_id": None,
+                "producer_evidence_id": producer_evidence_id,
+                "producer_revision": producer_revision,
+                "producer_mode": producer_mode,
+                "producer_content_sha256": producer_digest,
+            }
+            if (
+                not isinstance(receipt, dict)
+                or receipt_id not in owner_receipt_ids
+                or not isinstance(receipt_evidence_id, str)
+                or receipt_evidence_id not in owner_evidence_ids
+                or receipt.get("status") != "accepted"
+                or receipt.get("stage_relation_id") != relation_id
+                or receipt.get("owner_leaf_key") != producer
+                or receipt.get("external_artifact_id") is not None
+                or receipt.get("source_revision") != producer_revision
+                or receipt_evidence is None
+                or receipt_evidence.get("source_revision") != producer_revision
+                or receipt_evidence.get("mode") != producer_mode
+                or receipt_evidence.get("kind") != "receipt"
+                or receipt_evidence.get("receipt_binding") != expected_receipt_binding
+                or not isinstance(receipt.get("owner_role"), str)
+                or not receipt.get("owner_role", "").strip()
+                or not isinstance(receipt.get("action"), str)
+                or not receipt.get("action", "").strip()
+            ):
+                continue
+            candidates.setdefault((producer, receipt_id), []).append({
+                "evidence_id": receipt_evidence_id,
+                "source_revision": producer_revision,
+                "mode": producer_mode,
+                "producer_evidence_id": producer_evidence_id,
+                "producer_content_sha256": producer_digest,
+                "relation_id": relation_id,
+            })
+
+    # A duplicated receipt/evidence reference across relations is not a basis
+    # for choosing one relation's revision. Grant an exception only when all
+    # applicable declarations resolve to the same complete binding.
+    contexts: dict[tuple[str, str], dict[str, Any]] = {}
+    evidence_bindings: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for key, values in candidates.items():
+        distinct = {
+            (value["evidence_id"], value["source_revision"], value["mode"],
+             value["producer_evidence_id"], value["producer_content_sha256"], value["relation_id"])
+            for value in values
+        }
+        if len(distinct) != 1:
+            continue
+        value = values[0]
+        contexts[key] = value
+        evidence_bindings.setdefault((key[0], value["evidence_id"]), []).append(value)
+    safe_evidence_bindings: dict[tuple[str, str], dict[str, Any]] = {}
+    for key, values in evidence_bindings.items():
+        signatures = {
+            (value["source_revision"], value["mode"], value["producer_evidence_id"],
+             value["producer_content_sha256"], value["relation_id"])
+            for value in values
+        }
+        if len(signatures) == 1:
+            safe_evidence_bindings[key] = values[0]
+    return contexts, safe_evidence_bindings
 
 
 def _required_test_ids(entry: dict[str, Any]) -> list[str]:

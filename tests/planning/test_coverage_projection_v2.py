@@ -519,7 +519,12 @@ class CoverageProjectionV2Tests(unittest.TestCase):
             "producer": "synthetic-control", "source_revision": revision, "captured_at": "2026-10-11T17:00:00Z",
             "mode": "mock", "kind": "receipt",
             "receipt_binding": {"relation_id": "STG-000", "receipt_id": receipt_id,
-                                "owner_leaf_key": "AH-LEAF", "external_artifact_id": None},
+                                "owner_leaf_key": "AH-LEAF", "external_artifact_id": None,
+                                "producer_evidence_id": "ev-stage-ah", "producer_revision": revision,
+                                "producer_mode": "mock",
+                                "producer_content_sha256": next(
+                                    item["sha256"] for item in release["evidence"] if item["id"] == "ev-stage-ah"
+                                )},
         })
         ah_outcome = next(row for row in release["outcomes"] if row["leaf_key"] == "AH-LEAF")
         ah_outcome["evidence_ids"].append(receipt_evidence_id)
@@ -549,6 +554,98 @@ class CoverageProjectionV2Tests(unittest.TestCase):
                 self.paths["release"].write_bytes(_bytes(changed))
                 self.assertIn("STAGE_RELATION_OWNER_RECEIPT_MISSING",
                               self.codes(self.validate(release_path=self.paths["release"], require_specialists=False)))
+
+    def test_internal_relation_receipt_binds_standalone_selected_artifact_revision(self) -> None:
+        receipt_id = "receipt-standalone-prerequisite"
+        revision_a = "a" * 40
+        revision_b = "b" * 40
+
+        def make_manifest(receipt_revision: str | None) -> tuple[dict[str, Any], dict[Path, str]]:
+            release, expected_paths = self._release_manifest()
+            self.coverage["source_stage_rows"][0]["required_owner_receipt_ids"] = [receipt_id] if receipt_revision else []
+            self.coverage["stage_relations"][0]["required_owner_receipt_ids"] = [receipt_id] if receipt_revision else []
+            self.write()
+            release["tested_revisions"].append({"repository": "agent-harness", "revision": revision_b})
+            selected_artifact = next(item for item in release["evidence"] if item["id"] == "ev-stage-ah")
+            selected_digest = selected_artifact["sha256"]
+            selected_artifact["source_revision"] = revision_b
+            release["stage_evidence"][0]["producer_revision"] = revision_b
+            release["stage_evidence"][0]["producer_content_sha256"] = selected_digest
+            ah_outcome = next(item for item in release["outcomes"] if item["leaf_key"] == "AH-LEAF")
+            self.assertEqual(ah_outcome["revision"], revision_a)
+            self.assertNotIn("ev-stage-ah", ah_outcome["evidence_ids"])
+            if receipt_revision is not None:
+                receipt_content = "standalone prerequisite receipt evidence"
+                receipt_path = self.work / f"standalone-receipt-{receipt_revision[0]}.txt"
+                receipt_path.write_text(receipt_content, encoding="utf-8")
+                expected_paths[receipt_path] = receipt_content
+                receipt_evidence_id = "ev-standalone-receipt"
+                release["evidence"].append({
+                    "id": receipt_evidence_id, "path": str(receipt_path),
+                    "sha256": _sha(receipt_content.encode()), "producer": "synthetic-control",
+                    "source_revision": receipt_revision, "captured_at": "2026-10-11T17:00:00Z",
+                    "mode": "mock", "kind": "receipt",
+                    "receipt_binding": {
+                        "relation_id": "STG-000", "receipt_id": receipt_id,
+                        "owner_leaf_key": "AH-LEAF", "external_artifact_id": None,
+                        "producer_evidence_id": "ev-stage-ah", "producer_revision": revision_b,
+                        "producer_mode": "mock", "producer_content_sha256": selected_digest,
+                    },
+                })
+                ah_outcome["evidence_ids"].append(receipt_evidence_id)
+                ah_outcome["required_owner_receipts"] = [receipt_id]
+                ah_outcome["owner_receipt_ids"] = [receipt_id]
+                release["owner_receipts"] = [{
+                    "id": receipt_id, "status": "accepted", "source_revision": receipt_revision,
+                    "evidence_id": receipt_evidence_id, "owner_role": "Shared-contracts owner",
+                    "action": "Provide receipt bound to the selected prerequisite artifact",
+                    "stage_relation_id": "STG-000", "owner_leaf_key": "AH-LEAF",
+                    "external_artifact_id": None,
+                }]
+            return release, expected_paths
+
+        wrong_revision, expected_paths = make_manifest(revision_a)
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        self.paths["release"].write_bytes(_bytes(wrong_revision))
+        wrong_codes = self.codes(self.validate(release_path=self.paths["release"], require_specialists=False))
+        self.assertIn("STAGE_RELATION_OWNER_RECEIPT_MISSING", wrong_codes)
+
+        exact_revision, expected_paths = make_manifest(revision_b)
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        self.paths["release"].write_bytes(_bytes(exact_revision))
+        self.assertEqual(
+            self.validate(release_path=self.paths["release"], require_specialists=False)["status"],
+            "SCOPED_RELEASE_EVIDENCE_READY",
+        )
+
+        receipt_binding_mutations = {
+            "arbitrary_receipt_identity": {"receipt_id": "receipt-arbitrary"},
+            "wrong_selected_artifact": {"producer_evidence_id": "ev-ah-leaf"},
+            "wrong_selected_revision": {"producer_revision": revision_a},
+            "wrong_selected_mode": {"producer_mode": "recorded"},
+            "wrong_selected_digest": {"producer_content_sha256": "f" * 64},
+        }
+        for label, fields in receipt_binding_mutations.items():
+            with self.subTest(binding=label):
+                changed = copy.deepcopy(exact_revision)
+                evidence = next(item for item in changed["evidence"] if item["id"] == "ev-standalone-receipt")
+                evidence["receipt_binding"].update(fields)
+                self.paths["release"].write_bytes(_bytes(changed))
+                changed_codes = self.codes(self.validate(release_path=self.paths["release"], require_specialists=False))
+                self.assertIn("STAGE_RELATION_OWNER_RECEIPT_MISSING", changed_codes)
+                if label == "arbitrary_receipt_identity":
+                    self.assertIn("EVIDENCE_REVISION_MISMATCH", changed_codes)
+
+        receipt_free, expected_paths = make_manifest(None)
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        self.paths["release"].write_bytes(_bytes(receipt_free))
+        self.assertEqual(
+            self.validate(release_path=self.paths["release"], require_specialists=False)["status"],
+            "SCOPED_RELEASE_EVIDENCE_READY",
+        )
 
     def test_external_relation_receipt_is_bound_to_consumer_outcome(self) -> None:
         receipt_id = "receipt-external-required"
