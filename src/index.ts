@@ -24,6 +24,15 @@ export type {
   StoredAttemptSummary
 } from "./metering.js";
 export {
+  AttemptStoreError,
+  LocalAttemptPersistence,
+  createLocalAttemptPersistence
+} from "./attempt-store.js";
+export type {
+  AttemptHistory,
+  LocalAttemptPersistenceOptions
+} from "./attempt-store.js";
+export {
   evaluateProviderPolicy,
   PRODIGI_SANDBOX_BASE_URL,
   PRODIGI_SANDBOX_OPERATION_ENDPOINTS,
