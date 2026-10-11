@@ -32,6 +32,8 @@ KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 ISSUE_PATH_RE = re.compile(r"^/([^/]+)/([^/]+)/issues/([1-9][0-9]*)/?$")
 MODES = {"mock", "recorded", "sandbox", "shadow", "live"}
+STAGES = {"fixture", "contract", "runnable", "final_acceptance"}
+STAGED_EDGE_STATES = {"pending", "satisfied"}
 EVIDENCE_KINDS = {"test", "runtime", "configuration", "artifact", "receipt"}
 LEAF_KINDS = {"implementation_leaf", "delivery_leaf"}
 NON_LEAF_KINDS = {"epic", "gate", "release_gate", "program_gate"}
@@ -44,6 +46,7 @@ MAX_OWNERSHIP_ROWS = 100_000
 MAX_GRAPH_ROWS = 100_000
 MAX_RELEASE_RECORDS = 10_000
 MAX_BLOCKER_TEXT = 512
+MAX_ISSUE_NUMBER_DIGITS = 20
 
 
 class InputError(Exception):
@@ -209,6 +212,18 @@ def _relative_artifact(value: Any, record: str) -> Path:
 
 def _add_issue(issues: list[dict[str, str]], code: str, record: Any) -> None:
     item = {"code": code, "record": _label(record)}
+    if item not in issues and len(issues) < 250:
+        issues.append(item)
+
+
+def _add_relation_issue(
+    issues: list[dict[str, str]], code: str, record: Any, related_record: Any
+) -> None:
+    item = {
+        "code": code,
+        "record": _label(record),
+        "related_record": _label(related_record),
+    }
     if item not in issues and len(issues) < 250:
         issues.append(item)
 
@@ -428,6 +443,9 @@ def _entry_identity(
         _add_issue(issues, "ENTRY_ISSUE_URL_INVALID", record)
         return None
     owner, url_repo, number_text = match.groups()
+    if len(number_text) > MAX_ISSUE_NUMBER_DIGITS:
+        _add_issue(issues, "ENTRY_ISSUE_URL_INVALID", record)
+        return None
     if url_repo != repo:
         _add_issue(issues, "ENTRY_REPOSITORY_URL_MISMATCH", record)
         return None
@@ -475,10 +493,12 @@ def _check_issue_readbacks(
         except ValueError:
             _add_issue(issues, "ISSUE_READBACK_URL_INVALID", f"readback-{index}")
             continue
+        readback_match = ISSUE_PATH_RE.fullmatch(parsed.path)
         if (
             parsed.scheme != "https"
             or parsed.hostname != "github.com"
-            or not ISSUE_PATH_RE.fullmatch(parsed.path)
+            or not readback_match
+            or len(readback_match.group(3)) > MAX_ISSUE_NUMBER_DIGITS
             or parsed.query
             or parsed.fragment
             or parsed.username is not None
@@ -518,8 +538,17 @@ def _check_issue_readbacks(
             _add_issue(issues, "ISSUE_READBACK_BODY_MISMATCH", key)
         if not isinstance(row.get("state"), str) or row.get("state") not in {"open", "closed"}:
             _add_issue(issues, "ISSUE_READBACK_STATE_INVALID", key)
-        elif entry.get("state") == "closed" and row.get("state") != "closed":
-            _add_issue(issues, "ISSUE_READBACK_STATE_MISMATCH", key)
+        else:
+            entry_state = entry.get("state")
+            if entry_state == "closed" and row.get("state") != "closed":
+                _add_issue(issues, "ISSUE_READBACK_STATE_MISMATCH", key)
+            elif row.get("state") == "closed":
+                if isinstance(entry_state, str) and entry_state in {
+                    "planned", "in_progress", "blocked", "deferred", "not_planned", "not-planned"
+                }:
+                    _add_issue(issues, "ISSUE_READBACK_STATE_MISMATCH", key)
+                if not _has_exact_closure_evidence(entry.get("closure_evidence"), _required_test_ids(entry)):
+                    _add_issue(issues, "CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", key)
 
 
 def _validate_map(
@@ -642,6 +671,14 @@ def _validate_map(
                 _add_issue(issues, "ENTRY_REQUIRED_RECEIPTS_INVALID", key)
             elif len(required_receipts) != len(set(required_receipts)):
                 _add_issue(issues, "ENTRY_REQUIRED_RECEIPTS_DUPLICATE", key)
+            for field in ("required_model_revision", "required_policy_revision"):
+                if field in raw and not _safe_key(raw.get(field)):
+                    _add_issue(issues, "ENTRY_REQUIRED_CONFIGURATION_PIN_INVALID", key)
+            required_release_stage = raw.get("required_release_stage")
+            if "required_release_stage" in raw and (
+                not isinstance(required_release_stage, str) or required_release_stage not in STAGES
+            ):
+                _add_issue(issues, "ENTRY_REQUIRED_RELEASE_STAGE_INVALID", key)
         repo = raw.get("repository")
         if not isinstance(repo, str) or REPOSITORY_RE.fullmatch(repo) is None:
             _add_issue(issues, "ENTRY_REPOSITORY_INVALID", key)
@@ -739,6 +776,7 @@ def _validate_map(
             _add_issue(issues, "LOCAL_SCOPE_CLASSIFICATION_INVALID", ident)
 
     contribution_rows: list[dict[str, Any]] = []
+    contributed_pairs: dict[str, set[str]] = {}
     seen_row_ids: set[str] = set()
     for index, raw in enumerate(contributions_raw):
         if not isinstance(raw, dict):
@@ -760,11 +798,14 @@ def _validate_map(
         if not isinstance(leaf, str) or leaf not in leaf_by_key:
             _add_issue(issues, "CONTRIBUTION_OWNER_NOT_LEAF", ident)
         else:
-            if ident not in raw_by_list(entry_by_key[leaf].get("requirement_ids")):
+            leaf_declares_requirement = ident in raw_by_list(entry_by_key[leaf].get("requirement_ids"))
+            if not leaf_declares_requirement:
                 _add_issue(issues, "CONTRIBUTION_NOT_DECLARED_BY_LEAF", ident)
             required_contributors = ownership_by_id[ident].get("required_contributors", [])
             if not isinstance(required_contributors, list) or leaf not in required_contributors:
                 _add_issue(issues, "CONTRIBUTION_OWNER_NOT_DECLARED", ident)
+            elif leaf_declares_requirement:
+                contributed_pairs.setdefault(ident, set()).add(leaf)
         if ident in criteria:
             acceptance = raw.get("authoritative_acceptance")
             if not isinstance(acceptance, dict):
@@ -793,6 +834,19 @@ def _validate_map(
     }
     for ident in sorted(set(ownership_by_id) - contributed_ids):
         _add_issue(issues, "OWNERSHIP_WITHOUT_CONTRIBUTION", ident)
+    for ident, ownership in ownership_by_id.items():
+        required_contributors = ownership.get("required_contributors")
+        if not isinstance(required_contributors, list) or any(
+            not isinstance(contributor, str) or contributor not in leaf_by_key
+            for contributor in required_contributors
+        ):
+            continue
+        actual_contributors = contributed_pairs.get(ident, set())
+        for contributor in required_contributors:
+            if contributor not in actual_contributors:
+                _add_relation_issue(
+                    issues, "REQUIRED_CONTRIBUTOR_MISSING", ident, contributor
+                )
 
     for entry in entries:
         supersedes = entry.get("supersedes")
@@ -816,6 +870,18 @@ def _validate_map(
 
     if check_dag:
         _validate_graph(coverage.get("dag"), coverage.get("staged_edges"), entry_by_key, leaf_by_key, issues)
+    staged_edges_for_ownership = coverage.get("staged_edges")
+    if isinstance(staged_edges_for_ownership, list):
+        for index, edge in enumerate(staged_edges_for_ownership):
+            if not isinstance(edge, dict) or edge.get("required_for_v1") is not True:
+                continue
+            edge_id = edge.get("edge_id")
+            requirement_ids = edge.get("requirement_ids")
+            if not isinstance(requirement_ids, list):
+                continue
+            for requirement_id in requirement_ids:
+                if isinstance(requirement_id, str) and requirement_id not in ownership_by_id:
+                    _add_issue(issues, "STAGED_EDGE_REQUIREMENT_UNKNOWN", edge_id or f"stage-{index}")
 
     if coverage.get("complete") is not True or map_pin.get("complete") is not True:
         _add_issue(issues, "COVERAGE_SNAPSHOT_INCOMPLETE", "coverage-map")
@@ -823,7 +889,11 @@ def _validate_map(
     global_ids = set(criteria)
     mapped_global = set(ownership_by_id) & global_ids
     local_ids = set(ownership_by_id) - global_ids
-    row_global = sum(1 for row in contribution_rows if row.get("requirement_id") in global_ids)
+    row_global = sum(
+        1
+        for row in contribution_rows
+        if isinstance(row.get("requirement_id"), str) and row.get("requirement_id") in global_ids
+    )
     row_local = len(contribution_rows) - row_global
     dimensions = {
         "required_leaf_records": sum(1 for item in entries if item.get("required_for_v1") is True),
@@ -948,11 +1018,19 @@ def _validate_graph(
         _add_issue(issues, "STAGED_EDGE_FAMILY_MISSING", "staged_edges")
         return
     staged_edges = _bounded_rows(staged_edges, MAX_GRAPH_ROWS, "STAGED_EDGE_ROW_LIMIT_EXCEEDED", "staged_edges", issues)
+    seen_stage_edge_ids: set[str] = set()
     for index, edge in enumerate(staged_edges):
         record = f"stage-{index}"
         if not isinstance(edge, dict):
             _add_issue(issues, "STAGED_EDGE_INVALID", record)
             continue
+        edge_id = edge.get("edge_id")
+        if not _safe_key(edge_id):
+            _add_issue(issues, "STAGED_EDGE_ID_INVALID", record)
+        elif edge_id in seen_stage_edge_ids:
+            _add_issue(issues, "STAGED_EDGE_ID_DUPLICATE", edge_id)
+        else:
+            seen_stage_edge_ids.add(edge_id)
         consumer = edge.get("consumer_key")
         prerequisite = edge.get("prerequisite_key")
         if (
@@ -962,9 +1040,52 @@ def _validate_graph(
             or prerequisite not in all_nodes
         ):
             _add_issue(issues, "STAGED_EDGE_UNKNOWN_NODE", record)
-        for field in ("consumer_stage", "prerequisite_stage", "status"):
-            if not isinstance(edge.get(field), str) or not edge.get(field).strip():
+        for field in ("consumer_stage", "prerequisite_stage"):
+            if not isinstance(edge.get(field), str) or edge.get(field) not in STAGES:
                 _add_issue(issues, "STAGED_EDGE_FIELD_INVALID", record)
+        if not isinstance(edge.get("status"), str) or edge.get("status") not in STAGED_EDGE_STATES:
+            _add_issue(issues, "STAGED_EDGE_STATUS_INVALID", record)
+        required_for_v1 = edge.get("required_for_v1")
+        if not isinstance(required_for_v1, bool):
+            _add_issue(issues, "STAGED_EDGE_REQUIRED_FLAG_INVALID", record)
+        requirement_ids = edge.get("requirement_ids")
+        if (
+            not isinstance(requirement_ids, list)
+            or any(not _safe_key(value) for value in requirement_ids)
+        ):
+            _add_issue(issues, "STAGED_EDGE_REQUIREMENT_IDS_INVALID", record)
+        elif len(requirement_ids) != len(set(requirement_ids)):
+            _add_issue(issues, "STAGED_EDGE_REQUIREMENT_IDS_DUPLICATE", record)
+        elif required_for_v1 is True:
+            if not requirement_ids:
+                _add_issue(issues, "STAGED_EDGE_REQUIREMENT_IDS_REQUIRED", record)
+            for endpoint in (consumer, prerequisite):
+                endpoint_leaf = leaf_by_key.get(endpoint) if isinstance(endpoint, str) else None
+                endpoint_requirement_ids = endpoint_leaf.get("requirement_ids") if endpoint_leaf is not None else None
+                if (
+                    endpoint_leaf is None
+                    or not isinstance(endpoint_requirement_ids, list)
+                    or not any(value in endpoint_requirement_ids for value in requirement_ids)
+                ):
+                    _add_issue(issues, "STAGED_EDGE_REQUIREMENT_NOT_DECLARED", edge_id or record)
+        required_evidence = edge.get("required_evidence_ids", [])
+        if (
+            not isinstance(required_evidence, list)
+            or any(not _safe_key(value) for value in required_evidence)
+        ):
+            _add_issue(issues, "STAGED_EDGE_EVIDENCE_IDS_INVALID", record)
+        elif len(required_evidence) != len(set(required_evidence)):
+            _add_issue(issues, "STAGED_EDGE_EVIDENCE_IDS_DUPLICATE", record)
+        elif edge.get("status") == "satisfied" and not required_evidence:
+            _add_issue(issues, "STAGED_EDGE_EVIDENCE_REQUIRED", record)
+        required_receipts = edge.get("required_owner_receipt_ids", [])
+        if (
+            not isinstance(required_receipts, list)
+            or any(not _safe_key(value) for value in required_receipts)
+        ):
+            _add_issue(issues, "STAGED_EDGE_RECEIPT_IDS_INVALID", record)
+        elif len(required_receipts) != len(set(required_receipts)):
+            _add_issue(issues, "STAGED_EDGE_RECEIPT_IDS_DUPLICATE", record)
         if edge.get("edge_type") != "evidence_stage":
             _add_issue(issues, "STAGED_EDGE_TYPE_INVALID", record)
 
@@ -997,6 +1118,7 @@ def _validate_release(
     leaves: dict[str, dict[str, Any]],
     dag: Any,
     required_gate_fan_in: Any,
+    staged_edges: Any,
     issues: list[dict[str, str]],
 ) -> dict[str, Any]:
     manifest, manifest_raw = _read_json(release_path, "release-manifest")
@@ -1151,6 +1273,14 @@ def _validate_release(
         outcomes[leaf] = item
         if item.get("status") != "verified":
             _add_issue(issues, "REQUIRED_OUTCOME_NOT_VERIFIED", leaf)
+        required_stage = leaves[leaf].get("required_release_stage")
+        evaluated_stage = item.get("evaluated_stage")
+        if not isinstance(required_stage, str) or required_stage not in STAGES:
+            _add_issue(issues, "REQUIRED_RELEASE_STAGE_MISSING", leaf)
+        if not isinstance(evaluated_stage, str) or evaluated_stage not in STAGES:
+            _add_issue(issues, "OUTCOME_EVALUATED_STAGE_INVALID", leaf)
+        elif isinstance(required_stage, str) and required_stage in STAGES and evaluated_stage != required_stage:
+            _add_issue(issues, "OUTCOME_EVALUATED_STAGE_MISMATCH", leaf)
         revision = item.get("revision")
         repo = leaves[leaf].get("repository")
         if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None or (repo, revision) not in tested:
@@ -1181,6 +1311,15 @@ def _validate_release(
         entry_mode = leaves[leaf].get("required_mode")
         if entry_mode is not None and required_mode != entry_mode:
             _add_issue(issues, "REQUIRED_MODE_MISMATCH", leaf)
+        required_configuration: dict[str, Any] = {}
+        for pin_field in ("model_revision", "policy_revision"):
+            expected_pin = leaves[leaf].get("required_" + pin_field)
+            if expected_pin is not None:
+                required_configuration[pin_field] = expected_pin
+                if item.get("required_" + pin_field) != expected_pin:
+                    _add_issue(issues, "REQUIRED_CONFIGURATION_PIN_MISMATCH", leaf)
+            elif "required_" + pin_field in item:
+                _add_issue(issues, "OUTCOME_CONFIGURATION_PIN_UNDECLARED", leaf)
         leaf_state = leaves[leaf].get("state")
         if leaves[leaf].get("blockers") or (
             isinstance(leaf_state, str) and leaf_state in {"blocked", "deferred", "not_planned", "not-planned"}
@@ -1204,8 +1343,7 @@ def _validate_release(
                     elif test_id in required_tests:
                         passed_tests.add(test_id)
                 if isinstance(evidence.get("kind"), str) and evidence.get("kind") in {"test", "runtime", "configuration"}:
-                    for pin_field in ("model_revision", "policy_revision"):
-                        required_pin = item.get("required_" + pin_field)
+                    for pin_field, required_pin in required_configuration.items():
                         if required_pin is not None and evidence.get(pin_field) != required_pin:
                             _add_issue(issues, "EVIDENCE_CONFIGURATION_PIN_MISMATCH", leaf)
         for test_id in required_tests:
@@ -1222,6 +1360,23 @@ def _validate_release(
             if isinstance(leaf_required_receipts, list)
             else set()
         )
+        if isinstance(staged_edges, list):
+            for edge in staged_edges:
+                if (
+                    not isinstance(edge, dict)
+                    or edge.get("required_for_v1") is not True
+                    or edge.get("prerequisite_key") != leaf
+                ):
+                    continue
+                consumer_key = edge.get("consumer_key")
+                consumer_leaf = leaves.get(consumer_key) if isinstance(consumer_key, str) else None
+                if (
+                    consumer_leaf is not None
+                    and edge.get("consumer_stage") == consumer_leaf.get("required_release_stage")
+                ):
+                    edge_receipts = edge.get("required_owner_receipt_ids")
+                    if isinstance(edge_receipts, list):
+                        leaf_required_set.update(value for value in edge_receipts if isinstance(value, str))
         if set(value for value in required_receipts if isinstance(value, str)) != leaf_required_set:
             _add_issue(issues, "REQUIRED_OWNER_RECEIPTS_MISMATCH", leaf)
         provided_receipt_set = set(value for value in provided_receipts if isinstance(value, str))
@@ -1246,6 +1401,79 @@ def _validate_release(
                 or not receipt.get("action").strip()
             ):
                 _add_issue(issues, "REQUIRED_OWNER_RECEIPT_MISSING", leaf)
+
+    if isinstance(staged_edges, list):
+        for edge_index, edge in enumerate(staged_edges):
+            if not isinstance(edge, dict):
+                continue
+            consumer = edge.get("consumer_key")
+            if edge.get("required_for_v1") is not True:
+                continue
+            outcome = outcomes.get(consumer) if isinstance(consumer, str) else None
+            consumer_leaf = leaves.get(consumer) if isinstance(consumer, str) else None
+            if outcome is None or consumer_leaf is None:
+                continue
+            required_stage = consumer_leaf.get("required_release_stage")
+            if edge.get("consumer_stage") != required_stage:
+                continue
+            edge_id = edge.get("edge_id")
+            if edge.get("status") != "satisfied":
+                _add_issue(issues, "STAGED_EDGE_PREREQUISITE_PENDING", edge_id or f"stage-{edge_index}")
+                continue
+            prerequisite = edge.get("prerequisite_key")
+            prerequisite_outcome = outcomes.get(prerequisite) if isinstance(prerequisite, str) else None
+            evidence_ids = edge.get("required_evidence_ids")
+            if not isinstance(evidence_ids, list) or not evidence_ids:
+                _add_issue(issues, "STAGED_EDGE_EVIDENCE_REQUIRED", edge_id or f"stage-{edge_index}")
+                continue
+            if prerequisite_outcome is None:
+                _add_issue(issues, "STAGED_EDGE_PREREQUISITE_OUTCOME_MISSING", edge_id or f"stage-{edge_index}")
+                continue
+            prerequisite_outcome_ids = prerequisite_outcome.get("evidence_ids")
+            if not isinstance(prerequisite_outcome_ids, list):
+                prerequisite_outcome_ids = []
+            expected_revision = prerequisite_outcome.get("revision")
+            expected_mode = prerequisite_outcome.get("required_mode")
+            edge_requirement_ids = edge.get("requirement_ids")
+            for evidence_id in evidence_ids:
+                evidence = evidence_by_id.get(evidence_id) if isinstance(evidence_id, str) else None
+                evidence_requirement_ids = evidence.get("requirement_ids") if evidence is not None else None
+                if (
+                    not isinstance(evidence_id, str)
+                    or evidence_id not in prerequisite_outcome_ids
+                    or evidence is None
+                    or evidence.get("stage_edge_id") != edge_id
+                    or evidence.get("leaf_key") != prerequisite
+                    or evidence.get("stage") != edge.get("prerequisite_stage")
+                    or not isinstance(edge_requirement_ids, list)
+                    or any(not isinstance(value, str) for value in edge_requirement_ids)
+                    or not isinstance(evidence_requirement_ids, list)
+                    or any(not isinstance(value, str) for value in evidence_requirement_ids)
+                    or set(evidence_requirement_ids) != set(edge_requirement_ids)
+                    or evidence.get("source_revision") != expected_revision
+                    or evidence.get("mode") != expected_mode
+                ):
+                    _add_issue(issues, "STAGED_EDGE_EVIDENCE_MISMATCH", edge_id or f"stage-{edge_index}")
+            required_receipts = edge.get("required_owner_receipt_ids", [])
+            if isinstance(required_receipts, list) and required_receipts:
+                outcome_receipt_ids = prerequisite_outcome.get("owner_receipt_ids")
+                if not isinstance(outcome_receipt_ids, list):
+                    outcome_receipt_ids = []
+                for receipt_id in required_receipts:
+                    receipt = receipt_by_id.get(receipt_id) if isinstance(receipt_id, str) else None
+                    receipt_evidence_id = receipt.get("evidence_id") if receipt is not None else None
+                    receipt_evidence = evidence_by_id.get(receipt_evidence_id) if isinstance(receipt_evidence_id, str) else None
+                    if (
+                        receipt is None
+                        or receipt_id not in outcome_receipt_ids
+                        or receipt.get("status") != "accepted"
+                        or receipt.get("source_revision") != expected_revision
+                        or receipt_evidence is None
+                        or receipt_evidence_id not in prerequisite_outcome_ids
+                        or receipt_evidence.get("source_revision") != expected_revision
+                        or receipt_evidence.get("kind") != "receipt"
+                    ):
+                        _add_issue(issues, "STAGED_EDGE_OWNER_RECEIPT_MISSING", edge_id or f"stage-{edge_index}")
 
     for leaf, entry in leaves.items():
         if entry.get("required_for_v1") is True and leaf not in outcomes:
@@ -1334,7 +1562,9 @@ def validate(
             try:
                 dag = coverage.get("dag")
                 fan_in = dag.get("required_gate_fan_in") if isinstance(dag, dict) else None
-                release_counts = _validate_release(release_path, leaves, dag, fan_in, issues)
+                release_counts = _validate_release(
+                    release_path, leaves, dag, fan_in, coverage.get("staged_edges"), issues
+                )
             except InputError as exc:
                 _add_issue(issues, exc.code, exc.record)
         else:
@@ -1411,6 +1641,33 @@ def validate(
             "release_issue_count": 1 if release_path is not None else 0,
             "issue_count": 1,
             "issues": issues,
+        }
+    except Exception:
+        return {
+            "schema": "acv1.coverage-validation/v1",
+            "mode": "release" if release_path is not None else "planning",
+            "status": "BLOCKED",
+            "planning_status": "BLOCKED",
+            "coordination_status": "unreported",
+            "publication_status": "unreported",
+            "release_status": "BLOCKED" if release_path is not None else "not_run",
+            "checks": {
+                "issue_readbacks": check_urls,
+                "typed_graph": check_dag,
+                "specialist_families": require_specialists or release_path is not None,
+            },
+            "pending_blockers": [],
+            "pending_blockers_truncated": False,
+            "planning_only": release_path is None,
+            "whole_program_acceptance": False,
+            "global_acceptance": "not_asserted",
+            "source_pins": {},
+            "counts": {},
+            "release_counts": None,
+            "planning_issue_count": 1,
+            "release_issue_count": 1 if release_path is not None else 0,
+            "issue_count": 1,
+            "issues": [{"code": "VALIDATION_INTERNAL_ERROR", "record": "input"}],
         }
 
 

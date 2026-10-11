@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import copy
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -65,7 +67,11 @@ class CoverageValidatorTests(unittest.TestCase):
             if entry.get("required_for_v1") is True:
                 repo = entry["repository"]
                 repo_counts[repo] = repo_counts.get(repo, 0) + 1
-        rows_global = sum(1 for row in rows if row.get("requirement_id") in criteria)
+        rows_global = sum(
+            1
+            for row in rows
+            if isinstance(row.get("requirement_id"), str) and row.get("requirement_id") in criteria
+        )
         return {
             "required_leaf_records": sum(1 for row in mapping["entries"] if row.get("required_for_v1") is True),
             "agent_harness_leaf_records": repo_counts.get("agent-harness", 0),
@@ -177,6 +183,7 @@ class CoverageValidatorTests(unittest.TestCase):
                 "leaf_key": leaf,
                 "status": "verified",
                 "revision": revision,
+                "evaluated_stage": entry["required_release_stage"],
                 "prerequisites_satisfied": True,
                 "required_test_ids": [test_id],
                 "evidence_ids": [evidence_id],
@@ -265,6 +272,30 @@ class CoverageValidatorTests(unittest.TestCase):
         self.write_inputs(mapping)
         self.assertIn("ORPHAN_CONTRIBUTION_REQUIREMENT", self.codes(self.validate()))
 
+    def test_same_count_contributor_reassignment_preserves_required_pair_check(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        mapping["source_contribution_rows"][2]["owning_leaf_key"] = "EI-LEAF"
+        self.write_inputs(mapping)
+        report = self.validate()
+        self.assertEqual(report["counts"]["source_contribution_rows"], 3)
+        self.assertEqual(report["counts"]["unique_mapped_requirement_ids"], 2)
+        missing = [item for item in report["issues"] if item["code"] == "REQUIRED_CONTRIBUTOR_MISSING"]
+        self.assertEqual(missing, [{
+            "code": "REQUIRED_CONTRIBUTOR_MISSING",
+            "record": "GLOBAL-A",
+            "related_record": "CE-LEAF",
+        }])
+
+    def test_distinct_repeated_contribution_rows_keep_multiplicity(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        repeated = copy.deepcopy(mapping["source_contribution_rows"][2])
+        repeated["row_id"] = "ROW-4"
+        mapping["source_contribution_rows"].append(repeated)
+        self.write_inputs(mapping)
+        report = self.validate()
+        self.assertEqual(report["status"], "BACKLOG_READY")
+        self.assertEqual(report["counts"]["source_contribution_rows"], 4)
+
     def test_duplicate_owner_or_orphan_ownership_fails(self) -> None:
         mapping = copy.deepcopy(self.map)
         mapping["ownership_rows"].append(copy.deepcopy(mapping["ownership_rows"][0]))
@@ -317,6 +348,21 @@ class CoverageValidatorTests(unittest.TestCase):
         self.write_inputs(mapping)
         self.assertIn("REQUIRED_LEAF_NOT_DELIVERED", self.codes(self.validate()))
 
+    def test_closed_readback_cannot_hide_an_active_map_leaf(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        readbacks = copy.deepcopy(self.readbacks)
+        readbacks["issues"][0]["state"] = "closed"
+        self.write_inputs(mapping, readbacks=readbacks)
+        report = self.validate()
+        self.assertIn("ISSUE_READBACK_STATE_MISMATCH", self.codes(report))
+        self.assertIn("CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", self.codes(report))
+
+        mapping = copy.deepcopy(self.map)
+        ah = next(row for row in mapping["entries"] if row["key"] == "AH-LEAF")
+        ah["state"] = "closed"
+        self.write_inputs(mapping)
+        self.assertIn("ISSUE_READBACK_STATE_MISMATCH", self.codes(self.validate()))
+
     def test_supersession_requires_both_exact_link_directions(self) -> None:
         mapping = copy.deepcopy(self.map)
         replacement = copy.deepcopy(mapping["entries"][0])
@@ -351,6 +397,39 @@ class CoverageValidatorTests(unittest.TestCase):
         readbacks["pages_complete"] = False
         self.write_inputs(readbacks=readbacks)
         self.assertIn("ISSUE_READBACK_PAGES_INCOMPLETE", self.codes(self.validate()))
+
+    def test_json_derived_unhashable_contribution_ids_are_total(self) -> None:
+        for value in ([], {}, None, 7, True):
+            with self.subTest(value_type=type(value).__name__):
+                mapping = copy.deepcopy(self.map)
+                mapping["source_contribution_rows"][0]["requirement_id"] = value
+                self.write_inputs(mapping)
+                report = self.validate()
+                self.assertEqual(report["status"], "BLOCKED")
+                self.assertIn("ORPHAN_CONTRIBUTION_REQUIREMENT", self.codes(report))
+                self.assertEqual(report["schema"], "acv1.coverage-validation/v1")
+
+    def test_oversized_issue_number_is_bounded_and_cli_keeps_json_diagnostic(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        ah = next(row for row in mapping["entries"] if row["key"] == "AH-LEAF")
+        ah["issue_url"] = "https://github.com/Example-Co/agent-harness/issues/" + ("9" * 5000)
+        self.write_inputs(mapping)
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            exit_code = validator.main([
+                str(self.map_path),
+                "--source-pins", str(self.pins_path),
+                "--canonical-checklist", str(self.canonical_path),
+                "--issue-readbacks", str(self.readbacks_path),
+            ])
+        rendered = stdout.getvalue()
+        report = json.loads(rendered)
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIn("ENTRY_ISSUE_URL_INVALID", self.codes(report))
+        self.assertNotIn("Traceback", rendered)
+        self.assertNotIn("ValueError", rendered)
 
     def test_duplicate_json_keys_are_rejected_and_pin_mismatch_fails(self) -> None:
         self.write_inputs()
@@ -425,6 +504,209 @@ class CoverageValidatorTests(unittest.TestCase):
         self.assertEqual(report["global_acceptance"], "not_asserted")
         self.assertEqual(report["release_counts"]["outcomes"], 3)
 
+    def test_applicable_stage_prerequisites_need_revision_bound_evidence(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        mapping["staged_edges"].append({
+            "edge_type": "evidence_stage",
+            "edge_id": "EDGE-CE-RUNNABLE-EI-CONTRACT",
+            "consumer_key": "CE-LEAF",
+            "prerequisite_key": "EI-LEAF",
+            "consumer_stage": "runnable",
+            "prerequisite_stage": "contract",
+            "status": "pending",
+            "required_for_v1": True,
+            "requirement_ids": ["GLOBAL-A"],
+            "required_evidence_ids": [],
+            "required_owner_receipt_ids": [],
+        })
+        self.write_inputs(mapping)
+        release = self.release_manifest()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        pending_report = self.validate(release_path=self.release_path)
+        self.assertEqual(pending_report["status"], "BLOCKED")
+        self.assertIn("STAGED_EDGE_PREREQUISITE_PENDING", self.codes(pending_report))
+
+        mapping["staged_edges"][-1]["status"] = "satisfied"
+        mapping["staged_edges"][-1]["required_evidence_ids"] = ["ev-ei-contract"]
+        mapping["staged_edges"][-1]["required_owner_receipt_ids"] = ["receipt-ei-contract"]
+        ei = next(row for row in mapping["entries"] if row["key"] == "EI-LEAF")
+        ei["required_owner_receipts"] = ["receipt-ei-contract"]
+        self.write_inputs(mapping)
+
+        release = self.release_manifest()
+        ei_outcome = next(row for row in release["outcomes"] if row["leaf_key"] == "EI-LEAF")
+        ei_outcome["evidence_ids"].extend(["ev-ei-contract", "ev-ei-contract-receipt"])
+        ei_outcome["required_owner_receipts"] = ["receipt-ei-contract"]
+        ei_outcome["owner_receipt_ids"] = ["receipt-ei-contract"]
+        contract_file = self.evidence_dir / "evidence-ei.txt"
+        receipt_file = self.evidence_dir / "evidence-receipt-ce.txt"
+        release["evidence"].extend([
+            {
+                "id": "ev-ei-contract",
+                "path": str(contract_file),
+                "sha256": hashlib.sha256(contract_file.read_bytes()).hexdigest(),
+                "producer": "synthetic-unit-control",
+                "source_revision": "b" * 40,
+                "captured_at": "2026-10-11T12:10:00Z",
+                "mode": "mock",
+                "kind": "configuration",
+                "stage_edge_id": "EDGE-CE-RUNNABLE-EI-CONTRACT",
+                "leaf_key": "EI-LEAF",
+                "stage": "contract",
+                "requirement_ids": ["GLOBAL-A"],
+            },
+            {
+                "id": "ev-ei-contract-receipt",
+                "path": str(receipt_file),
+                "sha256": hashlib.sha256(receipt_file.read_bytes()).hexdigest(),
+                "producer": "synthetic-unit-control",
+                "source_revision": "b" * 40,
+                "captured_at": "2026-10-11T12:10:00Z",
+                "mode": "mock",
+                "kind": "receipt",
+            },
+        ])
+        release["owner_receipts"].append({
+            "id": "receipt-ei-contract",
+            "evidence_id": "ev-ei-contract-receipt",
+            "owner_role": "Synthetic prerequisite owner",
+            "action": "accept the synthetic contract-stage fixture",
+            "status": "accepted",
+            "source_revision": "b" * 40,
+        })
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
+        self.assertEqual(report["status"], "SCOPED_RELEASE_EVIDENCE_READY", report)
+
+    def test_outcome_cannot_lower_required_stage_and_final_gate_stays_outside_scope(self) -> None:
+        self.write_inputs()
+        release = self.release_manifest()
+        ce = next(row for row in release["outcomes"] if row["leaf_key"] == "CE-LEAF")
+        ce["evaluated_stage"] = "fixture"
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
+        self.assertIn("OUTCOME_EVALUATED_STAGE_MISMATCH", self.codes(report))
+
+        mapping = copy.deepcopy(self.map)
+        ce_leaf = next(row for row in mapping["entries"] if row["key"] == "CE-LEAF")
+        ce_leaf["required_release_stage"] = "fixture"
+        mapping["staged_edges"].append({
+            "edge_type": "evidence_stage",
+            "edge_id": "EDGE-CE-FIXTURE-EI-RUNNABLE",
+            "consumer_key": "CE-LEAF",
+            "prerequisite_key": "EI-LEAF",
+            "consumer_stage": "fixture",
+            "prerequisite_stage": "runnable",
+            "status": "satisfied",
+            "required_for_v1": True,
+            "requirement_ids": ["GLOBAL-A"],
+            "required_evidence_ids": ["ev-ei"],
+            "required_owner_receipt_ids": [],
+        })
+        self.write_inputs(mapping)
+        release = self.release_manifest()
+        ce = next(row for row in release["outcomes"] if row["leaf_key"] == "CE-LEAF")
+        ce["evaluated_stage"] = "fixture"
+        ei_evidence = next(row for row in release["evidence"] if row["id"] == "ev-ei")
+        ei_evidence.update({
+            "stage_edge_id": "EDGE-CE-FIXTURE-EI-RUNNABLE",
+            "leaf_key": "EI-LEAF",
+            "stage": "runnable",
+            "requirement_ids": ["GLOBAL-A"],
+        })
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
+        self.assertEqual(report["status"], "SCOPED_RELEASE_EVIDENCE_READY", report)
+        self.assertEqual(mapping["staged_edges"][0]["status"], "pending")
+
+        mapping = copy.deepcopy(self.map)
+        mapping["staged_edges"].append({
+            "edge_type": "evidence_stage",
+            "edge_id": "EDGE-OPTIONAL-CE-RUNNABLE-EI-CONTRACT",
+            "consumer_key": "CE-LEAF",
+            "prerequisite_key": "EI-LEAF",
+            "consumer_stage": "runnable",
+            "prerequisite_stage": "contract",
+            "status": "pending",
+            "required_for_v1": False,
+            "requirement_ids": ["GLOBAL-A"],
+            "required_evidence_ids": [],
+            "required_owner_receipt_ids": [],
+        })
+        self.write_inputs(mapping)
+        self.assertEqual(self.validate_release()["status"], "SCOPED_RELEASE_EVIDENCE_READY")
+
+    def test_stage_status_enum_and_required_evidence_fail_closed(self) -> None:
+        for status, required, expected in (
+            ("owner-approved", ["ev-ei-contract"], "STAGED_EDGE_STATUS_INVALID"),
+            ("satisfied", [], "STAGED_EDGE_EVIDENCE_REQUIRED"),
+        ):
+            with self.subTest(status=status, required=required):
+                mapping = copy.deepcopy(self.map)
+                mapping["staged_edges"].append({
+                    "edge_type": "evidence_stage",
+                    "edge_id": "EDGE-CE-RUNNABLE-EI-CONTRACT",
+                    "consumer_key": "CE-LEAF",
+                    "prerequisite_key": "EI-LEAF",
+                    "consumer_stage": "runnable",
+                    "prerequisite_stage": "contract",
+                    "status": status,
+                    "required_for_v1": True,
+                    "requirement_ids": ["GLOBAL-A"],
+                    "required_evidence_ids": required,
+                    "required_owner_receipt_ids": [],
+                })
+                self.write_inputs(mapping)
+                release = self.release_manifest()
+                self.release_path.write_bytes(_canonical_bytes(release))
+                report = self.validate(release_path=self.release_path)
+                self.assertEqual(report["status"], "BLOCKED")
+                self.assertIn(expected, self.codes(report))
+
+        for field, wrong in (
+            ("stage", "fixture"),
+            ("source_revision", "c" * 40),
+            ("mode", "recorded"),
+            ("requirement_ids", ["LOCAL-A"]),
+        ):
+            with self.subTest(stage_evidence_field=field):
+                mapping = copy.deepcopy(self.map)
+                mapping["staged_edges"].append({
+                    "edge_type": "evidence_stage",
+                    "edge_id": "EDGE-CE-RUNNABLE-EI-CONTRACT",
+                    "consumer_key": "CE-LEAF",
+                    "prerequisite_key": "EI-LEAF",
+                    "consumer_stage": "runnable",
+                    "prerequisite_stage": "contract",
+                    "status": "satisfied",
+                    "required_for_v1": True,
+                    "requirement_ids": ["GLOBAL-A"],
+                    "required_evidence_ids": ["ev-ei"],
+                    "required_owner_receipt_ids": [],
+                })
+                self.write_inputs(mapping)
+                release = self.release_manifest()
+                ei_evidence = next(row for row in release["evidence"] if row["id"] == "ev-ei")
+                ei_evidence.update({
+                    "stage_edge_id": "EDGE-CE-RUNNABLE-EI-CONTRACT",
+                    "leaf_key": "EI-LEAF",
+                    "stage": "contract",
+                    "requirement_ids": ["GLOBAL-A"],
+                })
+                ei_evidence[field] = wrong
+                self.release_path.write_bytes(_canonical_bytes(release))
+                report = self.validate(release_path=self.release_path)
+                self.assertIn("STAGED_EDGE_EVIDENCE_MISMATCH", self.codes(report))
+
+        mapping = copy.deepcopy(self.map)
+        ce_leaf = next(row for row in mapping["entries"] if row["key"] == "CE-LEAF")
+        ce_leaf.pop("required_release_stage")
+        self.write_inputs(mapping)
+        release = self.release_manifest()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
+        self.assertIn("REQUIRED_RELEASE_STAGE_MISSING", self.codes(report))
+
     def test_release_requires_exact_revisions_modes_tests_and_receipts(self) -> None:
         release = self.release_manifest()
         release["outcomes"][0]["revision"] = "stale-revision"
@@ -460,6 +742,54 @@ class CoverageValidatorTests(unittest.TestCase):
         self.assertIn("EVIDENCE_DIGEST_MISMATCH", codes)
         self.assertIn("EVIDENCE_CONFIGURATION_PIN_MISMATCH", codes)
         self.assertIn("OUTCOME_PREREQUISITE_UNSATISFIED", codes)
+
+    def test_release_configuration_expectations_are_pinned_by_the_leaf(self) -> None:
+        self.write_inputs()
+        for field in ("required_model_revision", "required_policy_revision"):
+            for value in ("missing", None, [], "changed-value"):
+                with self.subTest(field=field, value_type=type(value).__name__, value=value):
+                    release = self.release_manifest()
+                    ce = next(item for item in release["outcomes"] if item["leaf_key"] == "CE-LEAF")
+                    if value == "missing":
+                        ce.pop(field)
+                    else:
+                        ce[field] = value
+                    ce_evidence = next(item for item in release["evidence"] if item["id"] == "ev-ce")
+                    evidence_field = field.removeprefix("required_")
+                    ce_evidence[evidence_field] = "wrong-configuration"
+                    self.release_path.write_bytes(_canonical_bytes(release))
+                    report = self.validate(release_path=self.release_path)
+                    self.assertIn("REQUIRED_CONFIGURATION_PIN_MISMATCH", self.codes(report))
+                    self.assertIn("EVIDENCE_CONFIGURATION_PIN_MISMATCH", self.codes(report))
+
+        # The map has no model or policy requirement for AH/EI, so no outcome
+        # fields are invented for those leaves.
+        release = self.release_manifest()
+        for outcome in release["outcomes"]:
+            if outcome["leaf_key"] != "CE-LEAF":
+                self.assertNotIn("required_model_revision", outcome)
+                self.assertNotIn("required_policy_revision", outcome)
+        self.release_path.write_bytes(_canonical_bytes(release))
+        self.assertEqual(self.validate(release_path=self.release_path)["status"], "SCOPED_RELEASE_EVIDENCE_READY")
+
+        release = self.release_manifest()
+        ah = next(item for item in release["outcomes"] if item["leaf_key"] == "AH-LEAF")
+        ah["required_model_revision"] = "invented-model"
+        ah_evidence = next(item for item in release["evidence"] if item["id"] == "ev-ah")
+        ah_evidence["model_revision"] = "invented-model"
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
+        self.assertIn("OUTCOME_CONFIGURATION_PIN_UNDECLARED", self.codes(report))
+
+    def test_invalid_map_configuration_pin_types_are_reported(self) -> None:
+        for field in ("required_model_revision", "required_policy_revision"):
+            for value in (None, [], {}, 4):
+                with self.subTest(field=field, value_type=type(value).__name__):
+                    mapping = copy.deepcopy(self.map)
+                    ce = next(row for row in mapping["entries"] if row["key"] == "CE-LEAF")
+                    ce[field] = value
+                    self.write_inputs(mapping)
+                    self.assertIn("ENTRY_REQUIRED_CONFIGURATION_PIN_INVALID", self.codes(self.validate()))
 
     def test_release_missing_artifact_is_named_without_path_echo(self) -> None:
         release = self.release_manifest()
