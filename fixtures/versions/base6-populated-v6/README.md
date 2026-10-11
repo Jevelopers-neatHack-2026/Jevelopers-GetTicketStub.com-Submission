@@ -1,0 +1,3 @@
+# Populated V6 version-store migration fixture
+
+This fixture is an actual V6 SQLite database produced by opening the checked-in populated V4 fixture with the qualified V6 store implementation from commit 5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74. The migration runs offline and keeps the completed generation, edit, inspection, immutable versions, usage evidence, selection, and content-addressed artwork. Its manifest pins the source database, resulting database, requests, and artifact bytes. The V7 inspection integration test opens this populated V6 database, applies the additive inspection-session/stage migration, reopens it, and replays the historical operations without dispatch.

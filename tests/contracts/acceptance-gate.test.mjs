@@ -58,6 +58,24 @@ test("canonical owner acceptance gate reports missing C01 and C02 agreements as 
   assert.ok(briefGate.missing_owner_evidence.includes("event_intelligence_invalidation_delivery"));
   assert.ok(briefGate.missing_owner_evidence.includes("application_approval_staleness_consumer"));
 
+  const inspection = spawnSync("make", ["--no-print-directory", "--silent", "acceptance", "TARGET=inspection"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, MAKEFLAGS: "", MAKELEVEL: "0", MFLAGS: "" },
+  });
+  assert.equal(inspection.status, 2, "CE-09 acceptance must wait for separate external owner evidence");
+  const inspectionGate = JSON.parse(inspection.stdout);
+  assert.equal(inspectionGate.schema_version, "creative-inspection-acceptance-result/v1");
+  assert.equal(inspectionGate.target, "CE-09");
+  assert.equal(inspectionGate.acceptance_allowed, false);
+  assert.equal(inspectionGate.provider_dispatches, 0);
+  assert.equal(inspectionGate.paid_provider_calls, 0);
+  assert.equal(inspectionGate.provider_credentials_read, false);
+  assert.equal(inspectionGate.promotion_status, "not_promoted");
+  assert.ok(inspectionGate.missing_owner_evidence.includes("shared_contracts_decision_port"));
+  assert.ok(inspectionGate.missing_owner_evidence.includes("finance_metering_budget_protocol"));
+  assert.ok(inspectionGate.external_gates.some((item) => /Q01 held-out corpus/.test(item)));
+
   for (const [target, expectedIds] of [
     ["metering-contract", ["finance_metering_budget_protocol", "shared_contracts_usage_budget_schemas"]],
     ["handoff-contract", ["product_approval_protocol_and_consumer", "production_artwork_handoff", "shared_contracts_approval_handoff_schemas"]],

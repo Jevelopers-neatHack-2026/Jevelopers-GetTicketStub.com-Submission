@@ -937,6 +937,32 @@ test("repair limits and action identity persist across restart, duplicate, cance
   assert.deepEqual(REPAIR_LIMITS, { maxRepairs: 2, maxElapsedMs: 60_000, maxSimulatedUnits: 3 });
 });
 
+test("repair claims refuse borrowed BEGIN and SAVEPOINT transactions", async (t) => {
+  const databasePath = await temporaryDatabase(t, "borrowed-repair-transaction.sqlite");
+  const database = new DatabaseSync(databasePath);
+  const controller = createSqliteInspectionRepairController({ database, now: () => 1_000 });
+  const scope = { ...trustedScope, design_version_id: "design-borrowed-transaction" };
+  controller.startInspection({ scope, inspection_id: "inspection-borrowed-transaction",
+    brief_hash: digest("borrowed brief"), design_hash: digest("borrowed design") });
+  const claim = { scope, inspection_id: "inspection-borrowed-transaction", action_id: "repair-borrowed-transaction",
+    request_hash: digest("borrowed request"), repair_action: "image.edit", simulated_units: 1 };
+
+  database.exec("BEGIN IMMEDIATE;");
+  assert.throws(() => controller.recordRepairClaim(claim), { code: "transaction_unavailable" });
+  assert.equal(database.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count, 0);
+  database.exec("ROLLBACK;");
+
+  database.exec("SAVEPOINT borrowed_repair;");
+  assert.equal(database.isTransaction, true);
+  assert.throws(() => controller.recordRepairClaim(claim), { code: "transaction_unavailable" });
+  assert.equal(database.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count, 0);
+  database.exec("ROLLBACK TO borrowed_repair;");
+  database.exec("RELEASE borrowed_repair;");
+  assert.equal(database.isTransaction, false);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM creative_inspection_action_v2").get().count, 0);
+  database.close();
+});
+
 test("persisted legacy repair references fail closed before public state projection", async (t) => {
   const databasePath = await temporaryDatabase(t, "unsafe-repair-id.sqlite");
   const database = new DatabaseSync(databasePath);

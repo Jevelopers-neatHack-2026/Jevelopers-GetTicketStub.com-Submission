@@ -413,8 +413,12 @@ export function inspectCreativeArtifact(input) {
       fail("invalid_references", "parent_design_hash", "A non-root inspection requires the trusted expected parent hash.");
     }
     try {
+      const { artifact_id: _childArtifactId, ...parentScope } = trustedScope;
       const parent = validateDesignVersion(parentInput, {
-        trustedScope: { ...trustedScope, design_version_id: design.parent_version_id },
+        // The child artifact ID is not a trusted parent artifact reference.
+        // The immutable child does bind the exact parent version ID, while
+        // the parent's own artifact and content hash are validated below.
+        trustedScope: { ...parentScope, design_version_id: design.parent_version_id },
         brief_hash: canonicalHash(brief),
         known_source_refs: copyBoundedPlainArray(brief.source_identity, "brief.source_identity", 10_000).map((source) => source.source_id),
       });
@@ -434,19 +438,64 @@ export function inspectCreativeArtifact(input) {
   const actualHash = hashArtifactBytes(bytes);
   const hashMatches = actualHash === design.artifact.content_hash;
   const checks = [checkRecord("artifact_hash", hashMatches ? "pass" : "fail", hashMatches ? undefined : "hash_mismatch")];
+  let decoderResult = null;
+  if (input.decoder_result !== undefined) {
+    try { decoderResult = snapshotPlainRecord(plainRecord(input.decoder_result, "decoder_result"), "decoder_result"); }
+    catch { decoderResult = null; }
+    if (decoderResult && Object.keys(decoderResult).some((key) => ![
+      "contract", "schema_version", "status", "artifact_hash", "format", "width", "height", "has_alpha", "has_transparency",
+    ].includes(key))) decoderResult = null;
+  }
+  const selectedDecodeValid = decoderResult?.contract === "OpenAIBoundedImageDecode" &&
+    decoderResult.schema_version === "1.0" && decoderResult.status === "pass" && decoderResult.artifact_hash === actualHash &&
+    decoderResult.format === ({ "image/png": "png", "image/jpeg": "jpeg", "image/webp": "webp" })[publicMediaType] &&
+    Number.isSafeInteger(decoderResult.width) && decoderResult.width > 0 && decoderResult.width <= INSPECTION_LIMITS.maxDimension &&
+    Number.isSafeInteger(decoderResult.height) && decoderResult.height > 0 && decoderResult.height <= INSPECTION_LIMITS.maxDimension &&
+    decoderResult.width * decoderResult.height <= INSPECTION_LIMITS.maxPixels &&
+    typeof decoderResult.has_alpha === "boolean" && typeof decoderResult.has_transparency === "boolean";
   let dimensions = null;
   let decodeError = null;
   let decodeStatus = "fail";
-  if (publicMediaType !== "image/png") {
-    decodeError = "unsupported_media_type";
-    decodeStatus = "unknown";
-  } else {
+  if (publicMediaType === "image/png") {
     try {
       dimensions = decodePng(bytes);
       decodeStatus = "pass";
+      // The local policy parser independently checks the PNG structure and
+      // dimensions. Pixel alpha/transparency comes from the trusted shared
+      // decoder bound to the same byte hash; this parser intentionally does
+      // not duplicate that pixel-level metadata walk.
+      if (input.decoder_result !== undefined && (!selectedDecodeValid || decoderResult.width !== dimensions.width ||
+        decoderResult.height !== dimensions.height)) {
+        dimensions = null;
+        decodeError = decoderResult?.status === "unknown" ? "image_decoder_unavailable" : "image_decoder_mismatch";
+        decodeStatus = decoderResult?.status === "unknown" ? "unknown" : "fail";
+      }
     } catch (error) {
       decodeError = error instanceof InspectionError ? error.code : "image_decode_failed";
     }
+  } else if (publicMediaType === "image/jpeg" || publicMediaType === "image/webp") {
+    // JPEG and WebP use the same bounded native decoder as the provider
+    // adapter. The runtime supplies only its immediately verified metadata,
+    // bound to this byte snapshot's content hash. A missing or mismatched
+    // decoder result remains unknown and can never become eligible.
+    const expectedFormat = publicMediaType === "image/jpeg" ? "jpeg" : "webp";
+    if (selectedDecodeValid && decoderResult.format === expectedFormat) {
+      dimensions = Object.freeze({ width: decoderResult.width, height: decoderResult.height, format: expectedFormat,
+        has_alpha: decoderResult.has_alpha, has_transparency: decoderResult.has_transparency });
+      decodeStatus = "pass";
+    } else if (decoderResult === null) {
+      decodeError = "unsupported_media_type";
+      decodeStatus = "unknown";
+    } else if (decoderResult?.status === "fail") {
+      decodeError = "image_decode_failed";
+      decodeStatus = "fail";
+    } else {
+      decodeError = "image_decode_unverified";
+      decodeStatus = "unknown";
+    }
+  } else {
+    decodeError = "unsupported_media_type";
+    decodeStatus = "unknown";
   }
   checks.push(checkRecord("artifact_decode", decodeStatus, decodeError ?? undefined));
   if (dimensions) {
@@ -463,7 +512,11 @@ export function inspectCreativeArtifact(input) {
   checks.push(checkRecord("brief_facts", unresolvedFacts.length === 0 ? "pass" : "unknown",
     unresolvedFacts.length === 0 ? undefined : "unresolved_facts_present"));
   if (!Object.hasOwn(input, "used_assets")) fail("invalid_references", "used_assets", "The complete trusted asset-use set must be explicit.");
-  const assetChecks = validateUsedAssets(brief, input.used_assets);
+  const assetUseStatus = input.asset_use_evidence_status ?? "verified";
+  if (!["verified", "unknown"].includes(assetUseStatus)) fail("invalid_references", "asset_use_evidence_status");
+  const assetChecks = assetUseStatus === "unknown"
+    ? [checkRecord("asset_permission", "unknown", "asset_use_evidence_unavailable")]
+    : validateUsedAssets(brief, input.used_assets);
   checks.push(...assetChecks);
 
   const failed = checks.some((check) => check.status === "fail");

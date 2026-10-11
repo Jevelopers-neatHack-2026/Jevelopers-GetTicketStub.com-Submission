@@ -42,7 +42,8 @@ export interface DeterministicInspection {
   readonly artifact_hash: string;
   readonly actual_artifact_hash: string;
   readonly media_type: string;
-  readonly dimensions: Readonly<{ format: "png"; width: number; height: number; decoded_scanlines: number }> | null;
+  readonly dimensions: Readonly<{ width: number; height: number; format?: "png" | "jpeg" | "webp";
+    decoded_scanlines?: number; has_alpha?: boolean; has_transparency?: boolean }> | null;
   readonly checks: readonly InspectionCheck[];
   readonly gate: "eligible" | "needs_human_review" | "failure";
   readonly eligible_repair_actions: readonly InspectionRepairAction[];
@@ -60,6 +61,12 @@ export interface InspectCreativeArtifactInput {
   artifact_bytes: Uint8Array;
   /** Complete trusted asset-use set for the inspected version, including an explicit empty list. */
   used_assets: readonly { asset_id: string; action: UsedAssetAction }[];
+  /** Old versions without hash-bound asset-use evidence stay human-review-only. */
+  asset_use_evidence_status?: "verified" | "unknown";
+  /** Metadata from the shared native codec, bound by the runtime to the exact byte hash. */
+  decoder_result?: Readonly<{ contract: "OpenAIBoundedImageDecode"; schema_version: "1.0";
+    status: "pass" | "fail" | "unknown"; artifact_hash: string; format: "png" | "jpeg" | "webp"; width: number; height: number;
+    has_alpha: boolean; has_transparency: boolean }>;
   /** Host-supplied eligible action intersection; this module never grants or dispatches actions. */
   eligible_repair_actions?: readonly InspectionRepairAction[];
 }
@@ -155,6 +162,11 @@ export declare function createInspectionDecisionPlan(input: {
   provider_status?: "complete" | "refused" | "unavailable" | "timeout" | "cancelled";
   inspection_subject_hash?: string;
 }): InspectionQuestionPlanResult;
+export declare function createInspectionRoutingInput(input: {
+  deterministic: DeterministicInspection;
+  observation: CreativeVisualObservation;
+}): Readonly<{ status: "ready"; execution_mode: "sequential"; state: Readonly<{ observations: readonly DecisionObservation[] }>;
+  questions: Readonly<Record<string, DecisionQuestion>> }> | Readonly<{ status: "unavailable"; reason: string }>;
 export type InspectionRouteDecisionContext = InspectionDecisionContext & Readonly<{
   linked_request_id: string;
   linked_billable_attempt_id: string;

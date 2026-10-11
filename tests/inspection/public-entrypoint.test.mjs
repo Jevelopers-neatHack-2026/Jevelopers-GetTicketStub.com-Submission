@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import * as inspection from "../../src/inspection/index.mjs";
+import * as inspection from "creative-engine/inspection";
 
-test("every declared public inspection export is a runtime export with the matching error constructor", () => {
+test("the package inspection subpath exports every declared symbol and its matching error constructor", () => {
   for (const name of [
     "INSPECTION_LIMITS", "INSPECTION_POLICY_VERSION", "INSPECTION_QUESTION_SCHEMA_VERSION", "REPAIR_LIMITS",
     "InspectionError", "canonicalInspectionSubjectHash", "copyInspectionArtifactBytes", "createInspectionDecisionPlan",

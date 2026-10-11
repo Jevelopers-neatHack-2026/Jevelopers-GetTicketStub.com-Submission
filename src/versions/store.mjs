@@ -18,7 +18,7 @@ import {
 import { createCreativeBriefStore } from "../planning/index.mjs";
 import { initializeCreativeBriefDatabase } from "../planning/store.mjs";
 
-const STORAGE_VERSION = 6;
+const STORAGE_VERSION = 7;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9_.:-]{1,256}$/;
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -329,7 +329,7 @@ function readStoredObjectSync(objectRoot, contentHash) {
 
 function makeSchema(db) {
   const version = db.prepare("PRAGMA user_version").get().user_version;
-  if (![0, 1, 2, 3, 4, 5, STORAGE_VERSION].includes(version)) {
+  if (![0, 1, 2, 3, 4, 5, 6, STORAGE_VERSION].includes(version)) {
     db.close();
     reject("unsupported_version", "storage_version");
   }
@@ -585,6 +585,72 @@ function makeSchema(db) {
       FOREIGN KEY(tenant_id, project_id, brief_id, design_version_id)
         REFERENCES design_versions(tenant_id, project_id, brief_id, design_version_id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS creative_inspection_sessions_v1 (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      job_id TEXT NOT NULL,
+      request_hash TEXT NOT NULL,
+      brief_id TEXT NOT NULL,
+      brief_hash TEXT NOT NULL,
+      design_version_id TEXT NOT NULL,
+      design_hash TEXT NOT NULL,
+      parent_version_id TEXT,
+      parent_design_hash TEXT,
+      artifact_id TEXT NOT NULL,
+      artifact_hash TEXT NOT NULL,
+      root_design_version_id TEXT NOT NULL,
+      root_design_hash TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active','completed','failed','unknown')),
+      result_json TEXT,
+      result_hash TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,action_id),
+      UNIQUE(tenant_id,project_id,job_id),
+      FOREIGN KEY(tenant_id,project_id,job_id) REFERENCES creative_jobs(tenant_id,project_id,job_id),
+      CHECK((status='completed' AND result_json IS NOT NULL AND result_hash IS NOT NULL) OR
+        (status!='completed' AND result_json IS NULL AND result_hash IS NULL))
+    ) STRICT;
+    CREATE TRIGGER IF NOT EXISTS creative_inspection_session_identity_immutable
+      BEFORE UPDATE ON creative_inspection_sessions_v1
+      WHEN NEW.tenant_id!=OLD.tenant_id OR NEW.project_id!=OLD.project_id OR NEW.action_id!=OLD.action_id OR
+        NEW.actor_id!=OLD.actor_id OR NEW.job_id!=OLD.job_id OR NEW.request_hash!=OLD.request_hash OR
+        NEW.brief_id!=OLD.brief_id OR NEW.brief_hash!=OLD.brief_hash OR
+        NEW.design_version_id!=OLD.design_version_id OR NEW.design_hash!=OLD.design_hash OR
+        NEW.parent_version_id IS NOT OLD.parent_version_id OR NEW.parent_design_hash IS NOT OLD.parent_design_hash OR
+        NEW.artifact_id!=OLD.artifact_id OR NEW.artifact_hash!=OLD.artifact_hash OR
+        NEW.root_design_version_id!=OLD.root_design_version_id OR NEW.root_design_hash!=OLD.root_design_hash OR
+        NEW.created_at!=OLD.created_at
+      BEGIN SELECT RAISE(ABORT,'inspection session identity is immutable'); END;
+    CREATE TABLE IF NOT EXISTS creative_inspection_stages_v1 (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      stage TEXT NOT NULL CHECK(stage IN ('observer','decision_evidence','decision_route')),
+      attempt_id TEXT NOT NULL,
+      intent_json TEXT NOT NULL,
+      intent_hash TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('dispatching','completed','unknown')),
+      result_json TEXT,
+      result_hash TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,action_id,stage),
+      FOREIGN KEY(tenant_id,project_id,action_id)
+        REFERENCES creative_inspection_sessions_v1(tenant_id,project_id,action_id),
+      CHECK((status='completed' AND result_json IS NOT NULL AND result_hash IS NOT NULL) OR
+        (status!='completed' AND result_json IS NULL AND result_hash IS NULL))
+    ) STRICT;
+    CREATE TRIGGER IF NOT EXISTS creative_inspection_stage_identity_immutable
+      BEFORE UPDATE ON creative_inspection_stages_v1
+      WHEN NEW.tenant_id!=OLD.tenant_id OR NEW.project_id!=OLD.project_id OR NEW.action_id!=OLD.action_id OR
+        NEW.stage!=OLD.stage OR NEW.attempt_id!=OLD.attempt_id OR NEW.intent_json!=OLD.intent_json OR
+        NEW.intent_hash!=OLD.intent_hash OR NEW.created_at!=OLD.created_at
+      BEGIN SELECT RAISE(ABORT,'inspection stage identity is immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS creative_inspection_stages_no_delete
+      BEFORE DELETE ON creative_inspection_stages_v1 BEGIN SELECT RAISE(ABORT,'inspection stages are immutable'); END;
     CREATE TRIGGER IF NOT EXISTS immutable_design_versions_update
       BEFORE UPDATE ON design_versions BEGIN SELECT RAISE(ABORT,'immutable version'); END;
     CREATE TRIGGER IF NOT EXISTS immutable_design_versions_delete

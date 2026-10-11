@@ -10,6 +10,7 @@ export {
 export {
   INSPECTION_POLICY_VERSION,
   INSPECTION_QUESTION_SCHEMA_VERSION,
+  createInspectionRoutingInput,
   createInspectionDecisionPlan,
   createInspectionEvidenceBatch,
   createInspectionRouteBatch,

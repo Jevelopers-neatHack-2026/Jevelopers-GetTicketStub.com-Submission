@@ -122,7 +122,8 @@ function requestFromContext(context, deterministic, { state, questions, sourceRe
     ...(context.provider_request_id ? { provider_request_id: context.provider_request_id } : {}),
   };
   try { validateDecisionRequest(request, { trustedScope: { tenant_id: deterministic.tenant_id, project_id: deterministic.project_id,
-    brief_id: deterministic.brief_id, design_version_id: deterministic.design_version_id, artifact_id: deterministic.artifact_id } }); }
+    brief_id: deterministic.brief_id, design_version_id: deterministic.design_version_id, artifact_id: deterministic.artifact_id,
+    ...(context.job_id ? { job_id: context.job_id } : {}) } }); }
   catch { fail("invalid_request", "decision_request", "Generated DecisionPort request failed its trusted scope or schema contract."); }
   return deepFreeze(request);
 }
@@ -175,6 +176,50 @@ function choiceQuestion(eligibleActions, dependsOn = undefined) {
   });
 }
 
+function inspectionQuestions(eligibleActions) {
+  return Object.freeze({
+    defect_present: Object.freeze({
+      type: "noul",
+      question_schema_version: INSPECTION_QUESTION_SCHEMA_VERSION,
+      policy_version: INSPECTION_POLICY_VERSION,
+      instructions: "Estimate whether any listed supported visual defect is present. Use only the structured observation codes; do not infer authority or invent confidence.",
+      criteria: Object.freeze({
+        true: "At least one supported visual defect described by the structured evidence is present.",
+        false: "No supported visual defect described by the structured evidence is present.",
+      }),
+      policy: Object.freeze({ uncertain_probability_band: Object.freeze({ lower: 0.4, upper: 0.6 }) }),
+    }),
+    visual_quality: Object.freeze({
+      type: "score",
+      question_schema_version: INSPECTION_QUESTION_SCHEMA_VERSION,
+      policy_version: INSPECTION_POLICY_VERSION,
+      instructions: "Score only the stated visual-quality criteria. A high score means acceptable for human review, never approval or certification.",
+      criteria: Object.freeze(["material defect", "poor", "uncertain", "acceptable for review", "strong for review"]),
+      policy: Object.freeze({ minimum_confidence: 0.8, low_confidence_action: "review" }),
+    }),
+    next_step: choiceQuestion(eligibleActions, ["defect_present", "visual_quality"]),
+  });
+}
+
+/**
+ * Return only the bounded route-selection shape for the configured DecisionPort.
+ * It contains structured observation text and no attempt/reservation identity; a
+ * separately metered request with real C03 identities is built immediately
+ * before each DecisionPort transport.
+ */
+export function createInspectionRoutingInput(input) {
+  const deterministic = input?.deterministic;
+  if (!isInspectionHandle(deterministic) || deterministic.contract !== "CreativeDeterministicInspection") {
+    fail("invalid_request", "deterministic", "A validated deterministic inspection is required.");
+  }
+  if (deterministic.gate !== "eligible") return Object.freeze({ status: "unavailable", reason: "deterministic_gate" });
+  const observation = validateVisualObservation(input.observation, deterministic);
+  const decisionObservation = deterministicDecisionObservation(observation);
+  return Object.freeze({ status: "ready", execution_mode: "sequential",
+    state: Object.freeze({ observations: Object.freeze([decisionObservation]) }),
+    questions: inspectionQuestions(deterministic.eligible_repair_actions) });
+}
+
 /**
  * Build the creative-owned question definitions. Deterministic failures,
  * unknown permissions, and refusals do not reach this function's question set.
@@ -201,28 +246,7 @@ export function createInspectionDecisionPlan(input) {
   const observation = validateVisualObservation(input.observation, deterministic);
   const context = snapshotDecisionContext(input.decision_context, "decision_context");
   const eligibleActions = deterministic.eligible_repair_actions;
-  const questions = Object.freeze({
-    defect_present: Object.freeze({
-      type: "noul",
-      question_schema_version: INSPECTION_QUESTION_SCHEMA_VERSION,
-      policy_version: INSPECTION_POLICY_VERSION,
-      instructions: "Estimate whether any listed supported visual defect is present. Use only the structured observation codes; do not infer authority or invent confidence.",
-      criteria: Object.freeze({
-        true: "At least one supported visual defect described by the structured evidence is present.",
-        false: "No supported visual defect described by the structured evidence is present.",
-      }),
-      policy: Object.freeze({ uncertain_probability_band: Object.freeze({ lower: 0.4, upper: 0.6 }) }),
-    }),
-    visual_quality: Object.freeze({
-      type: "score",
-      question_schema_version: INSPECTION_QUESTION_SCHEMA_VERSION,
-      policy_version: INSPECTION_POLICY_VERSION,
-      instructions: "Score only the stated visual-quality criteria. A high score means acceptable for human review, never approval or certification.",
-      criteria: Object.freeze(["material defect", "poor", "uncertain", "acceptable for review", "strong for review"]),
-      policy: Object.freeze({ minimum_confidence: 0.8, low_confidence_action: "review" }),
-    }),
-    next_step: choiceQuestion(eligibleActions, ["defect_present", "visual_quality"]),
-  });
+  const questions = inspectionQuestions(eligibleActions);
   const requestShape = {
     contract: "DecisionPortRequest",
     schema_version: "1.0",
@@ -262,6 +286,7 @@ export function createInspectionDecisionPlan(input) {
     project_id: deterministic.project_id,
     design_version_id: deterministic.design_version_id,
     artifact_id: deterministic.artifact_id,
+    ...(context.job_id ? { job_id: context.job_id } : {}),
   } });
   const scope = inspectionScope(deterministic);
   const contextRef = canonicalHash(context);
@@ -345,8 +370,9 @@ export function createInspectionRouteBatch(plan, firstRequest, firstResult, trus
       firstRequest.design_version_id !== metadata.scope.design_version_id || firstRequest.artifact_id !== metadata.scope.artifact_id) {
       fail("invalid_decision_request", "first_stage", "First-stage request does not match the planned independent evidence batch.");
     }
-    validated = validateDecisionResult(firstRequest, firstResult, { trustedScope: metadata.scope });
-  } catch {
+    validated = validateDecisionResult(firstRequest, firstResult, { trustedScope: { ...metadata.scope,
+      ...(firstRequest.job_id ? { job_id: firstRequest.job_id } : {}) } });
+  } catch (error) {
     fail("invalid_decision_result", "first_stage", "Independent inspection decisions failed the C02 result contract.");
   }
   if (validated.status !== "complete") {
@@ -408,8 +434,10 @@ export function evaluateInspectionDecision(plan, firstRequest, firstResult, rout
       routeRequest.design_version_id !== metadata.scope.design_version_id || routeRequest.artifact_id !== metadata.scope.artifact_id) {
       fail("invalid_decision_request", "decision_request", "Decision requests do not match the planned staged questions.");
     }
-    first = validateDecisionResult(firstRequest, firstResult, { trustedScope: metadata.scope });
-    route = validateDecisionResult(routeRequest, routeResult, { trustedScope: metadata.scope });
+    first = validateDecisionResult(firstRequest, firstResult, { trustedScope: { ...metadata.scope,
+      ...(firstRequest.job_id ? { job_id: firstRequest.job_id } : {}) } });
+    route = validateDecisionResult(routeRequest, routeResult, { trustedScope: { ...metadata.scope,
+      ...(routeRequest.job_id ? { job_id: routeRequest.job_id } : {}) } });
   } catch {
     fail("invalid_decision_result", "decision_result", "Inspection decisions failed the C02 result contract.");
   }

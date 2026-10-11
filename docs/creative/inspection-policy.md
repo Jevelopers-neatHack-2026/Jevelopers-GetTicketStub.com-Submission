@@ -1,6 +1,6 @@
 # Creative inspection and bounded repair policy
 
-This source package defines deterministic artwork checks, a versioned structured observation format, narrow DecisionPort questions, a review-only report, held-out fixture metrics, and a durable local repair counter. It is a fixture policy (`fixture-policy/1.0`), not an accepted production threshold or a canonical external inspection protocol.
+The public `creative-engine/inspection` package defines deterministic artwork checks, a versioned structured observation format, narrow DecisionPort questions, a review-only report, held-out fixture metrics, and a durable local repair counter. The public creative API wires those checks to persisted design versions, metered observer and DecisionPort attempts, and immutable repair children. It remains a fixture policy (`fixture-policy/1.0`), not an accepted production threshold or canonical external inspection protocol.
 
 ## Evaluation order and evidence
 
@@ -8,11 +8,11 @@ The deterministic gate runs before any visual decision. It snapshots the supplie
 
 The public inspection handle preserves a design version’s exact media type only when it has a safe MIME-type shape and passes the public-reference privacy check. Safe but unsupported media types remain unchanged and produce a review-only decode result; private or malformed values fail closed without entering the handle or diagnostic.
 
-The in-process decoder currently supports PNG only. JPEG and WebP are not passed through an alternate decoder; they receive an unsupported-media result and require human review until the selected shared verified decoder is integrated. This source package does not claim validation of the production image adapter or its supported format set.
+The API calls the same pinned bounded decoder used by the image adapter. It decodes PNG, JPEG, and WebP pixels before the observer receives the copied artifact bytes; unsupported formats and malformed or corrupt payloads stop at the deterministic gate. The API-level fixture checks exercise each supported format through durable storage and inspection.
 
 Visual observations are separately sourced records bound to tenant, project, brief, brief hash, design version, parent hash, artifact, and artifact hash. They retain observer/model/configuration identity, source reference, uncertainty, structured findings, and usage completeness. The question builder exposes only allowlisted observation codes, source hashes, and validated prior answers. It never sends raster bytes or raw image content to JEV. A report is limited to `acceptable_for_review`, a bounded repair recommendation, human review, refusal, or failure. It cannot approve artwork, establish legal rights, or certify print readiness.
 
-The host supplies the trusted scope and the pre-eligible repair-action intersection. Inspection does not grant asset rights, unlock controls, authorize spending, or dispatch an operation. The repair controller stores a local action identity and cumulative fixture limits; it is not a Finance ledger, budget authority, provider executor, or permission to perform an edit. Unknown repair cost remains unknown and prevents a new bounded claim. Finance quotes, acknowledgements, grants, and actual provider attempts remain separate injected authorities.
+The host supplies the trusted scope and the pre-eligible repair-action intersection. Inspection does not grant asset rights, unlock controls, authorize spending, or dispatch an operation. The API rechecks current design and brief authority at each asynchronous boundary and in the final publication compare-and-set. A repair request must match a completed inspection action and report hash, trusted owner usage evidence, eligible `image.edit`, current selection, and the original immutable root lineage. Only then does the ordinary edit/C03 path reserve and create a child version; it cannot overwrite the inspected version. The SQLite repair controller carries the root lineage’s fixture attempt, elapsed-time, and simulated-unit limits across restarts and competing workers. It is not a Finance ledger, budget authority, provider executor, or permission to perform an edit. Unknown repair cost or usage remains unknown and prevents a new bounded claim. Finance quotes, acknowledgements, grants, and actual provider attempts remain separate injected authorities.
 
 ## Decision questions
 
@@ -34,10 +34,10 @@ The fixture manifest names seven buckets: corrupt integrity, revoked or unknown 
 
 ## Current integration boundary
 
-This worktree is a source-only inspection package. It does not wire inspection into the application API, a vision adapter, a durable design-version publication transaction, C03 metering/Finance, or the shared event/trace sink. Those integrations remain required before CE-09 can be considered complete. The source tests are checked on Node 22.23.3 and 24.15.0 and can be run with:
+The local integration is exercised through the public API and the shared durable SQLite store. Inspection stage intents are persisted before transport; an interrupted stage stays `dispatching` and fails closed after restart without redispatch. The offline mock gate includes all six CE-09 acceptance cases, all seven manifest buckets, public declarations, the populated V6 additive migration, codec paths, privacy checks, metering fixtures, repair bounds, and restart behavior:
 
 ```sh
-node --test tests/inspection/*.test.mjs
+make check TARGET=inspection MODE=mock
 ```
 
-The runtime entrypoint assertion is included in `tests/inspection/public-entrypoint.test.mjs`. The public declarations are checked with TypeScript 5.9.3 under strict NodeNext resolution by compiling `tests/inspection/public-consumer.mts` against the source subpath. The TypeScript compiler remains a top-level build dependency to be wired during serialized root integration. These local checks are not application-level or live-provider acceptance evidence.
+The repository CI matrix runs the offline check and strict package consumer under Node 22.23.3 and 24.15.0. A local passing mock check does not establish live provider access, accepted owner usage mapping, Finance authority, Neatlogs ingestion/readback, an adjudicated Q01 corpus or production promotion, or Node 22 CloudLinux/CageFS/LVE qualification. `make check TARGET=inspection MODE=live` and `make acceptance TARGET=inspection` remain fail-closed until those separate owner and host evidence gates are accepted.

@@ -54,6 +54,19 @@ const requirements = {
     "finance_metering_budget_protocol",
     "shared_contracts_usage_budget_schemas",
   ],
+  inspection: [
+    "shared_contracts_creative_schemas",
+    "event_intelligence_producer",
+    "trusted_project_membership",
+    "event_intelligence_asset_permission_protocol",
+    "event_intelligence_invalidation_delivery",
+    "application_approval_staleness_consumer",
+    "shared_contracts_decision_port",
+    "harness_decision_port_consumer",
+    "harness_jev_transport_owner",
+    "finance_metering_budget_protocol",
+    "shared_contracts_usage_budget_schemas",
+  ],
 };
 
 const creativeMeteringExternalGate =
@@ -221,6 +234,29 @@ function writeBriefAcceptanceResult({ unmet, proposalState }) {
   if (unmet.length > 0) process.exitCode = 2;
 }
 
+function writeInspectionAcceptanceResult({ unmet, proposalState, creativePolicy, imageAdapter }) {
+  process.stdout.write(JSON.stringify({
+    schema_version: "creative-inspection-acceptance-result/v1",
+    target: "CE-09",
+    proposal_state: proposalState,
+    acceptance_allowed: false,
+    provider_dispatches: 0,
+    paid_provider_calls: 0,
+    provider_credentials_read: false,
+    promotion_status: "not_promoted",
+    missing_owner_evidence: [...new Set([...unmet, ...imageAdapter.missing_owner_evidence])],
+    q01: { accepted: creativePolicy.accepted, finding_count: creativePolicy.findings.length,
+      findings: creativePolicy.findings },
+    external_gates: [
+      "Selected observation-provider and DecisionPort account/model/capability evidence remains pending.",
+      "Q01 held-out corpus, adjudication, thresholds, and promotion remain pending.",
+      "Exact Node 22.23.3 host, CloudLinux, CageFS, and LVE qualification remains unverified.",
+      "Finance and Neatlogs protocol, ingestion, and readback remain pending owner evidence.",
+    ],
+  }) + "\n");
+  process.exitCode = 2;
+}
+
 async function main() {
   const target = process.argv[2] ?? "all";
   if (target === "access-preflight") {
@@ -237,7 +273,7 @@ async function main() {
     return;
   }
   if (!Object.hasOwn(requirements, target) && target !== "all") {
-    process.stderr.write("Unknown acceptance target " + target + ". Use api, controls, contracts, brief, decision-contract, eval-policy, metering-contract, handoff-contract, versions, creative-metering, access-preflight, image-adapter, or all.\n");
+    process.stderr.write("Unknown acceptance target " + target + ". Use api, controls, contracts, brief, decision-contract, eval-policy, metering-contract, handoff-contract, versions, creative-metering, inspection, access-preflight, image-adapter, or all.\n");
     process.exitCode = 2;
     return;
   }
@@ -248,6 +284,11 @@ async function main() {
   const { unmet, unresolved, proposalState } = await evaluateAcceptanceRecord(record, target, repoRoot);
   if (target === "brief") {
     writeBriefAcceptanceResult({ unmet, proposalState });
+    return;
+  }
+  if (target === "inspection") {
+    writeInspectionAcceptanceResult({ unmet, proposalState, creativePolicy: evaluateCreativePolicy(repoRoot),
+      imageAdapter: createImageAdapterGateReport() });
     return;
   }
   const creativePolicy = target === "all" ? evaluateCreativePolicy(repoRoot) : null;

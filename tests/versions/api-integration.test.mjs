@@ -6,16 +6,22 @@ import { cp, readFile, unlink } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createCreativeApi } from "../../src/api/v1.mjs";
 import { canonicalHash, canonicalSerialize } from "../../src/contracts/index.mjs";
+import { PINNED_JEV_MODEL_ID } from "../../src/contracts/decision-port/v1.mjs";
+import { corruptPngCrc, makePng } from "../../fixtures/models/png.mjs";
+import { completeResearchPackage } from "../../fixtures/planning/research-packages.mjs";
 import { createCreativeVersionApiPorts } from "../../src/versions/api-ports.mjs";
 import { CreativeVersionStore, VersionStoreError } from "../../src/versions/store.mjs";
-import { createSqliteTelemetryOutbox, deliverPendingUsageObservations, USAGE_PROFILE } from "../../src/telemetry/index.mjs";
+import { createSqliteTelemetryOutbox, createUsageObservation, deliverPendingUsageObservations, USAGE_PROFILE } from "../../src/telemetry/index.mjs";
+import { evaluateHeldOutFixtures } from "../../src/inspection/index.mjs";
 
 const NOW = Date.parse("2026-10-10T12:30:00.000Z");
 const SCOPE = Object.freeze({ tenant_id: "tenant-api-1", project_id: "project-api-1", brief_id: "brief-api-1" });
 const API_CRASH_WORKER = new URL("../../fixtures/versions/api-crash-worker.mjs", import.meta.url);
+const INSPECTION_CRASH_WORKER = new URL("../../fixtures/versions/inspection-crash-worker.mjs", import.meta.url);
 
 async function fixture(name) {
   return JSON.parse(await readFile(new URL(`../../fixtures/api/${name}.json`, import.meta.url), "utf8"));
@@ -37,6 +43,29 @@ function request(actionId, plan) {
     operation: "generate", action_id: actionId, payload: { brief_id: SCOPE.brief_id, plan } };
 }
 
+function inspectionRequest(actionId, designVersionId) {
+  const body = request(actionId, null);
+  body.operation = "inspect";
+  body.payload = { brief_id: SCOPE.brief_id, design_version_id: designVersionId };
+  return body;
+}
+
+async function repairEditRequest(actionId, design, reportHash, inspectionActionId) {
+  const plan = await fixture("edit-plan");
+  plan.base = { brief_hash: design.brief_hash, design_hash: design.design_hash,
+    design_version_id: design.design_version_id };
+  for (const step of plan.steps) {
+    if (step.parameters.design_version_id !== undefined) step.parameters.design_version_id = design.design_version_id;
+    if (step.parameters.artifact_id !== undefined) step.parameters.artifact_id = design.artifact.artifact_id;
+  }
+  plan.expected_result.parent_version_id = design.design_version_id;
+  const body = { ...request(actionId, plan), operation: "edit",
+    payload: { brief_id: SCOPE.brief_id, design_version_id: design.design_version_id, plan,
+      inspection_repair: { contract: "CreativeInspectionRepairRequest", schema_version: "1.0",
+        inspection_action_id: inspectionActionId, report_hash: reportHash, repair_action: "image.edit" } } };
+  return body;
+}
+
 function substituteAttemptIdentity(intentJson) {
   const intent = JSON.parse(intentJson);
   intent.evidence.creation.billable_attempt_id = "billable-substituted-after-prepare";
@@ -44,8 +73,9 @@ function substituteAttemptIdentity(intentJson) {
   return canonicalSerialize(intent);
 }
 
-function portsFor(store, counters, idFactory, { leaseDurationMs = 60_000 } = {}) {
-  const bytes = Buffer.from("durable exact artwork bytes");
+function portsFor(store, counters, idFactory, { leaseDurationMs = 60_000,
+  artifactBytes = Buffer.from("durable exact artwork bytes"), artifactMediaType = "image/png" } = {}) {
+  const bytes = Buffer.from(artifactBytes);
   const hash = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
   const provider = {
     resolveRoute: () => ({ retry_mapping_ref: "retry:fixture/1", provider: {
@@ -57,7 +87,7 @@ function portsFor(store, counters, idFactory, { leaseDurationMs = 60_000 } = {})
       (counters.providerTransportIds ??= []).push(input.transport_attempt_id);
       await input.recordTransportAttempt(input.transport_attempt_id);
       return { design_version_id: "design-durable-api-1",
-        artifact: { artifact_id: "artifact-durable-api-1", content_hash: hash, media_type: "image/png" },
+        artifact: { artifact_id: "artifact-durable-api-1", content_hash: hash, media_type: artifactMediaType },
         artifact_bytes: Uint8Array.from(bytes), provider: "fixture-provider", model: "fixture-model",
         usage: { completeness: "complete", input_tokens: 2, output_tokens: 4 } };
     },
@@ -66,7 +96,7 @@ function portsFor(store, counters, idFactory, { leaseDurationMs = 60_000 } = {})
       (counters.providerTransportIds ??= []).push(input.transport_attempt_id);
       await input.recordTransportAttempt(input.transport_attempt_id);
       return { design_version_id: `design-durable-edit-${counters.provider}`,
-        artifact: { artifact_id: `artifact-durable-edit-${counters.provider}`, content_hash: hash, media_type: "image/png" },
+        artifact: { artifact_id: `artifact-durable-edit-${counters.provider}`, content_hash: hash, media_type: artifactMediaType },
         artifact_bytes: Uint8Array.from(bytes), provider: "fixture-provider", model: "fixture-model",
         usage: { completeness: "complete", input_tokens: 2, output_tokens: 4 } };
     },
@@ -103,6 +133,145 @@ function portsFor(store, counters, idFactory, { leaseDurationMs = 60_000 } = {})
       },
     },
   };
+}
+
+function attachInspectionPorts(ports, counters, { recommendRepair = false, estimateRepair = true, repairUnits = 1,
+  decisionDefectProbability = 0.8, decisionQualityScore = 2 } = {}) {
+  ports.telemetry.usage_profile_authority = Object.freeze({
+    mapProviderUsage(input) {
+      const profile = input.attempt.operation_kind === "jev_decision"
+        ? USAGE_PROFILE.TYPESAFE_DECISION : USAGE_PROFILE.NORMALIZED;
+      const observation = createUsageObservation({ attempt: input.attempt, trustedScope: input.trustedScope,
+        usage: input.rawUsage, profile, sourceObservationId: input.sourceObservationId,
+        source: "provider_response", transportAttemptId: input.transportAttemptId });
+      return { status: "mapped", profile_ref: `offline-fixture-profile:${profile}`,
+        profile_sha256: canonicalHash({ profile, source: "versions-api-integration-fixture" }),
+        raw_usage_sha256: input.rawUsageSha256, target_binding_sha256: input.targetBindingSha256,
+        attempt_binding_sha256: input.attemptBindingSha256, observation };
+    },
+  });
+  const route = { retry_mapping_ref: "retry:inspection-fixture/1", provider: {
+    name: "fixture-vision", model: "fixture-vision-model", endpoint: "test:/vision",
+    sdk: { name: "fixture-sdk", version: "1.0" },
+  } };
+  ports.inspection = {
+    resolveRoute: () => structuredClone(route),
+    async inspect(input) {
+      counters.inspection = (counters.inspection ?? 0) + 1;
+      (counters.inspectionTransportIds ??= []).push(input.transport_attempt_id);
+      await input.recordTransportAttempt(input.transport_attempt_id);
+      return { status: "complete", observer: { type: "model", id: "offline-vision-observer",
+        model_id: "fixture-vision-model", config_ref: canonicalHash("offline-vision-config/1") },
+        uncertainty: { status: "measured", note: "not_independently_measured" },
+        findings: [{ code: "layout_issue", status: "present", severity: "moderate", confidence: 0.9,
+          region: { x: 0.25, y: 0.25, width: 0.25, height: 0.25 } }],
+        usage: { completeness: "complete", input_tokens: 2, output_tokens: 3 } };
+    },
+    ...(estimateRepair ? { estimateFixtureRepairCost() { return { contract: "CreativeFixtureRepairEstimate", schema_version: "1.0",
+      evidence_mode: "fixture", policy_version: "fixture-repair-estimate/1", simulated_units: repairUnits }; } } : {}),
+  };
+  const jevRoute = { retry_mapping_ref: "retry:inspection-jev-fixture/1", provider: {
+    name: "fixture-jev", model: PINNED_JEV_MODEL_ID, endpoint: "test:/jev",
+    sdk: { name: "fixture-sdk", version: "1.0" },
+  } };
+  ports.decisionPort = {
+    resolveRoute: () => structuredClone(jevRoute),
+    async execute(input) {
+      counters.decision = (counters.decision ?? 0) + 1;
+      await input.recordTransportAttempt(input.transport_attempt_id);
+      const answers = {};
+      for (const [key, question] of Object.entries(input.request.questions)) {
+        if (question.type === "noul") {
+          answers[key] = { status: "answered", question_schema_version: question.question_schema_version,
+            policy_version: question.policy_version, answer: { type: "noul", noul: decisionDefectProbability } };
+        } else if (question.type === "score") {
+          const keys = question.criteria.map((_item, index) => String(index));
+          const lower = Math.floor(decisionQualityScore);
+          const upper = Math.min(4, lower + 1);
+          const probabilities = Object.fromEntries(keys.map((item) => [item, 0]));
+          probabilities[String(lower)] = 1 - (decisionQualityScore - lower);
+          probabilities[String(upper)] += decisionQualityScore - lower;
+          answers[key] = { status: "answered", question_schema_version: question.question_schema_version,
+            policy_version: question.policy_version, answer: { type: "score", score: decisionQualityScore,
+              legend: Object.fromEntries(question.criteria.map((item, index) => [String(index), item])),
+              probabilities, confidence: 0.95 } };
+        } else {
+          const choice = recommendRepair && question.eligible_candidate_ids.includes("repair_image_edit")
+            ? "repair_image_edit" : "acceptable_for_review";
+          answers[key] = { status: "answered", question_schema_version: question.question_schema_version,
+            policy_version: question.policy_version, answer: { type: "choice", choice,
+              probabilities: Object.fromEntries(question.eligible_candidate_ids.map((item) => [item, item === choice ? 1 : 0])),
+              confidence: 0.95 } };
+        }
+      }
+      return { contract: "DecisionPortResult", schema_version: "1.0", event_id: `result:${input.request.event_id}`,
+        tenant_id: input.request.tenant_id, project_id: input.request.project_id,
+        correlation_id: input.request.correlation_id, producer: "fixture-jev", occurred_at: input.request.occurred_at,
+        ingested_at: input.request.ingested_at, environment: input.request.environment, billing_mode: input.request.billing_mode,
+        source_refs: input.request.source_refs, request_id: input.request.request_id,
+        logical_operation_id: input.request.logical_operation_id, billable_attempt_id: input.request.billable_attempt_id,
+        model_id: input.request.model_policy.model_id, model_policy_version: input.request.model_policy.policy_version,
+        job_id: input.request.job_id, answers, status: "complete",
+        usage: { completeness: "complete", input_tokens: 2, output_tokens: 2 } };
+    },
+  };
+  return ports;
+}
+
+async function setupInspectionSystem(t, { artifactBytes = Buffer.from(makePng(16, 16)),
+  artifactMediaType = "image/png", recommendRepair = false, decisionDefectProbability = 0.8,
+  decisionQualityScore = 2 } = {}) {
+  const root = await mkdtemp(join(tmpdir(), "creative-inspection-api-case-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  const brief = await fixture("brief");
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief });
+  const counters = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
+  let id = 0;
+  const ports = attachInspectionPorts(portsFor(store, counters, () => `case-port-${++id}`,
+    { artifactBytes, artifactMediaType }), counters, { recommendRepair, decisionDefectProbability, decisionQualityScore });
+  const api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `case-api-${++id}` });
+  return { root, store, brief, counters, ports, api, nextId: () => ++id };
+}
+
+async function setupAssetBackedInspectionSystem(t) {
+  const system = await setupInspectionSystem(t, { recommendRepair: true });
+  const research = { ...completeResearchPackage(), tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id };
+  system.ports.planning.getCurrentResearchPackage = async () => research;
+  let permissionStatus = "granted";
+  system.ports.planning.assetPermissionVerifier = { async verifyAssetUse(input) {
+    return { status: permissionStatus, owner_evidence_status: permissionStatus === "granted" ? "verified" : "revoked",
+      tenant_id: input.tenant_id, project_id: input.project_id, asset_id: input.asset_id,
+      content_hash: input.content_hash, action: input.action, package_id: input.package_id,
+      package_hash: input.package_hash, evidence_ref: "fixture:inspection-asset-permission",
+      checked_at: new Date(NOW).toISOString(), expires_at: new Date(NOW + 60_000).toISOString() };
+  } };
+  const createBriefBody = request("inspection-asset-brief", null);
+  createBriefBody.operation = "brief.create";
+  createBriefBody.payload = {};
+  createBriefBody.source_refs = [];
+  const briefCreated = await system.api.invoke({ ...actor(), permissions: [...actor().permissions, "creative.brief.create"] },
+    createBriefBody);
+  assert.equal(briefCreated.ok, true, JSON.stringify(briefCreated));
+  const brief = briefCreated.result.brief;
+  const plan = await fixture("generate-plan");
+  const planHash = canonicalHash(brief);
+  plan.base.brief_hash = planHash;
+  plan.base.design_hash = canonicalHash({ contract: "DesignRoot", schema_version: "1.0", brief_id: brief.brief_id });
+  plan.expected_result.parent_version_id = `root:${brief.brief_id}`;
+  plan.source_refs = ["page-1"];
+  plan.steps[0].source_refs = ["page-1"];
+  plan.steps[0].parameters.brief_id = brief.brief_id;
+  const generateBody = request("inspection-asset-generation", plan);
+  generateBody.payload.brief_id = brief.brief_id;
+  generateBody.source_refs = ["page-1"];
+  const generated = await system.api.invoke(actor(), generateBody);
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  assert.equal(generated.result.design_version.creative_asset_use.entries.length, 1);
+  permissionStatus = "denied";
+  return { ...system, brief, design: generated.result.design_version };
 }
 
 test("real API invocation commits job, exact artifact bytes, version and selection through one durable adapter", async (t) => {
@@ -180,7 +349,434 @@ test("real API invocation commits job, exact artifact bytes, version and selecti
   assert.equal(counters.provider, 1, "conflicting action replay must not dispatch again");
 });
 
-test("populated BASE4e v4 database migrates to v6 and replays historical generation, edit, and inspection after restart", async (t) => {
+test("inspection hard exit reopens with a dispatching stage and never redispatches it", async (t) => {
+  const system = await setupInspectionSystem(t);
+  const generated = await system.api.invoke(actor(), request("inspection-crash-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const actionId = "inspection-hard-exit-action";
+  const designVersionId = generated.result.design_version.design_version_id;
+  const callLog = join(system.root, "inspection-side-effects.log");
+  const crashAt = NOW + 120_000;
+  system.store.close();
+  const child = spawnSync(process.execPath, [fileURLToPath(INSPECTION_CRASH_WORKER)], {
+    cwd: process.cwd(), encoding: "utf8", timeout: 30_000,
+    env: { ...process.env, CE09_INSPECTION_DATABASE: join(system.root, "versions.sqlite"),
+      CE09_INSPECTION_OBJECTS: join(system.root, "objects"), CE09_INSPECTION_ACTION: actionId,
+      CE09_INSPECTION_DESIGN: designVersionId, CE09_INSPECTION_CALL_LOG: callLog,
+      CE09_INSPECTION_NOW: String(crashAt) },
+  });
+  assert.equal(child.status, 86, `worker must hard-exit at observer dispatch: ${child.stderr}`);
+  assert.equal((await readFile(callLog, "utf8")).trim().split("\n").length, 2,
+    "the observer side effect and its C03 transport acknowledgement must both precede the hard exit");
+
+  const afterCrash = new CreativeVersionStore({ databasePath: join(system.root, "versions.sqlite"),
+    objectRoot: join(system.root, "objects"), now: () => crashAt + 180_000 });
+  t.after(() => afterCrash.close());
+  const stageBeforeReplay = afterCrash.db.prepare(`SELECT stage,status,attempt_id FROM creative_inspection_stages_v1
+    WHERE action_id=?`).get(actionId);
+  assert.equal(stageBeforeReplay?.stage, "observer");
+  assert.equal(stageBeforeReplay?.status, "dispatching");
+  const counters = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
+  let id = 0;
+  const ports = attachInspectionPorts(portsFor(afterCrash, counters, () => `post-crash-port-${++id}`), counters);
+  const api = createCreativeApi({ ports, now: () => crashAt + 180_000,
+    idFactory: () => `post-crash-api-${++id}` });
+  const replay = await api.invoke(actor(), inspectionRequest(actionId, designVersionId));
+  assert.equal(replay.ok, false);
+  assert.equal(replay.error.code, "unavailable");
+  assert.equal(counters.inspection, 0, "an uncertain observer attempt is never dispatched again");
+  assert.equal(counters.decision, 0, "no dependent DecisionPort stage runs after the unknown observer attempt");
+  assert.equal(counters.provider, 0);
+  assert.equal(counters.reserved, 0, "restart reconciliation adds no metered reserve");
+  const stageAfterReplay = afterCrash.db.prepare(`SELECT stage,status,attempt_id FROM creative_inspection_stages_v1
+    WHERE action_id=?`).get(actionId);
+  assert.deepEqual(stageAfterReplay, stageBeforeReplay);
+  assert.equal((await readFile(callLog, "utf8")).trim().split("\n").length, 2);
+});
+
+test("inspection API decodes PNG, JPEG, and WebP with the pinned shared codec", async (t) => {
+  const samples = [
+    { format: "png", mediaType: "image/png", bytes: Buffer.from(makePng(16, 16)) },
+    { format: "jpeg", mediaType: "image/jpeg", bytes: await readFile(new URL("../../fixtures/models/valid-16x16.jpg", import.meta.url)) },
+    { format: "webp", mediaType: "image/webp", bytes: await readFile(new URL("../../fixtures/models/valid-16x16.webp", import.meta.url)) },
+  ];
+  for (const sample of samples) await t.test(sample.format, async (subtest) => {
+    const system = await setupInspectionSystem(subtest, { artifactBytes: sample.bytes, artifactMediaType: sample.mediaType });
+    const generated = await system.api.invoke(actor(), request(`codec-${sample.format}-seed`, await fixture("generate-plan")));
+    assert.equal(generated.ok, true, JSON.stringify(generated));
+    const inspect = system.ports.inspection.inspect;
+    system.ports.inspection.inspect = async (input) => {
+      assert.equal(input.deterministic.dimensions.format, sample.format);
+      assert.deepEqual(Buffer.from(input.artifact_bytes), sample.bytes);
+      return inspect(input);
+    };
+    const result = await system.api.invoke(actor(), inspectionRequest(`codec-${sample.format}-inspect`,
+      generated.result.design_version.design_version_id));
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.result.report.deterministic.gate, "eligible");
+    assert.equal(result.result.report.observations.length, 1);
+  });
+});
+
+test("CE09 acceptance case 4 persists cumulative root limits across restart and blocks a third repair", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-inspection-reopen-repair-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  const brief = await fixture("brief");
+  const png = Buffer.from(makePng(16, 16));
+  const storeOptions = { databasePath, objectRoot, now: () => NOW };
+  let store = new CreativeVersionStore(storeOptions);
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief });
+  const counters = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
+  let id = 0;
+  const makePorts = () => attachInspectionPorts(portsFor(store, counters,
+    () => `inspection-port-${++id}`, { artifactBytes: png }), counters, { recommendRepair: true });
+  let activePorts = makePorts();
+  let api = createCreativeApi({ ports: activePorts, now: () => NOW, idFactory: () => `inspection-api-${++id}` });
+  const generated = await api.invoke(actor(), request("inspection-seed-generation", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const original = generated.result.design_version;
+  assert.deepEqual(Buffer.from(await store.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: original.design_version_id })), png);
+
+  const firstInspectAction = `inspect-${original.design_version_id}`;
+  const firstInspectBody = inspectionRequest(firstInspectAction, original.design_version_id);
+  const inspected = await api.invoke(actor(), firstInspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify({ inspected, counters,
+    job: store.db.prepare("SELECT status,error_json,result_json FROM creative_jobs WHERE action_id=?").get(firstInspectAction),
+    intents: store.db.prepare("SELECT transport_attempt_id,authorized_at FROM creative_dispatch_intents WHERE job_id=(SELECT job_id FROM creative_jobs WHERE action_id=?)")
+      .all(firstInspectAction) }));
+  assert.equal(inspected.result.report.outcome, "bounded_repair_recommended");
+  assert.equal(inspected.result.report.recommendation, "image.edit");
+  assert.equal(inspected.result.report.limits.usage_completeness, "complete",
+    "a repairable report requires the trusted owner usage mapping for every inspection stage");
+  assert.equal(inspected.result.report.deterministic.gate, "eligible");
+  assert.equal(inspected.result.report.limitations.some((item) => /not customer approval/i.test(item)), true);
+  assert.equal(Object.hasOwn(inspected.result.report, "approved"), false);
+  assert.deepEqual(inspected.result.attempt_ids.length, 3, "observer and both sequential C02 stages are separately metered");
+  assert.equal(counters.inspection, 1);
+  assert.equal(counters.decision, 2);
+  assert.equal(counters.reserved, 4, "generation, observer, and both DecisionPort requests have distinct reservations");
+  assert.equal(new Set(counters.financeTransportIds).size, 4);
+  const sessionRow = store.db.prepare("SELECT status,result_hash FROM creative_inspection_sessions_v1 WHERE action_id=?")
+    .get(firstInspectAction);
+  assert.equal(sessionRow.status, "completed");
+  assert.equal(sessionRow.result_hash, canonicalHash(JSON.parse(sessionRow.result_hash ?
+    store.db.prepare("SELECT result_json FROM creative_inspection_sessions_v1 WHERE action_id=?").get(firstInspectAction).result_json : "null")));
+  const firstStages = store.db.prepare("SELECT stage,status FROM creative_inspection_stages_v1 WHERE action_id=? ORDER BY stage")
+    .all(firstInspectAction);
+  assert.deepEqual(firstStages.map((row) => row.status), ["completed", "completed", "completed"]);
+  const firstStageResults = store.db.prepare("SELECT stage,attempt_id,result_json FROM creative_inspection_stages_v1 WHERE action_id=? ORDER BY stage")
+    .all(firstInspectAction);
+  assert.deepEqual(firstStageResults.map((row) => JSON.parse(row.result_json).usage_completeness), ["complete", "complete", "complete"]);
+  assert.deepEqual(firstStageResults.map((row) => JSON.parse(row.result_json).telemetry_evidence.local_status),
+    ["recorded", "recorded", "recorded"]);
+  const firstUsageRows = store.db.prepare(`SELECT billable_attempt_id,status,payload_json
+    FROM creative_telemetry_observations_v1 WHERE logical_operation_id=? ORDER BY billable_attempt_id`)
+    .all(firstInspectAction);
+  assert.equal(firstUsageRows.length, 3, "observer and both dependent DecisionPort stages have separate owner usage evidence");
+  assert.ok(firstStageResults.every((stage) => firstUsageRows.some((row) => {
+    const observation = JSON.parse(row.payload_json).observation;
+    return row.billable_attempt_id === stage.attempt_id && row.status === "delivered" &&
+      observation.completeness === "complete" && observation.billable_attempt_id === stage.attempt_id;
+  })), "each completed stage must match a complete, acknowledged C03 observation for its own attempt");
+
+  store.close();
+  store = new CreativeVersionStore(storeOptions);
+  activePorts = makePorts();
+  api = createCreativeApi({ ports: activePorts, now: () => NOW, idFactory: () => `inspection-reopen-api-${++id}` });
+  const replay = await api.invoke(actor(), { ...firstInspectBody, event_id: "inspect-replay-event",
+    request_id: "inspect-replay-request", correlation_id: "inspect-replay-correlation" });
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.replayed, true);
+  assert.equal(counters.inspection, 1, "reopening a completed observation does not call vision again");
+  assert.equal(counters.decision, 2, "reopening a completed decision does not call DecisionPort again");
+  assert.equal(counters.reserved, 4, "inspection replay creates no additional metered attempts");
+
+  const firstRepair = await repairEditRequest("inspection-repair-1", original,
+    canonicalHash(inspected.result.report), firstInspectAction);
+  const repaired1 = await api.invoke(actor(), firstRepair);
+  assert.equal(repaired1.ok, true, JSON.stringify(repaired1));
+  const design1 = repaired1.result.design_version;
+  assert.equal(design1.parent_version_id, original.design_version_id);
+  assert.equal(repaired1.result.inspection_repair.root_design_version_id, original.design_version_id);
+  assert.equal(repaired1.result.inspection_repair.source_report_hash, canonicalHash(inspected.result.report));
+  assert.equal(counters.provider, 2, "repair uses the existing normal edit provider path once");
+  assert.equal(counters.reserved, 5);
+  const state = activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+    design_version_id: original.design_version_id }, inspection_id: inspected.result.inspection_id });
+  assert.equal(state.repairs_used, 1);
+  assert.equal(state.simulated_units_used, 1);
+  assert.equal(state.remaining_repairs, 1);
+  assert.equal(state.remaining_simulated_units, 2);
+
+  store.close();
+  store = new CreativeVersionStore(storeOptions);
+  activePorts = makePorts();
+  api = createCreativeApi({ ports: activePorts, now: () => NOW, idFactory: () => `inspection-reopen-2-api-${++id}` });
+  const replayRepair = await api.invoke(actor(), { ...firstRepair, event_id: "repair-replay-event",
+    request_id: "repair-replay-request", correlation_id: "repair-replay-correlation" });
+  assert.equal(replayRepair.ok, true, JSON.stringify(replayRepair));
+  assert.equal(replayRepair.replayed, true);
+  assert.equal(replayRepair.result.inspection_repair.claim_ref, repaired1.result.inspection_repair.claim_ref);
+  assert.equal(counters.provider, 2, "repair replay after reopen does not redispatch an edit");
+  assert.equal(counters.reserved, 5);
+
+  const secondInspectAction = `inspect-${design1.design_version_id}`;
+  const secondInspectBody = inspectionRequest(secondInspectAction, design1.design_version_id);
+  const inspected2 = await api.invoke(actor(), secondInspectBody);
+  assert.equal(inspected2.ok, true, JSON.stringify(inspected2));
+  assert.equal(inspected2.result.report.limits.remaining_repairs, 1);
+  const secondRepair = await repairEditRequest("inspection-repair-2", design1,
+    canonicalHash(inspected2.result.report), secondInspectAction);
+  const repaired2 = await api.invoke(actor(), secondRepair);
+  assert.equal(repaired2.ok, true, JSON.stringify(repaired2));
+  assert.equal(repaired2.result.design_version.parent_version_id, design1.design_version_id);
+  assert.equal(counters.provider, 3);
+  assert.equal(counters.reserved, 9, "second inspect adds three attempts and second repair adds one");
+  const finalState = activePorts.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+    design_version_id: original.design_version_id }, inspection_id: inspected.result.inspection_id });
+  assert.equal(finalState.repairs_used, 2);
+  assert.equal(finalState.remaining_repairs, 0);
+
+  const thirdDesign = repaired2.result.design_version;
+  const thirdInspectAction = `inspect-${thirdDesign.design_version_id}`;
+  const thirdInspection = await api.invoke(actor(), inspectionRequest(thirdInspectAction, thirdDesign.design_version_id));
+  assert.equal(thirdInspection.ok, true, JSON.stringify(thirdInspection));
+  const beforeDeniedRepair = { provider: counters.provider, reserved: counters.reserved };
+  const denied = await api.invoke(actor(), await repairEditRequest("inspection-repair-3", thirdDesign,
+    canonicalHash(thirdInspection.result.report), thirdInspectAction));
+  assert.equal(denied.ok, false);
+  assert.equal(denied.error.code, "review_required", "the durable root repair limit is a review gate, not missing usage");
+  assert.deepEqual({ provider: counters.provider, reserved: counters.reserved }, beforeDeniedRepair,
+    "the durable two-repair limit stops a third edit before new route, reservation, or transport");
+});
+
+test("inspection repair remains review-gated when trusted owner usage evidence is unavailable", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "creative-inspection-unknown-owner-usage-"));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
+    objectRoot: join(root, "objects"), now: () => NOW });
+  t.after(() => store.close());
+  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+  const counters = { provider: 0, reserved: 0, inspection: 0, decision: 0, estimates: 0 };
+  let id = 0;
+  const ports = attachInspectionPorts(portsFor(store, counters, () => `unknown-owner-port-${++id}`,
+    { artifactBytes: Buffer.from(makePng(16, 16)) }), counters, { recommendRepair: true });
+  const estimate = ports.inspection.estimateFixtureRepairCost;
+  ports.inspection.estimateFixtureRepairCost = (...args) => {
+    counters.estimates += 1;
+    return estimate(...args);
+  };
+  const api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `unknown-owner-api-${++id}` });
+  const generated = await api.invoke(actor(), request("unknown-owner-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+
+  delete ports.telemetry.usage_profile_authority;
+  const inspectionAction = `unknown-owner-inspect-${generated.result.design_version.design_version_id}`;
+  const inspection = await api.invoke(actor(), inspectionRequest(inspectionAction,
+    generated.result.design_version.design_version_id));
+  assert.equal(inspection.ok, true, JSON.stringify(inspection));
+  assert.equal(inspection.result.report.limits.usage_completeness, "unknown");
+  assert.ok(inspection.result.report.uncertainty.includes("unknown_cost"));
+  const stagedUsage = store.db.prepare("SELECT result_json FROM creative_inspection_stages_v1 WHERE action_id=? ORDER BY stage")
+    .all(inspectionAction).map((row) => JSON.parse(row.result_json).usage_completeness);
+  assert.deepEqual(stagedUsage, ["unknown", "unknown", "unknown"]);
+
+  const before = { provider: counters.provider, reserved: counters.reserved, estimates: counters.estimates };
+  const repair = await api.invoke(actor(), await repairEditRequest("unknown-owner-repair",
+    generated.result.design_version, canonicalHash(inspection.result.report), inspectionAction));
+  assert.equal(repair.ok, false);
+  assert.equal(repair.error.code, "unavailable", "repair validation fails closed at the missing owner usage evidence gate");
+  assert.deepEqual({ provider: counters.provider, reserved: counters.reserved, estimates: counters.estimates }, before,
+    "unknown usage cannot authorize an edit, reserve a repair attempt, or request a cost estimate");
+});
+
+test("CE09 acceptance case 1 blocks corrupt artifacts, revoked rights, and observer refusal before any favorable bypass", async (t) => {
+  const corrupt = await setupInspectionSystem(t);
+  const generated = await corrupt.api.invoke(actor(), request("case1-corrupt-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const digest = generated.result.design_version.artifact.content_hash.slice("sha256:".length);
+  await unlink(join(corrupt.store.objectRoot, "objects", "sha256", digest.slice(0, 2), digest));
+  const corrupted = await corrupt.api.invoke(actor(), inspectionRequest("case1-corrupt-inspect",
+    generated.result.design_version.design_version_id));
+  assert.equal(corrupted.ok, false);
+  assert.ok(["failed", "unavailable"].includes(corrupted.error.code));
+  assert.equal(corrupt.counters.inspection, 0);
+  assert.equal(corrupt.counters.decision, 0);
+  assert.equal(corrupt.counters.reserved, 1, "corrupt bytes stop before inspection or DecisionPort reservations");
+
+  const revoked = await setupAssetBackedInspectionSystem(t);
+  const revokedBody = inspectionRequest("case1-revoked-inspect", revoked.design.design_version_id);
+  revokedBody.payload.brief_id = revoked.brief.brief_id;
+  const denied = await revoked.api.invoke(actor(), revokedBody);
+  assert.equal(denied.ok, false);
+  assert.equal(denied.error.code, "permission_denied");
+  assert.equal(revoked.counters.inspection, 0);
+  assert.equal(revoked.counters.decision, 0);
+  assert.equal(revoked.counters.reserved, 1, "revoked asset rights stop before model or repair dispatch");
+
+  const refusal = await setupInspectionSystem(t, { recommendRepair: true });
+  const refusalSeed = await refusal.api.invoke(actor(), request("case1-refusal-seed", await fixture("generate-plan")));
+  assert.equal(refusalSeed.ok, true, JSON.stringify(refusalSeed));
+  refusal.ports.inspection.inspect = async (input) => {
+    refusal.counters.inspection += 1;
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    return { status: "refusal", usage: { completeness: "unknown", missing_fields: ["usage_unavailable"] } };
+  };
+  const refused = await refusal.api.invoke(actor(), inspectionRequest("case1-observer-refusal",
+    refusalSeed.result.design_version.design_version_id));
+  assert.equal(refused.ok, false);
+  assert.ok(["failed", "unavailable"].includes(refused.error.code));
+  assert.equal(refusal.counters.inspection, 1);
+  assert.equal(refusal.counters.decision, 0, "a refusal cannot be overruled by JEV");
+  assert.equal(refusal.counters.provider, 1, "a refusal cannot launch a repair image edit");
+});
+
+test("CE09 acceptance case 2 executes all seven labeled fixture buckets through the durable public API", async (t) => {
+  const manifest = JSON.parse(await readFile(new URL("../../fixtures/inspection/manifest.json", import.meta.url), "utf8"));
+  const expectedBuckets = ["corrupt_integrity", "revoked_permission", "valid_unchanged", "wrong_subject",
+    "mask_drift", "poor_result", "adversarial_observation"];
+  assert.deepEqual(manifest.buckets.map((bucket) => bucket.id), expectedBuckets);
+  for (const bucket of manifest.buckets) {
+    await t.test(bucket.id, async (subtest) => {
+      if (bucket.id === "revoked_permission") {
+        const system = await setupAssetBackedInspectionSystem(subtest);
+        const body = inspectionRequest(`bucket-${bucket.id}`, system.design.design_version_id);
+        body.payload.brief_id = system.brief.brief_id;
+        const result = await system.api.invoke(actor(), body);
+        assert.equal(result.ok, false);
+        assert.equal(result.error.code, "permission_denied");
+        assert.equal(system.counters.inspection, 0);
+        assert.equal(system.counters.decision, 0);
+        return;
+      }
+      const system = await setupInspectionSystem(subtest, {
+        ...(bucket.id === "corrupt_integrity" ? { artifactBytes: corruptPngCrc(makePng(16, 16)) } : {}),
+        recommendRepair: bucket.id !== "valid_unchanged",
+        ...(bucket.id === "valid_unchanged" ? { decisionDefectProbability: 0.1, decisionQualityScore: 3.5 } : {}) });
+      const generated = await system.api.invoke(actor(), request(`bucket-seed-${bucket.id}`, await fixture("generate-plan")));
+      assert.equal(generated.ok, true, JSON.stringify(generated));
+      const design = generated.result.design_version;
+      if (bucket.id === "corrupt_integrity") {
+        const result = await system.api.invoke(actor(), inspectionRequest(`bucket-${bucket.id}`, design.design_version_id));
+        assert.equal(result.ok, true, JSON.stringify(result));
+        assert.equal(result.result.report.outcome, "failure");
+        assert.equal(system.counters.inspection, 0);
+        assert.equal(system.counters.decision, 0);
+      } else {
+        const inspect = system.ports.inspection.inspect;
+        system.ports.inspection.inspect = async (input) => {
+          const raw = await inspect(input);
+          if (bucket.id === "valid_unchanged") return { ...raw, findings: [] };
+          if (bucket.id === "wrong_subject") return { ...raw, design_version_id: "design-for-another-subject" };
+          if (bucket.id === "mask_drift") return { ...raw, findings: [{ code: "mask_drift", status: "present",
+            severity: "high", confidence: 0.95 }] };
+          if (bucket.id === "poor_result") return { ...raw, findings: [{ code: "other_visual_defect", status: "present",
+            severity: "critical", confidence: 0.99 }] };
+          if (bucket.id === "adversarial_observation") return { ...raw, instructions: bucket.fixture.injection };
+          return raw;
+        };
+        const result = await system.api.invoke(actor(), inspectionRequest(`bucket-${bucket.id}`, design.design_version_id));
+        if (bucket.id === "valid_unchanged") {
+          assert.equal(result.ok, true, JSON.stringify(result));
+          assert.equal(result.result.report.outcome, "acceptable_for_review");
+          assert.equal(Object.hasOwn(result.result.report, "approved"), false);
+        } else if (bucket.id === "mask_drift" || bucket.id === "poor_result") {
+          assert.equal(result.ok, true, JSON.stringify(result));
+          assert.equal(result.result.report.outcome, "bounded_repair_recommended");
+          assert.equal(result.result.report.recommendation, "image.edit");
+          assert.equal(system.counters.provider, 1, "a recommendation does not itself dispatch the edit provider");
+        } else {
+          assert.equal(result.ok, false, JSON.stringify(result));
+          assert.ok(["failed", "unavailable"].includes(result.error.code));
+          assert.equal(system.counters.decision, 0, "unbound or injected observer output cannot reach DecisionPort");
+        }
+      }
+      const expectedSessions = 1;
+      assert.equal(system.store.db.prepare("SELECT count(*) AS count FROM creative_inspection_sessions_v1").get().count,
+        expectedSessions);
+    });
+  }
+});
+
+test("CE09 acceptance case 3 rejects malformed DecisionPort confidence without authorizing a repair", async (t) => {
+  const system = await setupInspectionSystem(t, { recommendRepair: true });
+  const generated = await system.api.invoke(actor(), request("case3-malformed-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const execute = system.ports.decisionPort.execute;
+  system.ports.decisionPort.execute = async (input) => {
+    const result = structuredClone(await execute(input));
+    result.answers.defect_present.answer.confidence = 0.99;
+    return result;
+  };
+  const before = { provider: system.counters.provider, reserved: system.counters.reserved };
+  const inspected = await system.api.invoke(actor(), inspectionRequest("case3-malformed-confidence",
+    generated.result.design_version.design_version_id));
+  assert.equal(inspected.ok, false);
+  assert.ok(["failed", "unavailable", "review_required"].includes(inspected.error.code));
+  assert.equal(system.counters.inspection, 1);
+  assert.equal(system.counters.decision, 1);
+  assert.equal(system.counters.provider, before.provider, "malformed decision output cannot dispatch an image edit");
+  assert.equal(system.counters.reserved, before.reserved + 2, "only observer and malformed first decision are reserved");
+  assert.equal(system.store.db.prepare("SELECT count(*) AS count FROM creative_inspection_stages_v1 WHERE status='completed'")
+    .get().count, 1, "the malformed stage is not completed or reused as trusted provenance");
+});
+
+test("CE09 acceptance case 5 keeps favorable API reports review-only without approval or certification", async (t) => {
+  const system = await setupInspectionSystem(t, { decisionDefectProbability: 0.1, decisionQualityScore: 3.5 });
+  const generated = await system.api.invoke(actor(), request("case5-review-only-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const observe = system.ports.inspection.inspect;
+  system.ports.inspection.inspect = async (input) => ({ ...await observe(input), findings: [] });
+  const result = await system.api.invoke(actor(), inspectionRequest("case5-review-only", generated.result.design_version.design_version_id));
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const report = result.result.report;
+  assert.equal(report.outcome, "acceptable_for_review");
+  assert.equal(Object.hasOwn(report, "approved"), false);
+  assert.equal(Object.hasOwn(report, "legal_compliance_certified"), false);
+  assert.equal(Object.hasOwn(report, "print_ready_certified"), false);
+  assert.ok(report.limitations.some((item) => /not customer approval/i.test(item)));
+});
+
+test("CE09 acceptance case 6 calculates held-out error rates, latency and unknown total cost from API reports", async (t) => {
+  const manifest = JSON.parse(await readFile(new URL("../../fixtures/inspection/manifest.json", import.meta.url), "utf8"));
+  const reports = [];
+  for (const [label, finding] of [["valid", null], ["defect", "other_visual_defect"]]) {
+    const system = await setupInspectionSystem(t, { recommendRepair: finding !== null,
+      ...(finding === null ? { decisionDefectProbability: 0.1, decisionQualityScore: 3.5 } : {}) });
+    const generated = await system.api.invoke(actor(), request(`case6-${label}-seed`, await fixture("generate-plan")));
+    assert.equal(generated.ok, true, JSON.stringify(generated));
+    const observe = system.ports.inspection.inspect;
+    system.ports.inspection.inspect = async (input) => ({ ...await observe(input), findings: finding ? [{ code: finding,
+      status: "present", severity: "critical", confidence: 0.99 }] : [] });
+    const start = Date.now();
+    const inspected = await system.api.invoke(actor(), inspectionRequest(`case6-${label}-inspect`,
+      generated.result.design_version.design_version_id));
+    const latency = Math.max(0, Date.now() - start);
+    assert.equal(inspected.ok, true, JSON.stringify(inspected));
+    reports.push({ report: inspected.result.report, latency_ms: latency });
+  }
+  const metrics = evaluateHeldOutFixtures({ schema_version: "1.0", corpus_hash: manifest.buckets[0].fixture_hash,
+    cases: [
+      { expected_defect: true, predicted_defect: false, report: reports[0].report, latency_ms: reports[0].latency_ms,
+        downstream_cost: { status: "unknown" } },
+      { expected_defect: false, predicted_defect: true, report: reports[1].report, latency_ms: reports[1].latency_ms,
+        downstream_cost: { status: "unknown" } },
+      { expected_defect: null, predicted_defect: null, report: reports[0].report, latency_ms: reports[0].latency_ms,
+        downstream_cost: { status: "unknown" } },
+    ] });
+  assert.equal(metrics.sample_count, 3);
+  assert.equal(metrics.defect_false_negatives, 1);
+  assert.equal(metrics.valid_output_false_repairs, 1);
+  assert.equal(metrics.unknown_label_count, 1);
+  assert.ok(metrics.latency_ms.p50 >= 0);
+  assert.equal(metrics.downstream_cost.status, "unknown", "the mock fixture does not claim full Finance cost");
+  assert.equal(metrics.promotion_status, "not_promoted");
+});
+
+test("populated BASE4e v4 database migrates to v7 and replays historical generation, edit, and inspection after restart", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-base4e-v4-migration-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
   const fixtureRoot = new URL("../../fixtures/versions/base4-populated-v4/", import.meta.url);
@@ -213,9 +809,9 @@ test("populated BASE4e v4 database migrates to v6 and replays historical generat
   baseline.close();
 
   let migrated = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
-  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 6);
-  const v6DispatchColumns = migrated.db.prepare("PRAGMA table_info(creative_dispatch_intents)").all().map((column) => column.name);
-  for (const column of ["reservation_ref", "provider_name", "provider_model"]) assert.equal(v6DispatchColumns.includes(column), true);
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 7);
+  const v7DispatchColumns = migrated.db.prepare("PRAGMA table_info(creative_dispatch_intents)").all().map((column) => column.name);
+  for (const column of ["reservation_ref", "provider_name", "provider_model"]) assert.equal(v7DispatchColumns.includes(column), true);
   assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='private_provider_attributions'").get());
   for (const designVersionId of [requests.expected_generate_design_version_id, requests.expected_edit_design_version_id]) {
     const design = migrated.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id, design_version_id: designVersionId });
@@ -228,7 +824,7 @@ test("populated BASE4e v4 database migrates to v6 and replays historical generat
 
   migrated = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
   t.after(() => migrated.close());
-  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 6);
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 7);
   const counters = { provider: 0, reserved: 0, inspection: 0 };
   let id = 0;
   const ports = portsFor(migrated, counters, () => `base4-replay-port-${++id}`);
@@ -514,80 +1110,143 @@ test("incomplete usage attached to a failed provider error remains held and unpu
   assert.equal(JSON.stringify(result).includes("private partial provider failure"), false);
 });
 
-test("legacy generation, edit, and inspection results replay with unknown telemetry status", async (t) => {
+test("populated V6 records migrate additively and replay legacy telemetry as unknown without redispatch", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-version-api-legacy-replay-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
-  const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
-    objectRoot: join(root, "objects"), now: () => NOW });
+  const fixtureRoot = new URL("../../fixtures/versions/base6-populated-v6/", import.meta.url);
+  const manifest = JSON.parse(await readFile(new URL("manifest.json", fixtureRoot), "utf8"));
+  const databaseBytes = await readFile(new URL("creative.sqlite", fixtureRoot));
+  const requests = JSON.parse(await readFile(new URL("requests.json", fixtureRoot), "utf8"));
+  const sha256 = (bytes) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+  assert.equal(manifest.source_commit, "5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74");
+  assert.equal(manifest.storage_user_version, 6);
+  assert.equal(manifest.dependency_mode, "offline_fixture");
+  assert.equal(sha256(databaseBytes), manifest.database_sha256);
+  assert.equal(sha256(Buffer.from(JSON.stringify(requests, null, 2) + "\n")), manifest.requests_sha256);
+  assert.equal(requests.storage_user_version, 6);
+  assert.equal(requests.artifact_sha256, manifest.artifact_sha256);
+  assert.equal(manifest.source_fixture_database_sha256, sha256(await readFile(
+    new URL("../base4-populated-v4/creative.sqlite", fixtureRoot))));
+  const artifactDigest = manifest.artifact_sha256.slice("sha256:".length);
+  const artifactBytes = await readFile(new URL(`objects/objects/sha256/${artifactDigest.slice(0, 2)}/${artifactDigest}`, fixtureRoot));
+  assert.equal(sha256(artifactBytes), manifest.artifact_sha256);
+
+  const databasePath = join(root, "versions.sqlite");
+  const objectRoot = join(root, "objects");
+  await cp(new URL("creative.sqlite", fixtureRoot), databasePath);
+  await cp(new URL("objects", fixtureRoot), objectRoot, { recursive: true });
+  const baseline = new DatabaseSync(databasePath);
+  assert.equal(baseline.prepare("PRAGMA user_version").get().user_version, 6);
+  assert.deepEqual(baseline.prepare("SELECT action_id,operation,status FROM creative_jobs ORDER BY action_id").all()
+    .map((row) => ({ ...row })), manifest.expected_actions.map((row) => ({ ...row, status: "completed" }))
+      .sort((left, right) => left.action_id.localeCompare(right.action_id)));
+  assert.deepEqual(baseline.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?,?) ORDER BY name")
+    .all("creative_inspection_sessions_v1", "creative_inspection_stages_v1"), []);
+  baseline.close();
+
+  let store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
   t.after(() => store.close());
-  store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
-  const counters = { provider: 0, reserved: 0 };
-  let id = 0;
-  const ports = portsFor(store, counters, () => `legacy-replay-port-${++id}`);
-  ports.inspection = {
-    resolveRoute: () => ({ retry_mapping_ref: "retry:fixture/1", provider: {
-      name: "fixture-provider", model: "fixture-model", endpoint: "test:/vision",
-      sdk: { name: "fixture-sdk", version: "1.0" },
-    } }),
-    async inspect(input) {
-      await input.recordTransportAttempt(input.transport_attempt_id);
-      return { tenant_id: input.scope.tenant_id, project_id: input.scope.project_id,
-        brief_id: input.brief.brief_id, design_version_id: input.design_version.design_version_id,
-        artifact_id: input.design_version.artifact.artifact_id,
-        artifact_hash: input.design_version.artifact.content_hash,
-        design_hash: input.design_version.design_hash, inspection_id: `inspection:${input.job_id}`,
-        observations: [], usage: { completeness: "complete", input_tokens: 1, output_tokens: 1 } };
-    },
-  };
-  const api = createCreativeApi({ ports,
-    now: () => NOW, idFactory: () => `legacy-replay-api-${++id}` });
-  const stripLegacyTelemetry = (actionId, nestedInspection = false) => {
-    const row = store.db.prepare("SELECT result_json FROM creative_jobs WHERE action_id=?").get(actionId);
-    const legacyResult = JSON.parse(row.result_json);
-    if (nestedInspection) delete legacyResult.inspection.telemetry_evidence;
-    else delete legacyResult.telemetry_evidence;
-    const attemptId = legacyResult.attempt_id;
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 7);
+  const inspectionTables = store.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?,?) ORDER BY name")
+    .all("creative_inspection_sessions_v1", "creative_inspection_stages_v1").map((row) => row.name);
+  assert.deepEqual(inspectionTables, ["creative_inspection_sessions_v1", "creative_inspection_stages_v1"]);
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_inspection_sessions_v1").get().count, 0,
+    "old inspect jobs remain historical records; migration does not synthesize new inspection sessions");
+  assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
+  for (const designVersionId of [requests.expected_generate_design_version_id, requests.expected_edit_design_version_id]) {
+    assert.ok(store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id, design_version_id: designVersionId }));
+    assert.deepEqual(Buffer.from(await store.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: designVersionId })), artifactBytes);
+  }
+
+  const preservedCounters = { provider: 0, reserved: 0, inspection: 0 };
+  let preservedId = 0;
+  const preservedPorts = portsFor(store, preservedCounters, () => `v6-preserved-port-${++preservedId}`);
+  preservedPorts.inspection = { resolveRoute() { throw new Error("historical inspection replay must not resolve a route"); },
+    async inspect() { preservedCounters.inspection += 1; throw new Error("historical inspection replay must not redispatch"); } };
+  const preservedApi = createCreativeApi({ ports: preservedPorts, now: () => NOW,
+    idFactory: () => `v6-preserved-api-${++preservedId}` });
+  const preservedEvidence = new Map();
+  for (const body of [requests.generate_request, requests.edit_request, requests.inspect_request]) {
+    const row = store.db.prepare("SELECT result_json FROM creative_jobs WHERE action_id=?").get(body.action_id);
+    const historical = JSON.parse(row.result_json);
+    const telemetry = body.operation === "inspect" ? historical.inspection.telemetry_evidence : historical.telemetry_evidence;
+    assert.deepEqual(telemetry, { local_status: "recorded" }, `${body.operation} retains the V6 metering result`);
+    const outbox = store.db.prepare(`SELECT event_id,event_type,status,payload_json FROM creative_telemetry_evidence_outbox_v1
+      WHERE tenant_id=? AND project_id=? AND json_extract(payload_json, '$.logical_operation_id')=? ORDER BY rowid`)
+      .all(SCOPE.tenant_id, SCOPE.project_id, body.action_id).map((item) => ({ ...item }));
+    const observations = store.db.prepare(`SELECT status,source_observation_id,logical_operation_id,billable_attempt_id,payload_json
+      FROM creative_telemetry_observations_v1 WHERE tenant_id=? AND project_id=? AND budget_scope_id=? AND logical_operation_id=?
+      ORDER BY billable_attempt_id`)
+      .all(SCOPE.tenant_id, SCOPE.project_id, "budget-api-1", body.action_id).map((item) => ({ ...item }));
+    assert.equal(outbox.length, 3, `${body.operation} retains its attempt, transport, and outcome evidence`);
+    assert.equal(observations.length, 1, `${body.operation} retains its source usage observation`);
+    assert.equal(observations[0].status, "delivered");
+    preservedEvidence.set(body.action_id, canonicalHash({ outbox, observations }));
+
+    const replay = await preservedApi.invoke(actor(), body);
+    assert.equal(replay.ok, true, JSON.stringify(replay));
+    assert.equal(replay.replayed, true);
+    assert.deepEqual(replay.result.telemetry_evidence, telemetry,
+      `${body.operation} keeps the historical public telemetry status and shape`);
+    if (body.operation === "generate") {
+      assert.equal(replay.result.design_version.design_version_id, requests.expected_generate_design_version_id);
+    } else if (body.operation === "edit") {
+      assert.equal(replay.result.design_version.design_version_id, requests.expected_edit_design_version_id);
+    } else {
+      assert.equal(replay.result.design_version_id, requests.expected_inspection_design_version_id);
+    }
+    const afterOutbox = store.db.prepare(`SELECT event_id,event_type,status,payload_json FROM creative_telemetry_evidence_outbox_v1
+      WHERE tenant_id=? AND project_id=? AND json_extract(payload_json, '$.logical_operation_id')=? ORDER BY rowid`)
+      .all(SCOPE.tenant_id, SCOPE.project_id, body.action_id).map((item) => ({ ...item }));
+    const afterObservations = store.db.prepare(`SELECT status,source_observation_id,logical_operation_id,billable_attempt_id,payload_json
+      FROM creative_telemetry_observations_v1 WHERE tenant_id=? AND project_id=? AND budget_scope_id=? AND logical_operation_id=?
+      ORDER BY billable_attempt_id`)
+      .all(SCOPE.tenant_id, SCOPE.project_id, "budget-api-1", body.action_id).map((item) => ({ ...item }));
+    assert.equal(canonicalHash({ outbox: afterOutbox, observations: afterObservations }), preservedEvidence.get(body.action_id),
+      `${body.operation} replay preserves the original metering and telemetry rows byte-for-byte`);
+  }
+  assert.equal(preservedCounters.provider, 0);
+  assert.equal(preservedCounters.inspection, 0);
+  assert.equal(preservedCounters.reserved, 0);
+
+  for (const body of [requests.generate_request, requests.edit_request, requests.inspect_request]) {
+    const row = store.db.prepare("SELECT result_json FROM creative_jobs WHERE action_id=?").get(body.action_id);
+    assert.ok(row, body.action_id);
+    const legacy = JSON.parse(row.result_json);
+    const attemptId = legacy.attempt_id;
+    if (body.operation === "inspect") delete legacy.inspection.telemetry_evidence;
+    else delete legacy.telemetry_evidence;
+    store.db.prepare("UPDATE creative_jobs SET result_json=? WHERE action_id=?")
+      .run(JSON.stringify(legacy), body.action_id);
     store.db.prepare(`DELETE FROM creative_telemetry_evidence_outbox_v1
       WHERE tenant_id=? AND project_id=?
         AND json_extract(payload_json, '$.logical_operation_id')=?
         AND json_extract(payload_json, '$.billable_attempt_id')=?`)
-      .run(SCOPE.tenant_id, SCOPE.project_id, actionId, attemptId);
+      .run(SCOPE.tenant_id, SCOPE.project_id, body.action_id, attemptId);
     store.db.prepare(`DELETE FROM creative_telemetry_observations_v1
       WHERE tenant_id=? AND project_id=? AND budget_scope_id=?
         AND logical_operation_id=? AND billable_attempt_id=?`)
-      .run(SCOPE.tenant_id, SCOPE.project_id, "budget-api-1", actionId, attemptId);
-    store.db.prepare("UPDATE creative_jobs SET result_json=? WHERE action_id=?")
-      .run(JSON.stringify(legacyResult), actionId);
-  };
-  const replayLegacy = async (body, expectedResult) => {
-    const first = await api.invoke(actor(), body);
-    assert.equal(first.ok, true, JSON.stringify(first));
-    stripLegacyTelemetry(body.action_id, body.operation === "inspect");
+      .run(SCOPE.tenant_id, SCOPE.project_id, "budget-api-1", body.action_id, attemptId);
+  }
+  store.close();
+
+  store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  const counters = { provider: 0, reserved: 0, inspection: 0 };
+  let id = 0;
+  const ports = portsFor(store, counters, () => `v6-replay-port-${++id}`);
+  ports.inspection = { resolveRoute() { throw new Error("historical inspection replay must not resolve a route"); },
+    async inspect() { counters.inspection += 1; throw new Error("historical inspection replay must not redispatch"); } };
+  const api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `v6-replay-api-${++id}` });
+  for (const body of [requests.generate_request, requests.edit_request, requests.inspect_request]) {
     const replay = await api.invoke(actor(), { ...body, event_id: `${body.event_id}-retry`, request_id: `${body.request_id}-retry` });
     assert.equal(replay.ok, true, JSON.stringify(replay));
     assert.equal(replay.replayed, true);
-    assert.deepEqual(expectedResult(replay).telemetry_evidence, { local_status: "unknown" });
-    return first.result;
-  };
-
-  const generated = await replayLegacy(request("legacy-generate-action", await fixture("generate-plan")),
-    (response) => response.result);
-  const editPlan = await fixture("edit-plan");
-  editPlan.base = { brief_hash: generated.design_version.brief_hash,
-    design_hash: generated.design_version.design_hash,
-    design_version_id: generated.design_version.design_version_id };
-  editPlan.steps[0].parameters.design_version_id = generated.design_version.design_version_id;
-  editPlan.steps[0].parameters.artifact_id = generated.design_version.artifact.artifact_id;
-  editPlan.expected_result.parent_version_id = generated.design_version.design_version_id;
-  const edited = await replayLegacy({ ...request("legacy-edit-action", editPlan), operation: "edit",
-    payload: { brief_id: SCOPE.brief_id, design_version_id: generated.design_version.design_version_id, plan: editPlan } },
-  (response) => response.result);
-  const inspected = await replayLegacy({ ...request("legacy-inspect-action", {}), operation: "inspect",
-    payload: { brief_id: SCOPE.brief_id, design_version_id: edited.design_version.design_version_id } },
-  (response) => response.result);
-  assert.equal(inspected.design_version_id, edited.design_version.design_version_id);
-  assert.equal(counters.provider, 2, "legacy generation/edit replay must not issue provider attempts");
-  assert.equal(counters.reserved, 3, "inspection is separately metered once; replay adds no reservation");
+    assert.deepEqual(replay.result.telemetry_evidence, { local_status: "unknown" }, body.operation);
+  }
+  assert.equal(counters.provider, 0, "legacy generation and edit replay never redispatch providers");
+  assert.equal(counters.inspection, 0, "legacy inspection replay never calls the observer");
+  assert.equal(counters.reserved, 0, "legacy replay never creates another reservation");
 });
 
 test("a new result with removed telemetry status fails closed instead of replaying as legacy", async (t) => {
