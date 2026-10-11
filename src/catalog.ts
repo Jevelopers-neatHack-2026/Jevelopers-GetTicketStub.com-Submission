@@ -1,5 +1,5 @@
 import { CONTRACT_OWNERSHIP } from "./contracts.js";
-import type { BoundaryResult, ContractBinding, ContractValidator, TrustedScope } from "./types.js";
+import type { BoundaryFailure, BoundaryResult, ContractValidator, TrustedScope } from "./types.js";
 
 /**
  * Private connector development shape. This is not a shared-contracts schema,
@@ -824,10 +824,17 @@ function routeForDestination(
     details.push("destination_region_unsupported");
     return undefined;
   }
-  if (country.regions.state === "known" && country.regions.value.length > 0 && regionCode !== undefined && !contains(country.regions.value, regionCode)) {
-    reasons.push("selection_incompatible");
-    details.push("destination_region_unsupported");
-    return undefined;
+  if (country.regions.state === "known" && country.regions.value.length > 0) {
+    if (regionCode === undefined) {
+      reasons.push("selection_incompatible");
+      details.push("destination_region_required");
+      return undefined;
+    }
+    if (!contains(country.regions.value, regionCode)) {
+      reasons.push("selection_incompatible");
+      details.push("destination_region_unsupported");
+      return undefined;
+    }
   }
   const exactRegion = regionCode === undefined ? undefined : shipping.find((rule) => rule.countryCode === countryCode && rule.regionCode === regionCode);
   const general = shipping.find((rule) => rule.countryCode === countryCode && rule.regionCode === null);
@@ -938,6 +945,14 @@ export function evaluateCatalogSelection(
       if (compareBigInt(selection.safeArea[side], minimumSafeArea[side]) < 0) addIncompatible(details, `safe_area_below_minimum_${side.replace("Nm", "")}`);
     }
   }
+  if (dimensions !== undefined) {
+    if (BigInt(selection.safeArea.leftNm) + BigInt(selection.safeArea.rightNm) >= BigInt(dimensions.widthNm)) {
+      addIncompatible(details, "safe_area_no_horizontal_content");
+    }
+    if (BigInt(selection.safeArea.topNm) + BigInt(selection.safeArea.bottomNm) >= BigInt(dimensions.heightNm)) {
+      addIncompatible(details, "safe_area_no_vertical_content");
+    }
+  }
   if (minimumDpi !== undefined && selection.effectiveResolutionDpi < minimumDpi) addIncompatible(details, "resolution_below_minimum");
   if (surfaces !== undefined && !contains(surfaces, selection.surface)) addIncompatible(details, "surface_unsupported");
   if (files !== undefined && (!contains(files.types, selection.fileType) || selection.fileCount < files.minimumCount || selection.fileCount > files.maximumCount)) {
@@ -988,6 +1003,12 @@ export async function validateCatalogSnapshotBoundary(
   validator: ContractValidator,
   trustedScope: TrustedScope
 ): Promise<BoundaryResult<unknown>> {
+  const failure = (code: BoundaryFailure["code"]): BoundaryResult<unknown> =>
+    Object.freeze({ ok: false as const, failure: Object.freeze({ code }) });
+  const validFailureCodes = new Set<BoundaryFailure["code"]>([
+    "invalid_input", "contract_missing", "unsupported_schema_major", "scope_mismatch"
+  ]);
+  const schemaVersionPattern = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/u;
   let tenantId: string;
   let projectId: string;
   try {
@@ -996,58 +1017,97 @@ export async function validateCatalogSnapshotBoundary(
     tenantId = safeCode(scope.tenantId);
     projectId = safeCode(scope.projectId);
   } catch {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "invalid_input" }) });
+    return failure("invalid_input");
   }
-  let binding: ContractBinding;
+  let bindingVersion: RegExpExecArray;
   try {
-    binding = safeTree(validator.binding("capability")) as ContractBinding;
+    const binding = record(safeTree(validator.binding("capability")));
+    exactKeys(binding, ["shape", "ownerRepository", "upstreamIssue", "state"], ["schemaVersion", "sourceRevision", "fixtureDigest"]);
+    if (binding.shape !== "capability" || binding.ownerRepository !== CONTRACT_OWNERSHIP.capability.ownerRepository ||
+      binding.upstreamIssue !== CONTRACT_OWNERSHIP.capability.upstreamIssue) return failure("contract_missing");
+    const schemaVersion = text(binding.schemaVersion, 128);
+    const match = schemaVersionPattern.exec(schemaVersion);
+    if (match === null) return failure("contract_missing");
+    bindingVersion = match;
+    if (binding.state === "development_fixture") {
+      text(binding.fixtureDigest, 256);
+    } else if (binding.state === "accepted") {
+      text(binding.sourceRevision, 256);
+      text(binding.fixtureDigest, 256);
+    } else {
+      return failure("contract_missing");
+    }
   } catch {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "contract_missing" }) });
+    return failure("contract_missing");
   }
-  const owner = CONTRACT_OWNERSHIP.capability;
-  const validStates = binding.state === "development_fixture" || binding.state === "accepted";
-  if (binding.shape !== "capability" || !validStates || binding.ownerRepository !== owner.ownerRepository ||
-    binding.upstreamIssue !== owner.upstreamIssue || typeof binding.schemaVersion !== "string" ||
-    !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u.test(binding.schemaVersion) ||
-    (binding.state === "development_fixture" && (typeof binding.fixtureDigest !== "string" || binding.fixtureDigest.trim() === "")) ||
-    (binding.state === "accepted" && (typeof binding.sourceRevision !== "string" || binding.sourceRevision.trim() === "" ||
-      typeof binding.fixtureDigest !== "string" || binding.fixtureDigest.trim() === ""))) {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "contract_missing" }) });
-  }
-  let result: BoundaryResult<unknown>;
+
+  let rawResult: unknown;
   try {
-    result = await validator.validateOutbound({
+    rawResult = await validator.validateOutbound({
       operation: "discover_capabilities",
       requiredShapes: ["capability"],
       value: frozenOwnedCopy(snapshot),
       trustedScope: Object.freeze({ tenantId, projectId })
     });
   } catch {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "contract_missing" }) });
+    return failure("contract_missing");
   }
-  let copiedResult: BoundaryResult<unknown>;
+
+  let result: PlainRecord;
   try {
-    copiedResult = safeTree(result) as BoundaryResult<unknown>;
+    result = record(safeTree(rawResult));
   } catch {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "invalid_input" }) });
+    return failure("invalid_input");
   }
-  if (!copiedResult.ok) return deepFreeze(copiedResult);
-  if (!Array.isArray(copiedResult.receipts) || copiedResult.receipts.length !== 1) {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "invalid_input" }) });
+
+  if (result.ok === false) {
+    let failureRecord: PlainRecord;
+    try {
+      exactKeys(result, ["ok", "failure"]);
+      failureRecord = record(result.failure);
+      exactKeys(failureRecord, ["code"]);
+    } catch {
+      return failure("invalid_input");
+    }
+    const code = failureRecord.code;
+    if (typeof code !== "string" || !validFailureCodes.has(code as BoundaryFailure["code"])) return failure("invalid_input");
+    return failure(code as BoundaryFailure["code"]);
   }
-  const receiptValue = copiedResult.receipts[0];
-  if (receiptValue === null || typeof receiptValue !== "object" || Array.isArray(receiptValue)) {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "invalid_input" }) });
+  if (result.ok !== true) return failure("invalid_input");
+
+  let receipt: PlainRecord;
+  let value: unknown;
+  try {
+    exactKeys(result, ["ok", "value", "receipts"]);
+    value = result.value;
+    if (!Array.isArray(result.receipts) || result.receipts.length !== 1) return failure("invalid_input");
+    receipt = record(result.receipts[0]);
+    exactKeys(receipt, ["shape", "schemaVersion", "tenantId", "projectId"]);
+  } catch {
+    return failure("invalid_input");
   }
-  const receipt = record(receiptValue);
-  if (receipt.shape !== "capability") return Object.freeze({ ok: false, failure: Object.freeze({ code: "invalid_input" }) });
-  if (receipt.tenantId !== tenantId || receipt.projectId !== projectId) {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "scope_mismatch" }) });
+
+  if (receipt.shape !== "capability") return failure("invalid_input");
+  let receiptTenantId: string;
+  let receiptProjectId: string;
+  let receiptSchemaVersion: string;
+  try {
+    receiptTenantId = safeCode(receipt.tenantId);
+    receiptProjectId = safeCode(receipt.projectId);
+    receiptSchemaVersion = text(receipt.schemaVersion, 128);
+  } catch {
+    return failure("invalid_input");
   }
-  const receiptVersion = typeof receipt.schemaVersion === "string" ? /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/u.exec(receipt.schemaVersion) : null;
-  const bindingVersion = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/u.exec(binding.schemaVersion);
-  if (receiptVersion === null || bindingVersion === null || receiptVersion[1] !== bindingVersion[1]) {
-    return Object.freeze({ ok: false, failure: Object.freeze({ code: "unsupported_schema_major" }) });
-  }
-  return deepFreeze(copiedResult);
+  if (receiptTenantId !== tenantId || receiptProjectId !== projectId) return failure("scope_mismatch");
+  const receiptVersion = schemaVersionPattern.exec(receiptSchemaVersion);
+  if (receiptVersion === null || receiptVersion[1] !== bindingVersion[1]) return failure("unsupported_schema_major");
+
+  const ownedValue = deepFreeze(value);
+  const ownedReceipt = Object.freeze({
+    shape: "capability" as const,
+    schemaVersion: receiptSchemaVersion,
+    tenantId: receiptTenantId,
+    projectId: receiptProjectId
+  });
+  return Object.freeze({ ok: true as const, value: ownedValue, receipts: Object.freeze([ownedReceipt]) });
 }

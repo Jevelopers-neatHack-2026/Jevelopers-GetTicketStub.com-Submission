@@ -166,6 +166,25 @@ add("destination, region, and shipping constraints are checked independently", a
     assert.equal(result.status, "ineligible");
     assert.ok(result.details.includes(expected));
   }
+  const missingRegion = evaluateCatalogSelection(snapshot, {
+    ...selection, destination: { countryCode: "US" }, shippingMethod: "standard"
+  }, now);
+  assert.equal(missingRegion.status, "ineligible");
+  assert.ok(missingRegion.details.includes("destination_region_required"));
+  for (const [destination, shippingMethod] of [
+    [{ countryCode: "US", regionCode: "CA" }, "standard"],
+    [{ countryCode: "US", regionCode: "CA" }, "express"],
+    [{ countryCode: "US", regionCode: "NY" }, "standard"],
+    [{ countryCode: "GB" }, "tracked"]
+  ]) {
+    const allowed = evaluateCatalogSelection(snapshot, { ...selection, destination, shippingMethod }, now);
+    assert.equal(allowed.status, "eligible");
+  }
+  const regionalPrecedence = evaluateCatalogSelection(snapshot, {
+    ...selection, destination: { countryCode: "US", regionCode: "NY" }, shippingMethod: "express"
+  }, now);
+  assert.equal(regionalPrecedence.status, "ineligible");
+  assert.ok(regionalPrecedence.details.includes("shipping_method_unsupported"));
   const input = copyCatalog();
   input.products[0].constraints.destinations.value[0].regions = { state: "unknown", reasonCode: "not_confirmed" };
   const unknown = await normalizeCatalogSnapshot(input);
@@ -184,6 +203,28 @@ add("bleed, safe-area, and exact fixed dimensions are checked without rounding",
   const lowSafe = evaluateCatalogSelection(snapshot, { ...selection, safeArea: { top: "5", right: "4.999", bottom: "5", left: "5", unit: "mm" } }, now);
   assert.equal(lowSafe.status, "ineligible");
   assert.ok(lowSafe.details.includes("safe_area_below_minimum_right"));
+  const horizontalRoom = evaluateCatalogSelection(snapshot, {
+    ...selection, safeArea: { top: "5", right: "150", bottom: "5", left: "150", unit: "mm" }
+  }, now);
+  const horizontalRoomEquivalent = evaluateCatalogSelection(snapshot, {
+    ...selection, safeArea: { top: "0.5", right: "15", bottom: "0.5", left: "15", unit: "cm" }
+  }, now);
+  assert.equal(horizontalRoom.status, "eligible");
+  assert.equal(horizontalRoomEquivalent.status, "eligible");
+  const verticalRoom = evaluateCatalogSelection(snapshot, {
+    ...selection, safeArea: { top: "220", right: "5", bottom: "220", left: "5", unit: "mm" }
+  }, now);
+  assert.equal(verticalRoom.status, "eligible");
+  for (const [safeArea, expected] of [
+    [{ top: "5", right: "152.4", bottom: "5", left: "152.4", unit: "mm" }, "safe_area_no_horizontal_content"],
+    [{ top: "5", right: "160", bottom: "5", left: "160", unit: "mm" }, "safe_area_no_horizontal_content"],
+    [{ top: "228.6", right: "5", bottom: "228.6", left: "5", unit: "mm" }, "safe_area_no_vertical_content"],
+    [{ top: "230", right: "5", bottom: "230", left: "5", unit: "mm" }, "safe_area_no_vertical_content"]
+  ]) {
+    const impossible = evaluateCatalogSelection(snapshot, { ...selection, safeArea }, now);
+    assert.equal(impossible.status, "ineligible");
+    assert.ok(impossible.details.includes(expected));
+  }
   const wrongDimensions = evaluateCatalogSelection(snapshot, { ...selection, dimensions: { width: "304.799", height: "457.2", depth: "0.3", unit: "mm" } }, now);
   assert.equal(wrongDimensions.status, "ineligible");
   assert.ok(wrongDimensions.details.includes("dimensions_mismatch"));
@@ -276,6 +317,164 @@ add("canonical boundary delegation uses the existing validator and preserves pen
   const blocked = await validateCatalogSnapshotBoundary(snapshot, missing, { tenantId: "tenant-a", projectId: "project-a" });
   assert.equal(blocked.ok, false);
   assert.equal(blocked.failure.code, "contract_missing");
+});
+
+add("canonical boundary projects owned success and allowlisted immutable failures", async () => {
+  const snapshot = await normalizeCatalogSnapshot(catalogA);
+  const scope = { tenantId: "tenant-a", projectId: "project-a" };
+  const binding = {
+    shape: "capability", ownerRepository: "shared-contracts", upstreamIssue: "#4", state: "development_fixture",
+    schemaVersion: "0.1.0", fixtureDigest: "sha256:fixture-only"
+  };
+  const receipt = { shape: "capability", schemaVersion: "0.1.4", ...scope };
+  const validatorFor = (result, bindingValue = binding) => ({
+    binding: () => bindingValue,
+    async validateInbound() { throw new Error("not used"); },
+    async validateOutbound() { return result; }
+  });
+
+  const original = { ok: true, value: { nested: { fixture: "owned" } }, receipts: [receipt] };
+  const accepted = await validateCatalogSnapshotBoundary(snapshot, validatorFor(original), scope);
+  assert.equal(accepted.ok, true);
+  assert.deepEqual(Object.keys(accepted), ["ok", "value", "receipts"]);
+  assert.deepEqual(Object.keys(accepted.receipts[0]), ["shape", "schemaVersion", "tenantId", "projectId"]);
+  original.value.nested.fixture = "mutated";
+  original.receipts[0].tenantId = "other";
+  assert.equal(accepted.value.nested.fixture, "owned");
+  assert.equal(accepted.receipts[0].tenantId, "tenant-a");
+  assert.ok(Object.isFrozen(accepted));
+  assert.ok(Object.isFrozen(accepted.value.nested));
+  assert.ok(Object.isFrozen(accepted.receipts[0]));
+
+  const acceptedBinding = {
+    shape: "capability", ownerRepository: "shared-contracts", upstreamIssue: "#4", state: "accepted",
+    schemaVersion: "0.1.0", sourceRevision: "git:reviewed-source", fixtureDigest: "sha256:accepted-fixture"
+  };
+  assert.equal((await validateCatalogSnapshotBoundary(snapshot, validatorFor({ ok: true, value: null, receipts: [{ ...receipt, tenantId: "tenant-a" }] }, acceptedBinding), scope)).ok, true);
+
+  for (const code of ["invalid_input", "contract_missing", "unsupported_schema_major", "scope_mismatch"]) {
+    const result = await validateCatalogSnapshotBoundary(snapshot, validatorFor({ ok: false, failure: { code } }), scope);
+    assert.deepEqual(result, { ok: false, failure: { code } });
+    assert.ok(Object.isFrozen(result));
+    assert.ok(Object.isFrozen(result.failure));
+  }
+});
+
+add("canonical boundary rejects malformed result unions and projects no raw response fields", async () => {
+  const snapshot = await normalizeCatalogSnapshot(catalogA);
+  const scope = { tenantId: "tenant-a", projectId: "project-a" };
+  const binding = {
+    shape: "capability", ownerRepository: "shared-contracts", upstreamIssue: "#4", state: "development_fixture",
+    schemaVersion: "0.1.0", fixtureDigest: "sha256:fixture-only"
+  };
+  const receipt = { shape: "capability", schemaVersion: "0.1.0", ...scope };
+  const validatorFor = (result) => ({
+    binding: () => binding,
+    async validateInbound() { throw new Error("not used"); },
+    async validateOutbound() { return result; }
+  });
+  const malformed = [
+    ["null result", null, "invalid_input"],
+    ["array result", [], "invalid_input"],
+    ["string result", "not-a-result", "invalid_input"],
+    ["number result", 7, "invalid_input"],
+    ["missing discriminator", { value: {}, receipts: [receipt] }, "invalid_input"],
+    ["non-boolean discriminator", { ok: "false", value: {}, receipts: [receipt] }, "invalid_input"],
+    ["missing success value", { ok: true, receipts: [receipt] }, "invalid_input"],
+    ["missing failure", { ok: false }, "invalid_input"],
+    ["invalid failure code", { ok: false, failure: { code: "not-a-code" } }, "invalid_input"],
+    ["mixed success branch", { ok: true, value: {}, receipts: [receipt], failure: { code: "contract_missing" } }, "invalid_input"],
+    ["mixed failure branch", { ok: false, failure: { code: "contract_missing" }, value: {}, receipts: [receipt] }, "invalid_input"],
+    ["raw top-level failure field", { ok: false, failure: { code: "contract_missing" }, raw: "review-secret-marker" }, "invalid_input"],
+    ["raw nested failure field", { ok: false, failure: { code: "contract_missing", raw: "review-secret-marker" } }, "invalid_input"],
+    ["duplicate receipts", { ok: true, value: {}, receipts: [receipt, receipt] }, "invalid_input"],
+    ["sparse receipts", { ok: true, value: {}, receipts: new Array(1) }, "invalid_input"],
+    ["extra receipt field", { ok: true, value: {}, receipts: [{ ...receipt, raw: "review-secret-marker" }] }, "invalid_input"],
+    ["null receipt", { ok: true, value: {}, receipts: [null] }, "invalid_input"],
+    ["wrong receipt shape", { ok: true, value: {}, receipts: [{ ...receipt, shape: "print_specification" }] }, "invalid_input"],
+    ["wrong receipt scope", { ok: true, value: {}, receipts: [{ ...receipt, tenantId: "other" }] }, "scope_mismatch"],
+    ["wrong receipt schema major", { ok: true, value: {}, receipts: [{ ...receipt, schemaVersion: "1.0.0" }] }, "unsupported_schema_major"]
+  ];
+  for (const [name, raw, expectedCode] of malformed) {
+    const result = await validateCatalogSnapshotBoundary(snapshot, validatorFor(raw), scope);
+    assert.equal(result.ok, false, name);
+    assert.equal(result.failure.code, expectedCode, name);
+    assert.equal(JSON.stringify(result).includes("review-secret-marker"), false, name);
+  }
+
+  let resultGetterCalled = false;
+  const accessorResult = { value: {}, receipts: [receipt] };
+  Object.defineProperty(accessorResult, "ok", { enumerable: true, get() { resultGetterCalled = true; return true; } });
+  const accessorFailure = await validateCatalogSnapshotBoundary(snapshot, validatorFor(accessorResult), scope);
+  assert.equal(accessorFailure.ok, false);
+  assert.equal(resultGetterCalled, false);
+  const proxyResult = new Proxy({ ok: true, value: {}, receipts: [receipt] }, {
+    ownKeys() { throw new Error("review-secret-marker"); }
+  });
+  const proxyFailure = await validateCatalogSnapshotBoundary(snapshot, validatorFor(proxyResult), scope);
+  assert.equal(proxyFailure.ok, false);
+  assert.equal(proxyFailure.failure.code, "invalid_input");
+  assert.equal(JSON.stringify(proxyFailure).includes("review-secret-marker"), false);
+  const symbolResult = { ok: true, value: {}, receipts: [receipt], [Symbol("unexpected")]: "review-secret-marker" };
+  const symbolFailure = await validateCatalogSnapshotBoundary(snapshot, validatorFor(symbolResult), scope);
+  assert.equal(symbolFailure.ok, false);
+  assert.equal(symbolFailure.failure.code, "invalid_input");
+  const symbolReceipt = { ...receipt, [Symbol("unexpected")]: "review-secret-marker" };
+  const symbolReceiptFailure = await validateCatalogSnapshotBoundary(snapshot, validatorFor({ ok: true, value: {}, receipts: [symbolReceipt] }), scope);
+  assert.equal(symbolReceiptFailure.ok, false);
+  assert.equal(symbolReceiptFailure.failure.code, "invalid_input");
+});
+
+add("canonical boundary treats null, malformed, accessor-backed, and proxy bindings as missing", async () => {
+  const snapshot = await normalizeCatalogSnapshot(catalogA);
+  const scope = { tenantId: "tenant-a", projectId: "project-a" };
+  const receipt = { shape: "capability", schemaVersion: "0.1.0", ...scope };
+  const response = { ok: true, value: {}, receipts: [receipt] };
+  const validatorFor = (binding) => ({
+    binding: () => binding,
+    async validateInbound() { throw new Error("not used"); },
+    async validateOutbound() { return response; }
+  });
+  for (const [name, binding] of [
+    ["null", null], ["array", []], ["primitive", "missing"],
+    ["extra property", { shape: "capability", ownerRepository: "shared-contracts", upstreamIssue: "#4", state: "development_fixture", schemaVersion: "0.1.0", fixtureDigest: "sha256:fixture-only", raw: "review-secret-marker" }]
+  ]) {
+    const result = await validateCatalogSnapshotBoundary(snapshot, validatorFor(binding), scope);
+    assert.equal(result.ok, false, name);
+    assert.equal(result.failure.code, "contract_missing", name);
+  }
+
+  let bindingGetterCalled = false;
+  const accessorBinding = {
+    ownerRepository: "shared-contracts", upstreamIssue: "#4", state: "development_fixture",
+    schemaVersion: "0.1.0", fixtureDigest: "sha256:fixture-only"
+  };
+  Object.defineProperty(accessorBinding, "shape", { enumerable: true, get() { bindingGetterCalled = true; return "capability"; } });
+  const accessorFailure = await validateCatalogSnapshotBoundary(snapshot, validatorFor(accessorBinding), scope);
+  assert.equal(accessorFailure.ok, false);
+  assert.equal(accessorFailure.failure.code, "contract_missing");
+  assert.equal(bindingGetterCalled, false);
+
+  const proxyBinding = new Proxy({}, { ownKeys() { throw new Error("review-secret-marker"); } });
+  const proxyFailure = await validateCatalogSnapshotBoundary(snapshot, validatorFor(proxyBinding), scope);
+  assert.equal(proxyFailure.ok, false);
+  assert.equal(proxyFailure.failure.code, "contract_missing");
+  const symbolBinding = {
+    shape: "capability", ownerRepository: "shared-contracts", upstreamIssue: "#4", state: "development_fixture",
+    schemaVersion: "0.1.0", fixtureDigest: "sha256:fixture-only", [Symbol("unexpected")]: "review-secret-marker"
+  };
+  const symbolBindingFailure = await validateCatalogSnapshotBoundary(snapshot, validatorFor(symbolBinding), scope);
+  assert.equal(symbolBindingFailure.ok, false);
+  assert.equal(symbolBindingFailure.failure.code, "contract_missing");
+
+  const throwingValidator = {
+    binding() { throw new Error("review-secret-marker"); },
+    async validateInbound() { throw new Error("not used"); },
+    async validateOutbound() { throw new Error("not dispatched"); }
+  };
+  const thrownBinding = await validateCatalogSnapshotBoundary(snapshot, throwingValidator, scope);
+  assert.deepEqual(thrownBinding, { ok: false, failure: { code: "contract_missing" } });
+  assert.equal(JSON.stringify(thrownBinding).includes("review-secret-marker"), false);
 });
 
 export async function runCatalogSuite() {

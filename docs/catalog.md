@@ -12,14 +12,14 @@ Every constraint is explicitly `known`, `unknown`, or `unsupported`. Unknown man
 | --- | --- |
 | `dimensions` | Fixed product width, height, and depth. Exact positive decimal strings plus one unit (`mm`, `cm`, or `in`). Selection dimensions must match exactly after normalization. |
 | `minimumBleed` | Minimum bleed for each of top, right, bottom, and left. The selected declaration must meet or exceed every side. |
-| `minimumSafeArea` | Minimum content-safe margin for all four sides. Left+right and top+bottom must leave positive space inside the fixed dimensions. |
+| `minimumSafeArea` | Minimum content-safe margin for all four sides. Selected margins must meet each minimum, and left+right and top+bottom must each remain strictly below the fixed dimensions. Equality leaves no content area and is ineligible. |
 | `minimumResolutionDpi` | Positive integer effective resolution. Selection must meet or exceed it. |
 | `surfaces` | Set of supported print surfaces; selection names one exact member. |
 | `files` | MIME types and inclusive minimum/maximum file counts. Both format and count must fit. |
 | `color` | Supported color-space and profile sets. The selection must name one of each. |
 | `options`, `materials` | Provider-specific selectable identifiers. Every selected identifier must be present; at least one material must be selected. Options may be empty when the product has no selected extra options. |
 | `personalization` | Supported modes and hard field/character limits, or an explicit unsupported state. No personalization content is sent or constructed here. |
-| `destinations` | Country rules. A known empty region list means no region restriction; a non-empty list is an allowlist; unknown regions block; unsupported regional selection rejects a request that supplies a region. |
+| `destinations` | Country rules. A known empty region list means no region restriction; a non-empty list is an allowlist that requires one explicit matching region; unknown regions block; unsupported regional selection rejects a request that supplies a region. |
 | `shipping` | Methods by country and optional region. An exact regional rule takes precedence; otherwise the country-wide rule applies. No matching route means ineligible. |
 | `providerAttributes` | Bounded source-specific JSON metadata retained with the product. Sensitive-looking keys, URLs, email/phone-like values, unsafe numeric values, and oversized content are rejected. Attributes participate in spec identity because their semantics are provider-specific. |
 
@@ -39,7 +39,7 @@ The identity strings and evidence fields are local integrity/provenance values. 
 
 ## Boundary and evidence
 
-`validateCatalogSnapshotBoundary()` delegates the private snapshot to the existing injected `ContractValidator` for the owned `capability` output boundary. It checks the existing binding ownership/state/version, the single capability receipt, schema major, and trusted tenant/project scope; malformed or missing receipts fail closed. A development fixture response remains a development fixture and cannot satisfy an accepted pin or producer/consumer conformance requirement. No canonical schema mapping or accepted shared-contract version exists in this change.
+`validateCatalogSnapshotBoundary()` delegates the private snapshot to the existing injected `ContractValidator` for the owned `capability` output boundary. It validates bounded own-data binding and result records, a literal boolean discriminator with exactly one branch, required success value, allowlisted failure codes, and one exact capability receipt with matching scope and schema major. It returns newly owned, frozen projections of approved success, receipt, or failure fields; malformed structures fail with a typed safe result. Canonical value validation stays delegated to the injected validator. A development fixture response remains a development fixture and cannot satisfy an accepted pin or producer/consumer conformance requirement. No canonical schema mapping or accepted shared-contract version exists in this change.
 
 The local fixture mapping for a future owner review is:
 
@@ -54,7 +54,7 @@ The local fixture mapping for a future owner review is:
 
 This is a semantic mapping from the accepted FC-03 field requirements to the future capability/print-spec boundary, not an assertion that print-production #6 has accepted these exact field names. The consumer's declared field/signature requirements and shared-contracts #4 canonical mapping remain review inputs; the fixture test does not claim producer/consumer conformance.
 
-`tests/catalog-fixtures.mjs` contains two incompatible synthetic catalogs. `tests/catalog-suite.mjs` checks deterministic set handling, retrieval/content/spec identity separation, drift, freshness and clock failures including expiry equality, removed SKUs, unknown mandatory constraints, unsupported personalization, destination/region/shipping/format/color/option/material checks, exact units, strict untrusted input, immutable ownership, and boundary delegation. Run it after the existing TypeScript build:
+`tests/catalog-fixtures.mjs` contains two incompatible synthetic catalogs. `tests/catalog-suite.mjs` checks deterministic set handling, retrieval/content/spec identity separation, drift, freshness and clock failures including expiry equality, removed SKUs, unknown mandatory constraints, unsupported personalization, required allowlisted destination regions, region-specific shipping precedence, impossible safe-area equality/overflow and valid positive content area, format/color/option/material checks, exact units, strict untrusted catalog and boundary inputs, immutable ownership, malformed boundary result unions, projected receipt/failure fields, and delegated boundary behavior. Run it after the existing TypeScript build:
 
 ```sh
 node tests/catalog-suite.mjs
