@@ -292,3 +292,21 @@ test("export outcomes are logged once per kind with status only", async () => {
   assert.ok(lines.some((l) => l === "[ops] neatlogs: export accepted (HTTP 200)"));
   assert.ok(!lines.join("").includes(KEY) && !lines.join("").includes("denied"));
 });
+
+test("the selected sinks are noted once, with names only, and quoted/semicolon lists work", async () => {
+  (await import("../src/server/observability/sink.ts")).resetSelectionNotes();
+  const lines = [];
+  const info = console.info; console.info = (l) => lines.push(l);
+  try {
+    process.env.NEATLOGS_API_KEY = KEY;
+    process.env.TICKETSTUB_OPS_TELEMETRY = '"log; neatlogs"';
+    assert.equal(activeSink().name, "log,neatlogs");
+    activeSink();
+    process.env.TICKETSTUB_OPS_TELEMETRY = "log";
+    assert.equal(activeSink(), logSink);
+  } finally { console.info = info; }
+  const sel = lines.filter((l) => l.startsWith("[ops] telemetry sinks: log,neatlogs"));
+  assert.equal(sel.length, 1, "noted once per distinct selection");
+  assert.match(sel[0], /sinks: log,neatlogs \(requested: log,neatlogs; unrecognised entries: 0; setting length: 15\)/);
+  assert.ok(!lines.join("").includes(KEY));
+});
