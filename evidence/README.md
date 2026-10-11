@@ -1,12 +1,12 @@
 # Submission evidence index
 
-No implementation or sponsor evidence is supplied by the architecture kit. Add sanitized, reviewer-accessible records for each actually tested release.
+This index distinguishes planned evidence from dated records of actually verified artifacts. Add sanitized, reviewer-accessible records for each tested release.
 
 | Evidence | Required record | State |
 | --- | --- | --- |
 | Neatlogs | Actual execution traces, failure recovery, before/after comparable improvement | planned |
 | Entire | Development checkpoints and codebase graph artifacts tied to revisions | planned |
-| CFO.ai | Actual plan covering pricing, costs, revenue, runway and assumptions | planned |
+| CFO.ai | [Actual saved plan, native export, assumptions and verification](cfo-ai/2026-10-11/README.md) covering pricing, costs, revenue, runway and scenarios | artifact verified 2026-10-11; SPN-03 owner acceptance review pending |
 | Integrated journey | Research, edit, approval, printable artifacts, sandbox fulfillment, financial attribution | planned |
 | Implementation history | Inspectable repository commits within permitted coding window | planned |
 
