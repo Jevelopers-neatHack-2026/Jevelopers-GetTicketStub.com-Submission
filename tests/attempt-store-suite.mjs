@@ -50,6 +50,65 @@ async function expectStoreError(promise, code) {
   });
 }
 
+async function expectMissingPath(path) {
+  await assert.rejects(lstat(path), (error) => error?.code === "ENOENT");
+}
+
+function statePaths(directory) {
+  return {
+    snapshot: join(directory, ".attempt-store-v1", "metering-state.json"),
+    marker: join(directory, ".attempt-store-committed.json")
+  };
+}
+
+function makeInvalidStateInputs(hookCalls) {
+  return [
+    { name: "empty array", value: [] },
+    { name: "single-element array", value: ["unknown"] },
+    { name: "nested single-element array", value: [["unknown"]] },
+    { name: "boxed string", value: new String("unknown") },
+    { name: "ordinary object", value: {} },
+    { name: "null-prototype object", value: Object.create(null) },
+    {
+      name: "Symbol.toPrimitive object",
+      value: {
+        [Symbol.toPrimitive]() {
+          hookCalls.count += 1;
+          return "unknown";
+        }
+      }
+    },
+    {
+      name: "toString object",
+      value: {
+        toString() {
+          hookCalls.count += 1;
+          return "unknown";
+        },
+        valueOf() {
+          hookCalls.count += 1;
+          return "unknown";
+        }
+      }
+    },
+    { name: "number", value: 1 },
+    { name: "boolean", value: false },
+    { name: "null", value: null },
+    { name: "unknown primitive string", value: "future_state" }
+  ];
+}
+
+const JSON_INVALID_ENUM_VALUES = [
+  { name: "empty array", value: [] },
+  { name: "single-element array", value: ["unknown"] },
+  { name: "nested single-element array", value: [["unknown"]] },
+  { name: "ordinary object", value: {} },
+  { name: "number", value: 1 },
+  { name: "boolean", value: false },
+  { name: "null", value: null },
+  { name: "unknown primitive string", value: "future_state" }
+];
+
 async function expectConnectorError(promise, code, sideEffectState) {
   await assert.rejects(promise, (error) => {
     assert.ok(error instanceof ConnectorError);
@@ -677,6 +736,215 @@ test("initial, intermediate, and final history rows enforce all state-reference 
       }
     }
     assert.equal(caseNumber, 12);
+  });
+});
+
+test("claim and save require exact primitive enum strings before storage mutation", async () => {
+  await withRoot(async (root) => {
+    const hookCalls = { count: 0 };
+    const invalidValues = makeInvalidStateInputs(hookCalls);
+    const fields = ["sideEffectState", "budgetReservationState"];
+    let caseNumber = 0;
+    for (const field of fields) {
+      for (const invalid of invalidValues) {
+        const claimDirectory = join(root, `invalid-claim-${caseNumber}`);
+        const claimStore = await openAttemptStore(claimDirectory);
+        const invalidClaim = makeAttemptRecord({
+          idempotencyKey: `invalid-claim-key-${caseNumber}`,
+          claimId: `invalid-claim-owner-${caseNumber}`,
+          authorizationId: `invalid-claim-auth-${caseNumber}`,
+          actionId: `invalid-claim-action-${caseNumber}`,
+          [field]: invalid.value
+        });
+        await expectStoreError(claimStore.claimSubmitAttempt(invalidClaim), "invalid_record");
+        assert.equal(await claimStore.getSubmitAttempt(
+          invalidClaim.providerId,
+          ATTEMPT_SCOPE,
+          invalidClaim.idempotencyKey
+        ), undefined, `${field}: ${invalid.name} claim was not recorded`);
+        const claimPaths = statePaths(claimDirectory);
+        await expectMissingPath(claimPaths.snapshot);
+        await expectMissingPath(claimPaths.marker);
+        assert.equal(hookCalls.count, 0, `${field}: ${invalid.name} invoked a coercion hook`);
+
+        const saveDirectory = join(root, `invalid-save-${caseNumber}`);
+        const saveStore = await openAttemptStore(saveDirectory);
+        const original = makeAttemptRecord({
+          idempotencyKey: `invalid-save-key-${caseNumber}`,
+          claimId: `invalid-save-owner-${caseNumber}`,
+          authorizationId: `invalid-save-auth-${caseNumber}`,
+          actionId: `invalid-save-action-${caseNumber}`
+        });
+        assert.deepEqual(await saveStore.claimSubmitAttempt(original), { claimed: true });
+        const savePaths = statePaths(saveDirectory);
+        const snapshotBefore = await readFile(savePaths.snapshot);
+        const markerBefore = await readFile(savePaths.marker);
+        await expectStoreError(saveStore.saveSubmitAttempt({
+          ...original,
+          [field]: invalid.value,
+          updatedAt: original.updatedAt + 1
+        }), "invalid_record");
+        assert.deepEqual(await readFile(savePaths.snapshot), snapshotBefore, `${field}: ${invalid.name} changed snapshot`);
+        assert.deepEqual(await readFile(savePaths.marker), markerBefore, `${field}: ${invalid.name} changed commit marker`);
+        assert.deepEqual(
+          await saveStore.getSubmitAttempt(original.providerId, ATTEMPT_SCOPE, original.idempotencyKey),
+          original
+        );
+        assert.equal((await saveStore.attemptHistory(ATTEMPT_SCOPE, original.idempotencyKey)).length, 1);
+        assert.equal(hookCalls.count, 0, `${field}: ${invalid.name} invoked a coercion hook`);
+        caseNumber += 1;
+      }
+    }
+    assert.equal(caseNumber, fields.length * invalidValues.length);
+  });
+});
+
+test("all valid primitive state enums remain usable in claims, saves, history, and restart", async () => {
+  await withRoot(async (root) => {
+    const effectStates = ["not_dispatched", "possible", "confirmed", "unknown"];
+    const budgetStates = ["not_requested", "pending", "reserved", "denied", "unknown"];
+    for (const [index, state] of effectStates.entries()) {
+      const directory = join(root, `valid-effect-claim-${index}`);
+      const record = makeAttemptRecord({
+        idempotencyKey: `valid-effect-key-${index}`,
+        claimId: `valid-effect-owner-${index}`,
+        authorizationId: `valid-effect-auth-${index}`,
+        actionId: `valid-effect-action-${index}`,
+        sideEffectState: state,
+        ...(state === "confirmed" ? { providerRequestId: "valid-provider-request" } : {})
+      });
+      assert.deepEqual(await (await openAttemptStore(directory)).claimSubmitAttempt(record), { claimed: true });
+      const reopened = await openAttemptStore(directory);
+      assert.deepEqual(await reopened.getSubmitAttempt(record.providerId, ATTEMPT_SCOPE, record.idempotencyKey), record);
+      assert.equal((await reopened.attemptHistory(ATTEMPT_SCOPE, record.idempotencyKey))[0].sideEffectState, state);
+    }
+    for (const [index, state] of budgetStates.entries()) {
+      const directory = join(root, `valid-budget-claim-${index}`);
+      const record = makeAttemptRecord({
+        idempotencyKey: `valid-budget-key-${index}`,
+        claimId: `valid-budget-owner-${index}`,
+        authorizationId: `valid-budget-auth-${index}`,
+        actionId: `valid-budget-action-${index}`,
+        budgetReservationState: state,
+        ...(state === "reserved" ? { budgetReservationReference: "valid-reservation-reference" } : {})
+      });
+      assert.deepEqual(await (await openAttemptStore(directory)).claimSubmitAttempt(record), { claimed: true });
+      const reopened = await openAttemptStore(directory);
+      assert.deepEqual(await reopened.getSubmitAttempt(record.providerId, ATTEMPT_SCOPE, record.idempotencyKey), record);
+      assert.equal((await reopened.attemptHistory(ATTEMPT_SCOPE, record.idempotencyKey))[0].budgetReservationState, state);
+    }
+
+    const effectDirectory = join(root, "valid-effect-history");
+    const effectStore = await openAttemptStore(effectDirectory);
+    const effectRecord = makeAttemptRecord({
+      sideEffectState: "not_dispatched",
+      idempotencyKey: "valid-effect-history-key",
+      claimId: "valid-effect-history-owner",
+      authorizationId: "valid-effect-history-auth",
+      actionId: "valid-effect-history-action"
+    });
+    await effectStore.claimSubmitAttempt(effectRecord);
+    const effectUnknown = { ...effectRecord, sideEffectState: "unknown", budgetReservationState: "pending", updatedAt: effectRecord.updatedAt + 1 };
+    await effectStore.saveSubmitAttempt(effectUnknown);
+    const effectPossible = { ...effectUnknown, sideEffectState: "possible", updatedAt: effectRecord.updatedAt + 2 };
+    await effectStore.saveSubmitAttempt(effectPossible);
+    const effectConfirmed = {
+      ...effectPossible,
+      sideEffectState: "confirmed",
+      providerRequestId: "valid-effect-history-provider",
+      updatedAt: effectRecord.updatedAt + 3
+    };
+    await effectStore.saveSubmitAttempt(effectConfirmed);
+    const effectHistory = await (await openAttemptStore(effectDirectory))
+      .attemptHistory(ATTEMPT_SCOPE, effectRecord.idempotencyKey);
+    assert.deepEqual(effectHistory.map((row) => row.sideEffectState), [
+      "not_dispatched", "unknown", "possible", "confirmed"
+    ]);
+
+    for (const [index, terminal] of ["reserved", "denied", "unknown"].entries()) {
+      const directory = join(root, `valid-budget-history-${index}`);
+      const store = await openAttemptStore(directory);
+      const record = makeAttemptRecord({
+        idempotencyKey: `valid-budget-history-key-${index}`,
+        claimId: `valid-budget-history-owner-${index}`,
+        authorizationId: `valid-budget-history-auth-${index}`,
+        actionId: `valid-budget-history-action-${index}`
+      });
+      await store.claimSubmitAttempt(record);
+      const pending = { ...record, budgetReservationState: "pending", updatedAt: record.updatedAt + 1 };
+      await store.saveSubmitAttempt(pending);
+      await store.saveSubmitAttempt({
+        ...pending,
+        budgetReservationState: terminal,
+        ...(terminal === "reserved" ? { budgetReservationReference: "valid-history-reservation" } : {}),
+        updatedAt: record.updatedAt + 2
+      });
+      const history = await (await openAttemptStore(directory)).attemptHistory(ATTEMPT_SCOPE, record.idempotencyKey);
+      assert.deepEqual(history.map((row) => row.budgetReservationState), ["not_requested", "pending", terminal]);
+    }
+  });
+});
+
+test("persisted records and every history position reject non-string enums without rewriting bytes", async () => {
+  await withRoot(async (root) => {
+    const fields = ["sideEffectState", "budgetReservationState"];
+    let caseNumber = 0;
+    for (const field of fields) {
+      for (const invalid of JSON_INVALID_ENUM_VALUES) {
+        const directory = join(root, `invalid-record-state-${caseNumber}`);
+        const store = await openAttemptStore(directory);
+        const record = makeAttemptRecord();
+        await store.claimSubmitAttempt(record);
+        const paths = statePaths(directory);
+        const state = JSON.parse(await readFile(paths.snapshot, "utf8"));
+        state.entries[0].record[field] = JSON.parse(JSON.stringify(invalid.value));
+        const corruptBytes = JSON.stringify(state);
+        await writeFile(paths.snapshot, corruptBytes, { mode: 0o600 });
+        const markerBefore = await readFile(paths.marker);
+        await expectStoreError(openAttemptStore(directory), "corrupt_state");
+        assert.equal(await readFile(paths.snapshot, "utf8"), corruptBytes, `${field} record: ${invalid.name} was rewritten`);
+        assert.deepEqual(await readFile(paths.marker), markerBefore, `${field} record: ${invalid.name} changed marker`);
+        caseNumber += 1;
+      }
+      for (const [position, positionName] of [[0, "initial"], [1, "middle"], [2, "final"]]) {
+        for (const invalid of JSON_INVALID_ENUM_VALUES) {
+          const directory = join(root, `invalid-history-state-${caseNumber}`);
+          const store = await openAttemptStore(directory);
+          const record = makeAttemptRecord();
+          await store.claimSubmitAttempt(record);
+          const middle = {
+            ...record,
+            sideEffectState: "possible",
+            budgetReservationState: "pending",
+            updatedAt: record.updatedAt + 1
+          };
+          await store.saveSubmitAttempt(middle);
+          await store.saveSubmitAttempt({
+            ...middle,
+            sideEffectState: "confirmed",
+            providerRequestId: "valid-history-provider-request",
+            budgetReservationState: "reserved",
+            budgetReservationReference: "valid-history-reservation-reference",
+            updatedAt: record.updatedAt + 2
+          });
+          const paths = statePaths(directory);
+          const state = JSON.parse(await readFile(paths.snapshot, "utf8"));
+          state.entries[0].history[position][field] = JSON.parse(JSON.stringify(invalid.value));
+          const corruptBytes = JSON.stringify(state);
+          await writeFile(paths.snapshot, corruptBytes, { mode: 0o600 });
+          const markerBefore = await readFile(paths.marker);
+          await expectStoreError(openAttemptStore(directory), "corrupt_state");
+          assert.equal(
+            await readFile(paths.snapshot, "utf8"),
+            corruptBytes,
+            `${field} ${positionName} history: ${invalid.name} was rewritten`
+          );
+          assert.deepEqual(await readFile(paths.marker), markerBefore, `${field} ${positionName} history: ${invalid.name} changed marker`);
+          caseNumber += 1;
+        }
+      }
+    }
+    assert.equal(caseNumber, fields.length * JSON_INVALID_ENUM_VALUES.length * 4);
   });
 });
 

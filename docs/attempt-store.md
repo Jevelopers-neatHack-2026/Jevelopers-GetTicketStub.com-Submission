@@ -52,6 +52,12 @@ that binding, advance the timestamp and effect/budget states monotonically,
 and retain any reservation reference or provider request ID already recorded.
 Reads and history are limited to the requested trusted scope.
 
+Effect and budget states must be exact primitive strings from their declared
+enums. The store does not stringify arrays, boxed strings, or objects to
+interpret state values. Invalid caller values fail with `invalid_record`
+before storage changes; malformed persisted records or history fail with
+`corrupt_state` and are left unchanged.
+
 The private snapshot format is versioned. Unknown versions, malformed history,
 duplicate identities, and corrupt data fail closed without rewriting the
 existing bytes. There is no automatic migration or recovery from an older

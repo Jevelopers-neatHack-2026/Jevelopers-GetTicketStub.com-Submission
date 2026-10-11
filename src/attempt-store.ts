@@ -112,6 +112,15 @@ function validText(value: unknown, maximum = MAX_ID_LENGTH): value is string {
   return typeof value === "string" && value.trim() !== "" && value.length <= maximum && !value.includes("\0");
 }
 
+function isAttemptEffectState(value: unknown): value is SubmitAttemptRecord["sideEffectState"] {
+  return value === "not_dispatched" || value === "possible" || value === "confirmed" || value === "unknown";
+}
+
+function isBudgetReservationState(value: unknown): value is SubmitAttemptRecord["budgetReservationState"] {
+  return value === "not_requested" || value === "pending" || value === "reserved" ||
+    value === "denied" || value === "unknown";
+}
+
 function ownerUid(): number | null {
   const uidReader = (process as NodeJS.Process & { getuid?: () => number }).getuid;
   return typeof uidReader === "function" ? uidReader() : null;
@@ -338,8 +347,8 @@ function normalizeRecord(value: SubmitAttemptRecord): SubmitAttemptRecord {
     value.authorizationId, value.actionId, value.authorizationClaimReference, value.requestFingerprint
   ];
   if (!strings.every((item) => validText(item)) ||
-    !["not_dispatched", "possible", "confirmed", "unknown"].includes(String(value.sideEffectState)) ||
-    !["not_requested", "pending", "reserved", "denied", "unknown"].includes(String(value.budgetReservationState)) ||
+    !isAttemptEffectState(value.sideEffectState) ||
+    !isBudgetReservationState(value.budgetReservationState) ||
     typeof value.updatedAt !== "number" || !Number.isSafeInteger(value.updatedAt) || value.updatedAt < 0) {
     throw new AttemptStoreError("invalid_record");
   }
@@ -365,8 +374,8 @@ function normalizeRecord(value: SubmitAttemptRecord): SubmitAttemptRecord {
     actionId: value.actionId,
     authorizationClaimReference: value.authorizationClaimReference,
     requestFingerprint: value.requestFingerprint,
-    sideEffectState: value.sideEffectState as SubmitAttemptRecord["sideEffectState"],
-    budgetReservationState: value.budgetReservationState as SubmitAttemptRecord["budgetReservationState"],
+    sideEffectState: value.sideEffectState,
+    budgetReservationState: value.budgetReservationState,
     ...(Object.hasOwn(value, "budgetReservationReference")
       ? { budgetReservationReference: value.budgetReservationReference as string }
       : {}),
@@ -444,16 +453,16 @@ function parseHistoryRow(value: unknown): AttemptHistoryRow {
   if (!Number.isSafeInteger(value.revision) || (value.revision as number) < 0 ||
     !Number.isSafeInteger(value.recordedAt) || (value.recordedAt as number) < 0 ||
     (value.event !== "claimed" && value.event !== "updated") ||
-    !["not_dispatched", "possible", "confirmed", "unknown"].includes(String(value.sideEffectState)) ||
-    !["not_requested", "pending", "reserved", "denied", "unknown"].includes(String(value.budgetReservationState)) ||
+    !isAttemptEffectState(value.sideEffectState) ||
+    !isBudgetReservationState(value.budgetReservationState) ||
     typeof value.hasBudgetReservationReference !== "boolean" ||
     typeof value.hasProviderRequestId !== "boolean") throw new AttemptStoreError("corrupt_state");
   const row: AttemptHistoryRow = {
     revision: value.revision as number,
     recordedAt: value.recordedAt as number,
     event: value.event,
-    sideEffectState: value.sideEffectState as AttemptHistoryRow["sideEffectState"],
-    budgetReservationState: value.budgetReservationState as AttemptHistoryRow["budgetReservationState"],
+    sideEffectState: value.sideEffectState,
+    budgetReservationState: value.budgetReservationState,
     hasBudgetReservationReference: value.hasBudgetReservationReference,
     hasProviderRequestId: value.hasProviderRequestId
   };
@@ -470,7 +479,15 @@ function parseStoredAttempt(value: unknown): StoredAttempt {
     !Array.isArray(value.history) || value.history.length === 0 || value.history.length > MAX_HISTORY_LENGTH) {
     throw new AttemptStoreError("corrupt_state");
   }
-  const record = normalizeRecord(value.record as SubmitAttemptRecord);
+  let record: SubmitAttemptRecord;
+  try {
+    record = normalizeRecord(value.record as SubmitAttemptRecord);
+  } catch (error) {
+    if (error instanceof AttemptStoreError && error.code === "invalid_record") {
+      throw new AttemptStoreError("corrupt_state");
+    }
+    throw error;
+  }
   const history = value.history.map(parseHistoryRow);
   if (value.immutableDigest !== immutableDigest(record) || value.revision !== history.length - 1) {
     throw new AttemptStoreError("corrupt_state");
