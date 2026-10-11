@@ -118,6 +118,8 @@ export function FactQuestion({ stub, q, onChange, onDone }: { stub: Stub; q: Que
             value={value}
             onChange={(e) => setValue(e.target.value)}
             autoComplete="off"
+            required
+            aria-required="true"
             autoFocus
           />
           <label className={styles.fieldLabel} htmlFor={`${id}-r`}>
@@ -175,9 +177,14 @@ function FactRow({ stub, f, group, onChange, onAsk }: { stub: Stub; f: Fact; gro
           {group === "corrected" && active && printed && <span className={styles.notice}>This changes the printed stub.</span>}
         </div>
         <Tags>
-          {(group === "unsure" || group === "missing") && <Tag onClick={onAsk}>{group === "missing" ? "Add" : "Fix"}</Tag>}
+          {(group === "unsure" || group === "missing") && (
+            <Tag aria-label={`${group === "missing" ? "Add" : "Fix"} ${f.label}`} onClick={onAsk}>
+              {group === "missing" ? "Add" : "Fix"}
+            </Tag>
+          )}
           {group === "corrected" && (
             <Tag
+              aria-label={`Undo your change to ${f.label}`}
               onClick={() => {
                 onChange(undoCorrection(stub, f.id));
                 play("tap", { emphasis: "subtle" });
@@ -187,7 +194,7 @@ function FactRow({ stub, f, group, onChange, onAsk }: { stub: Stub; f: Fact; gro
             </Tag>
           )}
           {group !== "missing" && (
-            <Tag pressed={!!f.kept} onClick={() => onChange(toggleKept(stub, f.id))}>
+            <Tag pressed={!!f.kept} aria-label={`${f.kept ? "On stub" : "Keep"}: ${f.label}`} onClick={() => onChange(toggleKept(stub, f.id))}>
               {f.kept ? "On stub" : "Keep"}
             </Tag>
           )}

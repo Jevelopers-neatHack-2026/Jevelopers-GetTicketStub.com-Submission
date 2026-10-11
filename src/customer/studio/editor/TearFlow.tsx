@@ -6,6 +6,8 @@ import { upsertStub } from "../store";
 import { TearGesture } from "@/customer/studio/stub/TearGesture";
 import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { PaperButton } from "@/customer/desk/Desk";
+import { announce } from "@/customer/a11y/announce";
+import { useDialogFocus } from "@/customer/a11y/focus";
 import styles from "./TearFlow.module.css";
 
 const FADE_MS = 600;
@@ -19,6 +21,9 @@ export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; 
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  // a dialog: focus lands on the tear handle, Tab stays here, and "Back to styling" returns it to the tear strip
+  useDialogFocus(stageRef, true, '[role="slider"]');
 
   useEffect(() => {
     router.prefetch("/wall");
@@ -45,11 +50,12 @@ export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; 
 
   const torn = () => {
     upsertStub({ ...stub, torn: true });
+    announce("Torn off. Pinning it to your wall.");
     router.push(`/wall?pinned=${encodeURIComponent(stub.id)}`);
   };
 
   return (
-    <div className={`desk-surface ${styles.stage} ${leaving ? styles.leaving : ""}`} role="dialog" aria-modal="true" aria-label="Tear off your stub">
+    <div ref={stageRef} className={`desk-surface ${styles.stage} ${leaving ? styles.leaving : ""}`} role="dialog" aria-modal="true" aria-label="Tear off your stub">
       <PathTrack current="tear" stubId={stub.id} className={styles.track} />
       <div className={styles.area}>
         <TearGesture stub={stub} onTorn={torn} />

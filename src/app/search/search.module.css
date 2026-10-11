@@ -59,12 +59,11 @@
 }
 .input::placeholder {
   color: var(--desk-ink-soft);
-  opacity: 0.7;
 }
-.input:focus {
-  outline: none;
-  border-bottom-color: var(--desk-stamp);
-  box-shadow: 0 1.5px 0 var(--desk-stamp);
+.input:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 3px;
+  border-bottom-color: var(--desk-focus);
 }
 
 .status {

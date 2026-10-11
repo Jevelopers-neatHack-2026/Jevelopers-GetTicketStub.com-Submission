@@ -117,11 +117,11 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
         </OnDesk>
 
         {giftPath ? (
-          <section className={ui.card} aria-labelledby="sent-h" role="status">
+          <section className={ui.card} aria-labelledby="sent-h">
             <div>
               <Stamped>Sent</Stamped>
             </div>
-            <h2 id="sent-h" className={ui.h3}>
+            <h2 id="sent-h" className={ui.h3} data-announce>
               Send them this link.
             </h2>
             <p className={ui.muted}>
@@ -129,7 +129,7 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
               {delivery === "print" ? " The print ships in the sandbox; no real order was placed." : ""}
             </p>
             {revoked ? (
-              <p className={ui.status} role="status">
+              <p className={ui.status} data-announce>
                 Gift link stopped. The message is deleted and the link no longer works.
               </p>
             ) : (

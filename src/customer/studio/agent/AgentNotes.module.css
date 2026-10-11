@@ -116,7 +116,8 @@
   font-style: italic;
 }
 .replyInput:focus-visible {
-  outline: none;
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 2px;
   border-bottom: 1px solid var(--desk-ink);
 }
 

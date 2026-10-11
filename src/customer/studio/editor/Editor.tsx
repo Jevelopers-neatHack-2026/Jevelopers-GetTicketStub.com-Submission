@@ -6,7 +6,11 @@ import { EDITIONS, currentVersion } from "../types";
 import { encodeStub, getStub, upsertStub } from "../store";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { EDITION_META } from "@/customer/studio/stub/editions";
+import { announce } from "@/customer/a11y/announce";
 import { haptic, play } from "@/customer/studio/feedback";
+import { getAccountState } from "@/customer/account/useAccount";
+import { isOnServer } from "@/customer/account/sync";
+import { reportEvent } from "@/customer/feedback-messages/report";
 import { AgentChat } from "@/customer/studio/agent/AgentChat";
 import { AgentNotes } from "@/customer/studio/agent/AgentNotes";
 import { Breadcrumbs } from "@/customer/nav/Breadcrumbs";
@@ -159,9 +163,25 @@ function EditorLoaded({ id }: { id: string }) {
     return () => window.clearTimeout(t);
   }, []);
 
+  const stubRef = useRef(stub);
   const update = useCallback((s: Stub) => {
+    const prev = stubRef.current;
+    stubRef.current = s;
     setStub(s);
     upsertStub(s);
+    // The server only hears about stubs it has: signed in, and a sync that carried this one has come back.
+    if (prev && getAccountState().status === "in" && isOnServer(s.id)) {
+      const before = prev.corrections?.length ?? 0;
+      const added = s.corrections ?? [];
+      if (added.length > before) {
+        const last = added[added.length - 1];
+        if (last.kind !== "undo") reportEvent("fact_corrected", { fact: last.factId, versions: s.versions.length }, s.id);
+      }
+      // A pick from the history changes the current version without making a new one.
+      if (s.currentVersionId !== prev.currentVersionId && s.versions.length === prev.versions.length) {
+        reportEvent("version_selected", { version: s.currentVersionId, versions: s.versions.length }, s.id);
+      }
+    }
   }, []);
 
   /** Deal another style: the old stub slides off, the new one is set down with a thunk and a buzz. */
@@ -169,6 +189,7 @@ function EditorLoaded({ id }: { id: string }) {
     (next: Stub, dir: 1 | -1, fromX = 0) => {
       if (!stub) return;
       setDealing({ from: stub, dir, fromX, n: ++dealN.current });
+      announce(`${editionLabel(currentVersion(next).edition)} style.`);
       setHint(false);
       setSelected(null);
       setFlipped(false);
@@ -196,7 +217,10 @@ function EditorLoaded({ id }: { id: string }) {
   );
 
   const flip = useCallback(() => {
-    setFlipped((f) => !f);
+    setFlipped((f) => {
+      announce(f ? "Showing the front." : "Showing the back.");
+      return !f;
+    });
     setSelected(null);
     play("flip");
   }, []);
@@ -645,7 +669,7 @@ function EditorLoaded({ id }: { id: string }) {
                     style={stageVars}
                     tabIndex={0}
                     role="group"
-                    aria-label="Cutting mat. Scroll to zoom, middle-drag or hold space to pan, 0 to fit."
+                    aria-label="Cutting mat. Scroll or press plus and minus to zoom, hold space and drag, or press Shift with the arrow keys, to pan. 0 fits the stub."
                     {...stageHandlers}
                   >
                     <div className={styles.view}>
@@ -731,7 +755,7 @@ function EditorLoaded({ id }: { id: string }) {
   /* ---------------- Phone ---------------- */
   return (
     <div className={`${styles.root} desk-surface`}>
-      <div className={styles.phone}>
+      <main className={styles.phone}>
         <header className={styles.topBar}>
           <Breadcrumbs className={styles.crumbs} />
           <h1 className={styles.title}>{ev.title}</h1>
@@ -743,7 +767,7 @@ function EditorLoaded({ id }: { id: string }) {
           className={styles.stage}
           data-pressing={pressing || undefined}
           style={stageVars}
-          aria-label={`Your stub, ${editionLabel(edition)} style. Swipe for another style, hold for all styles.`}
+          aria-label={`Your stub, ${editionLabel(edition)} style. Swipe or press the left and right arrow keys for another style, hold for all styles, press F to flip it.`}
           {...stageHandlers}
         >
           {deck("lg")}
@@ -770,7 +794,7 @@ function EditorLoaded({ id }: { id: string }) {
         <div className={styles.trayWrap}>
           <Tray stub={stub} onChange={update} onTear={onTear} onOpen={setSheet} />
         </div>
-      </div>
+      </main>
       {overlays}
     </div>
   );

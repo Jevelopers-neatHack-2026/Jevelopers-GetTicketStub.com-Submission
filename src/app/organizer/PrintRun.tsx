@@ -2,7 +2,8 @@
 // The print run: the paper desk fades in and every guest's stub feeds out of the printer slot, one after
 // another, with the printer running. They pile up under the slot; then "Published" lands.
 // Same printer and slot as the fan reveal (research/Printing.tsx), run once per guest.
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useDialogFocus } from "@/customer/a11y/focus";
 import { PaperButton, SourceMark, Stamped, TearLink } from "@/customer/desk/Desk";
 import { FeedbackNote } from "@/customer/feedback-messages/progress";
 import { StubView } from "@/customer/studio/stub/StubView";
@@ -21,6 +22,8 @@ export function PrintRun({ stubs, names, orderId, problem, onClose, onClaim }: {
   const [done, setDone] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [reduced] = useState(reducedMotion);
+  const stage = useRef<HTMLElement>(null);
+  useDialogFocus(stage, true, "self");
   // A run of 6 prints leisurely; a run of 200 still ends in about six seconds.
   const per = reduced ? 60 : clamp(Math.round(5600 / Math.max(1, n)), 160, 700);
 
@@ -60,8 +63,12 @@ export function PrintRun({ stubs, names, orderId, problem, onClose, onClaim }: {
   const current = count > 0 ? names[count - 1] : "";
 
   return (
-    <section className={`desk-surface ${s.stage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="Sandbox print run of every guest's stub" style={{ "--feed": `${Math.min(per * 0.9, 560)}ms` } as CSSProperties}>
-      <div className={s.status} role="status" aria-live="polite">
+    <section ref={stage} className={`desk-surface ${s.stage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="Sandbox print run of every guest's stub" style={{ "--feed": `${Math.min(per * 0.9, 560)}ms` } as CSSProperties}>
+      {/* said twice, not 200 times: when the run starts and when it ends */}
+      <span className="visually-hidden" data-announce>
+        {done ? `Run complete. ${n} ${n === 1 ? "stub" : "stubs"} printed.` : "Sandbox print run started."}
+      </span>
+      <div className={s.status}>
         {done ? (
           <Stamped>Run complete</Stamped>
         ) : (

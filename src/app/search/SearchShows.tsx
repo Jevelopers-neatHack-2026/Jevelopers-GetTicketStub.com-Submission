@@ -128,7 +128,7 @@ export function SearchShows() {
           </Tags>
         ) : null}
 
-        <p className={styles.status} role="status" aria-live="polite">
+        <p className={styles.status} data-announce="change">
           {busy ? "Searching…" : error ? error : query.trim() && shown.length === 0 ? "No shows found yet. Try fewer words." : ""}
         </p>
 

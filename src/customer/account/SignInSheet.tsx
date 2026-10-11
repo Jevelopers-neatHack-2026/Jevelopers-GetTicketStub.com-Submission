@@ -34,7 +34,7 @@ function Body({ request }: { request: SignInRequest }) {
     // No writable storage on this preview: say so calmly, offer nothing to fill in.
     return (
       <div className={s.body}>
-        <p className={s.lede} role="status">
+        <p className={s.lede} data-announce>
           {SAVING_OFF_LINE}
         </p>
         <TearLink type="button" onClick={closeSignIn}>
@@ -57,6 +57,7 @@ function Form({ request }: { request: SignInRequest }) {
     const to = email.trim();
     if (!EMAIL_RE.test(to)) {
       setError("That email doesn't look right. Check it and try again.");
+      document.getElementById("signin-email")?.focus();
       return;
     }
     setError("");
@@ -71,7 +72,7 @@ function Form({ request }: { request: SignInRequest }) {
   if (sent) {
     return (
       <div className={s.body}>
-        <p className={s.lede} role="status">
+        <p className={s.lede} data-announce>
           We sent a link to <strong className={s.addr}>{sent.email}</strong>. Open it on this device to save your wall. It works once and lasts 15 minutes.
         </p>
         {sent.devLink ? (
@@ -123,7 +124,9 @@ function Form({ request }: { request: SignInRequest }) {
         id="signin-email"
         type="email"
         label="Your email"
-        hint={error ? undefined : "No password. The link works once."}
+        hint="No password. The link works once."
+        error={error || undefined}
+        required
         value={email}
         autoComplete="email"
         inputMode="email"
@@ -133,13 +136,7 @@ function Form({ request }: { request: SignInRequest }) {
           setError("");
           if (progress.state.phase === "failed") progress.reset();
         }}
-        aria-invalid={!!error}
       />
-      {error ? (
-        <p className={s.err} role="alert">
-          {error}
-        </p>
-      ) : null}
       <ProgressNote state={progress.state} labels={{ sending: "Sending your link" }} onRetry={() => void send()} />
       <Stamp type="submit" block disabled={progress.busy}>
         {progress.busy ? "Sending" : "Email me a link"}

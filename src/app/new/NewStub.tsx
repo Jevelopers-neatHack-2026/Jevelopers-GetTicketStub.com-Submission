@@ -73,7 +73,7 @@ export function NewStub() {
   if (error) {
     return (
       <main className={`desk-surface ${styles.stage} ${styles.errorPage}`}>
-        <div className={styles.card} role="alert">
+        <div className={styles.card} data-announce>
           <h1 className={styles.errorTitle}>We couldn&apos;t read that link.</h1>
           <p className={styles.muted}>{error}</p>
           <div className={styles.actions}>

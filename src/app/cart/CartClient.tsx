@@ -79,6 +79,7 @@ export default function CartClient() {
     }
     if (receipt.problem) {
       setEmailError(receipt.problem);
+      document.getElementById("cart-email")?.focus();
       return;
     }
     paidRef.current = true;
@@ -197,14 +198,10 @@ export default function CartClient() {
                 Quote holds for 15 min
                 <SourceMark p="estimated" />. A quote is not a charge. Prices are sandbox fixtures, not printer quotes · capability map {CAPABILITY_VERSION}.
               </p>
-              {paid ? null : <ReceiptField id="cart-email" r={receipt} onChange={() => setEmailError("")} />}
+              {paid ? null : <ReceiptField id="cart-email" r={receipt} error={emailError === hold ? "" : emailError} onChange={() => setEmailError("")} />}
               {hold && !paid ? (
-                <p className={ui.err} role="status">
+                <p className={ui.err} data-announce>
                   {hold}
-                </p>
-              ) : emailError ? (
-                <p className={ui.err} role="alert">
-                  {emailError}
                 </p>
               ) : null}
               {paid ? (

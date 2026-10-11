@@ -107,7 +107,7 @@ function GuestLinks({ claims }: { claims: OrganizerEventReply["claims"] }) {
       >
         Copy all {claims.length} as a list
       </PaperButton>
-      <p className={ui.status} aria-live="polite">
+      <p className={ui.status} data-announce>
         {status}
       </p>
     </div>
@@ -440,7 +440,7 @@ export default function OrganizerClient() {
                 </div>
                 <div className={s.trayLip}>
                   {list ? (
-                    <p className={s.trayName} role="status">
+                    <p className={s.trayName} data-announce>
                       <Stamped key={fileName}>Loaded</Stamped>
                       <span>
                         {fileName} · <span className={ui.num}>{n}</span> {n === 1 ? "guest" : "guests"}
@@ -462,7 +462,7 @@ export default function OrganizerClient() {
               </div>
               <p className={ui.status}>A header row, then one guest per line. We read it on this device; nothing is uploaded.</p>
               {fileError ? (
-                <p className={ui.err} role="alert">
+                <p className={ui.err} data-announce>
                   {fileError}
                 </p>
               ) : null}
@@ -605,13 +605,13 @@ export default function OrganizerClient() {
                   </dl>
                   <p className={ui.status}>Prices are sandbox fixtures, not printer quotes · capability map {CAPABILITY_VERSION}.</p>
                   {gate.ok ? null : (
-                    <p className={ui.err} role="status">
+                    <p className={ui.err} data-announce>
                       {gate.message}
                     </p>
                   )}
                   <MarkLegend marks={["estimated", ...(mark ? [mark] : [])]} />
                   {ordered ? (
-                    <div className={s.done} role="status">
+                    <div className={s.done} data-announce>
                       <Stamped>{heldOrder?.code ? "Saved here" : "Ordered"}</Stamped>
                       <p className={ui.muted}>
                         Sandbox order <span className={ui.num}>{ordered}</span>
@@ -641,12 +641,12 @@ export default function OrganizerClient() {
                   <p className={ui.muted}>Each guest gets their own link. It signs them in with their email and puts their named stub on their wall. Links last 30 days.</p>
                   {published && events ? (
                     <div className={s.done}>
-                      <Stamped>Published</Stamped>
+                      <Stamped say>Published</Stamped>
                       <GuestLinks claims={events.claims} />
                     </div>
                   ) : published ? (
                     <div className={s.done}>
-                      <Stamped>Published</Stamped>
+                      <Stamped say>Published</Stamped>
                       <CopyField path={claimPath} label="Guest claim link" />
                       <PaperLink href={claimPath}>Preview the guest page</PaperLink>
                     </div>

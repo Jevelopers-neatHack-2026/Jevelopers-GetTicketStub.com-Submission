@@ -116,7 +116,7 @@ export function Memories({ stub, onChange }: Props) {
           onChange={(e) => addPhotos(e.target.files)}
         />
         {error && (
-          <p className={styles.muted} role="alert">
+          <p className={styles.muted} data-announce>
             {error}
           </p>
         )}

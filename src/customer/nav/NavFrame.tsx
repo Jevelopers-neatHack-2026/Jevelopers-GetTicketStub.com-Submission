@@ -5,6 +5,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
+import { LiveRegion } from "@/customer/a11y/announce";
+import a11y from "@/customer/a11y/a11y.module.css";
 import { SoundIcon } from "@/customer/desk/icons";
 import { AccountLine } from "@/customer/account/AccountLine";
 import { AccountRoot } from "@/customer/account/AccountRoot";
@@ -241,11 +243,22 @@ export function NavFrame({ children, notice }: { children: ReactNode; notice?: R
       ...(k.children && isOpen(k.key) ? flyRows(k, depth + 1) : []),
     ]);
 
+  // The skip link moves focus to the content, and the next Tab starts inside it (a plain #hash jump would not).
+  const skipToContent = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const target = document.getElementById("content");
+    if (!target) return;
+    e.preventDefault();
+    target.focus({ preventScroll: false });
+  };
+
   const places = tree.filter((n) => !n.hidden);
   const rule = places.findIndex((n) => n.key === "organizer");
 
   return (
     <div className={f.frame} data-nav={show ? "on" : "off"} data-full={show ? full : undefined} data-drawer={drawer}>
+      <a href="#content" className={a11y.skip} onClick={skipToContent}>
+        Skip to content
+      </a>
       {show ? (
         <>
           <button type="button" className={f.scrim} aria-label="Close menu" tabIndex={-1} onClick={closeDrawer} />
@@ -300,7 +313,7 @@ export function NavFrame({ children, notice }: { children: ReactNode; notice?: R
                   const hasFly = !full && !!n.children?.length;
                   return (
                     <Fragment key={n.key}>
-                      {i === rule ? <li className={f.rule} role="separator" /> : null}
+                      {i === rule ? <li className={f.rule} role="presentation" aria-hidden="true" /> : null}
                     <li
                       className={f.top}
                       onPointerEnter={(e) => {
@@ -338,8 +351,8 @@ export function NavFrame({ children, notice }: { children: ReactNode; notice?: R
               <button
                 type="button"
                 className={f.item}
-                aria-pressed={muted}
-                title={full ? undefined : muted ? "Sound is off" : "Sound is on"}
+                title={full ? undefined : muted ? "Sound is off. Press to turn it on" : "Sound is on. Press to turn it off"}
+                aria-label={muted ? "Sound off. Press to turn it on" : "Sound on. Press to turn it off"}
                 onClick={() => {
                   setMuted(!muted);
                   if (muted) play("toggle", { emphasis: "subtle", direction: "forward" });
@@ -355,12 +368,15 @@ export function NavFrame({ children, notice }: { children: ReactNode; notice?: R
         </>
       ) : null}
 
-      <div className={f.content}>
+      {/* The cart sits top right but comes right after the sidebar in Tab order, before the page it belongs to. */}
+      {show ? <CartCorner /> : null}
+
+      <div className={f.content} id="content" tabIndex={-1} inert={!desktop && drawer}>
         {notice}
         {children}
       </div>
-      {show ? <CartCorner /> : null}
       <AccountRoot />
+      <LiveRegion />
     </div>
   );
 }

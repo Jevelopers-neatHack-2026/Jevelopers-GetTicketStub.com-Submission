@@ -5,7 +5,7 @@
 //   MATERIAL  paper + grain, edition edge (perforated stamp, admit-one corners, tear-off), foil + glare.
 // Back (flipped): setlist / score / cast / programme by event.type, note, friends, "Memory page" QR, Ts stamp.
 /* eslint-disable @next/next/no-img-element */
-import { useCallback, useMemo, useRef, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useId, useMemo, useRef, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { currentVersion, type ArtLayer, type Edition, type Fact, type Stub } from "../types";
 import { EDITION_META, type EditionMeta } from "./editions";
 import { Foil, foilTextClass } from "./Foil";
@@ -597,31 +597,37 @@ export function StubView({ stub, flipped = false, tilt = false, size = "md", sel
     "--title-color": stub.personal.titleColor || meta.titleColor,
   } as CSSProperties;
 
-  const label = [
-    `${meta.label} edition stub: ${e.title}`,
+  // The name is short (what it is); the description carries the rest (when, where, which facts, how it is finished).
+  const label = `${e.title}, ${meta.label} edition stub${flipped ? ", back" : ""}`;
+  const description = [
     e.subtitle,
     e.venue,
     e.city,
     c.date?.long,
     stub.personal.guestName ? `Admits ${stub.personal.guestName}` : undefined,
-    c.kept.length ? `Facts: ${c.kept.map((f) => f.label).join(", ")}` : undefined,
+    c.kept.length ? `Facts on the stub: ${c.kept.map((f) => f.label).join(", ")}` : undefined,
     c.unsure.length ? `${c.unsure.length} unsure ${c.unsure.length === 1 ? "fact" : "facts"} to check` : undefined,
     `${stub.finish} finish`,
-    flipped ? "Showing the back" : undefined,
+    flipped ? "Showing the back" : "Showing the front",
   ]
     .filter(Boolean)
     .join(". ");
+  const descId = useId();
 
   return (
     <figure
       className={cx(s.stub, s[edition], s[meta.orientation], flipped && s.flipped, className)}
       style={vars}
       aria-label={label}
+      aria-describedby={descId}
       data-edition={edition}
       data-size={size}
       data-guest={stub.personal.guestName ? "" : undefined}
       onClick={onClick}
     >
+      <span id={descId} hidden>
+        {description}
+      </span>
       <div ref={tiltRef} className={s.tilt}>
         <div className={s.flipper}>
           <div className={cx(s.face, s.front)} aria-hidden={flipped || undefined}>

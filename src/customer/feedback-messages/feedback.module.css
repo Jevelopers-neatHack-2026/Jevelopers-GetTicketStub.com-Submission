@@ -4,7 +4,8 @@
   gap: 8px;
   justify-items: start;
   padding-left: 10px;
-  border-left: 3px solid var(--desk-stamp);
+  border-left: 3px solid var(--desk-error);
+  overflow-wrap: anywhere;
 }
 .text {
   font: var(--type-label);

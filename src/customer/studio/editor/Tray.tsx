@@ -24,6 +24,7 @@ export function Tray({ stub, onChange, onTear, compact, onOpen }: Props) {
   const router = useRouter();
   const selected = selectedSummary(stub);
   const open = openCount(stub);
+  const kept = stub.versions.filter((v) => !v.id.startsWith("preview-")).length;
   return (
     <section className={styles.tray} aria-label="Print your stub">
       <div className={styles.sandbox}>
@@ -32,10 +33,10 @@ export function Tray({ stub, onChange, onTear, compact, onOpen }: Props) {
       {!compact && <MaterialPicker stub={stub} onChange={onChange} />}
       {onOpen && (
         <Tags label="Review your stub">
-          <Tag count={open || undefined} onClick={() => onOpen("facts")}>
+          <Tag count={open || undefined} countNote="to check" onClick={() => onOpen("facts")}>
             Facts
           </Tag>
-          <Tag count={stub.versions.filter((v) => !v.id.startsWith("preview-")).length} onClick={() => onOpen("versions")}>
+          <Tag count={kept} countNote="kept" onClick={() => onOpen("versions")}>
             Versions
           </Tag>
         </Tags>

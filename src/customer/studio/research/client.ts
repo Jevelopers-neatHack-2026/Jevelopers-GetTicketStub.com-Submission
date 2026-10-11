@@ -1,25 +1,41 @@
 // Browser-side calls to the research, art and agent routes. Errors carry user-facing copy.
 import type { ArtLayer, EventData, Stub } from "../types";
 import { currentVersion } from "../types";
+import { codeOf, messageFor } from "@/customer/feedback-messages/messages";
 
 const READ_ERROR = "We couldn't read that link.";
+
+/** The words to show for a caught failure: our own copy (it carries a catalog code), never a raw runtime message. */
+export function failureCopy(e: unknown, fallback: string): string {
+  return e instanceof Error && typeof (e as { code?: unknown }).code === "string" ? e.message : fallback;
+}
+
+/** An Error whose message is the catalog copy for the server's code, and which carries that code for useProgress. */
+function apiError(data: unknown, fallback: string): Error {
+  const code = codeOf(data);
+  if (code === "unknown") {
+    // Older bodies carried a bare string; show it only when it is plain copy, never a code or a stack.
+    const legacy = (data as { error?: unknown } | null)?.error;
+    return Object.assign(new Error(typeof legacy === "string" && legacy ? legacy : fallback), { code });
+  }
+  return Object.assign(new Error(messageFor(code).message), { code });
+}
 
 async function postJson<T>(path: string, body: unknown, fallbackError: string): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   } catch {
-    throw new Error("You look offline. Check your connection and try again.");
+    throw Object.assign(new Error(messageFor("network").message), { code: "network" });
   }
   let data: unknown;
   try {
     data = await res.json();
   } catch {
-    throw new Error(fallbackError);
+    throw Object.assign(new Error(fallbackError), { code: "unavailable" });
   }
   if (!res.ok || (data && typeof data === "object" && "error" in data)) {
-    const msg = (data as { error?: unknown })?.error;
-    throw new Error(typeof msg === "string" && msg ? msg : fallbackError);
+    throw apiError(data, fallbackError);
   }
   return data as T;
 }
@@ -92,13 +108,13 @@ export async function remixArtNoted(stub: Stub, vibe?: string): Promise<RemixRes
       body: JSON.stringify({ event: stub.event, vibe, seed, edition: v?.edition, first: false }),
     });
   } catch {
-    throw new Error("You look offline. Check your connection and try again.");
+    throw Object.assign(new Error(messageFor("network").message), { code: "network" });
   }
   let data: unknown;
   try {
     data = await res.json();
   } catch {
-    throw new Error("We couldn't remix the art. Try again in a moment.");
+    throw Object.assign(new Error("We couldn't remix the art. Try again in a moment."), { code: "unavailable" });
   }
   if (res.status === 429 && (data as { error?: { code?: string } })?.error?.code === "art_limit") {
     const d = data as { art?: ArtLayer; retryAt?: number };
@@ -106,8 +122,7 @@ export async function remixArtNoted(stub: Stub, vibe?: string): Promise<RemixRes
     return { art, limitNote: ART_LIMIT_NOTE, retryAt: d.retryAt };
   }
   if (!res.ok || (data && typeof data === "object" && "error" in data)) {
-    const msg = (data as { error?: unknown })?.error;
-    throw new Error(typeof msg === "string" && msg ? msg : "We couldn't remix the art. Try again in a moment.");
+    throw apiError(data, "We couldn't remix the art. Try again in a moment.");
   }
   return { art: data as ArtLayer };
 }
@@ -127,10 +142,10 @@ export async function askAgent(stub: Stub, message: string): Promise<{ reply: st
       body: JSON.stringify({ event: stub.event, message }),
     });
   } catch {
-    throw new Error("You look offline. Check your connection and try again.");
+    throw Object.assign(new Error(messageFor("network").message), { code: "network" });
   }
   if (res.status === 204) return undefined;
-  const data = await res.json() as { reply?: string; provenance?: string; error?: string };
-  if (!res.ok) throw new Error(data.error || "The agent is unavailable. Try again in a moment.");
+  const data = (await res.json().catch(() => ({}))) as { reply?: string; provenance?: string };
+  if (!res.ok) throw apiError(data, "The agent is unavailable. Try again in a moment.");
   return data.reply && data.provenance === "live" ? { reply: data.reply, provenance: "live" } : undefined;
 }

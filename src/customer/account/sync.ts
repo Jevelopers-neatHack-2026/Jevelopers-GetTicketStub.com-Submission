@@ -42,6 +42,10 @@ export interface SyncResult {
   count: number;
 }
 
+/** Ids the server has acknowledged this visit: a stub is "on the server" once a sync that carried it has come back. */
+const onServer = new Set<string>();
+export const isOnServer = (id: string): boolean => onServer.has(id);
+
 let running: Promise<SyncResult> | null = null;
 let again = false;
 
@@ -58,6 +62,9 @@ export function syncNow(): Promise<SyncResult> {
     const deleted = loadDeleted();
     try {
       const reply = await api.sync(local, deleted);
+      for (const s of local) onServer.add(s.id);
+      for (const s of reply.stubs) onServer.add(s.id);
+      for (const id of reply.deleted) onServer.delete(id);
       const merged = foldWall(loadWall(), reply.stubs, reply.deleted, sentAt);
       writeWall(merged);
       // the tombstones we just sent are on the server now; ones made since stay queued

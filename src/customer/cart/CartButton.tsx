@@ -104,7 +104,7 @@ export function CartButton() {
         className={c.btn}
         data-cart-button
         data-empty={count === 0 ? "true" : undefined}
-        aria-label={count === 0 ? "Cart, empty" : `Cart, ${count} ${count === 1 ? "stub" : "stubs"}`}
+        aria-label={`Cart, ${count > 99 ? "99+" : count} ${count === 1 ? "stub" : "stubs"}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => (open ? closeMiniCart() : openMiniCart())}

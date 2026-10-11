@@ -98,6 +98,7 @@ export default function CheckoutClient({ id }: { id: string }) {
     }
     if (receipt.problem) {
       setError(receipt.problem);
+      document.getElementById("co-email")?.focus();
       return;
     }
     setPaid(true);
@@ -210,10 +211,10 @@ export default function CheckoutClient({ id }: { id: string }) {
               <dd>{formatMoney(q.totalMinor)}</dd>
             </div>
           </dl>
-          <div className={s.quote} aria-live="polite">
+          <div className={s.quote}>
             {expired ? (
               <>
-                <span>This quote has run out.</span>
+                <span data-announce>This quote has run out.</span>
                 <TearLink
                   type="button"
                   onClick={() => {
@@ -232,7 +233,7 @@ export default function CheckoutClient({ id }: { id: string }) {
             )}
           </div>
 
-          {paid ? null : <ReceiptField id="co-email" r={receipt} onChange={() => setError("")} />}
+          {paid ? null : <ReceiptField id="co-email" r={receipt} error={receipt.problem && error === receipt.problem ? error : ""} onChange={() => setError("")} />}
 
           <div className={s.actions}>
             {paid ? (
@@ -245,11 +246,11 @@ export default function CheckoutClient({ id }: { id: string }) {
               </Stamp>
             )}
             {!gate.ok && !paid ? (
-              <p className={ui.err} role="status">
+              <p className={ui.err} data-announce>
                 {gate.message}
               </p>
-            ) : error ? (
-              <p className={ui.err} role="alert">
+            ) : error && error !== receipt.problem ? (
+              <p className={ui.err} data-announce>
                 {error}
               </p>
             ) : null}

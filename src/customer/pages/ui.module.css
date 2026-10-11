@@ -223,9 +223,10 @@ a:hover > span > .leaves {
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
 }
-.copyInput:focus {
-  outline: none;
-  border-bottom-color: var(--desk-stamp);
+.copyInput:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 3px;
+  border-bottom-color: var(--desk-focus);
 }
 
 /* QR (a drawn placeholder, labelled as one) */
@@ -273,9 +274,12 @@ a:hover > span > .leaves {
   color: var(--desk-ink);
   font: var(--type-body);
 }
-.input:focus {
-  outline: none;
-  box-shadow: inset 0 1px 2px var(--desk-ledge), 0 0 0 2px var(--desk-stamp);
+.input:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 2px;
+}
+.input[aria-invalid="true"] {
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 -2px 0 var(--desk-error);
 }
 textarea.input {
   min-height: 88px;
@@ -283,9 +287,10 @@ textarea.input {
 }
 .err {
   font: var(--type-label);
-  color: var(--desk-ink);
+  color: var(--desk-error);
   padding-left: 10px;
-  border-left: 3px solid var(--desk-stamp);
+  border-left: 3px solid var(--desk-error);
+  overflow-wrap: anywhere;
 }
 
 /* Stub on the desk: the stub is lit by the window and rests on a contact shadow */

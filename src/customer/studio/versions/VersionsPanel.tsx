@@ -97,7 +97,7 @@ export function VersionsPanel({ stub, onChange, layout }: Props) {
         })}
       </ul>
 
-      <p className={styles.note} role="status" aria-live="polite">
+      <p className={styles.note} data-announce="change">
         {said || (picks.length === 1 ? "Pick one more version to compare." : versions.length < 2 ? "Remix the art or try another style and the history builds here." : "Pick two versions to compare them.")}
       </p>
 

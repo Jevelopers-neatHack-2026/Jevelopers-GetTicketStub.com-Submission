@@ -95,11 +95,11 @@ export default function AccountClient() {
           <h1 className={s.title}>Your account</h1>
         </header>
         {note === "changed" ? (
-          <p className={s.notice} role="status">
+          <p className={s.notice} data-announce>
             <Stamped>Changed</Stamped> Your email is updated.
           </p>
         ) : note === "taken" ? (
-          <p className={s.notice} role="alert">
+          <p className={s.notice} data-announce>
             That email already has an account, so we kept your current one. Use another address, or sign in with that one.
           </p>
         ) : null}
@@ -218,7 +218,7 @@ function ChangeEmail() {
   if (sent) {
     return (
       <div className={s.sheetBody}>
-        <p className={s.lede} role="status">
+        <p className={s.lede} data-announce>
           Check your email. We sent a link to <strong>{sent.email}</strong>. Your email changes when you open it.
         </p>
         {sent.devLink ? (

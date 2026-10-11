@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { Stamped, TearLink } from "@/customer/desk/Desk";
 import { haptic } from "@/customer/studio/feedback";
+import { messageFor } from "@/customer/feedback-messages/messages";
 import { SignInSheet } from "./SignInSheet";
 import { openSignIn, useSignInRequest } from "./signin";
 import { startSync, syncNow } from "./sync";
@@ -78,17 +79,17 @@ export function AccountRoot() {
     <>
       <SignInSheet request={request} />
       {slip ? (
-        <div className={s.toast} data-leaving={leaving} role="status" key={slip.id}>
+        <div className={s.toast} data-leaving={leaving} key={slip.id}>
           {slip.kind === "saved" ? (
             <>
               <Stamped>Saved</Stamped>
-              <p className={s.toastText}>{slip.text.replace(/^Saved\.\s*/, "")}</p>
+              <p className={s.toastText} data-announce>{slip.text.replace(/^Saved\.\s*/, "")}</p>
             </>
           ) : slip.kind === "offline" ? (
-            <p className={s.toastText}>You&apos;re signed in. We&apos;ll save your wall as soon as we can reach the server.</p>
+            <p className={s.toastText} data-announce>You&apos;re signed in. We&apos;ll save your wall as soon as we can reach the server.</p>
           ) : (
             <>
-              <p className={s.toastText}>That link has run out. Each one works once and lasts 15 minutes. We can send a fresh one.</p>
+              <p className={s.toastText} data-announce>{messageFor("signin_expired").message} We can send a fresh one.</p>
               <TearLink
                 type="button"
                 onClick={() => {
@@ -96,7 +97,7 @@ export function AccountRoot() {
                   openSignIn({ reason: "save" });
                 }}
               >
-                Send a new link
+                {messageFor("signin_expired").action?.label}
               </TearLink>
               <TearLink type="button" onClick={() => setSlip(null)}>
                 Dismiss

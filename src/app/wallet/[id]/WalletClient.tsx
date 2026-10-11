@@ -108,7 +108,7 @@ export default function WalletClient({ id }: { id: string }) {
               Add to {providerLabel}
             </Stamp>
           </div>
-          <div aria-live="polite">
+          <div data-announce>
             {issued ? (
               <div className={ui.card}>
                 <div>

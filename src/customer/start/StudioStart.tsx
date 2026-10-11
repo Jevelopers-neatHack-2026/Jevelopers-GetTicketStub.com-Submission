@@ -175,6 +175,8 @@ export function StudioStart({ fill = false }: { fill?: boolean } = {}) {
                   setMessage(
                     msg || "Try a different link, or search for your show.",
                   );
+                  // back to the field with the problem, so the next key goes where the fix is
+                  requestAnimationFrame(() => inputRef.current?.focus());
                 }}
               />
             </div>
@@ -223,6 +225,8 @@ export function StudioStart({ fill = false }: { fill?: boolean } = {}) {
                       placeholder="ticketmaster.com/event/…"
                       value={link}
                       disabled={phase !== "idle"}
+                      required
+                      aria-invalid={message ? true : undefined}
                       aria-describedby={message ? noteId : undefined}
                       onChange={(e) => {
                         setLink(e.target.value);
@@ -257,8 +261,7 @@ export function StudioStart({ fill = false }: { fill?: boolean } = {}) {
               <p
                 id={noteId}
                 className={s.note}
-                role="status"
-                aria-live="polite"
+                data-announce
               >
                 {message ?? ""}
               </p>

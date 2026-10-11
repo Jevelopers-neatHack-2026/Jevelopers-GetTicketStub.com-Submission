@@ -1,7 +1,8 @@
 "use client";
 // Desk parts: the print-shop controls every studio screen is built from (review page: /parts).
 // Each part owns its press, its motion and its sound, so screens never wire feedback by hand.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useDialogFocus } from "@/customer/a11y/focus";
 import { haptic, play, type Cue, type PlayOptions } from "@/customer/studio/feedback";
 import type { Provenance } from "@/customer/studio/types";
 import s from "./Desk.module.css";
@@ -139,9 +140,9 @@ export function PunchTabs<T extends string>({ options, value, onChange, label }:
     return () => ro.disconnect();
   }, [value]);
 
-  const move = (dir: 1 | -1) => {
+  const move = (dir: 1 | -1, to?: "first" | "last") => {
     const i = options.findIndex((o) => o.value === value);
-    const next = options[(i + dir + options.length) % options.length];
+    const next = to === "first" ? options[0] : to === "last" ? options[options.length - 1] : options[(i + dir + options.length) % options.length];
     play("select", { direction: dir > 0 ? "forward" : "back" });
     onChange(next.value);
     wrap.current?.querySelector<HTMLElement>(`[data-value="${CSS.escape(next.value)}"]`)?.focus();
@@ -169,8 +170,10 @@ export function PunchTabs<T extends string>({ options, value, onChange, label }:
             }
           }}
           onKeyDown={(e) => {
-            if (e.key === "ArrowRight") move(1);
-            if (e.key === "ArrowLeft") move(-1);
+            const go = e.key === "ArrowRight" || e.key === "ArrowDown" ? () => move(1) : e.key === "ArrowLeft" || e.key === "ArrowUp" ? () => move(-1) : e.key === "Home" ? () => move(1, "first") : e.key === "End" ? () => move(1, "last") : null;
+            if (!go) return;
+            e.preventDefault();
+            go();
           }}
         >
           <span>{o.label}</span>
@@ -182,7 +185,7 @@ export function PunchTabs<T extends string>({ options, value, onChange, label }:
 }
 
 /** A paper tag. Pass `pressed` to make it a toggle. */
-export function Tag({ children, count, pressed, onClick, ...rest }: ButtonProps & { count?: number; pressed?: boolean }) {
+export function Tag({ children, count, countNote, pressed, onClick, ...rest }: ButtonProps & { count?: number; /** What the count counts, said to a screen reader after it ("to check"). */ countNote?: string; pressed?: boolean }) {
   const { bind, fire } = usePress("select", 4);
   return (
     <button
@@ -196,7 +199,13 @@ export function Tag({ children, count, pressed, onClick, ...rest }: ButtonProps 
       }}
     >
       {children}
-      {count !== undefined ? <span className={s.tagCount}>{count}</span> : null}
+      {count !== undefined ? (
+        <span className={s.tagCount}>
+          <span className="visually-hidden">, </span>
+          {count}
+          {countNote ? <span className="visually-hidden"> {countNote}</span> : null}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -229,16 +238,35 @@ export function FinishSwatches({
     { v: "foil", label: "Foil" },
     { v: "holo", label: "Holo" },
   ];
+  const wrap = useRef<HTMLDivElement>(null);
+  const pick = (v: FinishValue, focus = false) => {
+    if (focus) wrap.current?.querySelector<HTMLElement>(`[data-finish="${v}"]`)?.focus();
+    if (value === v) return;
+    play(v === "matte" ? "select" : "flick");
+    haptic(8);
+    onChange(v);
+  };
+  const step = (dir: 1 | -1) => {
+    const i = items.findIndex((x) => x.v === value);
+    pick(items[(i + dir + items.length) % items.length].v, true);
+  };
   return (
-    <div role="radiogroup" aria-label="Finish" className={s.swatches}>
+    <div ref={wrap} role="radiogroup" aria-label="Finish" className={s.swatches}>
       {items.map((it) => (
         <button
           key={it.v}
           type="button"
           role="radio"
           aria-checked={value === it.v}
+          tabIndex={value === it.v ? 0 : -1}
           data-finish={it.v}
           className={s.swatch}
+          onKeyDown={(e) => {
+            const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+            if (!dir) return;
+            e.preventDefault();
+            step(dir);
+          }}
           onClick={() => {
             if (value === it.v) return;
             play(it.v === "matte" ? "select" : "flick");
@@ -286,13 +314,30 @@ export function Switch({ checked, onChange, children, hint }: { checked: boolean
 }
 
 /** Write on the line. Organizer and checkout only: the fan path has no fields. */
-export function Field({ id, label, hint, ...rest }: React.InputHTMLAttributes<HTMLInputElement> & { id: string; label: string; hint?: string }) {
+export function Field({ id, label, hint, error, "aria-describedby": describedBy, ...rest }: React.InputHTMLAttributes<HTMLInputElement> & { id: string; label: string; hint?: string; error?: string }) {
+  // The hint and the error are the field's description, so a screen reader says them after its name. Required and
+  // invalid are states of the input itself (required is announced from the attribute, invalid from aria-invalid).
+  const hintId = `${id}-hint`;
+  const errId = `${id}-err`;
+  const described = [error ? errId : null, hint ? hintId : null, describedBy].filter(Boolean).join(" ") || undefined;
   return (
-    <label className={s.field} htmlFor={id}>
-      <span className="desk-label">{label}</span>
-      <input id={id} className={s.fieldInput} {...rest} />
-      {hint ? <span className={s.fieldHint}>{hint}</span> : null}
-    </label>
+    <div className={s.field}>
+      <label htmlFor={id} className={s.fieldLabel}>
+        <span className="desk-label">{label}</span>
+        {rest.required ? <span className={s.fieldReq}>Required</span> : null}
+      </label>
+      <input id={id} className={s.fieldInput} aria-describedby={described} aria-invalid={error ? true : rest["aria-invalid"]} {...rest} />
+      {error ? (
+        <span id={errId} className={s.fieldError} data-announce>
+          {error}
+        </span>
+      ) : null}
+      {hint ? (
+        <span id={hintId} className={s.fieldHint}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -345,6 +390,9 @@ export function SandboxStrip({ children = "Sandbox prices. Nothing is charged." 
 /** A sheet of paper that slides up (phone) or in from the side (desktop). */
 export function PaperSheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const opened = useRef(false);
+  const box = useRef<HTMLElement>(null);
+  const titleId = useId();
+  useDialogFocus(box, open);
   useEffect(() => {
     if (open && !opened.current) play("open");
     if (!open && opened.current) play("close");
@@ -358,11 +406,13 @@ export function PaperSheet({ open, onClose, title, children }: { open: boolean; 
   return (
     <>
       <div className={s.scrim} onClick={onClose} aria-hidden />
-      <section role="dialog" aria-modal="true" aria-label={title} className={s.sheet}>
+      <section ref={box} role="dialog" aria-modal="true" aria-labelledby={titleId} className={s.sheet}>
         <span className={s.sheetGrip} aria-hidden />
         <header className={s.sheetHead}>
-          <h2 className={s.sheetTitle}>{title}</h2>
-          <button type="button" className={s.close} onClick={onClose} aria-label="Close">
+          <h2 id={titleId} className={s.sheetTitle}>
+            {title}
+          </h2>
+          <button type="button" className={s.close} onClick={onClose} aria-label={`Close ${title}`} data-close>
             <CloseIcon />
           </button>
         </header>
@@ -373,10 +423,10 @@ export function PaperSheet({ open, onClose, title, children }: { open: boolean; 
 }
 
 /** Confirmation that lands like a rubber stamp ("Kept", "Pinned", "Sent"). */
-export function Stamped({ children }: { children: ReactNode }) {
+export function Stamped({ children, say }: { children: ReactNode; /** Announce it. Leave off when the line it sits in is already announced. */ say?: boolean }) {
   useEffect(() => play("success"), []);
   return (
-    <span className={s.stamped} role="status">
+    <span className={s.stamped} data-announce={say ? "" : undefined}>
       {children}
     </span>
   );

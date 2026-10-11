@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useDialogFocus } from "@/customer/a11y/focus";
 import { api } from "@/customer/account/api";
 import { messageForError } from "@/customer/feedback-messages/messages";
 import { sharePath } from "@/customer/account/share";
@@ -69,7 +70,10 @@ export default function MemoryPage({ token, gift, giftTo, giftToken, wrap = true
   const setOwned = (next: Stub) => setOwnedState({ id: next.id, stub: next });
   const [flipped, setFlipped] = useState(false);
   const [torn, setTorn] = useState(false);
+  const giftRef = useRef<HTMLDivElement>(null);
   const wrapped = !torn && (gift || (!!giftNote && wrap));
+  // the gift wrap is a dialog over the page: focus lands on "Tear it open" and stays until it is open
+  useDialogFocus(giftRef, wrapped, "button");
   const [opening, setOpening] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [status, setStatus] = useState<{ text: string; ok?: boolean }>({ text: "" });
@@ -216,7 +220,7 @@ export default function MemoryPage({ token, gift, giftTo, giftToken, wrap = true
                 <MarkLegend marks={["sandbox"]} />
               </div>
             ) : null}
-            <div className={`${ui.status} ${s.status}`} aria-live="polite">
+            <div className={`${ui.status} ${s.status}`} data-announce>
               {status.ok ? <Stamped key={stampKey}>{status.text}</Stamped> : status.text}
             </div>
           </div>
@@ -406,7 +410,7 @@ export default function MemoryPage({ token, gift, giftTo, giftToken, wrap = true
       </PageShell>
 
       {wrapped ? (
-        <div className={`desk-surface ${s.giftStage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="A gift for you">
+        <div ref={giftRef} className={`desk-surface ${s.giftStage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="A gift for you">
           <div className={`${s.giftBox} ${opening ? s.giftOpening : ""}`}>
             <p className="desk-label">{giftNote?.to || giftTo ? `For ${giftNote?.to || giftTo}` : "A gift for you"}</p>
             <h1 className={s.giftTitle}>Someone made you a stub.</h1>

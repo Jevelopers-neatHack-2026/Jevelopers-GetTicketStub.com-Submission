@@ -32,6 +32,7 @@ export function MiniCart() {
   const router = useRouter();
   const items = useCartItems();
   const [phase, setPhase] = useState<Phase>("closed");
+  const shut = phase === "closed"; // a closed cart is not in the page at all: no dialog to find, nothing to Tab into
   const [removed, setRemoved] = useState<{ item: CartItem; index: number } | null>(null);
   const sheetRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -131,7 +132,7 @@ export function MiniCart() {
   };
 
   return (
-    <div className={m.root} data-phase={phase}>
+    <div className={m.root} data-phase={phase} inert={shut}>
       <button type="button" className={m.scrim} aria-label="Close the cart" tabIndex={-1} onClick={closeMiniCart} />
       <section
         ref={sheetRef}
@@ -190,7 +191,7 @@ export function MiniCart() {
             </ul>
           )}
           {removed ? (
-            <p className={m.undo} role="status">
+            <p className={m.undo} data-announce>
               <span>Removed {removed.item.title}.</span>
               <TearLink
                 type="button"

@@ -98,7 +98,7 @@ export default function GuestClaimClient({ token }: { token: string }) {
           {expired ? (
             <p className={ui.muted}>Ask the organizer to send you a new claim link.</p>
           ) : done ? (
-            <div className={s.signed} role="status">
+            <div className={s.signed} data-announce>
               <Stamped>Claimed</Stamped>
               <span>It&apos;s on your wall.</span>
             </div>

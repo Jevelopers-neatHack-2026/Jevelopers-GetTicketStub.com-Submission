@@ -11,6 +11,15 @@
   --desk-ink-soft: rgb(23 20 15 / 0.66);
   --desk-rule: rgb(23 20 15 / 0.16);
   --desk-rule-strong: rgb(23 20 15 / 0.42);
+  /* The edge of a control you can aim at (an input line, a switch slot): 3:1 against paper, raised and sunk (WCAG 1.4.11).
+     --desk-rule-strong stays for perforations and decoration, which carry no meaning. */
+  --desk-edge: rgb(23 20 15 / 0.55);
+  /* The focus ring is desk ink everywhere: buttons, tags, tabs, stubs, map nodes, sidebar rows. */
+  --desk-focus: var(--desk-ink);
+  /* A mistake: the stamp's own ledge colour, which reads as red ink and holds 4.8:1 or better on every paper. */
+  --desk-error: var(--desk-stamp-ledge);
+  /* How much of its ink a disabled control keeps. Dimmed, never gone: the label stays readable at 3:1. */
+  --desk-disabled-alpha: 0.55;
   --desk-ledge: rgb(23 20 15 / 0.2);
   --desk-stamp: #e4572e;
   --desk-stamp-ledge: #a83d1f;

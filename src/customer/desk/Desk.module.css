@@ -51,7 +51,7 @@
 }
 .stamp[disabled] {
   filter: saturate(0.25);
-  opacity: 0.55;
+  opacity: var(--desk-disabled-alpha);
   cursor: not-allowed;
 }
 .stamp.block {
@@ -88,7 +88,7 @@
   gap: 8px;
   min-height: 44px;
   padding: 0 18px;
-  border: 1px solid var(--desk-rule-strong);
+  border: 1px solid var(--desk-edge);
   border-radius: 8px;
   background: var(--desk-paper-raised);
   color: var(--desk-ink);
@@ -105,6 +105,10 @@
 }
 .paper:hover {
   border-color: var(--desk-ink);
+}
+.paper[disabled] {
+  opacity: var(--desk-disabled-alpha);
+  cursor: not-allowed;
 }
 .paper[data-pressed="true"] {
   --ledge: 0px;
@@ -170,7 +174,7 @@
 }
 .tool[aria-pressed="true"] {
   background: var(--desk-paper-raised);
-  box-shadow: inset 0 0 0 1px var(--desk-rule-strong), 0 1px 0 var(--desk-ledge);
+  box-shadow: inset 0 0 0 1px var(--desk-edge), 0 1px 0 var(--desk-ledge);
 }
 
 /* ---------- Punched tabs: one choice from a few ---------- */
@@ -254,7 +258,7 @@
   padding: 0 14px 0 calc(var(--notch) + 14px);
   border: 0;
   /* the outline is the tag's own background showing round a 1px-inset paper face (::after) */
-  background: var(--desk-rule-strong);
+  background: var(--desk-edge);
   color: var(--desk-ink);
   font: var(--type-ui);
   font-size: 0.94rem;
@@ -296,13 +300,28 @@
   background: var(--desk-ink);
   color: var(--desk-paper);
 }
+/* The tag is clipped to its notched shape, which would cut an outline off. Its focus ring is the shape itself:
+   a thick ink edge (on a pressed tag, which is ink inside, an orange one). */
+.tag:focus-visible {
+  outline: none;
+  background: var(--desk-focus);
+}
+.tag:focus-visible::after {
+  clip-path: polygon(calc(var(--notch) + 3px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) calc(100% - 3px), calc(var(--notch) + 3px) calc(100% - 3px), 5px 50%);
+}
+.tag[aria-pressed="true"]:focus-visible {
+  background: var(--desk-stamp);
+}
+.tag[disabled] {
+  opacity: var(--desk-disabled-alpha);
+  cursor: default;
+}
 .tag[data-pressed="true"] {
   transform: translateY(1px) rotate(-1.5deg);
   transition-duration: var(--desk-press);
 }
 .tagCount {
   font-variant-numeric: tabular-nums;
-  opacity: 0.6;
 }
 
 /* ---------- Finish swatches: you see the material, not a word ---------- */
@@ -367,7 +386,12 @@
 }
 .swatchPrice {
   font-variant-numeric: tabular-nums;
-  opacity: 0.7;
+  color: var(--desk-ink-soft);
+}
+.swatch:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 /* ---------- Switch: a paper slider in a slot ---------- */
@@ -393,7 +417,7 @@
   height: 26px;
   border-radius: 13px;
   background: var(--desk-paper-sunk);
-  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 0 0 1px var(--desk-rule);
+  box-shadow: inset 0 1px 2px var(--desk-ledge), inset 0 0 0 1px var(--desk-edge);
   transition: background-color 260ms ease;
 }
 .switchKnob {
@@ -427,12 +451,22 @@
   display: grid;
   gap: 4px;
 }
+.fieldLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fieldReq {
+  font: var(--type-label);
+  color: var(--desk-ink-soft);
+}
 .fieldInput {
   width: 100%;
   min-height: 44px;
   padding: 8px 0 6px;
   border: 0;
-  border-bottom: 1.5px solid var(--desk-rule-strong);
+  border-bottom: 1.5px solid var(--desk-edge);
   border-radius: 0;
   background: transparent;
   color: var(--desk-ink);
@@ -441,16 +475,27 @@
 }
 .fieldInput::placeholder {
   color: var(--desk-ink-soft);
-  opacity: 0.7;
 }
-.fieldInput:focus {
-  outline: none;
-  border-bottom-color: var(--desk-stamp);
-  box-shadow: 0 1.5px 0 var(--desk-stamp);
+.fieldInput:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 3px;
+  border-bottom-color: var(--desk-focus);
+}
+.fieldInput[aria-invalid="true"] {
+  border-bottom-color: var(--desk-error);
 }
 .fieldHint {
   font: var(--type-label);
   color: var(--desk-ink-soft);
+  overflow-wrap: anywhere;
+}
+.fieldError {
+  padding-left: 10px;
+  border-left: 3px solid var(--desk-error);
+  font: var(--type-label);
+  font-size: 0.9rem;
+  color: var(--desk-error);
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Rules ---------- */
@@ -599,6 +644,10 @@
   background: none;
   color: var(--desk-ink-soft);
 }
+.close:focus-visible {
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 0;
+}
 .close:hover {
   color: var(--desk-ink);
   background: color-mix(in srgb, var(--desk-ink) 6%, transparent);
@@ -629,9 +678,9 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px 5px;
-  border: 2px solid var(--desk-stamp);
+  border: 2px solid var(--desk-error);
   border-radius: 4px;
-  color: var(--desk-stamp);
+  color: var(--desk-error);
   font: 700 0.8rem/1 var(--font-ui), var(--ts-font-ui);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -682,5 +731,15 @@
   .scrim,
   .stamped {
     animation: none;
+  }
+  .stamped {
+    transform: rotate(-4deg);
+  }
+  .tearLink {
+    transition: none;
+  }
+  .tag:hover,
+  .tag[data-pressed="true"] {
+    transform: none;
   }
 }

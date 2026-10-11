@@ -292,7 +292,7 @@
   clip: rect(0 0 0 0);
 }
 .filePick:focus-within {
-  outline: 2px solid var(--ts-focus);
+  outline: 2px solid var(--desk-focus);
   outline-offset: 3px;
 }
 

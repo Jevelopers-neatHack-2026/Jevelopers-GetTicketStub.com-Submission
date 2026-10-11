@@ -3,7 +3,8 @@
 // camera (wheel, pinch, drag), a paper control cluster (zoom, fit, fullscreen) and a way back when the stubs are out of sight.
 // The stage is the element that goes fullscreen, so `overlay` (the lamp) renders inside it and stays visible.
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { play } from "@/customer/studio/feedback";
+import { play, useMuted } from "@/customer/studio/feedback";
+import { SoundIcon } from "@/customer/desk/icons";
 import { chrome as c } from "./chrome";
 import { useBoardCamera } from "./useBoardCamera";
 import s from "./canvas.module.css";
@@ -62,6 +63,7 @@ export function Canvas({ label, layoutKey, fitKey, panOverStubs = false, onCance
   const stageRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const [fs, setFs] = useState<Fs>("off");
+  const [muted, setMuted] = useMuted();
   const fsRef = useRef<Fs>("off");
   const cancelRef = useRef(onCancelGesture);
   const notifyRef = useRef(onFullscreen);
@@ -209,6 +211,21 @@ export function Canvas({ label, layoutKey, fitKey, panOverStubs = false, onCance
           Fit
         </button>
         <span className={s.sep} aria-hidden="true" />
+        {fs !== "off" ? (
+          // fullscreen hides the sidebar, where the sound switch lives: it stays one press away here
+          <button
+            type="button"
+            className={s.btn}
+            aria-label={muted ? "Sound off. Press to turn it on" : "Sound on. Press to turn it off"}
+            title={muted ? "Sound is off" : "Sound is on"}
+            onClick={() => {
+              setMuted(!muted);
+              if (muted) play("toggle", { emphasis: "subtle", direction: "forward" });
+            }}
+          >
+            <SoundIcon muted={muted} />
+          </button>
+        ) : null}
         <button
           type="button"
           className={s.btn}

@@ -129,7 +129,7 @@ export default function ClaimClient({ set, from }: { set: string; from?: string 
               {acct === "loading" || savingOff ? null : account ? (
                 <>
                   <p className="desk-label">Your wall</p>
-                  <p className={s.signed} role="status">
+                  <p className={s.signed} data-announce>
                     <span>
                       Signed in as {account.email}. This stub is saved to your wall.
                     </span>

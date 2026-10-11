@@ -6,7 +6,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ArtLayer, DesignVersion, Fact, Provenance, Stub } from "../types";
 import { currentVersion } from "../types";
-import { ART_LIMIT_NOTE, askAgent, remixArtNoted } from "../research/client";
+import { ART_LIMIT_NOTE, askAgent, failureCopy, remixArtNoted } from "../research/client";
 import { MarkLegend, PaperButton, SourceMark, Tag, Tags } from "@/customer/desk/Desk";
 import { haptic, play } from "@/customer/studio/feedback";
 import { activeCorrection, applyCorrection } from "../facts/corrections";
@@ -124,7 +124,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
         art.provenance,
       );
     } catch (e) {
-      say(e instanceof Error ? e.message : "We couldn't remix the art. Try again in a moment.");
+      say(failureCopy(e, "We couldn't remix the art. Try again in a moment."));
     } finally {
       setBusy(undefined);
     }
@@ -175,7 +175,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
         if (live) return say(live.reply, "live");
         return say("I can keep facts, fix unsure ones and remix the art. Try “Make it moodier”.");
       } catch (error) {
-        return say(error instanceof Error ? error.message : "The agent is unavailable. Try again in a moment.");
+        return say(failureCopy(error, "The agent is unavailable. Try again in a moment."));
       } finally {
         setBusy(undefined);
       }
@@ -198,7 +198,7 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
 
   return (
     <div className={styles.root}>
-      <div className={styles.list} ref={listRef} aria-live="polite">
+      <div className={styles.list} ref={listRef} data-announce="added">
         {messages.map((m) => {
           if (m.role === "user") {
             return (

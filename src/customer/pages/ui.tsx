@@ -167,7 +167,7 @@ export function CopyField({ path, label = "Link" }: { path: string; label?: stri
           Copy link
         </PaperButton>
       </div>
-      <div className={s.status} aria-live="polite">
+      <div className={s.status} data-announce>
         {status === "copied" ? <Stamped key={stampKey}>Copied</Stamped> : status === "failed" ? "Couldn't copy. Select the link and copy it." : ""}
       </div>
     </div>

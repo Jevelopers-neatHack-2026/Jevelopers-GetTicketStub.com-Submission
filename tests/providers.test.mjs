@@ -198,8 +198,9 @@ test("direct Anthropic and OpenAI paths keep their original wire contracts", asy
 
 
 test("browser agent displays configured-provider errors rather than simulated replies", async () => {
-  globalThis.fetch = async () => response({ error: "The selected AI service could not complete this request.", code: "provider_authentication_failed" }, 502);
-  await assert.rejects(client.askAgent({ event }, "Hello?"), /selected AI service/);
+  // the routes answer in the one envelope; the browser shows the catalog's words for the code, never the route's detail
+  globalThis.fetch = async () => response({ error: { code: "provider_authentication_failed", message: "The selected AI service could not complete this request." } }, 502);
+  await assert.rejects(client.askAgent({ event }, "Hello?"), e => e.code === "provider_authentication_failed" && /isn't set up for that helper/.test(e.message) && !/selected AI service/.test(e.message));
   globalThis.fetch = async () => new Response(null, { status: 204 });
   assert.equal(await client.askAgent({ event }, "Hello?"), undefined);
 });

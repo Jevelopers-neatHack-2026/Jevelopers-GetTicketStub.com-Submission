@@ -222,6 +222,7 @@ npm run verify:product -- --suite foundation --mode fixture --evidence-dir out/e
 | `access` | `scripts/smoke-server.mjs` against a production server (the one dev-only email-preview check is excluded by name and recorded in the evidence) |
 | `research` | `scripts/smoke-ticketmaster.mjs` on the saved Discovery sample |
 | `creative` | `scripts/check-creative-adapter.mjs` |
+| `a11y` | GT-11: axe-core on eight pages at 390 and 1280 px, overflow at 320, 640 and 200% zoom, a keyboard walk of the critical path with dialog focus, reduced motion, and the desk colours against WCAG AA, in a real headless Chrome (needs Chrome or Edge, or `CHROME_PATH`). `accessibility` is an alias. See `docs/product/accessibility.md` |
 | `production` | `scripts/smoke-production.mjs` against a production server |
 | `degraded` | a production server whose `TICKETSTUB_DB` and `TICKETSTUB_FILES` sit under a file, so storage can't be written: the 503s, the health fields, every page rendering 200, and `smoke:production` still passing |
 

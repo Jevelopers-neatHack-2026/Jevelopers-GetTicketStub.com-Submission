@@ -1,6 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { announce } from "@/customer/a11y/announce";
+import { useDialogFocus } from "@/customer/a11y/focus";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play, haptic } from "@/customer/studio/feedback";
 import { loadWall, removeStub, saveWall, upsertStub } from "@/customer/studio/store";
@@ -314,6 +316,21 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
     haptic([20]);
   }
 
+  /** Move a focused stub with the arrow keys (12 px, 48 with Shift): the keyboard way to do what a drag does. */
+  function stubKey(e: React.KeyboardEvent<HTMLButtonElement>, st: PlacedStub) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const step = e.shiftKey ? 48 : 12;
+    const by: Record<string, [number, number, string]> = { ArrowLeft: [-step, 0, "left"], ArrowRight: [step, 0, "right"], ArrowUp: [0, -step, "up"], ArrowDown: [0, step, "down"] };
+    const move = by[e.key];
+    if (!move) return;
+    e.preventDefault();
+    const next: PlacedStub = { ...st, wallX: Math.round((st.wallX ?? 0) + move[0]), wallY: Math.round((st.wallY ?? 0) + move[1]) };
+    setStubs((prev) => prev.map((x) => (x.id === next.id ? { ...next, updatedAt: Date.now() } : x)));
+    upsertStub(next);
+    play("tap", { emphasis: "subtle" });
+    announce(`Moved ${move[2]}.`);
+  }
+
   function remove(id: string) {
     removeStub(id);
     setStubs((prev) => prev.filter((x) => x.id !== id));
@@ -325,7 +342,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
       {landing ? <div className={`desk-surface ${s.lights}`} aria-hidden="true" /> : null}
 
       {banner ? (
-        <div className={s.banner} role="status">
+        <div className={s.banner} data-announce>
           <p>
             <strong>Check your email.</strong> Your receipt is on its way.
           </p>
@@ -400,7 +417,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
       {mounted && stubs.length > 0 ? (
         <section ref={boardRef} className={s.board} aria-label="Your stubs, pinned to a corkboard">
           <Canvas
-            label="Your wall. Drag the cork to move around, scroll to zoom. Plus and minus zoom, 0 fits, F is fullscreen."
+            label="Your wall. Arrow keys move around the cork, plus and minus zoom, 0 fits, F is fullscreen. Tab to a stub and press Enter to lift it, or use the arrow keys to move it."
             layoutKey={layoutKey}
             fitKey={activeFilter}
             apiRef={canvasApi}
@@ -429,7 +446,9 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
                   data-stub-id={st.id}
                   className={s.stubBtn}
                   aria-label={`Lift ${st.event.title}${st.event.dateISO ? `, ${formatDate(st.event.dateISO)}` : ""}`}
+                  aria-describedby="wall-stub-help"
                   aria-expanded={lift?.id === st.id}
+                  onKeyDown={(e) => stubKey(e, st)}
                   onPointerDown={(e) => stubDown(e, st)}
                   onPointerMove={stubMove}
                   onPointerUp={(e) => stubUp(e, st)}
@@ -438,11 +457,17 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
                     if (!suppressClick.current) openLift(st.id);
                   }}
                 >
-                  <StubView stub={st} size="sm" />
+                  {/* the button's own label names it; the printed stub inside is a picture of that */}
+                  <span aria-hidden="true" style={{ display: "contents" }}>
+                    <StubView stub={st} size="sm" />
+                  </span>
                 </button>
               </div>
             ))}
           </Canvas>
+          <p id="wall-stub-help" hidden>
+            Enter lifts the stub. Arrow keys move it 12 pixels, or 48 with Shift. Escape pins it back.
+          </p>
         </section>
       ) : null}
       {mounted && stubs.length > 1 ? <p className={s.hint}>Drag a stub to move it. Scroll to zoom, drag the cork to pan.</p> : null}
@@ -481,7 +506,7 @@ function PublicLink({ path, capped, onStop }: { path: string; capped: boolean; o
         )
       ) : null}
       {capped ? <p className={s.small}>Your {WALL_TOKEN_MAX} newest stubs appear on the public page.</p> : null}
-      <p className={s.small} aria-live="polite">
+      <p className={s.small} data-announce>
         {status}
       </p>
     </div>
@@ -500,7 +525,7 @@ function NextSteps({ stub }: { stub: Stub }) {
   return (
     <aside className={s.note} aria-labelledby="next-h">
       <Pin seed={`${stub.id}-note`} />
-      <Stamped>Pinned</Stamped>
+      <Stamped say>Pinned</Stamped>
       <h2 id="next-h" className={s.noteTitle}>
         It&apos;s on your wall.
       </h2>
@@ -547,7 +572,7 @@ function NextSteps({ stub }: { stub: Stub }) {
           </TearLink>
         </div>
       </div>
-      <p className={s.small} role="status">
+      <p className={s.small} data-announce>
         {status}
       </p>
       <SandboxStrip />
@@ -565,9 +590,8 @@ function Lamp({ stub, lift, onPutBack, onDelete }: { stub: Stub; lift: Lift; onP
   const dragX = useRef<number | null>(null);
   const swiped = useRef(false);
 
-  useEffect(() => {
-    rootRef.current?.focus();
-  }, []);
+  // The lamp is a dialog: focus lands on it, Tab stays inside it, and pinning back returns focus to the stub.
+  useDialogFocus(rootRef, true, "self");
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onPutBack();
@@ -643,9 +667,13 @@ function Lamp({ stub, lift, onPutBack, onDelete }: { stub: Stub; lift: Lift; onP
               </Tool>
             </Tools>
             <div className={s.trayFoot}>
-              <p className={s.small} role="status">
-                {status || "Tap anywhere else to pin it back."}
+              <p className={s.small}>Tap anywhere else, or press Escape, to pin it back.</p>
+              <p className={s.small} data-announce>
+                {status}
               </p>
+              <TearLink type="button" onClick={onPutBack}>
+                Pin it back
+              </TearLink>
               <TearLink
                 type="button"
                 onClick={() => {

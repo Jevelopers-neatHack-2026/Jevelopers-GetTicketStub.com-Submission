@@ -49,7 +49,7 @@ export function VariantNote({ material, finish, size, withSize = true }: { mater
   const mark = statusMark(v.status);
   const copy = SIZE_COPY[size];
   return (
-    <div className={styles.variant} aria-live="polite" data-status={v.status}>
+    <div className={styles.variant} data-announce="change" data-status={v.status}>
       <p className={styles.variantStatus}>
         {mark ? <SourceMark p={mark} /> : null}
         <span>{statusLine(v)}</span>
@@ -78,7 +78,7 @@ export function CartLineSpec({ item, className }: { item: CartItem; className?: 
         <p className={className}>
           {material} · {finish} · saved before sizes were checked
         </p>
-        <p className={className} data-choose-again role="status">
+        <p className={className} data-choose-again data-announce>
           <SourceMark p="blocked" /> {CHOOSE_AGAIN_BODY}
         </p>
         <p>

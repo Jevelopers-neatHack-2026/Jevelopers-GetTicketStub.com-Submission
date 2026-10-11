@@ -181,6 +181,9 @@ export function Printing(props: {
       if (!deadlineRef.current) {
         deadlineRef.current = Math.max(startRef.current + MIN_MS, Date.now() + (reducedRef.current ? 800 : DWELL_MS));
       }
+      // Someone working through the lines with the keyboard has not finished: the page waits while focus is on a line.
+      const here = document.activeElement;
+      if (here instanceof HTMLElement && here.closest("[data-receipt]") && deadlineRef.current) extendDeadline(deadlineRef);
       if (Date.now() >= deadlineRef.current) finish();
     }, 100);
 
@@ -287,10 +290,10 @@ export function Printing(props: {
   return (
     <section className={styles.stage} aria-label="Printing your stub" aria-busy={!settling}>
       <PathTrack current="paste" className={styles.track} />
-      <h1 className={styles.headline} key={headline} role="status" aria-live="polite">
+      <h1 className={styles.headline} key={headline} data-announce>
         {headline}
       </h1>
-      <p className={styles.hint}>{shown > 0 ? "Tap a line to keep it on your stub." : " "}</p>
+      <p className={styles.hint}>{shown > 0 ? "Choose a line to keep it on your stub." : " "}</p>
 
       <div className={styles.layout}>
         <div className={styles.printer}>
@@ -307,7 +310,7 @@ export function Printing(props: {
           </div>
         </div>
 
-        <div className={`${styles.receipt} ${lines.length ? styles.receiptOn : ""}`} aria-hidden={lines.length ? undefined : true}>
+        <div className={`${styles.receipt} ${lines.length ? styles.receiptOn : ""}`} data-receipt aria-hidden={lines.length ? undefined : true}>
           <p className={`desk-label ${styles.receiptHead}`}>What we found</p>
           {RECEIPT_ORDER.map((g) => {
             const inGroup = lines.filter((l) => grouped[l.k] === g);

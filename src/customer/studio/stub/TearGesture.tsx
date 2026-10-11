@@ -170,7 +170,7 @@ export function TearGesture({ stub, onTorn }: { stub: Stub; onTorn: () => void }
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={pct}
-          aria-valuetext={ripped ? "Torn" : "Drag right to tear. Past the middle it comes off. Press Enter to tear it off."}
+          aria-valuetext={ripped ? "Torn" : pct === 0 ? "Not torn yet. Arrow keys tear a little at a time, past the middle it comes off. Press Enter to tear it off." : `${pct} percent torn`}
           className={`${t.handle} ${bar}`}
           style={{ left: `${pct}%` }}
           onPointerDown={onDown}

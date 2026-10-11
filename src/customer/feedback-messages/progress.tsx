@@ -4,6 +4,7 @@
 // working..."), unknown (past UNKNOWN_MS the answer hasn't come, so we say we can't tell whether it went
 // through), done and failed. A late answer after "unknown" still lands: it moves the state to done or failed.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useAnnounce } from "@/customer/a11y/announce";
 import { PaperButton, TearLink } from "@/customer/desk/Desk";
 import { codeOf, messageFor, type FeedbackMessage } from "./messages";
 import s from "./feedback.module.css";
@@ -76,8 +77,10 @@ export function FeedbackNote({ code, message, onRetry, onSignIn, children }: { c
   const m = message ?? messageFor(code);
   const a = m.action;
   const act = a?.href ? null : a?.action === "sign-in" ? onSignIn : a?.action === "reload" ? () => window.location.reload() : onRetry;
+  // The failure is on screen as text; the screen's one live region says it once, politely.
+  useAnnounce(m.message);
   return (
-    <div className={s.note} role="alert">
+    <div className={s.note} data-failure>
       <p className={s.text}>{m.message}</p>
       {children}
       {a?.href ? (
@@ -93,13 +96,14 @@ export function FeedbackNote({ code, message, onRetry, onSignIn, children }: { c
   );
 }
 
-/** The live region for a `useProgress` state: what is happening now, and what to do when it isn't going well. */
+/** The words for a `useProgress` state (also said through the screen's one live region): what is happening now, and what to do when it isn't going well. */
 export function ProgressNote({ state, labels, onRetry, onSignIn }: { state: ProgressState; labels: { sending: string; done?: string } } & RecoveryHandlers) {
   const { phase } = state;
+  useAnnounce(phase === "sending" ? labels.sending : phase === "slow" ? "Still working" : phase === "done" ? labels.done : phase === "unknown" ? messageFor("timeout").message : null);
   if (phase === "failed") return <FeedbackNote code={state.code} onRetry={onRetry} onSignIn={onSignIn} />;
   if (phase === "unknown") {
     return (
-      <div className={s.note} role="alert">
+      <div className={s.note} data-failure>
         <p className={s.text}>{messageFor("timeout").message}</p>
         {onRetry ? (
           <PaperButton type="button" onClick={onRetry}>
@@ -110,7 +114,7 @@ export function ProgressNote({ state, labels, onRetry, onSignIn }: { state: Prog
     );
   }
   return (
-    <p className={s.progress} role="status" aria-live="polite" data-phase={phase}>
+    <p className={s.progress} data-phase={phase}>
       {phase === "sending" ? (
         <>
           <span className={s.dot} aria-hidden="true" />

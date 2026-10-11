@@ -20,7 +20,7 @@ export function useReceiptEmail() {
   return { status, savingOff, signedIn: !!account, email, typed, setTyped, problem };
 }
 
-export function ReceiptField({ id, r, onChange }: { id: string; r: ReturnType<typeof useReceiptEmail>; onChange?: () => void }) {
+export function ReceiptField({ id, r, onChange, error }: { id: string; r: ReturnType<typeof useReceiptEmail>; onChange?: () => void; /** A problem with this address, shown on the field itself and tied to it for screen readers. */ error?: string }) {
   if (r.status === "loading") return null;
   if (r.savingOff) return null; // no receipt email on a preview that saves nothing
   if (r.signedIn) {
@@ -37,7 +37,9 @@ export function ReceiptField({ id, r, onChange }: { id: string; r: ReturnType<ty
       label="Email for your receipt"
       hint="We'll send the receipt here. Use it again to save your wall. You can leave it empty in the sandbox."
       value={r.typed}
+      error={error || undefined}
       autoComplete="email"
+      inputMode="email"
       onChange={(ev) => {
         r.setTyped(ev.target.value);
         onChange?.();
@@ -63,7 +65,7 @@ export function AfterPay({ placed, email, signedIn, progress, onRetry }: { place
   }, [placed, offer, problem, email, router]);
   return (
     <div className={s.after}>
-      {placed && !problem ? <Stamped>Ordered</Stamped> : null}
+      {placed && !problem ? <Stamped say>Ordered</Stamped> : null}
       {!placed ? (
         <ProgressNote state={progress ?? { phase: "sending" }} labels={{ sending: "Placing your order" }} onRetry={onRetry} />
       ) : problem ? (

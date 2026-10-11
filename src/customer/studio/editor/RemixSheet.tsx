@@ -121,7 +121,7 @@ export function RemixPanel({ stub, onChange, onDescribe, onDone }: PanelProps) {
       <PaperButton block onClick={run} disabled={busy}>
         {busy ? "Remixing…" : "Remix the art"}
       </PaperButton>
-      <p className={styles.muted} role="status" aria-live="polite">
+      <p className={styles.muted} data-announce="change">
         {busy ? "Remixing. Your text and edits stay." : (error ?? "Your text and edits stay. Each remix is kept, so you can go back.")}
       </p>
       {earlier.length > 0 && (

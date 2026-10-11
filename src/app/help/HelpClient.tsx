@@ -114,7 +114,7 @@ export default function HelpClient() {
               Search the questions
             </label>
             <input id={searchId} className={h.input} type="search" value={query} onChange={(e) => search(e.target.value)} placeholder="Try prices, holo or magic link" autoComplete="off" enterKeyHint="search" />
-            <p className={h.count} role="status">
+            <p className={h.count} data-announce="change">
               {needle && total > 0 ? `${total} ${total === 1 ? "question matches" : "questions match"}.` : ""}
             </p>
           </div>

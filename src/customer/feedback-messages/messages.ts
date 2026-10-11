@@ -21,6 +21,7 @@ const RETRY: RecoveryAction = { label: "Try again", action: "retry" };
 const SIGN_IN: RecoveryAction = { label: "Sign in", action: "sign-in" };
 const WALL: RecoveryAction = { label: "Open your wall", href: "/wall" };
 const START: RecoveryAction = { label: "Start a stub", href: "/new" };
+const SEND_NEW: RecoveryAction = { label: "Send a new link", action: "sign-in" };
 const RELOAD: RecoveryAction = { label: "Reload the page", action: "reload" };
 
 const PROVIDER_DOWN = "Our research and art helpers are out of reach right now. Your stub is safe, and the procedural art still works.";
@@ -45,6 +46,7 @@ export const MESSAGES = {
 
   // Links, claims and orders
   expired: { message: "This link has expired. Ask whoever sent it for a new one.", action: START },
+  signin_expired: { message: "That sign-in link has run out. Each one works once and lasts 15 minutes.", action: SEND_NEW },
   already_claimed: { message: "Someone already claimed this stub. Ask the organizer for your own link.", action: START },
   variant_not_orderable: { message: "That size and finish isn't orderable yet. Choose another, or keep it as a preview.", action: WALL },
   unreadable_link: { message: "We couldn't read that link. Paste the event page address, or search for the event by name.", action: RETRY, retryable: true },

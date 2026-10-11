@@ -153,9 +153,13 @@
 .artButton:hover {
   box-shadow: inset 0 0 0 1px rgb(228 87 46 / 0.6);
 }
-.artButton:focus-visible,
 .artButton.selected {
   box-shadow: inset 0 0 0 max(2px, 0.6cqw) #e4572e;
+  outline: none;
+}
+/* Focus is a two-tone ring (light inside, ink outside) so it reads on any art, light or dark. */
+.artButton:focus-visible {
+  box-shadow: inset 0 0 0 max(2px, 0.6cqw) #fff, inset 0 0 0 max(4px, 1.2cqw) var(--desk-focus);
   outline: none;
 }
 
@@ -185,8 +189,11 @@
 .pickBtn:hover {
   outline-color: rgb(228 87 46 / 0.55);
 }
+/* Focus is two-tone (a light halo, then ink) so it reads on the paper and on any art behind the type. */
 .pickBtn:focus-visible {
-  outline: 2px solid #e4572e;
+  outline: 2px solid var(--desk-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9);
 }
 .selected {
   outline: max(2px, 0.5cqw) solid #e4572e !important;
