@@ -9,7 +9,7 @@ Neatlogs separates ingestion from reading. Do not assume one credential works fo
 | Setting | What it is | Used for | Where it comes from |
 | --- | --- | --- | --- |
 | `NEATLOGS_API_KEY` | Project key, sent as the `x-api-key` header | OTLP/HTTP ingest to `{ingest}/v1/traces` | Neatlogs → Settings → API keys → Project API key |
-| `NEATLOGS_TOKEN` | Expiring service-account token, sent as `Authorization: Bearer` | Public API readback | Settings → Service accounts: create an account, bind it to the project with the least role, mint a token with `context:read` and `observability:read` |
+| `NEATLOGS_TOKEN` | Expiring service-account token, sent as `Authorization: Bearer` | Public API readback | Settings → Service accounts: create an account, bind it to the project with the least role, mint a token with `context:read` and `observability:read` (the create dialog pre-ticks only `context:read`; tick **Traces and sessions · Read** too, since scopes cannot be changed after creation) |
 | `NEATLOGS_PROJECT_ID` | UUID of the bound project, sent as `x-project-id` | Public API readback | The project the service account is bound to |
 | `NEATLOGS_ENDPOINT` | Ingest origin. Blank means US `https://ingest.neatlogs.com` | Region selection | EU: `https://eu.ingest.neatlogs.com` |
 | `NEATLOGS_HOST` | App/API origin. Blank means US `https://app.neatlogs.com` | Region selection | EU: `https://eu.app.neatlogs.com` |
@@ -101,6 +101,11 @@ node tools/neatlogs-live-verify.mjs --mode send --env-file .env \
 # Readback of a saved plan (needs NEATLOGS_TOKEN + NEATLOGS_PROJECT_ID).
 node tools/neatlogs-live-verify.mjs --mode readback --env-file .env \
   --plan /tmp/neatlogs-plan.json --evidence /tmp/neatlogs-readback.json
+
+# Readback of a saved plan that re-sends `missing` traces once under the next generation
+# (needs the API key, token and project ID). The plan file is updated with the new IDs.
+node tools/neatlogs-live-verify.mjs --mode readback --recover --env-file .env \
+  --plan /tmp/neatlogs-plan.json --evidence /tmp/neatlogs-recovery.json
 
 # Both in one run; --recover re-sends bounded-window `missing` traces once under the next generation and records the duplicate risk.
 node tools/neatlogs-live-verify.mjs --mode send-and-readback --recover --env-file .env \
