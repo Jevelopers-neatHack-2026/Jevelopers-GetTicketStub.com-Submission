@@ -159,6 +159,15 @@ export function requirePhysicalTextSize(
 	);
 	return physicalMm;
 }
+function requireImageScale(
+	node: Extract<LayoutNode, { kind: "artwork" | "overlay" }>,
+): void {
+	requireCore(
+		node.transform.scaleX === node.transform.scaleY,
+		"INVALID_INPUT",
+		`nodes.${node.id}.imageScale`,
+	);
+}
 export async function recheckPermissions(
 	artifact: PrivateArtifact,
 	ports: CompositionPorts,
@@ -242,7 +251,8 @@ export function parseComposition(
 				`nodes.${node.id}.textPolicy`,
 			);
 		}
-		if (node.kind === "artwork" || node.kind === "overlay")
+		if (node.kind === "artwork" || node.kind === "overlay") {
+			requireImageScale(node);
 			requireCore(
 				node.asset.purpose === node.kind &&
 					slot.fits.includes(node.fit) &&
@@ -251,6 +261,7 @@ export function parseComposition(
 				"INVALID_INPUT",
 				`nodes.${node.id}.placementPolicy`,
 			);
+		}
 	}
 	return freeze({
 		...input,
@@ -261,6 +272,7 @@ export function imagePlacement(
 	node: Extract<LayoutNode, { kind: "artwork" | "overlay" }>,
 	asset: ParsedAsset,
 ): Rect {
+	requireImageScale(node);
 	const source = node.crop ?? {
 		x: 0,
 		y: 0,

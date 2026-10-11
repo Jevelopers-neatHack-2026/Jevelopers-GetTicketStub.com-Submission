@@ -107,7 +107,7 @@ const mutations: readonly {
 		code: "DPI_LOW",
 		change: (n) =>
 			n.kind === "artwork"
-				? { ...n, transform: { ...n.transform, scaleX: 2 } }
+				? { ...n, transform: { ...n.transform, scaleX: 2, scaleY: 2 } }
 				: n,
 	},
 	{
