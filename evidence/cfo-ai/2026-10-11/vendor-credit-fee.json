@@ -1,0 +1,10 @@
+{
+  "source": "https://openrouter.ai/docs/faq",
+  "observed_at": "2026-10-11T07:18:58.864459+00:00",
+  "html_sha256": "b7ff5b437da6cbbbd9ffe40c787c6e3ba8082231c8a13ca6cf1880a523e80316",
+  "observation": "Official HTML embedded getTotalFeeString returns 5.5% ($0.80 minimum) for stripe and 5% for coinbase. The text renderer omitted these dynamic values.",
+  "card_credit_purchase_fee_percent": 5.5,
+  "minimum_fee_usd": 0.8,
+  "model_allowance_percent": 6,
+  "classification": "Published vendor fee; separate conservative model allowance, not actual project spending"
+}

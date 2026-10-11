@@ -291,15 +291,16 @@ The matching [JSON tracker](https://github.com/Jevelopers-neatHack-2026/integrat
 
 ### SPN-02 Entire use
 
-- [ ] **Planned** | P0 | Agent and research
+- [x] **Verified** 2026-10-11 (owner-accepted) | P0 | Agent and research
 - **Verify:** Capture actual Entire development provenance through checkpoints or repository graph output.
 - **Evidence:** Entire artifact linked to relevant component revisions.
 
 ### SPN-03 CFO.ai use
 
-- [ ] **Planned** | P0 | Finance and reliability
+- [x] **Verified** 2026-10-11 (owner-accepted) | P0 | Finance and reliability
 - **Verify:** Build the business plan in CFO.ai using the financial summary and documented assumptions.
 - **Evidence:** CFO.ai plan covering pricing, costs, revenue and runway; a generic data export alone is insufficient.
+- **Recorded evidence:** [CFO.ai plan revision 2](https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2) at integration-evals `6420af4`; [verification](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/VERIFICATION.md). Forecasts are hypothetical; the authoritative Finance summary export (cost-intelligence#3), actual cash, demo coverage and submission remain open.
 
 
 ## Production launch

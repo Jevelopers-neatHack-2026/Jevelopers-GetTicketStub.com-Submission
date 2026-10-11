@@ -1,0 +1,25 @@
+{
+  "outcome": "pass",
+  "method": "Read-only XLSX XML extraction; cached values independently recomputed; formula precedents inspected. No native Excel engine executed.",
+  "formula_cells": 1121,
+  "checks": [
+    "Nine native export sheets inspected; no cached formula-error cells, macros or external workbook links found.",
+    "Base, Conservative and Growth order, AI, contribution, profit and break-even results match independent Python calculations to $0.00000001.",
+    "Launch reserves and six-month funding needs match independent cash calculations for all cases.",
+    "Conversion, traffic, generation/revision, chat and abandonment sensitivities match independent checkpoints.",
+    "Conditional physical contribution and +25% fulfillment-cost stress match; physical sales are excluded from the cash forecast.",
+    "October\u2013December 2026 prelaunch revenue is zero, bootstrap cash is $400/-$200/-$800, and cash reconciliation is zero in every exported month.",
+    "Formula traces inspected: research/chat/image rates feed per-start AI, abandonment allocation and contribution; scenario outputs and cash rollforward retain Excel formulas."
+  ],
+  "final_formula_observations": {
+    "sensitivity_baseline_funding_formula": "IF('01 \u2014 Editable assumptions \u2014 USD'!B30=\"\",\"\",'01 \u2014 Editable assumptions \u2014 USD'!B30)",
+    "prelaunch_months_formula": [
+      "DATEDIF(DATE(YEAR('01 \u2014 Editable assumptions \u2014 USD'!B61),MONTH('01 \u2014 Editable assumptions \u2014 USD'!B61),1),DATE(YEAR('01 \u2014 Editable assumptions \u2014 USD'!B60),MONTH('01 \u2014 Editable assumptions \u2014 USD'!B60),1),\"M\")"
+    ]
+  },
+  "limits": [
+    "Native Excel recalculation and visual layout were not independently tested in a desktop spreadsheet engine.",
+    "CFO.ai canvas is the editable source; export is a dated snapshot. Static narrative does not automatically update with assumptions.",
+    "Unknown real costs, cash, traffic and supplier prices remain unknown; this verification does not establish production readiness."
+  ]
+}

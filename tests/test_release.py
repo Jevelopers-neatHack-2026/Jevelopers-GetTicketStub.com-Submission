@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from integration_evals.artifacts import load_record
@@ -26,3 +27,16 @@ def test_audit_retains_every_leaf_when_components_missing() -> None:
     )
     assert set(receipt.exclusions) == {"BUD-04", "LIVE-01", "LIVE-02", "LIVE-03"}
     assert tracker == load_record(REPOSITORY / "planning/acceptance-checklist.json", Tracker)
+
+
+def test_acceptance_statuses_match_markdown() -> None:
+    tracker = load_record(REPOSITORY / "planning/acceptance-checklist.json", Tracker)
+    markdown = (REPOSITORY / "planning/acceptance-checklist.md").read_text(encoding="utf-8")
+    rows = re.finditer(
+        r"^### ([A-Z]+-\d+) [^\n]+\n\n- \[[ x]\] \*\*([^*]+)\*\*",
+        markdown,
+        flags=re.MULTILINE,
+    )
+    statuses = {row.group(1): row.group(2).lower() for row in rows}
+    assert len(statuses) == len(tracker.criteria)
+    assert statuses == {criterion.id: criterion.status.value for criterion in tracker.criteria}

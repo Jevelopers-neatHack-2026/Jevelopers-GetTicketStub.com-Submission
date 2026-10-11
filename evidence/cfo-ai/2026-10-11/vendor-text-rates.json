@@ -1,0 +1,223 @@
+{
+  "observed_at": "2026-10-11T07:11:58.538145+00:00",
+  "source": "https://openrouter.ai/api/v1/models",
+  "data": [
+    {
+      "id": "openai/gpt-6.1-sol",
+      "canonical_slug": "openai/gpt-6.1-sol-20260929",
+      "hugging_face_id": null,
+      "name": "OpenAI: GPT-6.1 Sol",
+      "created": 1790702882,
+      "description": "GPT-6.1 Sol is an upgrade to GPT-6 Sol from OpenAI, positioned below the flagship GPT-6 Astra in the GPT-6 series. It is suited for agentic coding, computer use, document-heavy professional...",
+      "context_length": 1050000,
+      "architecture": {
+        "modality": "text+image+file->text",
+        "input_modalities": [
+          "file",
+          "image",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "GPT",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "web_search": "0.01",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.0000025",
+        "overrides": [
+          {
+            "min_prompt_tokens": 272000,
+            "prompt": "0.000004",
+            "completion": "0.000015",
+            "input_cache_read": "0.0000002",
+            "input_cache_write": "0.000005"
+          }
+        ]
+      },
+      "top_provider": {
+        "context_length": 1050000,
+        "max_completion_tokens": 128000,
+        "is_moderated": true
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "seed",
+        "structured_outputs",
+        "tool_choice",
+        "tools",
+        "verbosity"
+      ],
+      "default_parameters": {},
+      "supported_voices": null,
+      "knowledge_cutoff": null,
+      "expiration_date": null,
+      "links": {
+        "details": "/api/v1/models/openai/gpt-6.1-sol-20260929/endpoints"
+      },
+      "benchmarks": {
+        "design_arena": [
+          {
+            "arena": "models",
+            "category": "codecategories",
+            "elo": 1348,
+            "win_rate": 58.5,
+            "rank": 5
+          },
+          {
+            "arena": "models",
+            "category": "gamedev",
+            "elo": 1366,
+            "win_rate": 60.7,
+            "rank": 5
+          },
+          {
+            "arena": "models",
+            "category": "website",
+            "elo": 1323,
+            "win_rate": 55.9,
+            "rank": 4
+          }
+        ],
+        "artificial_analysis": {
+          "intelligence_index": 51.8,
+          "coding_index": null,
+          "agentic_index": null
+        }
+      },
+      "reasoning": {
+        "mandatory": true,
+        "default_enabled": true,
+        "supported_efforts": [
+          "max",
+          "xhigh",
+          "high",
+          "medium",
+          "low"
+        ],
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5",
+      "canonical_slug": "anthropic/claude-sonnet-5.5-20260928",
+      "hugging_face_id": null,
+      "name": "Anthropic: Claude Sonnet 5.5",
+      "created": 1790618686,
+      "description": "Claude Sonnet 5.5 is Anthropic's Sonnet-class model for well-scoped everyday work, succeeding Claude Sonnet 5 as a direct upgrade. It is especially strong at building features, fixing bugs, and producing...",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text+image+file->text",
+        "input_modalities": [
+          "text",
+          "image",
+          "file"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "Claude",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "web_search": "0.01",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.0000025",
+        "input_cache_write_1h": "0.000004"
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000,
+        "is_moderated": true
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "stop",
+        "structured_outputs",
+        "tool_choice",
+        "tools",
+        "verbosity"
+      ],
+      "default_parameters": {},
+      "supported_voices": null,
+      "knowledge_cutoff": null,
+      "expiration_date": null,
+      "links": {
+        "details": "/api/v1/models/anthropic/claude-sonnet-5.5-20260928/endpoints"
+      },
+      "benchmarks": {
+        "design_arena": [
+          {
+            "arena": "models",
+            "category": "codecategories",
+            "elo": 1362,
+            "win_rate": 59.9,
+            "rank": 3
+          },
+          {
+            "arena": "models",
+            "category": "dataviz",
+            "elo": 1382,
+            "win_rate": 66.2,
+            "rank": 2
+          },
+          {
+            "arena": "models",
+            "category": "gamedev",
+            "elo": 1440,
+            "win_rate": 68.7,
+            "rank": 2
+          },
+          {
+            "arena": "models",
+            "category": "uicomponent",
+            "elo": 1384,
+            "win_rate": 64.7,
+            "rank": 2
+          },
+          {
+            "arena": "models",
+            "category": "website",
+            "elo": 1317,
+            "win_rate": 53.9,
+            "rank": 6
+          }
+        ],
+        "artificial_analysis": {
+          "intelligence_index": 56,
+          "coding_index": null,
+          "agentic_index": null
+        }
+      },
+      "reasoning": {
+        "mandatory": true,
+        "supported_efforts": [
+          "max",
+          "xhigh",
+          "high",
+          "medium",
+          "low"
+        ],
+        "default_effort": "high"
+      }
+    }
+  ]
+}

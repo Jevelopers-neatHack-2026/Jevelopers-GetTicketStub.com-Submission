@@ -1,0 +1,34 @@
+{
+ "generic": "cfo-native-export-generic.xlsx",
+ "repaired": "cfo-native-export.xlsx",
+ "differences": [
+  {
+   "part": "xl/worksheets/sheet10.xml",
+   "cell": "B69",
+   "generic_formula": "'01 \u2014 Editable assumptions \u2014 USD'!B34",
+   "repaired_formula": "IF('01 \u2014 Editable assumptions \u2014 USD'!B34=\"\",\"\",'01 \u2014 Editable assumptions \u2014 USD'!B34)",
+   "cached_value_equal": true
+  },
+  {
+   "part": "xl/worksheets/sheet10.xml",
+   "cell": "B74",
+   "generic_formula": "'01 \u2014 Editable assumptions \u2014 USD'!B34",
+   "repaired_formula": "IF('01 \u2014 Editable assumptions \u2014 USD'!B34=\"\",\"\",'01 \u2014 Editable assumptions \u2014 USD'!B34)",
+   "cached_value_equal": true
+  },
+  {
+   "part": "xl/worksheets/sheet10.xml",
+   "cell": "B76",
+   "generic_formula": "'01 \u2014 Editable assumptions \u2014 USD'!B34",
+   "repaired_formula": "IF('01 \u2014 Editable assumptions \u2014 USD'!B34=\"\",\"\",'01 \u2014 Editable assumptions \u2014 USD'!B34)",
+   "cached_value_equal": true
+  },
+  {
+   "part": "xl/worksheets/sheet10.xml",
+   "cell": "C72",
+   "generic_formula": "'01 \u2014 Editable assumptions \u2014 USD'!B34",
+   "repaired_formula": "IF('01 \u2014 Editable assumptions \u2014 USD'!B34=\"\",\"\",'01 \u2014 Editable assumptions \u2014 USD'!B34)",
+   "cached_value_equal": true
+  }
+ ]
+}
