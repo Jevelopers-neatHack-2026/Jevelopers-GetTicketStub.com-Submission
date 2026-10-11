@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './capture-test.mjs';
 import AxeBuilder from '@axe-core/playwright';
 const counts=async request=>(await request.get('/api/counters')).json();
 async function refresh(page,expected){const response=page.waitForResponse('**/api/composition/current');await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();const view=(await(await response).json()).view;expect(view.status).toBe('current');if(expected)expect(view.projection.base.revision_sha256).toBe(expected.revision_sha256);await expect(page.locator('#preview-status')).toContainText('Both exact byte hashes verified');}
@@ -136,4 +136,35 @@ test('well-formed cross-scope projection and hostile identity history never beco
   await initialize(page);await page.route('**/api/composition/current',async route=>{const response=await route.fetch(),data=await response.json();data.view.projection.base.tenant_id='other_fixture_tenant';const body={...data.view.projection};delete body.projection_sha256;data.view.projection.projection_sha256=await page.evaluate(async body=>{const canonical=x=>Array.isArray(x)?`[${x.map(canonical).join(',')}]`:x&&typeof x==='object'?`{${Object.keys(x).sort().map(k=>`${JSON.stringify(k)}:${canonical(x[k])}`).join(',')}}`:JSON.stringify(x);const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical(body)));return `sha256:${Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('')}`;},body);await route.fulfill({response,json:data});},{times:1});
   await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-preview')).toBeHidden();await refresh(page);
   await page.route('**/api/composition/history?**',async route=>{const response=await route.fetch(),data=await response.json();data.view.identity.preview_access={bytes_base64:'AAAA'};await route.fulfill({response,json:data});},{times:1});await page.getByRole('button',{name:'Read composition history',exact:true}).click();await expect(page.locator('#composition-history-status')).toContainText('unavailable');await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();expect(await counts(request)).toMatchObject({composition_previews:0,image_calls:0});
+});
+
+
+for(const outcome of ['success','error'])test(`delayed old history ${outcome} never enables stale renewal or steals focus`,async({page,request})=>{
+  await initialize(page);let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});
+  await page.route('**/api/composition/history?**',async route=>{const response=await route.fetch();entered();await blocked;if(outcome==='success')await route.fulfill({response});else await route.abort();},{times:1});
+  await page.getByRole('button',{name:'Read composition history',exact:true}).click();await started;
+  await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForLoadState('networkidle');await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();await expect(page.getByRole('button',{name:'Review fresh authority renewal',exact:true})).toBeDisabled();await expect(page.locator('#composition-history li')).toHaveCount(0);await expect(page.locator('#composition-preview')).toBeHidden();
+});
+
+test('delayed preview bytes never revive a refreshed stale image or steal focus',async({page,request})=>{
+  await initialize(page);let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});
+  await page.route('**/api/composition/preview?**',async route=>{const response=await route.fetch();entered();await blocked;await route.fulfill({response});},{times:1});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await started;await request.post('/__fixture/state',{data:{advance_ms:60001}});await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-status')).toContainText('authority is stale');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForLoadState('networkidle');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();
+});
+
+test('late pending lookup cannot downgrade an authoritative cancellation terminal',async({page,request})=>{
+  await initialize(page);await request.post('/__fixture/state',{data:{block:'composition-preview'}});await page.getByLabel('Name size',{exact:true}).selectOption('large');await page.getByRole('button',{name:'Review draft',exact:true}).click();const applyResponse=page.waitForResponse('**/api/composition/apply');await page.getByRole('button',{name:'Apply reviewed composition',exact:true}).click();
+  let release,entered;const blocked=new Promise(r=>{release=r;}),started=new Promise(r=>{entered=r;});await page.route('**/api/composition/lookup',async route=>{const response=await route.fetch();expect((await response.json()).result.status).toBe('unknown');entered();await blocked;await route.fulfill({response});},{times:1});
+  await page.getByRole('button',{name:'Read existing operation',exact:true}).click();await started;await page.getByRole('button',{name:'Cancel existing operation',exact:true}).click();await expect(page.locator('#operation-status')).toContainText('cancelled');
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();release();await page.waitForTimeout(50);await expect(page.locator('#operation-status')).toContainText('cancelled');await expect(page.getByRole('button',{name:'Read composition history',exact:true})).toBeFocused();
+  await request.post('/__fixture/state',{data:{release:true}});expect((await(await applyResponse).json()).result.status).toBe('cancelled');await expect(page.locator('#operation-status')).toContainText('cancelled');expect(await counts(request)).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:1});
+});
+
+
+test('trusted scope refresh clears former action UI and rejects cross-scope current rendering',async({page,request})=>{
+  await initialize(page);await page.getByLabel('Name size',{exact:true}).selectOption('large');await apply(page);
+  await page.route('**/api/schema',async route=>{const response=await route.fetch(),data=await response.json();data.schema.tenant_id='other_fixture_tenant';await route.fulfill({response,json:data});},{times:1});
+  await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.locator('#operation-status')).toHaveText('No composition operation submitted in this scope.');await expect(page.getByRole('button',{name:'Read existing operation',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeDisabled();expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0});
 });

@@ -1,8 +1,9 @@
 /** Loopback only, explicit MOCK trusted host. No actual authentication or calls. */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, cpSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
 const port = Number(process.env.CONTROLS_FIXTURE_PORT ?? 4317);
@@ -19,6 +20,28 @@ Object.assign(files, { '/composition.html': ['composition.html', 'text/html'], '
 const compositionPrincipal = req => req.headers['x-mock-controls-principal'] === 'other-tenant' ? { ...fixturePrincipal, tenant_id: 'other_fixture_tenant' } : req.headers['x-mock-controls-principal'] === 'other-actor' ? { ...fixturePrincipal, actor_id: 'other_fixture_actor' } : fixturePrincipal;
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };
+let captureSequence = 0, hostFinalized = false;
+function closeAndCaptureHost(reason) {
+  if (hostFinalized) return;
+  const counters = host.counts(); host.close(); hostFinalized = true;
+  const evidence = process.env.CONTROLS_BROWSER_EVIDENCE_DIR;
+  if (!evidence) return;
+  const target = join(evidence, `session-${String(++captureSequence).padStart(4,'0')}`);
+  mkdirSync(target, { recursive: true }); cpSync(dir, join(target, 'store-root'), { recursive: true });
+  const files = [];
+  function walk(directory, prefix = '') {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a,b)=>a.name.localeCompare(b.name))) {
+      const path = join(directory, entry.name), relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) throw new TypeError('Browser fixture store must not contain links');
+      if (entry.isDirectory()) walk(path, relative);
+      else { const bytes = readFileSync(path); files.push({ path: relative, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }); }
+    }
+  }
+  walk(join(target, 'store-root'));
+  writeFileSync(join(target, 'manifest.json'), JSON.stringify(files, null, 2) + '\n');
+  writeFileSync(join(target, 'receipt.json'), JSON.stringify({ reason, captured_at: new Date().toISOString(), node: process.version, node_executable: process.execPath,
+    cwd: process.cwd(), mode: 'mock', live_calls: 0, counters, membership: 'explicit MOCK fixture', files: files.length }, null, 2) + '\n');
+}
 const server = createServer(async (req, res) => {
   try {
     const path = new URL(req.url, 'http://localhost').pathname;
@@ -54,11 +77,12 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': value.artifact.media_type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(Buffer.from(value.bytes));
     }
-    if (req.method !== 'POST' || !['/api/artwork/retry','/api/artwork/status','/api/composition/apply','/api/composition/retry','/api/composition/lookup','/api/composition/cancel','/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset'].includes(path)) return json(res, { code: 'not_found' }, 404);
+    if (req.method !== 'POST' || !['/api/artwork/retry','/api/artwork/status','/api/composition/apply','/api/composition/retry','/api/composition/lookup','/api/composition/cancel','/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset', '/__fixture/capture'].includes(path)) return json(res, { code: 'not_found' }, 404);
     if (!req.headers['content-type']?.startsWith('application/json')) return json(res, { code: 'validation' }, 415);
     if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, { code: 'permission' }, 403);
     let bytes = '', size = 0; for await (const chunk of req) { size += chunk.length; if (size > 32768) return json(res, { code: 'validation' }, 413); bytes += chunk; }
     const payload = JSON.parse(bytes);
+    if (path === '/__fixture/capture') { closeAndCaptureHost('browser-case-complete'); return json(res, { ok: true, mode: 'mock', live_calls: 0 }); }
     if (path === '/api/composition/apply') return json(res, { result: await host.composition.apply(compositionPrincipal(req), payload), counters: host.counts() });
     if (path === '/api/composition/lookup') return json(res, { result: await host.composition.lookup(compositionPrincipal(req), payload.action_id), counters: host.counts() });
     if (path === '/api/composition/retry') return json(res, { result: await host.composition.retry(compositionPrincipal(req), payload.action_id), counters: host.counts() });
@@ -77,8 +101,8 @@ const server = createServer(async (req, res) => {
     if (path === '/__fixture/reset') {
       const nativeFormat = payload.native_format ?? 'png';
       if (!['png', 'jpeg', 'webp'].includes(nativeFormat)) return json(res, { code: 'validation' }, 400);
-      host.close(); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
-      host = await createIntegratedHost(dir, { nativeFormat, enableComposition: true, lockLogo: payload.lock_logo !== false });
+      closeAndCaptureHost('fixture-reset'); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
+      host = await createIntegratedHost(dir, { nativeFormat, enableComposition: true, lockLogo: payload.lock_logo !== false }); hostFinalized = false;
     }
     else {
       if (payload.inspection_fault) host.policy.inspection_fault = payload.inspection_fault;
@@ -104,5 +128,5 @@ const server = createServer(async (req, res) => {
   } catch { json(res, { ...mode, ok: false, code: 'validation' }, 400); }
 });
 server.listen(port, '127.0.0.1', () => console.log(`MOCK integrated controls fixture http://127.0.0.1:${port}; actual local API/store, intercepted transport`));
-const stop = () => server.close(() => { host.close(); rmSync(dir, { recursive: true, force: true }); process.exit(0); });
+const stop = () => server.close(() => { closeAndCaptureHost('orderly-server-stop'); rmSync(dir, { recursive: true, force: true }); process.exit(0); });
 process.on('SIGTERM', stop); process.on('SIGINT', stop);

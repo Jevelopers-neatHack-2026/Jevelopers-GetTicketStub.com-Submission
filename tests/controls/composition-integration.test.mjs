@@ -60,7 +60,12 @@ for (const [kind, value, assertChange] of [
   assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(duplicate.revision_sha256, result.revision_sha256);
   const after = current(host); assertChange(after.revision);
   assert.equal(after.revision.parent_revision_sha256, before.revision.revision_sha256);
+  assert.notEqual(after.revision.revision_sha256, before.revision.revision_sha256);
   assert.notEqual(after.revision.state_sha256, before.revision.state_sha256);
+  if (kind !== 'text') {
+    assert.deepEqual(after.revision.layer_manifest, before.revision.layer_manifest);
+    assert.equal(after.revision.binding.composition.sha256, before.revision.binding.composition.sha256, 'geometry-only edits preserve the legacy layer commitment');
+  }
   assert.notEqual(after.revision.preview.preview_sha256, before.revision.preview.preview_sha256);
   assert.deepEqual(host.selection(), selection);
   assert.deepEqual(await host.store.getArtifactBytes({ scope: host.scope, brief_id: host.scope.brief_id, design_version_id: selection.design_version_id }), bytes);
@@ -241,4 +246,35 @@ test('history paginates actual identities without execution; forged renewal revi
   const forged = { ...await renewalAction(host, 'forged-renewal'), review_sha256: canonicalHash({}) }; assert.equal((await host.composition.apply(principal, forged)).ok, false);
   const good = await renewalAction(host, 'owner-denied'); host.policy.permitted_asset_ids = []; assert.equal((await host.composition.apply(principal, good)).ok, false);
   assert.equal(host.store.db.prepare('SELECT COUNT(*) AS n FROM creative_composition_revisions_v1').get().n, 2); zeroEffects(host);
+});
+
+
+test('read-only completed-job recovery remains available after edit revocation without caching or execution', async t => {
+  const host = await setup(t); await initialize(host);
+  const body = await action(host, {}, { name_size: 'large' }, 'lost-completed-readonly');
+  const invoke = host.composition.api.invoke;
+  host.composition.api = { ...host.composition.api, invoke: async (...args) => {
+    const response = await invoke(...args);
+    if (args[1].operation === 'composition.update') throw new Error('Declared lost response after actual publication');
+    return response;
+  } };
+  const lost = await host.composition.apply(principal, body);
+  assert.equal(lost.status, 'unknown');
+  const row = host.composition.row(principal, body.action_id);
+  assert.equal(row.response_json, null);
+  assert.equal((await host.composition.ports.jobs.get({ scope: principal, job_id: row.job_id })).status, 'completed');
+  host.policy.can_apply = false;
+  const before = host.counts(), revision = current(host).revision;
+  const recovered = await host.composition.lookup(principal, body.action_id);
+  assert.equal(recovered.ok, true, JSON.stringify(recovered));
+  assert.equal(recovered.historical, true);
+  assert.equal(recovered.revision_sha256, revision.revision_sha256);
+  assert.deepEqual(host.counts(), before);
+  assert.equal(host.composition.row(principal, body.action_id).response_json, null, 'read-only recovery must not cache acknowledgement');
+  assert.equal(await host.composition.lookup({ ...principal, actor_id: 'other_actor' }, body.action_id), null);
+  assert.equal(await host.composition.lookup({ ...principal, tenant_id: 'other_tenant' }, body.action_id), null);
+  assert.equal(await host.composition.lookup({ ...principal, project_id: 'other_project' }, body.action_id), null);
+  host.policy.can_read = false;
+  assert.equal(await host.composition.lookup(principal, body.action_id), null);
+  zeroEffects(host);
 });

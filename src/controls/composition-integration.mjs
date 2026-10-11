@@ -168,7 +168,7 @@ export class CompositionControlsAdapter {
   async consume(principal, row, readOnly = false) {
     try {
       this.assertTransactionFree();
-      const context = this.context(principal, !row.response_json), request = snapshotCompositionJson(JSON.parse(row.request_json));
+      const context = this.context(principal, !row.response_json && !readOnly), request = snapshotCompositionJson(JSON.parse(row.request_json));
       if (!['composition.create','composition.update','composition.revalidate'].includes(request.operation)) throw new TypeError('Unsupported composition operation');
       if (canonicalHash(request) !== row.request_hash || request.action_id !== row.action_id || request.tenant_id !== principal.tenant_id || request.project_id !== principal.project_id) throw new TypeError('Corrupt request');
       let response;
@@ -202,7 +202,7 @@ export class CompositionControlsAdapter {
         backend_job_id: job.job_id, request_sha256: row.request_hash, revision_id: revision.revision_id, revision_sha256: revision.revision_sha256,
         parent_revision_id: revision.parent_revision_id, parent_revision_sha256: revision.parent_revision_sha256,
         state_sha256: revision.state_sha256, artwork_sha256: revision.dependencies.artwork_sha256, preview: this.previewDescriptor(revision), approval: false, purchase: false });
-    } catch { return safe({ ok: false, code: 'unavailable', status: savedJob?.status === 'cancelled' ? 'cancelled' : 'unknown', action_id: row.action_id, backend_job_id: row.job_id ?? null, approval: false, purchase: false }); }
+    } catch { return safe({ ok: false, code: 'unavailable', status: 'unknown', action_id: row.action_id, backend_job_id: row.job_id ?? null, approval: false, purchase: false }); }
   }
   async lookup(principal, action_id) {
     try { this.assertTransactionFree(); this.context(principal); if (!validId(action_id)) return null; const row = this.row(principal, action_id); return row ? this.consume(principal, row, true) : null; } catch { return null; }
