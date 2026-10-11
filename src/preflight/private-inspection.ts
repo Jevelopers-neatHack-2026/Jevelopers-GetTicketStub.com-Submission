@@ -17,6 +17,7 @@ import {
 	digestSchema,
 	fingerprint,
 	freeze,
+	overlaps,
 	parse,
 	transformed,
 } from "../composition/primitives.js";
@@ -237,6 +238,8 @@ export function inspectModel(
 	let bleedCovered = false;
 	const contentBounds: { readonly node: LayoutNode; readonly bounds: Rect }[] =
 		[];
+	const paintBounds: { readonly node: LayoutNode; readonly bounds: Rect }[] =
+		[];
 	for (const slot of layout.slots) {
 		const assigned = input.nodes.filter((n) => n.slot === slot.id && n.visible);
 		if (slot.required && assigned.length !== 1)
@@ -390,6 +393,7 @@ export function inspectModel(
 			}
 		}
 		const world = transformed(box, node.transform);
+		paintBounds.push({ node, bounds: world });
 		if (node.clip && !contains(node.clip, box))
 			add(
 				"CONTENT_CLIPPED",
@@ -428,6 +432,30 @@ export function inspectModel(
 				"state",
 				"warning",
 			);
+	}
+	for (const target of paintBounds) {
+		const required =
+			(target.node.kind === "text" && target.node.field.required) ||
+			(target.node.kind !== "artwork" &&
+				layout.slots.some((s) => s.id === target.node.slot && s.required));
+		if (!required) continue;
+		for (const cover of paintBounds) {
+			if (
+				cover.node.order <= target.node.order ||
+				cover.node.opacity === 0 ||
+				!overlaps(target.bounds, cover.bounds)
+			)
+				continue;
+			add(
+				"CONTENT_OCCLUSION",
+				`nodes.${target.node.id}.visibility`,
+				cover.node.id,
+				"no intersecting later paint over required content",
+				"state",
+				"hard_failure",
+				"unsupported",
+			);
+		}
 	}
 	if (!bleedCovered)
 		add(
