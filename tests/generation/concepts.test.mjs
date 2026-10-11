@@ -1245,3 +1245,44 @@ test("cancellation suppresses same-attempt late success while retaining evidence
     cancellation_evidence_ref: "second-cancel",
   })));
 });
+
+function openRouterConceptInput(capabilities) {
+  const input = conceptProposalInput();
+  const snapshot = input.adapter_snapshot;
+  snapshot.provider_name = "openrouter";
+  snapshot.endpoint = "https://openrouter.ai/api/v1/images";
+  snapshot.model = "synthetic-lab/image-model-offline";
+  snapshot.provider_tag = "synthetic-provider";
+  snapshot.configuration = {};
+  snapshot.configuration_sha256 = canonicalHash({});
+  snapshot.capabilities = capabilities;
+  return input;
+}
+
+test("OpenRouter concept snapshots require an edit capability that admits both references and reject unknown keys", () => {
+  const accepted = createCreativeConceptBatchProposal(openRouterConceptInput({ generation: true, edit: { max_input_references: 2 } }));
+  assert.deepEqual(accepted.adapter_snapshot.capabilities, { generation: true, edit: { max_input_references: 2 } });
+  assert.equal(createCreativeConceptBatchProposal(openRouterConceptInput({ generation: false, edit: { max_input_references: 32 } }))
+    .adapter_snapshot.capabilities.edit.max_input_references, 32);
+  for (const [name, capabilities] of [
+    ["edit false", { generation: true, edit: false }],
+    ["edit absent", { generation: true }],
+    ["edit true", { generation: true, edit: true }],
+    ["one reference", { generation: true, edit: { max_input_references: 1 } }],
+    ["zero references", { generation: true, edit: { max_input_references: 0 } }],
+    ["fractional references", { generation: true, edit: { max_input_references: 2.5 } }],
+    ["unsafe references", { generation: true, edit: { max_input_references: Number.MAX_SAFE_INTEGER + 1 } }],
+    ["above the adapter ceiling", { generation: true, edit: { max_input_references: 33 } }],
+    ["string references", { generation: true, edit: { max_input_references: "2" } }],
+    ["missing max", { generation: true, edit: {} }],
+    ["generation missing", { edit: { max_input_references: 2 } }],
+    ["generation not boolean", { generation: "yes", edit: { max_input_references: 2 } }],
+    ["unknown capability key", { generation: true, edit: { max_input_references: 2 }, mask: true }],
+    ["unknown edit key", { generation: true, edit: { max_input_references: 2, mask: true } }],
+    ["not an object", "edit"],
+    ["null", null],
+  ]) {
+    expectCode("unsupported_concept_route", () => createCreativeConceptBatchProposal(openRouterConceptInput(capabilities)));
+    assert.ok(name);
+  }
+});

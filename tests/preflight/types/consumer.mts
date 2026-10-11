@@ -1,5 +1,6 @@
 import {
   AccessPreflightError,
+  createOpenRouterImagesAdapter,
   runAccessPreflight,
   validateAccessPlan,
   type AccessProviderAdapter,
@@ -8,6 +9,7 @@ import {
   type AccessPlan,
   type AuthorizationPort,
   type NormalizedAccessPlanCell,
+  type OpenRouterCredentialPort,
   type ReservationVerifierPort,
   type ResolvedOpenAICredential,
   type TrustedAccessScope,
@@ -72,3 +74,10 @@ void maybeScope;
 void publicErrorCode;
 void bindingDigest;
 void report;
+
+declare const openRouterCredentials: OpenRouterCredentialPort;
+const openRouterAdapter: AccessProviderAdapter = createOpenRouterImagesAdapter({
+  credentialPort: openRouterCredentials,
+  fetchImpl: async (_input, _init) => new Response('{}'),
+});
+void openRouterAdapter;

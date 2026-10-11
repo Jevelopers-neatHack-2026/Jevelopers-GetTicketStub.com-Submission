@@ -98,6 +98,58 @@ test("the profile is explicit: no default model, tag, or capability is invented"
     configuration: { background: "transparent", output_format: "webp", output_compression: 80 } }));
 });
 
+const LIVE_DESCRIPTORS = Object.freeze({
+  aspect_ratio: { type: "enum", values: ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "auto"] },
+  quality: { type: "enum", values: ["auto", "low", "medium", "high", "xhigh", "max"] },
+  background: { type: "enum", values: ["auto", "transparent", "opaque"] },
+  output_format: { type: "enum", values: ["png", "jpeg", "webp"] },
+  n: { type: "range", min: 1, max: 10 },
+  input_references: { type: "range", min: 0, max: 16 },
+  output_compression: { type: "range", min: 0, max: 100 },
+});
+
+test("catalog-shaped descriptors that list auto are accepted verbatim, but auto is never a pinned configuration", () => {
+  const base = (overrides) => ({ ...orProfile(), ...orAuthorityPorts(), credentialPort: orCredentialPort(),
+    promptPort: { render: () => PROMPT }, ...overrides });
+  const verbatim = structuredClone(LIVE_DESCRIPTORS);
+  const provider = createOpenRouterImagesProvider(base({ supported_parameters: verbatim,
+    configuration: { aspect_ratio: "16:9", quality: "high", background: "opaque", output_format: "png" } }));
+  assert.equal(provider.getConceptConfiguration().configuration.aspect_ratio, "16:9");
+  assert.deepEqual(verbatim, LIVE_DESCRIPTORS, "the host's descriptor object is not mutated");
+  const reject = (overrides, code, name) => assert.throws(() => createOpenRouterImagesProvider(base(overrides)),
+    (error) => error.code === code, name);
+  reject({ supported_parameters: LIVE_DESCRIPTORS, configuration: { aspect_ratio: "auto" } }, "unsupported_image_configuration",
+    "pinning auto aspect ratio is refused");
+  // The other catalog "auto" values keep their existing pinnable behavior.
+  assert.doesNotThrow(() => createOpenRouterImagesProvider(base({ supported_parameters: LIVE_DESCRIPTORS,
+    configuration: { quality: "auto", background: "auto" } })));
+  for (const [name, descriptor] of [
+    ["auto spelled in upper case", { type: "enum", values: ["AUTO"] }],
+    ["auto with whitespace", { type: "enum", values: ["auto "] }],
+    ["junk value", { type: "enum", values: ["1:1", "wide"] }],
+    ["zero-dimension ratio", { type: "enum", values: ["0:1"] }],
+    ["duplicate auto", { type: "enum", values: ["auto", "auto"] }],
+    ["non-string value", { type: "enum", values: [1] }],
+    ["unknown descriptor key", { type: "enum", values: ["auto"], default: "auto" }],
+  ]) reject({ supported_parameters: { aspect_ratio: descriptor }, configuration: {} }, "unsupported_model_profile", name);
+  for (const [name, supported_parameters] of [
+    ["quality junk", { quality: { type: "enum", values: ["auto", "Not Valid!"] } }],
+    ["background junk", { background: { type: "enum", values: ["auto", "sparkly"] } }],
+    ["auto in output_format", { output_format: { type: "enum", values: ["auto"] } }],
+    ["auto in resolution", { resolution: { type: "enum", values: ["auto"] } }],
+    ["n above bound", { n: { type: "range", min: 1, max: 33 } }],
+    ["n inverted", { n: { type: "range", min: 5, max: 1 } }],
+    ["n as enum", { n: { type: "enum", values: ["1"] } }],
+    ["input_references negative", { input_references: { type: "range", min: -1, max: 4 } }],
+    ["input_references above ceiling", { input_references: { type: "range", min: 0, max: 33 } }],
+    ["compression above 100", { output_compression: { type: "range", min: 0, max: 101 } }],
+  ]) reject({ supported_parameters, configuration: {} }, "unsupported_model_profile", name);
+  // Descriptor-only ranges can never be pinned.
+  reject({ supported_parameters: LIVE_DESCRIPTORS, configuration: { n: 2 } }, "unsupported_image_configuration", "n is not pinnable");
+  reject({ supported_parameters: LIVE_DESCRIPTORS, configuration: { input_references: 1 } }, "unsupported_image_configuration",
+    "input_references is not pinnable");
+});
+
 test("route is the exact OpenRouter endpoint and never a direct OpenAI one", () => {
   const harness = orHarness();
   for (const operation of ["generate", "edit"]) {
@@ -568,7 +620,7 @@ test("usage is raw, unknown, identity-bound, and missing values are reported, ne
     assert.equal(normalizeOpenRouterImageUsage({ cost: 1e-9 }).cost.amount, "0.000000001");
   });
   await t.test("unmapped extensions and over-wide usage are flagged, and wide usage never publishes", async () => {
-    const extension = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: { cached_tokens: 1 }, cost_details: { upstream_inference_cost: 0.1, extra: 1 } });
+    const extension = normalizeOpenRouterImageUsage({ ...FULL_USAGE, mystery_field: 1, cost_details: { upstream_inference_cost: 0.1, extra: 1 } });
     assert.ok(extension.missing_fields.includes("usage.unmapped_fields"));
     assert.ok(extension.missing_fields.includes("usage.cost_details.unmapped_fields"));
     const wide = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`field_${index}`, index]));
@@ -600,6 +652,66 @@ test("usage is raw, unknown, identity-bound, and missing values are reported, ne
       return true;
     });
     assert.equal(harness.fetchCount, 1);
+  });
+  await t.test("documented token details are bounded counters preserved as parent subsets", async () => {
+    const details = { prompt_tokens_details: { audio_tokens: 0, cache_write_tokens: 1, cached_tokens: 2, file_tokens: 3, video_tokens: 4 },
+      completion_tokens_details: { audio_tokens: 0, image_tokens: 30, reasoning_tokens: 4 } };
+    const usage = normalizeOpenRouterImageUsage({ ...FULL_USAGE, ...details });
+    assert.deepEqual(usage.input_tokens_details, details.prompt_tokens_details);
+    assert.deepEqual(usage.output_tokens_details, details.completion_tokens_details);
+    assert.ok(Object.isFrozen(usage.input_tokens_details) && Object.isFrozen(usage.output_tokens_details));
+    assert.deepEqual(usage.missing_fields, ["usage.profile_mapping_pending"], "documented details are not findings");
+    assert.ok(!("prompt_tokens_details" in usage) && !("completion_tokens_details" in usage));
+    const harness = orHarness({ usage: { ...FULL_USAGE, ...details } });
+    const output = await harness.provider.generate(harness.ctx);
+    assert.deepEqual(output.usage.input_tokens_details, details.prompt_tokens_details);
+    assert.deepEqual(output.usage.output_tokens_details, details.completion_tokens_details);
+    assert.deepEqual(output.usage.missing_fields, ["usage.profile_mapping_pending"]);
+    const bad = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: { cached_tokens: -1, file_tokens: 1.5, video_tokens: "3", audio_tokens: 2 },
+      completion_tokens_details: [1] });
+    assert.deepEqual(bad.input_tokens_details, { audio_tokens: 2 }, "invalid counters are dropped, never zero");
+    assert.ok(!("output_tokens_details" in bad));
+    for (const field of ["usage.prompt_tokens_details.cached_tokens", "usage.prompt_tokens_details.file_tokens",
+      "usage.prompt_tokens_details.video_tokens", "usage.completion_tokens_details"]) assert.ok(bad.missing_fields.includes(field), field);
+    const nullish = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: null });
+    assert.ok(!("input_tokens_details" in nullish) && nullish.missing_fields.length === 1);
+  });
+  await t.test("unknown detail keys are anonymous findings and over-wide details are bounded", async () => {
+    const unknown = normalizeOpenRouterImageUsage({ ...FULL_USAGE,
+      prompt_tokens_details: { cached_tokens: 2, secret_vendor_key: 9 }, completion_tokens_details: { image_tokens: 1, other: 1 } });
+    assert.deepEqual(unknown.input_tokens_details, { cached_tokens: 2 });
+    assert.deepEqual(unknown.output_tokens_details, { image_tokens: 1 });
+    assert.ok(unknown.missing_fields.includes("usage.prompt_tokens_details.unmapped_fields"));
+    assert.ok(unknown.missing_fields.includes("usage.completion_tokens_details.unmapped_fields"));
+    assert.ok(!JSON.stringify(unknown).includes("secret_vendor_key"));
+    const extensions = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`extension_${index}`, `private-extra-${index}`]));
+    const harness = orHarness({ usage: { ...FULL_USAGE, prompt_tokens_details: { cached_tokens: 5, ...extensions } } });
+    await assert.rejects(harness.provider.generate(harness.ctx), (error) => {
+      assert.equal(error.code, "usage_invalid");
+      assert.deepEqual(error.usage.input_tokens_details, { cached_tokens: 5 });
+      assert.deepEqual(error.usage.cost, { amount: "0.04", currency: "USD", provenance: "provider_reported_unsettled" });
+      assert.ok(error.usage.missing_fields.includes("usage.prompt_tokens_details.too_many_fields"));
+      assert.ok(error.usage.missing_fields.includes("usage.prompt_tokens_details.unmapped_fields"));
+      assert.ok(!JSON.stringify(error.usage).includes("private-extra") && !JSON.stringify(error.usage).includes("extension_"));
+      return true;
+    });
+  });
+  await t.test("unmapped root keys are named only from the documented vocabulary; undocumented keys stay anonymous", async () => {
+    const documented = { server_tool_use: { tool_calls_executed: 1 }, service_tier: "default", speed: "fast",
+      cache_creation: { x: 1 }, iterations: [{ a: 1 }] };
+    const usage = normalizeOpenRouterImageUsage({ ...FULL_USAGE, ...documented });
+    assert.deepEqual(usage.missing_fields, ["usage.profile_mapping_pending", ...Object.keys(documented).map((key) => `usage.unmapped.${key}`)]);
+    assert.ok(!usage.missing_fields.includes("usage.unmapped_fields"));
+    const mixed = normalizeOpenRouterImageUsage({ ...FULL_USAGE, service_tier: "default", vendor_secret_key: "v" });
+    assert.ok(mixed.missing_fields.includes("usage.unmapped.service_tier") && mixed.missing_fields.includes("usage.unmapped_fields"));
+    assert.ok(!JSON.stringify(mixed).includes("vendor_secret_key"));
+    const harness = orHarness({ usage: { ...FULL_USAGE, ...documented, vendor_secret_key: "do-not-echo" } });
+    const output = await harness.provider.generate(harness.ctx);
+    for (const key of Object.keys(documented)) assert.ok(output.usage.missing_fields.includes(`usage.unmapped.${key}`), key);
+    assert.ok(output.usage.missing_fields.includes("usage.unmapped_fields"));
+    assert.ok(!JSON.stringify(output.usage).includes("vendor_secret_key") && !JSON.stringify(output.usage).includes("do-not-echo"));
+    assert.ok(!("service_tier" in output.usage) && !("server_tool_use" in output.usage));
+    assert.equal(output.usage.cost.amount, "0.04");
   });
   await t.test("accessor-backed or proxied usage is rejected without being invoked", () => {
     let invoked = false;

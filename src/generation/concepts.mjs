@@ -251,9 +251,12 @@ function validateAdapterSnapshot(value) {
   if (nativeRoute.name === "openrouter") {
     const capabilities = value.capabilities;
     if (typeof value.provider_tag !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/.test(value.provider_tag) ||
-        !isPlainRecord(capabilities) || typeof capabilities.generation !== "boolean" ||
-        !(capabilities.edit === false || (isPlainRecord(capabilities.edit) &&
-          Number.isSafeInteger(capabilities.edit.max_input_references) && capabilities.edit.max_input_references >= 2))) {
+        !isPlainRecord(capabilities) || !Object.keys(capabilities).every((key) => key === "generation" || key === "edit") ||
+        typeof capabilities.generation !== "boolean" ||
+        // Concepts send two references, so edit:false and any smaller or unknown-shaped edit declaration is refused.
+        !isPlainRecord(capabilities.edit) || !Object.keys(capabilities.edit).every((key) => key === "max_input_references") ||
+        !Number.isSafeInteger(capabilities.edit.max_input_references) || capabilities.edit.max_input_references < 2 ||
+        capabilities.edit.max_input_references > 32) {
       fail("unsupported_concept_route", "adapter_snapshot.provider_tag", "OpenRouter concepts must bind the pinned provider tag and an edit capability that admits both references.");
     }
     routing = { provider_tag: value.provider_tag, capabilities: cloned(capabilities) };

@@ -701,11 +701,52 @@ const PRIVATE_ATTRIBUTION_TRIGGERS = Object.freeze({
  * image provider allowlist. The rows, keys, foreign keys and immutability triggers are preserved and
  * the rebuild is idempotent, so user_version is unchanged.
  */
+const OPENAI_USAGE_DETAIL_KEYS = Object.freeze({
+  input_tokens_details: Object.freeze(["text_tokens", "image_tokens"]),
+  output_tokens_details: Object.freeze(["text_tokens", "image_tokens"]),
+});
+// OpenRouter's documented prompt/completion token details, normalized under the same input/output names.
+const OPENROUTER_USAGE_DETAIL_KEYS = Object.freeze({
+  input_tokens_details: Object.freeze(["audio_tokens", "cache_write_tokens", "cached_tokens", "file_tokens", "video_tokens"]),
+  output_tokens_details: Object.freeze(["audio_tokens", "image_tokens", "reasoning_tokens"]),
+});
+const OPENROUTER_COST_DETAIL_KEYS = Object.freeze([
+  "upstream_inference_cost", "upstream_inference_prompt_cost", "upstream_inference_completions_cost"]);
+const USAGE_DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
+
+/** Returns the first token-detail key that uses undocumented or invalid counters, else undefined. */
+function invalidUsageDetail(usage, provider) {
+  const allowed = provider === "openrouter" ? OPENROUTER_USAGE_DETAIL_KEYS : OPENAI_USAGE_DETAIL_KEYS;
+  for (const key of ["input_tokens_details", "output_tokens_details"]) {
+    if (usage[key] === undefined) continue;
+    if (!isRecord(usage[key]) || Object.keys(usage[key]).some((name) => !allowed[key].includes(name)) ||
+        Object.values(usage[key]).some((count) => !Number.isSafeInteger(count) || count < 0)) return key;
+  }
+  return undefined;
+}
+
+/** Validates the OpenRouter-only cost fields of an already key-allowlisted usage record. Returns the first bad field. */
+function invalidOpenRouterUsageField(usage) {
+  if (usage.cost !== undefined && (!isRecord(usage.cost) || Object.keys(usage.cost).length !== 3 ||
+      typeof usage.cost.amount !== "string" || !USAGE_DECIMAL.test(usage.cost.amount) || usage.cost.currency !== "USD" ||
+      usage.cost.provenance !== "provider_reported_unsettled")) return "cost";
+  if (usage.cost_details !== undefined && (!isRecord(usage.cost_details) ||
+      Object.entries(usage.cost_details).some(([name, amount]) => !OPENROUTER_COST_DETAIL_KEYS.includes(name) ||
+        typeof amount !== "string" || !USAGE_DECIMAL.test(amount)))) return "cost_details";
+  if (usage.is_byok !== undefined && typeof usage.is_byok !== "boolean") return "is_byok";
+  return undefined;
+}
+
 const PRIVATE_MIGRATION_DIAGNOSTICS = new WeakMap();
 
 /** Internal accessor for tests and operators: a sanitized SQLite cause (no SQL text, paths, or values). */
 export function readPrivateStoreMigrationDiagnostic(error) {
   return error !== null && typeof error === "object" ? PRIVATE_MIGRATION_DIAGNOSTICS.get(error) : undefined;
+}
+
+/** SQLITE_BUSY (5) and SQLITE_LOCKED (6), including extended result codes: another writer holds the database. */
+function isSqliteContention(cause) {
+  return Number.isInteger(cause?.errcode) && [5, 6].includes(cause.errcode & 0xff);
 }
 
 function widenPrivateAttributionProviderChecks(db) {
@@ -738,7 +779,8 @@ function widenPrivateAttributionProviderChecks(db) {
       if (db.isTransaction) db.exec("ROLLBACK");
       db.close();
     }
-    try { reject("migration_failed", "storage_version"); } catch (error) {
+    // A busy timeout is contention, not a failed migration: the connection is closed above and the caller may retry.
+    try { isSqliteContention(cause) ? reject("unavailable", "storage_version", true) : reject("migration_failed", "storage_version"); } catch (error) {
       PRIVATE_MIGRATION_DIAGNOSTICS.set(error, diagnostic);
       throw error;
     }
@@ -1523,6 +1565,8 @@ function makeSchema(db) {
     try { db.exec("PRAGMA foreign_keys=ON;"); } catch { /* Preserve the original migration failure. */ }
     db.close();
     if (error instanceof VersionStoreError) throw error;
+    // The first BEGIN IMMEDIATE sits inside this try, so a busy timeout closes the connection and is retryable.
+    if (isSqliteContention(error)) reject("unavailable", "storage_version", true);
     reject("migration_failed", "storage_version");
   }
 }
@@ -2148,31 +2192,15 @@ export class CreativeVersionStore {
         reject("invalid_request", `provider_usage_attribution.usage.${key}`);
       }
     }
-    for (const key of ["input_tokens_details", "output_tokens_details"]) {
-      if (usage[key] === undefined) continue;
-      if (!isRecord(usage[key]) || Object.keys(usage[key]).some((name) => !["text_tokens", "image_tokens"].includes(name)) ||
-          Object.values(usage[key]).some((count) => !Number.isSafeInteger(count) || count < 0)) {
-        reject("invalid_request", `provider_usage_attribution.${key}`);
-      }
-    }
+    const invalidDetail = invalidUsageDetail(usage, input.provider);
+    if (invalidDetail) reject("invalid_request", `provider_usage_attribution.${invalidDetail}`);
     if (usage.provider_request_id !== undefined &&
         !/^provider-request-[a-f0-9]{64}$/.test(usage.provider_request_id)) {
       reject("invalid_request", "provider_usage_attribution.provider_request_id");
     }
-    const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
-    if (usage.cost !== undefined && (!isRecord(usage.cost) || Object.keys(usage.cost).length !== 3 ||
-        typeof usage.cost.amount !== "string" || !DECIMAL.test(usage.cost.amount) || usage.cost.currency !== "USD" ||
-        usage.cost.provenance !== "provider_reported_unsettled")) {
-      reject("invalid_request", "provider_usage_attribution.cost");
-    }
-    if (usage.cost_details !== undefined && (!isRecord(usage.cost_details) ||
-        Object.entries(usage.cost_details).some(([name, amount]) => ![
-          "upstream_inference_cost", "upstream_inference_prompt_cost", "upstream_inference_completions_cost"].includes(name) ||
-          typeof amount !== "string" || !DECIMAL.test(amount)))) {
-      reject("invalid_request", "provider_usage_attribution.cost_details");
-    }
-    if (usage.is_byok !== undefined && typeof usage.is_byok !== "boolean") {
-      reject("invalid_request", "provider_usage_attribution.is_byok");
+    if (input.provider === "openrouter") {
+      const invalid = invalidOpenRouterUsageField(usage);
+      if (invalid) reject("invalid_request", `provider_usage_attribution.${invalid}`);
     }
     if (!Array.isArray(usage.missing_fields) || usage.missing_fields.length > 64 ||
         usage.missing_fields.some((field) => typeof field !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(field))) {
@@ -2271,6 +2299,8 @@ export class CreativeVersionStore {
       usage = snapshotJson(input.usage, "invalid_request", "provider_attribution_pending.usage");
       const allowed = new Set(["completeness", "input_tokens", "output_tokens", "total_tokens",
         "input_tokens_details", "output_tokens_details", "provider_request_id", "transport_attempt_id", "missing_fields"]);
+      // OpenRouter's reported cost fields are staged with the same shape as the direct record.
+      if (input.provider === "openrouter") for (const key of ["cost", "cost_details", "is_byok"]) allowed.add(key);
       if (!hasOnlyKeys(usage, [...allowed]) || !["complete", "partial", "incomplete", "unknown"].includes(usage.completeness) ||
           usage.transport_attempt_id !== transport_attempt_id) {
         reject("invalid_request", "provider_attribution_pending.usage");
@@ -2280,12 +2310,11 @@ export class CreativeVersionStore {
           reject("invalid_request", `provider_attribution_pending.usage.${key}`);
         }
       }
-      for (const key of ["input_tokens_details", "output_tokens_details"]) {
-        if (usage[key] === undefined) continue;
-        if (!isRecord(usage[key]) || Object.keys(usage[key]).some((name) => !["text_tokens", "image_tokens"].includes(name)) ||
-            Object.values(usage[key]).some((count) => !Number.isSafeInteger(count) || count < 0)) {
-          reject("invalid_request", `provider_attribution_pending.usage.${key}`);
-        }
+      const invalidDetail = invalidUsageDetail(usage, input.provider);
+      if (invalidDetail) reject("invalid_request", `provider_attribution_pending.usage.${invalidDetail}`);
+      if (input.provider === "openrouter") {
+        const invalid = invalidOpenRouterUsageField(usage);
+        if (invalid) reject("invalid_request", `provider_attribution_pending.usage.${invalid}`);
       }
       if (usage.provider_request_id !== undefined && !/^provider-request-[a-f0-9]{64}$/.test(usage.provider_request_id)) {
         reject("invalid_request", "provider_attribution_pending.usage.provider_request_id");
