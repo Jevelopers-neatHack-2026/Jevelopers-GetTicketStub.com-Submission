@@ -163,6 +163,13 @@ function normalizeDecimal(value) {
   return normalizedFraction ? `${whole}.${normalizedFraction}` : whole;
 }
 
+function parseExactCents(value) {
+  const match = /^(-?)(0|[1-9][0-9]*)(?:\.([0-9]{1,2}))?$/.exec(String(value));
+  assert.ok(match, `expected a projection amount with at most two decimal places, got ${value}`);
+  const cents = BigInt(match[2]) * 100n + BigInt((match[3] ?? '').padEnd(2, '0') || '0');
+  return match[1] === '-' ? -cents : cents;
+}
+
 test('CI02 ledger persists exact immutable records and rebuilds scoped projections in PostgreSQL 16', async () => {
   const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
   assert.deepEqual(fixture.provenance, {
@@ -216,6 +223,40 @@ test('CI02 ledger persists exact immutable records and rebuilds scoped projectio
     assert.equal(validateLedgerProjectionRequestBoundary({
       schemaVersion: '1.0.0', requestId: 'invalid-projection', scope, asOf: '2026-10-11T03:00:00-04:00',
     }).ok, false, 'projection times must be UTC Z instants');
+    const projectionTimestampCases = [
+      ['2026-10-11T03:00:00Z', '2026-10-11T03:00:00.000Z'],
+      ['2026-10-11T03:00:00.0Z', '2026-10-11T03:00:00.000Z'],
+      ['2026-10-11T03:00:00.000000Z', '2026-10-11T03:00:00.000Z'],
+      ['2026-10-11T03:00:00.1Z', '2026-10-11T03:00:00.100Z'],
+      ['2026-10-11T03:00:00.100000Z', '2026-10-11T03:00:00.100Z'],
+      ['2026-10-11T03:00:00.000001Z', '2026-10-11T03:00:00.000001Z'],
+      ['2026-10-11T03:00:00.000002Z', '2026-10-11T03:00:00.000002Z'],
+    ];
+    for (const [asOf, canonical] of projectionTimestampCases) {
+      const validated = validateLedgerProjectionRequestBoundary({
+        schemaVersion: '1.0.0', requestId: `projection-${asOf}`, scope, asOf,
+      });
+      assert.equal(validated.ok, true, `${asOf} is a supported UTC projection instant`);
+      if (validated.ok) assert.equal(validated.value.asOf, canonical, `${asOf} normalizes deterministically`);
+    }
+    for (const asOf of [
+      '2026-10-11T03:00:00.0000001Z', '2026-10-11T03:00:00+00:00', '2026-02-30T03:00:00Z',
+    ]) {
+      assert.equal(validateLedgerProjectionRequestBoundary({
+        schemaVersion: '1.0.0', requestId: `invalid-projection-${asOf}`, scope, asOf,
+      }).ok, false, `${asOf} is rejected at the request boundary`);
+    }
+    let invalidPrecisionConnections = 0;
+    const invalidPrecisionResult = await rebuildLedgerProjection({
+      schemaVersion: '1.0.0', requestId: 'invalid-precision-no-connect', scope,
+      asOf: '2026-10-11T03:00:00.0000001Z',
+    }, {
+      ...makePorts(pool, scope, clock),
+      database: { connect: async () => { invalidPrecisionConnections++; return pool.connect(); } },
+    });
+    assert.equal(invalidPrecisionResult.ok, false);
+    if (!invalidPrecisionResult.ok) assert.equal(invalidPrecisionResult.error.code, 'VALIDATION_ERROR');
+    assert.equal(invalidPrecisionConnections, 0, 'unsupported timestamp precision rejects before opening a database connection');
 
     const protectedScope = makeScope('trusted');
     let connects = 0;
@@ -815,6 +856,323 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
       assert.equal(amountRow(raceProjection, 'correction', 'direct_cost', 'USD'), undefined);
     }
 
+    const makeAncestorChain = async (label, directReversalAmount = null) => {
+      const scope = makeScope(label);
+      const ports = makePorts(pool, scope, clock);
+      const operation = `${label}-operation`;
+      const root = makeRequest(scope, {
+        eventType: 'expense', amount: '1.00', logicalOperationId: operation,
+        sourceObjectId: `${label}-root`, revisionSubjectId: `${label}-root-line`, sourceEventId: `${label}-root-v0`,
+      });
+      await append(root, ports);
+      const addReversal = async (name, amount, target) => {
+        const request = makeRequest(scope, {
+          eventType: 'reversal', amount, logicalOperationId: operation,
+          sourceObjectId: `${label}-${name}`, revisionSubjectId: `${label}-${name}-line`, sourceEventId: `${label}-${name}-source`,
+          reversesEventId: target.eventId, sourceRefs: [evidenceRef(`${label}-${name}-proof`)],
+        });
+        await append(request, ports);
+        return request;
+      };
+      const first = await addReversal('reverse-root', '-1.00', root);
+      const second = await addReversal('reverse-first', '1.00', first);
+      const direct = directReversalAmount === null ? null : await addReversal('branch-root', directReversalAmount, root);
+      return { scope, ports, operation, root, first, second, direct, addReversal };
+    };
+    const assertRejectedWithoutLedgerMutation = async (scenario, request, label) => {
+      const beforeProjection = await project(scenario.scope, scenario.ports, '2026-10-11T03:02:00.000Z');
+      const counts = async () => pool.query(
+        `SELECT
+           (SELECT count(*)::integer FROM cost_intelligence.financial_ledger_events WHERE tenant_id = $1 AND project_id = $2) AS events,
+           (SELECT count(*)::integer FROM cost_intelligence.financial_posting_attempt_mappings WHERE tenant_id = $1 AND project_id = $2) AS mappings,
+           (SELECT count(*)::integer FROM cost_intelligence.financial_source_revision_heads WHERE tenant_id = $1 AND project_id = $2) AS source_head_count,
+           (SELECT coalesce(jsonb_agg(to_jsonb(head) ORDER BY head.source_name, head.source_object_id, head.source_revision_subject_id), '[]'::jsonb)
+              FROM cost_intelligence.financial_source_revision_heads head WHERE head.tenant_id = $1 AND head.project_id = $2) AS source_heads,
+           (SELECT coalesce(jsonb_agg(to_jsonb(mapping) ORDER BY mapping.source_name, mapping.source_object_id, mapping.source_line_id, mapping.source_revision_sequence), '[]'::jsonb)
+              FROM cost_intelligence.financial_posting_attempt_mappings mapping WHERE mapping.tenant_id = $1 AND mapping.project_id = $2) AS mapping_rows`,
+        [scenario.scope.tenantId, scenario.scope.projectId],
+      );
+      const beforeCounts = await counts();
+      const rejected = await appendLedgerEvent(request, scenario.ports);
+      assert.ok((rejected.ok && rejected.value.status === 'conflict')
+        || (!rejected.ok && rejected.error.code === 'VALIDATION_ERROR'),
+      `${label} must reject as a conflict or boundary validation error`);
+      const afterProjection = await project(scenario.scope, scenario.ports, '2026-10-11T03:02:00.000Z');
+      const afterCounts = await counts();
+      assert.deepEqual(afterCounts.rows, beforeCounts.rows, `${label} must not change event, mapping, or source-head records`);
+      assert.equal(afterProjection.projectionHash, beforeProjection.projectionHash, `${label} must not change persisted projections`);
+      assert.equal(afterProjection.eventCount, beforeProjection.eventCount);
+    };
+
+    const ancestorCorrectionScenario = await makeAncestorChain('review-ancestor-correction', '-1.00');
+    const ancestorCorrection = makeRequest(ancestorCorrectionScenario.scope, {
+      eventType: 'correction', amount: '0.50', logicalOperationId: ancestorCorrectionScenario.operation,
+      sourceObjectId: ancestorCorrectionScenario.second.sourceIdentity.sourceObjectId,
+      revisionSubjectId: ancestorCorrectionScenario.second.sourceIdentity.revisionSubjectId,
+      sourceEventId: 'review-ancestor-correction-second-v1', revisionSequence: 1,
+      supersedesEventId: ancestorCorrectionScenario.second.eventId,
+      postingMapping: ancestorCorrectionScenario.second.postingMapping,
+      sourceRefs: [evidenceRef('review-ancestor-correction-proof')],
+    });
+    await assertRejectedWithoutLedgerMutation(ancestorCorrectionScenario, ancestorCorrection, 'deep reversal descendant correction');
+
+    const ancestorReversalScenario = await makeAncestorChain('review-ancestor-reversal', '-1.00');
+    const ancestorReversal = makeRequest(ancestorReversalScenario.scope, {
+      eventType: 'reversal', amount: '-0.50', logicalOperationId: ancestorReversalScenario.operation,
+      sourceObjectId: 'review-ancestor-reversal-final', revisionSubjectId: 'review-ancestor-reversal-final-line',
+      sourceEventId: 'review-ancestor-reversal-final-source', reversesEventId: ancestorReversalScenario.second.eventId,
+      sourceRefs: [evidenceRef('review-ancestor-reversal-final-proof')],
+    });
+    await assertRejectedWithoutLedgerMutation(ancestorReversalScenario, ancestorReversal, 'reversal of a deep reversal descendant');
+
+    const deepAncestorScenario = await makeAncestorChain('review-ancestor-deep-mixed');
+    const deepThird = await deepAncestorScenario.addReversal('reverse-second', '-0.50', deepAncestorScenario.second);
+    const deepFourth = await deepAncestorScenario.addReversal('reverse-third', '0.25', deepThird);
+    await deepAncestorScenario.addReversal('branch-root-after-depth', '-0.70', deepAncestorScenario.root);
+    const deepAncestorCorrection = makeRequest(deepAncestorScenario.scope, {
+      eventType: 'correction', amount: '0.01', logicalOperationId: deepAncestorScenario.operation,
+      sourceObjectId: deepFourth.sourceIdentity.sourceObjectId,
+      revisionSubjectId: deepFourth.sourceIdentity.revisionSubjectId,
+      sourceEventId: 'review-ancestor-deep-v1', revisionSequence: 1,
+      supersedesEventId: deepFourth.eventId, postingMapping: deepFourth.postingMapping,
+      sourceRefs: [evidenceRef('review-ancestor-deep-correction-proof')],
+    });
+    await assertRejectedWithoutLedgerMutation(deepAncestorScenario, deepAncestorCorrection,
+      'correction below a four-level mixed-sign reversal chain with an ancestor branch');
+    const deepAncestorReversal = makeRequest(deepAncestorScenario.scope, {
+      eventType: 'reversal', amount: '-0.25', logicalOperationId: deepAncestorScenario.operation,
+      sourceObjectId: 'review-ancestor-deep-final', revisionSubjectId: 'review-ancestor-deep-final-line',
+      sourceEventId: 'review-ancestor-deep-final-source', reversesEventId: deepFourth.eventId,
+      sourceRefs: [evidenceRef('review-ancestor-deep-final-proof')],
+    });
+    await assertRejectedWithoutLedgerMutation(deepAncestorScenario, deepAncestorReversal,
+      'reversal below a four-level mixed-sign chain with an ancestor branch');
+
+    const boundedDeepScope = makeScope('review-bounded-deep-reversal-chain');
+    const boundedDeepPorts = makePorts(pool, boundedDeepScope, clock);
+    const boundedDeepOperation = 'review-bounded-deep-reversal-operation';
+    const boundedRoot = makeRequest(boundedDeepScope, {
+      eventType: 'expense', amount: '1.00', logicalOperationId: boundedDeepOperation,
+      sourceObjectId: 'review-bounded-deep-root', revisionSubjectId: 'review-bounded-deep-root-line',
+      sourceEventId: 'review-bounded-deep-root-v0',
+    });
+    await append(boundedRoot, boundedDeepPorts);
+    const addBoundedReversal = async (name, amount, target) => {
+      const request = makeRequest(boundedDeepScope, {
+        eventType: 'reversal', amount, logicalOperationId: boundedDeepOperation,
+        sourceObjectId: `review-bounded-deep-${name}`, revisionSubjectId: `review-bounded-deep-${name}-line`,
+        sourceEventId: `review-bounded-deep-${name}-source`, reversesEventId: target.eventId,
+        sourceRefs: [evidenceRef(`review-bounded-deep-${name}-proof`)],
+      });
+      await append(request, boundedDeepPorts);
+      return request;
+    };
+    const boundedFirst = await addBoundedReversal('first', '-0.60', boundedRoot);
+    const boundedSecond = await addBoundedReversal('second', '0.30', boundedFirst);
+    const boundedThird = await addBoundedReversal('third', '-0.20', boundedSecond);
+    const boundedFourth = await addBoundedReversal('fourth', '0.10', boundedThird);
+    await addBoundedReversal('root-branch', '-0.20', boundedRoot);
+    const boundedCorrection = makeRequest(boundedDeepScope, {
+      eventType: 'correction', amount: '0.20', logicalOperationId: boundedDeepOperation,
+      sourceObjectId: boundedFourth.sourceIdentity.sourceObjectId,
+      revisionSubjectId: boundedFourth.sourceIdentity.revisionSubjectId,
+      sourceEventId: 'review-bounded-deep-fourth-v1', revisionSequence: 1,
+      supersedesEventId: boundedFourth.eventId, postingMapping: boundedFourth.postingMapping,
+      sourceRefs: [evidenceRef('review-bounded-deep-correction-proof')],
+    });
+    await append(boundedCorrection, boundedDeepPorts);
+    await addBoundedReversal('bounded-inverse', '-0.10', boundedCorrection);
+    const boundedDeepProjection = await project(boundedDeepScope, boundedDeepPorts, '2026-10-11T03:02:00.000Z');
+    const boundedDeepNet = boundedDeepProjection.amounts.reduce((total, row) => total + (row.totalAmount === null
+      ? 0n : parseExactCents(row.totalAmount)), 0n);
+    assert.equal(boundedDeepNet, 40n, 'bounded partial inverses and a correction preserve a legal positive ancestor residual');
+
+    const deepRace = await makeAncestorChain('review-deep-correction-reversal-race', '-0.50');
+    const deepCorrection = makeRequest(deepRace.scope, {
+      eventType: 'correction', amount: '0.70', logicalOperationId: deepRace.operation,
+      sourceObjectId: deepRace.second.sourceIdentity.sourceObjectId,
+      revisionSubjectId: deepRace.second.sourceIdentity.revisionSubjectId,
+      sourceEventId: 'review-deep-race-second-v1', revisionSequence: 1,
+      supersedesEventId: deepRace.second.eventId, postingMapping: deepRace.second.postingMapping,
+      sourceRefs: [evidenceRef('review-deep-race-correction-proof')],
+    });
+    const deepReversal = makeRequest(deepRace.scope, {
+      eventType: 'reversal', amount: '-0.30', logicalOperationId: deepRace.operation,
+      sourceObjectId: 'review-deep-race-final', revisionSubjectId: 'review-deep-race-final-line',
+      sourceEventId: 'review-deep-race-final-source', reversesEventId: deepRace.second.eventId,
+      sourceRefs: [evidenceRef('review-deep-race-reversal-proof')],
+    });
+    const deepRaceResults = await Promise.all([
+      appendLedgerEvent(deepCorrection, deepRace.ports), appendLedgerEvent(deepReversal, deepRace.ports),
+    ]);
+    assert.ok(deepRaceResults.every(result => result.ok));
+    assert.deepEqual(deepRaceResults.map(result => result.ok ? result.value.status : 'error').sort(), ['accepted', 'conflict'],
+      'scope locking must allow only one of two individually valid descendant changes whose combination exceeds the top-level reversal ceiling');
+    const deepRaceProjection = await project(deepRace.scope, deepRace.ports, '2026-10-11T03:02:00.000Z');
+    const deepRaceTotal = deepRaceProjection.amounts.reduce((total, row) => total + (row.totalAmount === null
+      ? 0n : parseExactCents(row.totalAmount)), 0n);
+    assert.equal(deepRaceTotal, 20n, 'the serialized winner leaves the top-level economic root at +0.20');
+
+    const financialResolutionScope = makeScope('review-financial-unknown-resolution');
+    const financialResolutionPorts = makePorts(pool, financialResolutionScope, clock);
+    const financialResolutionOperation = 'review-financial-unknown-resolution-operation';
+    const financialUnknownMapping = {
+      schemaVersion: '1.0.0', sourceLineId: 'financial-unknown-charge-line',
+      transportAttemptId: { status: 'unknown' }, providerAttemptId: { status: 'unknown' },
+      providerRequestId: { status: 'unknown' }, billableAttemptId: { status: 'unknown' },
+    };
+    const financialUnknown = makeRequest(financialResolutionScope, {
+      eventType: 'expense', amount: null, valuation: 'unknown', logicalOperationId: financialResolutionOperation,
+      sourceObjectId: 'review-financial-unknown-object', revisionSubjectId: 'financial-unknown-charge-line',
+      sourceEventId: 'review-financial-unknown-v0', postingMapping: financialUnknownMapping,
+    });
+    await append(financialUnknown, financialResolutionPorts);
+    const financialKnownMapping = {
+      schemaVersion: '1.0.0', sourceLineId: financialUnknownMapping.sourceLineId,
+      transportAttemptId: { status: 'known', id: 'review-financial-transport-attempt' },
+      providerAttemptId: { status: 'known', id: 'review-financial-provider-attempt' },
+      providerRequestId: { status: 'known', id: 'review-financial-provider-request' },
+      billableAttemptId: { status: 'known', id: 'review-financial-billable-attempt' },
+    };
+    const financialResolution = makeRequest(financialResolutionScope, {
+      eventType: 'correction', amount: '1.10', valuation: 'provider_confirmed',
+      logicalOperationId: financialResolutionOperation,
+      sourceObjectId: financialUnknown.sourceIdentity.sourceObjectId,
+      revisionSubjectId: financialUnknown.sourceIdentity.revisionSubjectId,
+      sourceEventId: 'review-financial-unknown-v1', revisionSequence: 1,
+      supersedesEventId: financialUnknown.eventId, postingMapping: financialKnownMapping,
+      sourceRefs: [evidenceRef('review-financial-unknown-resolution-proof')],
+    });
+    await append(financialResolution, financialResolutionPorts);
+    const financialResolutionProjection = await project(financialResolutionScope, financialResolutionPorts, '2026-10-11T03:02:00.000Z');
+    const resolvedFinancialAmount = amountRow(financialResolutionProjection, 'correction', 'direct_cost', 'USD');
+    assert.equal(resolvedFinancialAmount.totalAmount, '1.1');
+    assert.equal(resolvedFinancialAmount.eventCount, 1, 'the corrected financial source line contributes one effective posting');
+    assert.equal(resolvedFinancialAmount.unknownAmountCount, 0);
+    const financialResolutionEvents = await pool.query(
+      `SELECT event_type, amount::text AS amount, transport_attempt_id, transport_attempt_status,
+              provider_attempt_id, provider_attempt_status, provider_request_id, provider_request_status,
+              billable_attempt_id, billable_attempt_status
+       FROM cost_intelligence.financial_ledger_events
+       WHERE tenant_id = $1 AND project_id = $2 ORDER BY source_revision_sequence`,
+      [financialResolutionScope.tenantId, financialResolutionScope.projectId],
+    );
+    assert.equal(financialResolutionEvents.rowCount, 2, 'the original unknown event and its evidenced correction remain immutable records');
+    assert.equal(financialResolutionEvents.rows[0].amount, null);
+    assert.deepEqual([
+      financialResolutionEvents.rows[0].transport_attempt_status,
+      financialResolutionEvents.rows[0].provider_attempt_status,
+      financialResolutionEvents.rows[0].provider_request_status,
+      financialResolutionEvents.rows[0].billable_attempt_status,
+    ], ['unknown', 'unknown', 'unknown', 'unknown']);
+    assert.deepEqual([
+      financialResolutionEvents.rows[1].transport_attempt_id,
+      financialResolutionEvents.rows[1].provider_attempt_id,
+      financialResolutionEvents.rows[1].provider_request_id,
+      financialResolutionEvents.rows[1].billable_attempt_id,
+    ], [
+      financialKnownMapping.transportAttemptId.id, financialKnownMapping.providerAttemptId.id,
+      financialKnownMapping.providerRequestId.id, financialKnownMapping.billableAttemptId.id,
+    ]);
+    const financialResolutionMappings = await pool.query(
+      `SELECT source_revision_sequence, event_id, transport_attempt_id, transport_attempt_status,
+              provider_attempt_id, provider_attempt_status, provider_request_id, provider_request_status,
+              billable_attempt_id, billable_attempt_status
+       FROM cost_intelligence.financial_posting_attempt_mappings
+       WHERE tenant_id = $1 AND project_id = $2 ORDER BY source_revision_sequence`,
+      [financialResolutionScope.tenantId, financialResolutionScope.projectId],
+    );
+    assert.equal(financialResolutionMappings.rowCount, 2, 'mapping revisions preserve both unknown and resolved identities');
+    assert.deepEqual(financialResolutionMappings.rows.map(row => Number(row.source_revision_sequence)), [0, 1]);
+    assert.deepEqual([
+      financialResolutionMappings.rows[0].transport_attempt_status,
+      financialResolutionMappings.rows[0].provider_attempt_status,
+      financialResolutionMappings.rows[0].provider_request_status,
+      financialResolutionMappings.rows[0].billable_attempt_status,
+    ], ['unknown', 'unknown', 'unknown', 'unknown']);
+    const makeForbiddenFinancialCorrection = (label, changes = {}) => makeRequest(financialResolutionScope, {
+      eventType: 'correction', amount: '1.20', logicalOperationId: changes.logicalOperationId ?? financialResolutionOperation,
+      sourceObjectId: financialUnknown.sourceIdentity.sourceObjectId,
+      revisionSubjectId: financialUnknown.sourceIdentity.revisionSubjectId,
+      sourceEventId: `review-financial-unknown-${label}`, revisionSequence: 2,
+      supersedesEventId: financialResolution.eventId,
+      postingMapping: { ...financialKnownMapping, ...changes.postingMapping },
+      currency: changes.currency ?? 'USD',
+      ...(changes.identities ? { identities: changes.identities } : {}),
+      sourceRefs: [evidenceRef(`review-financial-unknown-${label}-proof`)],
+    });
+    const forbiddenFinancialCorrections = [
+      ['known upstream identity rebinding', makeForbiddenFinancialCorrection('changed-known-id', {
+        postingMapping: { transportAttemptId: { status: 'known', id: 'review-financial-transport-rebound' } },
+      })],
+      ['source-line rebinding', makeForbiddenFinancialCorrection('changed-source-line', {
+        postingMapping: { sourceLineId: 'contradictory-financial-source-line' },
+      })],
+      ['logical-operation rebinding', makeForbiddenFinancialCorrection('changed-operation', {
+        logicalOperationId: 'contradictory-financial-operation',
+      })],
+      ['currency rebinding', makeForbiddenFinancialCorrection('changed-currency', { currency: 'EUR' })],
+      ['reservation rebinding', makeForbiddenFinancialCorrection('changed-reservation', {
+        identities: { logicalOperationId: financialResolutionOperation, reservationId: 'contradictory-financial-reservation' },
+      })],
+    ];
+    for (const [label, request] of forbiddenFinancialCorrections) {
+      await assertRejectedWithoutLedgerMutation({ scope: financialResolutionScope, ports: financialResolutionPorts }, request, label);
+    }
+
+    const financialResolutionRaceScope = makeScope('review-financial-unknown-resolution-race');
+    const financialResolutionRacePorts = makePorts(pool, financialResolutionRaceScope, clock);
+    const financialResolutionRaceOperation = 'review-financial-unknown-resolution-race-operation';
+    const financialResolutionRaceLine = makeRequest(financialResolutionRaceScope, {
+      eventType: 'expense', amount: null, valuation: 'unknown', logicalOperationId: financialResolutionRaceOperation,
+      sourceObjectId: 'review-financial-unknown-race-object', revisionSubjectId: 'financial-unknown-race-line',
+      sourceEventId: 'review-financial-unknown-race-v0',
+      postingMapping: {
+        schemaVersion: '1.0.0', sourceLineId: 'financial-unknown-race-line',
+        transportAttemptId: { status: 'unknown' }, providerAttemptId: { status: 'unknown' },
+        providerRequestId: { status: 'unknown' }, billableAttemptId: { status: 'unknown' },
+      },
+    });
+    await append(financialResolutionRaceLine, financialResolutionRacePorts);
+    const makeRacingResolution = label => makeRequest(financialResolutionRaceScope, {
+      eventType: 'correction', amount: '1.10', logicalOperationId: financialResolutionRaceOperation,
+      sourceObjectId: financialResolutionRaceLine.sourceIdentity.sourceObjectId,
+      revisionSubjectId: financialResolutionRaceLine.sourceIdentity.revisionSubjectId,
+      sourceEventId: `review-financial-unknown-race-${label}`, revisionSequence: 1,
+      supersedesEventId: financialResolutionRaceLine.eventId,
+      postingMapping: {
+        schemaVersion: '1.0.0', sourceLineId: 'financial-unknown-race-line',
+        transportAttemptId: { status: 'known', id: `race-${label}-transport` },
+        providerAttemptId: { status: 'known', id: `race-${label}-provider` },
+        providerRequestId: { status: 'known', id: `race-${label}-request` },
+        billableAttemptId: { status: 'known', id: `race-${label}-billable` },
+      },
+      sourceRefs: [evidenceRef(`review-financial-unknown-race-${label}-proof`)],
+    });
+    const competingFinancialResolutions = [makeRacingResolution('left'), makeRacingResolution('right')];
+    const competingResolutionResults = await Promise.all(competingFinancialResolutions.map(request =>
+      appendLedgerEvent(request, financialResolutionRacePorts)));
+    assert.ok(competingResolutionResults.every(result => result.ok));
+    const competingResolutionStatuses = competingResolutionResults.map(result => result.ok ? result.value.status : 'error').sort();
+    assert.deepEqual(competingResolutionStatuses, ['accepted', 'stale_revision'],
+      'the shared lineage lock allows exactly one of two incompatible unknown-to-known financial resolutions');
+    const winningResolutionIndex = competingResolutionResults.findIndex(result => result.ok && result.value.status === 'accepted');
+    const winningFinancialResolution = competingFinancialResolutions[winningResolutionIndex];
+    const racedFinancialProjection = await project(financialResolutionRaceScope, financialResolutionRacePorts, '2026-10-11T03:02:00.000Z');
+    assert.equal(amountRow(racedFinancialProjection, 'correction', 'direct_cost', 'USD').totalAmount, '1.1');
+    assert.equal(racedFinancialProjection.eventCount, 1, 'a winning resolution retains one effective financial posting');
+    const financialRaceCounts = await pool.query(
+      `SELECT
+         (SELECT count(*)::integer FROM cost_intelligence.financial_ledger_events WHERE tenant_id = $1 AND project_id = $2) AS events,
+         (SELECT count(*)::integer FROM cost_intelligence.financial_posting_attempt_mappings WHERE tenant_id = $1 AND project_id = $2) AS mappings,
+         (SELECT current_event_id FROM cost_intelligence.financial_source_revision_heads
+          WHERE tenant_id = $1 AND project_id = $2 AND source_name = 'ci02-synthetic'
+            AND source_object_id = 'review-financial-unknown-race-object'
+            AND source_revision_subject_id = 'financial-unknown-race-line') AS current_event_id`,
+      [financialResolutionRaceScope.tenantId, financialResolutionRaceScope.projectId],
+    );
+    assert.deepEqual(financialRaceCounts.rows[0], { events: 2, mappings: 2, current_event_id: winningFinancialResolution.eventId });
+
     const usageScope = makeScope('review-partial-usage');
     const usagePorts = makePorts(pool, usageScope, clock);
     await append(makeRequest(usageScope, {
@@ -1101,6 +1459,40 @@ test('CI02 issue 7 review regressions preserve lineage, reversals, partial usage
     } finally {
       await reconnectPool.end();
     }
+
+    const precisionScope = makeScope('review-projection-asof-precision');
+    const precisionPorts = makePorts(pool, precisionScope, clock);
+    await append(makeRequest(precisionScope, { amount: '0.01' }), precisionPorts);
+    const equivalentSecondSpellings = [
+      '2026-10-11T03:00:00Z', '2026-10-11T03:00:00.0Z',
+      '2026-10-11T03:00:00.000Z', '2026-10-11T03:00:00.000000Z',
+    ];
+    const secondPrecisionSnapshots = await Promise.all(equivalentSecondSpellings.map(asOf => project(precisionScope, precisionPorts, asOf)));
+    assert.equal(new Set(secondPrecisionSnapshots.map(item => item.projectionHash)).size, 1,
+      'equivalent second-resolution spellings reuse one canonical persisted snapshot');
+    assert.ok(secondPrecisionSnapshots.every(item => item.asOf === '2026-10-11T03:00:00.000Z'));
+    const equivalentFractionSpellings = [
+      '2026-10-11T03:00:00.1Z', '2026-10-11T03:00:00.100Z', '2026-10-11T03:00:00.100000Z',
+    ];
+    const fractionalPrecisionSnapshots = await Promise.all(equivalentFractionSpellings.map(asOf => project(precisionScope, precisionPorts, asOf)));
+    assert.equal(new Set(fractionalPrecisionSnapshots.map(item => item.projectionHash)).size, 1,
+      'equivalent supported fractional spellings reuse one canonical persisted snapshot');
+    assert.ok(fractionalPrecisionSnapshots.every(item => item.asOf === '2026-10-11T03:00:00.100Z'));
+    assert.notEqual(fractionalPrecisionSnapshots[0].projectionHash, secondPrecisionSnapshots[0].projectionHash,
+      'different as-of instants have distinct content addresses');
+    const distinctMicrosecondSnapshots = await Promise.all([
+      project(precisionScope, precisionPorts, '2026-10-11T03:00:00.000001Z'),
+      project(precisionScope, precisionPorts, '2026-10-11T03:00:00.000002Z'),
+    ]);
+    assert.notEqual(distinctMicrosecondSnapshots[0].projectionHash, distinctMicrosecondSnapshots[1].projectionHash,
+      'distinct microseconds remain distinct persisted projection instants');
+    assert.ok(distinctMicrosecondSnapshots.every(item => item.eventCount === 1));
+    const precisionSnapshotCount = await pool.query(
+      `SELECT count(*)::integer AS total FROM cost_intelligence.financial_projection_snapshots
+       WHERE tenant_id = $1 AND project_id = $2`, [precisionScope.tenantId, precisionScope.projectId],
+    );
+    assert.equal(precisionSnapshotCount.rows[0].total, 4,
+      'equivalent instants share snapshots while distinct microseconds persist separately');
 
     const snapshotRaceScope = makeScope('review-snapshot-contention');
     const snapshotRacePorts = makePorts(pool, snapshotRaceScope, clock);

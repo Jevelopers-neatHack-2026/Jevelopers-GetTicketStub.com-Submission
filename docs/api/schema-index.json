@@ -190,7 +190,7 @@
       "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionRequestSchema.json",
       "completeness": "partial_wrapper_requires_combined_validation",
       "combined_validator": "validateLedgerProjectionRequestBoundary",
-      "sha256": "baa0d0b5a829a1213ea239b7319554e15241a428e94da13570ba7bf0ba1867c9"
+      "sha256": "c79e69f03558eb449f6c5a546446910f2d93011f91b54c212f699f0246706f1b"
     },
     {
       "module": "ledger",

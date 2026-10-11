@@ -19,6 +19,10 @@ import {
 
 const LocalVersion = Type.Literal('1.0.0');
 const UtcTimestamp = Type.String({ format: 'date-time' });
+const ProjectionAsOfTimestamp = Type.String({
+  format: 'date-time',
+  pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$',
+});
 const Sha256Reference = Type.String({ pattern: '^sha256:[a-f0-9]{64}$' });
 const RevisionHash = Type.String({ pattern: '^[a-f0-9]{40}$' });
 const Identifier = Type.String({ minLength: 1, maxLength: 256 });
@@ -202,7 +206,7 @@ export const LedgerProjectionRequestSchema = Type.Object({
   schemaVersion: LocalVersion,
   requestId: Type.String({ minLength: 1, maxLength: 128 }),
   scope: TrustedScopeSchema,
-  asOf: UtcTimestamp,
+  asOf: ProjectionAsOfTimestamp,
 }, { additionalProperties: false });
 export type LedgerProjectionRequest = Static<typeof LedgerProjectionRequestSchema>;
 
@@ -280,6 +284,19 @@ function validationFailure(module: string, operation: string, requestId: string,
 
 function hasUtcZ(value: string): boolean {
   return value.endsWith('Z') && Number.isFinite(Date.parse(value));
+}
+
+function canonicalProjectionInstant(value: string): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?Z$/.exec(value);
+  if (!match) return null;
+  const instant = Date.parse(`${match[1]}Z`);
+  if (!Number.isFinite(instant) || new Date(instant).toISOString().slice(0, 19) !== match[1]) return null;
+  const micros = (match[2] ?? '').padEnd(6, '0');
+  const milliseconds = micros.slice(0, 3);
+  const subMillisecond = micros.slice(3);
+  return subMillisecond === '000'
+    ? `${match[1]}.${milliseconds}Z`
+    : `${match[1]}.${milliseconds}${subMillisecond}Z`;
 }
 
 function decimalScale(value: string): number {
@@ -419,10 +436,12 @@ export function validateLedgerAppendRequestBoundary(value: unknown): Validation<
 export function validateLedgerProjectionRequestBoundary(value: unknown): Validation<LedgerProjectionRequest> {
   const parsed = validateRequest(LedgerProjectionRequestSchema, value, 'ledger', 'rebuildLedgerProjection');
   if (!parsed.ok) return parsed;
-  if (!hasUtcZ(parsed.value.asOf)) {
-    return validationFailure('ledger', 'rebuildLedgerProjection', parsed.value.requestId, 'Projection as-of time must be a UTC instant ending in Z.');
+  const asOf = canonicalProjectionInstant(parsed.value.asOf);
+  if (!asOf || !hasUtcZ(asOf)) {
+    return validationFailure('ledger', 'rebuildLedgerProjection', parsed.value.requestId,
+      'Projection as-of time must be a valid UTC instant ending in Z with at most six fractional digits.');
   }
-  return parsed;
+  return { ok: true, value: { ...parsed.value, asOf } };
 }
 
 function bindingsFor(request: LedgerAppendRequest): Binding[] {
@@ -533,6 +552,35 @@ async function currentEconomicTree(
     economic_reverses_event_id: fromRow(row, 'economic_reverses_event_id'),
     amount: fromRow(row, 'amount'),
   }));
+}
+
+type EconomicAncestryTree = { rootId: string; tree: EconomicTreeRow[]; rootRow: EconomicTreeRow };
+
+async function currentEconomicAncestry(
+  client: LedgerTransactionPort,
+  scope: LedgerScope,
+  rootEventId: string,
+): Promise<EconomicAncestryTree[] | null> {
+  const ancestry: EconomicAncestryTree[] = [];
+  const visited = new Set<string>();
+  let nextRootId: string | null = rootEventId;
+  while (nextRootId !== null) {
+    if (visited.has(nextRootId)) return null;
+    visited.add(nextRootId);
+    const tree = await currentEconomicTree(client, scope, nextRootId);
+    const rootRow = tree.find(row => row.economic_root_event_id === nextRootId);
+    if (!rootRow) return null;
+    ancestry.push({ rootId: nextRootId, tree, rootRow });
+    nextRootId = rootRow.economic_reverses_event_id;
+  }
+  return ancestry;
+}
+
+function sumEconomicTree(tree: readonly EconomicTreeRow[]): bigint | null {
+  return tree.reduce<bigint | null>((sum, row) => {
+    const amount = exactAmount(row.amount);
+    return sum === null || amount === null ? null : sum + amount;
+  }, 0n);
 }
 
 function exactAmount(value: string | null): bigint | null {
@@ -797,7 +845,7 @@ export async function appendLedgerEvent(
       const cumulativeConsumption = request.eventType === 'consumption'
         && fromRow(predecessor, 'economic_event_type') === 'consumption'
         && predecessor.financial_effect === true && request.financialEffect;
-      const allowMappingResolution = usageRevision;
+      const allowMappingResolution = usageRevision || financialCorrection;
       const mappingChecks = {
         sourceLine: fromRow(predecessor, 'source_line_id') === request.postingMapping.sourceLineId,
         logicalOperation: fromRow(predecessor, 'logical_operation_id') === request.identities.logicalOperationId,
@@ -860,15 +908,14 @@ export async function appendLedgerEvent(
       const targetValue = parseScaledDecimal(targetAmount);
       const reversalValue = parseScaledDecimal(reversalAmount);
       economicReversesEventId = asString(target.economic_root_event_id);
-      const tree = await currentEconomicTree(client, scope, economicReversesEventId);
-      const rootRow = tree.find(row => row.economic_root_event_id === economicReversesEventId);
-      const currentNet = tree.reduce<bigint | null>((sum, row) => {
-        const amount = exactAmount(row.amount);
-        return sum === null || amount === null ? null : sum + amount;
-      }, 0n);
-      const nextNet = currentNet === null ? null : currentNet + reversalValue;
+      const ancestry = await currentEconomicAncestry(client, scope, economicReversesEventId);
+      const ancestorsRemainWithinReversalCeiling = ancestry !== null && ancestry.every(({ tree, rootRow }) => {
+        const currentNet = sumEconomicTree(tree);
+        const nextNet = currentNet === null ? null : currentNet + reversalValue;
+        return validEconomicNet(exactAmount(rootRow.amount), nextNet);
+      });
       if (targetValue === 0n || (targetValue > 0n) === (reversalValue > 0n)
-        || !rootRow || !validEconomicNet(exactAmount(rootRow.amount), nextNet)) {
+        || !ancestorsRemainWithinReversalCeiling) {
         await rollback(client);
         inTransaction = false;
         return conflictResult(request, 'conflict', request.reversesEventId);
@@ -879,42 +926,21 @@ export async function appendLedgerEvent(
       const priorAmount = fromRow(predecessor, 'amount');
       const nextAmount = request.money.amount;
       const rootId = asString(predecessor.economic_root_event_id);
-      const tree = await currentEconomicTree(client, scope, rootId);
-      if (tree.length > 1) {
-        const rootRow = tree.find(row => row.economic_root_event_id === rootId);
-        const currentNet = tree.reduce<bigint | null>((sum, row) => {
-          const amount = exactAmount(row.amount);
-          return sum === null || amount === null ? null : sum + amount;
-        }, 0n);
-        const oldValue = exactAmount(priorAmount);
-        const newValue = exactAmount(nextAmount);
+      const ancestry = await currentEconomicAncestry(client, scope, rootId);
+      const oldValue = exactAmount(priorAmount);
+      const newValue = exactAmount(nextAmount);
+      const allAncestorsRemainWithinReversalCeiling = ancestry !== null && ancestry.every(({ tree, rootRow }) => {
+        if (tree.length <= 1) return true;
+        const currentNet = sumEconomicTree(tree);
         const nextNet = currentNet === null || oldValue === null || newValue === null
           ? null : currentNet - oldValue + newValue;
-        const rootValue = rootRow?.event_id === predecessor.event_id ? newValue : exactAmount(rootRow?.amount ?? null);
-        if (!rootRow || !validEconomicNet(rootValue, nextNet)) {
-          await rollback(client);
-          inTransaction = false;
-          return conflictResult(request, 'conflict', currentSourceEventId);
-        }
-      }
-      if (economicReversesEventId !== null) {
-        const parentTree = await currentEconomicTree(client, scope, economicReversesEventId);
-        if (parentTree.length > 1) {
-          const parentRoot = parentTree.find(row => row.economic_root_event_id === economicReversesEventId);
-          const parentNet = parentTree.reduce<bigint | null>((sum, row) => {
-            const amount = exactAmount(row.amount);
-            return sum === null || amount === null ? null : sum + amount;
-          }, 0n);
-          const oldValue = exactAmount(priorAmount);
-          const newValue = exactAmount(nextAmount);
-          const nextNet = parentNet === null || oldValue === null || newValue === null
-            ? null : parentNet - oldValue + newValue;
-          if (!parentRoot || !validEconomicNet(exactAmount(parentRoot.amount), nextNet)) {
-            await rollback(client);
-            inTransaction = false;
-            return conflictResult(request, 'conflict', currentSourceEventId);
-          }
-        }
+        const rootValue = rootRow.event_id === predecessor?.event_id ? newValue : exactAmount(rootRow.amount);
+        return validEconomicNet(rootValue, nextNet);
+      });
+      if (!allAncestorsRemainWithinReversalCeiling) {
+        await rollback(client);
+        inTransaction = false;
+        return conflictResult(request, 'conflict', currentSourceEventId);
       }
     }
 
@@ -1217,7 +1243,9 @@ export async function rebuildLedgerProjection(
       }
     }
     const persistedHeader = await client.query(
-      `SELECT tenant_id, project_id, environment, billing_mode, as_of, event_count, projection_hash
+      `SELECT tenant_id, project_id, environment, billing_mode,
+              to_char(as_of AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS as_of_utc,
+              event_count, projection_hash
        FROM cost_intelligence.financial_projection_snapshots WHERE snapshot_id = $1`,
       [projectionHash],
     );
@@ -1226,7 +1254,7 @@ export async function rebuildLedgerProjection(
       || fromRow(header, 'project_id') !== request.scope.projectId
       || fromRow(header, 'environment') !== request.scope.environment
       || fromRow(header, 'billing_mode') !== request.scope.billingMode
-      || new Date(String(header.as_of)).toISOString() !== request.asOf
+      || canonicalProjectionInstant(asString(header.as_of_utc)) !== request.asOf
       || Number(header.event_count) !== events.rows.length
       || fromRow(header, 'projection_hash') !== projectionHash) {
       throw new Error('Persisted snapshot header does not match its content address.');

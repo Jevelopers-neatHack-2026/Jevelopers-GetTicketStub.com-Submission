@@ -12,7 +12,97 @@ const { Client } = pg;
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
 function hasDestructiveMigrationStatement(sql) {
-  return /(?:^|;)\s*(?:DROP|TRUNCATE)\b/im.test(sql);
+  const tokens = [];
+  let index = 0;
+  let statement = 0;
+  let dollarDelimiter = null;
+  while (index < sql.length) {
+    const rest = sql.slice(index);
+    const current = sql[index];
+    if (rest.startsWith('--')) {
+      const newline = sql.indexOf('\n', index + 2);
+      index = newline < 0 ? sql.length : newline + 1;
+      continue;
+    }
+    if (rest.startsWith('/*')) {
+      let depth = 1;
+      index += 2;
+      while (index < sql.length && depth > 0) {
+        if (sql.startsWith('/*', index)) { depth++; index += 2; }
+        else if (sql.startsWith('*/', index)) { depth--; index += 2; }
+        else index++;
+      }
+      continue;
+    }
+    if (dollarDelimiter && rest.startsWith(dollarDelimiter)) {
+      index += dollarDelimiter.length;
+      dollarDelimiter = null;
+      continue;
+    }
+    if (!dollarDelimiter && current === '$') {
+      const delimiter = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(rest)?.[0];
+      if (delimiter) {
+        dollarDelimiter = delimiter;
+        index += delimiter.length;
+        continue;
+      }
+    }
+    if (current === "'" || current === '"') {
+      const quote = current;
+      index++;
+      let contents = '';
+      while (index < sql.length) {
+        if (sql[index] === '\\' && index + 1 < sql.length) {
+          contents += sql[index + 1];
+          index += 2;
+        } else if (sql[index] === quote && sql[index + 1] === quote) {
+          contents += quote;
+          index += 2;
+        } else if (sql[index] === quote) {
+          index++;
+          break;
+        } else {
+          contents += sql[index++];
+        }
+      }
+      for (const match of contents.matchAll(/[A-Za-z_][A-Za-z0-9_$]*/g)) {
+        tokens.push({ kind: 'word', value: match[0].toUpperCase(), statement, quoted: true, inDollar: dollarDelimiter !== null });
+      }
+      continue;
+    }
+    const word = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(rest)?.[0];
+    if (word) {
+      tokens.push({ kind: 'word', value: word.toUpperCase(), statement, quoted: false, inDollar: dollarDelimiter !== null });
+      index += word.length;
+      continue;
+    }
+    if (current === ';' && dollarDelimiter === null) {
+      statement++;
+    } else if (current === ';') {
+      tokens.push({ kind: 'punctuation', value: ';', statement, quoted: false, inDollar: true });
+    }
+    index++;
+  }
+
+  return tokens.some(token => {
+    if (token.kind !== 'word') return false;
+    if (token.value === 'DROP') return true;
+    if (token.value !== 'TRUNCATE') return false;
+
+    // Only the SQL event name in a CREATE TRIGGER ... BEFORE TRUNCATE ON
+    // declaration is safe. Quoted strings and dollar-quoted bodies stay
+    // conservative: they may contain dynamic SQL that executes later.
+    if (token.quoted || token.inDollar) return true;
+    const statementTokens = tokens.filter(item => item.statement === token.statement);
+    const codeWords = statementTokens.filter(item => item.kind === 'word' && !item.quoted && !item.inDollar);
+    const position = codeWords.indexOf(token);
+    const safeTriggerDeclaration = codeWords[0]?.value === 'CREATE'
+      && codeWords[1]?.value === 'TRIGGER'
+      && position > 1
+      && codeWords[position - 1]?.value === 'BEFORE'
+      && codeWords[position + 1]?.value === 'ON';
+    return !safeTriggerDeclaration;
+  });
 }
 
 function testChildEnvironment(prefix) {
@@ -47,10 +137,28 @@ async function verifyDurability(prefix) {
 test('fresh and previous foundation schemas apply checksummed upgrades, survive reconnect, and expose health', async () => {
   assert.equal(hasDestructiveMigrationStatement('CREATE TRIGGER guard BEFORE TRUNCATE ON schema.table FOR EACH STATEMENT EXECUTE FUNCTION guard_fn();'), false,
     'append-only TRUNCATE trigger declarations are not destructive migration statements');
+  assert.equal(hasDestructiveMigrationStatement('CREATE TRIGGER guard BEFORE /* rationale */ TRUNCATE /* event */ ON schema.table FOR EACH STATEMENT EXECUTE FUNCTION guard_fn();'), false,
+    'comments within a safe trigger declaration do not make it destructive');
   assert.equal(hasDestructiveMigrationStatement('  DROP\n TABLE schema.table;'), true,
     'indented multiline DROP statements remain forbidden');
   assert.equal(hasDestructiveMigrationStatement(';\nTRUNCATE\n TABLE schema.table;'), true,
     'multiline TRUNCATE statements remain forbidden');
+  assert.equal(hasDestructiveMigrationStatement('/* rationale */ DROP TABLE schema.table;'), true,
+    'block comments cannot hide destructive DROP statements');
+  assert.equal(hasDestructiveMigrationStatement('-- rationale\nTRUNCATE TABLE schema.table;'), true,
+    'line comments cannot hide destructive TRUNCATE statements');
+  assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN DROP TABLE schema.table; END $$;'), true,
+    'procedural bodies remain scanned for destructive statements');
+  assert.equal(hasDestructiveMigrationStatement('DO $$ BEGIN TRUNCATE TABLE schema.table; END $$;'), true,
+    'procedural TRUNCATE statements remain forbidden');
+  assert.equal(hasDestructiveMigrationStatement("SELECT 'DROP TABLE schema.table';"), true,
+    'dynamic destructive SQL text is rejected conservatively');
+  assert.equal(hasDestructiveMigrationStatement("EXECUTE 'TRUNCATE TABLE schema.table';"), true,
+    'quoted dynamic TRUNCATE text remains rejected conservatively');
+  assert.equal(hasDestructiveMigrationStatement('EXECUTE $$TRUNCATE TABLE schema.table$$;'), true,
+    'dollar-quoted dynamic TRUNCATE text remains rejected conservatively');
+  assert.equal(hasDestructiveMigrationStatement('CREATE TRIGGER guard BEFORE TRUNCATE ON schema.table FOR EACH STATEMENT EXECUTE FUNCTION guard_fn(); TRUNCATE TABLE schema.table;'), true,
+    'a safe trigger declaration cannot exempt a later destructive statement');
   assert.throws(() => assertDisposableMarker([]), /not marked as a disposable/);
   assert.throws(() => assertDisposableMarker([{ marker: 'unrelated' }]), /not marked as a disposable/);
   assert.equal(assertDisposableMarker([{ marker: DISPOSABLE_MARKER }]), true);
