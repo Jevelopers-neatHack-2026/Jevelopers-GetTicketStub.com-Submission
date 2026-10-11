@@ -11,6 +11,7 @@ import path from 'node:path';
 import { types as utilTypes } from 'node:util';
 import { isPrivacyBoundary } from '../../privacy/boundary.mjs';
 import { isCorrectionCacheBindingCapability } from '../../review/history/cache-binding-capability.mjs';
+import { beginLocalBoundary, localBoundaryEffectiveNow, monotonicTimestampNs } from '../../private/boundary-guard.mjs';
 
 const ERROR_MESSAGES = Object.freeze({
   REUSE_DENIED: 'reuse access denied',
@@ -337,7 +338,7 @@ async function withLocalQueue(key, operation) {
 
 export function createScopedReuseStore(options) {
   const config = record(options, new Set([
-    'directory', 'resolveTenant', 'resolveActor', 'authorizeAction', 'authorizeCurrentRequest', 'resolveKey', 'resolveRetention',
+    'directory', 'resolveTenant', 'resolveActor', 'authorizeAction', 'authorizeCurrentRequest', 'authorizeBoundary', 'resolveKey', 'resolveRetention',
     'verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage',
     'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement',
     'now', 'maxEntryBytes', 'maxEntries', 'maxFlights', 'maxPrivateLinks', 'maxObservationsPerEntry', 'maxOutboxEntries',
@@ -347,7 +348,7 @@ export function createScopedReuseStore(options) {
     || typeof config.resolveActor !== 'function' || typeof config.authorizeAction !== 'function'
     || typeof config.authorizeCurrentRequest !== 'function'
     || typeof config.resolveKey !== 'function' || typeof config.resolveRetention !== 'function') fail('REUSE_INVALID');
-  for (const name of ['verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage', 'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement']) {
+  for (const name of ['authorizeBoundary', 'verifySourceObservation', 'verifyAdmissionOutcome', 'authorizePublicPublication', 'resolvePrivateProfileReferences', 'verifyPermission', 'resolveLineage', 'consumeOriginalLineage', 'resolveInvalidationConsumers', 'deliverInvalidation', 'verifyInvalidationAcknowledgement']) {
     if (config[name] !== undefined && typeof config[name] !== 'function') fail('REUSE_INVALID');
   }
   const limits = {
@@ -377,6 +378,11 @@ export function createScopedReuseStore(options) {
     try { value = limits.now(); } catch { fail('REUSE_STORAGE'); }
     if (!Number.isSafeInteger(value) || value < 0 || value > MAX_TIME) fail('REUSE_STORAGE');
     return value;
+  }
+
+  function boundaryInput(info, request, eventId, action, details = {}, field = null) {
+    return Object.freeze({ request, tenantId: info.tenantId, actorId: info.actorId,
+      eventId, action, field, details: Object.freeze({ ...details }) });
   }
 
   async function authenticatedScope(request) {
@@ -708,8 +714,9 @@ export function createScopedReuseStore(options) {
     });
   }
 
-  async function withBindingDatabase(gate, operation, signal = undefined) {
+  async function withBindingDatabase(gate, operation, signal = undefined, boundary = undefined) {
     const delays = [2, 4, 8, 12, 20, 30, 40];
+    const startedAt = monotonicTimestampNs();
     for (let attempt = 0; ; attempt += 1) {
       if (signalAborted(signal)) fail('REUSE_DENIED');
       try {
@@ -718,9 +725,16 @@ export function createScopedReuseStore(options) {
           let transactionOpen = false;
           try {
             database = await openStoreDatabase(0);
-            // The clock is supplied by the host. Evaluate it before the history fence and
-            // cache transaction are acquired so no host function runs under either lock.
-            const now = currentTime();
+            // The synchronous host decision runs after every async/filesystem preparation
+            // and before either paired SQLite writer is acquired.
+            const boundaryToken = boundary
+              ? beginLocalBoundary(config.authorizeBoundary, boundary.input, () => fail('REUSE_DENIED'))
+              : null;
+            const now = boundaryToken?.nowMs ?? currentTime();
+            const effectiveNow = boundaryToken ? localBoundaryEffectiveNow(boundaryToken) : now;
+            if (!Number.isSafeInteger(effectiveNow) || effectiveNow < now || effectiveNow > MAX_TIME
+              || (boundary?.mustBeBeforeMs !== undefined && effectiveNow >= boundary.mustBeBeforeMs)) fail('REUSE_DENIED');
+            if (signalAborted(signal)) fail('REUSE_DENIED');
             try {
               return gate(() => {
                 database.exec('BEGIN IMMEDIATE');
@@ -734,8 +748,15 @@ export function createScopedReuseStore(options) {
                   database.prepare("INSERT INTO reuse_meta (key, value) VALUES ('clock_max_ms', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
                     .run(String(now));
                 }
-                const result = operation(database, { now, clockRollback });
+                const result = operation(database, { now, effectiveNow, clockRollback });
                 if (result && typeof result.then === 'function') fail('REUSE_STORAGE');
+                if (signalAborted(signal)) fail('REUSE_DENIED');
+                if (boundaryToken) {
+                  const effectiveCommitNow = localBoundaryEffectiveNow(boundaryToken);
+                  if (!Number.isSafeInteger(effectiveCommitNow) || effectiveCommitNow < now
+                    || effectiveCommitNow > MAX_TIME
+                    || (boundary?.mustBeBeforeMs !== undefined && effectiveCommitNow >= boundary.mustBeBeforeMs)) fail('REUSE_DENIED');
+                }
                 database.exec('COMMIT');
                 transactionOpen = false;
                 return result;
@@ -773,7 +794,10 @@ export function createScopedReuseStore(options) {
       } catch (error) {
         const safe = safeError(error);
         if (safe.code !== 'REUSE_BUSY' || attempt >= delays.length || signalAborted(signal)) throw safe;
-        await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+        const elapsed = monotonicTimestampNs() - startedAt;
+        const remaining = limits.lockTimeoutMs - Number((elapsed + 999_999n) / 1_000_000n);
+        if (remaining <= 0) throw safe;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(delays[attempt], remaining)));
       }
     }
   }
@@ -1243,6 +1267,23 @@ export function createScopedReuseStore(options) {
     const profileRef = randomUUID();
     await authorize(info, request, 'private_profile.write');
     if (signalAborted(external.signal)) fail('REUSE_DENIED');
+    const boundary = Object.freeze({
+      input: boundaryInput(info, request, binding.eventId, 'cache.private_profile.bind', {
+        operationId,
+        fence: external.bindingOperation.fence,
+        bindingId: binding.bindingId,
+        profileRef,
+        scopeKind: binding.scopeKind,
+        identity: index.identity,
+        pins: index.pins,
+        cacheSourceContentHash: index.contentHash,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        effectiveExpiresAtMs: Math.min(binding.historyExpiresAtMs, entryPayload.retentionPolicy.expiresAtMs),
+      }),
+      mustBeBeforeMs: Math.min(binding.historyExpiresAtMs, entryPayload.retentionPolicy.expiresAtMs),
+    });
     const result = await withBindingDatabase((commit, time) => external.commitGate(commit, time), (database, time) => {
       const replay = database.prepare('SELECT * FROM reuse_bound_writes WHERE operation_id = ? AND partition_hash = ?')
         .get(operationId, keys.partitionHash);
@@ -1252,7 +1293,7 @@ export function createScopedReuseStore(options) {
           .get(replay.entry_id, 'tenant_private', keys.partitionHash);
         if (!row || row.version !== replay.version || row.binding_hash !== bindingHash) fail('REUSE_INTEGRITY');
         return Object.freeze({ status: 'stored', profileRef: row.entry_id, version: row.version,
-          freshness: row.expires_at_ms <= time.now ? 'expired' : 'fresh', originalLineageStatus: 'unknown', replayed: true,
+          freshness: row.expires_at_ms <= time.effectiveNow ? 'expired' : 'fresh', originalLineageStatus: 'unknown', replayed: true,
           expiresAtMs: row.expires_at_ms, bindingHash, identity: index.identity, pins: index.pins,
           cacheSourceContentHash: index.contentHash, scopeKind: 'tenant_private' });
       }
@@ -1264,7 +1305,7 @@ export function createScopedReuseStore(options) {
         .get('tenant_private', keys.partitionHash, keys.identityHash, keys.cacheKeyHash).expires_at_ms;
       const fixedExpiry = historicalCap === null ? entryPayload.retentionPolicy.expiresAtMs
         : Math.min(entryPayload.retentionPolicy.expiresAtMs, historicalCap);
-      if (fixedExpiry <= time.now || fixedExpiry > binding.historyExpiresAtMs) fail('REUSE_POLICY_UNAVAILABLE');
+      if (fixedExpiry <= time.effectiveNow || fixedExpiry > binding.historyExpiresAtMs) fail('REUSE_POLICY_UNAVAILABLE');
       const version = nextVersion(database, 'tenant_private', keys.partitionHash, keys.identityHash);
       const fixedRetention = Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: fixedExpiry });
       const versionedPayload = freeze({ ...entryPayload, retentionPolicy: fixedRetention, version });
@@ -1315,7 +1356,7 @@ export function createScopedReuseStore(options) {
         originalLineageStatus: entryPayload.lineage?.status ?? 'unknown', replayed: false, expiresAtMs: fixedExpiry,
         bindingHash, identity: index.identity, pins: index.pins, cacheSourceContentHash: index.contentHash,
         scopeKind: 'tenant_private' });
-    }, external.signal);
+    }, external.signal, boundary);
     await authorize(info, request, 'private_profile.write');
     if (signalAborted(external.signal)) fail('REUSE_DENIED');
     return result;
@@ -2120,9 +2161,9 @@ export function createScopedReuseStore(options) {
     return openStoreDatabase(0);
   }
 
-  function finalBoundRead(database, candidate, now, capability) {
+  function finalBoundRead(database, candidate, now, effectiveNow, capability) {
     if (!isCorrectionCacheBindingCapability(capability) || !database || signalAborted(candidate?.signal)
-      || !Number.isSafeInteger(now)) fail('REUSE_DENIED');
+      || !Number.isSafeInteger(now) || !Number.isSafeInteger(effectiveNow) || effectiveNow < now) fail('REUSE_DENIED');
     let transactionOpen = false;
     try {
       database.exec('BEGIN IMMEDIATE');
@@ -2141,9 +2182,9 @@ export function createScopedReuseStore(options) {
         && current?.eligible === 1 && current?.binding_hash === candidate.binding.cacheBindingHash
         && current?.version === candidate.binding.cacheVersion && current?.payload_purged !== 1
         && current?.expires_at_ms === candidate.binding.cacheExpiresAtMs
-        && now < candidate.binding.expiresAtMs
-        && (candidate.permissionState.validUntilMs === undefined || now < candidate.permissionState.validUntilMs)
-        && eligibility(current, candidate.payload, candidate.observation, now, false, true).status === 'fresh';
+        && effectiveNow < candidate.binding.expiresAtMs
+        && (candidate.permissionState.validUntilMs === undefined || effectiveNow < candidate.permissionState.validUntilMs)
+        && eligibility(current, candidate.payload, candidate.observation, effectiveNow, false, true).status === 'fresh';
       if (!isCurrent || signalAborted(candidate.signal)) fail('REUSE_DENIED');
       const result = Object.freeze({ status: 'hit', profileRef: current.entry_id, version: current.version,
         facts: candidate.payload.facts, trust: 'tenant_private', permissionStatus: candidate.permissionState.status,
@@ -2259,6 +2300,20 @@ export function createScopedReuseStore(options) {
     }
     await guard();
     if (signalAborted(signal)) fail('REUSE_DENIED');
+    const boundary = Object.freeze({
+      input: boundaryInput(info, request, binding.eventId, 'cache.private_profile.invalidate', {
+        operationId: operation.operationId,
+        fence: operation.fence,
+        bindingId: binding.bindingId,
+        profileRef: binding.profileRef,
+        cacheVersion: binding.cacheVersion,
+        cacheBindingHash: binding.cacheBindingHash,
+        priorHistoryVersionId: binding.historyVersionId,
+        priorHistoryContentHash: binding.historyContentHash,
+        targetHistoryVersionId: operation.targetVersionId,
+        targetHistoryContentHash: operation.targetContentHash,
+      }),
+    });
     const result = await withBindingDatabase((commit, time) => historyGate(commit, time), (database, time) => {
       const priorReceipt = database.prepare(`SELECT binding_hash, fingerprint, event_ids FROM reuse_history_invalidation_ops
         WHERE operation_id = ? AND entry_id = ? AND partition_hash = ?`)
@@ -2341,7 +2396,7 @@ export function createScopedReuseStore(options) {
           fingerprint, JSON.stringify(eventIds));
       return Object.freeze({ profileRef: binding.profileRef, locallyIneligible: true,
         eventIds: Object.freeze(eventIds), replayed: false });
-    }, signal);
+    }, signal, boundary);
     await guard();
     return result;
   }
@@ -2932,6 +2987,7 @@ export function createScopedReuseStore(options) {
     purgeExpired: publicBoundary(purgeExpired),
   });
   CACHE_BINDING_PORTS.set(api, Object.freeze({
+    hasBoundaryGuard: typeof config.authorizeBoundary === 'function',
     context: bindingContext,
     validateProfileInput: (scope, request, input, signal, capability) =>
       validateBoundPrivateProfileInput(scope, request, input, signal, capability),
@@ -2940,7 +2996,7 @@ export function createScopedReuseStore(options) {
     loadCandidate: (scope, request, binding, use, signal, capability) =>
       loadBoundCandidate(scope, request, binding, use, signal, capability),
     prepareReadDatabase: (capability) => prepareBoundReadDatabase(capability),
-    finalRead: (database, candidate, now, capability) => finalBoundRead(database, candidate, now, capability),
+    finalRead: (database, candidate, now, effectiveNow, capability) => finalBoundRead(database, candidate, now, effectiveNow, capability),
     invalidate: (scope, request, binding, operation, gate, signal, capability) =>
       invalidateBoundProfile(scope, request, binding, operation, gate, signal, capability),
     now: currentTime,
@@ -2951,6 +3007,6 @@ export function createScopedReuseStore(options) {
 export function getScopedReuseBindingPort(store, capability) {
   if (!isCorrectionCacheBindingCapability(capability)) fail('REUSE_DENIED');
   const port = CACHE_BINDING_PORTS.get(store);
-  if (!port) fail('REUSE_DENIED');
+  if (!port || !port.hasBoundaryGuard) fail('REUSE_DENIED');
   return port;
 }

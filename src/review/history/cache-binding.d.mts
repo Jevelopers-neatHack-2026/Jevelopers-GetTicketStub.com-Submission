@@ -17,6 +17,8 @@ import type {
   ScopedReuseOptions,
   ReusePermission,
 } from '../../cache/reuse/store.mjs';
+import type { LocalBoundaryInput, LocalBoundaryPermit } from '../../private/boundary-guard.mjs';
+import type { LocalBoundaryGuard } from '../../private/boundary-guard.mjs';
 
 declare const correctionCacheBindingScopeBrand: unique symbol;
 
@@ -35,12 +37,7 @@ export type CorrectionCacheProfileInput = LookupInput & Readonly<{
   expiresAtMs?: number;
 }>;
 
-export interface FinalPrivateDisclosureDecision<Request = unknown> {
-  readonly tenantId: string;
-  readonly actorId: string;
-  readonly eventId: string;
-  readonly action: 'private_profile.read';
-  readonly request: Request;
+export interface FinalPrivateDisclosureDetails {
   readonly bindingId: string;
   readonly profileRef: string;
   readonly historyVersionId: string;
@@ -53,14 +50,25 @@ export interface FinalPrivateDisclosureDecision<Request = unknown> {
   readonly permissionValidUntilMs: number | null;
   readonly cacheExpiresAtMs: number;
   readonly historyExpiresAtMs: number;
-  readonly nowMs: number;
 }
+
+export interface FinalPrivateDisclosureDecision<Request = unknown> extends LocalBoundaryInput<Request> {
+  readonly eventId: string;
+  readonly action: 'private_profile.read';
+  readonly field: null;
+  readonly details: Readonly<FinalPrivateDisclosureDetails>;
+}
+
+/** Scoped-cache configuration used by the composed participant. Standalone cache callers may omit this guard. */
+export type CorrectionCacheParticipantOptions<Request = unknown> = ScopedReuseOptions<Request> & Readonly<{
+  readonly authorizeBoundary: LocalBoundaryGuard<Request>;
+}>;
 
 export interface CorrectionCacheBindingOptions<Request = unknown, RetentionHandle extends object = object> {
   readonly history: CorrectionHistoryStoreOptions<Request, RetentionHandle>;
-  readonly cache: ScopedReuseOptions<Request>;
-  /** Must make a synchronous, current permission/request decision. Async results fail closed. */
-  readonly authorizeFinalDisclosure: (input: FinalPrivateDisclosureDecision<Request>) => boolean;
+  readonly cache: CorrectionCacheParticipantOptions<Request>;
+  /** Required synchronous current request/permission decision and trusted time sample for action `private_profile.read`. */
+  readonly authorizeBoundary: (input: FinalPrivateDisclosureDecision<Request>) => LocalBoundaryPermit | false;
   readonly operationTimeoutMs?: number;
 }
 

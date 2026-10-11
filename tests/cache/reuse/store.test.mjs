@@ -87,6 +87,10 @@ async function fixture(t, overrides = {}) {
       const principal = authRequest?.principal;
       return allowed && principal?.tenantId === expectedTenantId && principal?.actorId === expectedActorId;
     },
+    authorizeBoundary: (input) => input.request?.principal?.tenantId === input.tenantId
+      && input.request?.principal?.actorId === input.actorId
+      ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: clock.value }) : false,
     resolveKey: ({ tenantId, scope, purpose }) => ({
       keyId: `${scope}:${purpose}:${tenantId ?? 'global'}`,
       key: Buffer.alloc(32, tenantId ? tenantId.charCodeAt(0) : 91),

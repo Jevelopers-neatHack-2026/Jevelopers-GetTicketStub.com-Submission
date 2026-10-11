@@ -11,6 +11,10 @@ const request = Object.freeze({
   principal: Object.freeze({ tenantId: 'tenant-binding', actorId }),
   serverContextToken: TRUSTED_TOKEN,
 });
+const authorizeBoundary = (input) => request.serverContextToken === TRUSTED_TOKEN
+  && request.principal.tenantId === input.tenantId && request.principal.actorId === input.actorId
+  ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+    eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH }) : false;
 
 const store = createCorrectionCacheBinding({
   history: {
@@ -21,6 +25,7 @@ const store = createCorrectionCacheBinding({
       return value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === tenantId
         && value?.principal?.actorId === resolvedActor && resolvedActor !== 'outsider';
     },
+    authorizeBoundary,
     resolveKey({ tenantId, purpose, keyId }) {
       const resolvedId = `${purpose}-v1`;
       if (keyId && keyId !== resolvedId) throw new Error('synthetic history key unavailable');
@@ -64,6 +69,7 @@ const store = createCorrectionCacheBinding({
       return value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === expectedTenantId
         && value?.principal?.actorId === expectedActorId && expectedActorId !== 'outsider';
     },
+    authorizeBoundary,
     resolveKey({ tenantId, scope, purpose, keyId }) {
       const resolvedId = `${scope}:${purpose}:${tenantId ?? 'global'}:v1`;
       if (keyId && keyId !== resolvedId) throw new Error('synthetic cache key unavailable');
@@ -90,7 +96,7 @@ const store = createCorrectionCacheBinding({
     deliverInvalidation: async (event) => event,
     verifyInvalidationAcknowledgement: () => false,
   },
-  authorizeFinalDisclosure: ({ tenantId, actorId: resolvedActor }) => tenantId === 'tenant-binding' && resolvedActor !== 'outsider',
+  authorizeBoundary,
 });
 
 const scope = await store.scopeForAuthenticatedRequest(request);

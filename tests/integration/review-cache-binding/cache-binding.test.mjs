@@ -63,6 +63,14 @@ async function fixture(t, options = {}) {
       return value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === tenantId
         && value?.principal?.actorId === actorId && actorId !== 'outsider';
     },
+    authorizeBoundary(input) {
+      if (options.history?.authorizeBoundary) return options.history.authorizeBoundary(input);
+      const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: clock.value }) : false;
+    },
     resolveKey({ tenantId, purpose, keyId }) {
       const resolvedId = `${purpose}-v1`;
       if (keyId && keyId !== resolvedId) throw new Error('synthetic history key unavailable');
@@ -89,6 +97,14 @@ async function fixture(t, options = {}) {
     authorizeCurrentRequest({ expectedTenantId, expectedActorId, request: value }) {
       return value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === expectedTenantId
         && value?.principal?.actorId === expectedActorId && expectedActorId !== 'outsider';
+    },
+    authorizeBoundary(input) {
+      if (options.cache?.authorizeBoundary) return options.cache.authorizeBoundary(input);
+      const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: clock.value }) : false;
     },
     resolveKey({ tenantId, scope, purpose, keyId }) {
       const resolvedId = `${scope}:${purpose}:${tenantId ?? 'global'}:v1`;
@@ -117,10 +133,12 @@ async function fixture(t, options = {}) {
     verifyInvalidationAcknowledgement: () => false,
     ...options.cache,
   };
-  const authorizeFinalDisclosure = options.authorizeFinalDisclosure ?? ((decision) => decision.tenantId === 'tenant-binding'
-    && decision.actorId !== 'outsider' && decision.action === 'private_profile.read');
+  const authorizeBoundary = options.authorizeBoundary ?? ((input) => input.tenantId === 'tenant-binding'
+    && input.request?.serverContextToken === TRUSTED_TOKEN && input.actorId !== 'outsider'
+    ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+      eventId: input.eventId, action: input.action, field: input.field, nowMs: clock.value }) : false);
   const makeStore = (timeoutMs = options.operationTimeoutMs) => createCorrectionCacheBinding({ history: historyOptions, cache: cacheOptions,
-    authorizeFinalDisclosure, operationTimeoutMs: timeoutMs });
+    authorizeBoundary, operationTimeoutMs: timeoutMs });
   const store = makeStore();
   const authRequest = request();
   const scope = await store.scopeForAuthenticatedRequest(authRequest);
@@ -254,6 +272,150 @@ test('composed correction binds exact history provenance, invalidates cache loca
     (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
 });
 
+test('bind preflight honors the exact history expiry without extending earlier cache retention', async (t) => {
+  const cases = [
+    {
+      name: 'profile expiry omitted',
+      profile() {
+        const { expiresAtMs, ...withoutExpiry } = cacheProfile();
+        void expiresAtMs;
+        return withoutExpiry;
+      },
+      requestedExpiryMs: EPOCH + 60_000,
+      expectedExpiryMs: EPOCH + 60_000,
+    },
+    {
+      name: 'profile expiry later than history',
+      profile: () => cacheProfile({ expiresAtMs: EPOCH + 120_000 }),
+      requestedExpiryMs: EPOCH + 60_000,
+      expectedExpiryMs: EPOCH + 60_000,
+    },
+    {
+      name: 'profile expiry earlier than history',
+      profile: () => cacheProfile({ expiresAtMs: EPOCH + 45_000 }),
+      requestedExpiryMs: EPOCH + 45_000,
+      expectedExpiryMs: EPOCH + 45_000,
+    },
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.name, async (subtest) => {
+      const requestedExpiries = [];
+      const f = await fixture(subtest, { cache: {
+        resolveRetention({ nowMs, requestedExpiryMs }) {
+          requestedExpiries.push(requestedExpiryMs);
+          return { expiresAtMs: Math.min(nowMs + 180_000, requestedExpiryMs ?? Number.MAX_SAFE_INTEGER),
+            policyId: 'synthetic-long-cache-retention', policyVersion: '1' };
+        },
+      } });
+      const seeded = await createSeed(f);
+      const bound = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+        { idempotencyKey: `bind-expiry-${scenario.name.replaceAll(' ', '-')}`, profile: scenario.profile() }, f.authRequest);
+      assert.equal(bound.status, 'bound');
+      assert.equal(bound.historyVersionId, seeded.snapshot.versionId);
+      assert.equal(Date.parse(bound.expiresAt), scenario.expectedExpiryMs);
+      assert.deepEqual(requestedExpiries, [scenario.requestedExpiryMs]);
+      assert.equal((await f.store.getHistory(f.scope, EVENT_ID, f.authRequest)).versionId, seeded.snapshot.versionId);
+
+      const cache = new DatabaseSync(cacheDatabasePath(f.root));
+      const history = new DatabaseSync(historyDatabasePath(f.root));
+      try {
+        const entry = cache.prepare(`SELECT expires_at_ms, eligible FROM reuse_entries
+          WHERE scope_kind = 'tenant_private'`).get();
+        assert.equal(entry.expires_at_ms, scenario.expectedExpiryMs);
+        assert.equal(entry.eligible, 1);
+        const mapping = history.prepare('SELECT expires_at_ms, bound_version_id FROM correction_cache_bindings').get();
+        assert.equal(mapping.expires_at_ms, scenario.expectedExpiryMs);
+        assert.equal(mapping.bound_version_id, seeded.snapshot.versionId);
+        const state = history.prepare('SELECT kind, phase FROM correction_cache_state').get();
+        assert.deepEqual({ ...state }, { kind: 'bind', phase: 'complete' });
+      } finally { cache.close(); history.close(); }
+    });
+  }
+});
+
+test('bind preflight rejects a TTL longer than effective history retention before creating a barrier', async (t) => {
+  const f = await fixture(t, { cache: { resolveRetention({ nowMs, requestedExpiryMs }) {
+    return { expiresAtMs: Math.min(nowMs + 180_000, requestedExpiryMs ?? Number.MAX_SAFE_INTEGER),
+      policyId: 'synthetic-long-cache-retention', policyVersion: '1' };
+  } } });
+  const seeded = await createSeed(f);
+  const invalidInput = { idempotencyKey: 'bind-ttl-over-history-expiry',
+    profile: cacheProfile({ expiresAtMs: EPOCH + 120_000, freshnessTtlMs: 60_001 }) };
+  await assert.rejects(f.store.bindPrivateProfile(f.scope, EVENT_ID, invalidInput, f.authRequest),
+    (error) => error?.code === 'REUSE_INVALID');
+  assertNoPendingBinding(f.root);
+  assert.equal((await f.store.getHistory(f.scope, EVENT_ID, f.authRequest)).versionId, seeded.snapshot.versionId);
+  assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup())).status, 'miss');
+
+  const valid = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-ttl-after-history-expiry-rejection', profile: cacheProfile({ expiresAtMs: EPOCH + 120_000 }) },
+    f.authRequest);
+  assert.equal(valid.status, 'bound');
+  assert.equal(Date.parse(valid.expiresAt), EPOCH + 60_000);
+});
+
+test('bind preflight rejects a stale history base without writing a binding barrier', async (t) => {
+  let gateNextRetention = false;
+  let resolveRetentionStarted;
+  let releaseRetention;
+  const retentionStarted = new Promise((resolve) => { resolveRetentionStarted = resolve; });
+  const retentionGate = new Promise((resolve) => { releaseRetention = resolve; });
+  const f = await fixture(t, { cache: { async resolveRetention({ nowMs, requestedExpiryMs }) {
+    if (gateNextRetention) {
+      gateNextRetention = false;
+      resolveRetentionStarted();
+      await retentionGate;
+    }
+    return { expiresAtMs: Math.min(nowMs + 180_000, requestedExpiryMs ?? Number.MAX_SAFE_INTEGER),
+      policyId: 'synthetic-long-cache-retention', policyVersion: '1' };
+  } } });
+  t.after(() => releaseRetention());
+  const seeded = await createSeed(f);
+  const input = { idempotencyKey: 'bind-stale-preflight-base',
+    profile: cacheProfile({ expiresAtMs: EPOCH + 120_000 }) };
+  gateNextRetention = true;
+  const bindAttempt = f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest);
+  await waitForSignal(retentionStarted, 'bind retention preflight after history snapshot');
+
+  const corrected = await f.store.applyCorrection(f.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: seeded.snapshot.versionId,
+    baseContentHash: seeded.snapshot.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-26' },
+    idempotencyKey: 'advance-history-during-bind-preflight',
+    retentionHandle: f.createPermit(),
+  }, f.authRequest);
+  assert.equal(corrected.snapshot.revision, 2);
+  releaseRetention();
+  await assert.rejects(awaitWithTimeout(bindAttempt, 'stale bind base rejection'),
+    (error) => error?.code === 'REVIEW_VERSION_CONFLICT');
+
+  assert.equal((await f.store.getHistory(f.scope, EVENT_ID, f.authRequest)).versionId, corrected.snapshot.versionId);
+  assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup())).status, 'miss');
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    const state = history.prepare('SELECT kind, phase FROM correction_cache_state').get();
+    assert.deepEqual({ ...state }, { kind: 'correction', phase: 'complete' });
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+    assert.equal(history.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count, 0);
+  } finally { history.close(); }
+  let cacheEntries = 0;
+  try {
+    await access(cacheDatabasePath(f.root));
+    const cache = new DatabaseSync(cacheDatabasePath(f.root));
+    try { cacheEntries = cache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count; }
+    finally { cache.close(); }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  assert.equal(cacheEntries, 0);
+
+  const retried = await f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest);
+  assert.equal(retried.status, 'bound');
+  assert.equal(retried.historyVersionId, corrected.snapshot.versionId);
+});
+
 test('invalid composed revision input is rejected before a durable barrier is created', async (t) => {
   const cases = [
     {
@@ -353,7 +515,7 @@ test('composed revisions reauthorize after a real SQLite writer conflict before 
       let retentionCalls = 0;
       let armNextPreBeginPair = false;
       let preBeginPairRemaining = 0;
-      let revokeAtNextNow = false;
+      let boundaryAttempts = 0;
       let writer;
       let writerAcquired = false;
       let writerAcquireError;
@@ -389,12 +551,32 @@ test('composed revisions reauthorize after a real SQLite writer conflict before 
           }
           if (matchesOperation && preBeginPairRemaining > 0) {
             preBeginPairRemaining -= 1;
-            if (preBeginPairRemaining === 0) revokeAtNextNow = true;
           }
           return value?.serverContextToken === TRUSTED_TOKEN
             && value?.principal?.tenantId === tenantId
             && value?.principal?.actorId === actorId
             && actorId !== 'outsider' && actorId !== 'actor-revoked';
+        },
+        authorizeBoundary(input) {
+          const boundaryAction = scenario.action === 'apply_correction'
+            ? 'review.history.apply_correction' : 'review.history.refresh_source_facts';
+          if (input.request === requestValue && input.action === boundaryAction) {
+            boundaryAttempts += 1;
+            if (boundaryAttempts === 2) {
+              requestValue.principal.actorId = 'actor-revoked';
+              if (!retryObservedSignalled) {
+                retryObservedSignalled = true;
+                resolveRetryObserved();
+              }
+              return false;
+            }
+          }
+          const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+            && input.request?.principal?.tenantId === input.tenantId
+            && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider'
+            && input.actorId !== 'actor-revoked';
+          return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+            eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH }) : false;
         },
         resolveRetention({ tenantId, nowMs, sourceExpiresAtMs, retentionHandle }) {
           if (!retentionHandle || typeof retentionHandle !== 'object') throw new Error('synthetic history retention denied');
@@ -405,13 +587,7 @@ test('composed revisions reauthorize after a real SQLite writer conflict before 
           return { expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
             policyId: 'synthetic-history-retention', policyVersion: '1', accessPolicy: 'tenant_private' };
         },
-        now() {
-          if (revokeAtNextNow) {
-            revokeAtNextNow = false;
-            requestValue.principal.actorId = 'actor-revoked';
-          }
-          return EPOCH;
-        },
+        now: () => EPOCH,
       };
       const f = await fixture(subtest, { history });
       subtest.after(() => {
@@ -468,13 +644,14 @@ test('composed revisions reauthorize after a real SQLite writer conflict before 
         retentionCalls,
         armNextPreBeginPair,
         preBeginPairRemaining,
-        revokeAtNextNow,
+        boundaryAttempts,
         writerAcquired,
         writerAcquireError: writerAcquireError?.message,
         writerHeld: Boolean(writer),
         retryObservedSignalled,
       }));
       await waitForSignal(retryObserved, 'revoked composed revision retry authorization');
+      assert.equal(boundaryAttempts, 2, 'the second synchronous guard follows the actual busy BEGIN retry');
       assert.equal(writerAcquired, true, writerAcquireError?.message);
       assert.equal(Boolean(writer), true);
       closeWriter();
@@ -1027,14 +1204,15 @@ test('cancelled correction callback cannot commit after an exact retry takes ove
   assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup())).status, 'miss');
 });
 
-test('final synchronous disclosure guard is current and permission expiry is resampled afterward', async (t) => {
+test('final synchronous boundary permit is current and permission expiry is resampled afterward', async (t) => {
   let authorized = true;
   const f = await fixture(t, {
-    authorizeFinalDisclosure(decision) {
-      assert.equal(decision.permissionValidUntilMs, EPOCH + 500);
+    authorizeBoundary(input) {
+      assert.equal(input.details.permissionValidUntilMs, EPOCH + 500);
       if (!authorized) return false;
       f.clock.value = EPOCH + 500;
-      return true;
+      return Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value });
     },
     cache: {
       verifyPermission({ reference, contentHash, version, use }) {
@@ -1090,8 +1268,8 @@ test('composed cancellation reads genuine AbortSignal state through captured int
   (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_ABORTED');
 });
 
-test('asynchronous and hostile final disclosure results fail closed without thenable property access', async (t) => {
-  const asyncFixture = await fixture(t, { authorizeFinalDisclosure: async () => true });
+test('asynchronous and hostile final boundary permits fail closed without thenable property access', async (t) => {
+  const asyncFixture = await fixture(t, { authorizeBoundary: async () => true });
   await createSeed(asyncFixture);
   await asyncFixture.store.bindPrivateProfile(asyncFixture.scope, EVENT_ID,
     { idempotencyKey: 'bind-async-final-guard', profile: cacheProfile() }, asyncFixture.authRequest);
@@ -1100,7 +1278,7 @@ test('asynchronous and hostile final disclosure results fail closed without then
   (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
 
   let thenReads = 0;
-  const hostileFixture = await fixture(t, { authorizeFinalDisclosure: () => Object.defineProperty({}, 'then', {
+  const hostileFixture = await fixture(t, { authorizeBoundary: () => Object.defineProperty({}, 'then', {
     get() { thenReads += 1; throw new Error('hostile then getter'); },
   }) });
   await createSeed(hostileFixture);
@@ -1110,6 +1288,86 @@ test('asynchronous and hostile final disclosure results fail closed without then
     hostileFixture.authRequest, lookup()),
   (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
   assert.equal(thenReads, 0);
+
+  const rejectedFixture = await fixture(t, { authorizeBoundary: () => Promise.reject(new Error('rejected async guard')) });
+  await createSeed(rejectedFixture);
+  await rejectedFixture.store.bindPrivateProfile(rejectedFixture.scope, EVENT_ID,
+    { idempotencyKey: 'bind-rejected-final-guard', profile: cacheProfile() }, rejectedFixture.authRequest);
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    await assert.rejects(rejectedFixture.store.getPrivateProfile(rejectedFixture.scope, EVENT_ID,
+      rejectedFixture.authRequest, lookup()),
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+});
+
+test('malformed final boundary permit shapes fail closed without changing the bound row', async (t) => {
+  let mode = 'valid';
+  let accessorReads = 0;
+  let proxyTraps = 0;
+  const f = await fixture(t, { authorizeBoundary(input) {
+    const permit = Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+      eventId: input.eventId, action: input.action, field: input.field, nowMs: EPOCH });
+    if (mode === 'valid') return permit;
+    if (mode === 'denied') return false;
+    if (mode === 'throw') throw new Error('trusted guard failure');
+    if (mode === 'tenant') return { ...permit, tenantId: 'tenant-other' };
+    if (mode === 'actor') return { ...permit, actorId: 'actor-other' };
+    if (mode === 'event') return { ...permit, eventId: 'event-other' };
+    if (mode === 'action') return { ...permit, action: 'review.history.read' };
+    if (mode === 'field') return { ...permit, field: 'event_name' };
+    if (mode === 'clock') return { ...permit, nowMs: Number.NaN };
+    if (mode === 'extra') return { ...permit, extra: true };
+    if (mode === 'accessor') {
+      const result = { ...permit };
+      Object.defineProperty(result, 'nowMs', { enumerable: true, get() { accessorReads += 1; throw new Error('permit getter'); } });
+      return result;
+    }
+    if (mode === 'proxy') return new Proxy(permit, { ownKeys() { proxyTraps += 1; throw new Error('permit proxy trap'); } });
+    if (mode === 'prototype') return Object.assign(Object.create({ trusted: true }), permit);
+    return permit;
+  } });
+  await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-malformed-final-permit', profile: cacheProfile() }, f.authRequest);
+
+  for (const invalidMode of ['denied', 'throw', 'tenant', 'actor', 'event', 'action', 'field', 'clock', 'extra', 'accessor', 'proxy', 'prototype']) {
+    mode = invalidMode;
+    await assert.rejects(f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup()),
+      (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED', invalidMode);
+  }
+  assert.equal(accessorReads, 0, 'permit getters are inspected as descriptors, never invoked');
+  assert.equal(proxyTraps, 0, 'proxy detection runs before proxy traps');
+
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  const cache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(history.prepare('SELECT revision FROM heads').get().revision, 1);
+    assert.equal(cache.prepare('SELECT eligible FROM reuse_entries WHERE binding_hash IS NOT NULL').get().eligible, 1);
+  } finally { history.close(); cache.close(); }
+  mode = 'valid';
+  assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup())).status, 'hit');
+});
+
+test('a composed cache participant requires its sync guard while standalone cache remains compatible', async (t) => {
+  const f = await fixture(t);
+  const { authorizeBoundary: _standaloneOptionalGuard, ...standaloneOptions } = f.cacheOptions;
+  const standalone = createScopedReuseStore(standaloneOptions);
+  assert.ok(await standalone.scopeForAuthenticatedRequest(f.authRequest));
+
+  assert.throws(() => createCorrectionCacheBinding({
+    history: f.historyOptions,
+    cache: standaloneOptions,
+    authorizeBoundary: () => false,
+  }), (error) => error?.code === 'REUSE_DENIED');
+  await assert.rejects(access(historyDatabasePath(f.root)), { code: 'ENOENT' });
+  await assert.rejects(access(cacheDatabasePath(f.root)), { code: 'ENOENT' });
 });
 
 test('cache expiry atomically removes its reservation and history cleanup retires only the expired mapping', async (t) => {
@@ -1425,41 +1683,74 @@ test('cache expiry consumes the reserved retention event at the exact outbox cap
 
 test('history mapping purge rechecks current authorization after a real SQLite writer conflict before retry', async (t) => {
   let revoked = false;
-  let watchTransactionClock = false;
-  let sawTransactionClock;
-  const transactionClockObserved = new Promise((resolve) => { sawTransactionClock = resolve; });
+  let watchBoundary = false;
+  let boundaryAttempts = 0;
+  let purgeAuthorizationCalls = 0;
+  const authorizationCountsAtBoundary = [];
+  let writer;
+  let writerAcquired = false;
+  let writerAcquireError;
+  let signalRetry;
+  const retryObserved = new Promise((resolve) => { signalRetry = resolve; });
   const f = await fixture(t, { history: {
-    authorize({ tenantId, actorId, request: value }) {
+    authorize({ tenantId, actorId, action, request: value }) {
+      if (action === 'purge_correction_history') purgeAuthorizationCalls += 1;
       return !revoked && value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === tenantId
         && value?.principal?.actorId === actorId && actorId !== 'outsider';
     },
-    now() {
-      if (watchTransactionClock) {
-        watchTransactionClock = false;
-        sawTransactionClock();
+    authorizeBoundary(input) {
+      if (watchBoundary && input.eventId === null && input.action === 'review.history.retention_purge') {
+        boundaryAttempts += 1;
+        authorizationCountsAtBoundary.push(purgeAuthorizationCalls);
+        if (boundaryAttempts === 1) {
+          try {
+            writer = new DatabaseSync(historyDatabasePath(f.root), { timeout: 0 });
+            writer.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
+            writerAcquired = true;
+          } catch (error) {
+            writerAcquireError = error;
+          }
+          if (!writerAcquired) return false;
+          return Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+            eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value });
+        }
+        if (boundaryAttempts === 2) {
+          revoked = true;
+          signalRetry();
+          return false;
+        }
       }
-      return f.clock.value;
+      const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider'
+        && !revoked;
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
     },
   } });
+  t.after(() => {
+    try { writer?.exec('ROLLBACK'); } catch { /* It may already be closed. */ }
+    try { writer?.close(); } catch { /* Cleanup is best-effort after a test failure. */ }
+  });
   await createSeed(f);
   await f.store.bindPrivateProfile(f.scope, EVENT_ID,
     { idempotencyKey: 'bind-purge-auth-race', profile: cacheProfile() }, f.authRequest);
   f.clock.value = EPOCH + 45_000;
   const history = await historyStoreFor(f);
-  const blocker = new DatabaseSync(historyDatabasePath(f.root), { timeout: 0 });
-  blocker.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
-  watchTransactionClock = true;
+  watchBoundary = true;
   const purgeAttempt = history.history.purgeExpired(history.scope, f.authRequest);
-  const rejected = assert.rejects(purgeAttempt,
-    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
-  try {
-    await waitForSignal(transactionClockObserved, 'history purge transaction clock before locked BEGIN');
-    revoked = true;
-  } finally {
-    blocker.exec('ROLLBACK');
-    blocker.close();
-  }
-  await rejected;
+  const rejection = await awaitWithTimeout(purgeAttempt, 'history purge authorization retry')
+    .then(() => null, (error) => error);
+  assert.equal(rejection instanceof ReviewHistoryError, true);
+  assert.equal(rejection?.code, 'REVIEW_DENIED');
+  await waitForSignal(retryObserved, 'history purge synchronous boundary rejection');
+  assert.equal(writerAcquired, true, writerAcquireError?.message);
+  assert.equal(boundaryAttempts, 2, 'the second guard follows an actual busy BEGIN retry');
+  assert.equal(authorizationCountsAtBoundary[1] - authorizationCountsAtBoundary[0], 2,
+    'the retry performs both async authorization checks before its final synchronous guard');
+  writer.exec('ROLLBACK');
+  writer.close();
+  writer = undefined;
   const deniedSweep = new DatabaseSync(historyDatabasePath(f.root));
   try {
     assert.equal(deniedSweep.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 1);

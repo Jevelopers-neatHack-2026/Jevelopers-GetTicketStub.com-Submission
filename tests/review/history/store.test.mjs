@@ -64,6 +64,18 @@ async function createHarness(t, overrides = {}) {
         && request?.principal?.actorId === actorId
         && actorId !== 'outsider';
     },
+    authorizeBoundary(input) {
+      const allowed = input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId
+        && input.actorId !== 'outsider';
+      let boundaryNow = clock.value;
+      if (typeof overrides.now === 'function') {
+        try { boundaryNow = overrides.now(); } catch { return false; }
+      }
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: boundaryNow }) : false;
+    },
     resolveKey({ tenantId, purpose, keyId }) {
       const resolvedId = `${purpose}-v1`;
       if (keyId && keyId !== resolvedId) throw new Error('SYNTHETIC_KEY_ERROR');
@@ -179,6 +191,17 @@ async function inspectDatabase(root, tenantId = 'tenant-a') {
   }
 }
 
+async function inspectHistoryClockMax(root, tenantId = 'tenant-a') {
+  const tenantHash = createHash('sha256').update(`event-intelligence:review-tenant:v1:${tenantId}`).digest('hex');
+  const database = new DatabaseSync(path.join(root, tenantHash, 'history.sqlite'));
+  try {
+    const row = database.prepare("SELECT value FROM correction_cache_meta WHERE key = 'clock_max_ms'").get();
+    return row ? Number(row.value) : null;
+  } finally {
+    database.close();
+  }
+}
+
 function historyDatabasePath(root, tenantId = 'tenant-a') {
   const tenantHash = createHash('sha256').update(`event-intelligence:review-tenant:v1:${tenantId}`).digest('hex');
   return path.join(root, tenantHash, 'history.sqlite');
@@ -213,6 +236,8 @@ async function createWriterAuthorizationRaceHarness(t, revokeOnFirstWriterAttemp
     writerAcquireError: null,
     writerReleased: false,
     retryAuthorizationCalls: 0,
+    boundaryAttempts: 0,
+    busyAttemptObserved: false,
     retryObserved,
     retryObservedSignalled: false,
     resolveRetryObserved,
@@ -240,33 +265,47 @@ async function createWriterAuthorizationRaceHarness(t, revokeOnFirstWriterAttemp
       return value?.principal?.actorId;
     },
     authorize({ tenantId, actorId, action, request: value }) {
-      const matchesOperation = value === race.request && action === race.action;
-      if (matchesOperation && race.armNextPreBeginPair && race.preBeginPairRemaining === 0) {
-        race.armNextPreBeginPair = false;
-        race.preBeginPairRemaining = 2;
-        try {
-          race.writer = new DatabaseSync(historyDatabasePath(race.root));
-          race.writer.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
-          race.writerAcquired = true;
-        } catch (error) {
-          race.writerAcquireError = error;
-        }
-      }
-      if (matchesOperation && race.preBeginPairRemaining > 0) {
-        race.preBeginPairRemaining -= 1;
-        if (race.preBeginPairRemaining === 0 && race.revokeOnFirstWriterAttempt) race.revokeAtNextNow = true;
-      } else if (matchesOperation && race.writerAcquired && !race.writerReleased
-        && !race.revokeOnFirstWriterAttempt) {
-        race.retryAuthorizationCalls += 1;
-        if (race.retryAuthorizationCalls === 1) {
-          race.releaseWriter();
-          race.signalRetry();
-        }
-      }
       return value?.serverContextToken === TRUSTED_SERVER_CONTEXT
         && value?.principal?.tenantId === tenantId
         && value?.principal?.actorId === actorId
         && actorId !== 'outsider' && actorId !== 'actor-revoked';
+    },
+    authorizeBoundary(input) {
+      const actionByLegacy = {
+        initialize_history: 'review.history.initialize',
+        apply_correction: 'review.history.apply_correction',
+        refresh_source_facts: 'review.history.refresh_source_facts',
+      };
+      const matchesOperation = input.request === race.request && input.action === actionByLegacy[race.action];
+      if (matchesOperation) {
+        race.boundaryAttempts += 1;
+        if (race.armNextPreBeginPair && !race.writerAcquired) {
+          race.armNextPreBeginPair = false;
+          try {
+            race.writer = new DatabaseSync(historyDatabasePath(race.root), { timeout: 0 });
+            race.writer.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
+            race.writerAcquired = true;
+          } catch (error) {
+            race.writerAcquireError = error;
+          }
+        } else if (race.writerAcquired && !race.writerReleased && race.boundaryAttempts > 1) {
+          race.busyAttemptObserved = true;
+          race.retryAuthorizationCalls += 1;
+          if (race.revokeOnFirstWriterAttempt) {
+            race.request.principal.actorId = 'actor-revoked';
+            race.signalRetry();
+            return false;
+          }
+          race.releaseWriter();
+          race.signalRetry();
+        }
+      }
+      const allowed = input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId
+        && input.actorId !== 'outsider' && input.actorId !== 'actor-revoked';
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: race.clock?.value ?? EPOCH }) : false;
     },
     resolveRetention({ tenantId, nowMs, sourceExpiresAtMs, retentionHandle }) {
       if (!retentionHandle || typeof retentionHandle !== 'object') throw new Error('synthetic retention denial');
@@ -281,13 +320,7 @@ async function createWriterAuthorizationRaceHarness(t, revokeOnFirstWriterAttemp
         accessPolicy: 'tenant_private',
       };
     },
-    now() {
-      if (race.revokeAtNextNow) {
-        race.revokeAtNextNow = false;
-        race.request.principal.actorId = 'actor-revoked';
-      }
-      return race.clock?.value ?? EPOCH;
-    },
+    now: () => race.clock?.value ?? EPOCH,
   });
   race.root = harness.root;
   race.clock = harness.clock;
@@ -569,6 +602,7 @@ test('persistVersion succeeds after an actual SQLite writer conflict and reautho
   assert.equal(race.writerAcquired, true, race.writerAcquireError?.message);
   assert.equal(race.writerReleased, true);
   assert.equal(race.retryAuthorizationCalls >= 1, true);
+  assert.equal(race.busyAttemptObserved, true, 'the first BEGIN was blocked by the retained external writer');
   assert.equal(result.snapshot.revision, 2);
   assert.equal((await harness.store.listHistory(scope, EVENT_ID, request)).length, 2);
 });
@@ -580,25 +614,33 @@ test('persistVersion denies disclosure after a committed revision when authoriza
   let disclosureDenials = 0;
   const harness = await createHarness(t, {
     authorize({ tenantId, actorId, action, request }) {
-      const identityValid = request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+      return request?.serverContextToken === TRUSTED_SERVER_CONTEXT
         && request?.principal?.tenantId === tenantId
         && request?.principal?.actorId === actorId
         && actorId !== 'outsider';
-      if (!identityValid || action !== 'apply_correction' || !denyCommittedDisclosure) return identityValid;
-      const database = new DatabaseSync(historyDatabasePath(root));
-      let revision;
-      try {
-        revision = database.prepare('SELECT revision FROM heads ORDER BY event_key LIMIT 1').get()?.revision ?? null;
-      } finally {
-        database.close();
+    },
+    authorizeBoundary(input) {
+      let allowed = input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && input.request?.principal?.tenantId === input.tenantId
+        && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+      if (allowed && input.action === 'private_profile.read' && input.details?.sourceAction === 'apply_correction'
+        && denyCommittedDisclosure) {
+        const database = new DatabaseSync(historyDatabasePath(root), { timeout: 0 });
+        let revision;
+        try {
+          revision = database.prepare('SELECT revision FROM heads ORDER BY event_key LIMIT 1').get()?.revision ?? null;
+        } finally {
+          database.close();
+        }
+        if (revision === 2) {
+          committedRevisionSeenByGuard = revision;
+          disclosureDenials += 1;
+          denyCommittedDisclosure = false;
+          allowed = false;
+        }
       }
-      if (revision === 2) {
-        committedRevisionSeenByGuard = revision;
-        disclosureDenials += 1;
-        denyCommittedDisclosure = false;
-        return false;
-      }
-      return true;
+      return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+        eventId: input.eventId, action: input.action, field: input.field, nowMs: harness?.clock.value ?? EPOCH }) : false;
     },
   });
   root = harness.root;
@@ -716,6 +758,7 @@ test('persistVersion denies an actor revoked between a real busy writer attempt 
       await waitForSignal(race.retryObserved, `revoked ${scenario.operation} retry authorization`);
       assert.equal(race.writerAcquired, true, race.writerAcquireError?.message);
       assert.equal(race.writerReleased, false);
+      assert.equal(race.busyAttemptObserved, true, 'retry boundary proves the first BEGIN hit SQLite contention');
       race.releaseWriter();
       const after = await inspectDatabase(harness.root);
       if (scenario.operation === 'initialize') {
@@ -737,6 +780,262 @@ test('persistVersion denies an actor revoked between a real busy writer attempt 
       assert.equal((await harness.store.listHistory(scope, EVENT_ID, request)).length, scenario.operation === 'initialize' ? 1 : 2);
     });
   }
+});
+
+test('persistVersion reauthorizes after its transaction clock sample before any revision write', async (t) => {
+  const scenarios = [
+    { operation: 'initialize', action: 'initialize_history' },
+    { operation: 'correction', action: 'apply_correction' },
+    { operation: 'source refresh', action: 'refresh_source_facts' },
+  ];
+  for (const scenario of scenarios) {
+    await t.test(scenario.operation, async (subtest) => {
+      let requestValue;
+      let currentActor = 'customer-a';
+      let root;
+      let operationHandle;
+      let retentionCalls = 0;
+      let revokeAtTransactionClock = false;
+      let clockBoundaryReached = false;
+      let clockCallbackAcquiredWriter = false;
+      let clockWriterError;
+      const harness = await createHarness(subtest, {
+        authorize({ tenantId, actorId, request: value }) {
+          return value?.serverContextToken === TRUSTED_SERVER_CONTEXT
+            && value?.principal?.tenantId === tenantId
+            && currentActor === actorId
+            && actorId !== 'outsider' && actorId !== 'actor-revoked';
+        },
+        resolveActor(value) { return value === requestValue ? currentActor : value?.principal?.actorId; },
+        resolveRetention({ nowMs, sourceExpiresAtMs, retentionHandle }) {
+          if (!retentionHandle || typeof retentionHandle !== 'object') throw new Error('synthetic retention denial');
+          if (retentionHandle === operationHandle) {
+            retentionCalls += 1;
+            if (retentionCalls === 2) revokeAtTransactionClock = true;
+          }
+          return {
+            expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+            policyId: 'synthetic-private-history',
+            policyVersion: '1',
+            accessPolicy: 'tenant_private',
+          };
+        },
+        authorizeBoundary(input) {
+          const guardAction = scenario.action === 'initialize_history' ? 'review.history.initialize'
+            : scenario.action === 'apply_correction' ? 'review.history.apply_correction'
+              : 'review.history.refresh_source_facts';
+          if (input.request === requestValue && input.action === guardAction && revokeAtTransactionClock
+            && !clockBoundaryReached) {
+            revokeAtTransactionClock = false;
+            clockBoundaryReached = true;
+            currentActor = 'actor-revoked';
+            let writer;
+            try {
+              writer = new DatabaseSync(historyDatabasePath(root), { timeout: 0 });
+              writer.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE; ROLLBACK');
+              clockCallbackAcquiredWriter = true;
+            } catch (error) {
+              clockWriterError = error;
+            } finally {
+              writer?.close();
+            }
+          }
+          const allowed = input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+            && input.request?.principal?.tenantId === input.tenantId
+            && input.request?.principal?.actorId === input.actorId
+            && currentActor === input.actorId && input.actorId !== 'outsider' && input.actorId !== 'actor-revoked';
+          return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+            eventId: input.eventId, action: input.action, field: input.field, nowMs: harness.clock.value }) : false;
+        },
+        now: () => harness.clock.value,
+      });
+      requestValue = harness.request;
+      root = harness.root;
+      let base;
+      if (scenario.operation !== 'initialize') {
+        base = (await createSeed(harness)).snapshot;
+      }
+      operationHandle = harness.createPermit();
+      const input = scenario.operation === 'initialize'
+        ? { eventId: EVENT_ID, sourceFacts: initialFacts(), idempotencyKey: 'clock-revoke-initialize', retentionHandle: operationHandle }
+        : scenario.operation === 'correction'
+          ? { eventId: EVENT_ID, baseVersionId: base.versionId, baseContentHash: base.contentHash,
+            field: 'event_date', value: { precision: 'date', value: '2027-06-25' },
+            idempotencyKey: 'clock-revoke-correction', retentionHandle: operationHandle }
+          : { eventId: EVENT_ID, baseVersionId: base.versionId, baseContentHash: base.contentHash,
+            sourceFacts: { event_date: sourceDate('2027-06-26', 'clock-revoke-refresh') },
+            idempotencyKey: 'clock-revoke-source-refresh', retentionHandle: operationHandle };
+      const run = () => scenario.operation === 'initialize'
+        ? harness.store.createHistory(harness.scope, input, requestValue)
+        : scenario.operation === 'correction'
+          ? harness.store.applyCorrection(harness.scope, input, requestValue)
+          : harness.store.refreshSources(harness.scope, input, requestValue);
+      const before = scenario.operation === 'initialize' ? null : await inspectDatabase(root);
+
+      const rejected = await awaitWithTimeout(run(), `clock-revoked ${scenario.operation}`)
+        .then(() => null, (error) => error);
+      assert.equal(rejected?.code, 'REVIEW_DENIED');
+      assert.equal(clockBoundaryReached, true, 'the transaction clock callback must reach the actual pre-BEGIN boundary');
+      assert.equal(clockCallbackAcquiredWriter, true, clockWriterError?.message);
+      assert.equal(currentActor, 'actor-revoked');
+      const after = await inspectDatabase(root);
+      if (scenario.operation === 'initialize') {
+        assert.equal(after.heads.length, 0);
+        assert.equal(after.versions.length, 0);
+        assert.equal(after.idempotencyCount, 0);
+      } else {
+        assert.deepEqual(after, before);
+      }
+      assert.equal(after.correctionCacheOperations, 0);
+      assert.equal(after.pendingCorrectionCacheOperations, 0);
+
+      currentActor = 'customer-a';
+      const retried = await awaitWithTimeout(run(), `exact clock-revoked ${scenario.operation} retry`);
+      assert.equal(retried.snapshot.revision, scenario.operation === 'initialize' ? 1 : 2);
+    });
+  }
+});
+
+test('persistVersion rechecks expiry after queued authorization advances the injected clock', async (t) => {
+  let requestValue;
+  let operationHandle;
+  let correctionAuthorizationCalls = 0;
+  let advancedAtFinalAsyncAuthorization = false;
+  const harness = await createHarness(t, {
+    authorize({ tenantId, actorId, request: value, action }) {
+      const permitted = value?.serverContextToken === TRUSTED_SERVER_CONTEXT
+        && value?.principal?.tenantId === tenantId && value?.principal?.actorId === actorId
+        && actorId !== 'outsider' && actorId !== 'actor-revoked';
+      if (value === requestValue && action === 'apply_correction') {
+        correctionAuthorizationCalls += 1;
+      }
+      if (correctionAuthorizationCalls === 5 && !advancedAtFinalAsyncAuthorization) {
+        // This is the second authorization inside the final async recheck, after
+        // retention/key/directory preparation and immediately before the sync guard.
+        advancedAtFinalAsyncAuthorization = true;
+        harness.clock.value = EPOCH + 3;
+      }
+      return permitted;
+    },
+  });
+  requestValue = harness.request;
+  const base = (await createSeed(harness)).snapshot;
+  operationHandle = harness.createPermit('tenant-a', 3);
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: base.versionId,
+    baseContentHash: base.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-27' },
+    idempotencyKey: 'expiry-advances-during-prebegin-authorization',
+    retentionHandle: operationHandle,
+  };
+  const before = await inspectDatabase(harness.root);
+  assert.equal(await inspectHistoryClockMax(harness.root), EPOCH);
+  await assert.rejects(harness.store.applyCorrection(harness.scope, input, requestValue), assertReviewError('REVIEW_EXPIRED'));
+  assert.equal(advancedAtFinalAsyncAuthorization, true);
+  assert.equal(correctionAuthorizationCalls, 5, 'the expiry jump occurred inside the final async authorization pair');
+  assert.deepEqual(await inspectDatabase(harness.root), before);
+  assert.equal(await inspectHistoryClockMax(harness.root), EPOCH + 3,
+    'the separately authorized expiry cleanup records the final boundary clock without changing history rows');
+
+  harness.clock.value = EPOCH;
+  await assert.rejects(harness.store.applyCorrection(harness.scope, input, requestValue), assertReviewError('REVIEW_DENIED'));
+  assert.equal(await inspectHistoryClockMax(harness.root), EPOCH + 3,
+    'a backwards trusted clock cannot retry against the newer persisted watermark');
+  harness.clock.value = EPOCH + 4;
+  input.retentionHandle = harness.createPermit('tenant-a', 60_000);
+  const retried = await harness.store.applyCorrection(harness.scope, input, requestValue);
+  assert.equal(retried.snapshot.revision, 2);
+});
+
+test('persistVersion uses monotonic elapsed time at pre-COMMIT without persisting it as the clock watermark', async (t) => {
+  let harness;
+  let guardedWriteAttempt = 0;
+  harness = await createHarness(t, { authorizeBoundary(input) {
+    const allowed = input.request?.serverContextToken === TRUSTED_SERVER_CONTEXT
+      && input.request?.principal?.tenantId === input.tenantId
+      && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+    if (allowed && input.action === 'review.history.apply_correction') guardedWriteAttempt += 1;
+    return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+      eventId: input.eventId, action: input.action, field: input.field, nowMs: harness.clock.value }) : false;
+  } });
+  const base = (await createSeed(harness)).snapshot;
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: base.versionId,
+    baseContentHash: base.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-28' },
+    idempotencyKey: 'monotonic-expiry-precommit',
+    retentionHandle: harness.createPermit('tenant-a', 400),
+  };
+  const before = await inspectDatabase(harness.root);
+  const beforeClock = await inspectHistoryClockMax(harness.root);
+
+  const probe = new DatabaseSync(':memory:');
+  const statementPrototype = Object.getPrototypeOf(probe.prepare('SELECT 1'));
+  probe.close();
+  const prepareDescriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'prepare');
+  const getDescriptor = Object.getOwnPropertyDescriptor(statementPrototype, 'get');
+  const originalPrepare = prepareDescriptor.value;
+  const originalGet = getDescriptor.value;
+  const statementSql = new WeakMap();
+  let matchingStatements = 0;
+  let delayedBeforeCommit = false;
+  let abortBeforeCommit = false;
+  const controller = new AbortController();
+  const liveBytesQuery = /SELECT COALESCE\(SUM\(length\(sealed\)\), 0\) AS bytes FROM versions WHERE state = 'available'/;
+  Object.defineProperty(DatabaseSync.prototype, 'prepare', { ...prepareDescriptor, value: function(...args) {
+    const statement = Reflect.apply(originalPrepare, this, args);
+    statementSql.set(statement, args[0]);
+    return statement;
+  } });
+  Object.defineProperty(statementPrototype, 'get', { ...getDescriptor, value: function(...args) {
+    const sql = statementSql.get(this);
+    if (guardedWriteAttempt > 0 && typeof sql === 'string' && liveBytesQuery.test(sql)) {
+      matchingStatements += 1;
+      if (guardedWriteAttempt === 1 && matchingStatements === 2) {
+        delayedBeforeCommit = true;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 650);
+      } else if (guardedWriteAttempt === 2 && matchingStatements === 2) {
+        abortBeforeCommit = true;
+        controller.abort();
+      }
+    }
+    return Reflect.apply(originalGet, this, args);
+  } });
+  try {
+    await assert.rejects(awaitWithTimeout(harness.store.applyCorrection(harness.scope, input, harness.request),
+      'monotonic pre-commit expiry'), assertReviewError('REVIEW_EXPIRED'));
+    assert.equal(guardedWriteAttempt, 1, 'the synchronous write boundary was reached');
+    assert.equal(matchingStatements, 2, 'the delay occurred after the transaction write set was staged');
+    assert.equal(delayedBeforeCommit, true);
+    assert.deepEqual(await inspectDatabase(harness.root), before, 'the expired transaction rolls back all revision and idempotency writes');
+    assert.equal(await inspectHistoryClockMax(harness.root), beforeClock,
+      'monotonic elapsed expiry is not persisted as an extrapolated trusted clock sample');
+
+    input.retentionHandle = harness.createPermit('tenant-a', 60_000);
+    matchingStatements = 0;
+    await assert.rejects(awaitWithTimeout(harness.store.applyCorrection(harness.scope, input, harness.request,
+      { signal: controller.signal }), 'abort at pre-commit boundary'), assertReviewError('REVIEW_ABORTED'));
+    assert.equal(guardedWriteAttempt, 2);
+    assert.equal(matchingStatements, 2, 'abort occurs after the full SQLite write set is staged');
+    assert.equal(abortBeforeCommit, true);
+    assert.deepEqual(await inspectDatabase(harness.root), before, 'pre-COMMIT cancellation rolls back revision and idempotency writes');
+    assert.equal(await inspectHistoryClockMax(harness.root), beforeClock);
+  } finally {
+    Object.defineProperty(DatabaseSync.prototype, 'prepare', prepareDescriptor);
+    Object.defineProperty(statementPrototype, 'get', getDescriptor);
+  }
+
+  guardedWriteAttempt = 0;
+  matchingStatements = 0;
+  abortBeforeCommit = false;
+  delayedBeforeCommit = false;
+  input.retentionHandle = harness.createPermit('tenant-a', 60_000);
+  const retry = await harness.store.applyCorrection(harness.scope, input, harness.request);
+  assert.equal(retry.snapshot.revision, 2, 'the exact operation succeeds with a newly valid retention permit');
 });
 
 test('persistVersion reauthorizes after its same-process tenant queue wait and before BEGIN', async (t) => {

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { types as utilTypes } from 'node:util';
 import { createScopedReuseStore, getScopedReuseBindingPort } from '../../cache/reuse/store.mjs';
+import { beginLocalBoundary, localBoundaryEffectiveNow } from '../../private/boundary-guard.mjs';
 import { issueCorrectionCacheBindingCapability } from './cache-binding-capability.mjs';
 import { createCorrectionHistoryStore, getCorrectionHistoryBindingPort, ReviewHistoryError } from './store.mjs';
 
@@ -11,7 +12,6 @@ const MAX_JSON_DEPTH = 32;
 const ABORTED_GETTER = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
 const ADD_EVENT_LISTENER = EventTarget.prototype.addEventListener;
 const REMOVE_EVENT_LISTENER = EventTarget.prototype.removeEventListener;
-const PROMISE_THEN = Promise.prototype.then;
 
 function fail(code) {
   throw new ReviewHistoryError(code);
@@ -260,8 +260,8 @@ function correctionResult(snapshot, replayed = false) {
  * The underlying stores and their bound participant ports never escape this module.
  */
 export function createCorrectionCacheBinding(options) {
-  const config = ownRecord(options, new Set(['history', 'cache', 'authorizeFinalDisclosure', 'operationTimeoutMs']), ['history', 'cache', 'authorizeFinalDisclosure']);
-  if (!config || typeof config.authorizeFinalDisclosure !== 'function') fail('REVIEW_INVALID');
+  const config = ownRecord(options, new Set(['history', 'cache', 'authorizeBoundary', 'operationTimeoutMs']), ['history', 'cache', 'authorizeBoundary']);
+  if (!config || typeof config.authorizeBoundary !== 'function') fail('REVIEW_INVALID');
   const operationTimeoutMs = config.operationTimeoutMs ?? 30_000;
   if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 1 || operationTimeoutMs > MAX_OPERATION_TIMEOUT_MS) fail('REVIEW_INVALID');
   const history = createCorrectionHistoryStore(config.history);
@@ -305,8 +305,6 @@ export function createCorrectionCacheBinding(options) {
       const { scopes, historyContext, cacheContext } = await pairedContexts(scope, request, eventId,
         'read_history', 'private_profile.write', undefined, signal);
       try {
-        const preflightToken = await cachePort.validateProfileInput(scopes.cacheScope, request, profile, signal, capability);
-        if (signal.aborted) fail('REVIEW_ABORTED');
         const operationInput = Object.freeze({
           eventId: historyContext.eventId,
           identity: profile.identity,
@@ -314,15 +312,38 @@ export function createCorrectionCacheBinding(options) {
           cacheSourceContentHash: profile.contentHash,
           profile,
         });
+        const bindHead = await historyPort.preflightBindHead(historyContext, input.idempotencyKey,
+          operationInput, request);
+        if (signal.aborted) fail('REVIEW_ABORTED');
+        const historyExpiresAtMs = bindHead.expiresAtMs;
+        const effectiveProfile = Object.freeze({ ...profile,
+          expiresAtMs: Math.min(profile.expiresAtMs ?? historyExpiresAtMs, historyExpiresAtMs) });
+        const preflightToken = await cachePort.validateProfileInput(scopes.cacheScope, request,
+          effectiveProfile, signal, capability);
+        if (signal.aborted) fail('REVIEW_ABORTED');
         const operation = await historyPort.beginOperation(historyContext, {
           kind: 'bind', operationKey: input.idempotencyKey, normalizedInput: operationInput,
+          baseVersionId: bindHead.snapshot.versionId,
+          baseContentHash: bindHead.snapshot.contentHash,
           action: 'record_downstream_reference',
         }, request, signal);
         if (operation.replayed) return findCompletedBind(historyContext, operation);
         if (signal.aborted) fail('REVIEW_ABORTED');
-        const baseSnapshot = await historyPort.readVersion(historyContext, operation.baseVersionId, request, 'read_history');
+        const pendingRead = Object.freeze({
+          operationId: operation.operationId,
+          fence: operation.fence,
+          kind: operation.kind,
+          phase: operation.phase,
+          baseVersionId: operation.baseVersionId,
+          baseContentHash: operation.baseContentHash,
+          targetVersionId: operation.targetVersionId,
+          targetContentHash: operation.targetContentHash,
+        });
+        const baseSnapshot = await historyPort.readVersion(historyContext, operation.baseVersionId, request, 'read_history', pendingRead);
         if (signal.aborted) fail('REVIEW_ABORTED');
-        const historyExpiresAtMs = Date.parse(baseSnapshot.expiresAt);
+        if (baseSnapshot.versionId !== bindHead.snapshot.versionId
+          || baseSnapshot.contentHash !== bindHead.snapshot.contentHash
+          || Date.parse(baseSnapshot.expiresAt) !== historyExpiresAtMs) fail('REVIEW_VERSION_CONFLICT');
         const projection = projectHistory(baseSnapshot);
         const projectionHash = sha256(canonical(projection));
         const fence = await historyPort.prepareFence(historyContext);
@@ -336,9 +357,9 @@ export function createCorrectionCacheBinding(options) {
             historyExpiresAtMs,
           });
           const stored = await cachePort.putProfile(scopes.cacheScope, request,
-            Object.freeze({ ...profile, facts: projection, expiresAtMs: Math.min(profile.expiresAtMs ?? historyExpiresAtMs, historyExpiresAtMs) }),
+            Object.freeze({ ...effectiveProfile, facts: projection }),
             binding, operation, (commit, time) => fence.run(operation.operationId, operation.fence,
-              ['pending_bind'], commit, time.now), signal, capability, preflightToken);
+              ['pending_bind'], commit, time.now, time.effectiveNow, signal), signal, capability, preflightToken);
           if (signal.aborted) fail('REVIEW_ABORTED');
           if (stored.status !== 'stored' || stored.scopeKind !== 'tenant_private'
             || stored.cacheSourceContentHash !== profile.contentHash
@@ -425,7 +446,7 @@ export function createCorrectionCacheBinding(options) {
             const cacheBinding = bindingForCache(binding);
             const localResult = await cachePort.invalidate(scopes.cacheScope, request, cacheBinding, targetOperation,
               (commit, time) => fence.run(operation.operationId, operation.fence,
-                ['history_committed', 'cache_invalidating'], commit, time.now), signal, capability);
+                ['history_committed', 'cache_invalidating'], commit, time.now, time.effectiveNow, signal), signal, capability);
             if (!localResult.locallyIneligible || localResult.profileRef !== binding.profileRef
               || !Array.isArray(localResult.eventIds) || localResult.eventIds.length < 1) fail('REVIEW_INTEGRITY');
             await historyPort.markInvalidated(historyContext, targetOperation, binding);
@@ -470,16 +491,15 @@ export function createCorrectionCacheBinding(options) {
           let cacheDatabase;
           try {
             cacheDatabase = await cachePort.prepareReadDatabase(capability);
-            const hostGuardNowMs = Math.max(historyPort.now(), cachePort.now());
             const permissions = candidate.payload.permissions ?? [];
-            let finalAllowed;
-            try {
-              finalAllowed = config.authorizeFinalDisclosure(Object.freeze({
-                tenantId: historyContext.info.tenantId,
-                actorId: historyContext.actorId,
-                eventId: historyContext.eventId,
-                action: 'private_profile.read',
-                request,
+            const boundaryInput = Object.freeze({
+              request,
+              tenantId: historyContext.info.tenantId,
+              actorId: historyContext.actorId,
+              eventId: historyContext.eventId,
+              action: 'private_profile.read',
+              field: null,
+              details: Object.freeze({
                 bindingId: binding.bindingId,
                 profileRef: binding.profileRef,
                 historyVersionId: binding.historyVersionId,
@@ -492,24 +512,14 @@ export function createCorrectionCacheBinding(options) {
                 permissionValidUntilMs: candidate.permissionState.validUntilMs ?? null,
                 cacheExpiresAtMs: binding.cacheExpiresAtMs,
                 historyExpiresAtMs: binding.historyExpiresAtMs,
-                nowMs: hostGuardNowMs,
-              }));
-            } catch { fail('REVIEW_DENIED'); }
-            if (finalAllowed !== true) {
-              // Drain a genuine returned Promise without consulting an overridable
-              // `then` property. Other objects and thenables are simply denied.
-              try {
-                if (utilTypes.isPromise(finalAllowed)) Reflect.apply(PROMISE_THEN, finalAllowed, [undefined, () => {}]);
-              } catch { /* The final decision remains denied regardless of Promise state. */ }
-              fail('REVIEW_DENIED');
-            }
-            // The host guard is synchronous but may perform its own current-request and
-            // permission checks. Sample both clocks again after it, immediately before
-            // the paired no-await transaction boundary, so its work cannot make a cache
-            // or history expiry look current using an earlier timestamp.
-            const nowMs = Math.max(historyPort.now(), cachePort.now());
-            if (nowMs >= binding.expiresAtMs || (candidate.permissionState.validUntilMs !== undefined
-              && nowMs >= candidate.permissionState.validUntilMs)) return Object.freeze({ status: 'unavailable', reason: 'expired' });
+              }),
+            });
+            const boundaryToken = beginLocalBoundary(config.authorizeBoundary, boundaryInput, () => fail('REVIEW_DENIED'));
+            const nowMs = boundaryToken.nowMs;
+            const effectiveNowMs = localBoundaryEffectiveNow(boundaryToken);
+            if (!Number.isSafeInteger(effectiveNowMs) || effectiveNowMs < nowMs) fail('REVIEW_DENIED');
+            if (effectiveNowMs >= binding.expiresAtMs || (candidate.permissionState.validUntilMs !== undefined
+              && effectiveNowMs >= candidate.permissionState.validUntilMs)) return Object.freeze({ status: 'unavailable', reason: 'expired' });
             const expected = Object.freeze({
               bindingHash: binding.bindingHash,
               referenceHash: binding.referenceHash,
@@ -517,10 +527,12 @@ export function createCorrectionCacheBinding(options) {
               versionId: binding.historyVersionId,
               contentHash: binding.historyContentHash,
               nowMs,
+              effectiveNowMs,
+              signal,
             });
             try {
               return historyFence.read(expected,
-                () => cachePort.finalRead(cacheDatabase, candidate, nowMs, capability));
+                () => cachePort.finalRead(cacheDatabase, candidate, nowMs, effectiveNowMs, capability));
             } catch (error) {
               if (!isBusy(error) || attempt >= delays.length) throw error;
             }

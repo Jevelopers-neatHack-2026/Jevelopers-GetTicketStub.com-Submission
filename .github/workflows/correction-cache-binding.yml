@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/review/history/**'
       - 'src/cache/reuse/**'
+      - 'src/private/boundary-guard.*'
       - 'tests/review/history/**'
       - 'tests/cache/reuse/**'
       - 'tests/integration/review-cache-binding/**'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'src/review/history/**'
       - 'src/cache/reuse/**'
+      - 'src/private/boundary-guard.*'
       - 'tests/review/history/**'
       - 'tests/cache/reuse/**'
       - 'tests/integration/review-cache-binding/**'

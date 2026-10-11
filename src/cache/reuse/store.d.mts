@@ -1,4 +1,5 @@
 import type { PrivacyBoundary, SanitizedDerivative, TenantScope } from '../../privacy/boundary.mjs';
+import type { LocalBoundaryGuard } from '../../private/boundary-guard.mjs';
 
 declare const reuseScopeBrand: unique symbol;
 export type ScopedReuseScope = { readonly [reuseScopeBrand]: true };
@@ -179,6 +180,8 @@ export interface ScopedReuseOptions<Request = unknown> {
   readonly authorizeAction: (input: { readonly tenantId: string; readonly actorId: string; readonly action: string; readonly request: Request; readonly details: Readonly<Record<string, unknown>> }) => boolean | Promise<boolean>;
   /** Private local final-disclosure adapter. The trusted host must bind the current request principal to the expected issued scope and authorize the exact action in one decision. No cache-controlled async identity or policy work follows a true result; this is not a canonical contract, approval, or durable lease. */
   readonly authorizeCurrentRequest: (input: { readonly expectedTenantId: string; readonly expectedActorId: string; readonly action: string; readonly request: Request; readonly details: Readonly<Record<string, unknown>> }) => boolean | Promise<boolean>;
+  /** Required at runtime only when this store is attached to the private correction-binding participant. Standalone cache authorization stays unchanged. */
+  readonly authorizeBoundary?: LocalBoundaryGuard<Request>;
   readonly resolveKey: (input: ReuseKeyRequest) => ReuseKey | Promise<ReuseKey>;
   readonly resolveRetention: (input: { readonly tenantId: string | null; readonly kind: 'tenant_private' | 'public_profile'; readonly nowMs: number; readonly requestedExpiryMs: number | null }) => RetentionDecision | Promise<RetentionDecision>;
   readonly verifySourceObservation?: (input: { readonly tenantId: string | null; readonly actorId: string | null; readonly request: Request; readonly purpose: 'initial' | 'revalidate'; readonly expectedContentHash: string; readonly observation: unknown }) => SourceObservation | Promise<SourceObservation>;
