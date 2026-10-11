@@ -764,6 +764,104 @@ test("compiled public inspection and decision adapters invoke typed dispatch fen
   assert.ok(typedOwnerFenceCalls >= 5, "generated image plus every observer/decision stage uses the compiled owner callback");
 });
 
+test("compiled public session scope stays exact across begin, stages, completion, reopen, and replay", async (t) => {
+  const buildRoot = await mkdtemp(join(tmpdir(), "creative-inspection-session-scope-"));
+  t.after(async () => rm(buildRoot, { recursive: true, force: true }));
+  const compiler = fileURLToPath(new URL("../../examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc", import.meta.url));
+  const consumer = fileURLToPath(new URL("../../tests/inspection/session-scope-consumer.mts", import.meta.url));
+  const compile = spawnSync(process.execPath, [compiler, "--strict", "--skipLibCheck", "false", "--module", "NodeNext",
+    "--moduleResolution", "NodeNext", "--target", "ES2022", "--rootDir", fileURLToPath(new URL("../../tests/inspection", import.meta.url)),
+    "--outDir", buildRoot, consumer], { encoding: "utf8" });
+  assert.equal(compile.status, 0, `${compile.stdout}\n${compile.stderr}`);
+  const typed = await import(pathToFileURL(join(buildRoot, "session-scope-consumer.mjs")).href);
+
+  const system = await setupInspectionSystem(t);
+  const snapshots = [];
+  const storage = system.ports.storage;
+  const begin = storage.beginInspectionSession.bind(storage);
+  storage.beginInspectionSession = async (input) => {
+    const fresh = await begin(input);
+    snapshots.push({ path: "begin:fresh", session: fresh });
+    const replayed = await begin(input);
+    snapshots.push({ path: "begin:existing", session: replayed });
+    const { lease_token: _leaseToken, ...publicFresh } = fresh;
+    assert.deepEqual(replayed, publicFresh, "an existing begin returns the same public scoped record while the job is active");
+    return fresh;
+  };
+  const stage = storage.stageInspectionStage.bind(storage);
+  storage.stageInspectionStage = async (input) => {
+    const fresh = await stage(input);
+    snapshots.push({ path: `stage:${input.stage}:new`, session: fresh });
+    const replayed = await stage(input);
+    snapshots.push({ path: `stage:${input.stage}:replay`, session: replayed });
+    assert.deepEqual(replayed, fresh, "an already-staged attempt returns the same scoped record");
+    return fresh;
+  };
+
+  const generated = await system.api.invoke(actor(), request("session-scope-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const body = inspectionRequest("session-scope-lifecycle", generated.result.design_version.design_version_id);
+  const result = await system.api.invoke(actor(), body);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(system.counters.provider, 1);
+  assert.equal(system.counters.reserved, 4);
+  assert.equal(system.counters.inspection, 1);
+  assert.equal(system.counters.decision, 2);
+
+  const assertRecord = (record, path) => {
+    assert.equal(typed.assertInspectionSessionScope(record, SCOPE), record, `${path} uses the public record contract`);
+    assert.deepEqual(record.scope, SCOPE, `${path} returns the exact tenant/project/brief scope`);
+    assert.equal(record.tenant_id, SCOPE.tenant_id, `${path} retains its flat tenant field`);
+    assert.equal(record.project_id, SCOPE.project_id, `${path} retains its flat project field`);
+    assert.equal(record.brief_id, SCOPE.brief_id, `${path} retains its flat brief field`);
+    assert.equal(Object.isFrozen(record), true, `${path} record is immutable`);
+    assert.equal(Object.isFrozen(record.scope), true, `${path} nested scope is immutable`);
+    assert.equal(Reflect.set(record, "tenant_id", "caller-mutated"), false);
+    assert.equal(Reflect.set(record, "project_id", "caller-mutated"), false);
+    assert.equal(Reflect.set(record, "brief_id", "caller-mutated"), false);
+    assert.deepEqual(record.scope, SCOPE, `${path} mutation attempts cannot change authoritative scope`);
+  };
+
+  assert.equal(snapshots.length, 8, "fresh/existing begin and fresh/replayed returns for all three stages are captured");
+  assert.deepEqual(snapshots.map(({ path }) => path), [
+    "begin:fresh", "begin:existing",
+    "stage:observer:new", "stage:observer:replay",
+    "stage:decision_evidence:new", "stage:decision_evidence:replay",
+    "stage:decision_route:new", "stage:decision_route:replay",
+  ]);
+  for (const snapshot of snapshots) assertRecord(snapshot.session, snapshot.path);
+  assert.ok(snapshots.every(({ session }) => session.status === "active"),
+    "begin and stage returns retain the active-session status during execution");
+
+  const completed = await typed.readInspectionSessionScope(system.ports.storage,
+    { scope: SCOPE, action_id: body.action_id }, SCOPE);
+  assertRecord(completed, "completed get");
+  assert.equal(completed.status, "completed");
+  assert.deepEqual(completed.stages.map(({ stage: name, status }) => [name, status]), [
+    ["observer", "completed"], ["decision_evidence", "completed"], ["decision_route", "completed"],
+  ]);
+
+  const databasePath = join(system.root, "versions.sqlite");
+  const objectRoot = join(system.root, "objects");
+  system.store.close();
+  const reopenedStore = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  t.after(() => reopenedStore.close());
+  const reopenedCounters = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
+  const reopenedPorts = attachInspectionPorts(portsFor(reopenedStore, reopenedCounters,
+    (() => { let id = 0; return () => `session-scope-reopen-port-${++id}`; })()), reopenedCounters);
+  const reopenedApi = createCreativeApi({ ports: reopenedPorts, now: () => NOW,
+    idFactory: (() => { let id = 0; return () => `session-scope-reopen-api-${++id}`; })() });
+  const replay = await reopenedApi.invoke(actor(), body);
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(reopenedCounters, { provider: 0, reserved: 0, inspection: 0, decision: 0 },
+    "completed inspection replay after reopen adds no provider, metering, observer, or decision work");
+  const reopened = await typed.readInspectionSessionScope(reopenedPorts.storage,
+    { scope: SCOPE, action_id: body.action_id }, SCOPE);
+  assertRecord(reopened, "reopened replay get");
+  assert.deepEqual(reopened, completed, "reopened replay preserves the exact stored scope and session record");
+});
+
 test("inspection repair remains review-gated when trusted owner usage evidence is unavailable", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-inspection-unknown-owner-usage-"));
   t.after(async () => rm(root, { recursive: true, force: true }));

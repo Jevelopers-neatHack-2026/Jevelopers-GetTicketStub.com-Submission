@@ -692,7 +692,9 @@ export interface InspectionSessionStageRecord {
   readonly status: "dispatching" | "completed" | "unknown";
   readonly result?: unknown;
 }
-export interface InspectionSessionRecord extends InspectionSessionIdentity {
+export interface InspectionSessionRecord extends Readonly<Omit<InspectionSessionIdentity, "scope">> {
+  /** Authoritative stored session identity; both the record and this scope are immutable. */
+  readonly scope: Readonly<TrustedScope & { brief_id: string }>;
   readonly status: "active" | "completed" | "failed" | "unknown";
   readonly result?: unknown;
   readonly stages: readonly InspectionSessionStageRecord[];

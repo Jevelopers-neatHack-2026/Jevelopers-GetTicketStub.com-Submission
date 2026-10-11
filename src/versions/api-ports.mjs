@@ -39,7 +39,13 @@ function inspectionSessionFromRows(session, stages) {
   if (!session) return null;
   const result = session.result_json === null ? undefined
     : jsonWithHash(session.result_json, session.result_hash, "inspection.result");
+  const scope = Object.freeze({
+    tenant_id: session.tenant_id,
+    project_id: session.project_id,
+    brief_id: session.brief_id,
+  });
   return Object.freeze({
+    scope,
     tenant_id: session.tenant_id, project_id: session.project_id, action_id: session.action_id,
     actor_id: session.actor_id, job_id: session.job_id, request_hash: session.request_hash,
     brief_id: session.brief_id, brief_hash: session.brief_hash,
