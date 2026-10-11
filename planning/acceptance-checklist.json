@@ -962,10 +962,19 @@
       "title": "CFO.ai use",
       "verification": "Build the business plan in CFO.ai using the financial summary and documented assumptions.",
       "evidence_required": "CFO.ai plan covering pricing, costs, revenue and runway; a generic data export alone is insufficient.",
-      "status": "planned",
-      "evidence_refs": [],
-      "tested_revision_refs": [],
-      "notes": "",
+      "status": "verified",
+      "evidence_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/6420af494a5276f69c337f47dac3ad4c1854d524/evidence/cfo-ai/2026-10-11-r2/VERIFICATION.md",
+        "https://app.cfo.ai/completetech-83718c83/pages/7ed03e7e-ca7d-441c-b6bb-7d4e5f7efc94",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/24"
+      ],
+      "tested_revision_refs": [
+        "integration-evals 6420af494a5276f69c337f47dac3ad4c1854d524",
+        "getticketstub.com 8afdefd40c9faf912e4a50a6a532fff0b5e480b2",
+        "cfo.ai page 7ed03e7e-ca7d-441c-b6bb-7d4e5f7efc94 revision 2 (2026-10-11)"
+      ],
+      "notes": "Owner (Finance and reliability: CompleteDotTech) accepted 2026-10-11 by explicit chat instruction relayed by an agent; see PR #24. Plan built in CFO.ai from documented assumptions, public vendor rates and cost-intelligence synthetic-tariff evidence; all figures are hypothetical forecasts, no actual revenue. Finance CFO-001/002/003 repaired and checked by desktop-Excel recalculation. Open: authoritative cost-intelligence financial-summary export integration (cost-intelligence#3), actual cash/receipts, demo-video coverage and hackathon submission.",
       "dependencies": [
         "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
         "https://github.com/Jevelopers-neatHack-2026/team-dashboard/issues/1",
