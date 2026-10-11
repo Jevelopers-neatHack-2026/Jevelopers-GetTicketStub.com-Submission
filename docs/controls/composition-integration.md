@@ -1,0 +1,53 @@
+# Composition controls integration (staged mock implementation)
+
+The controls package now exports a separately versioned composition projection, reviewed Apply adapter and browser validator through `creative-engine/controls`. The loopback example at `/composition.html` consumes the actual public API 1.2 and shared SQLite version store. This staging branch starts at PR36 `7cba89a123a19a13e9dd17ed656785dede6b0052`, which has requested review changes. It is not a qualified release or acceptance closure. Final verification must use the corrected backend and receive a new exact-head review.
+
+All application provider, JEV, vision, issuer, Finance and production calls are zero. Artwork style exercises the genuine local artwork edit producer with intercepted native transport and simulated reservations; its fixture counters distinguish those edits from composition changes. The owner/rights assertions and geometry renderer are explicitly MOCK. The fixture preview uses actual candidate state to generate distinct PNG blocks; it proves byte/state bindings, decode and geometry protocol behavior, not production typography, actual logo rendering or visual quality.
+
+## Version and authority boundaries
+
+The existing `creative-controls/1.0` and `/1.1`, `creative-apply/1.0` and `/1.1`, public package inventory and limits stay closed. Composition uses `CreativeCompositionControlPolicy/1.0`, `creative-composition-controls/1.0`, `creative-composition-apply/1.0`, and a separately reviewed `creative-composition-initialize/1.0` action. Unknown versions, extra fields, executable values, accessors, ambiguous policy mappings and overlapping geometry proposals fail closed.
+
+The authenticated host supplies category meanings, target layer/asset identities, units, ranges, policy time and locks. There are no category-to-geometry defaults in the library. The projection is derived after the neutral immutable revision hash. Its own digest binds the exact scope, full revision/state, design/artwork, selection, edit policy, control policy and preview. The projection is not embedded in neutral hash material and does not introduce a hash fixed point. A read-only current result, favorable inspection or selected version never grants approval or purchase.
+
+`fixtures/controls/composition-policy.mjs` declares the fixture's small/medium/large (18/24/36 pt), centered/stacked geometry, q01 balanced/name alternatives, and approved-logo top/bottom geometry. Layout and q01 use one joint mapping, so their order cannot overwrite a prior operation. Exact values outside that mapping display an unrepresented categorical value rather than a guessed baseline. Both categorical and exact operations pass the actual C04 plan validator and neutral locks, factual restrictions and rights checks. Distinct text, size and geometry changes can combine into one immutable child; incompatible writes reject before execution.
+
+## Durable reviewed Apply and preview reads
+
+The adapter owns only `control_composition_actions_v1` on the existing controls SQLite connection. It stores the normalized scoped reviewed action and exact request/hash before invoke, and binds the genuine backend job. Caller-owned BEGIN or SAVEPOINT transactions reject before host callbacks or writes. It owns no selection pointer, rights authority, approval issuer or renderer.
+
+Read/refresh never initialize. Missing composition shows the exact selected artwork binding; initialization requires an explicit review and separate Apply. The four exact operations are text, text size, layer layout and approved-logo position. Each goes through public create/get/update, the real durable action and job, exact parent/target/full hashes and owner preview bytes. Pure composition preserves original artwork bytes and the DesignVersion/selection identities.
+
+Retry uses the original durable request. Read-existing recovery only observes the real stored job/action; it makes no executor or preview call and does not write an acknowledgement. A completed response is historical until a separate fail-closed current GET proves currentness. Pending/unknown response loss never authorizes a new operation. The browser stores only opaque scoped action identity, not the personalization draft. Changed action bytes under an existing ID conflict. Publication and cancellation remain backend authoritative.
+
+Artwork and composition previews are separate. The same-origin composition endpoint validates scope, current revision/full hash/preview hash and rechecks context after the asynchronous result. The browser bounds reads to 25 MiB, verifies exact byte length/hash/MIME, waits for real image load/decode and checks dimensions. No URL, access locator, provider request identity or raw preview access enters the browser projection. Generation, action identity and terminal guards cover asynchronous success, errors and cleanup. Unknown status cannot overwrite an observed terminal completion.
+
+## Required producers and full original scope
+
+The following requirements remain local implementation dependencies; they are not waived, externally deferred, or satisfied by disabled buttons. The isolated controls work proceeds while those neutral producers are staged and reviewed.
+
+| Required outcome | Exact producer prerequisite | Controls consumer obligation |
+| --- | --- | --- |
+| Expired proof and same-design restore/ABA recovery | Coherent reviewed API 1.3 `composition.history` and `composition.revalidate`, fresh trusted owner evidence, current ID/full-hash CAS, immutable child/final fences | Render metadata-only scoped history; review expected current identity; persist an explicit renewal action; display fresh verified preview; invalidate old drafts; require a separate fresh Apply |
+| All eight CE06 intent buckets and compound ordering | Typed durable routing result/operation ledger with actual route identities, authorization, usage and partial/recovery semantics | Typed controls bypass redundant classification; show real branch, denied/pending/unknown and child dependencies; never execute a UI-owned router |
+| CE07 local scope, mask, strength and post-image rebound | Agreed scoped edit manifest with dimensions/reference rights/locks/drift outcomes, genuine new-parent composition producer | Review real edit scope and A/B artifact bytes; show genuine parent, usage and drift; rebuild current composition context and require fresh Apply |
+| Research-first factual correction | Trusted correction → new package → new brief → mandatory invalidation acknowledgement producer | Show real correction/research progress and denial; invalidate old drafts/approval; require acknowledgement and fresh review/Apply |
+| CE10 full-state approval and exact-byte handoff | External verifier bound to displayed artwork/facts/assets/full geometry/revision/state/preview, durable idempotent handoff/receipt/reconciliation | Review the exact artifact, display pending/unknown/denied/consumed honestly; reject stale/forged/revoked/cross-scope identities; never infer approval or purchase |
+
+CE05 retains every original case and CON-01/02/03, ART-01/02 and EVAL-03/04. Related CE06, CE07, CE08, CE10, CE11 and the release gate retain their original required-for-v1 scope. Routing, Research, exact handoff and live external acceptance remain pending until their actual producers and consumers are integrated and tested.
+
+## Reproduce and evidence limits
+
+Use pinned Node 22.23.3 and 24.15.0. Install only the two independently locked dependency directories (`examples/frontend-action-roundtrip` and `src/models/codec-runtime`), with codec scripts disabled. Run the existing build/source/type/package checks plus:
+
+```sh
+node --test tests/controls/composition-integration.test.mjs tests/controls/composition-view.test.mjs
+node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc -p tests/controls/types/tsconfig.json
+node fixtures/controls/installed-composition-check.mjs --evidence-dir build/controls-package-evidence/composition
+cd examples/frontend-action-roundtrip
+node node_modules/@playwright/test/cli.js test tests/composition.spec.mjs --project=actual-api
+```
+
+The installed consumer packs and installs the candidate into an independent offline directory, resolves the public package without source aliases, typechecks closed positive/negative consumers, and exercises genuine producer/store/preview lifecycles. Reopen tests gracefully close the host and start a fresh process. They do not claim abrupt-exit or crash durability; separate backend crash/publication proof is required.
+
+The staging tests preserve the original public pending-update cancellation failure on 7c. The corrected neutral candidate has separate root observations; approval and test results do not transfer across changed source. Final paired aggregate, original/new browser projects, fresh installed consumers, exact-head Linux CI, independent review, production host qualification and gated live acceptance remain required. The retained execution evidence records exact source manifests, argv/runtime, raw logs and earlier failures.

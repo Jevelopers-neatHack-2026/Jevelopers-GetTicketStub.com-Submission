@@ -12,6 +12,7 @@
     "consumer.mts",
     "inspection-consumer.mts",
     "public-result.mts",
-    "actual-inspection.mts"
+    "actual-inspection.mts",
+    "composition-consumer.mts"
   ]
 }

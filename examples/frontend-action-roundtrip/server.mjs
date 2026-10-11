@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createIntegratedHost, fixturePrincipal } from '../../fixtures/controls/integrated-host.mjs';
 const port = Number(process.env.CONTROLS_FIXTURE_PORT ?? 4317);
-let dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-')), host = await createIntegratedHost(dir);
+let dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-')), host = await createIntegratedHost(dir, { enableComposition: true });
 const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/javascript'], '/messages.mjs': ['messages.mjs', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/schema.mjs': ['../../src/controls/schema.mjs', 'text/javascript'],
   '/inspection-presentation.html': ['inspection-presentation.html', 'text/html'],
   '/inspection-presentation.mjs': ['inspection-presentation.mjs', 'text/javascript'],
@@ -14,6 +14,7 @@ const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/
   '/inspection-view.mjs': ['../../src/controls/inspection-view.mjs', 'text/javascript'],
   '/public-result.mjs': ['../../src/controls/public-result.mjs', 'text/javascript'],
   '/inspection-inputs.json': ['../../fixtures/controls/inspection-presentation-inputs.json', 'application/json'] };
+Object.assign(files, { '/composition.html': ['composition.html', 'text/html'], '/composition-app.mjs': ['composition-app.mjs', 'text/javascript'], '/composition-view.mjs': ['../../src/controls/composition-view.mjs', 'text/javascript'] });
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };
 const server = createServer(async (req, res) => {
@@ -21,12 +22,19 @@ const server = createServer(async (req, res) => {
     const path = new URL(req.url, 'http://localhost').pathname;
     if (req.method === 'GET' && files[path]) {
       const [file, type] = files[path]; res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
+        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
       return res.end(await readFile(new URL(file, import.meta.url)));
     }
     if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), source: await host.inspection.currentSource(fixturePrincipal), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
+    if (req.method === 'GET' && path === '/api/composition/current') return json(res, { view: await host.composition.current(fixturePrincipal), counters: host.counts() });
+    if (req.method === 'GET' && path === '/api/composition/preview') {
+      const query = new URL(req.url, 'http://localhost').searchParams;
+      const value = await host.composition.preview(fixturePrincipal, Object.fromEntries(['revision_id','revision_sha256','preview_sha256'].map(k => [k, query.get(k)])));
+      if (!value) return json(res, { code: 'permission' }, 403);
+      res.writeHead(200, { 'Content-Type': value.metadata.mime_type, 'Content-Length': value.bytes.length, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(value.bytes);
+    }
     if (req.method === 'GET' && path === '/__fixture/native-evidence') {
       const value = host.nativeEvidence(new URL(req.url, 'http://localhost').searchParams.get('action_id'));
       return json(res, value ?? { code: 'permission' }, value ? 200 : 403);
@@ -38,11 +46,17 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': value.artifact.media_type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(Buffer.from(value.bytes));
     }
-    if (req.method !== 'POST' || !['/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset'].includes(path)) return json(res, { code: 'not_found' }, 404);
+    if (req.method !== 'POST' || !['/api/artwork/retry','/api/artwork/status','/api/composition/apply','/api/composition/retry','/api/composition/lookup','/api/composition/cancel','/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset'].includes(path)) return json(res, { code: 'not_found' }, 404);
     if (!req.headers['content-type']?.startsWith('application/json')) return json(res, { code: 'validation' }, 415);
     if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, { code: 'permission' }, 403);
     let bytes = '', size = 0; for await (const chunk of req) { size += chunk.length; if (size > 32768) return json(res, { code: 'validation' }, 413); bytes += chunk; }
     const payload = JSON.parse(bytes);
+    if (path === '/api/composition/apply') return json(res, { result: await host.composition.apply(fixturePrincipal, payload), counters: host.counts() });
+    if (path === '/api/composition/lookup') return json(res, { result: await host.composition.lookup(fixturePrincipal, payload.action_id), counters: host.counts() });
+    if (path === '/api/composition/retry') return json(res, { result: await host.composition.retry(fixturePrincipal, payload.action_id), counters: host.counts() });
+    if (path === '/api/composition/cancel') return json(res, { result: await host.composition.cancel(fixturePrincipal, payload.action_id), counters: host.counts() });
+    if (path === '/api/artwork/retry') return json(res, { ...mode, ...await host.adapter.retryExisting(fixturePrincipal, payload.action_id), counters: host.counts() });
+    if (path === '/api/artwork/status') return json(res, { ...mode, ...await host.adapter.readExisting(fixturePrincipal, payload.action_id), counters: host.counts() });
     if (path === '/api/inspection') return json(res, { view: await host.inspection.start(fixturePrincipal, payload), counters: host.counts() });
     if (path === '/api/inspection/lookup') return json(res, { view: await host.inspection.lookup(fixturePrincipal, payload.inspection_action_id), counters: host.counts() });
     if (path === '/api/inspection/cancel') return json(res, { view: await host.inspection.cancel(fixturePrincipal, payload.inspection_action_id), counters: host.counts() });
@@ -56,7 +70,7 @@ const server = createServer(async (req, res) => {
       const nativeFormat = payload.native_format ?? 'png';
       if (!['png', 'jpeg', 'webp'].includes(nativeFormat)) return json(res, { code: 'validation' }, 400);
       host.close(); rmSync(dir, { recursive: true, force: true }); dir = mkdtempSync(join(tmpdir(), 'creative-integrated-browser-'));
-      host = await createIntegratedHost(dir, { nativeFormat });
+      host = await createIntegratedHost(dir, { nativeFormat, enableComposition: true, lockLogo: payload.lock_logo !== false });
     }
     else {
       if (payload.inspection_fault) host.policy.inspection_fault = payload.inspection_fault;

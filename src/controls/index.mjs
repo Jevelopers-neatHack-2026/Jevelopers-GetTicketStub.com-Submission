@@ -5,3 +5,6 @@ export { CreativeControlsAdapter } from './integration.mjs';
 export { prepareInspectionRequest, projectInspectionPresentation } from './inspection-consumer.mjs';
 export { InspectionControlsAdapter } from './inspection-integration.mjs';
 export { projectInspectionSource, projectInspectionView, projectRepairResult } from './inspection-view.mjs';
+export { COMPOSITION_CONTROL_VERSION, COMPOSITION_APPLY_VERSION, CompositionControlsError, validateCompositionControlPolicy, createCompositionControlProjection, createCompositionControlPlan } from './composition-projection.mjs';
+export { CompositionControlsAdapter } from './composition-integration.mjs';
+export { assertCompositionPreview, assertCompositionProjection, assertCompositionCurrent, assertCompositionCompletion, verifyCompositionProjectionHash } from './composition-view.mjs';

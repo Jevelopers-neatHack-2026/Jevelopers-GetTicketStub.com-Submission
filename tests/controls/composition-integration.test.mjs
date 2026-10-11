@@ -1,0 +1,196 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, cp, mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, basename } from 'node:path';
+import { createIntegratedHost, fixturePrincipal as principal } from '../../fixtures/controls/integrated-host.mjs';
+import { canonicalHash } from 'creative-engine/contracts';
+import { spawnSync } from 'node:child_process';
+
+async function setup(t, options = {}) {
+  const directory = await mkdtemp(join(tmpdir(), 'controls-composition-'));
+  const host = await createIntegratedHost(directory, { enableComposition: true, lockLogo: false, ...options });
+  t.after(async () => {
+    const counts = host.evidenceCounts ?? host.counts();
+    host.close();
+    if (process.env.CONTROLS_COMPOSITION_EVIDENCE_DIR) {
+      const target = join(process.env.CONTROLS_COMPOSITION_EVIDENCE_DIR, t.name.replace(/[^a-zA-Z0-9_-]/g, '_'), basename(directory));
+      await mkdir(target, { recursive: true }); await cp(directory, join(target, 'store-root'), { recursive: true });
+      await writeFile(join(target, 'counters.json'), JSON.stringify(counts, null, 2));
+    }
+    await rm(directory, { recursive: true, force: true });
+  });
+  return host;
+}
+async function initialize(host, id = 'initialize') {
+  const view = await host.composition.current(principal);
+  assert.equal(view.status, 'not_initialized', JSON.stringify(view));
+  const action = { action_version: 'creative-composition-initialize/1.0', action_id: id, review_sha256: view.review.review_sha256, intent: 'initialize' };
+  const result = await host.composition.apply(principal, action);
+  assert.equal(result.ok, true, JSON.stringify(result)); return { action, result };
+}
+async function action(host, exact = {}, categories = {}, id = 'apply') {
+  const view = await host.composition.current(principal); assert.equal(view.status, 'current', JSON.stringify(view));
+  return { action_version: 'creative-composition-apply/1.0', action_id: id, projection_sha256: view.projection.projection_sha256, intent: 'apply', draft: { categories, exact } };
+}
+const current = host => host.store.getCurrentComposition({ scope: host.scope, design_version_id: host.selection().design_version_id });
+const previewBinding = preview => Object.fromEntries(['revision_id','revision_sha256','preview_sha256'].map(k=>[k,preview[k]]));
+const zeroEffects = host => assert.deepEqual([host.counts().image_calls, host.counts().jev_calls, host.counts().reservations], [0,0,0]);
+
+test('composition reads are uninitialized and read-only; initialization requires its exact reviewed binding', async t => {
+  const host = await setup(t), empty = await host.composition.current(principal);
+  await host.composition.current(principal); assert.equal(current(host), null); assert.equal(host.counts().composition_resolves, 0); zeroEffects(host);
+  const denied = await host.composition.apply(principal, { action_version: 'creative-composition-initialize/1.0', action_id: 'forged-init', review_sha256: canonicalHash({}), intent: 'initialize' });
+  assert.equal(denied.ok, false); assert.equal(current(host), null);
+  const { action: init, result } = await initialize(host);
+  const replay = await host.composition.apply(principal, init); assert.equal(replay.ok, true, JSON.stringify(replay)); assert.equal(replay.historical, true);
+  assert.equal(replay.revision_sha256, result.revision_sha256); assert.equal(empty.approval, false); zeroEffects(host);
+});
+
+for (const [kind, value, assertChange] of [
+  ['text', 'Taylor Sample', revision => assert.equal(revision.layer_manifest.find(x => x.layer_id === 'layer:name').value, 'Taylor Sample')],
+  ['text_size', { value: '31.125', unit: 'px' }, revision => assert.deepEqual(revision.geometry.find(x => x.layer_id === 'layer:name').text_size, { value: '31.125', unit: 'px' })],
+  ['layout', { x_milli: 150, y_milli: 230, width_milli: 650, height_milli: 120 }, revision => assert.equal(revision.geometry.find(x => x.layer_id === 'layer:name').layout.y_milli, 230)],
+  ['logo', { x_milli: 60, y_milli: 790, width_milli: 130, height_milli: 130 }, revision => assert.equal(revision.geometry.find(x => x.layer_id === 'layer:logo').layout.x_milli, 60)],
+]) test(`independent exact ${kind} Apply/get/replay/reopen preserves immutable artwork and loads owner preview`, async t => {
+  const host = await setup(t); await initialize(host); const before = current(host), selection = host.selection();
+  const bytes = await host.store.getArtifactBytes({ scope: host.scope, brief_id: host.scope.brief_id, design_version_id: selection.design_version_id });
+  const body = await action(host, { [kind]: value });
+  const [result, duplicate] = await Promise.all([host.composition.apply(principal, body), host.composition.apply(principal, body)]);
+  assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(duplicate.revision_sha256, result.revision_sha256);
+  const after = current(host); assertChange(after.revision);
+  assert.equal(after.revision.parent_revision_sha256, before.revision.revision_sha256);
+  assert.notEqual(after.revision.state_sha256, before.revision.state_sha256);
+  assert.notEqual(after.revision.preview.preview_sha256, before.revision.preview.preview_sha256);
+  assert.deepEqual(host.selection(), selection);
+  assert.deepEqual(await host.store.getArtifactBytes({ scope: host.scope, brief_id: host.scope.brief_id, design_version_id: selection.design_version_id }), bytes);
+  const view = await host.composition.current(principal); assert.equal(view.projection.base.revision_sha256, result.revision_sha256);
+  const preview = await host.composition.preview(principal, previewBinding(view.preview)); assert.deepEqual(preview.bytes, Buffer.from(after.preview_bytes));
+  assert.equal(preview.metadata.byte_length, preview.bytes.length);
+  host.restartAdapter(); const replay = await host.composition.apply(principal, body);
+  assert.equal(replay.ok, true, JSON.stringify(replay)); assert.equal(replay.historical, true); assert.equal(replay.backend_job_id, result.backend_job_id);
+  assert.equal(host.counts().composition_previews, 1); zeroEffects(host);
+  assert.equal(result.approval, false); assert.equal(result.purchase, false);
+  const databasePath = host.adapter.db.prepare('PRAGMA database_list').all().find(x=>x.name==='main').file;
+  const directory = databasePath.slice(0, -'/controls.sqlite'.length), actionPath=join(directory,'reopen-action.json');
+  await writeFile(actionPath,JSON.stringify({action_id:body.action_id}));host.evidenceCounts=host.counts();host.close();
+  const child=spawnSync(process.execPath,['fixtures/controls/composition-restart-worker.mjs',directory,actionPath],{encoding:'utf8'});
+  await writeFile(join(directory,'restart.stdout.raw'),child.stdout??'');await writeFile(join(directory,'restart.stderr.raw'),child.stderr??'');
+  await writeFile(join(directory,'restart.receipt.json'),JSON.stringify({argv:[process.execPath,'fixtures/controls/composition-restart-worker.mjs',directory,actionPath],node:process.version,cwd:process.cwd(),exit_code:child.status},null,2));
+  assert.equal(child.status,0,child.stderr);const reopened=JSON.parse(child.stdout);
+  assert.equal(reopened.result.ok,true,JSON.stringify(reopened.result));assert.equal(reopened.result.revision_sha256,result.revision_sha256);
+  assert.equal(reopened.current.projection.base.revision_sha256,result.revision_sha256);
+  assert.deepEqual([reopened.counters.composition_previews,reopened.counters.image_calls,reopened.counters.jev_calls,reopened.counters.reservations],[0,0,0,0]);
+});
+
+test('all original categoricals and q01 derive current state through explicit joint templates', async t => {
+  const host = await setup(t); await initialize(host);
+  for (const [id, categories] of [['small',{name_size:'small'}],['large',{name_size:'large'}],['medium',{name_size:'medium'}],
+    ['stacked',{layout:'stacked',layout_emphasis:'balanced'}],['emphasis',{layout:'stacked',layout_emphasis:'name'}],['centered',{layout:'centered'}],['bottom',{logo_position:'bottom'}],['top',{logo_position:'top'}]]) {
+    const result = await host.composition.apply(principal, await action(host, {}, categories, id)); assert.equal(result.ok, true, JSON.stringify(result));
+    const view = await host.composition.current(principal);
+    for (const [field,value] of Object.entries(categories)) assert.equal(view.projection.categories.find(x=>x.field===field).current_value, value);
+  }
+  zeroEffects(host); assert.equal(host.counts().composition_previews, 8);
+});
+
+test('unrepresented exact geometry stays null rather than inventing a categorical baseline', async t => {
+  const host = await setup(t); await initialize(host);
+  assert.equal((await host.composition.apply(principal, await action(host, { text_size: { value:'23',unit:'pt' } }))).ok, true);
+  assert.equal((await host.composition.current(principal)).projection.categories.find(x=>x.field==='name_size').current_value, null);
+});
+
+test('changed-action, hostile/unknown inputs, q01 conflicts, revoked scope and locks dispatch no effect', async t => {
+  const host = await setup(t); await initialize(host);
+  const good = await action(host, {}, {name_size:'large'}, 'dedup'); assert.equal((await host.composition.apply(principal, good)).ok,true);
+  const changed = structuredClone(good); changed.draft.categories.name_size='small'; assert.equal((await host.composition.apply(principal, changed)).code,'conflict');
+  const before=host.counts().composition_previews;
+  for (const [id,exact,categories] of [['html',{text:'<script>bad</script>'},{}],['unknown',{eval:'bad'},{}],['empty',{},{}],['q01',{}, {layout:'stacked'}],['overlap',{layout:{x_milli:0,y_milli:0}}, {layout:'centered'}]])
+    assert.equal((await host.composition.apply(principal, await action(host, exact, categories, id))).ok,false);
+  const body=await action(host,{text:'Safe Name'}, {}, 'revoked');
+  assert.equal((await host.composition.apply({...principal,tenant_id:'forged'},body)).ok,false);
+  host.policy.can_apply=false; assert.equal((await host.composition.apply(principal,body)).ok,false);
+  assert.equal(host.counts().composition_previews,before); zeroEffects(host);
+});
+
+test('same-ID geometry and preview swaps fail exact displayed preview binding', async t => {
+  const host=await setup(t); await initialize(host); const old=(await host.composition.current(principal)).preview;
+  assert.equal((await host.composition.apply(principal,await action(host,{}, {name_size:'large'}))).ok,true);
+  assert.equal(await host.composition.preview(principal,previewBinding(old)),null);
+  const now=(await host.composition.current(principal)).preview;
+  assert.equal(await host.composition.preview(principal,{...previewBinding(now),preview_sha256:old.preview_sha256}),null);
+  assert.equal(await host.composition.preview(principal,{...previewBinding(now),revision_sha256:old.revision_sha256}),null);
+});
+
+async function waitFor(check) { const end=Date.now()+4000; while(!check()){if(Date.now()>end)throw Error('Fixture barrier timed out');await new Promise(resolve=>setTimeout(resolve,5));} }
+test('pending read-only lookup performs no execution and cancellation never publishes a child', async t => {
+  const host=await setup(t);await initialize(host);const before=current(host).revision.revision_sha256,body=await action(host,{}, {name_size:'large'},'cancel-pending');
+  host.block('composition-preview');const pending=host.composition.apply(principal,body);await waitFor(()=>host.waiting==='composition-preview');
+  const counts=host.counts();const lookup=await host.composition.lookup(principal,body.action_id);assert.equal(lookup.status,'unknown');assert.deepEqual(host.counts(),counts,'lookup must not invoke owner or preview producer');
+  const cancel=await host.composition.cancel(principal,body.action_id);assert.equal(cancel.ok,true,JSON.stringify(cancel));host.release();const result=await pending;
+  assert.equal(result.ok,false);assert.equal(current(host).revision.revision_sha256,before);zeroEffects(host);
+});
+
+test('same-parent competing real Apply requests publish exactly one immutable child', async t => {
+  const host=await setup(t);await initialize(host);const before=current(host).revision;
+  const a=await action(host,{}, {name_size:'large'},'race-a'),b=await action(host,{}, {name_size:'small'},'race-b');
+  host.block('composition-preview');const pending=Promise.all([host.composition.apply(principal,a),host.composition.apply(principal,b)]);
+  await waitFor(()=>host.store.db.prepare("SELECT COUNT(*) AS n FROM creative_composition_actions_v1 WHERE action_id IN ('race-a','race-b')").get().n===2);host.release();const results=await pending;
+  assert.equal(results.filter(x=>x.ok).length,1,JSON.stringify(results));assert.equal(current(host).revision.parent_revision_sha256,before.revision_sha256);
+  assert.equal(host.store.db.prepare('SELECT COUNT(*) AS n FROM creative_composition_revisions_v1').get().n,2);zeroEffects(host);
+});
+
+test('real immutable locked and factual policies reject restricted edits while safe permitted size succeeds', async t => {
+  const locked=await setup(t);locked.policy.locked_layer_ids=['layer:name'];await initialize(locked,'locked-init');
+  const lockedBody=await action(locked,{text:'Blocked Name'}, {},'locked-text');assert.equal((await locked.composition.apply(principal,lockedBody)).ok,false);assert.equal(locked.counts().composition_previews,0);
+  const factual=await setup(t);factual.policy.factual_name=true;await initialize(factual,'factual-init');
+  const body=await action(factual,{text:'Invented Festival'}, {},'factual-text');assert.equal((await factual.composition.apply(principal,body)).ok,false);assert.equal(factual.counts().composition_previews,0);
+  assert.equal((await factual.composition.apply(principal,await action(factual,{}, {name_size:'large'},'factual-size'))).ok,true);
+  assert.equal(current(factual).revision.layer_manifest.find(x=>x.layer_id==='layer:name').value,'Example Festival');zeroEffects(locked);zeroEffects(factual);
+});
+
+test('closed nested exact input, hostile descriptors and forged actor fail before preview dispatch', async t => {
+  const host=await setup(t);await initialize(host);let hooks=0;
+  const getter=await action(host,{text:'Safe'}, {},'getter');Object.defineProperty(getter.draft.exact,'text',{get(){hooks++;return 'Hostile';},enumerable:true});
+  assert.equal((await host.composition.apply(principal,getter)).ok,false);assert.equal(hooks,0);
+  for(const[id,exact]of [['geometry-extra',{layout:{x_milli:0,y_milli:0,script:'run'}}],['negative',{layout:{x_milli:-1,y_milli:0}}],['offcanvas',{logo:{x_milli:900,y_milli:0,width_milli:200}}],['unit',{text_size:{value:'24',unit:'em'}}],['huge',{text_size:{value:'121',unit:'pt'}}],['size-extra',{text_size:{value:'24',unit:'pt',provider:'run'}}],['secret',{text:'api_key:synthetic-private-credential'}]]){
+    assert.equal((await host.composition.apply(principal,await action(host,exact,{},id))).ok,false,id);
+  }
+  const body=await action(host,{}, {name_size:'large'},'actor');assert.equal((await host.composition.apply({...principal,actor_id:'other'},body)).ok,false);
+  assert.equal(host.counts().composition_previews,0);zeroEffects(host);
+});
+
+test('borrowed controls BEGIN and SAVEPOINT reject before host callbacks and preserve caller rows',async t=>{
+  const host=await setup(t);await initialize(host);const body=await action(host,{}, {name_size:'large'},'borrowed');
+  const db=host.adapter.db;db.exec('CREATE TABLE caller_owned(value TEXT)');let reads=0;const original=host.composition.readContext;host.composition.readContext=(...args)=>{reads++;return original(...args);};
+  for(const boundary of ['BEGIN','SAVEPOINT caller']){
+    db.exec(boundary);db.prepare('INSERT INTO caller_owned VALUES(?)').run(boundary);
+    const before=host.counts().composition_previews;
+    assert.equal((await host.composition.apply(principal,body)).ok,false);assert.equal(await host.composition.lookup(principal,body.action_id),null);
+    assert.equal(db.isTransaction,true);assert.equal(db.prepare('SELECT COUNT(*) AS n FROM caller_owned WHERE value=?').get(boundary).n,1);assert.equal(reads,0);assert.equal(host.counts().composition_previews,before);
+    if(boundary==='BEGIN')db.exec('ROLLBACK');else db.exec('ROLLBACK TO caller; RELEASE caller');
+  }
+});
+
+
+test('distinct text, categorical size and exact layout/logo combine into one real immutable child', async t => {
+  const host = await setup(t); await initialize(host); const before = current(host).revision;
+  const body = await action(host, { text: 'Combined Sample', layout: { x_milli: 120, y_milli: 300 }, logo: { x_milli: 700, y_milli: 100 } }, { name_size: 'large' }, 'combined');
+  const result = await host.composition.apply(principal, body); assert.equal(result.ok, true, JSON.stringify(result));
+  const revision = current(host).revision;
+  assert.equal(revision.parent_revision_sha256, before.revision_sha256);
+  assert.equal(revision.layer_manifest.find(x => x.layer_id === 'layer:name').value, 'Combined Sample');
+  assert.equal(revision.geometry.find(x => x.layer_id === 'layer:name').text_size.value, '36');
+  assert.equal(revision.geometry.find(x => x.layer_id === 'layer:name').layout.y_milli, 300);
+  assert.equal(revision.geometry.find(x => x.layer_id === 'layer:logo').layout.x_milli, 700);
+  assert.equal(host.counts().composition_previews, 1); zeroEffects(host);
+});
+
+test('preview read discards genuine bytes if trusted selection changes during the response', async t => {
+  const host = await setup(t); await initialize(host); const expected = previewBinding((await host.composition.current(principal)).preview);
+  const api = host.composition.api, originalRead = host.composition.readContext; let changed = false;
+  host.composition.api = { invoke: async (...args) => { const result = await api.invoke(...args); changed = true; return result; } };
+  host.composition.readContext = (...args) => { const context = originalRead(...args); return changed ? { ...context, selection: { ...context.selection, revision: context.selection.revision + 1 } } : context; };
+  assert.equal(await host.composition.preview(principal, expected), null);
+  assert.equal(host.counts().composition_previews, 0); zeroEffects(host);
+});

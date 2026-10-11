@@ -74,6 +74,8 @@ export interface IntegratedApplyResult {
   approval?: false; purchase?: false;
 }
 export class CreativeControlsAdapter {
+  retryExisting(principal: TrustedPrincipal, actionId: string): Promise<IntegratedApplyResult>;
+  readExisting(principal: TrustedPrincipal, actionId: string): Promise<IntegratedApplyResult>;
   constructor(options: { path: string; ports: import('../api/v1.mjs').CreativeRuntimePorts & { jobs: NonNullable<import('../api/v1.mjs').CreativeRuntimePorts['jobs']>; storage: NonNullable<import('../api/v1.mjs').CreativeRuntimePorts['storage']> };
     readContext: (principal: TrustedPrincipal) => CurrentCreativeControlContext; now?: () => number });
   readonly store: ApplyStore;
@@ -86,3 +88,6 @@ export class CreativeControlsAdapter {
 export * from './inspection-consumer.mjs';
 export * from './inspection-integration.mjs';
 export * from './inspection-view.mjs';
+export * from './composition-projection.mjs';
+export * from './composition-integration.mjs';
+export * from './composition-view.mjs';

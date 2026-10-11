@@ -141,7 +141,7 @@ export class CreativeControlsAdapter {
     this.inflight.set(operationId, running);
     try { return await running; } finally { this.inflight.delete(operationId); }
   }
-  async consume(principal, operationId, replayed) {
+  async consume(principal, operationId, replayed, readOnly = false) {
     try {
       let binding = this.db.prepare('SELECT * FROM control_api_bindings_v1 WHERE operation_id=?').get(operationId);
       if (!binding) {
@@ -201,7 +201,7 @@ export class CreativeControlsAdapter {
         completion_id: `completion:${jobId}`, result_ref: design.design_version_id,
         applied_versions: this.projection(principal).schema.expected_versions };
       if (historical && (hash(receipt) !== completion.completion_hash || receipt.completion_id !== `completion:${jobId}` || receipt.result_ref !== design.design_version_id)) throw new TypeError('Corrupt original control completion');
-      const acknowledged = this.store.acknowledge(principal, operationId, receipt);
+      const acknowledged = readOnly ? { ok: true, code: 'replayed', operation_id: operationId, status: 'completed', replayed: true } : this.store.acknowledge(principal, operationId, receipt);
       if (!acknowledged.ok) return acknowledged;
       return { ...acknowledged, replayed: replayed || response.replayed === true,
         backend_job_id: jobId, backend_operation_id: response.operation_id, result: safe(response.result),
@@ -229,6 +229,31 @@ export class CreativeControlsAdapter {
     if (!job || job.status === 'completed' || job.status === 'cancelled') return;
     await this.ports.jobs.cancel({ scope, actor_id: actorId, job_id: binding.job_id, target_action_id: binding.action_id,
       action_id: `cancel:${operationId}`, request_hash: canonicalHash({ operation_id: operationId, intent: 'cancel' }) });
+  }
+  async retryExisting(principal, actionId) {
+    try {
+      principal = snapshotControlJson(principal);
+      if (!this.projection(principal).can_read) return { ok: false, code: 'permission' };
+      const row = this.db.prepare('SELECT * FROM control_jobs WHERE tenant_id=? AND project_id=? AND actor_id=? AND action_id=?')
+        .get(principal.tenant_id, principal.project_id, principal.actor_id, actionId);
+      if (!row) return { ok: false, code: 'unavailable', status: 'unknown' };
+      const payload = snapshotControlJson(JSON.parse(row.payload));
+      if (hash(payload) !== row.action_hash || payload.action_id !== actionId) throw new TypeError('Corrupt original action');
+      return this.apply(principal, payload);
+    } catch { return { ok: false, code: 'unavailable', status: 'unknown' }; }
+  }
+  async readExisting(principal, actionId) {
+    try {
+      principal = snapshotControlJson(principal);
+      if (!this.projection(principal).can_read) return { ok: false, code: 'permission' };
+      const row = this.db.prepare('SELECT j.operation_id,j.status,b.result_json FROM control_jobs j LEFT JOIN control_api_bindings_v1 b ON b.operation_id=j.operation_id WHERE j.tenant_id=? AND j.project_id=? AND j.actor_id=? AND j.action_id=?')
+        .get(principal.tenant_id, principal.project_id, principal.actor_id, actionId);
+      if (!row) return { ok: false, code: 'unavailable', status: 'unknown' };
+      // Pending status never invokes the producer. A completed cached binding is
+      // verified through the original historical read path before presentation.
+      if (row.status === 'completed' && row.result_json) return this.consume(principal, row.operation_id, true, true);
+      return { ok: true, code: 'replayed', status: row.status, operation_id: row.operation_id, acknowledgment_only: true, approval: false, purchase: false };
+    } catch { return { ok: false, code: 'unavailable', status: 'unknown' }; }
   }
   lookup(principal, actionId) {
     const ctx = snapshotControlJson(principal);
