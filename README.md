@@ -78,7 +78,7 @@ make check TARGET=versions MODE=mock   # durable store and process-restart cases
 make acceptance TARGET=all             # expected to exit 2 while owner evidence is pending
 ```
 
-Per-area targets (`brief`, `concepts`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `inspection`, `creative-metering`), live-gate behaviour, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The Chromium controls roundtrip has its own install steps in [controls integration](docs/controls-integration.md).
+Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `inspection`, `creative-metering`), their live-gate behaviour, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The concepts target is described below. The Chromium controls roundtrip has its own install steps in [controls integration](docs/controls-integration.md).
 
 `make check TARGET=concepts MODE=mock` runs the native-edit fixture journey, public persistence and recovery cases, and an offline installed-package API consumer. `MODE=CI` runs the same local checks; `MODE=failclosedlive` exits 2 without dispatching or reading provider credentials. The local Creative API 1.1 mapping and external owner agreements remain pending acceptance.
 
