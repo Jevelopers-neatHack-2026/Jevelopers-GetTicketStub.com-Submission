@@ -31,7 +31,7 @@ Boundaries that local checks do not cross:
 - **Planning** does not grant asset rights; permission fields are claims, not grants.
 - **Recovery and restore** do not dispatch providers. **Handoff** stays `unavailable` until durable external-result staging is implemented.
 - **Telemetry** reuses the C03 metering authority and does not create a budget ledger. Neatlogs protocol agreement, actual ingestion and readback remain unresolved.
-- **Live provider access** is fail-closed: the access-preflight, image-adapter and inspection live gates exit 2 with zero dispatches, and `MODE=live` is not implemented.
+- **Live provider access** is fail-closed: the access-preflight, image-adapter, openrouter-image-adapter and inspection live gates exit 2 with zero dispatches, and `MODE=live` is not implemented.
 - Application authentication, finance authority, approval issuance and rendering are not implemented here. Local process-restart tests do not certify production-host durability.
 
 Pending: the C01–C04 contract and schema proposals await external owner agreement ([agreement status](docs/contracts/canonical-owner-agreements.json)). Every `make acceptance` target exits 2 until that owner evidence is published and independently verified. See [development and acceptance gates](docs/development.md#detailed-package-status) for the full statement.
@@ -53,7 +53,7 @@ Exports from [`package.json`](package.json); each has an ESM `.mjs` runtime and 
 | `creative-engine/versions` | SQLite version store, selection CAS and API ports | [Version state](docs/creative/version-state-machine.md) |
 | `creative-engine/controls` | Controls runtime, ApplyStore and API adapter (CE-05) | [Controls integration](docs/controls-integration.md) |
 | `creative-engine/inspection` | Deterministic checks, DecisionPort questions, bounded repair (CE-09) | [Inspection policy](docs/creative/inspection-policy.md) |
-| `creative-engine/models` | Direct OpenAI Images adapter; candidate models unselected (CE-03) | [Images adapter](docs/providers/openai-images.md) |
+| `creative-engine/models` | Direct OpenAI Images adapter (candidate models unselected, CE-03) and OpenRouter Images adapter (explicit host profile, CE-03-OR) | [OpenAI Images](docs/providers/openai-images.md) · [OpenRouter Images](docs/providers/openrouter-images.md) |
 | `creative-engine/telemetry` | CE-11 usage/evidence boundary and SQLite outbox | [Usage evidence](docs/usage-trace-evidence.md) |
 
 The package is `private` at version `0.0.0`; it is not published to a registry.
@@ -78,7 +78,7 @@ make check TARGET=versions MODE=mock   # durable store and process-restart cases
 make acceptance TARGET=all             # expected to exit 2 while owner evidence is pending
 ```
 
-Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `inspection`, `creative-metering`), their live-gate behaviour, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The concepts target is described below. The Chromium controls roundtrip has its own install steps in [controls integration](docs/controls-integration.md).
+Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `openrouter-image-adapter`, `inspection`, `creative-metering`), their live-gate behaviour, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The concepts target is described below. The Chromium controls roundtrip has its own install steps in [controls integration](docs/controls-integration.md).
 
 `make check TARGET=concepts MODE=mock` runs the native-edit fixture journey, public persistence and recovery cases, and an offline installed-package API consumer. `MODE=CI` runs the same local checks; `MODE=failclosedlive` exits 2 without dispatching or reading provider credentials. The local Creative API 1.1 mapping and external owner agreements remain pending acceptance.
 
@@ -91,7 +91,7 @@ Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-p
 - [Brief planning, rights checks and invalidation](docs/creative-brief.md) · [version state machine](docs/creative/version-state-machine.md)
 - [Controls integration](docs/controls-integration.md) · [controls package](docs/controls-package-integration.md) · [inspection consumer preparation](docs/controls/inspection-consumer-preparation.md)
 - [Inspection policy](docs/creative/inspection-policy.md) · [evaluation policy](docs/evaluation/creative-evaluation.md) · [rubric](docs/evaluation/creative-rubric.md)
-- [Provider access preflight](docs/operations/provider-access.md) · [OpenAI Images adapter](docs/providers/openai-images.md)
+- [Provider access preflight](docs/operations/provider-access.md) · [OpenAI Images adapter](docs/providers/openai-images.md) · [OpenRouter Images adapter](docs/providers/openrouter-images.md)
 - [Usage and trace evidence](docs/usage-trace-evidence.md)
 - Contract proposals: [consumer](docs/contracts/creative-boundary.md) · [DecisionPort](docs/contracts/decision-port.md) · [metering](docs/contracts/metering.md) · [approval handoff](docs/contracts/approval-handoff.md) · [owner agreements](docs/contracts/canonical-owner-agreements.json)
 - [Architecture reference](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/architecture-kit/v1.0/README.md) · [implementation plan](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/main/docs/planning/implementation-plan.md)

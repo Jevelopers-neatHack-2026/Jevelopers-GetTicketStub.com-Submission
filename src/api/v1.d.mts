@@ -185,15 +185,12 @@ export interface CreativeConceptAppendEventResult {
   readonly batch_status: CreativeConceptStoredBatchStatus;
 }
 
-export interface CreativeConceptDispatchTargetBinding {
-  readonly service: "openai";
-  readonly endpoint: "https://api.openai.com/v1/images/edits";
+interface CreativeConceptDispatchTargetBindingBase {
   readonly model: string;
   readonly sdk_name: "native-fetch";
   readonly sdk_version: string;
   readonly configuration_sha256: `sha256:${string}`;
   readonly operation: "edit";
-  readonly operation_kind: "image_edit";
   readonly input_sha256: `sha256:${string}`;
   readonly prompt_sha256: `sha256:${string}`;
   readonly plan_sha256: `sha256:${string}`;
@@ -209,6 +206,21 @@ export interface CreativeConceptDispatchTargetBinding {
   readonly budget_scope_id: string;
   readonly billable_attempt_id: string;
 }
+
+/** The concept dispatch target for each allowlisted native image provider route. */
+export type CreativeConceptDispatchTargetBinding = CreativeConceptDispatchTargetBindingBase & (
+  | Readonly<{ service: "openai"; endpoint: "https://api.openai.com/v1/images/edits"; operation_kind: "image_edit" }>
+  | Readonly<{
+    service: "openrouter";
+    endpoint: "https://openrouter.ai/api/v1/images";
+    operation_kind: "image_reference_edit";
+    provider_tag: string;
+    provider_routing: Readonly<{ only: readonly [string]; allow_fallbacks: false }>;
+    metered_operation_kind: string;
+    edit_semantics: "reference_guided";
+    max_input_references: number;
+  }>
+);
 
 export interface CreativeConceptDispatchBindingInput {
   readonly scope: CreativeConceptStorageScope;
@@ -647,7 +659,7 @@ export interface PrivateProviderRequestAttribution {
   readonly action_id: string;
   readonly request_hash: `sha256:${string}`;
   readonly operation: "generate" | "edit";
-  readonly provider: "openai";
+  readonly provider: "openai" | "openrouter";
   readonly model: string;
   readonly reservation_ref: string;
   readonly billable_attempt_id: string;
@@ -670,7 +682,7 @@ export interface PrivateProviderUsageAttribution {
   readonly action_id: string;
   readonly request_hash: string;
   readonly operation: "generate" | "edit";
-  readonly provider: "openai";
+  readonly provider: "openai" | "openrouter";
   readonly model: string;
   readonly reservation_ref: string;
   readonly billable_attempt_id: string;
@@ -696,7 +708,7 @@ export interface PrivateProviderAttributionPending {
   readonly action_id: string;
   readonly request_hash: `sha256:${string}`;
   readonly operation: "generate" | "edit";
-  readonly provider: "openai";
+  readonly provider: "openai" | "openrouter";
   readonly model: string;
   readonly reservation_ref: string;
   readonly billable_attempt_id: string;
@@ -1089,9 +1101,9 @@ export interface CreativeRuntimePorts {
       Promise<CreativeProviderRoute> | CreativeProviderRoute;
     generate(input: ProviderInput): Promise<ProviderOutput>;
     edit(input: ProviderInput | CreativeConceptProviderInput): Promise<ProviderOutput>;
-    getConceptConfiguration?(): Readonly<{ model_id: string; configuration: Readonly<{
-      quality: string; size: string; output_format: string; background: string; moderation: string;
-    }> }>;
+    getConceptConfiguration?(): Readonly<{ model_id: string; configuration: OpenAIConceptConfiguration }> |
+      Readonly<{ model_id: string; provider_tag: string; capabilities: OpenRouterConceptCapabilities;
+        configuration: OpenRouterConceptConfiguration }>;
     /** Decode and hash the exact two authorized inputs before C03; the native edit rereads and verifies them. */
     inspectConceptReferences?(input: { scope: TrustedScope;
       references: readonly CreativeConceptReferencePreflight[];
@@ -1488,15 +1500,7 @@ export interface CreativeConceptLineage {
     maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number;
     budget_scope_id: string; budget_snapshot_ref: string; budget_expires_at: string;
   }>>;
-  readonly adapter_snapshot: DeepReadonly<Readonly<{
-    capability_ref: string; capability_schema_version: string; provider_name: string; model: string;
-    endpoint: string; provider_operation: "edit"; operation_mapping_ref: string; operation_kind: string;
-    target_ref: string; sdk_name: string; sdk_version: string; configuration_ref: string;
-    configuration_sha256: `sha256:${string}`; configuration: Readonly<{
-      quality: string; size: string; output_format: string; background: string; moderation: string;
-    }>;
-    prompt_template_ref: string; prompt_template_version: string; prompt_template_sha256: `sha256:${string}`;
-  }>>;
+  readonly adapter_snapshot: CreativeConceptAdapterSnapshot;
   readonly source_assets: readonly DeepReadonly<Readonly<{
     asset_id: string; source_ref: string; content_hash: `sha256:${string}`; media_type: string;
     role_ref: string; package_id: string; package_sha256: `sha256:${string}`;
@@ -1661,3 +1665,40 @@ export declare function createCreativeApi(options?: {
   idFactory?: () => string;
 }): { invoke(principal: TrustedCreativeActor, request: CreativeApiRequest): Promise<CreativeApiResponse> };
 export declare const createCreativeRuntime: typeof createCreativeApi;
+
+/** Direct OpenAI concept configuration (all five fields are required). */
+export type OpenAIConceptConfiguration = Readonly<{
+  quality: string; size: string; output_format: string; background: string; moderation: string;
+}>;
+/** OpenRouter concept configuration: the declared subset only. */
+export type OpenRouterConceptConfiguration = Readonly<{
+  aspect_ratio?: string; quality?: string; background?: string; output_format?: string;
+  resolution?: string; output_compression?: number;
+}>;
+export type OpenRouterConceptCapabilities = Readonly<{
+  generation: boolean; edit: false | Readonly<{ max_input_references: number }>;
+}>;
+
+type CreativeConceptAdapterSnapshotBase = Readonly<{
+  capability_ref: string; capability_schema_version: string; model: string;
+  endpoint: string; provider_operation: "edit"; operation_mapping_ref: string; operation_kind: string;
+  target_ref: string; sdk_name: string; sdk_version: string; configuration_ref: string;
+  configuration_sha256: `sha256:${string}`;
+  prompt_template_ref: string; prompt_template_version: string; prompt_template_sha256: `sha256:${string}`;
+}>;
+
+/** Provider-discriminated lineage keeps direct OpenAI guarantees and the narrower OpenRouter profile truthful. */
+export type CreativeConceptAdapterSnapshot = DeepReadonly<
+  | (CreativeConceptAdapterSnapshotBase & Readonly<{
+      provider_name: "openai";
+      configuration: OpenAIConceptConfiguration;
+      provider_tag?: never;
+      capabilities?: never;
+    }>)
+  | (CreativeConceptAdapterSnapshotBase & Readonly<{
+      provider_name: "openrouter";
+      provider_tag: string;
+      capabilities: OpenRouterConceptCapabilities;
+      configuration: OpenRouterConceptConfiguration;
+    }>)
+>;

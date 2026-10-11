@@ -206,6 +206,7 @@ export declare class OpenAIImagesProviderError extends Error {
     retry?: OpenAIImageRetryDecision;
     provider_request_ref?: string;
     field?: string;
+    embedded_code?: number;
   });
   readonly code: OpenAIImagesErrorCode | string;
   readonly provider_outcome: "succeeded" | "failed" | "partial" | "unknown";
@@ -213,6 +214,8 @@ export declare class OpenAIImagesProviderError extends Error {
   readonly retry?: OpenAIImageRetryDecision;
   readonly provider_request_ref?: string;
   readonly field?: string;
+  /** Sanitized numeric code of an error body delivered under a different HTTP status (for example 200). */
+  readonly embedded_code?: number;
   /** Raw allowlisted counters observed before a failed outcome; never implies settlement. */
   readonly usage?: OpenAIImageUsage;
 }
@@ -252,3 +255,136 @@ export declare function evaluateOpenAIImageRetry(input: {
   max_delay_ms?: number;
   next_attempt_authorized?: boolean;
 }): OpenAIImageRetryDecision;
+
+// ---------------------------------------------------------------------------
+// OpenRouter Images adapter. The host supplies an explicit profile; there is no
+// built-in default model, provider tag, price, or entitlement.
+// ---------------------------------------------------------------------------
+
+export type OpenRouterImageOutputFormat = OpenAIImageOutputFormat;
+
+/** Typed discovery-style descriptors. An absent key means the model does not support the parameter. */
+export type OpenRouterImageEnumDescriptor<T extends string = string> = Readonly<{ type: "enum"; values: readonly T[] }>;
+export type OpenRouterImageRangeDescriptor = Readonly<{ type: "range"; min: number; max: number }>;
+
+export interface OpenRouterImageSupportedParameters {
+  readonly aspect_ratio?: OpenRouterImageEnumDescriptor<`${number}:${number}`>;
+  readonly quality?: OpenRouterImageEnumDescriptor;
+  readonly background?: OpenRouterImageEnumDescriptor<"auto" | "opaque" | "transparent">;
+  readonly output_format?: OpenRouterImageEnumDescriptor<OpenRouterImageOutputFormat>;
+  readonly resolution?: OpenRouterImageEnumDescriptor<"512" | "768" | "1K" | "1.5K" | "2K" | "4K">;
+  readonly output_compression?: OpenRouterImageRangeDescriptor;
+}
+
+/** The pinned subset sent to the provider. Every key must be declared by `supported_parameters`. */
+export interface OpenRouterImageConfiguration {
+  readonly aspect_ratio?: string;
+  readonly quality?: string;
+  readonly background?: "auto" | "opaque" | "transparent";
+  readonly output_format?: OpenRouterImageOutputFormat;
+  readonly resolution?: "512" | "768" | "1K" | "1.5K" | "2K" | "4K";
+  readonly output_compression?: number;
+}
+
+/** Generation and reference-guided edit are separate capabilities; one never implies the other. */
+export interface OpenRouterImageCapabilities {
+  readonly generation: boolean;
+  readonly edit: false | Readonly<{ max_input_references: number }>;
+}
+
+export interface OpenRouterImageCostObservation {
+  readonly amount: string;
+  readonly currency: "USD";
+  /** Provider-reported and unsettled: never a Finance expense, a price, or a settlement. */
+  readonly provenance: "provider_reported_unsettled";
+}
+
+/** Raw allowlisted counters. A missing usage or cost is listed in `missing_fields`, never zero. */
+export interface OpenRouterImageUsage extends OpenAIImageUsage {
+  readonly cost?: OpenRouterImageCostObservation;
+  readonly cost_details?: Readonly<{
+    upstream_inference_cost?: string;
+    upstream_inference_prompt_cost?: string;
+    upstream_inference_completions_cost?: string;
+  }>;
+  readonly is_byok?: boolean;
+}
+
+export interface OpenRouterImagesOutput extends ProviderOutput {
+  readonly target_binding_sha256: `sha256:${string}`;
+  readonly usage: OpenRouterImageUsage;
+}
+
+export type OpenRouterImageTargetBinding = Omit<OpenAIImageTargetBinding, "service" | "operation_kind"> & Readonly<{
+  service: "openrouter";
+  endpoint: "https://openrouter.ai/api/v1/images";
+  provider_tag: string;
+  provider_routing: Readonly<{ only: readonly [string]; allow_fallbacks: false }>;
+  /** `image_generation`, or `image_reference_edit` for reference-guided edit (not the direct masked/parent edit). */
+  operation_kind: "image_generation" | "image_reference_edit";
+  /** The C03 MeteredOperationKind of the attempt. */
+  metered_operation_kind: string;
+  edit_semantics?: "reference_guided";
+  max_input_references?: number;
+}>;
+
+export type OpenRouterImageCapabilityRequest = Omit<OpenAIImageCapabilityRequest, "target_binding"> &
+  Readonly<{ target_binding: OpenRouterImageTargetBinding }>;
+export type OpenRouterImageAuthorizationRequest = Omit<OpenAIImageAuthorizationRequest, "target_binding"> &
+  Readonly<{ target_binding: OpenRouterImageTargetBinding }>;
+
+export interface OpenRouterImageCapabilityPort {
+  verify(input: OpenRouterImageCapabilityRequest): Promise<unknown> | unknown;
+  revalidate(input: OpenRouterImageCapabilityRequest): Promise<unknown> | unknown;
+}
+
+export interface OpenRouterImageAuthorizationPort {
+  revalidate(input: OpenRouterImageAuthorizationRequest): Promise<unknown> | unknown;
+}
+
+/** The host injects the creative-engine OpenRouter key here. The adapter never reads the environment. */
+export interface OpenRouterImageCredentialPort {
+  resolveCredential(input: Readonly<Record<string, unknown>>): Promise<unknown> | unknown;
+}
+
+export interface OpenRouterImageProviderOptions {
+  /** `author/slug` model id chosen by the host. */
+  readonly model_id: string;
+  /** Pinned into `provider.only` with `allow_fallbacks: false`. */
+  readonly provider_tag: string;
+  readonly capabilities: OpenRouterImageCapabilities;
+  readonly supported_parameters?: OpenRouterImageSupportedParameters;
+  readonly configuration: OpenRouterImageConfiguration;
+  readonly capabilityPort: OpenRouterImageCapabilityPort;
+  readonly authorizationPort: OpenRouterImageAuthorizationPort;
+  readonly credentialPort: OpenRouterImageCredentialPort;
+  readonly promptPort: OpenAIImagePromptPort;
+  readonly assetPort?: OpenAIImageAssetPort;
+  readonly fetchImpl?: typeof fetch;
+  readonly now?: () => number;
+  readonly idFactory?: () => string;
+  readonly retryPolicy?: OpenAIImageRetryPolicy;
+}
+
+export declare const OPENROUTER_IMAGES_ENDPOINT: "https://openrouter.ai/api/v1/images";
+export declare const OPENROUTER_IMAGES_COST_PROVENANCE: "provider_reported_unsettled";
+
+export declare class OpenRouterImagesProviderError extends OpenAIImagesProviderError {
+  readonly usage?: OpenRouterImageUsage;
+}
+
+export declare function createOpenRouterImagesProvider(options: OpenRouterImageProviderOptions): Readonly<{
+  resolveRoute(input: Pick<CreativeProviderRouteInput, "operation">): CreativeProviderRoute;
+  getConceptConfiguration(): Readonly<{ model_id: string; provider_tag: string; capabilities: OpenRouterImageCapabilities;
+    configuration: OpenRouterImageConfiguration }>;
+  inspectConceptReferences(input: { scope: ProviderInput["scope"];
+    references: readonly CreativeConceptReferencePreflight[];
+    maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number }):
+    Promise<readonly CreativeConceptReferenceInspection[]>;
+  generate(input: OpenAIImagesInput): Promise<OpenRouterImagesOutput>;
+  edit(input: OpenAIImagesInput | OpenAIImagesConceptInput): Promise<OpenRouterImagesOutput>;
+}>;
+
+export declare function normalizeOpenRouterImageUsage(raw: unknown, identities?: {
+  transport_attempt_id?: string;
+}): OpenRouterImageUsage;

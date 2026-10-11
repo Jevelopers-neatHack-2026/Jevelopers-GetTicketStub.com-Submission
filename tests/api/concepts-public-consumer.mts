@@ -13,6 +13,10 @@ import type {
   CreativeApiRequestV1_1Envelope,
   CreativeApiResponse,
   CreativeConceptBatchResult,
+  CreativeConceptLineage,
+  OpenAIConceptConfiguration,
+  OpenRouterConceptCapabilities,
+  OpenRouterConceptConfiguration,
   CreativeConceptNativePlan,
   CreativeConceptProviderInput,
   CreativeConceptReferenceInspection,
@@ -133,6 +137,33 @@ if (!generateRequest || !jobStatusRequest) throw new Error("Legacy request fixtu
 const response: Promise<CreativeApiResponse> = api.invoke(trustedActor, generateRequest);
 const aliasResponse: Promise<CreativeApiResponse> = apiAlias.invoke(trustedActor, jobStatusRequest);
 const conceptsInvocation: Promise<CreativeApiResponse> = api.invoke(trustedActor, conceptsRequest);
+
+function consumeConceptLineage(lineage: CreativeConceptLineage): string {
+  const adapter = lineage.adapter_snapshot;
+  if (adapter.provider_name === "openai") {
+    const directConfiguration: OpenAIConceptConfiguration = adapter.configuration;
+    const directSize: string = directConfiguration.size;
+    return `${adapter.model}:${directSize}`;
+  }
+  const providerTag: string = adapter.provider_tag;
+  const capabilities: OpenRouterConceptCapabilities = adapter.capabilities;
+  const routerConfiguration: OpenRouterConceptConfiguration = adapter.configuration;
+  // A valid OpenRouter profile may have no optional image parameters at all.
+  const noOptionalSize: string | undefined = routerConfiguration.resolution;
+  // @ts-expect-error OpenRouter's declared profile has no direct size field.
+  const unsupportedSize: string = routerConfiguration.size;
+  void unsupportedSize;
+  // @ts-expect-error OpenRouter lineage does not claim direct OpenAI moderation settings.
+  const unsupportedModeration: string = routerConfiguration.moderation;
+  void unsupportedModeration;
+  return `${adapter.model}:${providerTag}:${capabilities.generation}:${noOptionalSize ?? "empty"}`;
+}
+
+export function consumeSuccessfulConceptLineages(response: CreativeApiResponse): readonly string[] {
+  if (response.ok !== true || response.schema_version !== "1.1" ||
+      !response.result || response.result.contract !== "CreativeConceptBatchResult") return [];
+  return response.result.candidates.map((candidate) => consumeConceptLineage(candidate.creative_concept_lineage));
+}
 type CompleteIfActive = NonNullable<CreativeRuntimePorts["jobs"]>["completeIfActive"];
 type SynchronousBeforeCommit = NonNullable<Parameters<CompleteIfActive>[2]>;
 const validFinalFence: SynchronousBeforeCommit = () => true;

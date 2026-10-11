@@ -7,7 +7,8 @@ import {
 import {
   validateMeteredAttempt,
 } from "../contracts/metering.mjs";
-import { OPENAI_IMAGES_ENDPOINTS, inspectOpenAIImageBytes } from "../models/openai-images.mjs";
+import { inspectOpenAIImageBytes } from "../models/openai-images.mjs";
+import { imageProviderRoute } from "../models/image-routes.mjs";
 import { hashArtifactBytes } from "../storage/content-addressed.mjs";
 
 export const CREATIVE_CONCEPT_PROPOSAL = Object.freeze({
@@ -116,7 +117,38 @@ function cloned(value) {
   return structuredClone(value);
 }
 
-function validateConfiguration(value) {
+const OPENROUTER_CONFIGURATION_PATTERNS = Object.freeze({
+  aspect_ratio: /^[1-9]\d{0,2}:[1-9]\d{0,2}$/,
+  quality: /^[a-z][a-z0-9_-]{0,31}$/,
+  background: /^(?:auto|transparent|opaque)$/,
+  output_format: /^(?:png|jpeg|webp)$/,
+  resolution: /^(?:512|768|1K|1\.5K|2K|4K)$/,
+});
+
+/** OpenRouter's configuration is an explicit host-declared subset; every present key is validated. */
+function validateOpenRouterConfiguration(value) {
+  record(value, "adapter.configuration");
+  const result = {};
+  for (const key of Object.keys(value).sort()) {
+    const item = value[key];
+    if (key === "output_compression") {
+      if (!Number.isSafeInteger(item) || item < 0 || item > 100) {
+        fail("unsupported_configuration", "adapter.configuration", "The explicit image configuration contains an unsupported value.");
+      }
+    } else if (!Object.hasOwn(OPENROUTER_CONFIGURATION_PATTERNS, key) || typeof item !== "string" ||
+        !OPENROUTER_CONFIGURATION_PATTERNS[key].test(item)) {
+      fail("unsupported_configuration", "adapter.configuration", "The explicit OpenRouter image configuration contains an unsupported option or value.");
+    }
+    result[key] = item;
+  }
+  if (result.background === "transparent" && !["png", "webp"].includes(result.output_format)) {
+    fail("unsupported_configuration", "adapter.configuration", "Transparent output requires PNG or WebP.");
+  }
+  return Object.freeze(result);
+}
+
+function validateConfiguration(value, providerName = "openai") {
+  if (providerName === "openrouter") return validateOpenRouterConfiguration(value);
   record(value, "adapter.configuration");
   const keys = Object.keys(value).sort();
   if (!same(keys, [...CONFIGURATION_KEYS].sort())) {
@@ -208,11 +240,26 @@ function validatePolicySnapshot(value, scope, request, nowMs) {
 }
 
 function validateAdapterSnapshot(value) {
-  onlyKeys(value, ["capability_ref", "capability_schema_version", "provider_name", "model", "endpoint", "provider_operation", "operation_mapping_ref", "operation_kind", "target_ref", "sdk_name", "sdk_version", "configuration_ref", "configuration_sha256", "configuration", "prompt_template_ref", "prompt_template_version", "prompt_template_sha256"], "adapter_snapshot");
-  if (value.provider_operation !== "edit" || value.endpoint !== OPENAI_IMAGES_ENDPOINTS.edit) {
+  onlyKeys(value, ["capability_ref", "capability_schema_version", "provider_name", "model", "endpoint", "provider_operation", "operation_mapping_ref", "operation_kind", "target_ref", "sdk_name", "sdk_version", "configuration_ref", "configuration_sha256", "configuration", "prompt_template_ref", "prompt_template_version", "prompt_template_sha256", "provider_tag", "capabilities"], "adapter_snapshot");
+  const nativeRoute = imageProviderRoute(value.provider_name);
+  if (value.provider_operation !== "edit" || !nativeRoute || value.endpoint !== nativeRoute.edit_endpoint) {
     fail("unsupported_concept_route", "adapter_snapshot.endpoint", "Referenced initial concepts require the explicit native image-edit route proposal.");
   }
-  const config = validateConfiguration(value.configuration);
+  const config = validateConfiguration(value.configuration, nativeRoute.name);
+  // An OpenRouter approval binds the pinned provider tag and the declared capabilities; direct OpenAI has neither.
+  let routing = {};
+  if (nativeRoute.name === "openrouter") {
+    const capabilities = value.capabilities;
+    if (typeof value.provider_tag !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/.test(value.provider_tag) ||
+        !isPlainRecord(capabilities) || typeof capabilities.generation !== "boolean" ||
+        !(capabilities.edit === false || (isPlainRecord(capabilities.edit) &&
+          Number.isSafeInteger(capabilities.edit.max_input_references) && capabilities.edit.max_input_references >= 2))) {
+      fail("unsupported_concept_route", "adapter_snapshot.provider_tag", "OpenRouter concepts must bind the pinned provider tag and an edit capability that admits both references.");
+    }
+    routing = { provider_tag: value.provider_tag, capabilities: cloned(capabilities) };
+  } else if (value.provider_tag !== undefined || value.capabilities !== undefined) {
+    fail("unsupported_concept_route", "adapter_snapshot.provider_tag", "Only OpenRouter adapter snapshots carry a provider tag or capabilities.");
+  }
   const configurationHash = hash(value.configuration_sha256, "adapter_snapshot.configuration_sha256");
   if (configurationHash !== canonicalHash(config)) {
     fail("configuration_hash_mismatch", "adapter_snapshot.configuration_sha256", "The configuration hash does not match the exact supplied configuration.");
@@ -240,7 +287,12 @@ function validateAdapterSnapshot(value) {
     prompt_template_ref: nonEmpty(value.prompt_template_ref, "adapter_snapshot.prompt_template_ref"),
     prompt_template_version: nonEmpty(value.prompt_template_version, "adapter_snapshot.prompt_template_version"),
     prompt_template_sha256: promptHash,
+    ...routing,
   });
+}
+
+function isPlainRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function packageReference(packageValue, assetId, field) {
@@ -869,7 +921,8 @@ export function applyCreativeConceptEvent(batch, incomingEvent) {
       const height = integer(event.height, "event.height");
       const format = Object.keys(FORMATS).find((key) => FORMATS[key] === mediaType);
       if (!format) fail("unsupported_media_type", "event.media_type", "Only native inspected PNG, JPEG, and WebP bytes can be staged.");
-      if (mediaType !== FORMATS[next.adapter_snapshot.configuration.output_format]) {
+      const pinnedFormat = next.adapter_snapshot.configuration.output_format;
+      if (pinnedFormat !== undefined && mediaType !== FORMATS[pinnedFormat]) {
         fail("adapter_output_format_mismatch", "event.media_type", "Staged media type must match the explicit adapter output-format snapshot.");
       }
       attempt.staged_artifact = Object.freeze({ content_hash: artifactHash, media_type: mediaType, width, height, format });

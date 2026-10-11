@@ -277,8 +277,8 @@ async function retainMigrationArtifact(label, root, producer) {
     producer_signal: producer.signal,
     producer_stdout_sha256: createHash("sha256").update(producerStdout).digest("hex"),
     producer_stderr_sha256: createHash("sha256").update(producerStderr).digest("hex"),
-    source_commit: producer.sourceCommit ?? PINNED_SCHEMA10_COMMIT,
-    source_tree: producer.sourceTree ?? PINNED_SCHEMA10_TREE,
+    source_commit: Object.hasOwn(producer, "sourceCommit") ? producer.sourceCommit : PINNED_SCHEMA10_COMMIT,
+    source_tree: Object.hasOwn(producer, "sourceTree") ? producer.sourceTree : PINNED_SCHEMA10_TREE,
     source_inventory_count: sourceInventory.length,
     source_inventory_sha256: createHash("sha256").update(canonicalSerialize(sourceInventory)).digest("hex"),
     copied_inventory_matches: true,
@@ -601,6 +601,67 @@ test("reconstructed schema-10 composition-only reset preserves CE11 queues while
   assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
 });
 
+test("a final-v13 migration failure rolls genuine populated v4 and v6 databases back exactly", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "composition-authority-earliest-migration-rollback-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const cases = [
+    { fixture: "base4-populated-v4", version: 4,
+      sourceCommit: "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe" },
+    { fixture: "base6-populated-v6", version: 6,
+      sourceCommit: "5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74" },
+  ];
+  for (const sample of cases) await t.test(`schema ${sample.version}`, async (subtest) => {
+    const fixtureRoot = join(REPO_ROOT, "fixtures/versions", sample.fixture);
+    const sourceInventory = await migrationArtifactInventory(fixtureRoot);
+    const manifest = JSON.parse(await readFile(join(fixtureRoot, "manifest.json"), "utf8"));
+    assert.equal(manifest.storage_user_version, sample.version);
+    const caseRoot = join(root, `schema-${sample.version}`);
+    const databasePath = join(caseRoot, "creative.sqlite");
+    const objectRoot = join(caseRoot, "objects");
+    await mkdir(caseRoot, { recursive: true });
+    await cp(join(fixtureRoot, "creative.sqlite"), databasePath);
+    await cp(join(fixtureRoot, "objects"), objectRoot, { recursive: true });
+
+    const setup = new DatabaseSync(databasePath);
+    assert.equal(setup.prepare("PRAGMA user_version").get().user_version, sample.version,
+      "the rollback input is a populated checked-in database from the named historical producer");
+    const oldRows = setup.prepare("SELECT COUNT(*) AS count FROM creative_jobs").get().count;
+    assert.ok(oldRows >= 3, "the historical input contains completed job rows");
+    setup.exec(`CREATE TABLE creative_composition_action_leases_v12 (sentinel TEXT NOT NULL);
+      INSERT INTO creative_composition_action_leases_v12 VALUES ('intentional-final-v13-collision');`);
+    const before = migrationState(setup);
+    assert.equal(before.user_version, sample.version);
+    setup.close();
+    const objectsBefore = await migrationArtifactInventory(objectRoot);
+    const producer = { status: 0, signal: null, sourceCommit: sample.sourceCommit, sourceTree: null,
+      stdout: `${JSON.stringify({ fixture: sample.fixture, user_version: before.user_version,
+        schema_sha256: migrationSchemaHash(before.schema), tables: Object.keys(before.tables),
+        rows_sha256: createHash("sha256").update(canonicalSerialize(before.tables)).digest("hex") })}\n`,
+      stderr: "", migrationState: before };
+    await retainMigrationArtifact(`schema${sample.version}-v13-final-collision-before`, caseRoot, producer);
+
+    assert.throws(() => new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW }),
+      (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "storage_version",
+      "the deliberate schema-13 table collision aborts the complete historical upgrade");
+    const afterDb = new DatabaseSync(databasePath);
+    const after = migrationState(afterDb);
+    assert.deepEqual(after, before,
+      "rollback restores every sqlite_master entry, row, BLOB, sentinel, and the original user_version exactly");
+    assert.deepEqual(afterDb.prepare("PRAGMA foreign_key_check").all(), [],
+      "the exact restored historical database has no foreign-key violations");
+    afterDb.close();
+    assert.deepEqual(await migrationArtifactInventory(objectRoot), objectsBefore,
+      "the failed migration does not alter artwork object paths or bytes");
+    await retainMigrationArtifact(`schema${sample.version}-v13-final-collision-after`, caseRoot,
+      { ...producer, migrationState: after,
+        stdout: `${JSON.stringify({ fixture: sample.fixture, user_version: after.user_version,
+          schema_sha256: migrationSchemaHash(after.schema),
+          rows_sha256: createHash("sha256").update(canonicalSerialize(after.tables)).digest("hex") })}\n` });
+    assert.deepEqual(await migrationArtifactInventory(fixtureRoot), sourceInventory,
+      "the checked-in historical source and object bytes remain unchanged");
+  });
+});
+
 test("schema-14 is rejected without rewriting the future database", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "composition-authority-migration-atomicity-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -617,7 +678,7 @@ test("schema-14 is rejected without rewriting the future database", async (t) =>
   futureAfter.close();
 });
 
-test("pinned schema-10 producer database preserves the complete populated history through v13 and replays its recovered intent", async (t) => {
+test("pinned schema-10 producer plus a synthetic OpenRouter extension preserves history through v13 and replays its recovered intent", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "composition-authority-pinned-v10-"));
   const baselineRoot = join(root, "pinned-schema10-source");
   const databasePath = join(root, "schema10.sqlite");
@@ -668,6 +729,82 @@ test("pinned schema-10 producer database preserves the complete populated histor
   const baseline = new DatabaseSync(databasePath);
   assert.equal(baseline.prepare("PRAGMA user_version").get().user_version, 10,
     "the database is emitted by the actual pinned schema-10 store, before current code opens it");
+  const genuineV10SchemaBeforeExtension = migrationSql(baseline);
+  const genuineV10PrivateRowsBeforeExtension = Object.fromEntries(
+    ["private_provider_attributions", "private_provider_usage_attributions"]
+      .map((table) => [table, migrationRows(baseline, table)]));
+  const genuineV10ObjectsBeforeExtension = await migrationArtifactInventory(objectRoot);
+  // The pinned historical producer correctly contains OpenAI-only rows. Add a
+  // separately labeled, schema-10-shaped OpenRouter extension record so this
+  // exact migration also proves the later provider CHECK widening preserves
+  // every attribution row while the composition tables advance through v13.
+  // The extension uses an otherwise valid sibling dispatch and turns off only
+  // SQLite CHECK enforcement for the two legacy provider columns; the old
+  // schema and user_version remain byte-for-byte unchanged until migration.
+  const sourceUsage = baseline.prepare(`SELECT * FROM private_provider_usage_attributions
+    ORDER BY captured_at,transport_attempt_id LIMIT 1`).get();
+  assert.ok(sourceUsage, "the pinned source has a populated direct-provider usage observation");
+  const sourceProvider = baseline.prepare(`SELECT * FROM private_provider_attributions
+    WHERE job_id=? AND transport_attempt_id=?`).get(sourceUsage.job_id, sourceUsage.transport_attempt_id);
+  const sourceDispatch = baseline.prepare(`SELECT * FROM creative_dispatch_intents
+    WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`).get(
+    sourceUsage.tenant_id, sourceUsage.project_id, sourceUsage.job_id, sourceUsage.transport_attempt_id);
+  assert.ok(sourceProvider && sourceDispatch, "the pinned private usage record has its source provider and dispatch rows");
+  const extension = {
+    transport_attempt_id: "schema10-openrouter-extension-transport",
+    billable_attempt_id: "schema10-openrouter-extension-billable",
+    reservation_ref: "schema10-openrouter-extension-reservation",
+    dispatch_intent_ref: "schema10-openrouter-extension-dispatch",
+    provider_model: "synthetic-lab/schema10-openrouter-migration-fixture",
+    provider_request_id: "fixture-only:schema10-openrouter-request",
+  };
+  extension.provider_request_ref = `provider-request-${createHash("sha256")
+    .update(extension.provider_request_id, "utf8").digest("hex")}`;
+  const extensionDispatch = { ...sourceDispatch, transport_attempt_id: extension.transport_attempt_id,
+    billable_attempt_id: extension.billable_attempt_id, reservation_ref: extension.reservation_ref,
+    dispatch_intent_ref: extension.dispatch_intent_ref, provider_model: extension.provider_model,
+    provider_name: "openrouter", authorized_at: "2026-10-11T12:31:00.000Z" };
+  const extensionProvider = { ...sourceProvider, transport_attempt_id: extension.transport_attempt_id,
+    billable_attempt_id: extension.billable_attempt_id, reservation_ref: extension.reservation_ref,
+    dispatch_intent_ref: extension.dispatch_intent_ref, provider_model: extension.provider_model,
+    provider_request_id: extension.provider_request_id, provider_request_ref: extension.provider_request_ref,
+    provider_name: "openrouter",
+    captured_at: "2026-10-11T12:31:00.000Z" };
+  const extensionUsagePayload = JSON.parse(sourceUsage.usage_json);
+  extensionUsagePayload.transport_attempt_id = extension.transport_attempt_id;
+  if (extensionUsagePayload.provider_request_id !== undefined) {
+    extensionUsagePayload.provider_request_id = extension.provider_request_ref;
+  }
+  const extensionUsage = { ...sourceUsage, transport_attempt_id: extension.transport_attempt_id,
+    billable_attempt_id: extension.billable_attempt_id, reservation_ref: extension.reservation_ref,
+    dispatch_intent_ref: extension.dispatch_intent_ref, provider_model: extension.provider_model,
+    provider_name: "openrouter",
+    usage_json: canonicalSerialize(extensionUsagePayload), usage_sha256: canonicalHash(extensionUsagePayload),
+    captured_at: "2026-10-11T12:31:00.000Z" };
+  const insertRecord = (table, row) => {
+    const columns = Object.keys(row);
+    baseline.prepare(`INSERT INTO ${table} (${columns.map((column) => `"${column}"`).join(",")})
+      VALUES(${columns.map(() => "?").join(",")})`).run(...columns.map((column) => row[column]));
+  };
+  baseline.exec("PRAGMA foreign_keys=ON; PRAGMA ignore_check_constraints=ON; BEGIN IMMEDIATE;");
+  insertRecord("creative_dispatch_intents", extensionDispatch);
+  insertRecord("private_provider_attributions", extensionProvider);
+  insertRecord("private_provider_usage_attributions", extensionUsage);
+  baseline.exec("PRAGMA ignore_check_constraints=OFF; COMMIT;");
+  assert.equal(baseline.prepare(`SELECT provider_name FROM private_provider_attributions
+    WHERE transport_attempt_id=?`).get(extension.transport_attempt_id).provider_name, "openrouter");
+  assert.equal(baseline.prepare(`SELECT provider_name FROM private_provider_usage_attributions
+    WHERE transport_attempt_id=?`).get(extension.transport_attempt_id).provider_name, "openrouter");
+  assert.equal(baseline.prepare("PRAGMA user_version").get().user_version, 10,
+    "the test-only OpenRouter extension does not change the pinned producer's storage version");
+  assert.deepEqual(migrationSql(baseline), genuineV10SchemaBeforeExtension,
+    "the extension adds fixture rows without rewriting the producer's original schema or triggers");
+  for (const [table, sourceRows] of Object.entries(genuineV10PrivateRowsBeforeExtension)) {
+    assert.deepEqual(migrationRows(baseline, table).filter((row) => row.transport_attempt_id !== extension.transport_attempt_id),
+      sourceRows, `${table} keeps every genuine pinned producer row unchanged beside the synthetic OpenRouter extension`);
+  }
+  assert.deepEqual(await migrationArtifactInventory(objectRoot), genuineV10ObjectsBeforeExtension,
+    "the test-only attribution extension does not alter the genuine producer's artwork object bytes");
   const compositionTablesBefore = baseline.prepare(`SELECT name FROM sqlite_master WHERE type='table'
     AND name LIKE 'creative_composition_%' ORDER BY name`).all();
   assert.deepEqual(compositionTablesBefore, []);
@@ -818,6 +955,13 @@ test("pinned schema-10 producer database preserves the complete populated histor
   assert.equal(migrationSchemaHash(legacySchemaAfter), legacySchemaHashBefore,
     "the old trigger and index inventory retains its exact canonical hash");
   assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    const sql = store.db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)?.sql;
+    assert.ok(sql?.includes("CHECK(provider_name IN ('openai','openrouter'))"),
+      `${table} receives the explicit widened provider CHECK inside the schema-10→13 transaction`);
+    assert.equal(store.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE provider_name='openrouter'`).get().n, 1,
+      `${table} retains the schema-10 extension row through the full upgrade`);
+  }
   assert.deepEqual(store.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'creative_composition_%' ORDER BY name`)
     .all().map((row) => row.name), ["creative_composition_action_leases_v1", "creative_composition_actions_v1",
       "creative_composition_current_v1", "creative_composition_revisions_v1"]);
