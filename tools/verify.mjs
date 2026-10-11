@@ -18,6 +18,7 @@ const CASES = Object.freeze({
   "deterministic-extraction": ["tests/extraction"],
   evals: ["tests/evals"],
   "research-api": ["tests/api"],
+  "question-preparation": ["tests/decisions/questions", "tests/discovery/source-identity"],
   "verify-runner": ["tests/runner"],
   "eval-policy-unit": [],
 });
