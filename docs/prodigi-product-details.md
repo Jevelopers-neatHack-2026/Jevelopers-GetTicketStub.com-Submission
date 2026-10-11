@@ -8,7 +8,7 @@ The unknown-field rule is deliberately fail-closed: a new top-level, product, di
 
 `prodigiProductDetailsPath(sku)` returns only the fixed relative path `/v4.0/products/{escaped-sku}`. It rejects empty or trimmed identifiers, path separators, percent-encoded input, query/fragment delimiters, controls, traversal-only dot segments, malformed Unicode, and identifiers over 128 code units; it percent-encodes the remaining segment. It does not accept a host or construct a URL.
 
-`ProdigiProductDetailsError` exposes only one of three fixed codes (`invalid_sku`, `sku_mismatch`, `invalid_response`) and fixed messages. It does not include caller SKU text or provider response content.
+`ProdigiProductDetailsError` exposes only one of three fixed codes (`invalid_sku`, `sku_mismatch`, `invalid_response`) and fixed messages. It does not include caller SKU text or provider response content. The decoder never inspects or rethrows arbitrary caught values; caller-thrown errors from hostile response objects become a fresh `invalid_response` error, while only decoder-owned validation signals produce `invalid_sku` or `sku_mismatch`.
 
 This data is not a catalog snapshot or orderability decision. In particular, the parsed response does not establish `available` versus `removed`, selected variant, current price, quote expiry, tax/currency treatment, shipping eligibility for an actual destination, print-art eligibility, approval, or authorization. The module performs no HTTP, secret access, quote, order, status, cancellation, finance, authorization, or metering operation, and is not wired into the runtime.
 

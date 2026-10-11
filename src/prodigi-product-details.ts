@@ -38,19 +38,32 @@ export interface ProdigiProductDetails {
 
 export type ProdigiProductDetailsErrorCode = "invalid_sku" | "sku_mismatch" | "invalid_response";
 
+function normalizedErrorCode(value: unknown): ProdigiProductDetailsErrorCode {
+  if (value === "invalid_sku") return "invalid_sku";
+  if (value === "sku_mismatch") return "sku_mismatch";
+  return "invalid_response";
+}
+
+function errorMessage(code: ProdigiProductDetailsErrorCode): string {
+  switch (code) {
+    case "invalid_sku":
+      return "Prodigi product SKU is invalid.";
+    case "sku_mismatch":
+      return "Prodigi product response SKU does not match the requested SKU.";
+    case "invalid_response":
+      return "Prodigi Product Details response is invalid or unsupported.";
+  }
+}
+
 /** Safe fixed-message error; never includes provider response or SKU content. */
 export class ProdigiProductDetailsError extends Error {
   readonly code: ProdigiProductDetailsErrorCode;
 
   constructor(code: ProdigiProductDetailsErrorCode) {
-    const messages: Record<ProdigiProductDetailsErrorCode, string> = {
-      invalid_sku: "Prodigi product SKU is invalid.",
-      sku_mismatch: "Prodigi product response SKU does not match the requested SKU.",
-      invalid_response: "Prodigi Product Details response is invalid or unsupported."
-    };
-    super(messages[code]);
+    const safeCode = normalizedErrorCode(code);
+    super(errorMessage(safeCode));
     this.name = "ProdigiProductDetailsError";
-    this.code = code;
+    this.code = safeCode;
   }
 }
 
@@ -71,8 +84,35 @@ interface Budget {
 
 type SafeRecord = Record<string, unknown>;
 
+const INTERNAL_FAILURES = {
+  invalid_sku: Symbol("invalid_sku"),
+  sku_mismatch: Symbol("sku_mismatch"),
+  invalid_response: Symbol("invalid_response")
+};
+
 function fail(code: ProdigiProductDetailsErrorCode): never {
-  throw new ProdigiProductDetailsError(code);
+  switch (code) {
+    case "invalid_sku":
+      throw INTERNAL_FAILURES.invalid_sku;
+    case "sku_mismatch":
+      throw INTERNAL_FAILURES.sku_mismatch;
+    case "invalid_response":
+      throw INTERNAL_FAILURES.invalid_response;
+  }
+}
+
+function errorForFailure(failure: unknown): ProdigiProductDetailsError {
+  if (failure === INTERNAL_FAILURES.invalid_sku) return new ProdigiProductDetailsError("invalid_sku");
+  if (failure === INTERNAL_FAILURES.sku_mismatch) return new ProdigiProductDetailsError("sku_mismatch");
+  return new ProdigiProductDetailsError("invalid_response");
+}
+
+function withSafeFailureBoundary<T>(operation: () => T): T {
+  try {
+    return operation();
+  } catch (failure) {
+    throw errorForFailure(failure);
+  }
 }
 
 function consumeNode(budget: Budget): void {
@@ -104,7 +144,7 @@ function recordString(value: unknown, budget: Budget, maxLength = MAX_TEXT_LENGT
   return value;
 }
 
-function validateSku(value: unknown): string {
+function validateSku(value: unknown, failureCode: "invalid_sku" | "invalid_response" = "invalid_sku"): string {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
@@ -116,7 +156,7 @@ function validateSku(value: unknown): string {
     CONTROL_CHARACTERS.test(value) ||
     !isWellFormedUnicode(value)
   ) {
-    fail("invalid_sku");
+    fail(failureCode);
   }
   return value;
 }
@@ -126,16 +166,18 @@ function validateSku(value: unknown): string {
  * The helper returns a path only; it has no host, transport, or credentials.
  */
 export function prodigiProductDetailsPath(sku: string): string {
-  const safeSku = validateSku(sku);
-  let escaped: string;
-  try {
-    escaped = encodeURIComponent(safeSku).replace(/[!'()*]/gu, (character) =>
-      `%${character.charCodeAt(0).toString(16).toUpperCase()}`
-    );
-  } catch {
-    fail("invalid_sku");
-  }
-  return `/v4.0/products/${escaped}`;
+  return withSafeFailureBoundary(() => {
+    const safeSku = validateSku(sku);
+    let escaped: string;
+    try {
+      escaped = encodeURIComponent(safeSku).replace(/[!'()*]/gu, (character) =>
+        `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+      );
+    } catch {
+      fail("invalid_sku");
+    }
+    return `/v4.0/products/${escaped}`;
+  });
 }
 
 function getOwnRecord(value: unknown, allowedKeys: readonly string[] | null, requiredKeys: readonly string[], budget: Budget): SafeRecord {
@@ -348,9 +390,9 @@ function recordVariants(value: unknown, budget: Budget): readonly ProdigiProduct
  * SKU. The input must be plain data; output is a detached, deeply frozen DTO.
  */
 export function decodeProdigiProductDetails(input: unknown, expectedSku: string): ProdigiProductDetails {
-  validateSku(expectedSku);
-  const budget: Budget = { nodes: 0, textLength: 0 };
-  try {
+  return withSafeFailureBoundary(() => {
+    validateSku(expectedSku);
+    const budget: Budget = { nodes: 0, textLength: 0 };
     const envelope = getOwnRecord(input, ["outcome", "product", "traceParent"], ["outcome", "product"], budget);
     consumeNode(budget);
     if (envelope.outcome !== "Ok") fail("invalid_response");
@@ -363,13 +405,7 @@ export function decodeProdigiProductDetails(input: unknown, expectedSku: string)
       ["sku", "description", "productDimensions", "attributes", "printAreas", "variants"],
       budget
     );
-    let sku: string;
-    try {
-      sku = validateSku(product.sku);
-    } catch (error) {
-      if (error instanceof ProdigiProductDetailsError && error.code === "invalid_sku") fail("invalid_response");
-      throw error;
-    }
+    const sku = validateSku(product.sku, "invalid_response");
     if (sku !== expectedSku) fail("sku_mismatch");
     const details: ProdigiProductDetails = {
       sku,
@@ -381,8 +417,5 @@ export function decodeProdigiProductDetails(input: unknown, expectedSku: string)
     };
     consumeNode(budget);
     return Object.freeze(details);
-  } catch (error) {
-    if (error instanceof ProdigiProductDetailsError) throw error;
-    fail("invalid_response");
-  }
+  });
 }

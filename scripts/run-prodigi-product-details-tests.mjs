@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const suiteFile = fileURLToPath(new URL("../tests/prodigi-product-details-suite.mjs", import.meta.url));
-export const PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT = 12;
+export const PRODIGI_PRODUCT_DETAILS_SUITE_CASE_COUNT = 15;
 
 function credentialFreeEnvironment() {
   const environment = {};

@@ -37,6 +37,28 @@ function assertCode(run, code, forbiddenText = []) {
   });
 }
 
+function captureThrown(run) {
+  let didThrow = false;
+  let thrown;
+  try {
+    run();
+  } catch (error) {
+    didThrow = true;
+    thrown = error;
+  }
+  assert.equal(didThrow, true, "expected the operation to throw a safe error");
+  return thrown;
+}
+
+function assertFreshInvalidResponse(error, hostileValues = []) {
+  for (const hostile of hostileValues) assert.notEqual(error, hostile);
+  assert.ok(error instanceof ProdigiProductDetailsError);
+  assert.equal(error.code, "invalid_response");
+  assert.equal(error.message, "Prodigi Product Details response is invalid or unsupported.");
+  assert.equal(Object.hasOwn(error, "payload"), false);
+  assert.equal(Object.hasOwn(error, "rawBody"), false);
+}
+
 const cases = [];
 const add = (name, run) => cases.push([name, run]);
 
@@ -198,6 +220,61 @@ add("requires plain data and rejects accessors without invoking them", () => {
   assertCode(() => decodeProdigiProductDetails(withSymbol, fixtureSku), "invalid_response", ["secret"]);
   assertCode(() => decodeProdigiProductDetails(new Date(), fixtureSku), "invalid_response");
   assertCode(() => decodeProdigiProductDetails(new Proxy(response(), { ownKeys() { throw new Error("provider secret body"); } }), fixtureSku), "invalid_response", ["provider secret body"]);
+});
+
+add("maps forged exported errors to a fresh safe response error without reading their fields", () => {
+  const hostile = new ProdigiProductDetailsError("invalid_response");
+  const rawMessage = "SYNTHETIC_RAW_MESSAGE_SENTINEL";
+  const rawBody = "SYNTHETIC_RAW_BODY_SENTINEL";
+  hostile.message = rawMessage;
+  hostile.payload = rawBody;
+  let accessorCalls = 0;
+  Object.defineProperty(hostile, "code", {
+    configurable: true,
+    get() {
+      accessorCalls += 1;
+      throw new Error("SYNTHETIC_CODE_ACCESSOR_SENTINEL");
+    }
+  });
+  Object.defineProperty(hostile, "diagnostic", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      accessorCalls += 1;
+      throw new Error("SYNTHETIC_DIAGNOSTIC_ACCESSOR_SENTINEL");
+    }
+  });
+  const caught = captureThrown(() => decodeProdigiProductDetails(new Proxy(response(), {
+    ownKeys() { throw hostile; }
+  }), fixtureSku));
+  assert.notEqual(caught, hostile);
+  assert.equal(accessorCalls, 0);
+  assertFreshInvalidResponse(caught, [hostile]);
+});
+
+add("maps a revoked thrown proxy to a fresh safe response error", () => {
+  const revoked = Proxy.revocable({}, {});
+  revoked.revoke();
+  const caught = captureThrown(() => decodeProdigiProductDetails(new Proxy(response(), {
+    ownKeys() { throw revoked.proxy; }
+  }), fixtureSku));
+  assertFreshInvalidResponse(caught, [revoked.proxy]);
+});
+
+add("does not invoke a thrown proxy prototype trap while classifying it", () => {
+  let prototypeTrapCalls = 0;
+  const trapError = new Error("SYNTHETIC_PROTOTYPE_TRAP_SENTINEL");
+  const hostile = new Proxy({}, {
+    getPrototypeOf() {
+      prototypeTrapCalls += 1;
+      throw trapError;
+    }
+  });
+  const caught = captureThrown(() => decodeProdigiProductDetails(new Proxy(response(), {
+    ownKeys() { throw hostile; }
+  }), fixtureSku));
+  assert.equal(prototypeTrapCalls, 0);
+  assertFreshInvalidResponse(caught, [hostile, trapError]);
 });
 
 add("rejects sparse and augmented arrays", () => {
