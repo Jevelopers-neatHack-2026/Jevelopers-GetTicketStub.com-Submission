@@ -900,10 +900,19 @@
       "title": "Neatlogs use",
       "verification": "Record an actual agent run in Neatlogs and provide inspectable traces or sanitized screenshots.",
       "evidence_required": "Neatlogs artifact tied to an evaluated application run.",
-      "status": "planned",
-      "evidence_refs": [],
-      "tested_revision_refs": [],
-      "notes": "",
+      "status": "verified",
+      "evidence_refs": [
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/d9be4d1832a7d0f713cf8494eb5df0e59d94ec89/evidence/neatlogs/2026-10-11",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/d9be4d1832a7d0f713cf8494eb5df0e59d94ec89/evidence/neatlogs/2026-10-11/traces.json",
+        "https://github.com/Jevelopers-neatHack-2026/integration-evals/pull/33",
+        "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/pull/46"
+      ],
+      "tested_revision_refs": [
+        "integration-evals d9be4d1832a7d0f713cf8494eb5df0e59d94ec89",
+        "getticketstub.com e4a19931b5febbf6efdb85e11d1d3da1b88106fe (published, GoDaddy gvk66o79l1)",
+        "Neatlogs project Complete's project (US), traces 601d02d5d5658f22286286e53cdbe450, d3d7bccece4e343b863db06eec4ad578, 63b4db3d65091615052591841c961ed1, 8fc27f1ac8ceee3ef891900a9147a350"
+      ],
+      "notes": "Owner (Finance and reliability: CompleteDotTech) accepted 2026-10-11 by explicit chat instruction (\"I approve\") relayed by an agent; see PR #33. Actual production agent runs recorded as Neatlogs traces with LLM/tool spans, a failure trace and an internal-error recovery; synthetic/public inputs. Limitations: Neatlogs silently dropped 3 of 7 accepted production traces; production AI art fails internally (procedural fallback); no before/after improvement claim (EVAL-02).",
       "dependencies": [
         "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/1",
         "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/1",
