@@ -84,6 +84,34 @@ error. Temporary homes/directories and tenant/project namespace values are disti
 for every run/case. The clock/seed are explicit and deterministic; owners synchronize
 concurrency faults through their own barrier hooks. No fixed sleeps are used.
 
+### Evidence timestamps (schema 1.0)
+
+Keep source fixture collection/provenance timestamps, actual wall-clock capture times
+(where known), and the frozen injected scenario clock distinct. A fixture's immutable
+`collected_at` describes that fixture; it does not set the cutoff for new output.
+
+For newly generated synthetic, mock-only operation traces or rejection evidence, the
+current v1 convention is `original_cutoff = request.clock`. Existing synthetic producers
+also use `created_at = request.clock`. These are logical scenario timestamps, not claims
+of actual capture time. Label that distinction explicitly in the evidence's `limitations`
+and provenance. Preserve the original fixture's `collected_at` and any supplement's
+actual provenance timestamps; this convention does not authorize backdating or rewriting
+historical evidence.
+
+Replay or source-derived recorded/live evidence must preserve the genuinely supplied
+original cutoff and provenance from its source, snapshot or configuration. Do not infer
+that cutoff from the scenario clock or fixture collection date because synthetic examples
+use equal values. If its authentic meaning or value is unavailable, the broader source/live
+handoff remains blocked rather than inventing a timestamp.
+
+`Evidence` requires `created_at` and `original_cutoff`; the current timestamp validation
+in `output_evidence.py` checks timezone awareness only. It does not enforce provenance,
+equality with the scenario clock or `collected_at`, or temporal eligibility. Stronger
+source-bound or temporal rules remain external agreed-contract and provenance requirements,
+not newly implemented checks. This clarification establishes no official coding cutoff,
+source publication date, sourcing deadline, billing/approval validity or hackathon-window
+eligibility, and changes no historical evidence semantics.
+
 ## Offline enforcement and real modes
 
 Offline children receive only PATH/SYSTEMROOT and evaluator isolation variables.
