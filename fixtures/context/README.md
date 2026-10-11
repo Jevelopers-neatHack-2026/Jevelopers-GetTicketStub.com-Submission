@@ -75,3 +75,41 @@ Regenerate with `node fixtures/context/generate.mjs` (deterministic). Check with
 5. **Do not mint, widen or cache past `expiresAt`.** The consumer is not an identity authority.
 
 Production consumers hold the issuer's `CONTEXT_SECRET`-derived key through their own secret store. It is never in this folder, and the fixture key must never be set as `CONTEXT_SECRET`.
+
+## Context `/2` and finance fixtures (`v2/`)
+
+`ticketstub.context/2` is the version for finance consumers. `/1` and everything above is unchanged and still verifies. Why a new version, the grant matrix, the mode mapping and the GT-FIN-001..003 map are in `docs/architecture/identity.md` ("Context /2 and the finance handoff"). Same token format and key, same fixture-only warning: **the fixtures prove a consumer can read the format, not that the live issuer is integrated, and Finance has not accepted the grant matrix or the mode mapping.**
+
+What changes in `ctx`:
+
+| Field | `/2` |
+| --- | --- |
+| `actor.id`, `tenant.id` | Kind-prefixed and equal: `account:<id>`, `guest:<id>`, `anonymous:0`. Two kinds never collide. |
+| `project` | `{kind, id, ref}`, `ref` is `<kind>:<id>` |
+| `environment` | `development`, `preview`, `live`: where it runs |
+| `economicMode` | `none`, `sandbox`, `paid_test`, `live`: whether real money is at stake. `paid_test` is real money spent in testing, an actual expense. |
+| `evidenceMode` | `fixture`, `synthetic`, `live`: what kind of record backs it |
+| `issuer`, `audience` | `getticketstub.com`, and the host the token is for |
+| `capabilities` | the `/1` capabilities plus explicit `finance.*` grants. The role is informational. |
+
+Finance grants: `finance.read`, `finance.export`, `finance.command.budget_change`, `finance.command.expense_adjust`, `finance.command.reservation`, `finance.command.reconcile`, `finance.command.recovery`. An event captain holds read and export on that event. An event member (never issued yet) holds read. A stub owner, a guest and an ordinary account hold none. Staff hold every grant in the platform scope (a context with no project) and nothing on a project they do not hold.
+
+| File in `v2/` | Expect |
+| --- | --- |
+| `finance-read-allowed.json`, `finance-read-denied.json` | captain holds `finance.read`; a stub owner holds no finance grant |
+| `finance-export-allowed.json`, `finance-export-denied.json` | captain holds `finance.export`; an event member does not |
+| `finance-command-allowed.json`, `finance-command-denied.json` | staff in the platform scope hold every `finance.command.*`; the captain holds none |
+| `finance-guest-denied.json` | a guest holds no finance grant |
+| `injective-account.json`, `injective-guest.json` | the same raw id as `account:` and as `guest:`: different actor and tenant |
+| `economic-sandbox.json`, `economic-none.json`, `economic-paid-test.json`, `economic-live.json` | each carries its three modes and the proposed finance scope. `economic-paid-test` is `preview` / `paid_test` / `fixture`: billingMode `live`, an actual expense. |
+| `wrong-audience.json`, `right-audience.json` | verified with `audience` set to another host, `wrong_audience`; with the right one, ok |
+| `revoked-membership.json` | `revoked` (state `sessionLive: false`) |
+| `project-membership-removed.json` | `revoked` (state `projectMember: false`: the account no longer holds the project) |
+| `stale-revision.json` | `stale` |
+| `malformed-shapes.json` | 40 validly signed contexts, each malformed in one field, every one `unknown`. This includes the seven shapes the Finance receipt found passing the old offline verifier (missing actor id, missing or unknown environment, missing or unknown mode, malformed project kind or id, missing `issuedAt`), and the `/2` shapes: unprefixed or wrongly prefixed ids, tenant not equal to actor, missing or unknown economic or evidence mode, `paid_test` from a live environment, live money from development, a project ref that does not match, a finance grant held by a guest, an unknown `finance.*` string. |
+
+`verify.mjs` adds, for `/2`: `verifyContext(token, key, {now, state, audience})`, where `state` may carry `projectMember`; `authorizesFinance(ctx, {tenant, project?, capability, expect?})`, which reads only `capabilities`, binds tenant and project scope exactly, refuses `/1`, and, when `expect` pins the three modes, refuses a mismatch; and `toFinanceScope(ctx)`, the proposed mapping onto Finance's `TrustedScope` (`null` means no honest mapping: deny).
+
+`verify.mjs` and the server run the same shape rules. `tests/finance-context.test.mjs` requires identical answers on every malformed input, and `npm run verify:product -- --suite finance-context` posts the same corpus to `POST /api/context/verify` on a running server and compares. To select a project: `GET /api/context?v=2&project=event:<id>` with the user's session. The server proves the selection from its own records, and a project the caller does not hold is a `404`. `POST /api/context/verify` accepts `{token, audience?}` and re-checks session, project membership, revision, audience and modes at that moment.
+
+`corpus.mjs` holds the malformed corpus as data, so each caller signs it with its own key. Regenerate with `node fixtures/context/generate.mjs`; check with `node fixtures/context/verify.mjs`.
