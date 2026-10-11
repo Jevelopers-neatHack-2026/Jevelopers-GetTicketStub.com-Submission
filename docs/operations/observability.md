@@ -135,7 +135,7 @@ so one `generate` attempt per call is expected.
 
 ### `source_fetch` — one per data-source fetch
 
-`source`: `event_page`, `ticketmaster`, `weather_geocode`, `weather_forecast`, `weather_archive`.
+`source`: `event_page`, `ticketmaster`, `weather_geocode`, `weather_forecast`.
 `outcome`: `ok`, `http_error`, `timeout`, `network_error`, `bad_response`, `rate_limited`, `auth_failed`,
 `not_found`, `skipped` (no Ticketmaster key, or no geocoder match so no forecast was fetched), `pending` (date beyond
 the forecast horizon). Plus `upstreamStatus` and `durationMs`. Ticketmaster lookup is measured as one fetch around

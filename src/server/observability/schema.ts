@@ -58,7 +58,7 @@ export const OPS_SPEC = {
   },
   /** One per source API / page fetch (these are data sources, not AI provider usage). */
   source_fetch: {
-    source: ["event_page", "ticketmaster", "weather_geocode", "weather_forecast", "weather_archive"],
+    source: ["event_page", "ticketmaster", "weather_geocode", "weather_forecast"],
     outcome: ["ok", "http_error", "timeout", "network_error", "no_match", "no_data", "pending", "skipped", "rate_limited", "auth_failed", "not_found", "bad_response"],
     upstreamStatus: "status",
     durationMs: "ms",

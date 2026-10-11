@@ -87,6 +87,29 @@ fix.
 The direct models are fixed in
 [`src/server/ai/providers.ts`](../../src/server/ai/providers.ts).
 
+### Weather (Open-Meteo)
+
+Live research adds a weather fact from the Open-Meteo forecast and geocoding APIs
+([#48](https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/48)). The server-only
+`OPEN_METEO_API_KEY` holds the API Standard subscription key. When it is set, requests go to
+`customer-api.open-meteo.com` and `customer-geocoding-api.open-meteo.com` with the key. When it is blank, the free
+endpoints are used. The free tier is for evaluation and prototyping only and is not licensed for commercial
+use, so every customer-facing deployment must set the key.
+
+- **Coverage.** API Standard has no Historical Weather API; it needs the Professional plan, which is deferred and
+  not planned. A date gets weather only inside the forecast API's window: up to 92 days back and 15 days ahead.
+  Other dates show a pending weather fact. Inside the window, the API can still return no values for older
+  days. In a check on 2026-10-11, values went back about 54 days. The fact then shows "Weather lookup unavailable".
+- **Quota.** 1M calls per month. A lookup is two calls: one geocode and one single-day, two-variable forecast.
+  Open-Meteo emails at 80%, 90% and 100% of the budget.
+- **Key confidentiality.** The key travels only in the outbound request URL. The fact's `sourceUrl` is the
+  Open-Meteo attribution link, never the request URL, and operational telemetry records no URLs.
+- **Attribution (CC BY 4.0).** The fact's source is "Open-Meteo.com · place: GeoNames", and it links to
+  <https://open-meteo.com/> wherever the app links a fact's source: the facts review, agent chat and shared event page.
+  The label rounds and summarises the temperature and precipitation; the value keeps the API's figures.
+  **Gap:** a kept weather fact also appears on the stub itself, which is both a digital and a printed keepsake,
+  with no credit. Before commercial launch it needs a credit line agreed with the stub and print design.
+
 ## Product analytics (optional, off by default)
 
 GA4 product analytics ([analytics.md](analytics.md)) is **off** unless a deployment sets both

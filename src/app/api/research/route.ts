@@ -265,8 +265,33 @@ function extract(html: string, url: string): Extracted | undefined {
 
 // ---------- Weather (Open-Meteo) ----------
 
+// The API Standard subscription (#48) covers forecast and geocoding only; the Historical Weather API needs the
+// Professional plan. So a date must sit inside the forecast API's own window (past_days <= 92, forecast_days <= 16).
+const WEATHER_PAST_DAYS = 92;
+const WEATHER_AHEAD_DAYS = 15;
+// CC BY 4.0 wants a link next to the data (https://open-meteo.com/en/licence); place names are GeoNames data.
+const OPEN_METEO_CREDIT = { source: "Open-Meteo.com · place: GeoNames", sourceUrl: "https://open-meteo.com/" };
+
+/** With OPEN_METEO_API_KEY: the customer endpoint. Without it: the free tier, for evaluation only. The key goes only into this outbound URL. */
+function openMeteoUrl(host: "api" | "geocoding-api", path: string, params: Record<string, string>): string {
+  const key = process.env.OPEN_METEO_API_KEY?.trim();
+  const query = new URLSearchParams(key ? { ...params, apikey: key } : params);
+  return `https://${key ? "customer-" : ""}${host}.open-meteo.com${path}?${query}`;
+}
+
 async function weatherFact(city: string, dateISO: string, dateConfidence: number): Promise<Fact | undefined> {
-  const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
+  const today = new Date().toISOString().slice(0, 10);
+  const daysFromToday = Math.round((Date.parse(`${dateISO}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  if (daysFromToday > WEATHER_AHEAD_DAYS) {
+    sourceTimer("weather_forecast")("pending");
+    return { id: "weather", label: "Weather: pending", value: "Forecast opens 16 days before the date", source: "Open-Meteo", confidence: 0.3, provenance: "pending" };
+  }
+  if (daysFromToday < -WEATHER_PAST_DAYS) {
+    sourceTimer("weather_forecast")("skipped"); // historical weather is not in the subscription
+    return { id: "weather", label: "Weather: pending", value: "Past weather is not available this far back", source: "Open-Meteo", confidence: 0.2, provenance: "pending" };
+  }
+
+  const geoUrl = openMeteoUrl("geocoding-api", "/v1/search", { name: city, count: "1", language: "en", format: "json" });
   const g = await fetchSourceJson<{ results?: { latitude: number; longitude: number; name: string }[] }>("weather_geocode", geoUrl);
   if (!g) return undefined;
   const place = g.results?.[0];
@@ -275,27 +300,23 @@ async function weatherFact(city: string, dateISO: string, dateConfidence: number
     return undefined;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const daysFromToday = Math.round((Date.parse(`${dateISO}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
-  if (daysFromToday > 15) {
-    sourceTimer("weather_forecast")("pending");
-    return { id: "weather", label: "Weather: pending", value: "Forecast opens 16 days before the date", source: "Open-Meteo", confidence: 0.3, provenance: "pending" };
-  }
-  const base = daysFromToday < -60 ? "https://archive-api.open-meteo.com/v1/archive" : "https://api.open-meteo.com/v1/forecast";
-  const wUrl = `${base}?latitude=${place.latitude}&longitude=${place.longitude}&start_date=${dateISO}&end_date=${dateISO}&daily=temperature_2m_max,precipitation_sum&timezone=auto`;
-  const w = await fetchSourceJson<{ daily?: { temperature_2m_max?: (number | null)[]; precipitation_sum?: (number | null)[] } }>(daysFromToday < -60 ? "weather_archive" : "weather_forecast", wUrl);
+  const wUrl = openMeteoUrl("api", "/v1/forecast", {
+    latitude: String(place.latitude), longitude: String(place.longitude), start_date: dateISO, end_date: dateISO,
+    daily: "temperature_2m_max,precipitation_sum", timezone: "auto",
+  });
+  const w = await fetchSourceJson<{ daily?: { temperature_2m_max?: (number | null)[]; precipitation_sum?: (number | null)[] } }>("weather_forecast", wUrl);
   if (!w) return undefined;
   const t = w.daily?.temperature_2m_max?.[0];
   const p = w.daily?.precipitation_sum?.[0];
-  if (t == null) return undefined;
+  if (t == null) return undefined; // inside the window, but the forecast API keeps no values for that day
   const wet = (p ?? 0) >= 0.5;
   const forecast = daysFromToday > 0;
   return {
     id: "weather",
+    // The label rounds and summarises; the value keeps the API's own figures.
     label: `${Math.round(t)}°C · ${wet ? "rain" : "dry"}`,
-    value: `${Math.round(t)}°C max, ${p ?? 0} mm ${wet ? "rain" : "precipitation"} in ${place.name}${forecast ? " (forecast)" : ""}`,
-    source: "Open-Meteo",
-    sourceUrl: wUrl,
+    value: `${t}°C max, ${p ?? 0} mm ${wet ? "rain" : "precipitation"} in ${place.name}${forecast ? " (forecast)" : ""}`,
+    ...OPEN_METEO_CREDIT,
     confidence: Math.min(forecast ? 0.75 : 0.9, dateConfidence >= 0.8 ? 1 : 0.6),
     provenance: "live",
     kept: dateConfidence >= 0.8 && !forecast,

@@ -68,6 +68,7 @@ function configure(capability = "agent", model = "anthropic/test-model") {
   process.env[`${prefix}_OPENROUTER_API_KEY`] = "offline-test-placeholder";
   delete process.env.ANTHROPIC_API_KEY; delete process.env.OPENAI_API_KEY;
 }
+const isoDay = (offsetDays) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
 const named = (name) => sink.events.filter((e) => e.name === name);
 const only = (name) => { const list = named(name); assert.equal(list.length, 1, `${name} count`); return list[0]; };
 const assertClean = (...extra) => {
@@ -329,13 +330,13 @@ test("research invalid JSON, search and demo-only rejection", async () => {
   assertClean();
 });
 
-test("research live page: fetch, schema.org parse, archive weather and enrichment are all measured", async () => {
-  configure("research");
-  const page = `<script type="application/ld+json">{"@type":"MusicEvent","name":"Offline ${SEED}","startDate":"2020-01-01","location":{"name":"Hall","address":{"addressLocality":"Glasgow"}}}</script><p>Special guest Local Band.</p>`;
+test("research live page: fetch, schema.org parse, forecast weather and enrichment are all measured", async () => {
+  configure("research"); delete process.env.OPEN_METEO_API_KEY;
+  const page = `<script type="application/ld+json">{"@type":"MusicEvent","name":"Offline ${SEED}","startDate":"${isoDay(-10)}","location":{"name":"Hall","address":{"addressLocality":"Glasgow"}}}</script><p>Special guest Local Band.</p>`;
   globalThis.fetch = async (url) => {
     if (url.startsWith("https://example.com/")) return new Response(page);
-    if (url.startsWith("https://geocoding-api")) return response({ results: [{ latitude: 1, longitude: 2, name: "Glasgow" }] });
-    if (url.startsWith("https://archive-api")) return response({ daily: { temperature_2m_max: [5], precipitation_sum: [0] } });
+    if (url.startsWith("https://geocoding-api.open-meteo.com/")) return response({ results: [{ latitude: 1, longitude: 2, name: "Glasgow" }] });
+    if (url.startsWith("https://api.open-meteo.com/v1/forecast?")) return response({ daily: { temperature_2m_max: [5.4], precipitation_sum: [0] } });
     return response(textResponse(JSON.stringify([{ id: "opener", label: "Local Band", value: "Local Band", evidence: "Special guest Local Band.", confidence: 0.9 }])));
   };
   const res = await research.POST(req({ url: `https://example.com/event?ref=${SEED}` }));
@@ -343,13 +344,60 @@ test("research live page: fetch, schema.org parse, archive weather and enrichmen
   const body = await res.json();
   assert.ok(body.facts.some((f) => f.id === "weather" && f.provenance === "live"));
   assert.deepEqual(named("source_fetch").map((e) => [e.fields.source, e.fields.outcome, e.fields.upstreamStatus]).sort(), [
-    ["event_page", "ok", 200], ["weather_archive", "ok", 200], ["weather_geocode", "ok", 200],
+    ["event_page", "ok", 200], ["weather_forecast", "ok", 200], ["weather_geocode", "ok", 200],
   ]);
   assert.deepEqual(only("source_parse").fields, { parser: "schema_org", outcome: "ok", facts: 2, date: true });
   assert.equal(only("provider_attempt").fields.capability, "research");
   const r = only("api_request");
   assert.deepEqual([r.fields.operation, r.fields.dependency, r.fields.fallback, r.fields.outcome, r.fields.facts], ["research_link", "page", "none", "success", body.facts.length]);
   assertClean("Glasgow", "Local Band");
+});
+
+test("research weather uses the Open-Meteo customer endpoints with the subscription key and never returns the key", async () => {
+  configure("research"); process.env.TICKETSTUB_RESEARCH_PROVIDER = "anthropic"; // no enrichment
+  const KEY = `omkey${SEED}`;
+  process.env.OPEN_METEO_API_KEY = ` ${KEY} `;
+  const page = `<script type="application/ld+json">{"@type":"MusicEvent","name":"Gig","startDate":"${isoDay(-3)}","location":{"name":"Hall","address":{"addressLocality":"São Paulo"}}}</script>`;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    if (url.startsWith("https://example.com/")) return new Response(page);
+    calls.push(new URL(url));
+    if (url.startsWith("https://customer-geocoding-api.open-meteo.com/v1/search?")) return response({ results: [{ latitude: -23.5, longitude: -46.6, name: "São Paulo" }] });
+    if (url.startsWith("https://customer-api.open-meteo.com/v1/forecast?")) return response({ daily: { temperature_2m_max: [27.6], precipitation_sum: [3.2] } });
+    return response({ error: true, reason: "unexpected host" }, 404);
+  };
+  const res = await research.POST(req({ url: "https://example.com/gig" }));
+  assert.equal(res.status, 200);
+  const raw = await res.text();
+  assert.ok(!raw.includes(KEY) && !raw.includes("apikey"), "the response leaked the Open-Meteo key");
+  const weather = JSON.parse(raw).facts.find((f) => f.id === "weather");
+  assert.deepEqual([weather.label, weather.value, weather.source, weather.sourceUrl, weather.provenance],
+    ["28°C · rain", "27.6°C max, 3.2 mm rain in São Paulo", "Open-Meteo.com · place: GeoNames", "https://open-meteo.com/", "live"]);
+  assert.deepEqual(calls.map((u) => [u.host, u.pathname, u.searchParams.get("apikey")]), [
+    ["customer-geocoding-api.open-meteo.com", "/v1/search", KEY],
+    ["customer-api.open-meteo.com", "/v1/forecast", KEY],
+  ]);
+  assert.equal(calls[0].searchParams.get("name"), "São Paulo");
+  assert.equal(calls[1].searchParams.get("daily"), "temperature_2m_max,precipitation_sum");
+  assertClean(KEY, "apikey");
+});
+
+test("research weather outside the forecast window is pending without calling Open-Meteo, and never uses the archive", async () => {
+  configure("research"); process.env.TICKETSTUB_RESEARCH_PROVIDER = "anthropic";
+  process.env.OPEN_METEO_API_KEY = "offline-test-placeholder";
+  for (const [offset, value, outcome] of [[-93, "Past weather is not available this far back", "skipped"], [16, "Forecast opens 16 days before the date", "pending"]]) {
+    sink.clear();
+    const page = `<script type="application/ld+json">{"@type":"MusicEvent","name":"Gig","startDate":"${isoDay(offset)}","location":{"name":"Hall","address":{"addressLocality":"Oslo"}}}</script>`;
+    globalThis.fetch = async (url) => {
+      if (url.startsWith("https://example.com/")) return new Response(page);
+      throw new Error(`unexpected fetch ${url}`);
+    };
+    const body = await (await research.POST(req({ url: "https://example.com/gig" }))).json();
+    const weather = body.facts.filter((f) => f.id === "weather");
+    assert.deepEqual(weather.map((f) => [f.provenance, f.value]), [["pending", value]]);
+    assert.deepEqual(named("source_fetch").map((e) => [e.fields.source, e.fields.outcome]).sort(), [["event_page", "ok"], ["weather_forecast", outcome]]);
+  }
+  assertClean();
 });
 
 test("research page 404 and weather network failure stay graceful and are told apart", async () => {
@@ -362,7 +410,7 @@ test("research page 404 and weather network failure stay graceful and are told a
 
   sink.clear(); process.env.TICKETSTUB_RESEARCH_PROVIDER = "anthropic"; delete process.env.ANTHROPIC_API_KEY; // no enrichment
   globalThis.fetch = async (url) => {
-    if (url.startsWith("https://example.com/")) return new Response('<script type="application/ld+json">{"@type":"Event","name":"X","startDate":"2020-01-01","location":{"name":"Hall","address":{"addressLocality":"Oslo"}}}</script>');
+    if (url.startsWith("https://example.com/")) return new Response(`<script type="application/ld+json">{"@type":"Event","name":"X","startDate":"${isoDay(-1)}","location":{"name":"Hall","address":{"addressLocality":"Oslo"}}}</script>`);
     throw new TypeError(`fetch failed ${SEED}`);
   };
   const res = await research.POST(req({ url: "https://example.com/weatherless" }));
