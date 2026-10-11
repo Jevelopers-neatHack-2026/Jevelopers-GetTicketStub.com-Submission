@@ -58,3 +58,6 @@ jobs:
 
       - name: Verify private local durable attempt fixtures
         run: npm run verify:attempt-store
+
+      - name: Verify private offline comparison fixtures
+        run: npm run verify:comparison

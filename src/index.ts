@@ -77,3 +77,13 @@ export type {
   QuotedAmount
 } from "./quotes.js";
 export type { ExactMoney as PrivateQuoteExactMoney } from "./quotes.js";
+export { comparePrivateQuotes, PRIVATE_COMPARISON_FORMAT } from "./comparison.js";
+export type {
+  ComparisonCapabilityFit,
+  ComparisonQuoteEntry,
+  ComparisonQuoteReferences,
+  ComparisonReason,
+  PrivateQuoteComparison,
+  PrivateQuoteComparisonDependencies,
+  PrivateQuoteComparisonRequest
+} from "./comparison.js";
