@@ -14,52 +14,13 @@
     "provider": "openai",
     "product": "responses",
     "modelOrSku": "ci03-legacy-model",
-    "aliases": [],
-    "contextTier": null,
-    "serviceTier": null,
-    "reasoningMode": null,
-    "toolClass": null,
     "currency": "USD",
-    "pricingRuleRef": {
-      "contract": "PricingRule",
-      "schema_version": "1.0.0",
-      "id": "ci03-legacy-rule",
-      "revision": 1,
-      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    },
     "unitRates": [
-      { "category": "input", "unit": "token", "basisQuantity": "1000000", "rate": "2", "relation": "standalone" }
+      { "category": "input", "unit": "token", "rate": "2", "relation": "standalone" }
     ],
     "effectiveFrom": "2026-10-11T03:30:00.000Z",
     "effectiveTo": null,
     "retrievedAt": "2026-10-11T03:30:00.000Z",
-    "freshnessMaxAgeSeconds": 3600,
-    "sourceUrl": "https://fixtures.invalid/legacy-pricing",
-    "sourceContentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "approvalRef": {
-      "contract": "SyntheticFixtureApproval",
-      "schema_version": "1.0.0",
-      "id": "ci03-legacy-approval",
-      "revision": 1,
-      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    },
-    "provenance": "synthetic_fixture"
-  },
-  "pricing_rule": {
-    "schemaVersion": "1.0.0",
-    "id": "ci03-legacy-rule",
-    "revision": 1,
-    "provider": "openai",
-    "product": "responses",
-    "usageSource": "provider_response",
-    "usageSemantics": "Legacy standalone input token fixture.",
-    "usageUnits": [
-      { "name": "input_tokens", "category": "input", "unit": "token", "relation": "standalone", "treatment": "charge_total", "missingPolicy": "required" }
-    ],
-    "effectiveFrom": "2026-10-11T03:30:00.000Z",
-    "effectiveTo": null,
-    "retrievedAt": "2026-10-11T03:30:00.000Z",
-    "freshnessMaxAgeSeconds": 3600,
     "sourceUrl": "https://fixtures.invalid/legacy-pricing",
     "sourceContentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "approvalRef": {
@@ -76,10 +37,7 @@
     "requestId": "ci03-legacy-result",
     "estimatedAt": "2026-10-11T03:30:10.000Z",
     "status": "complete",
-    "selectionPolicy": "event_time",
-    "effectiveAt": "2026-10-11T03:30:00.000Z",
     "knownSubtotal": "0.000002",
-    "knownSubtotalExact": { "numerator": "1", "denominator": "500000" },
     "currency": "USD",
     "rateCardRef": {
       "contract": "RateCard",
@@ -88,23 +46,15 @@
       "revision": 1,
       "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
-    "pricingRuleRef": null,
-    "fxRateRef": null,
-    "fxConvertedSubtotal": null,
-    "fxConvertedSubtotalExact": null,
-    "fxTargetCurrency": null,
     "missingDimensions": [],
     "assumptions": ["Synthetic legacy compatibility fixture."],
     "boundedConservativeAuthorizationAmount": null,
     "calculation": [
       {
-        "usageUnit": "input_tokens",
         "category": "input",
         "quantity": "1",
         "unit": "token",
-        "basisQuantity": "1000000",
         "rate": "2",
-        "exactAmount": { "numerator": "1", "denominator": "500000" },
         "extendedAmount": "0.000002",
         "relation": "standalone"
       }

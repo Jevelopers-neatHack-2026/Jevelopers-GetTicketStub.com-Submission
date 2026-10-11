@@ -52,17 +52,21 @@ test('public domain boundaries return explicit unavailable results and never fab
     ...base, usageEvent, evidenceMode: 'mocked', verificationStatus: 'verified', evidenceProvenanceRef: 'fixture:usage-event',
   };
   await checkBoundary('ingestUsage', usage, 'SOURCE_UNAVAILABLE');
-  const estimate = {
+  const estimateV1 = {
     ...base, usageEvent,
+    selection: { policy: 'event_time', effectiveAt: usageEvent.occurred_at, requestedCurrency: 'USD', rateCardRef: null },
+  };
+  validRequests.push({ operation: 'estimate', request: estimateV1 });
+  assertError(await api.estimate(estimateV1, ports), 'PRICING_UNKNOWN',
+    'the retained 1.0.0 estimate boundary remains fail closed without a versioned tariff contract');
+  const estimateV2 = {
+    ...estimateV1, schemaVersion: '2.0.0',
     selection: {
       policy: 'event_time', effectiveAt: usageEvent.occurred_at, product: 'responses', requestedCurrency: 'USD',
       rateCardRef: null, fxRateRef: null, contractTimeEvidenceRef: null, contextTier: null, serviceTier: null,
       reasoningMode: null, toolClass: null, dimensionsEvidenceRef: null,
     },
   };
-  validRequests.push({ operation: 'estimate', request: estimate });
-  assertError(await api.estimate(estimate, ports), 'PRICING_UNKNOWN',
-    'the retained 1.0.0 estimate boundary remains fail closed without a versioned tariff contract');
   const pricingPorts = {
     ...ports,
     actionAuthority: {
@@ -83,7 +87,7 @@ test('public domain boundaries return explicit unavailable results and never fab
       }),
     },
   };
-  const estimateResult = await api.estimateV2({ ...estimate, schemaVersion: '2.0.0' }, pricingPorts);
+  const estimateResult = await api.estimateV2(estimateV2, pricingPorts);
   assert.equal(estimateResult.ok, true);
   assert.equal(estimateResult.value.status, 'pricing_unknown', 'an empty catalog returns typed unknown pricing, not a zero estimate');
 

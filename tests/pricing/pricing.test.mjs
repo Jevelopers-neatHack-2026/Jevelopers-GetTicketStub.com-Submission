@@ -8,19 +8,19 @@ import pg from 'pg';
 import { Value } from '@sinclair/typebox/value';
 import {
   EstimateRequestSchema,
+  EstimateResultV2Schema,
   EstimateResultSchema,
-  PricingRuleSchema,
+  PricingRuleV2Schema,
   RateCardSchema,
+  RateCardV2Schema,
   estimate,
   estimateV2,
-  registerPricingRule,
   registerFxRateV2,
   registerPricingRuleV2,
   registerRateCardV2,
   validateFxRateV2Boundary,
   validateEstimateRequestBoundary,
   validateEstimateRequestV2Boundary,
-  validatePricingRuleBoundary,
   validatePricingRuleV2Boundary,
   validateRateCardV2Boundary,
 } from '../../dist/index.js';
@@ -156,23 +156,39 @@ async function callEstimate(request, ports) {
 
 test('published pricing 1.0.0 fixtures retain their exact shape while incompatible pricing uses 2.0.0', async () => {
   const compatibility = JSON.parse(await readFile(join(root, 'fixtures/pricing/ci03-v1-compatibility.json'), 'utf8'));
+  const current = JSON.parse(await readFile(fixturePath, 'utf8'));
   const sharedEvent = JSON.parse(await readFile(sharedUsagePath, 'utf8')).valid;
   assert.equal(Value.Check(RateCardSchema, compatibility.rate_card), true);
-  assert.equal(Value.Check(PricingRuleSchema, compatibility.pricing_rule), true);
   assert.equal(Value.Check(EstimateResultSchema, compatibility.estimate_result), true);
-  assert.equal(Value.Check(RateCardSchema, compatibility.rate_card), true);
-  assert.equal(Value.Check(EstimateRequestSchema, {
-    schemaVersion: '1.0.0', requestId: 'ci03-legacy-request', idempotencyKey: 'ci03-legacy-idem',
-    scope: {
-      tenantId: sharedEvent.tenant_id, projectId: sharedEvent.project_id, environment: sharedEvent.environment,
-      billingMode: sharedEvent.billing_mode, actorId: 'ci03-legacy-actor',
+  assert.equal(Value.Check(RateCardV2Schema, compatibility.rate_card), false);
+  assert.equal(Value.Check(RateCardV2Schema, {
+    ...current.rate_card,
+    pricingRuleRef: {
+      contract: 'PricingRule', schema_version: '2.0.0', id: current.pricing_rule.id, revision: current.pricing_rule.revision,
+      content_hash: 'sha256:' + 'b'.repeat(64),
     },
-    usageEvent: sharedEvent,
-    selection: {
-      policy: 'event_time', effectiveAt: sharedEvent.occurred_at, product: 'responses', requestedCurrency: 'USD',
-      rateCardRef: null, fxRateRef: null, contractTimeEvidenceRef: null, contextTier: null, serviceTier: null,
-      reasoningMode: null, toolClass: null, dimensionsEvidenceRef: null,
+  }), true);
+  assert.equal(Value.Check(PricingRuleV2Schema, current.pricing_rule), true);
+  assert.equal(Value.Check(EstimateResultV2Schema, {
+    ...compatibility.estimate_result,
+    schemaVersion: '2.0.0',
+    selectionPolicy: 'event_time',
+    effectiveAt: compatibility.rate_card.effectiveFrom,
+    knownSubtotalExact: { numerator: '1', denominator: '500000' },
+    rateCardRef: { ...compatibility.versionedReference, schema_version: '2.0.0' },
+    pricingRuleRef: {
+      contract: 'PricingRule', schema_version: '2.0.0', id: current.pricing_rule.id, revision: current.pricing_rule.revision,
+      content_hash: 'sha256:' + 'b'.repeat(64),
     },
+    fxRateRef: null,
+    fxConvertedSubtotal: null,
+    fxConvertedSubtotalExact: null,
+    fxTargetCurrency: 'USD',
+    boundedConservativeAuthorizationAmountExact: null,
+    calculation: [{
+      usageUnit: 'input_tokens', category: 'input', quantity: '1', unit: 'token', basisQuantity: '1000000', rate: '2',
+      exactAmount: { numerator: '1', denominator: '500000' }, extendedAmount: '0.000002', relation: 'standalone',
+    }],
   }), true);
 
   const scope = {
@@ -183,26 +199,21 @@ test('published pricing 1.0.0 fixtures retain their exact shape while incompatib
     schemaVersion: '1.0.0', requestId: 'ci03-legacy-request', idempotencyKey: 'ci03-legacy-idem', scope,
     usageEvent: sharedEvent,
     selection: {
-      policy: 'event_time', effectiveAt: sharedEvent.occurred_at, product: 'responses', requestedCurrency: 'USD',
-      rateCardRef: null, fxRateRef: null, contractTimeEvidenceRef: null, contextTier: null, serviceTier: null,
-      reasoningMode: null, toolClass: null, dimensionsEvidenceRef: null,
+      policy: 'event_time', effectiveAt: sharedEvent.occurred_at, requestedCurrency: 'USD', rateCardRef: null,
     },
   };
+  assert.equal(Value.Check(EstimateRequestSchema, legacyRequest), true);
   assert.equal(validateEstimateRequestBoundary(legacyRequest).ok, true);
   assert.equal(validateEstimateRequestV2Boundary(legacyRequest).error.code, 'UNSUPPORTED_VERSION');
   assert.equal(validateEstimateRequestBoundary({ ...legacyRequest, schemaVersion: '2.0.0' }).error.code, 'UNSUPPORTED_VERSION');
-  assert.equal(validatePricingRuleBoundary({
-    schemaVersion: '1.0.0', requestId: 'ci03-legacy-rule', idempotencyKey: 'legacy-rule-idem', scope,
-    rule: compatibility.pricing_rule,
-  }).ok, true);
   assert.equal(validatePricingRuleV2Boundary({
     schemaVersion: '1.0.0', requestId: 'ci03-legacy-rule', idempotencyKey: 'legacy-rule-idem', scope,
-    rule: compatibility.pricing_rule,
+    rule: current.pricing_rule,
   }).error.code, 'UNSUPPORTED_VERSION');
-  assert.equal(validatePricingRuleBoundary({
+  assert.equal(validatePricingRuleV2Boundary({
     schemaVersion: '2.0.0', requestId: 'ci03-new-rule-through-v1', idempotencyKey: 'new-rule-idem', scope,
-    rule: compatibility.pricing_rule,
-  }).error.code, 'UNSUPPORTED_VERSION');
+    rule: { ...current.pricing_rule, schemaVersion: '1.0.0' },
+  }).error.code, 'VALIDATION_ERROR');
   assert.equal(validateRateCardV2Boundary({
     schemaVersion: '1.0.0', requestId: 'ci03-legacy-card', idempotencyKey: 'legacy-card-idem', scope,
     rateCard: compatibility.rate_card,
@@ -219,12 +230,13 @@ test('published pricing 1.0.0 fixtures retain their exact shape while incompatib
   const legacyEstimate = await estimate(legacyRequest, legacyPorts);
   assert.equal(legacyEstimate.ok, false);
   assert.equal(legacyEstimate.error.code, 'PRICING_UNKNOWN', 'legacy estimate wire API remains fail-closed without a versioned action grant');
-  const legacyWrite = await registerPricingRule({
-    schemaVersion: '1.0.0', requestId: 'ci03-legacy-rule', idempotencyKey: 'legacy-rule-idem', scope,
-    rule: compatibility.pricing_rule,
-  }, legacyPorts);
-  assert.equal(legacyWrite.ok, false);
-  assert.equal(legacyWrite.error.code, 'PRICING_UNKNOWN');
+
+  const scopeMismatch = { ...legacyRequest, scope: { ...scope, projectId: 'different-project' } };
+  assert.equal(validateEstimateRequestBoundary(scopeMismatch).ok, true,
+    'the original combined boundary validates the 1.0.0 wrapper and nested UsageEvent without adding scope policy');
+  const deniedScopeMismatch = await estimate(scopeMismatch, legacyPorts);
+  assert.equal(deniedScopeMismatch.ok, false);
+  assert.equal(deniedScopeMismatch.error.code, 'FORBIDDEN_SCOPE', 'the legacy operation enforces financial scope before calling its runtime ports');
 });
 
 test('CI03 persists immutable pricing versions and estimates exact, partial, unknown, stale, and converted amounts', async () => {
@@ -789,6 +801,109 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
     assert.deepEqual(boundEstimate.boundedConservativeAuthorizationAmountExact, { numerator: '31', denominator: '10000' });
     assert.ok(boundEstimate.missingDimensions.includes('usage:cached_tokens'));
 
+    const multiGroupRule = {
+      ...structuredClone(boundRule),
+      id: 'ci03-multigroup-bound-rule',
+      usageUnits: boundRule.usageUnits.map(item => {
+        if (item.name === 'output_tokens') return { ...item, treatment: 'charge_residual' };
+        if (item.name === 'reasoning_tokens') {
+          return { ...item, category: 'reasoning', treatment: 'charge_subset', missingPolicy: 'required' };
+        }
+        return item;
+      }),
+      partitionGroups: [...boundRule.partitionGroups, {
+        parent: 'output_tokens',
+        separatelyPricedMembers: ['reasoning_tokens'],
+        semantics: 'pairwise_disjoint_included_subsets',
+        conservativeBound: {
+          policy: 'maximum_marginal_rate',
+          evidenceRef: sourceReference('SyntheticPricingPartitionEvidence', 'ci03-output-partition-evidence', 'sha256:' + 'e'.repeat(64)),
+        },
+      }],
+    };
+    const multiGroupRuleWrite = await registerPricingRuleV2({
+      schemaVersion: '2.0.0', requestId: 'ci03-multigroup-rule', idempotencyKey: 'ci03-multigroup-rule-idem',
+      scope, rule: multiGroupRule,
+    }, ports);
+    assert.equal(multiGroupRuleWrite.ok, true, multiGroupRuleWrite.ok ? '' : multiGroupRuleWrite.error.safe_message);
+    const multiGroupRates = [
+      { category: 'input_ordinary', unit: 'token', basisQuantity: '1000000', rate: '1', relation: 'standalone' },
+      { category: 'cached_input', unit: 'token', basisQuantity: '1000000', rate: '0.1', relation: 'included_subset', includedIn: 'input_tokens' },
+      { category: 'cache_write', unit: 'token', basisQuantity: '1000000', rate: '2', relation: 'included_subset', includedIn: 'input_tokens' },
+      { category: 'output', unit: 'token', basisQuantity: '1000000', rate: '4', relation: 'standalone' },
+    ];
+    const multiGroupCard = {
+      ...boundCard,
+      id: 'ci03-multigroup-no-reasoning-rate-card',
+      modelOrSku: 'ci03-multigroup-no-reasoning-rate-model',
+      pricingRuleRef: multiGroupRuleWrite.value.reference,
+      unitRates: multiGroupRates,
+    };
+    const multiGroupCardWrite = await registerRateCardV2({
+      schemaVersion: '2.0.0', requestId: 'ci03-multigroup-no-reasoning-rate-card',
+      idempotencyKey: 'ci03-multigroup-no-reasoning-rate-card-idem', scope, rateCard: multiGroupCard,
+    }, ports);
+    assert.equal(multiGroupCardWrite.ok, true, multiGroupCardWrite.ok ? '' : multiGroupCardWrite.error.safe_message);
+    const multiGroupMissingEvent = makeEvent(sharedEvent, scope, fixture.selection.event_time, {
+      model: multiGroupCard.modelOrSku,
+      usageUnits: [unit('input_tokens', '1000'), unit('cache_write_tokens', '100', 'included_subset', 'input_tokens'), unit('output_tokens', '500')],
+    });
+    const multiGroupMissing = await callEstimate(requestBase(scope, multiGroupMissingEvent, 'ci03-multigroup-unpriced-bound'), ports);
+    assert.equal(multiGroupMissing.status, 'partial');
+    assert.equal(multiGroupMissing.knownSubtotal, '0.0002');
+    assert.ok(multiGroupMissing.missingDimensions.includes('usage:cached_tokens'));
+    assert.ok(multiGroupMissing.missingDimensions.includes('usage:reasoning_tokens'));
+    assert.equal(multiGroupMissing.boundedConservativeAuthorizationAmount, null,
+      'an unpriced output family makes a finite whole-estimate cap unavailable even when another partition is bounded');
+    assert.equal(multiGroupMissing.boundedConservativeAuthorizationAmountExact, null);
+
+    const multiGroupZeroCard = {
+      ...multiGroupCard,
+      id: 'ci03-multigroup-reasoning-zero-rate-card',
+      modelOrSku: 'ci03-multigroup-reasoning-zero-rate-model',
+      unitRates: [...multiGroupRates, {
+        category: 'reasoning', unit: 'token', basisQuantity: '1000000', rate: '0',
+        relation: 'included_subset', includedIn: 'output_tokens',
+      }],
+    };
+    const multiGroupZeroCardWrite = await registerRateCardV2({
+      schemaVersion: '2.0.0', requestId: 'ci03-multigroup-reasoning-zero-card',
+      idempotencyKey: 'ci03-multigroup-reasoning-zero-card-idem', scope, rateCard: multiGroupZeroCard,
+    }, ports);
+    assert.equal(multiGroupZeroCardWrite.ok, true, multiGroupZeroCardWrite.ok ? '' : multiGroupZeroCardWrite.error.safe_message);
+    const multiGroupZeroEvent = makeEvent(sharedEvent, scope, fixture.selection.event_time, {
+      model: multiGroupZeroCard.modelOrSku,
+      usageUnits: [
+        unit('input_tokens', '1000'), unit('cache_write_tokens', '100', 'included_subset', 'input_tokens'),
+        unit('output_tokens', '500'), unit('reasoning_tokens', '0', 'included_subset', 'output_tokens'),
+      ],
+    });
+    const multiGroupZero = await callEstimate(requestBase(scope, multiGroupZeroEvent, 'ci03-multigroup-zero-output-family'), ports);
+    assert.equal(multiGroupZero.knownSubtotal, '0.0022', 'an explicit zero reasoning quantity does not suppress the output total');
+    assert.ok(multiGroupZero.calculation.some(line => line.usageUnit === 'output_tokens' && line.extendedAmount === '0.002'));
+    assert.equal(multiGroupZero.boundedConservativeAuthorizationAmount, '0.0031',
+      'an observed zero reasoning quantity leaves the output subtotal visible and the input partition cap remains conservative');
+
+    const multiGroupBoundCard = {
+      ...multiGroupZeroCard,
+      id: 'ci03-multigroup-two-bounded-card',
+      modelOrSku: 'ci03-multigroup-two-bounded-model',
+    };
+    const multiGroupBoundCardWrite = await registerRateCardV2({
+      schemaVersion: '2.0.0', requestId: 'ci03-multigroup-two-bounded-card',
+      idempotencyKey: 'ci03-multigroup-two-bounded-card-idem', scope, rateCard: multiGroupBoundCard,
+    }, ports);
+    assert.equal(multiGroupBoundCardWrite.ok, true, multiGroupBoundCardWrite.ok ? '' : multiGroupBoundCardWrite.error.safe_message);
+    const multiGroupBothMissing = makeEvent(sharedEvent, scope, fixture.selection.event_time, {
+      model: multiGroupBoundCard.modelOrSku,
+      usageUnits: [unit('input_tokens', '1000'), unit('cache_write_tokens', '100', 'included_subset', 'input_tokens'), unit('output_tokens', '500')],
+    });
+    const multiGroupBound = await callEstimate(requestBase(scope, multiGroupBothMissing, 'ci03-multigroup-two-bounded-groups'), ports);
+    assert.equal(multiGroupBound.knownSubtotal, '0.0002');
+    assert.equal(multiGroupBound.boundedConservativeAuthorizationAmount, '0.0031',
+      'separately verified group bounds are each added exactly once to the known subtotal');
+    assert.deepEqual(multiGroupBound.boundedConservativeAuthorizationAmountExact, { numerator: '31', denominator: '10000' });
+
     const fractionalBoundEvidence = sourceReference(
       'SyntheticPricingPartitionEvidence', 'ci03-fractional-bound-evidence', 'sha256:' + 'd'.repeat(64),
     );
@@ -1107,6 +1222,13 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
       rateCard: lateCard,
     }, ports);
     assert.equal(lateCardWrite.ok, true, lateCardWrite.ok ? '' : lateCardWrite.error.safe_message);
+    const pinnedLateEvent = makeEvent(sharedEvent, scope, fixture.selection.event_time, { model: 'ci03-late-model' });
+    const pinnedLateRequest = requestBase(scope, pinnedLateEvent, 'ci03-pinned-late-first', {
+      rateCardRef: lateCardWrite.value.reference,
+    });
+    const pinnedLateFirst = await callEstimate(pinnedLateRequest, ports);
+    assert.equal(pinnedLateFirst.status, 'complete');
+    assert.equal(pinnedLateFirst.rateCardRef.content_hash, lateCardWrite.value.reference.content_hash);
     const firstLateEstimate = await callEstimate(lateHistoricalRequest, ports);
     assert.equal(firstLateEstimate.status, 'complete');
     assert.equal(firstLateEstimate.rateCardRef.id, lateCard.id,
@@ -1120,17 +1242,64 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
       retrievedAt: clock.value,
       unitRates: lateCard.unitRates.map(rate => ({ ...rate, rate: '99' })),
     };
-    const lateCorrectionWrite = await registerRateCardV2({
-      schemaVersion: '2.0.0', requestId: 'ci03-late-card-revision', idempotencyKey: 'ci03-late-card-revision-idem', scope,
-      rateCard: lateCardCorrection,
-    }, ports);
+    const [lateCorrectionWrite, pinnedConcurrentCorrectionReplay] = await Promise.all([
+      registerRateCardV2({
+        schemaVersion: '2.0.0', requestId: 'ci03-late-card-revision', idempotencyKey: 'ci03-late-card-revision-idem', scope,
+        rateCard: lateCardCorrection,
+      }, ports),
+      callEstimate({
+        ...pinnedLateRequest, requestId: 'ci03-pinned-late-concurrent-correction',
+        idempotencyKey: 'ci03-pinned-late-concurrent-correction-idem',
+      }, ports),
+    ]);
     assert.equal(lateCorrectionWrite.ok, true, lateCorrectionWrite.ok ? '' : lateCorrectionWrite.error.safe_message);
+    assert.deepEqual({ ...pinnedConcurrentCorrectionReplay, requestId: pinnedLateFirst.requestId }, pinnedLateFirst,
+      'a correction committed concurrently cannot bypass the existing original-pin valuation');
     const lateReplayWithNewKey = await callEstimate({
       ...lateHistoricalRequest, requestId: 'ci03-late-historical-replay', idempotencyKey: 'ci03-late-historical-replay-idem',
     }, ports);
     assert.equal(lateReplayWithNewKey.rateCardRef.revision, 1);
     assert.equal(lateReplayWithNewKey.knownSubtotal, firstLateEstimate.knownSubtotal,
       'catalog corrections do not silently reprice an immutable event valuation or an alternate retry key');
+    const pinnedReplayWithNewKey = await callEstimate({
+      ...pinnedLateRequest, requestId: 'ci03-pinned-late-replay', idempotencyKey: 'ci03-pinned-late-replay-idem',
+    }, ports);
+    assert.deepEqual({ ...pinnedReplayWithNewKey, requestId: pinnedLateFirst.requestId }, pinnedLateFirst,
+      'the explicit original rate-card pin replays the exact durable valuation after a backdated correction');
+    const changedPinnedSelection = await callEstimate({
+      ...pinnedLateRequest,
+      requestId: 'ci03-pinned-late-changed-selection',
+      idempotencyKey: 'ci03-pinned-late-changed-selection-idem',
+      selection: { ...pinnedLateRequest.selection, requestedCurrency: 'EUR' },
+    }, ports);
+    assert.equal(changedPinnedSelection.status, 'unknown');
+    assert.ok(changedPinnedSelection.missingDimensions.includes('existing_immutable_valuation_requires_authorized_revaluation'));
+    const concurrentPinnedReplays = await Promise.all([1, 2].map(index => callEstimate({
+      ...pinnedLateRequest,
+      requestId: 'ci03-pinned-late-concurrent-' + index,
+      idempotencyKey: 'ci03-pinned-late-concurrent-' + index + '-idem',
+    }, ports)));
+    for (const concurrentReplay of concurrentPinnedReplays) {
+      assert.deepEqual({ ...concurrentReplay, requestId: pinnedLateFirst.requestId }, pinnedLateFirst,
+        'concurrent alternate retry keys bind to the same pinned historical result');
+    }
+    const pinnedRateOnNewEvent = await callEstimate(requestBase(scope,
+      makeEvent(sharedEvent, scope, fixture.selection.event_time, { model: 'ci03-late-model' }), 'ci03-pinned-late-new-event', {
+        rateCardRef: lateCardWrite.value.reference,
+      }), ports);
+    assert.equal(pinnedRateOnNewEvent.status, 'pricing_unknown',
+      'a superseded explicit pin cannot price a new usage event without its own durable snapshot');
+    let replayDeniedConnections = 0;
+    const deniedPinnedReplay = await estimateV2(pinnedLateRequest, makePorts(pool, scope, clock, {
+      database: { connect: async () => { replayDeniedConnections += 1; throw new Error('denied replay reached database'); } },
+      actionAuthority: { authorize: async ({ scope: authorizedScope, action }) => ({
+        decisionId: 'synthetic-denied-replay', action, scope: authorizedScope, actorId: authorizedScope.actorId,
+        allowed: false, issuedAt: '2026-10-11T03:29:00.000Z', expiresAt: '2026-10-11T04:30:00.000Z',
+      }) },
+    }));
+    assert.equal(deniedPinnedReplay.ok, false);
+    assert.equal(deniedPinnedReplay.error.code, 'FORBIDDEN_SCOPE');
+    assert.equal(replayDeniedConnections, 0, 'current estimate authority is checked before returning a durable replay');
     const newLateAttempt = await callEstimate(requestBase(scope,
       makeEvent(sharedEvent, scope, fixture.selection.event_time, { model: 'ci03-late-model' }), 'ci03-late-new-attempt'), ports);
     assert.equal(newLateAttempt.rateCardRef.revision, 2);
@@ -1206,8 +1375,8 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
         + ' (SELECT count(*) FROM cost_intelligence.pricing_fx_rate_versions WHERE tenant_id = $1) AS fx',
       [scope.tenantId],
     );
-    assert.equal(Number(counts.rows[0].rules), 9);
-    assert.equal(Number(counts.rows[0].cards), 11);
+    assert.equal(Number(counts.rows[0].rules), 10);
+    assert.equal(Number(counts.rows[0].cards), 14);
     assert.equal(Number(counts.rows[0].fx), 3);
 
     const reconnectPool = new Pool({ ...databaseConfigFromEnvironment('CI_TEST_DB'), max: 4 });
@@ -1244,6 +1413,13 @@ test('CI03 persists immutable pricing versions and estimates exact, partial, unk
       assert.equal(replayAfterReconnect.rateCardRef.revision, 1);
       assert.equal(replayAfterReconnect.knownSubtotal, exact.knownSubtotal,
         'a fresh pool replays the first immutable valuation after later catalog revisions');
+      const pinnedReplayAfterReconnect = await callEstimate({
+        ...pinnedLateRequest,
+        requestId: 'ci03-pinned-late-after-reconnect',
+        idempotencyKey: 'ci03-pinned-late-after-reconnect-idem',
+      }, reconnectPorts);
+      assert.deepEqual({ ...pinnedReplayAfterReconnect, requestId: pinnedLateFirst.requestId }, pinnedLateFirst,
+        'a fresh pool returns the exact pinned valuation after a backdated card correction');
     } finally {
       await reconnectPool.end();
     }

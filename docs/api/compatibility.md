@@ -12,7 +12,7 @@ The candidate's policy uses exact semantic schema versions, rejects unknown fiel
 
 ### Pricing version migration
 
-The original pricing 1.0.0 schemas and types remain available under their existing export names with their exact base shape. Incompatible pricing shapes are 2.0.0 and use explicit `*V2Schema`, `*V2` type, and `*V2` function names; generated v2 pricing artifacts live under `schemas/cost-intelligence/2.0.0/pricing/`. A clean packed-consumer check compiles and imports both interfaces and validates old and new wire fixtures. The 1.0.0 functions remain available but fail closed because that encoding cannot carry the required operation-specific host grant. Use the v2 functions for pricing behavior.
+The original base pricing 1.0.0 `RateCard`, `EstimateRequest`, and `EstimateResult` schemas and types remain available under their exact names and shapes, along with the original fail-closed `estimate` function. The base had no catalog-write API. Incompatible catalog, rule, FX, and valuation shapes are 2.0.0 and use explicit `*V2Schema`, `*V2` type, and `*V2` function names; generated v2 pricing artifacts live under `schemas/cost-intelligence/2.0.0/pricing/`. A clean packed-consumer check compiles and imports both interfaces and validates old and new wire fixtures. The 1.0.0 estimate remains fail closed because that encoding cannot carry the required operation-specific host grant. Use the v2 functions for pricing behavior.
 
 Pricing v2 consumes the unchanged shared `UsageEvent@1.0.0` and uses finance-owned v2 references for its rules, cards, FX rates, and valuation results. No canonical contract or issuer capability was added. A real issuer adapter and its accepted decision source remain an external integration gate.
 

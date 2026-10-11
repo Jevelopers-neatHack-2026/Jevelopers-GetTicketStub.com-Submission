@@ -8,14 +8,13 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
-const pinnedPath = '/Users/completetech/.cache/acv1-toolchains/node-v22.23.3-darwin-arm64/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin';
 
 test('package root and every declared subpath resolve to ESM modules and declarations', async () => {
   const modules = [
-    ['@jevelopers/cost-intelligence', ['ingestUsage', 'estimate', 'estimateV2', 'registerPricingRule', 'registerPricingRuleV2', 'registerRateCard', 'registerRateCardV2', 'registerFxRate', 'registerFxRateV2', 'EstimateRequestV2Schema', 'EstimateResultV2Schema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'validateUsageObservationBoundary', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleBoundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary', 'authorize', 'markDispatched', 'settle', 'release', 'changeBudget', 'recordExpenseAdjustment', 'ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'querySummary', 'startReconciliation', 'getReconciliation', 'exportSummary', 'validateRateCardBoundary', 'validateFxRateBoundary', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary', 'validateFinancialSummaryPageBoundary', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary', 'validateExportRequestBoundary']],
+    ['@jevelopers/cost-intelligence', ['ingestUsage', 'estimate', 'estimateV2', 'registerPricingRuleV2', 'registerRateCardV2', 'registerFxRateV2', 'EstimateRequestSchema', 'EstimateResultSchema', 'EstimateRequestV2Schema', 'EstimateResultV2Schema', 'RateCardSchema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'validateUsageObservationBoundary', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary', 'authorize', 'markDispatched', 'settle', 'release', 'changeBudget', 'recordExpenseAdjustment', 'ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'querySummary', 'startReconciliation', 'getReconciliation', 'exportSummary', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary', 'validateFinancialSummaryPageBoundary', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary', 'validateExportRequestBoundary']],
     ['@jevelopers/cost-intelligence/contracts', ['ErrorEnvelopeSchema', 'TrustedScopeSchema']],
     ['@jevelopers/cost-intelligence/metering', ['ingestUsage', 'UsageObservationSchema', 'validateUsageObservationBoundary']],
-    ['@jevelopers/cost-intelligence/pricing', ['estimate', 'estimateV2', 'registerPricingRule', 'registerPricingRuleV2', 'registerRateCard', 'registerRateCardV2', 'registerFxRate', 'registerFxRateV2', 'RateCardSchema', 'PricingRuleSchema', 'FxRateSchema', 'EstimateRequestSchema', 'EstimateRequestV2Schema', 'EstimateResultV2Schema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary']],
+    ['@jevelopers/cost-intelligence/pricing', ['estimate', 'estimateV2', 'registerPricingRuleV2', 'registerRateCardV2', 'registerFxRateV2', 'RateCardSchema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'FxRateV2Schema', 'EstimateRequestSchema', 'EstimateRequestV2Schema', 'EstimateResultSchema', 'EstimateResultV2Schema', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary']],
     ['@jevelopers/cost-intelligence/budgets', ['authorize', 'markDispatched', 'settle', 'BudgetChangeRequestSchema', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary']],
     ['@jevelopers/cost-intelligence/ledger', ['ingestFinancial', 'FinancialEventSchema', 'appendLedgerEvent', 'rebuildLedgerProjection', 'LedgerEventTypeSchema', 'LedgerClassificationSchema', 'LedgerAppendRequestSchema', 'LedgerAppendReceiptSchema', 'LedgerProjectionRequestSchema', 'LedgerProjectionSchema', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary']],
     ['@jevelopers/cost-intelligence/reporting', ['querySummary', 'FinancialSummaryPageSchema', 'validateFinancialSummaryPageBoundary']],
@@ -25,6 +24,10 @@ test('package root and every declared subpath resolve to ESM modules and declara
   for (const [specifier, names] of modules) {
     const imported = await import(specifier);
     for (const name of names) assert.ok(name in imported, `${specifier} missing ${name}`);
+    if (specifier === '@jevelopers/cost-intelligence' || specifier === '@jevelopers/cost-intelligence/pricing') {
+      assert.equal('VersionedReferenceSchema' in imported, false, `${specifier} must preserve the reviewed 1.0.0 public exports`);
+      assert.equal('VersionedReference' in imported, false, `${specifier} must not add a 1.0.0 type export`);
+    }
   }
   await access(join(root, 'dist/index.d.ts'));
   const packageJson = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
@@ -39,21 +42,26 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
   const temp = await mkdtemp(join(tmpdir(), 'ci-packed-consumer-'));
   const consumer = join(temp, 'consumer');
   const tarballs = join(temp, 'tarballs');
-  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
   await mkdir(consumer, { recursive: true });
   await mkdir(tarballs, { recursive: true });
 
   function run(command, args, cwd, label) {
     const result = spawnSync(command, args, {
       cwd, encoding: 'utf8', timeout: 120_000,
-      env: { PATH: pinnedPath, CI: '1', npm_config_update_notifier: 'false', npm_config_fund: 'false', npm_config_audit: 'false' },
+      env: { ...process.env, CI: '1', npm_config_update_notifier: 'false', npm_config_fund: 'false', npm_config_audit: 'false' },
     });
     assert.equal(result.status, 0, `${label} failed (status=${result.status ?? 'null'}, error=${result.error?.message ?? 'none'}): ${(result.stderr || result.stdout || 'no output').slice(0, 1600)}`);
     return result.stdout;
   }
 
+  function runNpm(args, cwd, label) {
+    const cli = process.env.npm_execpath;
+    const command = cli ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm');
+    return run(command, cli ? [cli, ...args] : args, cwd, label);
+  }
+
   try {
-    const packOutput = run('npm', ['pack', '--json', '--pack-destination', tarballs], root, 'npm pack');
+    const packOutput = runNpm(['pack', '--json', '--pack-destination', tarballs], root, 'npm pack');
     const packed = JSON.parse(packOutput)[0];
     const packedPaths = packed.files.map(file => file.path);
     assert.ok(!packedPaths.some(path => path.startsWith('tests/') || path.startsWith('artifacts/')), 'test code and local evidence must stay out of the package');
@@ -68,28 +76,24 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
     await writeFile(join(consumer, 'package.json'), JSON.stringify({
       private: true,
       type: 'module',
-      dependencies: { '@sinclair/typebox': manifest.dependencies['@sinclair/typebox'] },
     }));
     await writeFile(join(consumer, 'tsconfig.json'), JSON.stringify({
       compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, noEmit: true, skipLibCheck: false },
       include: ['consumer.mts', 'worker-composition.mts'],
     }));
     await writeFile(join(consumer, 'consumer.mts'), [
-      "import { ingestUsage as rootIngest, estimate, estimateV2, registerPricingRule, registerPricingRuleV2, registerRateCard, registerRateCardV2, registerFxRate, registerFxRateV2, authorize, markDispatched, settle, release, changeBudget, recordExpenseAdjustment, ingestFinancial, appendLedgerEvent, rebuildLedgerProjection, querySummary, startReconciliation, getReconciliation, exportSummary, validateUsageObservationBoundary, validateEstimateRequestBoundary, validateEstimateRequestV2Boundary, validatePricingRuleBoundary, validatePricingRuleV2Boundary, validateRateCardBoundary, validateRateCardV2Boundary, validateFxRateBoundary, validateFxRateV2Boundary, validateReservationRequestBoundary, validateSettleReservationCommandBoundary, validateReleaseReservationCommandBoundary, validateReservationCommandBoundary, validateReservationSnapshotBoundary, validateFinancialSummaryPageBoundary, validateLedgerAppendRequestBoundary, validateLedgerProjectionRequestBoundary, validateExportRequestBoundary, RateCardSchema, RateCardV2Schema, EstimateRequestSchema, EstimateRequestV2Schema } from '@jevelopers/cost-intelligence';",
-      "import type { ApiResult, Validation, RuntimePorts, PricingRuntimePorts, LedgerRuntimePorts, IngestionReceipt, EstimateResult, EstimateResultV2, CatalogWriteReceipt, CatalogWriteReceiptV2, PricingRule, PricingRuleV2, RateCard, RateCardV2, FxRate, FxRateV2, RegisterPricingRuleRequest, RegisterPricingRuleRequestV2, RegisterRateCardRequest, RegisterRateCardRequestV2, RegisterFxRateRequest, RegisterFxRateRequestV2, AuthorizationDecision, ReservationSnapshot, BudgetChangeReceipt, PostingReceipt, LedgerAppendReceipt, LedgerAppendRequest, LedgerProjectionRequest, LedgerProjection, FinancialSummaryPage, ReconciliationRun, ReconciliationResult, ExportManifest, UsageObservation, EstimateRequest, EstimateRequestV2, ReservationRequest, SettleReservationCommand, ReleaseReservationCommand, ReservationCommand, ExportRequest } from '@jevelopers/cost-intelligence';",
+      "import { ingestUsage as rootIngest, estimate, estimateV2, registerPricingRuleV2, registerRateCardV2, registerFxRateV2, authorize, markDispatched, settle, release, changeBudget, recordExpenseAdjustment, ingestFinancial, appendLedgerEvent, rebuildLedgerProjection, querySummary, startReconciliation, getReconciliation, exportSummary, validateUsageObservationBoundary, validateEstimateRequestBoundary, validateEstimateRequestV2Boundary, validatePricingRuleV2Boundary, validateRateCardV2Boundary, validateFxRateV2Boundary, validateReservationRequestBoundary, validateSettleReservationCommandBoundary, validateReleaseReservationCommandBoundary, validateReservationCommandBoundary, validateReservationSnapshotBoundary, validateFinancialSummaryPageBoundary, validateLedgerAppendRequestBoundary, validateLedgerProjectionRequestBoundary, validateExportRequestBoundary, RateCardSchema, RateCardV2Schema, PricingRuleV2Schema, EstimateRequestSchema, EstimateRequestV2Schema, EstimateResultSchema, EstimateResultV2Schema } from '@jevelopers/cost-intelligence';",
+      "import type { ApiResult, Validation, RuntimePorts, PricingRuntimePorts, LedgerRuntimePorts, IngestionReceipt, EstimateResult, EstimateResultV2, CatalogWriteReceiptV2, PricingRuleV2, RateCard, RateCardV2, FxRateV2, RegisterPricingRuleRequestV2, RegisterRateCardRequestV2, RegisterFxRateRequestV2, AuthorizationDecision, ReservationSnapshot, BudgetChangeReceipt, PostingReceipt, LedgerAppendReceipt, LedgerAppendRequest, LedgerProjectionRequest, LedgerProjection, FinancialSummaryPage, ReconciliationRun, ReconciliationResult, ExportManifest, UsageObservation, EstimateRequest, EstimateRequestV2, ReservationRequest, SettleReservationCommand, ReleaseReservationCommand, ReservationCommand, ExportRequest } from '@jevelopers/cost-intelligence';",
       "type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? ((<T>() => T extends B ? 1 : 2) extends (<T>() => T extends A ? 1 : 2) ? true : false) : false;",
       'type NotAny<T> = 0 extends (1 & T) ? false : true;',
       'type Check<T extends true> = T;',
-      "type ExactPricingVersions = [Check<Equal<RateCard['schemaVersion'], '1.0.0'>>, Check<Equal<RateCardV2['schemaVersion'], '2.0.0'>>, Check<Equal<PricingRule['schemaVersion'], '1.0.0'>>, Check<Equal<PricingRuleV2['schemaVersion'], '2.0.0'>>, Check<Equal<EstimateRequest['schemaVersion'], '1.0.0'>>, Check<Equal<EstimateRequestV2['schemaVersion'], '2.0.0'>>, Check<Equal<EstimateResult['schemaVersion'], '1.0.0'>>, Check<Equal<EstimateResultV2['schemaVersion'], '2.0.0'>>];",
+      "type ExactPricingVersions = [Check<Equal<RateCard['schemaVersion'], '1.0.0'>>, Check<Equal<RateCardV2['schemaVersion'], '2.0.0'>>, Check<Equal<PricingRuleV2['schemaVersion'], '2.0.0'>>, Check<Equal<EstimateRequest['schemaVersion'], '1.0.0'>>, Check<Equal<EstimateRequestV2['schemaVersion'], '2.0.0'>>, Check<Equal<EstimateResult['schemaVersion'], '1.0.0'>>, Check<Equal<EstimateResultV2['schemaVersion'], '2.0.0'>>];",
       'type ExactPublicResults = [',
       '  Check<Equal<Awaited<ReturnType<typeof rootIngest>>, ApiResult<IngestionReceipt>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof estimate>>, ApiResult<EstimateResult>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof estimateV2>>, ApiResult<EstimateResultV2>>>,',
-      '  Check<Equal<Awaited<ReturnType<typeof registerPricingRule>>, ApiResult<CatalogWriteReceipt>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof registerPricingRuleV2>>, ApiResult<CatalogWriteReceiptV2>>>,',
-      '  Check<Equal<Awaited<ReturnType<typeof registerRateCard>>, ApiResult<CatalogWriteReceipt>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof registerRateCardV2>>, ApiResult<CatalogWriteReceiptV2>>>,',
-      '  Check<Equal<Awaited<ReturnType<typeof registerFxRate>>, ApiResult<CatalogWriteReceipt>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof registerFxRateV2>>, ApiResult<CatalogWriteReceiptV2>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof authorize>>, ApiResult<AuthorizationDecision>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof markDispatched>>, ApiResult<ReservationSnapshot>>>,',
@@ -104,7 +108,7 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       '  Check<Equal<Awaited<ReturnType<typeof startReconciliation>>, ApiResult<ReconciliationRun>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof getReconciliation>>, ApiResult<ReconciliationResult>>>,',
       '  Check<Equal<Awaited<ReturnType<typeof exportSummary>>, ApiResult<ExportManifest>>>,',
-      '  Check<NotAny<Awaited<ReturnType<typeof rootIngest>>>>, Check<NotAny<Awaited<ReturnType<typeof estimate>>>>, Check<NotAny<Awaited<ReturnType<typeof estimateV2>>>>, Check<NotAny<Awaited<ReturnType<typeof registerPricingRule>>>>, Check<NotAny<Awaited<ReturnType<typeof registerPricingRuleV2>>>>, Check<NotAny<Awaited<ReturnType<typeof registerRateCard>>>>, Check<NotAny<Awaited<ReturnType<typeof registerRateCardV2>>>>, Check<NotAny<Awaited<ReturnType<typeof registerFxRate>>>>, Check<NotAny<Awaited<ReturnType<typeof registerFxRateV2>>>>,',
+      '  Check<NotAny<Awaited<ReturnType<typeof rootIngest>>>>, Check<NotAny<Awaited<ReturnType<typeof estimate>>>>, Check<NotAny<Awaited<ReturnType<typeof estimateV2>>>>, Check<NotAny<Awaited<ReturnType<typeof registerPricingRuleV2>>>>, Check<NotAny<Awaited<ReturnType<typeof registerRateCardV2>>>>, Check<NotAny<Awaited<ReturnType<typeof registerFxRateV2>>>>,',
       '  Check<NotAny<Awaited<ReturnType<typeof authorize>>>>, Check<NotAny<Awaited<ReturnType<typeof markDispatched>>>>, Check<NotAny<Awaited<ReturnType<typeof settle>>>>, Check<NotAny<Awaited<ReturnType<typeof release>>>>,',
       '  Check<NotAny<Awaited<ReturnType<typeof changeBudget>>>>, Check<NotAny<Awaited<ReturnType<typeof recordExpenseAdjustment>>>>,',
       '  Check<NotAny<Awaited<ReturnType<typeof ingestFinancial>>>>, Check<NotAny<Awaited<ReturnType<typeof appendLedgerEvent>>>>, Check<NotAny<Awaited<ReturnType<typeof rebuildLedgerProjection>>>>, Check<NotAny<Awaited<ReturnType<typeof querySummary>>>>,',
@@ -125,15 +129,13 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       '  Check<Equal<ReturnType<typeof validateExportRequestBoundary>, Validation<ExportRequest>>>,',
       '];',
       'declare const runtimePorts: RuntimePorts; declare const pricingPorts: PricingRuntimePorts; declare const ledgerPorts: LedgerRuntimePorts;',
+      "const originalSelection: EstimateRequest['selection'] = { policy: 'event_time', effectiveAt: '2026-10-11T03:30:00.000Z', requestedCurrency: 'USD', rateCardRef: null };",
       'async function consumeTypedResults() {',
       '  const a = await rootIngest(undefined as never, runtimePorts); const aa: ApiResult<IngestionReceipt> = a; if (aa.ok) { const v: IngestionReceipt["status"] = aa.value.status; void v; }',
       '  const b = await estimate(undefined as never, runtimePorts); const bb: ApiResult<EstimateResult> = b; if (bb.ok) { const v: EstimateResult["status"] = bb.value.status; void v; }',
       '  const b2 = await estimateV2(undefined as never, pricingPorts); const bb2: ApiResult<EstimateResultV2> = b2; if (bb2.ok) { const v: EstimateResultV2["status"] = bb2.value.status; void v; }',
-      '  const rule = await registerPricingRule(undefined as never, runtimePorts); const rr: ApiResult<CatalogWriteReceipt> = rule; void rr;',
       '  const rule2 = await registerPricingRuleV2(undefined as never, pricingPorts); const rr2: ApiResult<CatalogWriteReceiptV2> = rule2; void rr2;',
-      '  const card = await registerRateCard(undefined as never, runtimePorts); const cr: ApiResult<CatalogWriteReceipt> = card; void cr;',
       '  const card2 = await registerRateCardV2(undefined as never, pricingPorts); const cr2: ApiResult<CatalogWriteReceiptV2> = card2; void cr2;',
-      '  const fx = await registerFxRate(undefined as never, runtimePorts); const fr: ApiResult<CatalogWriteReceipt> = fx; void fr;',
       '  const fx2 = await registerFxRateV2(undefined as never, pricingPorts); const fr2: ApiResult<CatalogWriteReceiptV2> = fx2; void fr2;',
       '  const c = await authorize(undefined as never, runtimePorts); const cc: ApiResult<AuthorizationDecision> = c; if (cc.ok) { const v: AuthorizationDecision["status"] = cc.value.status; void v; }',
       '  const dispatch = await markDispatched(undefined as never, runtimePorts); const dispatchedResult: ApiResult<ReservationSnapshot> = dispatch; if (dispatchedResult.ok) { const state: ReservationSnapshot["state"] = dispatchedResult.value.state; void state; }',
@@ -149,7 +151,7 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       '  const k = await getReconciliation(undefined as never, runtimePorts); const kk: ApiResult<ReconciliationResult> = k; if (kk.ok) { const v: ReconciliationResult["unknownVarianceCount"] = kk.value.unknownVarianceCount; void v; }',
       '  const l = await exportSummary(undefined as never, runtimePorts); const ll: ApiResult<ExportManifest> = l; if (ll.ok) { const v: ExportManifest["exportId"] = ll.value.exportId; void v; }',
       '}',
-      'void [consumeTypedResults, validateUsageObservationBoundary, validateEstimateRequestBoundary, validateEstimateRequestV2Boundary, validatePricingRuleBoundary, validatePricingRuleV2Boundary, validateRateCardBoundary, validateRateCardV2Boundary, validateFxRateBoundary, validateFxRateV2Boundary, validateReservationRequestBoundary, validateSettleReservationCommandBoundary, validateReleaseReservationCommandBoundary, validateReservationCommandBoundary, validateReservationSnapshotBoundary, validateFinancialSummaryPageBoundary, validateLedgerAppendRequestBoundary, validateLedgerProjectionRequestBoundary, validateExportRequestBoundary, RateCardSchema, RateCardV2Schema, EstimateRequestSchema, EstimateRequestV2Schema];',
+      'void [consumeTypedResults, originalSelection, validateUsageObservationBoundary, validateEstimateRequestBoundary, validateEstimateRequestV2Boundary, validatePricingRuleV2Boundary, validateRateCardV2Boundary, validateFxRateV2Boundary, validateReservationRequestBoundary, validateSettleReservationCommandBoundary, validateReleaseReservationCommandBoundary, validateReservationCommandBoundary, validateReservationSnapshotBoundary, validateFinancialSummaryPageBoundary, validateLedgerAppendRequestBoundary, validateLedgerProjectionRequestBoundary, validateExportRequestBoundary, RateCardSchema, RateCardV2Schema, EstimateRequestSchema, EstimateRequestV2Schema, EstimateResultSchema, EstimateResultV2Schema, PricingRuleV2Schema];',
       "import * as contracts from '@jevelopers/cost-intelligence/contracts';",
       "import * as metering from '@jevelopers/cost-intelligence/metering';",
       "import * as pricing from '@jevelopers/cost-intelligence/pricing';",
@@ -158,18 +160,18 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       "import * as reporting from '@jevelopers/cost-intelligence/reporting';",
       "import * as reconciliation from '@jevelopers/cost-intelligence/reconciliation';",
       "import * as integrations from '@jevelopers/cost-intelligence/integrations';",
-      'void [rootIngest, estimate, registerPricingRule, registerRateCard, registerFxRate, authorize, markDispatched, settle, release, changeBudget, recordExpenseAdjustment, ingestFinancial, appendLedgerEvent, rebuildLedgerProjection, querySummary, startReconciliation, getReconciliation, exportSummary, contracts.ErrorEnvelopeSchema, metering.ingestUsage, pricing.estimate, pricing.registerPricingRule, pricing.registerRateCard, pricing.registerFxRate, budgets.authorize, ledger.ingestFinancial, ledger.appendLedgerEvent, reporting.querySummary, reconciliation.getReconciliation, integrations.exportSummary];',
+      'void [rootIngest, estimate, estimateV2, registerPricingRuleV2, registerRateCardV2, registerFxRateV2, authorize, markDispatched, settle, release, changeBudget, recordExpenseAdjustment, ingestFinancial, appendLedgerEvent, rebuildLedgerProjection, querySummary, startReconciliation, getReconciliation, exportSummary, contracts.ErrorEnvelopeSchema, metering.ingestUsage, pricing.estimate, pricing.estimateV2, pricing.registerPricingRuleV2, pricing.registerRateCardV2, pricing.registerFxRateV2, budgets.authorize, ledger.ingestFinancial, ledger.appendLedgerEvent, reporting.querySummary, reconciliation.getReconciliation, integrations.exportSummary];',
     ].join('\n'));
     await writeFile(join(consumer, 'worker-composition.mts'), await readFile(join(root, 'examples/worker-composition.ts'), 'utf8'));
 
-    run('npm', ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', tarball], consumer, 'offline packed consumer install');
+    runNpm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', tarball], consumer, 'offline packed consumer install');
     run(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--project', join(consumer, 'tsconfig.json')], root, 'packed consumer declaration compile');
     const runtime = [
       "const entries = [",
-      "  ['@jevelopers/cost-intelligence', ['ingestUsage', 'estimate', 'estimateV2', 'registerPricingRule', 'registerPricingRuleV2', 'registerRateCard', 'registerRateCardV2', 'registerFxRate', 'registerFxRateV2', 'authorize', 'markDispatched', 'settle', 'release', 'changeBudget', 'recordExpenseAdjustment', 'ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'querySummary', 'startReconciliation', 'getReconciliation', 'exportSummary', 'validateUsageObservationBoundary', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleBoundary', 'validatePricingRuleV2Boundary', 'validateRateCardBoundary', 'validateRateCardV2Boundary', 'validateFxRateBoundary', 'validateFxRateV2Boundary', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary', 'validateFinancialSummaryPageBoundary', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary', 'validateExportRequestBoundary']],",
+      "  ['@jevelopers/cost-intelligence', ['ingestUsage', 'estimate', 'estimateV2', 'registerPricingRuleV2', 'registerRateCardV2', 'registerFxRateV2', 'authorize', 'markDispatched', 'settle', 'release', 'changeBudget', 'recordExpenseAdjustment', 'ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'querySummary', 'startReconciliation', 'getReconciliation', 'exportSummary', 'validateUsageObservationBoundary', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary', 'validateFinancialSummaryPageBoundary', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary', 'validateExportRequestBoundary']],",
       "  ['@jevelopers/cost-intelligence/contracts', ['ErrorEnvelopeSchema']],",
       "  ['@jevelopers/cost-intelligence/metering', ['ingestUsage', 'validateUsageObservationBoundary']],",
-      "  ['@jevelopers/cost-intelligence/pricing', ['estimate', 'estimateV2', 'registerPricingRule', 'registerPricingRuleV2', 'registerRateCard', 'registerRateCardV2', 'registerFxRate', 'registerFxRateV2', 'RateCardSchema', 'PricingRuleSchema', 'FxRateSchema', 'EstimateRequestSchema', 'EstimateRequestV2Schema', 'EstimateResultV2Schema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary']],",
+      "  ['@jevelopers/cost-intelligence/pricing', ['estimate', 'estimateV2', 'registerPricingRuleV2', 'registerRateCardV2', 'registerFxRateV2', 'RateCardSchema', 'RateCardV2Schema', 'PricingRuleV2Schema', 'FxRateV2Schema', 'EstimateRequestSchema', 'EstimateRequestV2Schema', 'EstimateResultSchema', 'EstimateResultV2Schema', 'validateEstimateRequestBoundary', 'validateEstimateRequestV2Boundary', 'validatePricingRuleV2Boundary', 'validateRateCardV2Boundary', 'validateFxRateV2Boundary']],",
       "  ['@jevelopers/cost-intelligence/budgets', ['authorize', 'markDispatched', 'validateReservationRequestBoundary', 'validateSettleReservationCommandBoundary', 'validateReleaseReservationCommandBoundary', 'validateReservationCommandBoundary', 'validateReservationSnapshotBoundary']],",
       "  ['@jevelopers/cost-intelligence/ledger', ['ingestFinancial', 'appendLedgerEvent', 'rebuildLedgerProjection', 'LedgerEventTypeSchema', 'LedgerClassificationSchema', 'LedgerAppendRequestSchema', 'LedgerAppendReceiptSchema', 'LedgerProjectionRequestSchema', 'LedgerProjectionSchema', 'validateLedgerAppendRequestBoundary', 'validateLedgerProjectionRequestBoundary']],",
       "  ['@jevelopers/cost-intelligence/reporting', ['querySummary', 'validateFinancialSummaryPageBoundary']],",
@@ -179,20 +181,24 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       'for (const [specifier, names] of entries) { const mod = await import(specifier); for (const name of names) if (!(name in mod)) throw new Error(`${specifier} missing ${name}`); }',
       "import assert from 'node:assert/strict';",
       "import { readFile } from 'node:fs/promises';",
-      "import { FormatRegistry } from '@sinclair/typebox';",
-      "import { Value } from '@sinclair/typebox/value';",
+      "import { createRequire } from 'node:module';",
       "import * as pricing from '@jevelopers/cost-intelligence/pricing';",
+      "const packageRequire = createRequire(new URL('./node_modules/@jevelopers/cost-intelligence/package.json', import.meta.url));",
+      "const { FormatRegistry } = packageRequire('@sinclair/typebox');",
+      "const { Value } = packageRequire('@sinclair/typebox/value');",
       "if (!FormatRegistry.Has('date-time')) FormatRegistry.Set('date-time', value => typeof value === 'string' && Number.isFinite(Date.parse(value)) && value.endsWith('Z'));",
       "if (!FormatRegistry.Has('uri')) FormatRegistry.Set('uri', value => { try { return new URL(value).protocol.length > 0; } catch { return false; } });",
       "const fixtureRoot = new URL('./node_modules/@jevelopers/cost-intelligence/fixtures/pricing/', import.meta.url);",
       "const legacy = JSON.parse(await readFile(new URL('ci03-v1-compatibility.json', fixtureRoot), 'utf8'));",
+      "assert.equal('PricingRuleSchema' in pricing, false);",
+      "assert.equal('FxRateSchema' in pricing, false);",
+      "assert.equal('VersionedReferenceSchema' in pricing, false);",
       "assert.equal(Value.Check(pricing.RateCardSchema, legacy.rate_card), true);",
       "assert.equal(Value.Check(pricing.RateCardV2Schema, legacy.rate_card), false);",
-      "assert.equal(Value.Check(pricing.PricingRuleSchema, legacy.pricing_rule), true);",
       "assert.equal(Value.Check(pricing.EstimateResultSchema, legacy.estimate_result), true);",
       "const scope = { tenantId: 'tenant-a', projectId: 'project-a', environment: 'test', billingMode: 'simulated', actorId: 'actor-a' };",
-      "const legacyRequest = { schemaVersion: '1.0.0', requestId: 'old', idempotencyKey: 'old-idem', scope, usageEvent: {}, selection: { policy: 'event_time', effectiveAt: '2026-10-11T03:30:00.000Z', product: 'responses', requestedCurrency: 'USD', rateCardRef: null, fxRateRef: null, contractTimeEvidenceRef: null, contextTier: null, serviceTier: null, reasoningMode: null, toolClass: null, dimensionsEvidenceRef: null } };",
-      "const nextRequest = { ...legacyRequest, schemaVersion: '2.0.0' };",
+      "const legacyRequest = { schemaVersion: '1.0.0', requestId: 'old', idempotencyKey: 'old-idem', scope, usageEvent: {}, selection: { policy: 'event_time', effectiveAt: '2026-10-11T03:30:00.000Z', requestedCurrency: 'USD', rateCardRef: null } };",
+      "const nextRequest = { ...legacyRequest, schemaVersion: '2.0.0', selection: { ...legacyRequest.selection, product: 'responses', fxRateRef: null, contractTimeEvidenceRef: null, contextTier: null, serviceTier: null, reasoningMode: null, toolClass: null, dimensionsEvidenceRef: null } };",
       "assert.equal(Value.Check(pricing.EstimateRequestSchema, legacyRequest), true);",
       "assert.equal(Value.Check(pricing.EstimateRequestV2Schema, legacyRequest), false);",
       "assert.equal(Value.Check(pricing.EstimateRequestV2Schema, nextRequest), true);",
@@ -201,7 +207,8 @@ test('packed tarball installs into a clean consumer, imports every subpath, and 
       "const ruleReference = { contract: 'PricingRule', schema_version: '2.0.0', id: current.pricing_rule.id, revision: current.pricing_rule.revision, content_hash: 'sha256:' + 'b'.repeat(64) };",
       "assert.equal(Value.Check(pricing.PricingRuleV2Schema, current.pricing_rule), true);",
       "assert.equal(Value.Check(pricing.RateCardV2Schema, { ...current.rate_card, pricingRuleRef: ruleReference }), true);",
-      "assert.equal(Value.Check(pricing.EstimateResultV2Schema, { ...legacy.estimate_result, schemaVersion: '2.0.0', rateCardRef: { ...legacy.versionedReference, schema_version: '2.0.0' }, pricingRuleRef: ruleReference, boundedConservativeAuthorizationAmountExact: null }), true);",
+      "const estimateResultV2 = { ...legacy.estimate_result, schemaVersion: '2.0.0', selectionPolicy: 'event_time', effectiveAt: legacy.rate_card.effectiveFrom, knownSubtotalExact: { numerator: '1', denominator: '500000' }, rateCardRef: { ...legacy.versionedReference, schema_version: '2.0.0' }, pricingRuleRef: ruleReference, fxRateRef: null, fxConvertedSubtotal: null, fxConvertedSubtotalExact: null, fxTargetCurrency: 'USD', boundedConservativeAuthorizationAmountExact: null, calculation: [{ usageUnit: 'input_tokens', category: 'input', quantity: '1', unit: 'token', basisQuantity: '1000000', rate: '2', exactAmount: { numerator: '1', denominator: '500000' }, extendedAmount: '0.000002', relation: 'standalone' }] };",
+      "assert.equal(Value.Check(pricing.EstimateResultV2Schema, estimateResultV2), true);",
     ].join('\n');
     await writeFile(join(consumer, 'consumer.mjs'), runtime);
     run(process.execPath, [join(consumer, 'consumer.mjs')], consumer, 'packed consumer runtime imports');

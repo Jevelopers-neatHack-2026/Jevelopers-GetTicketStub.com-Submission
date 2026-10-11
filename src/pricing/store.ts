@@ -1114,23 +1114,28 @@ export async function loadPricingCatalog(
 export type PricingEstimateSnapshotWrite =
   | { readonly kind: 'saved'; readonly value: EstimateResult }
   | { readonly kind: 'replay'; readonly value: EstimateResult }
+  | { readonly kind: 'miss' }
   | { readonly kind: 'idempotency_conflict' }
   | { readonly kind: 'valuation_conflict' };
 
-/** Persist the first valuation of a canonical usage_event_id and bind every successful retry key. */
-export async function persistPricingEstimate(args: {
+type PricingEstimateSnapshotArgs = {
   readonly requestId: string;
   readonly idempotencyKey: string;
   readonly payloadHash: string;
   readonly usageEventId: string;
   readonly usageEventHash: string;
-  readonly catalogAsOf: string;
   readonly scope: TrustedScope;
-  readonly result: EstimateResult;
   readonly ports: PricingRuntimePorts;
-}): Promise<PricingEstimateSnapshotWrite | ErrorEnvelope> {
-  const contentHash = await hashPricingContent(args.result);
-  const resultReference = reference('PricingEstimate', args.usageEventId, 1, contentHash);
+};
+
+async function accessPricingEstimateSnapshot(
+  args: PricingEstimateSnapshotArgs,
+  result?: EstimateResult,
+  catalogAsOf?: string,
+): Promise<PricingEstimateSnapshotWrite | ErrorEnvelope> {
+  const resultReference = result
+    ? reference('PricingEstimate', args.usageEventId, 1, await hashPricingContent(result))
+    : null;
   let client: PricingTransactionPort | undefined;
   let inTransaction = false;
   try {
@@ -1195,6 +1200,12 @@ export async function persistPricingEstimate(args: {
       return { kind: 'idempotency_conflict' };
     }
 
+    if (!result || !resultReference || !catalogAsOf) {
+      await client.query('COMMIT');
+      inTransaction = false;
+      return { kind: 'miss' };
+    }
+
     await client.query(
       'INSERT INTO cost_intelligence.pricing_estimate_snapshots'
         + ' (tenant_id, project_id, environment, billing_mode, actor_id, usage_event_id, usage_event_hash,'
@@ -1202,7 +1213,7 @@ export async function persistPricingEstimate(args: {
         + ' VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11)',
       [
         ...scopeValues(args.scope), args.scope.actorId, args.usageEventId, args.usageEventHash,
-        args.payloadHash, args.idempotencyKey, canonicalJson(args.result), args.catalogAsOf,
+        args.payloadHash, args.idempotencyKey, canonicalJson(result), catalogAsOf,
       ],
     );
     await insertOperationBinding({
@@ -1211,11 +1222,26 @@ export async function persistPricingEstimate(args: {
     });
     await client.query('COMMIT');
     inTransaction = false;
-    return { kind: 'saved', value: args.result };
+    return { kind: 'saved', value: result };
   } catch {
     if (client && inTransaction) await client.query('ROLLBACK').catch(() => {});
     return safeError('estimate', 'SOURCE_UNAVAILABLE', args.requestId, 'Immutable pricing history is temporarily unavailable.', true);
   } finally {
     client?.release();
   }
+}
+
+/** Read and bind an existing immutable event valuation before catalog selection. */
+export async function lookupPricingEstimateReplay(
+  args: PricingEstimateSnapshotArgs,
+): Promise<PricingEstimateSnapshotWrite | ErrorEnvelope> {
+  return accessPricingEstimateSnapshot(args);
+}
+
+/** Persist the first valuation of a canonical usage_event_id and bind every successful retry key. */
+export async function persistPricingEstimate(args: PricingEstimateSnapshotArgs & {
+  readonly catalogAsOf: string;
+  readonly result: EstimateResult;
+}): Promise<PricingEstimateSnapshotWrite | ErrorEnvelope> {
+  return accessPricingEstimateSnapshot(args, args.result, args.catalogAsOf);
 }

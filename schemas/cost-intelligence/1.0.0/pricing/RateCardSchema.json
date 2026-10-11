@@ -11,18 +11,11 @@
     "provider",
     "product",
     "modelOrSku",
-    "aliases",
-    "contextTier",
-    "serviceTier",
-    "reasoningMode",
-    "toolClass",
     "currency",
-    "pricingRuleRef",
     "unitRates",
     "effectiveFrom",
     "effectiveTo",
     "retrievedAt",
-    "freshnessMaxAgeSeconds",
     "sourceUrl",
     "sourceContentHash",
     "approvalRef",
@@ -35,7 +28,6 @@
     },
     "id": {
       "minLength": 1,
-      "maxLength": 128,
       "type": "string"
     },
     "revision": {
@@ -44,118 +36,22 @@
     },
     "provider": {
       "minLength": 1,
-      "maxLength": 128,
       "type": "string"
     },
     "product": {
       "minLength": 1,
-      "maxLength": 128,
       "type": "string"
     },
     "modelOrSku": {
       "minLength": 1,
-      "maxLength": 128,
       "type": "string"
-    },
-    "aliases": {
-      "maxItems": 100,
-      "type": "array",
-      "items": {
-        "minLength": 1,
-        "maxLength": 128,
-        "type": "string"
-      }
-    },
-    "contextTier": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "maxLength": 128,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "serviceTier": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "maxLength": 128,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "reasoningMode": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "maxLength": 128,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "toolClass": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "maxLength": 128,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ]
     },
     "currency": {
       "pattern": "^[A-Z]{3}$",
       "type": "string"
     },
-    "pricingRuleRef": {
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "contract",
-        "schema_version",
-        "id",
-        "revision",
-        "content_hash"
-      ],
-      "properties": {
-        "contract": {
-          "minLength": 1,
-          "maxLength": 128,
-          "type": "string"
-        },
-        "schema_version": {
-          "const": "1.0.0",
-          "type": "string"
-        },
-        "id": {
-          "minLength": 1,
-          "maxLength": 128,
-          "type": "string"
-        },
-        "revision": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "content_hash": {
-          "pattern": "^sha256:[a-f0-9]{64}$",
-          "type": "string"
-        }
-      }
-    },
     "unitRates": {
       "minItems": 1,
-      "maxItems": 100,
       "type": "array",
       "items": {
         "additionalProperties": false,
@@ -163,31 +59,22 @@
         "required": [
           "category",
           "unit",
-          "basisQuantity",
           "rate",
           "relation"
         ],
         "properties": {
           "category": {
             "minLength": 1,
-            "maxLength": 128,
             "type": "string"
           },
           "unit": {
             "minLength": 1,
-            "maxLength": 128,
-            "type": "string"
-          },
-          "basisQuantity": {
-            "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
-            "maxLength": 40,
-            "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
             "type": "string"
           },
           "rate": {
-            "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
             "maxLength": 40,
-            "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
+            "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
             "type": "string"
           },
           "relation": {
@@ -208,7 +95,18 @@
           },
           "includedIn": {
             "minLength": 1,
-            "maxLength": 128,
+            "type": "string"
+          },
+          "serviceTier": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "reasoningMode": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "toolClass": {
+            "minLength": 1,
             "type": "string"
           }
         }
@@ -216,14 +114,12 @@
     },
     "effectiveFrom": {
       "format": "date-time",
-      "pattern": "Z$",
       "type": "string"
     },
     "effectiveTo": {
       "anyOf": [
         {
           "format": "date-time",
-          "pattern": "Z$",
           "type": "string"
         },
         {
@@ -233,17 +129,10 @@
     },
     "retrievedAt": {
       "format": "date-time",
-      "pattern": "Z$",
       "type": "string"
-    },
-    "freshnessMaxAgeSeconds": {
-      "minimum": 0,
-      "maximum": 315360000,
-      "type": "integer"
     },
     "sourceUrl": {
       "format": "uri",
-      "maxLength": 2048,
       "type": "string"
     },
     "sourceContentHash": {
@@ -263,7 +152,6 @@
       "properties": {
         "contract": {
           "minLength": 1,
-          "maxLength": 128,
           "type": "string"
         },
         "schema_version": {
@@ -272,11 +160,10 @@
         },
         "id": {
           "minLength": 1,
-          "maxLength": 128,
           "type": "string"
         },
         "revision": {
-          "minimum": 1,
+          "minimum": 0,
           "type": "integer"
         },
         "content_hash": {

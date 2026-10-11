@@ -8,14 +8,6 @@ export {
   validatePricingRuleBoundary as validatePricingRuleV2Boundary,
   validateRateCardBoundary as validateRateCardV2Boundary,
 } from './store.js';
-export {
-  registerFxRate,
-  registerPricingRule,
-  registerRateCard,
-  validateFxRateBoundary,
-  validatePricingRuleBoundary,
-  validateRateCardBoundary,
-} from './legacy.js';
 export type {
   ContractTimeAuthorityPort,
   PricingAction,
@@ -31,35 +23,19 @@ export type {
   ResolvedContractTime,
 } from './store.js';
 
-// Existing 1.0.0 names remain the original exact public encoding.
+// These schemas and types retain the exact original pricing 1.0.0 encodings.
 export {
-  CatalogWriteReceiptSchema,
   EstimateRequestSchema,
   EstimateResultSchema,
-  EstimateStatusSchema,
-  ExactRatioSchema,
-  FxRateSchema,
-  PricingRuleSchema,
   RateCardSchema,
-  RegisterFxRateRequestSchema,
-  RegisterPricingRuleRequestSchema,
-  RegisterRateCardRequestSchema,
-  VersionedReferenceSchema,
 } from './legacy-schemas.js';
 export type {
-  CatalogWriteReceipt,
   EstimateRequest,
   EstimateResult,
-  FxRate,
-  PricingRule,
   RateCard,
-  RegisterFxRateRequest,
-  RegisterPricingRuleRequest,
-  RegisterRateCardRequest,
-  VersionedReference,
 } from './legacy-schemas.js';
 
-// Incompatible 2.0.0 encodings are named explicitly and generated under /2.0.0.
+// The implemented catalog and valuation API uses the incompatible 2.0.0 forms.
 export {
   CatalogWriteReceiptSchema as CatalogWriteReceiptV2Schema,
   EstimateRequestSchema as EstimateRequestV2Schema,

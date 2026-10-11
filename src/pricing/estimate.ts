@@ -31,6 +31,7 @@ import {
   authorizePricingOperation,
   hashPricingContent,
   loadPricingCatalog,
+  lookupPricingEstimateReplay,
   type PricingBoundEvidence,
   persistPricingEstimate,
   pricingGraphSemanticError,
@@ -53,7 +54,6 @@ import {
   EstimateRequestSchema as EstimateRequestV1Schema,
   type EstimateRequest as EstimateRequestV1,
   type EstimateResult as EstimateResultV1,
-  type VersionedReference as VersionedReferenceV1,
 } from './legacy-schemas.js';
 
 type UsageValue = {
@@ -157,11 +157,6 @@ export function validateEstimateRequestBoundary(value: unknown): Validation<Esti
     requestId: outer.value.requestId,
   });
   if (!canonical.ok) return canonical;
-  const event = parseUsageEvent(canonical.value);
-  if (event.tenant_id !== outer.value.scope.tenantId || event.project_id !== outer.value.scope.projectId
-    || event.environment !== outer.value.scope.environment || event.billing_mode !== outer.value.scope.billingMode) {
-    return { ok: false, error: safeError('FORBIDDEN_SCOPE', outer.value.requestId, 'The usage event does not match the authenticated financial scope.') };
-  }
   return { ok: true, value: { ...outer.value, usageEvent: canonical.value } as EstimateRequestV1 };
 }
 
@@ -338,7 +333,12 @@ function usageCalculation(
   rule: PricingRule,
   verifiedBoundGroups: ReadonlySet<string>,
   missing: string[],
-): { lines: PricedLine[]; exactTotal: ExactRational; exactBound: ExactRational | null } {
+): {
+  lines: PricedLine[];
+  exactTotal: ExactRational;
+  exactBound: ExactRational | null;
+  boundedMissing: ReadonlySet<string>;
+} {
   appendMissingUsageEvidence(event, missing);
   const observed = parseUsageUnits(event, missing);
   const ruleByName = new Map(rule.usageUnits.map(unit => [unit.name, unit]));
@@ -447,6 +447,7 @@ function usageCalculation(
   }
 
   let exactBound: ExactRational | null = null;
+  const boundedMissing = new Set<string>();
   let hasBound = false;
   for (const group of rule.partitionGroups) {
     if (!verifiedBoundGroups.has(group.parent) || group.conservativeBound === null
@@ -485,8 +486,12 @@ function usageCalculation(
     const extra = multiply(remaining, maximumRate);
     exactBound = exactBound === null ? add(exactTotal, extra) : add(exactBound, extra);
     hasBound = true;
+    for (const child of unknownChildren) {
+      if (child.missingPolicy === 'required') boundedMissing.add('usage:' + child.name);
+      if (child.missingPolicy === 'unknown') boundedMissing.add('usage_applicability:' + child.name);
+    }
   }
-  return { lines, exactTotal, exactBound: hasBound ? exactBound : null };
+  return { lines, exactTotal, exactBound: hasBound ? exactBound : null, boundedMissing };
 }
 
 function cardRuleRef(card: RateCard): VersionedReference {
@@ -643,6 +648,34 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
   }
 
   try {
+    const usageEventId = typeof event.usage_event_id === 'string' ? event.usage_event_id : '';
+    const payloadHash = await hashPricingContent({
+      schemaVersion: parsed.schemaVersion,
+      scope: parsed.scope,
+      usageEvent: parsed.usageEvent,
+      selection: parsed.selection,
+    });
+    const usageEventHash = await hashPricingContent(parsed.usageEvent);
+    if (usageEventId) {
+      const replay = await lookupPricingEstimateReplay({
+        requestId: parsed.requestId,
+        idempotencyKey: parsed.idempotencyKey,
+        payloadHash,
+        usageEventId,
+        usageEventHash,
+        scope: parsed.scope,
+        ports,
+      });
+      if ('code' in replay) return failure(replay);
+      if (replay.kind === 'idempotency_conflict') {
+        return failure(safeError('IDEMPOTENCY_CONFLICT', parsed.requestId, 'The estimate idempotency key is already bound to different pricing input.'));
+      }
+      if (replay.kind === 'valuation_conflict') {
+        return unknownEstimate(parsed, estimatedAt, effectiveAt, 'existing_immutable_valuation_requires_authorized_revaluation');
+      }
+      if (replay.kind === 'replay') return success(replay.value);
+    }
+
     // Catalog visibility is evaluated at this valuation's clock. Effective time remains economic time.
     const snapshot = await loadPricingCatalog(
       parsed.scope,
@@ -779,18 +812,9 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
       result.missingDimensions = ['no_priceable_usage_dimensions'];
     }
 
-    const boundableMissing = new Set<string>();
-    for (const group of rule.partitionGroups) {
-      if (!verifiedBoundGroups.has(group.parent) || group.conservativeBound === null) continue;
-      for (const member of group.separatelyPricedMembers) {
-        const child = rule.usageUnits.find(unitRule => unitRule.name === member);
-        if (!child) continue;
-        if (child.missingPolicy === 'required') boundableMissing.add('usage:' + child.name);
-        if (child.missingPolicy === 'unknown') boundableMissing.add('usage_applicability:' + child.name);
-      }
-    }
-    const hasOnlyBoundedMissing = result.missingDimensions.length > 0
-      && result.missingDimensions.every(dimension => boundableMissing.has(dimension));
+    const allMissingDimensions = new Set([...missing, ...result.missingDimensions]);
+    const hasOnlyBoundedMissing = allMissingDimensions.size > 0
+      && [...allMissingDimensions].every(dimension => priced.boundedMissing.has(dimension));
     if (priced.exactBound !== null && hasOnlyBoundedMissing && !stale
       && parsed.selection.requestedCurrency === card.currency) {
       result.boundedConservativeAuthorizationAmount = conservativeCeilingDecimal(priced.exactBound);
@@ -802,15 +826,7 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
       return failure(safeError('SOURCE_UNAVAILABLE', parsed.requestId, 'Pricing produced a result that did not match its published response schema.'));
     }
 
-    const usageEventId = typeof event.usage_event_id === 'string' ? event.usage_event_id : '';
     if (!usageEventId || result.rateCardRef === null || result.pricingRuleRef === null) return success(result);
-    const payloadHash = await hashPricingContent({
-      schemaVersion: parsed.schemaVersion,
-      scope: parsed.scope,
-      usageEvent: parsed.usageEvent,
-      selection: parsed.selection,
-    });
-    const usageEventHash = await hashPricingContent(parsed.usageEvent);
     const persisted = await persistPricingEstimate({
       requestId: parsed.requestId,
       idempotencyKey: parsed.idempotencyKey,
@@ -829,6 +845,9 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
     if (persisted.kind === 'valuation_conflict') {
       return unknownEstimate(parsed, estimatedAt, effectiveAt, 'existing_immutable_valuation_requires_authorized_revaluation');
     }
+    if (persisted.kind === 'miss') {
+      return failure(safeError('SOURCE_UNAVAILABLE', parsed.requestId, 'The immutable pricing snapshot could not be committed.', true));
+    }
     return success(persisted.value);
   } catch {
     return failure(safeError('SOURCE_UNAVAILABLE', parsed.requestId, 'The immutable pricing catalog is temporarily unavailable.', true));
@@ -839,6 +858,11 @@ export async function estimateV2(request: EstimateRequest, ports: PricingRuntime
 export async function estimate(request: EstimateRequestV1, ports: RuntimePorts): Promise<ApiResult<EstimateResultV1>> {
   const validation = validateEstimateRequestBoundary(request);
   if (!validation.ok) return failure(validation.error);
+  const event = validation.value.usageEvent;
+  if (event.tenant_id !== validation.value.scope.tenantId || event.project_id !== validation.value.scope.projectId
+    || event.environment !== validation.value.scope.environment || event.billing_mode !== validation.value.scope.billingMode) {
+    return failure(safeError('FORBIDDEN_SCOPE', validation.value.requestId, 'The usage event does not match the authenticated financial scope.'));
+  }
   return blockedBoundary<EstimateRequestV1, EstimateResultV1>({
     module: 'pricing',
     operation: 'estimate',
@@ -846,7 +870,7 @@ export async function estimate(request: EstimateRequestV1, ports: RuntimePorts):
     request: validation.value,
     ports,
     unavailableCode: 'PRICING_UNKNOWN',
-    safeMessage: 'The 1.0.0 pricing contract is retained for compatibility and has no active tariff implementation.',
+    safeMessage: 'No reviewed rate card is available for the requested event-time selection.',
     retryable: false,
   });
 }
