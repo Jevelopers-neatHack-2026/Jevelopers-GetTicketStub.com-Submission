@@ -12,7 +12,7 @@ The TicketStub customer studio: paste an event link, watch the stub print while 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
   <a href="#status"><img alt="Status: demo preview" src="https://img.shields.io/badge/status-demo%20preview-B4693E?style=flat-square&labelColor=17140F"></a>
-  <a href=".nvmrc"><img alt="Node.js 24.18.0" src="https://img.shields.io/badge/node-24.18.0-26302A?style=flat-square&labelColor=17140F"></a>
+  <a href=".nvmrc"><img alt="Node.js 22.23.3" src="https://img.shields.io/badge/node-22.23.3-26302A?style=flat-square&labelColor=17140F"></a>
   <a href="package.json"><img alt="Next.js 16.4.0" src="https://img.shields.io/badge/next.js-16.4.0-7CC6D2?style=flat-square&labelColor=17140F"></a>
 </p>
 
@@ -36,7 +36,7 @@ Pending or outside this repository's current state:
 
 ## Quickstart
 
-Use Node 24.18.0 ([`.nvmrc`](.nvmrc)) and npm 11.16.0 (`packageManager` in [`package.json`](package.json)).
+Use Node 22.23.3 ([`.nvmrc`](.nvmrc)) and npm 11.16.0 (`packageManager` in [`package.json`](package.json)).
 
 ```sh
 npm ci
