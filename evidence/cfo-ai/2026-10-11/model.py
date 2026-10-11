@@ -42,7 +42,7 @@ def main():
     results = [economics(s) for s in SCENARIOS]
     (HERE/'model-results.json').write_text(json.dumps(results,indent=2)+'\n')
     with (HERE/'monthly-scenarios.csv').open('w') as f:
-        writer=csv.DictWriter(f,fieldnames=list(results[0]))
+        writer=csv.DictWriter(f,fieldnames=list(results[0]),lineterminator="\n")
         writer.writeheader(); writer.writerows(results)
     cols=[('name','Scenario'),('orders','Orders/mo'),('revenue','Revenue'),('ai_per_order','AI/order including abandonment'),('cm_per_order','Contribution/order'),('operating_profit','Operating profit'),('founder_pay_profit','Profit with $3k founder pay'),('break_even_orders','Break-even orders'),('founder_break_even_orders','Break-even incl founder')]
     tables = ['# Recomputed planning tables\n\nAll amounts USD; all sales hypothetical.\n', rows_table(results,cols)]
