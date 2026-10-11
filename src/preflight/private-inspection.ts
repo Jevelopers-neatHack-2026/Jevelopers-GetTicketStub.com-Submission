@@ -36,7 +36,7 @@ import type { TextLayout } from "../typography/private-text.js";
 
 export type Finding = {
 	readonly code: string;
-	readonly ruleVersion: "private-preflight-1";
+	readonly ruleVersion: "private-preflight-2";
 	readonly specRevision: string | null;
 	readonly severity: "hard_failure" | "repairable" | "warning" | "information";
 	readonly state: "failed" | "unknown" | "unsupported" | "passed";
@@ -114,11 +114,32 @@ function covers(outer: Rect, t: Transform, inner: Rect): boolean {
 		);
 	});
 }
+function identifyReport<T extends { readonly findings: readonly Finding[] }>(
+	envelope: T,
+) {
+	return freeze({
+		...envelope,
+		envelope,
+		findingsHash: fingerprint(envelope.findings),
+		reportHash: fingerprint(envelope),
+	});
+}
 export function inspectModel(
 	artifact: PrivateArtifact,
 	constraints: ResolvedConstraints | null,
 	files: readonly FinalFileEvidence[] = [],
 ) {
+	const checkedFiles = files
+		.map((file) => ({
+			...file,
+			checks: [...file.checks].sort((a, b) =>
+				canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0,
+			),
+		}))
+		.sort((a, b) =>
+			canonical(a) < canonical(b) ? -1 : canonical(a) > canonical(b) ? 1 : 0,
+		);
+	files = checkedFiles;
 	const findings: Finding[] = [];
 	const { model } = artifact,
 		{ layout, input } = model;
@@ -133,7 +154,7 @@ export function inspectModel(
 	) =>
 		findings.push({
 			code,
-			ruleVersion: "private-preflight-1",
+			ruleVersion: "private-preflight-2",
 			specRevision: constraints?.revision ?? null,
 			severity,
 			state,
@@ -630,16 +651,40 @@ export function inspectModel(
 					!layout.allowedWarnings.some((w) => w === f.code))),
 	);
 	const filesReady = !findings.some((f) => f.path.startsWith("files"));
-	return freeze({
-		ruleVersion: "private-preflight-1",
+	const normalizedConstraints = constraints
+		? {
+				...constraints,
+				profiles: [...constraints.profiles].sort(),
+				exports: [...constraints.exports].sort(),
+				fonts: [...constraints.fonts].sort(),
+				requiredChecks: [...constraints.requiredChecks].sort(),
+			}
+		: null;
+	const policy = {
+		layout,
+		inputPolicyRevision: input.inputPolicyRevision,
+		rendererRevision: input.rendererRevision,
+	};
+	return identifyReport({
+		reportVersion: 2 as const,
+		ruleVersion: "private-preflight-2" as const,
 		compositionHash: artifact.compositionHash,
+		renderHash: artifact.renderHash,
+		revision: artifact.revision,
+		artifactIdentityHash: artifactIdentityHash(artifact),
+		sourceArtworkHashes: artifact.sourceArtworkHashes,
+		constraints: normalizedConstraints,
+		constraintHash: fingerprint(normalizedConstraints),
+		policy,
+		policyHash: fingerprint(policy),
+		checkedFiles,
 		findings,
 		modelReady,
 		filesReady,
 		draftReady: modelReady && filesReady,
 		productionEligibility: "unknown" as const,
 		handoffEligible: false as const,
-		reportHash: fingerprint(findings),
+		currentPermission: "unchecked" as const,
 		contentBounds,
 	});
 }
@@ -653,12 +698,15 @@ export async function inspectArtifact(
 	const report = inspectModel(artifact, constraints, files);
 	try {
 		await recheckPermissions(artifact, ports, "inspect", now);
-		return freeze({ ...report, currentPermission: "allowed" as const });
+		return identifyReport({
+			...report.envelope,
+			currentPermission: "allowed" as const,
+		});
 	} catch (error) {
 		if (error instanceof CompositionError) {
 			const finding: Finding = {
 				code: "CURRENT_PERMISSION_BLOCKED",
-				ruleVersion: "private-preflight-1",
+				ruleVersion: "private-preflight-2",
 				specRevision: constraints?.revision ?? null,
 				severity: "hard_failure",
 				state: "unknown",
@@ -672,10 +720,9 @@ export async function inspectArtifact(
 			const findings = [...report.findings, finding].sort((a, b) =>
 				a.path < b.path ? -1 : a.path > b.path ? 1 : a.code < b.code ? -1 : 1,
 			);
-			return freeze({
-				...report,
+			return identifyReport({
+				...report.envelope,
 				findings,
-				reportHash: fingerprint(findings),
 				modelReady: false,
 				draftReady: false,
 				currentPermission: "blocked" as const,
