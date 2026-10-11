@@ -3373,8 +3373,8 @@
       "lifecycleState": "not_applicable",
       "exists": true,
       "releaseEligible": false,
-      "trackedAtRevision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
-      "sha256": "b9e40fc8b1b9ac11f1ef1fd9388e1f421babf47a226a11d9234de191ce114ee6",
+      "trackedAtRevision": "3b06552124bc38b8516659471235839c3ad5d133",
+      "sha256": "b69e481ff3991545683fcd1d1a7e9dbfdd1b7da899ed8121a0b6d72ef63279fb",
       "provenanceRecordId": "HANDOFF-GUIDE-001"
     },
     {
@@ -3662,7 +3662,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
-      "sha256": "596ce1979cd501e01c15d8aeedb69bb29730d2ef6a10c3518cb5efb12111c89f",
+      "sha256": "370228dd6e87aff579500b823344c5a739ae9fefb821e33a5923fc3f5de483f0",
       "provenanceRecordId": "HANDOFF-MANIFEST-001"
     },
     {
@@ -4948,6 +4948,18 @@
       "trackedAtRevision": "e7be8ca7db02954259ac9ee666e2337cb67a1992",
       "sha256": "df5df2078aee74fb36bfe4ed6fc572db5217d2a9a64c47b984e05e19acbf0971",
       "provenanceRecordId": "PROV-FILE-89AE66BC68BC"
+    },
+    {
+      "fileId": "FILE-BB0E1AB425C4",
+      "path": "release/v0.1.0-rehearsal/history/manifest-370228dd6e87aff5.json",
+      "classification": "internal_package_control",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "not_applicable",
+      "exists": true,
+      "releaseEligible": false,
+      "trackedAtRevision": "3b06552124bc38b8516659471235839c3ad5d133",
+      "sha256": "370228dd6e87aff579500b823344c5a739ae9fefb821e33a5923fc3f5de483f0",
+      "provenanceRecordId": "PROV-FILE-BB0E1AB425C4"
     }
   ],
   "submissionScope": {
