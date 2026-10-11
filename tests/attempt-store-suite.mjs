@@ -117,6 +117,40 @@ async function waitForFile(path, timeoutMs) {
   throw Object.assign(new Error("fixture_ready_deadline"), { code: "fixture_ready_deadline" });
 }
 
+async function waitForDirectory(path, timeoutMs) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    try {
+      const metadata = await lstat(path);
+      if (!metadata.isDirectory()) {
+        throw Object.assign(new Error("fixture_barrier_invalid"), { code: "fixture_barrier_invalid" });
+      }
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+    }
+  }
+  throw Object.assign(new Error("fixture_barrier_deadline"), { code: "fixture_barrier_deadline" });
+}
+
+async function readReadyRecord(path, timeoutMs) {
+  const text = await waitForFile(path, timeoutMs);
+  let record;
+  try {
+    record = JSON.parse(text);
+  } catch (cause) {
+    throw Object.assign(new Error("fixture_ready_invalid", { cause }), { code: "fixture_ready_invalid" });
+  }
+  const validKeys = record !== null && typeof record === "object" && !Array.isArray(record) &&
+    Object.keys(record).length === 2 && Object.hasOwn(record, "pid") && Object.hasOwn(record, "readyAt");
+  if (!validKeys || !Number.isSafeInteger(record.pid) || record.pid <= 0 ||
+      !Number.isSafeInteger(record.readyAt) || record.readyAt <= 0) {
+    throw Object.assign(new Error("fixture_ready_invalid"), { code: "fixture_ready_invalid" });
+  }
+  return { text, record };
+}
+
 function parseChildReport(child) {
   try {
     const lines = child.stdout.trim().split(/\r?\n/).filter(Boolean);
@@ -783,6 +817,238 @@ test("twenty-process action and authorization fences converge under deterministi
   }, { retainOnFailure: true });
 });
 
+test("fixture writer-lock readiness publishes only complete records and rejects aborted or malformed gates", async () => {
+  await withRoot(async (root) => {
+    const diagnostics = { scenarios: {} };
+    const issues = [];
+
+    async function runPausedPublication(label, phase) {
+      const directory = join(root, label, "attempts");
+      const scenarioRoot = join(root, label);
+      await mkdir(scenarioRoot, { recursive: true, mode: 0o700 });
+      const readyFile = join(scenarioRoot, "ready.json");
+      const temporaryFile = join(scenarioRoot, "ready.tmp");
+      const publishReleaseFile = join(scenarioRoot, "publish-release");
+      const gateReleaseFile = join(scenarioRoot, "owner-release");
+      const reachedDirectory = join(scenarioRoot, "publication-reached");
+      const record = makeAttemptRecord({ idempotencyKey: label + "-key", claimId: label + "-claim" });
+      const ownerRun = runAttemptChild({
+        directory,
+        record,
+        reportAttempts: true,
+        gate: {
+          readyFile,
+          temporaryFile,
+          releaseFile: gateReleaseFile,
+          timeoutMs: 5_000,
+          ...(phase === "empty" ? {
+            pauseBeforeWrite: { reachedDirectory, releaseFile: publishReleaseFile, timeoutMs: 5_000 }
+          } : {
+            pauseBeforePublish: { reachedDirectory, releaseFile: publishReleaseFile, timeoutMs: 5_000 }
+          })
+        }
+      }).then((value) => ({ status: "fulfilled", value }), (error) => ({ status: "rejected", error: errorDetails(error) }));
+      const evidence = { phase, record, readyFile, temporaryFile };
+      try {
+        await waitForDirectory(reachedDirectory, 5_000);
+        const temporaryBefore = await readFile(temporaryFile);
+        const readyBefore = await fileEvidence(readyFile);
+        const pendingRead = await readReadyRecord(readyFile, 100)
+          .then((value) => ({ value }), (error) => ({ error: errorDetails(error) }));
+        const lockBytes = await readFile(join(directory, ".attempt-store-v1", ".metering-writer.lock"));
+        const lockRecord = JSON.parse(lockBytes.toString("utf8"));
+        evidence.temporaryBefore = {
+          byteLength: temporaryBefore.byteLength,
+          text: temporaryBefore.toString("utf8"),
+          sha256: createHash("sha256").update(temporaryBefore).digest("hex")
+        };
+        evidence.readyBefore = readyBefore;
+        evidence.pendingRead = pendingRead.error === undefined
+          ? { record: pendingRead.value.record }
+          : pendingRead;
+        evidence.lockRecord = lockRecord;
+        if (phase === "empty" && temporaryBefore.byteLength !== 0) issues.push(`${label}: staged file was not empty at the incomplete-write barrier`);
+        if (phase === "complete") {
+          let stagedRecord;
+          try { stagedRecord = JSON.parse(temporaryBefore.toString("utf8")); } catch { /* recorded below */ }
+          evidence.stagedRecord = stagedRecord;
+          if (stagedRecord === undefined || stagedRecord.pid !== lockRecord.pid || !Number.isSafeInteger(stagedRecord.readyAt)) {
+            issues.push(`${label}: completed staged record did not match the lock owner`);
+          }
+        }
+        if (readyBefore.present !== false) issues.push(`${label}: final ready path was visible before atomic publication`);
+        if (pendingRead.error?.code !== "fixture_ready_deadline") issues.push(`${label}: unpublished readiness did not stay bounded and not-ready`);
+        if (!Number.isSafeInteger(lockRecord.pid) || lockRecord.pid <= 0) issues.push(`${label}: lock record had no valid owner pid`);
+
+        await writeFile(publishReleaseFile, "publish\n", { mode: 0o600 });
+        const published = await readReadyRecord(readyFile, 5_000);
+        evidence.publishedRecord = published.record;
+        evidence.temporaryAfterPublish = await fileEvidence(temporaryFile);
+        const publishedLock = JSON.parse((await readFile(join(directory, ".attempt-store-v1", ".metering-writer.lock"))).toString("utf8"));
+        evidence.publishedLock = publishedLock;
+        if (published.record.pid !== publishedLock.pid) issues.push(`${label}: published readiness pid did not match the live lock owner`);
+        if (evidence.temporaryAfterPublish.present !== false) issues.push(`${label}: temporary name remained after successful publication`);
+      } catch (error) {
+        evidence.operationError = errorDetails(error);
+        issues.push(`${label}: publication evidence collection failed (${error?.code ?? error?.message ?? "unknown"})`);
+      } finally {
+        await writeFile(publishReleaseFile, "continue\n", { mode: 0o600 }).catch(() => undefined);
+        await readReadyRecord(readyFile, 5_000).catch(() => undefined);
+        await writeFile(gateReleaseFile, "release\n", { mode: 0o600 }).catch(() => undefined);
+        evidence.ownerOutcome = await ownerRun;
+      }
+      const ownerReport = evidence.ownerOutcome.status === "fulfilled" ? parseChildReport(evidence.ownerOutcome.value) : undefined;
+      evidence.ownerReport = ownerReport?.value;
+      evidence.ownerParseError = ownerReport?.error;
+      if (evidence.ownerOutcome.status !== "fulfilled" || evidence.ownerOutcome.value.code !== 0 ||
+          ownerReport?.error !== undefined || ownerReport?.value?.result?.claimed !== true) {
+        issues.push(`${label}: writer did not complete the claim after readiness release`);
+      }
+      diagnostics.scenarios[label] = evidence;
+    }
+
+    await runPausedPublication("incomplete-temporary", "empty");
+    await runPausedPublication("complete-before-publish", "complete");
+
+    const abortedRoot = join(root, "aborted-before-publish");
+    await mkdir(abortedRoot, { recursive: true, mode: 0o700 });
+    const abortedDirectory = join(abortedRoot, "attempts");
+    const abortedReady = join(abortedRoot, "ready.json");
+    const abortedTemporary = join(abortedRoot, "ready.tmp");
+    const abortedReached = join(abortedRoot, "publication-reached");
+    const abortedRecord = makeAttemptRecord({ idempotencyKey: "aborted-publication-key", claimId: "aborted-publication-claim" });
+    const abortedRun = runAttemptChild({
+      directory: abortedDirectory,
+      record: abortedRecord,
+      reportAttempts: true,
+      gate: {
+        readyFile: abortedReady,
+        temporaryFile: abortedTemporary,
+        releaseFile: join(abortedRoot, "owner-release"),
+        timeoutMs: 5_000,
+        pauseBeforePublish: { reachedDirectory: abortedReached, releaseFile: join(abortedRoot, "publish-release"), timeoutMs: 5_000, abortAfterSignal: true, exitCode: 76 }
+      }
+    }).then((value) => ({ status: "fulfilled", value }), (error) => ({ status: "rejected", error: errorDetails(error) }));
+    const abortedEvidence = { readyFile: abortedReady, temporaryFile: abortedTemporary, record: abortedRecord };
+    try {
+      await waitForDirectory(abortedReached, 5_000);
+      const child = await abortedRun;
+      abortedEvidence.ownerOutcome = child;
+      abortedEvidence.temporary = await readFile(abortedTemporary, "utf8");
+      abortedEvidence.ready = await fileEvidence(abortedReady);
+      abortedEvidence.pendingRead = await readReadyRecord(abortedReady, 100)
+        .then((value) => ({ value }), (error) => ({ error: errorDetails(error) }));
+      abortedEvidence.snapshot = await fileEvidence(statePaths(abortedDirectory).snapshot);
+      abortedEvidence.marker = await fileEvidence(statePaths(abortedDirectory).marker);
+      const staged = JSON.parse(abortedEvidence.temporary);
+      if (child.status !== "fulfilled" || child.value.code !== 76 || child.value.signal !== null) issues.push("aborted publication: fixture child did not exit at the pre-publication barrier");
+      if (abortedEvidence.ready.present !== false || abortedEvidence.pendingRead.error?.code !== "fixture_ready_deadline") {
+        issues.push("aborted publication: incomplete gate exposed a ready pid or failed to stay not-ready");
+      }
+      if (staged.pid <= 0 || !Number.isSafeInteger(staged.readyAt)) issues.push("aborted publication: staged complete record was malformed before the child exited");
+      if (abortedEvidence.snapshot.present !== false || abortedEvidence.marker.present !== false) issues.push("aborted publication: claim state changed before readiness publication");
+    } catch (error) {
+      abortedEvidence.operationError = errorDetails(error);
+      issues.push(`aborted publication: evidence collection failed (${error?.code ?? error?.message ?? "unknown"})`);
+      abortedEvidence.ownerOutcome = await abortedRun;
+    }
+    diagnostics.scenarios["aborted-before-publish"] = abortedEvidence;
+
+    const malformedRoot = join(root, "malformed-published-record");
+    await mkdir(malformedRoot, { recursive: true, mode: 0o700 });
+    const malformedDirectory = join(malformedRoot, "attempts");
+    const malformedReady = join(malformedRoot, "ready.json");
+    const malformedTemporary = join(malformedRoot, "ready.tmp");
+    const malformedRecord = makeAttemptRecord({ idempotencyKey: "malformed-publication-key", claimId: "malformed-publication-claim" });
+    const malformedRun = runAttemptChild({
+      directory: malformedDirectory,
+      record: malformedRecord,
+      reportAttempts: true,
+      gate: {
+        readyFile: malformedReady,
+        temporaryFile: malformedTemporary,
+        releaseFile: join(malformedRoot, "owner-release"),
+        timeoutMs: 5_000,
+        readyContents: "{malformed",
+        abortAfterPublish: true
+      }
+    }).then((value) => ({ status: "fulfilled", value }), (error) => ({ status: "rejected", error: errorDetails(error) }));
+    const malformedEvidence = { readyFile: malformedReady, temporaryFile: malformedTemporary, record: malformedRecord };
+    try {
+      malformedEvidence.reader = await readReadyRecord(malformedReady, 5_000)
+        .then((value) => ({ value }), (error) => ({ error: errorDetails(error) }));
+      malformedEvidence.ownerOutcome = await malformedRun;
+      const parsedChild = malformedEvidence.ownerOutcome.status === "fulfilled" ? parseChildReport(malformedEvidence.ownerOutcome.value) : undefined;
+      malformedEvidence.ownerReport = parsedChild?.value;
+      malformedEvidence.ownerParseError = parsedChild?.error;
+      malformedEvidence.ready = await fileEvidence(malformedReady);
+      malformedEvidence.readyText = await readFile(malformedReady, "utf8");
+      malformedEvidence.snapshot = await fileEvidence(statePaths(malformedDirectory).snapshot);
+      malformedEvidence.marker = await fileEvidence(statePaths(malformedDirectory).marker);
+      if (malformedEvidence.reader.error?.code !== "fixture_ready_invalid") issues.push("malformed publication: strict reader did not reject malformed bytes explicitly");
+      if (malformedEvidence.ownerOutcome.status !== "fulfilled" || malformedEvidence.ownerOutcome.value.code !== 2 ||
+          malformedEvidence.ownerReport?.errorCode !== "storage_unavailable" || malformedEvidence.ownerReport?.result !== undefined) {
+        issues.push("malformed publication: fixture did not abort before claiming after publishing invalid readiness");
+      }
+      if (malformedEvidence.ready.present !== true || malformedEvidence.readyText !== "{malformed" ||
+          malformedEvidence.snapshot.present !== false || malformedEvidence.marker.present !== false) {
+        issues.push("malformed publication: invalid-ready proof or no-claim state was not retained");
+      }
+    } catch (error) {
+      malformedEvidence.operationError = errorDetails(error);
+      issues.push(`malformed publication: evidence collection failed (${error?.code ?? error?.message ?? "unknown"})`);
+      malformedEvidence.ownerOutcome = await malformedRun;
+    }
+    diagnostics.scenarios["malformed-published-record"] = malformedEvidence;
+
+    const existingRoot = join(root, "existing-ready-path");
+    await mkdir(existingRoot, { recursive: true, mode: 0o700 });
+    const existingDirectory = join(existingRoot, "attempts");
+    const existingReady = join(existingRoot, "ready.json");
+    const existingTemporary = join(existingRoot, "ready.tmp");
+    const existingBytes = Buffer.from('{"pid":"not-a-number","readyAt":1}\n');
+    const existingRecord = makeAttemptRecord({ idempotencyKey: "existing-readiness-key", claimId: "existing-readiness-claim" });
+    await writeFile(existingReady, existingBytes, { mode: 0o600 });
+    const existingRun = await runAttemptChild({
+      directory: existingDirectory,
+      record: existingRecord,
+      reportAttempts: true,
+      gate: {
+        readyFile: existingReady,
+        temporaryFile: existingTemporary,
+        releaseFile: join(existingRoot, "owner-release"),
+        timeoutMs: 5_000
+      }
+    });
+    const existingReport = parseChildReport(existingRun);
+    const existingAfter = await readFile(existingReady);
+    const existingEvidence = {
+      readyFile: existingReady,
+      temporaryFile: existingTemporary,
+      readyBefore: { byteLength: existingBytes.byteLength, sha256: createHash("sha256").update(existingBytes).digest("hex") },
+      readyAfter: { byteLength: existingAfter.byteLength, sha256: createHash("sha256").update(existingAfter).digest("hex") },
+      reader: await readReadyRecord(existingReady, 100)
+        .then((value) => ({ value }), (error) => ({ error: errorDetails(error) })),
+      temporaryAfter: await fileEvidence(existingTemporary),
+      ownerOutcome: { code: existingRun.code, signal: existingRun.signal, stderr: existingRun.stderr },
+      ownerReport: existingReport.value,
+      ownerParseError: existingReport.error,
+      snapshot: await fileEvidence(statePaths(existingDirectory).snapshot),
+      marker: await fileEvidence(statePaths(existingDirectory).marker)
+    };
+    if (existingRun.code !== 2 || existingRun.signal !== null || existingReport.value?.errorCode !== "storage_unavailable" ||
+        existingReport.value?.result !== undefined) issues.push("existing ready path: fixture publisher did not fail before claiming");
+    if (!existingAfter.equals(existingBytes)) issues.push("existing ready path: atomic publication replaced existing bytes");
+    if (existingEvidence.reader.error?.code !== "fixture_ready_invalid") issues.push("existing ready path: schema-invalid record was accepted as a live owner");
+    if (existingEvidence.temporaryAfter.present !== false) issues.push("existing ready path: failed no-clobber publication left its temporary file behind");
+    if (existingEvidence.snapshot.present !== false || existingEvidence.marker.present !== false) issues.push("existing ready path: failed publication changed claim state");
+    diagnostics.scenarios["existing-ready-path"] = existingEvidence;
+
+    await persistFixtureDiagnostic(join(root, "atomic-readiness-diagnostics.json"), "atomic-readiness-diagnostics.json", diagnostics);
+    assert.deepEqual(issues, [], `atomic readiness publication evidence: ${join(root, "atomic-readiness-diagnostics.json")}`);
+  }, { retainOnFailure: true });
+});
+
 test("a one-shot storage_busy exhaustion preserves a live owner and resolves only after release", async () => {
   await withRoot(async (root) => {
     const directory = join(root, "attempts");
@@ -830,8 +1096,9 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
     let ownerOutcome;
     let operationError;
     try {
-      readyText = await waitForFile(readyFile, 5_000);
-      gateInfo = JSON.parse(readyText);
+      const ready = await readReadyRecord(readyFile, 5_000);
+      readyText = ready.text;
+      gateInfo = ready.record;
       lockBefore = await readFile(join(directory, ".attempt-store-v1", ".metering-writer.lock"));
       snapshotBefore = await readBytesOrMissing(paths.snapshot);
       markerBefore = await readBytesOrMissing(paths.marker);
@@ -1067,7 +1334,7 @@ test("runtime lock exhaustion remains not_dispatched with no budget or provider 
       return originalAuthorize(...args);
     };
     try {
-      gateInfo = JSON.parse(await waitForFile(readyFile, 5_000));
+      gateInfo = (await readReadyRecord(readyFile, 5_000)).record;
       const startedAt = performance.now();
       try {
         await harness.runtime.submit(envelope(command), MOCK_SCOPE);

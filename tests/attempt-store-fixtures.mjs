@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { link, mkdtemp, mkdir, open, readFile, realpath, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -73,7 +73,8 @@ function childEnvironment(payload) {
 
 export async function runAttemptChild(payload, timeoutMs = 30_000) {
   const source = `
-import { readFile, writeFile } from "node:fs/promises";
+import { link, mkdir, open, readFile, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 const payload = JSON.parse(process.env.FC_ATTEMPT_CHILD_PAYLOAD);
 if (payload.fixtureOutput === "malformed") {
   process.stdout.write("{malformed fixture output}\\n");
@@ -81,6 +82,52 @@ if (payload.fixtureOutput === "malformed") {
 }
 const imported = await import(process.env.FC_ATTEMPT_MODULE_URL);
 const pause = (milliseconds) => new Promise((resolvePause) => setTimeout(resolvePause, milliseconds));
+async function waitForGateRelease(path, timeoutMs, timeoutCode) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      await readFile(path);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      await pause(10);
+    }
+  }
+  const error = new Error(timeoutCode);
+  error.code = timeoutCode;
+  throw error;
+}
+async function pauseAtPublicationBarrier(barrier) {
+  if (barrier === undefined) return;
+  await mkdir(barrier.reachedDirectory, { mode: 0o700 });
+  if (barrier.abortAfterSignal === true) process.exit(barrier.exitCode ?? 76);
+  await waitForGateRelease(barrier.releaseFile, barrier.timeoutMs, "fixture_publication_barrier_timeout");
+}
+async function publishReadyRecord(gate) {
+  const temporaryFile = gate.temporaryFile ?? gate.readyFile + ".tmp-" + process.pid + "-" + randomUUID();
+  const handle = await open(temporaryFile, "wx", 0o600);
+  try {
+    await pauseAtPublicationBarrier(gate.pauseBeforeWrite);
+    const contents = typeof gate.readyContents === "string"
+      ? gate.readyContents
+      : JSON.stringify({ pid: process.pid, readyAt: Date.now() }) + "\\n";
+    await handle.writeFile(contents, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  await pauseAtPublicationBarrier(gate.pauseBeforePublish);
+  try {
+    await link(temporaryFile, gate.readyFile);
+  } finally {
+    await unlink(temporaryFile);
+  }
+  if (gate.abortAfterPublish === true) {
+    const error = new Error("fixture_abort_after_ready_publish");
+    error.code = "fixture_abort_after_ready_publish";
+    throw error;
+  }
+}
 const hooks = {};
 if (payload.exitAt === "temporary_file_sync") {
   hooks.afterTemporaryFileSync = () => process.exit(73);
@@ -90,23 +137,8 @@ if (payload.exitAt === "temporary_file_sync") {
   hooks.afterLock = async () => {
     if (payload.afterLockDelayMs !== undefined) await pause(payload.afterLockDelayMs);
     if (payload.gate === undefined) return;
-    await writeFile(payload.gate.readyFile, JSON.stringify({ pid: process.pid, readyAt: Date.now() }) + "\\n", {
-      flag: "wx",
-      mode: 0o600
-    });
-    const deadline = Date.now() + payload.gate.timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        await readFile(payload.gate.releaseFile);
-        return;
-      } catch (error) {
-        if (error?.code !== "ENOENT") throw error;
-        await pause(10);
-      }
-    }
-    const error = new Error("fixture_lock_gate_timeout");
-    error.code = "fixture_lock_gate_timeout";
-    throw error;
+    await publishReadyRecord(payload.gate);
+    await waitForGateRelease(payload.gate.releaseFile, payload.gate.timeoutMs, "fixture_lock_gate_timeout");
   };
 }
 const reportAttempts = payload.reportAttempts === true || payload.retryStorageBusy !== undefined;

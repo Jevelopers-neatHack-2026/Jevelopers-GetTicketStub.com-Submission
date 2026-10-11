@@ -134,7 +134,11 @@ retained ambiguity and reservation holds, expiry without claim release,
 committed-empty and missing-snapshot mutation refusal, a deterministic
 first-claim read race, malformed state/reference combinations in initial,
 intermediate, and final history rows, cross-scope privacy, corruption/version
-handling, permissions, and symlink rejection. Its runtime scenario uses the
+handling, permissions, and symlink rejection. Its process-contention fixture
+publishes lock readiness through a complete same-directory temporary record
+and an atomic no-clobber link; the parent rejects absent, malformed, or
+schema-invalid readiness before treating a child as the live lock owner. Its
+runtime scenario uses the
 deterministic simulator and fixture authorization, budget, and usage ports. It
 makes no provider or external finance calls and does not represent production
 authorization or billing evidence.
