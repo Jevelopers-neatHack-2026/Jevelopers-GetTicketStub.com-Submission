@@ -1,0 +1,34 @@
+{
+  "source": "Neatlogs dashboard backend (signed-in owner session, read-only), project 'Complete's project' (US); queried 2026-10-11 21:57-22:05 UTC",
+  "producer": {
+    "repository": "Jevelopers-neatHack-2026/getticketstub.com",
+    "published_commit": "e4a19931b5febbf6efdb85e11d1d3da1b88106fe",
+    "host": "GoDaddy Plus Launch app gvk66o79l1 (https://getticketstub.com)",
+    "runtime": { "TICKETSTUB_RUNTIME_MODE": "live", "TICKETSTUB_OPS_ENVIRONMENT": "production", "TICKETSTUB_OPS_TELEMETRY": "log,neatlogs" },
+    "exporter": "src/server/observability/neatlogs.ts (PR #46, diagnostics #51, #53)"
+  },
+  "inputs": "Synthetic or public only: synthetic event titles 'Neatlogs trace check (synthetic)'; public pages en.wikipedia.org/wiki/Glastonbury_Festival and olympics.com/en/olympic-games/los-angeles-2028. No customer data.",
+  "stored_traces": [
+    { "session": "op_jiBiNquOKpgM_fxn", "trace": "601d02d5d5658f22286286e53cdbe450", "workflow": "ticketstub.research", "status": "OK",
+      "spans": 4, "llm_calls": 1, "tool_calls": 2, "tokens": 3340, "duration_ms": 6944, "started": "2026-10-11T21:57:04.641Z",
+      "tree": ["ticketstub.research WORKFLOW 6.9s", "source.event_page TOOL 379ms", "parse.title TOOL", "anthropic/claude-sonnet-5.5 LLM 3,340 tok $0.01 6.5s"],
+      "screenshot": "trace-research-success.jpg" },
+    { "session": "op_Ba1UqOiaCYptAdmD", "trace": "d3d7bccece4e343b863db06eec4ad578", "workflow": "ticketstub.research", "status": "ERROR",
+      "spans": 2, "llm_calls": 0, "tool_calls": 1, "duration_ms": 8030, "started": "2026-10-11T21:56:48.584Z",
+      "tree": ["ticketstub.research WORKFLOW ERROR 8.0s", "source.event_page TOOL ERROR timeout 8.0s"],
+      "app_behaviour": "HTTP 422 unreadable_link returned to the user; no AI spend after the failed fetch",
+      "screenshot": "trace-research-failure.jpg" },
+    { "session": "op_bKlgNUuxjOhpVUkv", "trace": "63b4db3d65091615052591841c961ed1", "workflow": "ticketstub.agent", "status": "OK",
+      "spans": 2, "llm_calls": 1, "tokens": 158, "duration_ms": 3243, "started": "2026-10-11T21:56:04.862Z",
+      "tree": ["ticketstub.agent WORKFLOW 3.2s", "openai/gpt-6.1-sol LLM 158 tok 3.2s"],
+      "screenshot": "trace-agent-reply.jpg" },
+    { "session": "op_T-joQyeRzoJG175A", "trace": "8fc27f1ac8ceee3ef891900a9147a350", "workflow": "ticketstub.art", "status": "OK",
+      "spans": 1, "llm_calls": 0, "started": "2026-10-11 ~22:00 UTC (not recorded precisely)",
+      "app_behaviour": "Recovery: internal error before any image-model call (ops log code=internal, attempts=0, ~23 ms); app answered 200 with procedural art (fallback=procedural)" }
+  ],
+  "accepted_not_stored": {
+    "note": "Neatlogs returned HTTP 200 with no rejected spans for every export (host log: '[ops] neatlogs: export accepted (HTTP 200)', no failure lines), but these sessions were not found 30+ s later. Same receiver behaviour as documented in agent-harness#38: acceptance is not storage.",
+    "sessions": ["op_91uV_p0TBBEX8JfW (research, Billboard page, HTTP 200)", "op_LNoK2VHvk6U5V_cr (research, .invalid link, 422)", "op_j0o1z48tG3dNjntU (art, procedural fallback)"]
+  },
+  "earlier_local_runs": ["op_rwZtLKTb0n7tkbln", "op_VfByrGlgaMSBcSbI", "op_gAq1S0abPWDcYJ4H (development environment, local build)"]
+}
