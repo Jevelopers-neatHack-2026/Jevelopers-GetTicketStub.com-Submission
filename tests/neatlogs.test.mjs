@@ -250,3 +250,45 @@ test("a busy operation is truncated, not lost: the closing event always exports"
   assert.equal(spans.filter((x) => x.name === "source.event_page").length, 64);
   assert.ok(spans.filter((x) => x.name === "source.event_page").every((x) => x.statusCode === 1), "no_match is not an error");
 });
+
+test("quoted settings are accepted and problems are explained without values", async () => {
+  const { neatlogsConfigProblem, resetNeatlogsNotes } = await import("../src/server/observability/neatlogs.ts");
+  assert.equal(neatlogsConfig({ NEATLOGS_API_KEY: `"${KEY}"`, NEATLOGS_ENDPOINT: "'https://ingest.neatlogs.com'" }).apiKey, KEY);
+  assert.equal(neatlogsConfigProblem({}), "NEATLOGS_API_KEY is not set");
+  assert.match(neatlogsConfigProblem({ NEATLOGS_API_KEY: KEY, NEATLOGS_ENDPOINT: "https://ingest.neatlogs.com/v1/traces" }), /NEATLOGS_ENDPOINT must be/);
+  assert.equal(neatlogsConfigProblem({ NEATLOGS_API_KEY: KEY }), undefined);
+  // The configuration warning is logged once and never contains the key.
+  resetNeatlogsNotes();
+  const lines = [];
+  const warn = console.warn; console.warn = (l) => lines.push(l);
+  try {
+    process.env.TICKETSTUB_OPS_TELEMETRY = "neatlogs";
+    process.env.NEATLOGS_API_KEY = KEY;
+    process.env.NEATLOGS_ENDPOINT = "https://collector.example";
+    activeSink(); activeSink();
+  } finally { console.warn = warn; }
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^\[ops\] neatlogs: requested but not configured: NEATLOGS_ENDPOINT/);
+  assert.ok(!lines.join("").includes(KEY));
+});
+
+test("export outcomes are logged once per kind with status only", async () => {
+  const { resetNeatlogsNotes } = await import("../src/server/observability/neatlogs.ts");
+  resetNeatlogsNotes();
+  liveAgent();
+  const lines = [];
+  const warn = console.warn, info = console.info;
+  console.warn = (l) => lines.push(l); console.info = (l) => lines.push(l);
+  try {
+    setOpsSink(neatlogsSink({ config: { apiKey: KEY, endpoint: "https://ingest.neatlogs.com", tags: ["ticketstub"] }, fetchImpl: async () => new Response("denied", { status: 401 }) }));
+    globalThis.fetch = async () => Response.json(textResponse);
+    await agent.POST(req({ event, message: "Hello?" })); await agent.POST(req({ event, message: "Hello?" }));
+    await new Promise((r) => setTimeout(r, 0));
+    setOpsSink(neatlogsSink({ config: { apiKey: KEY, endpoint: "https://ingest.neatlogs.com", tags: ["ticketstub"] }, fetchImpl: async () => new Response(null, { status: 200 }) }));
+    await agent.POST(req({ event, message: "Hello?" }));
+    await new Promise((r) => setTimeout(r, 0));
+  } finally { console.warn = warn; console.info = info; }
+  assert.equal(lines.filter((l) => l.includes("HTTP 401")).length, 1, "401 noted once");
+  assert.ok(lines.some((l) => l === "[ops] neatlogs: export accepted (HTTP 200)"));
+  assert.ok(!lines.join("").includes(KEY) && !lines.join("").includes("denied"));
+});

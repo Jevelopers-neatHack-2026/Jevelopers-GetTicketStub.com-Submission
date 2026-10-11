@@ -32,11 +32,23 @@ export interface NeatlogsConfig { apiKey: string; endpoint: string; tags: string
 export interface NeatlogsStats { traces: number; accepted: number; rejectedSpans: number; failed: number; dropped: number }
 
 /** Reads the Neatlogs settings, or undefined when export cannot run. The key is never logged or returned elsewhere. */
+/** Host settings are often pasted with surrounding quotes; strip one matching pair, nothing else. */
+const unquote = (v: string | undefined) => v?.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+
+/** Why the Neatlogs settings cannot be used, in words safe to log (never a value), or undefined when they can. */
+export function neatlogsConfigProblem(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const apiKey = unquote(env.NEATLOGS_API_KEY);
+  if (!apiKey) return "NEATLOGS_API_KEY is not set";
+  if (/\s/.test(apiKey)) return "NEATLOGS_API_KEY contains whitespace";
+  const endpoint = (unquote(env.NEATLOGS_ENDPOINT) || DEFAULT_ENDPOINT).replace(/\/+$/, "");
+  if (!ENDPOINT.test(endpoint)) return "NEATLOGS_ENDPOINT must be empty, https://ingest.neatlogs.com or https://eu.ingest.neatlogs.com";
+  return undefined;
+}
+
 export function neatlogsConfig(env: NodeJS.ProcessEnv = process.env): NeatlogsConfig | undefined {
-  const apiKey = env.NEATLOGS_API_KEY?.trim();
-  if (!apiKey || /\s/.test(apiKey)) return undefined;
-  const endpoint = (env.NEATLOGS_ENDPOINT?.trim() || DEFAULT_ENDPOINT).replace(/\/+$/, "");
-  if (!ENDPOINT.test(endpoint)) return undefined; // only the documented US/EU ingest origins
+  if (neatlogsConfigProblem(env)) return undefined;
+  const apiKey = unquote(env.NEATLOGS_API_KEY)!;
+  const endpoint = (unquote(env.NEATLOGS_ENDPOINT) || DEFAULT_ENDPOINT).replace(/\/+$/, "");
   const commit = env.TICKETSTUB_COMMIT_SHA?.trim();
   const tags = ["ticketstub", ...(commit && /^[0-9a-f]{7,40}$/.test(commit) ? [`ticketstub@${commit}`] : [])];
   return { apiKey, endpoint, tags };
@@ -185,6 +197,16 @@ export function buildTrace(events: OpsEvent[], tags: string[]): { traceId: strin
 // --- The sink ---
 
 const stats: NeatlogsStats = { traces: 0, accepted: 0, rejectedSpans: 0, failed: 0, dropped: 0 };
+
+// One line per kind of outcome per process, so the host log shows whether export works without flooding it.
+// Lines carry only a status code or error class: never the key, a trace body or a response body.
+const noted = new Set<string>();
+export function noteOnce(kind: string, line: string, level: "info" | "warn" = "warn"): void {
+  if (noted.has(kind)) return;
+  noted.add(kind);
+  (level === "info" ? console.info : console.warn)(`[ops] neatlogs: ${line}`);
+}
+export const resetNeatlogsNotes = (): void => noted.clear();
 export const neatlogsStats = (): NeatlogsStats => ({ ...stats });
 export function resetNeatlogsStats(): void { stats.traces = stats.accepted = stats.rejectedSpans = stats.failed = stats.dropped = 0; }
 
@@ -249,14 +271,21 @@ export function neatlogsSink({ config, fetchImpl, onSent }: NeatlogsSinkOptions)
         headers: { "content-type": "application/x-protobuf", "x-api-key": config.apiKey },
       });
       const bytes = new Uint8Array(await res.arrayBuffer());
-      if (!res.ok) { stats.failed++; onSent?.({ traceId: built.traceId, status: res.status, rejectedSpans: -1 }); return; }
+      if (!res.ok) {
+        stats.failed++;
+        noteOnce(`http_${res.status}`, `export failed: HTTP ${res.status}${res.status === 401 || res.status === 403 ? " (check NEATLOGS_API_KEY is the project key for this region)" : ""}`);
+        onSent?.({ traceId: built.traceId, status: res.status, rejectedSpans: -1 });
+        return;
+      }
       const rejected = rejectedSpans(bytes, res.headers.get("content-type") ?? "");
-      if (rejected === 0) stats.accepted++;
-      else if (rejected > 0) stats.rejectedSpans += rejected;
-      else stats.failed++; // unreadable response: acceptance unknown
+      if (rejected === 0) { stats.accepted++; noteOnce("accepted", `export accepted (HTTP ${res.status})`, "info"); }
+      else if (rejected > 0) { stats.rejectedSpans += rejected; noteOnce("rejected_spans", `receiver rejected ${rejected} span(s)`); }
+      else { stats.failed++; noteOnce("unreadable", "export response unreadable; acceptance unknown"); }
       onSent?.({ traceId: built.traceId, status: res.status, rejectedSpans: rejected });
-    } catch {
+    } catch (e) {
       stats.failed++;
+      const kind = e instanceof Error ? e.name : "unknown";
+      noteOnce(`error_${kind}`, `export failed: ${kind === "TimeoutError" ? "timed out" : `network error (${kind})`}`);
     } finally {
       inFlight--;
     }
