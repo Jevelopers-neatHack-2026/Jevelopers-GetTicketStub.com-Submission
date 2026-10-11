@@ -1,0 +1,224 @@
+{
+  "schema_version": "1.0.0",
+  "package": "@jevelopers/cost-intelligence",
+  "shared_contracts": {
+    "package": "@jevelopers/shared-contracts@0.3.0",
+    "source_revision": "24eae28e3ae646c10bf26e483d9009e00381e6ec",
+    "package_archive_sha256": "29032c3caae8f5d45a9665ef2263e7014e429b94d4b4267d36826c0790de88f2",
+    "adoption_status": "proposal_only",
+    "accepted": false,
+    "blocking_findings": {
+      "FC-001": "The draft cannot express an observed final overrun without rejecting the amount or rewriting the original hold.",
+      "FC-002": "Budget semantic checks do not bind environment and billing mode across independent context, commands and results.",
+      "FC-003": "Settlement and grant result values are not bound to their commands; cumulative/delta and partial grant semantics are unresolved.",
+      "FC-004": "A held_for_reconciliation result is rejected in the uncertain state it is intended to represent."
+    }
+  },
+  "schemas": [
+    {
+      "module": "shared",
+      "name": "ErrorEnvelopeSchema",
+      "path": "schemas/cost-intelligence/1.0.0/shared/ErrorEnvelopeSchema.json",
+      "completeness": "complete",
+      "sha256": "936d6a52cee4cbb2e3dbeed214a5d85927f7e937a900bf980d05bae8cfe20a55"
+    },
+    {
+      "module": "shared",
+      "name": "TrustedScopeSchema",
+      "path": "schemas/cost-intelligence/1.0.0/shared/TrustedScopeSchema.json",
+      "completeness": "complete",
+      "sha256": "82bcc6132ca341f6a89a601968e210d9c676bd2c4378e16d9b60983b9a390352"
+    },
+    {
+      "module": "metering",
+      "name": "UsageObservationSchema",
+      "path": "schemas/cost-intelligence/1.0.0/metering/UsageObservationSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateUsageObservationBoundary",
+      "sha256": "da5072439f461b88ba3fbcb5756fed224a916f48314da2dc4c86e4cbcf5564f6"
+    },
+    {
+      "module": "metering",
+      "name": "IngestionReceiptSchema",
+      "path": "schemas/cost-intelligence/1.0.0/metering/IngestionReceiptSchema.json",
+      "completeness": "complete",
+      "sha256": "0b12ec89dae6144a215ee3c46c54d2f9a3277c22606292e869f7f3503bbf9ded"
+    },
+    {
+      "module": "pricing",
+      "name": "RateCardSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/RateCardSchema.json",
+      "completeness": "complete",
+      "sha256": "dfc09f9bc6753fbacfc6c7061d52978b8091c804527abe22bc42cd3008d26c10"
+    },
+    {
+      "module": "pricing",
+      "name": "EstimateRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateEstimateRequestBoundary",
+      "sha256": "ad8e9752130cf9cf24f44c68e550ed07cc5bf647a37276278aeef5796a61ea2a"
+    },
+    {
+      "module": "pricing",
+      "name": "EstimateResultSchema",
+      "path": "schemas/cost-intelligence/1.0.0/pricing/EstimateResultSchema.json",
+      "completeness": "complete",
+      "sha256": "9074bed6fea2fb894a7bbdcd684981e9867ce30da0f7acc10e92c9abfe502dc0"
+    },
+    {
+      "module": "budgets",
+      "name": "ReservationRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateReservationRequestBoundary",
+      "sha256": "0f86dd5fcc159473fe42cd2b56b114f660d7dd8c3b4332a1c20b3fe901927c95"
+    },
+    {
+      "module": "budgets",
+      "name": "AuthorizationDecisionSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/AuthorizationDecisionSchema.json",
+      "completeness": "complete",
+      "sha256": "610bcc075fbf5c7290fc289cba8991be249f645ea1752085e05446295800051c"
+    },
+    {
+      "module": "budgets",
+      "name": "MarkDispatchedCommandSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/MarkDispatchedCommandSchema.json",
+      "completeness": "complete",
+      "sha256": "422cc372c038d77f2530b35f739bdcc885c4b5ce9076f8d0dd0131a7732dca35"
+    },
+    {
+      "module": "budgets",
+      "name": "SettleReservationCommandSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/SettleReservationCommandSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateSettleReservationCommandBoundary",
+      "sha256": "ff4045749ec0225261c27dd8fb5f7d07bb3a68709dec81eec0a4221ba92427e4"
+    },
+    {
+      "module": "budgets",
+      "name": "ReleaseReservationCommandSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReleaseReservationCommandSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateReleaseReservationCommandBoundary",
+      "sha256": "4b1b4e38dabe825c30ed7ea35e62798acfb080b82e2b5dd65538511295f52b99"
+    },
+    {
+      "module": "budgets",
+      "name": "ReservationCommandSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationCommandSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateReservationCommandBoundary",
+      "sha256": "5d1796e42ae92610978dd2df0e091be1427802b0963775e1ecadb8ee52ea2d2b"
+    },
+    {
+      "module": "budgets",
+      "name": "ReservationSnapshotSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ReservationSnapshotSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateReservationSnapshotBoundary",
+      "sha256": "a8af847e700930d58c54b97b8c524fc8e3275cbe7f92a0f2d1904577d372f07d"
+    },
+    {
+      "module": "budgets",
+      "name": "BudgetChangeRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "50a4087bbceff69627309669b8bd4f1af5eb1cc9654481bc0dbc9edc2e2dcf10"
+    },
+    {
+      "module": "budgets",
+      "name": "BudgetChangeReceiptSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/BudgetChangeReceiptSchema.json",
+      "completeness": "complete",
+      "sha256": "d3e2fbdcb5e6901a3e5acb7b4286aea1dbcf70964e07d6325731122d00c57b87"
+    },
+    {
+      "module": "budgets",
+      "name": "ExpenseAdjustmentRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/ExpenseAdjustmentRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "fdc0d135732e8035c5daef14431cff9385584dec12e9e7023932b046709e2203"
+    },
+    {
+      "module": "budgets",
+      "name": "PostingReceiptSchema",
+      "path": "schemas/cost-intelligence/1.0.0/budgets/PostingReceiptSchema.json",
+      "completeness": "complete",
+      "sha256": "5f11699858d983170b24e1a563eb1ce643a4260b398119be0134048c09eb2010"
+    },
+    {
+      "module": "ledger",
+      "name": "FinancialEventSchema",
+      "path": "schemas/cost-intelligence/1.0.0/ledger/FinancialEventSchema.json",
+      "completeness": "complete",
+      "sha256": "67313c8e6e0c9fdb4a319e45a958e5de9e1a85413c472b4c4af637b8d56710c9"
+    },
+    {
+      "module": "reporting",
+      "name": "FinancialSummaryFiltersSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryFiltersSchema.json",
+      "completeness": "complete",
+      "sha256": "b4a7ee77fe0d4af843b1393bd55d7c92ce1e2913b69663afac99e229db6c01f2"
+    },
+    {
+      "module": "reporting",
+      "name": "FinancialSummaryQuerySchema",
+      "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryQuerySchema.json",
+      "completeness": "complete",
+      "sha256": "8505ff4e2d9bed4380e2d11ff07d11726798e3a0004e94d20bdcbf5273021755"
+    },
+    {
+      "module": "reporting",
+      "name": "SummarySourceWatermarkSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reporting/SummarySourceWatermarkSchema.json",
+      "completeness": "complete",
+      "sha256": "d60811b5af2e06c653cd97fabf4207ffa0a8f51aa8ee462bf335bfa78d882159"
+    },
+    {
+      "module": "reporting",
+      "name": "FinancialSummaryPageSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryPageSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateFinancialSummaryPageBoundary",
+      "sha256": "d7ff222c7d2dc319d0002eeb0684cad67b67fa5f538e89d3dd0125cd89f4c78c"
+    },
+    {
+      "module": "reconciliation",
+      "name": "ReconciliationRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationRequestSchema.json",
+      "completeness": "complete",
+      "sha256": "a4c003239855bb919a97fff06f09cfadeabbbe72e7461a6bf6138754331a0e13"
+    },
+    {
+      "module": "reconciliation",
+      "name": "ReconciliationRunSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationRunSchema.json",
+      "completeness": "complete",
+      "sha256": "b5bfa6eb9d3edc65780e3da47881dbd647b09eb084263dd999af1c5a052821a0"
+    },
+    {
+      "module": "reconciliation",
+      "name": "ReconciliationResultSchema",
+      "path": "schemas/cost-intelligence/1.0.0/reconciliation/ReconciliationResultSchema.json",
+      "completeness": "complete",
+      "sha256": "39968c5feca4c2f3ad391ed46462677f2fdf5656f01f22c67fde548b401ff97a"
+    },
+    {
+      "module": "integrations",
+      "name": "ExportRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/integrations/ExportRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateExportRequestBoundary",
+      "sha256": "1521e0b629170a50693535190216ff4906e06dbdb901cec6c89ff0eb659df30f"
+    },
+    {
+      "module": "integrations",
+      "name": "ExportManifestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/integrations/ExportManifestSchema.json",
+      "completeness": "complete",
+      "sha256": "14e496d5d9113ecf041d28e7e8bb0f741c846790ea146cb218d43527b231555a"
+    }
+  ]
+}
