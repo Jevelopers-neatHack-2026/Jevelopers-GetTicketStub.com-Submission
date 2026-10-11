@@ -1,7 +1,7 @@
 # Timed rehearsal storyboard
 
-**Asset:** `DEMO-STORYBOARD-001` · **Acceptance:** MM-03-A/B/C  
-**Status:** complete local rehearsal plan; not a final demo or submission-ready release.  
+**Asset:** `DEMO-STORYBOARD-001` · **Acceptance:** MM-03-A/B/C
+**Status:** complete local rehearsal plan; not a final demo or submission-ready release.
 **Target:** 150 seconds (2:30), within the 120–150 second target and below the current official maximum of 180 seconds.
 
 The scene contract for UI rendering is [`rehearsal-scenes.json`](rehearsal-scenes.json). Render it as a silent local video and use its `captionText` exactly. Keep every concept label visible alongside the related content. The complete accessible transcript is [`rehearsal-transcript.md`](rehearsal-transcript.md).

@@ -1,6 +1,6 @@
 # Recording and rehearsal handoff
 
-**Asset:** `DEMO-RECORDING-CHECKLIST-001` · **Acceptance:** MM-03-C  
+**Asset:** `DEMO-RECORDING-CHECKLIST-001` · **Acceptance:** MM-03-C
 **Current result:** local silent rehearsal may be rendered at 150 seconds. Final submission recording is **BLOCKED** pending evidence, official fields, permission, and review. A rehearsal does not satisfy or substitute for the final demo.
 
 ## Current rehearsal build

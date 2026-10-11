@@ -1,13 +1,13 @@
 # Announcement copy — editable draft set
 
-**Assets:** `LAUNCH-X-COPY-001`, `LAUNCH-X-CTA-001` · **Families:** `FAM-ANNOUNCEMENT-001`, `FAM-SOCIAL-001`  
+**Assets:** `LAUNCH-X-COPY-001`, `LAUNCH-X-CTA-001` · **Families:** `FAM-ANNOUNCEMENT-001`, `FAM-SOCIAL-001`
 **Status:** draft only. No automatic posting, scheduling, external submission, or approval is recorded.
 
 ## A. Required official X quote-post — field template
 
 The organizer's current requirement is one public quote-post of its official neatlogs submission post, carrying the team, name, project, public repository, and demo link. The official page checked **2026-10-11 UTC** says the final cutoff will be announced on Discord. The official post URL, confirmed cutoff, team, submitter name, confirmed project name, public project-repository URL, public demo URL, and submitter authorization are unresolved here. Do not invent or leave any of these fields looking final.
 
-**Attach/quote target outside the copy body:** `[OFFICIAL NEATLOGS SUBMISSION POST — not yet published or supplied]`  
+**Attach/quote target outside the copy body:** `[OFFICIAL NEATLOGS SUBMISSION POST — not yet published or supplied]`
 **Final cutoff:** `[PENDING — check the official Discord announcement]`
 
 ```text
