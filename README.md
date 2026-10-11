@@ -11,19 +11,25 @@ The public introduction to TicketStub: what it is, who it is for, and the way in
 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
-  <a href="#status"><img alt="Status: documentation baseline, no site source on main" src="https://img.shields.io/badge/status-docs%20baseline-B4693E?style=flat-square&labelColor=17140F"></a>
+  <a href="#status"><img alt="Status: Crystal landing page added, static site in site/" src="https://img.shields.io/badge/status-static%20site%20in%20site%2F-B4693E?style=flat-square&labelColor=17140F"></a>
   <a href="https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/2"><img alt="Delivery plan: LP-EPIC issue 2" src="https://img.shields.io/badge/plan-LP--EPIC%20%232-26302A?style=flat-square&labelColor=17140F"></a>
 </p>
 
-[Status](#status) · [What it owns](#what-it-owns) · [Docs](#docs) · [Related](#related-repositories)
+[Status](#status) · [Crystal landing page](#crystal-landing-page) · [What it owns](#what-it-owns) · [Docs](#docs) · [Related](#related-repositories)
 
 ## Status
 
-**Docs baseline.** `main` holds this README and two architecture documents. There is no site source, package manifest, build, test or CI configuration yet, so there is nothing to install or run. No implementation or acceptance has been verified.
+**Static site added.** The Crystal landing page lives in [`site/`](site/README.md) as a single static page with its assets. There is no package manifest, build, test or CI configuration yet. No acceptance has been verified.
 
 - Planned work is tracked in [LP-EPIC #2](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/2), from the page map and static site foundation ([LP-01 #3](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/3)) to the release gate ([LP-10 #12](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/issues/12)).
 - As of 2026-10-11 no pull requests are open. The only merged change is the architecture baseline in [PR #1](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/pull/1). See [open pull requests](https://github.com/Jevelopers-neatHack-2026/landing-page-repo/pulls) for anything newer.
 - Relevant acceptance criteria (EVAL-03, EVAL-04) stay planned in the [acceptance view](docs/architecture/ACCEPTANCE.md).
+
+## Crystal landing page
+
+The landing page for personalized ticket stub keepsakes is in [`site/`](site/README.md): [`site/index.html`](site/index.html) plus its 3D model, flight data and scene images in [`site/assets/`](site/assets/). It needs no build.
+
+Run it locally with `cd site && python3 -m http.server 8080`, then open http://localhost:8080.
 
 ## What it owns
 
