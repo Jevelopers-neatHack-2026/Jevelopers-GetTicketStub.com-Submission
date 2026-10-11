@@ -280,36 +280,41 @@ BEGIN
           AND extension_dependency.deptype = 'e'
         JOIN pg_extension extension_obj ON extension_obj.oid = extension_dependency.refobjid
         WHERE extension_obj.extname = ANY(ARRAY['adminpack', 'dblink', 'file_fdw', 'postgres_fdw']::text[])
-      ), routine_dependencies(root_oid, dependency_oid) AS (
+      ), routine_edges(caller_oid, dependency_oid) AS (
         SELECT dependency.objid, dependency.refobjid
         FROM pg_depend dependency
         WHERE dependency.classid = 'pg_proc'::regclass
           AND dependency.refclassid = 'pg_proc'::regclass
         UNION
         -- Dependencies on pinned pg_catalog routines are intentionally absent
-        -- from pg_depend. SQL-standard function bodies retain their parsed
-        -- FuncExpr OIDs in prosqlbody, so include those calls explicitly.
-        SELECT function_obj.oid, protected.routine_oid
-        FROM pg_proc function_obj
-        CROSS JOIN protected_routines protected
-        WHERE function_obj.prosqlbody IS NOT NULL
-          AND function_obj.prosqlbody::text ~ format(
-            ':funcid[[:space:]]+%s([^0-9]|$)', protected.routine_oid
-          )
+        -- from pg_depend. Add parsed SQL-standard function calls to the same
+        -- edge relation so recursive walks can cross mixed catalog/body chains.
+        SELECT caller_function.oid, called_function.oid
+        FROM pg_proc caller_function
+        CROSS JOIN LATERAL regexp_matches(
+          caller_function.prosqlbody::text,
+          ':funcid[[:space:]]+([0-9]+)',
+          'g'
+        ) AS parsed_call(match_parts)
+        JOIN pg_proc called_function ON called_function.oid = parsed_call.match_parts[1]::oid
+        WHERE caller_function.prosqlbody IS NOT NULL
+      ), routine_dependencies(root_oid, dependency_oid) AS (
+        SELECT edge.caller_oid, edge.dependency_oid
+        FROM routine_edges edge
         UNION
-        SELECT dependency_closure.root_oid, dependency.refobjid
+        SELECT dependency_closure.root_oid, edge.dependency_oid
         FROM routine_dependencies dependency_closure
-        JOIN pg_depend dependency
-          ON dependency.classid = 'pg_proc'::regclass
-          AND dependency.objid = dependency_closure.dependency_oid
-          AND dependency.refclassid = 'pg_proc'::regclass
-      ), callable_capabilities(routine_oid) AS (
+        JOIN routine_edges edge ON edge.caller_oid = dependency_closure.dependency_oid
+      ), protected_dependency_paths(routine_oid) AS (
         SELECT protected.routine_oid
         FROM protected_routines protected
         UNION
         SELECT dependency_closure.root_oid
         FROM routine_dependencies dependency_closure
         JOIN protected_routines protected ON protected.routine_oid = dependency_closure.dependency_oid
+      ), callable_capabilities(routine_oid) AS (
+        SELECT protected_path.routine_oid
+        FROM protected_dependency_paths protected_path
         UNION
         SELECT function_obj.oid
         FROM pg_proc function_obj
@@ -333,16 +338,9 @@ BEGIN
       )
         AND (
           function_obj.prosecdef
-          OR function_schema.nspname = 'pg_catalog'
           OR EXISTS (
-            SELECT 1
-            FROM pg_depend extension_dependency
-            JOIN pg_extension extension_obj ON extension_obj.oid = extension_dependency.refobjid
-            WHERE extension_dependency.classid = 'pg_proc'::regclass
-              AND extension_dependency.objid = function_obj.oid
-              AND extension_dependency.refclassid = 'pg_extension'::regclass
-              AND extension_dependency.deptype = 'e'
-              AND extension_obj.extname = ANY(ARRAY['adminpack', 'dblink']::text[])
+            SELECT 1 FROM protected_dependency_paths protected_path
+            WHERE protected_path.routine_oid = function_obj.oid
           )
           OR routine_owner.rolsuper
           OR routine_owner.rolcreatedb

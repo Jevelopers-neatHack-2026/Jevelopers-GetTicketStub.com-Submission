@@ -400,10 +400,11 @@ async function apply0006ToLegacyDatabase(client, name) {
   }
 }
 
-async function assert0006RejectedBeforeRecord(client, migrationName, label) {
+async function assert0006RejectedBeforeRecord(client, migrationName, label, expectedRejectionMessage) {
   await assert.rejects(
     apply0006ToLegacyDatabase(client, migrationName),
-    error => error.code === '42501',
+    error => error.code === '42501'
+      && (!expectedRejectionMessage || error.message.includes(expectedRejectionMessage)),
     `${label}: unsafe pre-existing runtime authority must stop the upgrade`,
   );
   const recorded = await client.query(
@@ -1258,9 +1259,13 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
   }
 
   const extensionSchema = 'ci09_extension';
+  const protectedExtensionNames = ['adminpack', 'dblink', 'file_fdw', 'postgres_fdw'];
+  const protectedExtensionRoutines = [];
   let pgReadFileIdentity;
   let dblinkConnectIdentity;
   let invokerReaderIdentity;
+  let invokerReaderOwnerRole;
+  let invokerReaderOriginalOwner;
   try {
     const dblinkAvailable = await admin.query(
       "SELECT 1 FROM pg_available_extensions WHERE name = 'dblink'",
@@ -1268,11 +1273,50 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
     assert.equal(dblinkAvailable.rows.length, 1, 'the pinned PostgreSQL 16 test image includes the dblink extension');
     await admin.query(`CREATE SCHEMA ${quoteIdentifier(extensionSchema)}`);
     await admin.query(`CREATE EXTENSION dblink WITH SCHEMA ${quoteIdentifier(extensionSchema)}`);
+    const otherProtectedExtensions = ['adminpack', 'file_fdw', 'postgres_fdw'];
+    const availableProtectedExtensions = await admin.query(
+      'SELECT name FROM pg_available_extensions WHERE name = ANY($1::text[]) ORDER BY name',
+      [otherProtectedExtensions],
+    );
+    assert.deepEqual(availableProtectedExtensions.rows.map(row => row.name), [...otherProtectedExtensions].sort(),
+      'the pinned PostgreSQL 16 test image includes each extension named by the reviewed routine policy');
+    for (const extensionName of otherProtectedExtensions) {
+      await admin.query(`CREATE EXTENSION ${quoteIdentifier(extensionName)}`);
+    }
     // Make the extension's default PUBLIC ACLs an explicit provisioning input;
     // the later success path is reached only after this host cleanup and a new
     // preflight. No dblink connection is attempted by these regressions.
     await admin.query(`REVOKE EXECUTE ON ALL ROUTINES IN SCHEMA ${quoteIdentifier(extensionSchema)} FROM PUBLIC`);
     await admin.query(`GRANT USAGE ON SCHEMA ${quoteIdentifier(extensionSchema)} TO ci_finance_runtime`);
+
+    // The member-level cases below demote one extension routine to an invoker
+    // owned by a nonprivileged fixture role. This makes the extension
+    // classification itself necessary for rejection; no function is invoked.
+    for (const extensionName of protectedExtensionNames) {
+      const members = await admin.query(
+        `SELECT format('%I.%I(%s)', function_schema.nspname, function_obj.proname,
+                       pg_get_function_identity_arguments(function_obj.oid)) AS identity,
+                function_schema.nspname AS schema_name,
+                pg_get_userbyid(function_obj.proowner) AS original_owner,
+                function_obj.prosecdef AS original_security_definer
+         FROM pg_proc function_obj
+         JOIN pg_depend extension_dependency
+           ON extension_dependency.classid = 'pg_proc'::regclass
+           AND extension_dependency.objid = function_obj.oid
+           AND extension_dependency.refclassid = 'pg_extension'::regclass
+           AND extension_dependency.deptype = 'e'
+         JOIN pg_extension extension_obj ON extension_obj.oid = extension_dependency.refobjid
+         JOIN pg_namespace function_schema ON function_schema.oid = function_obj.pronamespace
+         WHERE extension_obj.extname = $1 AND function_obj.prokind = 'f'
+         ORDER BY function_obj.proname, pg_get_function_identity_arguments(function_obj.oid)`,
+        [extensionName],
+      );
+      assert.ok(members.rows.length > 0, `${extensionName} exposes at least one protected function member`);
+      for (const member of members.rows) {
+        await admin.query(`REVOKE EXECUTE ON FUNCTION ${member.identity} FROM PUBLIC`);
+      }
+      protectedExtensionRoutines.push({ extensionName, ...members.rows[0] });
+    }
 
     pgReadFileIdentity = 'pg_catalog.pg_read_file(text,bigint,bigint)';
     dblinkConnectIdentity = `${extensionSchema}.dblink_connect(text)`;
@@ -1295,6 +1339,11 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
     assert.deepEqual(extensionDependency.rows, [{ extname: 'dblink' }],
       'the invoker routine probe is an actual extension member, not only an extension-named schema');
 
+    invokerReaderOwnerRole = `ci09_invoker_owner_${randomUUID().replaceAll('-', '')}`;
+    invokerReaderOriginalOwner = (await admin.query('SELECT current_user AS role')).rows[0].role;
+    await admin.query(
+      `CREATE ROLE ${quoteIdentifier(invokerReaderOwnerRole)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
+    );
     const invokerReader = `ci09_invoker_reader_${randomUUID().replaceAll('-', '')}`;
     invokerReaderIdentity = `public.${quoteIdentifier(invokerReader)}()`;
     await admin.query(
@@ -1304,6 +1353,7 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
          SELECT pg_catalog.pg_read_file('PG_VERSION', 0::bigint, 16::bigint);
        END`,
     );
+    await admin.query(`ALTER FUNCTION ${invokerReaderIdentity} OWNER TO ${quoteIdentifier(invokerReaderOwnerRole)}`);
     await admin.query(`REVOKE ALL ON FUNCTION ${invokerReaderIdentity} FROM PUBLIC`);
     const invokerDependency = await admin.query(
       `SELECT routine.prosqlbody IS NOT NULL
@@ -1323,27 +1373,53 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
     );
     assert.deepEqual(invokerDependency.rows, [{ parsed_call: true, catalog_dependency: false }],
       'the SQL-standard invoker wrapper stores the pinned catalog routine OID even though pg_depend omits it');
+    const invokerBaseline = await admin.query(
+      `SELECT has_function_privilege($1, $2::regprocedure, 'EXECUTE') AS wrapper_execute,
+              has_function_privilege($1, $3::regprocedure, 'EXECUTE') AS catalog_execute,
+              routine.prosecdef, owner.rolname AS routine_owner, owner.rolsuper, owner.rolbypassrls
+       FROM pg_proc routine JOIN pg_roles owner ON owner.oid = routine.proowner
+       WHERE routine.oid = $2::regprocedure`,
+      [runtimeLogin, invokerReaderIdentity, pgReadFileIdentity],
+    );
+    assert.deepEqual(invokerBaseline.rows, [{
+      wrapper_execute: false, catalog_execute: false, prosecdef: false,
+      routine_owner: invokerReaderOwnerRole, rolsuper: false, rolbypassrls: false,
+    }], 'the isolated invoker wrapper has neither a direct catalog grant nor a privileged owner');
   } catch (error) {
+    if (invokerReaderOwnerRole) {
+      const currentOwner = invokerReaderIdentity
+        ? await admin.query(
+          `SELECT owner.rolname FROM pg_proc routine JOIN pg_roles owner ON owner.oid = routine.proowner
+           WHERE routine.oid = $1::regprocedure`,
+          [invokerReaderIdentity],
+        ).catch(() => ({ rows: [] }))
+        : { rows: [] };
+      if (currentOwner.rows[0]?.rolname === invokerReaderOwnerRole) {
+        await admin.query(`ALTER FUNCTION ${invokerReaderIdentity} OWNER TO ${quoteIdentifier(invokerReaderOriginalOwner)}`);
+      }
+      await admin.query(`DROP ROLE IF EXISTS ${quoteIdentifier(invokerReaderOwnerRole)}`).catch(() => {});
+    }
     await admin.end().catch(() => {});
     await dropTestDatabase(name, base).catch(() => {});
     throw error;
   }
 
-  const addRoutineGrantScenario = (routineIdentity, label, { invoke = false, alsoGrantReadFile = false } = {}) => {
+  const routineCapabilityRejection = 'CI finance runtime principal can execute an unreviewed privileged routine';
+  const addRoutineGrantScenario = (routineIdentity, label, {
+    invoke = false, verifyReadFileUnavailable = false, expectedRejectionMessage,
+  } = {}) => {
     const suffix = randomUUID().replaceAll('-', '');
     const targetRole = `ci09_routine_target_${suffix}`;
     const bridgeRole = `ci09_routine_bridge_${suffix}`;
     const grantTo = roleName => admin.query(`GRANT EXECUTE ON FUNCTION ${routineIdentity} TO ${roleName}`);
     const revokeFrom = roleName => admin.query(`REVOKE EXECUTE ON FUNCTION ${routineIdentity} FROM ${roleName}`);
-    const grantReadFile = roleName => admin.query(`GRANT EXECUTE ON FUNCTION ${pgReadFileIdentity} TO ${roleName}`);
-    const revokeReadFile = roleName => admin.query(`REVOKE EXECUTE ON FUNCTION ${pgReadFileIdentity} FROM ${roleName}`);
     scenarios.push({
       label,
+      expectedRejectionMessage,
       prepare: async () => {
         if (label.includes('inherited')) {
           await admin.query(`CREATE ROLE ${quoteIdentifier(targetRole)} NOLOGIN`);
           await grantTo(quoteIdentifier(targetRole));
-          if (alsoGrantReadFile) await grantReadFile(quoteIdentifier(targetRole));
           await admin.query(`GRANT ${quoteIdentifier(targetRole)} TO ${runtimeRole} WITH INHERIT TRUE, SET FALSE`);
         } else if (label.includes('SET-only')) {
           await admin.query(`CREATE ROLE ${quoteIdentifier(targetRole)} NOLOGIN`);
@@ -1352,15 +1428,12 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
             await admin.query(`GRANT USAGE ON SCHEMA ${quoteIdentifier(extensionSchema)} TO ${quoteIdentifier(targetRole)}`);
           }
           await grantTo(quoteIdentifier(targetRole));
-          if (alsoGrantReadFile) await grantReadFile(quoteIdentifier(targetRole));
           await admin.query(`GRANT ${quoteIdentifier(targetRole)} TO ${quoteIdentifier(bridgeRole)} WITH INHERIT FALSE, SET TRUE`);
           await admin.query(`GRANT ${quoteIdentifier(bridgeRole)} TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`);
         } else if (label.includes('PUBLIC')) {
           await grantTo('PUBLIC');
-          if (alsoGrantReadFile) await grantReadFile('PUBLIC');
         } else {
           await grantTo(runtimeRole);
-          if (alsoGrantReadFile) await grantReadFile(runtimeRole);
         }
       },
       verifyRejected: () => withRuntimeLogin(async login => {
@@ -1377,9 +1450,24 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
           `${label}: the real runtime login retains the effective EXECUTE path after rejection`);
         assert.equal(effective.rows[0].schema_usage, true,
           `${label}: the real runtime login has schema USAGE for the protected routine`);
-        if (alsoGrantReadFile) {
-          assert.match((await login.query(`SELECT ${routineIdentity} AS content`)).rows[0].content, /^16/,
-            `${label}: the invoker routine reads only the harmless in-cluster PG_VERSION file`);
+        if (verifyReadFileUnavailable) {
+          const directCatalogGrant = await login.query(
+            `SELECT has_function_privilege(current_user, $1::regprocedure, 'EXECUTE') AS effective`,
+            [pgReadFileIdentity],
+          );
+          assert.deepEqual(directCatalogGrant.rows, [{ effective: false }],
+            `${label}: no direct pg_read_file grant can account for the wrapper rejection`);
+          const owner = await login.query(
+            `SELECT routine.prosecdef, owner.rolname, owner.rolsuper, owner.rolcreatedb,
+                    owner.rolcreaterole, owner.rolreplication, owner.rolbypassrls
+             FROM pg_proc routine JOIN pg_roles owner ON owner.oid = routine.proowner
+             WHERE routine.oid = $1::regprocedure`,
+            [routineIdentity],
+          );
+          assert.deepEqual(owner.rows, [{
+            prosecdef: false, rolname: invokerReaderOwnerRole, rolsuper: false,
+            rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false,
+          }], `${label}: the wrapper is invoker-owned by a nonprivileged role`);
         } else if (invoke) {
           assert.match((await login.query("SELECT pg_catalog.pg_read_file('PG_VERSION', 0, 16) AS content")).rows[0].content, /^16/,
             `${label}: the real runtime reads only the harmless in-cluster PG_VERSION file`);
@@ -1390,7 +1478,6 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
         if (label.includes('inherited')) {
           await admin.query(`REVOKE ${quoteIdentifier(targetRole)} FROM ${runtimeRole}`);
           await revokeFrom(quoteIdentifier(targetRole));
-          if (alsoGrantReadFile) await revokeReadFile(quoteIdentifier(targetRole));
           await admin.query(`DROP ROLE ${quoteIdentifier(targetRole)}`);
         } else if (label.includes('SET-only')) {
           await admin.query(`REVOKE ${quoteIdentifier(bridgeRole)} FROM ${runtimeRole}`);
@@ -1399,15 +1486,12 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
           if (routineIdentity.startsWith(`${extensionSchema}.`)) {
             await admin.query(`REVOKE USAGE ON SCHEMA ${quoteIdentifier(extensionSchema)} FROM ${quoteIdentifier(targetRole)}`);
           }
-          if (alsoGrantReadFile) await revokeReadFile(quoteIdentifier(targetRole));
           await admin.query(`DROP ROLE ${quoteIdentifier(bridgeRole)}`);
           await admin.query(`DROP ROLE ${quoteIdentifier(targetRole)}`);
         } else if (label.includes('PUBLIC')) {
           await revokeFrom('PUBLIC');
-          if (alsoGrantReadFile) await revokeReadFile('PUBLIC');
         } else {
           await revokeFrom(runtimeRole);
-          if (alsoGrantReadFile) await revokeReadFile(runtimeRole);
         }
       },
     });
@@ -1416,10 +1500,163 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
   for (const path of ['direct', 'inherited', 'SET-only', 'PUBLIC']) {
     addRoutineGrantScenario(pgReadFileIdentity, `host login ${path} pg_catalog.pg_read_file EXECUTE grant`, { invoke: true });
     addRoutineGrantScenario(invokerReaderIdentity,
-      `host login ${path} user-schema SECURITY INVOKER wrapper over pg_read_file`, { alsoGrantReadFile: true });
+      `host login ${path} user-schema SECURITY INVOKER wrapper over pg_read_file`, {
+        verifyReadFileUnavailable: true, expectedRejectionMessage: routineCapabilityRejection,
+      });
     addRoutineGrantScenario(dblinkConnectIdentity,
       `host login ${path} dblink extension invoker EXECUTE grant`);
   }
+
+  for (const extensionRoutine of protectedExtensionRoutines) {
+    const fixtureOwner = `ci09_extension_owner_${randomUUID().replaceAll('-', '')}`;
+    const { extensionName, identity, schema_name: schemaName, original_owner: originalOwner,
+      original_security_definer: originallySecurityDefiner } = extensionRoutine;
+    scenarios.push({
+      label: `host login direct ${extensionName} invoker extension-member EXECUTE grant`,
+      expectedRejectionMessage: routineCapabilityRejection,
+      prepare: async () => {
+        await admin.query(
+          `CREATE ROLE ${quoteIdentifier(fixtureOwner)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
+        );
+        await admin.query(`ALTER FUNCTION ${identity} OWNER TO ${quoteIdentifier(fixtureOwner)}`);
+        await admin.query(`ALTER FUNCTION ${identity} SECURITY INVOKER`);
+        if (!['pg_catalog', 'public'].includes(schemaName)) {
+          await admin.query(`GRANT USAGE ON SCHEMA ${quoteIdentifier(schemaName)} TO ${runtimeRole}`);
+        }
+        await admin.query(`GRANT EXECUTE ON FUNCTION ${identity} TO ${runtimeRole}`);
+        const effective = await admin.query(
+          `SELECT has_function_privilege($1, routine.oid, 'EXECUTE') AS can_execute,
+                  has_schema_privilege($1, namespace.oid, 'USAGE') AS can_use_schema,
+                  routine.prosecdef, owner.rolname AS routine_owner, owner.rolsuper, owner.rolcreatedb,
+                  owner.rolcreaterole, owner.rolreplication, owner.rolbypassrls,
+                  EXISTS (
+                    SELECT 1 FROM pg_depend dependency
+                    JOIN pg_extension extension_obj ON extension_obj.oid = dependency.refobjid
+                    WHERE dependency.classid = 'pg_proc'::regclass AND dependency.objid = routine.oid
+                      AND dependency.refclassid = 'pg_extension'::regclass AND dependency.deptype = 'e'
+                      AND extension_obj.extname = $2
+                  ) AS extension_member
+           FROM pg_proc routine
+           JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+           JOIN pg_roles owner ON owner.oid = routine.proowner
+           WHERE routine.oid = $3::regprocedure`,
+          [runtimeLogin, extensionName, identity],
+        );
+        assert.deepEqual(effective.rows, [{
+          can_execute: true, can_use_schema: true, prosecdef: false,
+          routine_owner: fixtureOwner, rolsuper: false, rolcreatedb: false,
+          rolcreaterole: false, rolreplication: false, rolbypassrls: false, extension_member: true,
+        }], `${extensionName}: only the explicit extension-member grant reaches the restricted runtime path`);
+      },
+      verifyRejected: () => withRuntimeLogin(async login => {
+        const effective = await login.query(
+          `SELECT has_function_privilege(current_user, $1::regprocedure, 'EXECUTE') AS can_execute,
+                  has_schema_privilege(current_user, $2, 'USAGE') AS can_use_schema`,
+          [identity, schemaName],
+        );
+        assert.deepEqual(effective.rows, [{ can_execute: true, can_use_schema: true }],
+          `${extensionName}: the rejected migration leaves the unsafe host grant active until cleanup`);
+      }),
+      cleanup: async () => {
+        await admin.query(`REVOKE EXECUTE ON FUNCTION ${identity} FROM ${runtimeRole}`).catch(() => {});
+        if (!['pg_catalog', 'public'].includes(schemaName)) {
+          await admin.query(`REVOKE USAGE ON SCHEMA ${quoteIdentifier(schemaName)} FROM ${runtimeRole}`).catch(() => {});
+        }
+        await admin.query(`ALTER FUNCTION ${identity} OWNER TO ${quoteIdentifier(originalOwner)}`).catch(() => {});
+        if (originallySecurityDefiner) {
+          await admin.query(`ALTER FUNCTION ${identity} SECURITY DEFINER`).catch(() => {});
+        }
+        await admin.query(`DROP ROLE IF EXISTS ${quoteIdentifier(fixtureOwner)}`).catch(() => {});
+      },
+    });
+  }
+
+  const transitiveInnerName = `ci09_inner_reader_${randomUUID().replaceAll('-', '')}`;
+  const transitiveOuterName = `ci09_outer_reader_${randomUUID().replaceAll('-', '')}`;
+  const transitiveOwnerRole = `ci09_transitive_owner_${randomUUID().replaceAll('-', '')}`;
+  const transitiveInnerIdentity = `public.${quoteIdentifier(transitiveInnerName)}()`;
+  const transitiveOuterIdentity = `public.${quoteIdentifier(transitiveOuterName)}()`;
+  scenarios.push({
+    label: 'transitive invoker wrapper crosses catalog and parsed SQL-body routine edges',
+    expectedRejectionMessage: routineCapabilityRejection,
+    prepare: async () => {
+      await admin.query(
+        `CREATE ROLE ${quoteIdentifier(transitiveOwnerRole)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
+      );
+      await admin.query(
+        `CREATE FUNCTION ${transitiveInnerIdentity}
+         RETURNS text LANGUAGE sql SECURITY INVOKER
+         BEGIN ATOMIC
+           SELECT pg_catalog.pg_read_file('PG_VERSION', 0::bigint, 16::bigint);
+         END`,
+      );
+      await admin.query(
+        `CREATE FUNCTION ${transitiveOuterIdentity}
+         RETURNS text LANGUAGE sql SECURITY INVOKER
+         BEGIN ATOMIC
+           SELECT ${transitiveInnerIdentity};
+         END`,
+      );
+      await admin.query(`ALTER FUNCTION ${transitiveInnerIdentity} OWNER TO ${quoteIdentifier(transitiveOwnerRole)}`);
+      await admin.query(`ALTER FUNCTION ${transitiveOuterIdentity} OWNER TO ${quoteIdentifier(transitiveOwnerRole)}`);
+      await admin.query(`REVOKE ALL ON FUNCTION ${transitiveInnerIdentity} FROM PUBLIC`);
+      await admin.query(`REVOKE ALL ON FUNCTION ${transitiveOuterIdentity} FROM PUBLIC`);
+      await admin.query(`GRANT EXECUTE ON FUNCTION ${transitiveOuterIdentity} TO ${runtimeRole}`);
+      const edges = await admin.query(
+        `SELECT EXISTS (
+                  SELECT 1 FROM pg_depend dependency
+                  WHERE dependency.classid = 'pg_proc'::regclass
+                    AND dependency.objid = $1::regprocedure
+                    AND dependency.refclassid = 'pg_proc'::regclass
+                    AND dependency.refobjid = $2::regprocedure
+                ) AS outer_catalog_edge,
+                inner_routine.prosqlbody::text ~ format(
+                  ':funcid[[:space:]]+%s([^0-9]|$)', protected.oid
+                ) AS inner_parsed_edge,
+                EXISTS (
+                  SELECT 1 FROM pg_depend dependency
+                  WHERE dependency.classid = 'pg_proc'::regclass
+                    AND dependency.objid = inner_routine.oid
+                    AND dependency.refclassid = 'pg_proc'::regclass
+                    AND dependency.refobjid = protected.oid
+                ) AS inner_catalog_edge,
+                has_function_privilege($3, $1::regprocedure, 'EXECUTE') AS outer_execute,
+                has_function_privilege($3, $2::regprocedure, 'EXECUTE') AS inner_execute,
+                has_function_privilege($3, $4::regprocedure, 'EXECUTE') AS direct_catalog_execute,
+                outer_owner.rolname AS owner_name, outer_routine.prosecdef AS outer_definer,
+                inner_routine.prosecdef AS inner_definer, outer_owner.rolsuper, outer_owner.rolcreatedb,
+                outer_owner.rolcreaterole, outer_owner.rolreplication, outer_owner.rolbypassrls
+         FROM pg_proc outer_routine
+         JOIN pg_proc inner_routine ON inner_routine.oid = $2::regprocedure
+         JOIN pg_proc protected ON protected.oid = $4::regprocedure
+         JOIN pg_roles outer_owner ON outer_owner.oid = outer_routine.proowner
+         WHERE outer_routine.oid = $1::regprocedure`,
+        [transitiveOuterIdentity, transitiveInnerIdentity, runtimeLogin, pgReadFileIdentity],
+      );
+      assert.deepEqual(edges.rows, [{
+        outer_catalog_edge: true, inner_parsed_edge: true, inner_catalog_edge: false,
+        outer_execute: true, inner_execute: false, direct_catalog_execute: false,
+        owner_name: transitiveOwnerRole, outer_definer: false, inner_definer: false,
+        rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false,
+      }], 'the runtime has only the outer grant, and the only path to pg_read_file crosses the missing pg_depend edge');
+    },
+    verifyRejected: () => withRuntimeLogin(async login => {
+      const effective = await login.query(
+        `SELECT has_function_privilege(current_user, $1::regprocedure, 'EXECUTE') AS outer_execute,
+                has_function_privilege(current_user, $2::regprocedure, 'EXECUTE') AS inner_execute,
+                has_function_privilege(current_user, $3::regprocedure, 'EXECUTE') AS direct_catalog_execute`,
+        [transitiveOuterIdentity, transitiveInnerIdentity, pgReadFileIdentity],
+      );
+      assert.deepEqual(effective.rows, [{ outer_execute: true, inner_execute: false, direct_catalog_execute: false }],
+        'rejected provisioning preserves only the outer wrapper grant and has no direct grant that can explain the rejection');
+    }),
+    cleanup: async () => {
+      await admin.query(`REVOKE EXECUTE ON FUNCTION ${transitiveOuterIdentity} FROM ${runtimeRole}`);
+      await admin.query(`DROP FUNCTION ${transitiveOuterIdentity}`);
+      await admin.query(`DROP FUNCTION ${transitiveInnerIdentity}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(transitiveOwnerRole)}`);
+    },
+  });
 
   // Preserve the original SET-only host-login reproduction. Rejecting 0006
   // must not be described as removing this already active server capability.
@@ -1585,7 +1822,7 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
     for (const scenario of scenarios) {
       try {
         await scenario.prepare();
-        await assert0006RejectedBeforeRecord(admin, migrationName, scenario.label);
+        await assert0006RejectedBeforeRecord(admin, migrationName, scenario.label, scenario.expectedRejectionMessage);
         assert.deepEqual(await captureLegacyFinancialRows(admin), financeRowsBefore,
           `${scenario.label}: a rejected security migration leaves immutable ledger and projection rows unchanged`);
         if (scenario.verifyRejected) await scenario.verifyRejected();
@@ -1746,6 +1983,17 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
       await restricted.end();
     }
   } finally {
+    if (invokerReaderIdentity && invokerReaderOwnerRole) {
+      const currentOwner = await admin.query(
+        `SELECT owner.rolname FROM pg_proc routine JOIN pg_roles owner ON owner.oid = routine.proowner
+         WHERE routine.oid = $1::regprocedure`,
+        [invokerReaderIdentity],
+      ).catch(() => ({ rows: [] }));
+      if (currentOwner.rows[0]?.rolname === invokerReaderOwnerRole) {
+        await admin.query(`ALTER FUNCTION ${invokerReaderIdentity} OWNER TO ${quoteIdentifier(invokerReaderOriginalOwner)}`);
+      }
+      await admin.query(`DROP ROLE IF EXISTS ${quoteIdentifier(invokerReaderOwnerRole)}`);
+    }
     await admin.end();
     await dropTestDatabase(name, base);
   }
