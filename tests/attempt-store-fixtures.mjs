@@ -62,12 +62,195 @@ export async function removePrivateTempDirectory(directory) {
   await rm(directory, { recursive: true, force: true });
 }
 
+export async function runFixtureClaimWithRetry({
+  claim,
+  retryStorageBusy,
+  childIndex = 0,
+  now = () => performance.now(),
+  pause = (milliseconds) => new Promise((resolvePause) => setTimeout(resolvePause, milliseconds)),
+  attemptWithinDeadlineForTests
+}) {
+  if (typeof claim !== "function") throw new TypeError("claim must be a function");
+  const startedAt = now();
+  const deadlineMs = retryStorageBusy?.deadlineMs;
+  if (retryStorageBusy !== undefined &&
+      (!Number.isFinite(deadlineMs) || deadlineMs < 0 ||
+       !Number.isFinite(retryStorageBusy.delayMs) || retryStorageBusy.delayMs < 0)) {
+    throw new TypeError("retryStorageBusy must have finite nonnegative deadlineMs and delayMs");
+  }
+  const attempts = [];
+  let result;
+  let failure;
+  let stopReason;
+  let stoppedAtOffsetMs;
+  const offset = (time) => Number((time - startedAt).toFixed(3));
+  const isWithinDeadline = (attemptOffsetMs) => {
+    if (deadlineMs === undefined) return true;
+    // The negative control injects a broken policy into this same retry loop.
+    if (attemptWithinDeadlineForTests !== undefined) {
+      return attemptWithinDeadlineForTests(attemptOffsetMs, deadlineMs);
+    }
+    return attemptOffsetMs < deadlineMs;
+  };
+  const finish = (reason, observedAt = now()) => {
+    stopReason = reason;
+    stoppedAtOffsetMs = offset(observedAt);
+  };
+  const deadlineError = () => Object.assign(new Error("fixture_retry_deadline"), {
+    code: "fixture_retry_deadline"
+  });
+
+  for (;;) {
+    const decisionAt = now();
+    const decisionOffsetMs = offset(decisionAt);
+    if (!isWithinDeadline(decisionOffsetMs)) {
+      failure = deadlineError();
+      finish("retry_deadline_before_attempt", decisionAt);
+      break;
+    }
+
+    const attemptStartedAt = now();
+    const attemptStartedAtOffsetMs = offset(attemptStartedAt);
+    if (!isWithinDeadline(attemptStartedAtOffsetMs)) {
+      failure = deadlineError();
+      finish("retry_deadline_before_attempt", attemptStartedAt);
+      break;
+    }
+
+    try {
+      result = await claim();
+      const completedAt = now();
+      attempts.push({
+        attempt: attempts.length + 1,
+        outcome: result.claimed ? "claimed" : "conflict",
+        decisionOffsetMs,
+        startOffsetMs: attemptStartedAtOffsetMs,
+        completionOffsetMs: offset(completedAt),
+        elapsedMs: Number((completedAt - attemptStartedAt).toFixed(3))
+      });
+      finish("claim_result", completedAt);
+      break;
+    } catch (error) {
+      const completedAt = now();
+      const code = typeof error?.code === "string" ? error.code : null;
+      attempts.push({
+        attempt: attempts.length + 1,
+        errorCode: code,
+        decisionOffsetMs,
+        startOffsetMs: attemptStartedAtOffsetMs,
+        completionOffsetMs: offset(completedAt),
+        elapsedMs: Number((completedAt - attemptStartedAt).toFixed(3))
+      });
+      if (retryStorageBusy === undefined || code !== "storage_busy") {
+        failure = error;
+        finish(code === "storage_busy" ? "one_shot_storage_busy" : "nonbusy_error", completedAt);
+        break;
+      }
+
+      const completionOffsetMs = offset(completedAt);
+      if (!isWithinDeadline(completionOffsetMs)) {
+        failure = deadlineError();
+        finish("retry_deadline_after_storage_busy", completedAt);
+        break;
+      }
+
+      const remainingMs = deadlineMs - completionOffsetMs;
+      const jitterMs = retryStorageBusy.jitterMs ?? 0;
+      const jitter = jitterMs === 0 ? 0 : (childIndex * 7 + attempts.length * 11) % jitterMs;
+      const delayMs = Math.max(0, Math.min(retryStorageBusy.delayMs + jitter, remainingMs));
+      await pause(delayMs);
+    }
+  }
+
+  const elapsedMs = offset(now());
+  const retryControl = {
+    deadlineMs: deadlineMs ?? null,
+    cutoffAtOffsetMs: deadlineMs ?? null,
+    cutoffKind: deadlineMs === undefined ? "none" : "next_outer_attempt_start",
+    stopReason,
+    stoppedAtOffsetMs,
+    attemptCount: attempts.length,
+    elapsedMs
+  };
+  return {
+    result,
+    failure,
+    attempts,
+    busyAttempts: attempts.filter((attempt) => attempt.errorCode === "storage_busy").length,
+    elapsedMs,
+    retryControl
+  };
+}
+
+export function retryStartCutoffViolations(report) {
+  const control = report?.retryControl;
+  if (control === undefined || control === null) return ["retry control evidence is missing"];
+  const hasDeadline = control.deadlineMs !== null && control.deadlineMs !== undefined;
+  if (hasDeadline && (!Number.isFinite(control.deadlineMs) || control.deadlineMs < 0)) {
+    return ["retry cutoff is not a finite nonnegative duration"];
+  }
+  if (hasDeadline &&
+      (control.cutoffAtOffsetMs !== control.deadlineMs ||
+       control.cutoffKind !== "next_outer_attempt_start")) {
+    return ["retry cutoff evidence does not match the configured start cutoff"];
+  }
+  if (!hasDeadline &&
+      (control.cutoffAtOffsetMs !== null || control.cutoffKind !== "none")) {
+    return ["one-shot control unexpectedly reports a retry cutoff"];
+  }
+  if (!Array.isArray(report.attempts)) return ["retry attempt log is missing"];
+  const issues = [];
+  const stopReasons = new Set([
+    "claim_result",
+    "one_shot_storage_busy",
+    "nonbusy_error",
+    "retry_deadline_after_storage_busy",
+    "retry_deadline_before_attempt"
+  ]);
+  if (!stopReasons.has(control.stopReason)) issues.push("retry stop reason is missing or unknown");
+  for (const [index, attempt] of report.attempts.entries()) {
+    if (!Number.isFinite(attempt?.decisionOffsetMs)) {
+      issues.push("attempt " + (index + 1) + " has no finite cutoff-decision offset");
+    } else if (hasDeadline && attempt.decisionOffsetMs >= control.deadlineMs) {
+      issues.push("attempt " + (index + 1) + " decision was at or after cutoff (" + attempt.decisionOffsetMs + "ms)");
+    }
+    if (!Number.isFinite(attempt?.startOffsetMs)) {
+      issues.push("attempt " + (index + 1) + " has no finite start offset");
+    } else if (hasDeadline && attempt.startOffsetMs >= control.deadlineMs) {
+      issues.push("attempt " + (index + 1) + " started at or after cutoff (" + attempt.startOffsetMs + "ms)");
+    }
+    if (!Number.isFinite(attempt?.completionOffsetMs) ||
+        !Number.isFinite(attempt?.elapsedMs) || attempt.elapsedMs < 0) {
+      issues.push("attempt " + (index + 1) + " has invalid completion timing");
+    } else if (attempt.completionOffsetMs < attempt.startOffsetMs) {
+      issues.push("attempt " + (index + 1) + " completed before its measured start");
+    }
+  }
+  if (control.attemptCount !== report.attempts.length) issues.push("retry attempt count does not match its log");
+  if (!Number.isFinite(control.stoppedAtOffsetMs)) issues.push("retry stop offset is not finite");
+  const lastCompletionOffsetMs = report.attempts.at(-1)?.completionOffsetMs;
+  if (Number.isFinite(control.stoppedAtOffsetMs) && Number.isFinite(lastCompletionOffsetMs) &&
+      control.stoppedAtOffsetMs < lastCompletionOffsetMs) {
+    issues.push("retry stop offset predates the final attempt completion");
+  }
+  if (control.stopReason === "retry_deadline_after_storage_busy" &&
+      (!hasDeadline || control.stoppedAtOffsetMs < control.deadlineMs)) {
+    issues.push("retry stopped for elapsed deadline before cutoff");
+  }
+  if (control.stopReason === "retry_deadline_before_attempt" &&
+      (!hasDeadline || control.stoppedAtOffsetMs < control.deadlineMs)) {
+    issues.push("retry stopped before an attempt while still before cutoff");
+  }
+  return issues;
+}
+
 function childEnvironment(payload) {
   return {
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     TMPDIR: tmpdir(),
     FC_ATTEMPT_CHILD_PAYLOAD: JSON.stringify(payload),
-    FC_ATTEMPT_MODULE_URL: attemptStoreModuleUrl
+    FC_ATTEMPT_MODULE_URL: attemptStoreModuleUrl,
+    FC_ATTEMPT_FIXTURE_URL: pathToFileURL(fileURLToPath(import.meta.url)).href
   };
 }
 
@@ -143,74 +326,39 @@ if (payload.exitAt === "temporary_file_sync") {
   };
 }
 const reportAttempts = payload.reportAttempts === true || payload.retryStorageBusy !== undefined;
+const fixture = await import(process.env.FC_ATTEMPT_FIXTURE_URL);
 const store = await imported.createLocalAttemptPersistence({
   directory: payload.directory,
   providerId: payload.providerId,
   mode: payload.mode,
   ...(Object.keys(hooks).length === 0 ? {} : { faultHooks: hooks })
 });
-const attemptLog = [];
-const startedAt = performance.now();
-const retry = payload.retryStorageBusy;
-const retryDeadline = retry === undefined ? undefined : startedAt + retry.deadlineMs;
-let result;
-let failure;
-for (;;) {
-  const attemptStartedAt = performance.now();
-  if (retryDeadline !== undefined && attemptStartedAt >= retryDeadline) {
-    failure = Object.assign(new Error("fixture_retry_deadline"), { code: "fixture_retry_deadline" });
-    break;
-  }
-  try {
-    result = await store.claimSubmitAttempt(payload.record);
-    attemptLog.push({
-      attempt: attemptLog.length + 1,
-      outcome: result.claimed ? "claimed" : "conflict",
-      elapsedMs: Number((performance.now() - attemptStartedAt).toFixed(3))
-    });
-    break;
-  } catch (error) {
-    const code = typeof error?.code === "string" ? error.code : null;
-    attemptLog.push({
-      attempt: attemptLog.length + 1,
-      errorCode: code,
-      elapsedMs: Number((performance.now() - attemptStartedAt).toFixed(3))
-    });
-    if (retry === undefined || code !== "storage_busy") {
-      failure = error;
-      break;
-    }
-    const remainingMs = retryDeadline - performance.now();
-    if (remainingMs <= 0) {
-      failure = Object.assign(new Error("fixture_retry_deadline"), { code: "fixture_retry_deadline" });
-      break;
-    }
-    const childIndex = Number.isSafeInteger(payload.childIndex) ? payload.childIndex : 0;
-    const jitterMs = retry.jitterMs ?? 0;
-    const jitter = jitterMs === 0 ? 0 : (childIndex * 7 + attemptLog.length * 11) % jitterMs;
-    const delayMs = Math.min(retry.delayMs + jitter, remainingMs);
-    await pause(delayMs);
-  }
-}
-const elapsedMs = Number((performance.now() - startedAt).toFixed(3));
+const attemptRun = await fixture.runFixtureClaimWithRetry({
+  claim: () => store.claimSubmitAttempt(payload.record),
+  retryStorageBusy: payload.retryStorageBusy,
+  childIndex: payload.childIndex
+});
+const { result, failure, attempts, busyAttempts, elapsedMs, retryControl } = attemptRun;
 if (failure !== undefined) {
   if (!reportAttempts) throw failure;
   process.stdout.write(JSON.stringify({
     errorCode: typeof failure?.code === "string" ? failure.code : null,
     errorName: typeof failure?.name === "string" ? failure.name : "Error",
     errorMessage: typeof failure?.message === "string" ? failure.message : String(failure),
-    attempts: attemptLog,
-    busyAttempts: attemptLog.filter((attempt) => attempt.errorCode === "storage_busy").length,
-    elapsedMs
+    attempts,
+    busyAttempts,
+    elapsedMs,
+    retryControl
   }) + "\\n");
   process.exitCode = 2;
 } else {
   process.stdout.write(JSON.stringify(reportAttempts
     ? {
         result,
-        attempts: attemptLog,
-        busyAttempts: attemptLog.filter((attempt) => attempt.errorCode === "storage_busy").length,
-        elapsedMs
+        attempts,
+        busyAttempts,
+        elapsedMs,
+        retryControl
       }
     : result) + "\\n");
 }

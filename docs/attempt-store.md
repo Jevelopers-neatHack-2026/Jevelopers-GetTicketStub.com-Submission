@@ -45,6 +45,16 @@ fixture-only retry for exactly `storage_busy`, always with the same immutable
 claim record; that test mechanism does not change runtime behavior or grant
 external retry authority.
 
+The fixture retry deadline is a monotonic cutoff for starting the next outer
+`claimSubmitAttempt`. It does not interrupt a claim call already in progress,
+so an attempt that starts before the cutoff may finish after it. Fixture attempt
+diagnostics record the cutoff duration, decision and start offsets, completion
+offset, stop offset, and stop reason. Tests require every outer attempt to start
+before the cutoff and require no retry after it. The 200 ms and 12 s
+values are retry-start windows, not completion-time service-level guarantees.
+The per-child process watchdog and readiness/gate timeouts remain liveness
+bounds for their respective processes and harness steps.
+
 Each attempt history is limited to 1,000,000 rows. An exact repeat at the
 limit remains a safe no-op; a changed update beyond the limit fails with
 `storage_unavailable` before changing either the snapshot or commit marker.

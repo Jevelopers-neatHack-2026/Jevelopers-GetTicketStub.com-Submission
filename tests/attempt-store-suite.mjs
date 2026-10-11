@@ -16,7 +16,9 @@ import {
   openAttemptStore,
   openAttemptStoreWithHistoryLimitForTests,
   removePrivateTempDirectory,
-  runAttemptChild
+  retryStartCutoffViolations,
+  runAttemptChild,
+  runFixtureClaimWithRetry
 } from "./attempt-store-fixtures.mjs";
 import {
   MOCK_BUNDLE,
@@ -225,6 +227,7 @@ async function runConvergentClaims({ label, directory, records, afterLockDelayMs
     label,
     afterLockDelayMs: afterLockDelayMs ?? 0,
     fixtureRetryDeadlineMs: CONTENTION_RETRY.deadlineMs,
+    retryCutoffSemantics: "next_outer_attempt_start",
     childWatchdogMs: 30_000,
     elapsedMs,
     childResults: children,
@@ -239,7 +242,6 @@ async function runConvergentClaims({ label, directory, records, afterLockDelayMs
   const issues = [];
   if (records.length !== 20) issues.push(`expected 20 requested children, received ${records.length}`);
   if (children.length !== 20) issues.push(`expected 20 settled children, received ${children.length}`);
-  if (elapsedMs >= CONTENTION_RETRY.deadlineMs) issues.push(`overall race exceeded ${CONTENTION_RETRY.deadlineMs}ms fixture deadline`);
   const parsedChildren = children.filter((child) => child.status === "fulfilled");
   if (parsedChildren.length !== 20) issues.push(`only ${parsedChildren.length} child processes returned normally`);
   for (const child of children) {
@@ -257,13 +259,23 @@ async function runConvergentClaims({ label, directory, records, afterLockDelayMs
         issues.push(`child ${child.childIndex} logged an error other than storage_busy`);
       }
       if (attempts.some((attempt) => !Number.isFinite(attempt.elapsedMs) || attempt.elapsedMs < 0)) {
-        issues.push(`child ${child.childIndex} logged invalid timing`);
+        issues.push("child " + child.childIndex + " logged invalid timing");
       }
       if (child.parsed?.busyAttempts !== attempts.filter((attempt) => attempt.errorCode === "storage_busy").length) {
-        issues.push(`child ${child.childIndex} busy-attempt count does not match its log`);
+        issues.push("child " + child.childIndex + " busy-attempt count does not match its log");
       }
-      if (!Number.isFinite(child.parsed?.elapsedMs) || child.parsed.elapsedMs > CONTENTION_RETRY.deadlineMs) {
-        issues.push(`child ${child.childIndex} exceeded its fixture retry deadline`);
+      if (!Number.isFinite(child.parsed?.elapsedMs) || child.parsed.elapsedMs < 0) {
+        issues.push("child " + child.childIndex + " omitted valid total elapsed diagnostics");
+      }
+      if (child.parsed?.retryControl?.deadlineMs !== CONTENTION_RETRY.deadlineMs ||
+          child.parsed?.retryControl?.cutoffKind !== "next_outer_attempt_start") {
+        issues.push("child " + child.childIndex + " omitted the configured outer-attempt cutoff contract");
+      }
+      if (child.parsed?.retryControl?.stopReason !== "claim_result") {
+        issues.push("child " + child.childIndex + " did not stop after a claim/conflict result");
+      }
+      for (const cutoffIssue of retryStartCutoffViolations(child.parsed)) {
+        issues.push("child " + child.childIndex + ": " + cutoffIssue);
       }
     }
     if (typeof child.parsed?.result?.claimed !== "boolean") {
@@ -1089,6 +1101,84 @@ test("fixture writer-lock readiness publishes only complete records and rejects 
   }, { retainOnFailure: true });
 });
 
+test("fixture retry flow enforces the measured outer-attempt start cutoff", async () => {
+  const record = Object.freeze({ claimId: "same-immutable-record" });
+  let nowMs = 0;
+  let calls = 0;
+  const passedRecords = [];
+  let rejectFirstCall;
+  let enteredResolve;
+  const entered = new Promise((resolve) => { enteredResolve = resolve; });
+  const busyError = Object.assign(new Error("storage_busy"), { code: "storage_busy" });
+  const normalRun = runFixtureClaimWithRetry({
+    claim: () => {
+      calls += 1;
+      passedRecords.push(record);
+      if (calls === 1) {
+        return new Promise((resolve, reject) => {
+          rejectFirstCall = reject;
+          enteredResolve();
+        });
+      }
+      return Promise.resolve({ claimed: true });
+    },
+    retryStorageBusy: { deadlineMs: 200, delayMs: 10, jitterMs: 0 },
+    now: () => nowMs,
+    pause: async () => { throw new Error("deadline case unexpectedly requested a retry delay"); }
+  });
+  await entered;
+  assert.equal(calls, 1);
+  nowMs = 201;
+  rejectFirstCall(busyError);
+  const normal = await normalRun;
+  assert.equal(normal.failure?.code, "fixture_retry_deadline");
+  assert.equal(normal.retryControl.stopReason, "retry_deadline_after_storage_busy");
+  assert.equal(normal.attempts.length, 1);
+  assert.equal(normal.attempts[0]?.decisionOffsetMs, 0);
+  assert.equal(normal.attempts[0]?.startOffsetMs, 0);
+  assert.equal(normal.attempts[0]?.completionOffsetMs, 201);
+  assert.equal(normal.retryControl.stoppedAtOffsetMs, 201);
+  assert.equal(calls, 1);
+  assert.ok(passedRecords.every((candidate) => candidate === record));
+  assert.deepEqual(retryStartCutoffViolations(normal), []);
+
+  nowMs = 0;
+  calls = 0;
+  passedRecords.length = 0;
+  let rejectBrokenFirstCall;
+  let brokenEnteredResolve;
+  const brokenEntered = new Promise((resolve) => { brokenEnteredResolve = resolve; });
+  const brokenRun = runFixtureClaimWithRetry({
+    claim: () => {
+      calls += 1;
+      passedRecords.push(record);
+      if (calls === 1) {
+        return new Promise((resolve, reject) => {
+          rejectBrokenFirstCall = reject;
+          brokenEnteredResolve();
+        });
+      }
+      return Promise.resolve({ claimed: true });
+    },
+    retryStorageBusy: { deadlineMs: 200, delayMs: 10, jitterMs: 0 },
+    now: () => nowMs,
+    pause: async (delayMs) => { assert.equal(delayMs, 0); },
+    attemptWithinDeadlineForTests: () => true
+  });
+  await brokenEntered;
+  nowMs = 201;
+  rejectBrokenFirstCall(busyError);
+  const deliberatelyBroken = await brokenRun;
+  assert.equal(deliberatelyBroken.result?.claimed, true);
+  assert.equal(deliberatelyBroken.attempts.length, 2);
+  assert.equal(deliberatelyBroken.attempts[1]?.startOffsetMs, 201);
+  assert.ok(passedRecords.every((candidate) => candidate === record));
+  assert.throws(
+    () => assert.deepEqual(retryStartCutoffViolations(deliberatelyBroken), []),
+    /attempt 2 .* at or after cutoff/
+  );
+});
+
 test("a one-shot storage_busy exhaustion preserves a live owner and resolves only after release", async () => {
   await withRoot(async (root) => {
     const directory = join(root, "attempts");
@@ -1224,6 +1314,10 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
     if (!Array.isArray(contenderReport?.attempts) || contenderReport.attempts.length !== 1 || contenderReport.attempts[0]?.errorCode !== "storage_busy") {
       issues.push("one-shot contender did not record exactly one storage_busy attempt");
     }
+    if (contenderReport?.retryControl?.stopReason !== "one_shot_storage_busy" ||
+        contenderReport?.retryControl?.deadlineMs !== null) {
+      issues.push("default one-shot behavior unexpectedly enabled a retry deadline");
+    }
     if (deadlineContender?.code !== 2 || deadlineContender.signal !== null || deadlineParseError !== undefined) {
       issues.push("bounded retry contender did not fail with a structured deadline report");
     }
@@ -1234,8 +1328,23 @@ test("a one-shot storage_busy exhaustion preserves a live owner and resolves onl
       deadlineReport.attempts.some((attempt) => attempt.errorCode !== "storage_busy") || deadlineReport.busyAttempts !== deadlineReport.attempts.length) {
       issues.push("fixture retry continued for a non-storage_busy error or omitted its busy log");
     }
-    if (!Number.isFinite(deadlineReport?.elapsedMs) || deadlineReport.elapsedMs >= 5_000) {
-      issues.push("fixture retry did not stop within the finite exhaustion bound");
+    if (deadlineReport?.retryControl?.deadlineMs !== 200 ||
+        deadlineReport?.retryControl?.cutoffAtOffsetMs !== 200 ||
+        deadlineReport?.retryControl?.cutoffKind !== "next_outer_attempt_start") {
+      issues.push("bounded retry report omitted the configured outer-attempt cutoff");
+    }
+    if (deadlineReport?.retryControl?.stopReason !== "retry_deadline_after_storage_busy") {
+      issues.push("in-flight storage_busy completion did not stop retrying at the deadline");
+    }
+    if (deadlineReport?.retryControl?.stoppedAtOffsetMs < 200 ||
+        deadlineReport?.attempts?.some((attempt) => attempt.completionOffsetMs < 200)) {
+      issues.push("deadline report did not record the late in-flight completion and stop");
+    }
+    for (const cutoffIssue of retryStartCutoffViolations(deadlineReport)) {
+      issues.push("bounded retry: " + cutoffIssue);
+    }
+    for (const cutoffIssue of retryStartCutoffViolations(contenderReport)) {
+      issues.push("one-shot: " + cutoffIssue);
     }
     if (!Array.isArray(recordsWhileLocked) || recordsWhileLocked.length !== 1 || recordsWhileLocked[0]?.claimId !== priorRecord.claimId) {
       issues.push("the gated claim appeared before its owner was released");
@@ -1320,6 +1429,10 @@ test("fixture retry diagnostics reject deadline, nonbusy errors, malformed outpu
     if (!Array.isArray(otherErrorReport.value?.attempts) || otherErrorReport.value.attempts.length !== 1 ||
       otherErrorReport.value.attempts[0]?.errorCode !== "invalid_record" || otherErrorReport.value.busyAttempts !== 0) {
       issues.push("fixture retry continued after invalid_record");
+    }
+    if (otherErrorReport.value?.retryControl?.stopReason !== "nonbusy_error" ||
+        retryStartCutoffViolations(otherErrorReport.value).length !== 0) {
+      issues.push("nonbusy failure lost retry-stop timing evidence");
     }
     if (malformed.code !== 0 || malformed.signal !== null || malformedReport.error === undefined || malformedReport.value !== undefined) {
       issues.push("malformed child output was accepted");
@@ -1940,7 +2053,14 @@ if (process.argv.includes("--positive-network-control")) {
       assert.equal(await localSocketError(), "EPERM");
     });
   }
-  for (const item of cases) {
+  const cutoffOnlyName = "fixture retry flow enforces the measured outer-attempt start cutoff";
+  const selectedCases = process.argv.includes("--cutoff-control-only")
+    ? cases.filter((item) => item.name === cutoffOnlyName)
+    : cases;
+  if (process.argv.includes("--cutoff-control-only") && selectedCases.length !== 1) {
+    throw new Error("cutoff-only selection did not resolve exactly one registered test");
+  }
+  for (const item of selectedCases) {
     try {
       await item.run();
       item.status = "passed";
@@ -1949,8 +2069,8 @@ if (process.argv.includes("--positive-network-control")) {
       item.message = error instanceof Error ? error.message : String(error);
     }
   }
-  const passed = cases.filter((item) => item.status === "passed").length;
-  const failed = cases.length - passed;
+  const passed = selectedCases.filter((item) => item.status === "passed").length;
+  const failed = selectedCases.length - passed;
   const report = {
     schemaVersion: "fulfillment-attempt-store-suite/1",
     suite: "attempt-store",
@@ -1961,7 +2081,7 @@ if (process.argv.includes("--positive-network-control")) {
     status: failed === 0 ? "passed" : "failed",
     passed,
     failed,
-    results: cases.map(({ name, status, message }) => ({ name, status, ...(message === undefined ? {} : { message }) }))
+    results: selectedCases.map(({ name, status, message }) => ({ name, status, ...(message === undefined ? {} : { message }) }))
   };
   process.stdout.write(JSON.stringify(report) + "\n");
   if (failed !== 0) process.exitCode = 1;
