@@ -10,12 +10,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import posixpath
 import re
 import subprocess
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 from xml.etree import ElementTree as ET
 
 
@@ -38,6 +40,7 @@ EXPECTED_VISUAL_COPY_SOURCES = {
     "launch/assets/x-submission-alt-text.md": "LAUNCH-X-ALT-TEXT-001",
     "examples/synthetic/redaction-after-alt-text.md": "PROV-REDACTION-AFTER-ALT-001",
 }
+STATIC_HTML_COMPOSITION_ASSET_IDS = {"DEMO-DECK-SUPPORT-001"}
 SELECTABLE_COLLATERAL_ASSET_IDS = {
     "DEMO-WORKFLOW-DIAGRAM-001",
     "DEMO-SCREENSHOT-SET-001",
@@ -46,6 +49,15 @@ SELECTABLE_COLLATERAL_ASSET_IDS = {
     "LAUNCH-X-ALT-TEXT-001",
 }
 DEFAULT_SUBMISSION_SELECTION = sorted(SELECTABLE_COLLATERAL_ASSET_IDS)
+REQUIRED_SUBMISSION_ASSET_IDS = (
+    "DEMO-EXPLAINER-001",
+    "DEMO-SUBMISSION-NARRATIVE-001",
+    "DEMO-SUBMISSION-VIDEO-001",
+    "LAUNCH-X-COPY-001",
+    "LAUNCH-X-CTA-001",
+    "LAUNCH-X-KEY-VISUAL-001",
+    "LAUNCH-X-ALT-TEXT-001",
+)
 REQUIRED_SUBMISSION_CLAIM_IDS = (
     "CLAIM-PRODUCT-CAPABILITY-001",
     "CLAIM-EVAL02-COMPARISON-001",
@@ -53,6 +65,32 @@ REQUIRED_SUBMISSION_CLAIM_IDS = (
     "CLAIM-SPN-02-ENTIRE-001",
     "CLAIM-SPN-03-CFO-001",
 )
+REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS = (
+    "EVAL-02",
+    "EVAL-03",
+    "EVAL-04",
+    "SPN-01",
+    "SPN-02",
+    "SPN-03",
+)
+LIFECYCLE_RELEASE_ELIGIBILITY = {
+    "draft": False,
+    "reviewed": False,
+    "released": True,
+    "deprecated": False,
+    "not_applicable": False,
+}
+COMPOSABLE_SOURCE_KINDS = {
+    "editable_visual_source",
+    "synthetic_mockup_source",
+    "visual_export",
+    "static_html_rehearsal_support",
+}
+ACCESSIBLE_ALTERNATIVE_KINDS = {
+    "accessible_text_alternative",
+    "accessible_synthetic_fixture_alternative",
+}
+LOCAL_MEDIA_SUFFIXES = {".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"}
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 RISK_PATTERNS = [
@@ -147,6 +185,30 @@ class _CopyHTMLParser(HTMLParser):
             return
         surface = "html-document-title" if self.stack and self.stack[-1] == "title" else "html-visible-text"
         self.units.append((surface, text))
+
+
+class _HTMLDependencyParser(HTMLParser):
+    """Collect local media and accessible-alternative links consumed by static HTML."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.references: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if tag == "img" and values.get("src"):
+            self.references.append(("embedded", values["src"] or ""))
+        elif tag in {"audio", "iframe", "source", "video"} and values.get("src"):
+            self.references.append(("embedded", values["src"] or ""))
+        elif tag == "object" and values.get("data"):
+            self.references.append(("embedded", values["data"] or ""))
+        elif tag == "a" and values.get("href"):
+            href = values["href"] or ""
+            suffix = Path(urlsplit(href).path).suffix.lower()
+            if suffix == ".md":
+                self.references.append(("alternative", href))
+            elif suffix in LOCAL_MEDIA_SUFFIXES:
+                self.references.append(("embedded", href))
 
 
 def _markdown_copy_units(text: str) -> list[tuple[str, str]]:
@@ -440,6 +502,116 @@ def validate_provenance(register: dict[str, Any]) -> list[str]:
     if "PROV-SYNTHETIC-CANARY-001" not in ids:
         errors.append("required synthetic canary provenance record is missing")
     errors.extend(validate_provenance_lineage(register))
+    errors.extend(validate_provenance_composition(register))
+    return errors
+
+
+def _local_composition_target(source_path: str, reference: str) -> str | None:
+    """Resolve an in-repository HTML reference while ignoring external URLs/fragments."""
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc or not parsed.path:
+        return None
+    path = unquote(parsed.path)
+    if path.startswith("/"):
+        target = posixpath.normpath(path.lstrip("/"))
+    else:
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(source_path), path))
+    if target in {"", ".", ".."} or target.startswith("../"):
+        raise ValueError("local reference escapes the repository root")
+    return target
+
+
+def validate_provenance_composition(register: dict[str, Any]) -> list[str]:
+    """Validate HTML composition edges separately from source/derivative lineage."""
+    errors: list[str] = []
+    rows = [row for row in register.get("records", []) if isinstance(row, dict)]
+    by_id = {row.get("assetId"): row for row in rows if isinstance(row.get("assetId"), str)}
+    by_path: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        path = row.get("source", {}).get("path")
+        if isinstance(path, str):
+            by_path.setdefault(path, []).append(row)
+
+    graph: dict[str, set[str]] = {}
+    for identifier, row in by_id.items():
+        raw_dependencies = row.get("compositionDependencies", [])
+        if not isinstance(raw_dependencies, list) or not all(isinstance(item, str) for item in raw_dependencies):
+            errors.append(f"{identifier}: compositionDependencies must be an array of provenance record IDs")
+            raw_dependencies = []
+        if len(raw_dependencies) != len(set(raw_dependencies)):
+            errors.append(f"{identifier}: compositionDependencies must be unique")
+        graph[identifier] = set(raw_dependencies)
+        if identifier in graph[identifier]:
+            errors.append(f"{identifier}: composition cannot depend on itself")
+        for dependency_id in raw_dependencies:
+            if dependency_id not in by_id:
+                errors.append(f"{identifier}: unknown composition dependency {dependency_id}")
+
+        source_path = row.get("source", {}).get("path")
+        if row.get("kind") != "static_html_rehearsal_support":
+            if identifier in STATIC_HTML_COMPOSITION_ASSET_IDS:
+                errors.append(f"{identifier}: canonical HTML composition must retain static_html_rehearsal_support kind")
+            continue
+        if not isinstance(source_path, str) or not (ROOT / source_path).is_file():
+            errors.append(f"{identifier}: static HTML composition source is missing")
+            continue
+        parser = _HTMLDependencyParser()
+        try:
+            parser.feed((ROOT / source_path).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError) as exc:
+            errors.append(f"{identifier}: HTML composition references cannot be read: {exc}")
+            continue
+
+        actual_dependencies: set[str] = set()
+        for dependency_kind, reference in parser.references:
+            try:
+                target_path = _local_composition_target(source_path, reference)
+            except ValueError as exc:
+                errors.append(f"{identifier}: unsafe HTML composition reference {reference!r}: {exc}")
+                continue
+            if target_path is None:
+                continue
+            if dependency_kind == "alternative":
+                candidates = [
+                    item for item in by_path.get(target_path, [])
+                    if item.get("kind") in ACCESSIBLE_ALTERNATIVE_KINDS
+                ]
+            else:
+                candidates = [
+                    item for item in by_path.get(target_path, [])
+                    if item.get("kind") in COMPOSABLE_SOURCE_KINDS
+                ]
+            if len(candidates) != 1:
+                errors.append(
+                    f"{identifier}: HTML {dependency_kind} reference {target_path} must resolve to exactly one matching provenance record"
+                )
+                continue
+            actual_dependencies.add(candidates[0]["assetId"])
+
+        declared = set(raw_dependencies)
+        for missing in sorted(actual_dependencies - declared):
+            errors.append(f"{identifier}: compositionDependencies omits consumed HTML source {missing}")
+        for stale in sorted(declared - actual_dependencies):
+            errors.append(f"{identifier}: composition dependency {stale} is not a consumed local HTML source")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(identifier: str) -> None:
+        if identifier in visiting:
+            errors.append(f"{identifier}: provenance composition graph contains a cycle")
+            return
+        if identifier in visited:
+            return
+        visiting.add(identifier)
+        for dependency_id in graph.get(identifier, set()):
+            if dependency_id in by_id:
+                visit(dependency_id)
+        visiting.remove(identifier)
+        visited.add(identifier)
+
+    for identifier in graph:
+        visit(identifier)
     return errors
 
 
@@ -746,6 +918,13 @@ def validate_visual_copy(
 def validate_inventory(inventory: dict[str, Any]) -> list[str]:
     """Check exact tracked-file coverage, stable IDs, availability, lifecycle, and checksums."""
     errors: list[str] = []
+    status_definitions = inventory.get("statusDefinitions", {})
+    documented_lifecycle = (
+        status_definitions.get("releaseEligibilityByLifecycle")
+        if isinstance(status_definitions, dict) else None
+    )
+    if documented_lifecycle != LIFECYCLE_RELEASE_ELIGIBILITY:
+        errors.append("statusDefinitions.releaseEligibilityByLifecycle must match the validator lifecycle policy")
     rows = inventory.get("trackedFiles", [])
     path_rows: dict[str, dict[str, Any]] = {}
     id_seen: set[str] = set()
@@ -769,8 +948,12 @@ def validate_inventory(inventory: dict[str, Any]) -> list[str]:
             continue
         if row.get("pathAvailability") not in {"tracked_at_baseline", "created_in_candidate"}:
             errors.append(f"{path_text}: tracked file has invalid pathAvailability")
-        if row.get("lifecycleState") is None or row.get("releaseEligible") is not False:
-            errors.append(f"{path_text}: lifecycle/release eligibility must be explicit")
+        lifecycle = row.get("lifecycleState")
+        expected_eligibility = LIFECYCLE_RELEASE_ELIGIBILITY.get(lifecycle)
+        if expected_eligibility is None:
+            errors.append(f"{path_text}: lifecycleState must be one of {', '.join(LIFECYCLE_RELEASE_ELIGIBILITY)}")
+        elif not isinstance(row.get("releaseEligible"), bool) or row.get("releaseEligible") is not expected_eligibility:
+            errors.append(f"{path_text}: lifecycleState {lifecycle} requires releaseEligible={str(expected_eligibility).lower()}")
         expected_digest = row.get("sha256")
         if expected_digest and _sha256_path(path) != expected_digest:
             errors.append(f"{path_text}: tracked inventory checksum drift")
@@ -807,6 +990,17 @@ def validate_inventory(inventory: dict[str, Any]) -> list[str]:
             values = scope.get(field, [])
             if all(isinstance(item, str) for item in values) and len(values) != len(set(values)):
                 errors.append(f"submissionScope.{field} must be unique")
+        canonical_requirements = {
+            "requiredAssetIds": REQUIRED_SUBMISSION_ASSET_IDS,
+            "requiredClaimIds": REQUIRED_SUBMISSION_CLAIM_IDS,
+            "requiredEvidenceClassIds": REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS,
+        }
+        for field, required_ids in canonical_requirements.items():
+            values = scope.get(field, [])
+            if isinstance(values, list) and all(isinstance(item, str) for item in values):
+                missing_ids = sorted(set(required_ids) - set(values))
+                if missing_ids:
+                    errors.append(f"submissionScope.{field} omits immutable required IDs: {', '.join(missing_ids)}")
         gates = scope.get("requiredOwnerGates", [])
         gate_ids = [row.get("id") for row in gates if isinstance(row, dict)]
         if len(gate_ids) != len(set(gate_ids)):
@@ -833,16 +1027,105 @@ def _selection_errors(selected_asset_ids: list[str] | tuple[str, ...] | None) ->
     return []
 
 
+def validate_inventory_composition(inventory: dict[str, Any], register: dict[str, Any]) -> list[str]:
+    """Keep the inventory's human-facing composition declaration aligned to provenance."""
+    errors: list[str] = []
+    planned = {
+        row.get("assetId"): row
+        for row in inventory.get("plannedDeliverables", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    records = {
+        row.get("assetId"): row
+        for row in register.get("records", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    for asset_id, record in records.items():
+        if record.get("kind") != "static_html_rehearsal_support":
+            continue
+        inventory_row = planned.get(asset_id)
+        if not inventory_row:
+            errors.append(f"{asset_id}: static HTML composition is missing from the collateral inventory")
+            continue
+        if "compositionDependencies" not in inventory_row:
+            errors.append(f"{asset_id}: static HTML composition is missing its inventory dependency list")
+    for asset_id, row in planned.items():
+        if "compositionDependencies" not in row:
+            continue
+        record = records.get(asset_id)
+        if not record:
+            errors.append(f"{asset_id}: inventory composition has no provenance record")
+            continue
+        if record.get("kind") != "static_html_rehearsal_support":
+            errors.append(f"{asset_id}: inventory composition requires a static HTML provenance record")
+            continue
+        inventory_dependencies = row.get("compositionDependencies")
+        provenance_dependencies = record.get("compositionDependencies", [])
+        if not isinstance(inventory_dependencies, list) or not all(isinstance(item, str) for item in inventory_dependencies):
+            errors.append(f"{asset_id}: inventory compositionDependencies must be an array of provenance record IDs")
+            continue
+        if not isinstance(provenance_dependencies, list) or not all(isinstance(item, str) for item in provenance_dependencies):
+            errors.append(f"{asset_id}: provenance compositionDependencies must be an array of record IDs")
+            continue
+        if set(inventory_dependencies) != set(provenance_dependencies):
+            errors.append(f"{asset_id}: inventory and provenance composition dependencies differ")
+    return errors
+
+
+def validate_inventory_provenance(inventory: dict[str, Any], register: dict[str, Any]) -> list[str]:
+    """Join each required deliverable to its canonical exact-output provenance record."""
+    errors: list[str] = []
+    planned = {
+        row.get("assetId"): row
+        for row in inventory.get("plannedDeliverables", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    records = {
+        row.get("assetId"): row
+        for row in register.get("records", [])
+        if isinstance(row, dict) and isinstance(row.get("assetId"), str)
+    }
+    scope = inventory.get("submissionScope", {})
+    scoped_asset_ids = scope.get("requiredAssetIds", []) if isinstance(scope, dict) else []
+    required_asset_ids = set(REQUIRED_SUBMISSION_ASSET_IDS)
+    if isinstance(scoped_asset_ids, list):
+        required_asset_ids.update(item for item in scoped_asset_ids if isinstance(item, str))
+    for asset_id in sorted(required_asset_ids):
+        row = planned.get(asset_id)
+        if not row:
+            continue
+        record_ids = row.get("provenanceRecordIds")
+        if not isinstance(record_ids, list) or not all(isinstance(item, str) and item for item in record_ids):
+            errors.append(f"{asset_id}: provenanceRecordIds must be an array of canonical provenance asset IDs")
+            continue
+        if len(record_ids) != len(set(record_ids)):
+            errors.append(f"{asset_id}: provenanceRecordIds must be unique")
+        if len(record_ids) > 1:
+            errors.append(f"{asset_id}: exactly one canonical output provenance record is supported")
+        for record_id in record_ids:
+            record = records.get(record_id)
+            if not record:
+                errors.append(f"{asset_id}: provenanceRecordIds references missing record {record_id}")
+                continue
+            if record_id != asset_id or record.get("assetId") != asset_id:
+                errors.append(f"{asset_id}: provenance record {record_id} is not the canonical output record")
+            source = record.get("source", {})
+            if not isinstance(source, dict) or source.get("path") != row.get("path"):
+                errors.append(f"{asset_id}: provenance record {record_id} source path does not match the planned output")
+    return errors
+
+
 def _expand_selected_assets(
     ledger: dict[str, Any], register: dict[str, Any], selected_asset_ids: list[str] | tuple[str, ...]
-) -> set[str]:
+) -> tuple[set[str], set[str]]:
     selected = set(selected_asset_ids)
     mappings = ledger.get("visualCopy", {}).get("mappings", [])
     records = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
     contexts = ledger.get("visualCopy", {}).get("qualifierContexts", [])
+    composition_records: set[str] = set()
     changed = True
     while changed:
-        before = set(selected)
+        before = (set(selected), set(composition_records))
         for context in contexts:
             related = set(context.get("relatedAssetIds", []))
             if related & selected:
@@ -856,8 +1139,16 @@ def _expand_selected_assets(
             for parent_id in record.get("lineage", {}).get("derivedFrom", []):
                 if parent_id in SELECTABLE_COLLATERAL_ASSET_IDS:
                     selected.add(parent_id)
-        changed = before != selected
-    return selected
+            for dependency_id in record.get("compositionDependencies", []):
+                composition_records.add(dependency_id)
+                for dependency_mapping in mappings:
+                    if dependency_mapping.get("provenanceRecordId") != dependency_id:
+                        continue
+                    dependency_asset = dependency_mapping.get("assetId")
+                    if dependency_asset in SELECTABLE_COLLATERAL_ASSET_IDS:
+                        selected.add(dependency_asset)
+        changed = before != (selected, composition_records)
+    return selected, composition_records
 
 
 def _cta_blockers(cta: dict[str, Any]) -> list[str]:
@@ -895,7 +1186,7 @@ def selected_collateral_blockers(
     errors = _selection_errors(selected_asset_ids)
     if errors:
         return errors
-    selected = _expand_selected_assets(ledger, register, selected_asset_ids)
+    selected, composition_records = _expand_selected_assets(ledger, register, selected_asset_ids)
     mappings = [
         row for row in ledger.get("visualCopy", {}).get("mappings", [])
         if isinstance(row, dict) and row.get("assetId") in selected
@@ -951,6 +1242,7 @@ def selected_collateral_blockers(
 
     record_by_id = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
     required_record_ids = {row.get("provenanceRecordId") for row in mappings if row.get("provenanceRecordId")}
+    required_record_ids.update(composition_records)
     relevant_kinds = {"editable_visual_source", "synthetic_mockup_source", "visual_export", "accessible_text_alternative", "static_html_rehearsal_support"}
     queue = list(required_record_ids)
     seen: set[str] = set()
@@ -971,6 +1263,9 @@ def selected_collateral_blockers(
         for child_id in record.get("lineage", {}).get("derivatives", []):
             if record_by_id.get(child_id, {}).get("kind") in relevant_kinds:
                 queue.append(child_id)
+        for dependency_id in record.get("compositionDependencies", []):
+            if dependency_id in record_by_id:
+                queue.append(dependency_id)
         if record.get("publishability") != "approved" or record.get("permission", {}).get("status") != "approved":
             blockers.append(f"{record_id}: selected destination rights/publishability are not approved")
         if not record.get("reviewer") or not record.get("reviewDate"):
@@ -993,13 +1288,33 @@ def submission_blockers(
     if inventory is None:
         inventory = _read_json(ROOT / "docs/collateral-inventory.json")
     scope = inventory.get("submissionScope", {})
+    if not isinstance(scope, dict):
+        scope = {}
     for field in ("requiredAssetIds", "requiredClaimIds", "requiredEvidenceClassIds", "requiredOwnerGates"):
         if not isinstance(scope.get(field), list) or not scope.get(field):
             blockers.append(f"submission scope is incomplete: {field} must be explicitly populated")
+    immutable_scope = {
+        "requiredAssetIds": REQUIRED_SUBMISSION_ASSET_IDS,
+        "requiredClaimIds": REQUIRED_SUBMISSION_CLAIM_IDS,
+        "requiredEvidenceClassIds": REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS,
+    }
+    scoped_values: dict[str, list[str]] = {}
+    for field, required_ids in immutable_scope.items():
+        values = scope.get(field, [])
+        if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+            values = []
+        scoped_values[field] = values
+        for missing_id in sorted(set(required_ids) - set(values)):
+            blockers.append(f"submission scope omits immutable required {field.removeprefix('required').removesuffix('Ids').lower()} {missing_id}")
+    gates = scope.get("requiredOwnerGates", [])
+    if not isinstance(gates, list):
+        gates = []
     deliverables = {row.get("assetId"): row for row in inventory.get("plannedDeliverables", []) if isinstance(row, dict)}
     tracked = {row.get("path"): row for row in inventory.get("trackedFiles", []) if isinstance(row, dict)}
+    provenance_by_id = {row.get("assetId"): row for row in register.get("records", []) if isinstance(row, dict)}
+    required_output_record_ids: list[str] = []
     selected = set(selected_asset_ids)
-    for asset_id in scope.get("requiredAssetIds", []):
+    for asset_id in dict.fromkeys((*REQUIRED_SUBMISSION_ASSET_IDS, *scoped_values["requiredAssetIds"])):
         row = deliverables.get(asset_id)
         if not row:
             blockers.append(f"submission asset {asset_id}: missing from inventory")
@@ -1007,26 +1322,43 @@ def submission_blockers(
         if asset_id in SELECTABLE_COLLATERAL_ASSET_IDS and asset_id not in selected:
             blockers.append(f"submission asset {asset_id}: required collateral was not selected")
         path_text = row.get("path")
-        if not isinstance(path_text, str) or not (ROOT / path_text).is_file():
+        output_exists = isinstance(path_text, str) and (ROOT / path_text).is_file()
+        if not output_exists:
             blockers.append(f"submission asset {asset_id}: required output is absent ({path_text})")
+        else:
+            indexed = tracked.get(path_text, {})
+            if row.get("pathAvailability") not in {"tracked_at_baseline", "created_in_candidate"} or row.get("lifecycleState") != "released" or indexed.get("releaseEligible") is not True:
+                blockers.append(f"submission asset {asset_id}: exact output is not inventoried as released/eligible")
+
+        output_record_ids = row.get("provenanceRecordIds")
+        if not isinstance(output_record_ids, list) or output_record_ids != [asset_id]:
+            blockers.append(f"submission asset {asset_id}: requires one canonical exact-output provenanceRecordIds entry")
             continue
-        indexed = tracked.get(path_text, {})
-        if row.get("pathAvailability") not in {"tracked_at_baseline", "created_in_candidate"} or row.get("lifecycleState") != "released" or indexed.get("releaseEligible") is not True:
-            blockers.append(f"submission asset {asset_id}: exact output is not inventoried as released/eligible")
+        output_record = provenance_by_id.get(asset_id)
+        if not output_record:
+            blockers.append(f"submission asset {asset_id}: canonical exact-output provenance record is missing")
+            continue
+        source = output_record.get("source", {})
+        if not isinstance(source, dict) or source.get("path") != path_text:
+            blockers.append(f"submission asset {asset_id}: canonical provenance source path does not match the required output")
+        required_output_record_ids.append(asset_id)
 
     claims_by_id = {row.get("id"): row for row in ledger.get("claims", []) if isinstance(row, dict)}
     evidence_by_id = {row.get("id"): row for row in ledger.get("evidenceClasses", []) if isinstance(row, dict)}
-    for claim_id in scope.get("requiredClaimIds", []):
+    for claim_id in dict.fromkeys((*REQUIRED_SUBMISSION_CLAIM_IDS, *scoped_values["requiredClaimIds"])):
         claim = claims_by_id.get(claim_id)
         if not claim:
             blockers.append(f"required submission claim {claim_id}: missing from claim ledger")
         elif claim.get("reviewStatus") != "approved" or claim.get("state") in {"blocked", "planned", "assumed"} or not claim.get("source", {}).get("revision"):
             blockers.append(f"required submission claim {claim_id}: product/evidence approval is not complete")
-    for evidence_id in scope.get("requiredEvidenceClassIds", []):
+    for evidence_id in dict.fromkeys((*REQUIRED_SUBMISSION_EVIDENCE_CLASS_IDS, *scoped_values["requiredEvidenceClassIds"])):
         evidence = evidence_by_id.get(evidence_id)
         if not evidence or evidence.get("status") != "approved":
             blockers.append(f"required submission evidence {evidence_id}: producer evidence is not approved")
-    for gate in scope.get("requiredOwnerGates", []):
+    for gate in gates:
+        if not isinstance(gate, dict):
+            blockers.append("required submission owner gate is malformed")
+            continue
         gate_id = gate.get("id", "unknown-owner-gate")
         if gate.get("status") != "approved" or not gate.get("reviewer") or not gate.get("reviewDate") or not gate.get("evidenceRef"):
             blockers.append(f"required submission owner gate {gate_id}: source-owner/organizer confirmation is pending")
@@ -1036,8 +1368,63 @@ def submission_blockers(
             blockers.append(f"required submission owner gate {required_gate}: missing from submission scope")
     if register.get("visualReview", {}).get("independentReview") != "passed":
         blockers.append("required submission review: independent visual/content/accessibility review is pending")
-    if str(register.get("visualReview", {}).get("brandAndSourceOwnerRights", "")).startswith("pending"):
-        blockers.append("required submission rights gate: brand/source-owner destination rights are pending")
+    if register.get("visualReview", {}).get("brandAndSourceOwnerRights") != "approved":
+        blockers.append("required submission rights gate: brand/source-owner destination rights are not approved")
+    blockers.extend(_submission_provenance_rights_blockers(required_output_record_ids, provenance_by_id))
+    return blockers
+
+
+def _submission_provenance_rights_blockers(
+    output_record_ids: list[str], provenance_by_id: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Require destination approval for each required output and every declared source input."""
+    blockers: list[str] = []
+    queue = list(output_record_ids)
+    seen: set[str] = set()
+    while queue:
+        record_id = queue.pop()
+        if record_id in seen:
+            continue
+        seen.add(record_id)
+        record = provenance_by_id.get(record_id)
+        if not record:
+            blockers.append(f"{record_id}: required submission provenance record is missing")
+            continue
+        permission = record.get("permission", {})
+        if record.get("publishability") != "approved" or permission.get("status") != "approved":
+            blockers.append(f"{record_id}: required output/source provenance destination rights are not approved")
+        if not record.get("reviewer") or not record.get("reviewDate"):
+            blockers.append(f"{record_id}: required output/source provenance review lacks reviewer/date")
+        allowed = record.get("allowedDestinations", [])
+        approved = permission.get("approvedDestinations", [])
+        if (
+            not isinstance(allowed, list) or not all(isinstance(item, str) for item in allowed)
+            or not isinstance(approved, list) or not all(isinstance(item, str) for item in approved)
+            or not set(allowed).intersection(approved)
+        ):
+            blockers.append(f"{record_id}: required output/source provenance has no matching approved destination")
+        source = record.get("source", {})
+        if not isinstance(source, dict) or not source.get("path") or not source.get("revision") or not _pinned_revision(source):
+            blockers.append(f"{record_id}: required output/source provenance is not immutably pinned")
+        elif source.get("repo") == "Jevelopers-neatHack-2026/marketing-material":
+            source_path = source["path"]
+            exact_path = ROOT / source_path
+            checksum = record.get("checksum", {})
+            if (
+                not _is_tracked_repo_file(source_path)
+                or not isinstance(checksum, dict)
+                or checksum.get("algorithm") != "SHA-256"
+                or checksum.get("value") != _sha256_path(exact_path)
+            ):
+                blockers.append(f"{record_id}: required output/source provenance path or checksum is not exact")
+        lineage = record.get("lineage", {})
+        parent_ids = lineage.get("derivedFrom", []) if isinstance(lineage, dict) else []
+        composition_ids = record.get("compositionDependencies", [])
+        for relation_name, relation_ids in (("lineage.derivedFrom", parent_ids), ("compositionDependencies", composition_ids)):
+            if not isinstance(relation_ids, list) or not all(isinstance(item, str) for item in relation_ids):
+                blockers.append(f"{record_id}: {relation_name} must be an array of provenance record IDs")
+                continue
+            queue.extend(relation_ids)
     return blockers
 
 
@@ -1062,6 +1449,8 @@ def validate_all(
     if inventory is None:
         inventory = _read_json(ROOT / "docs/collateral-inventory.json")
     errors.extend(validate_inventory(inventory))
+    errors.extend(validate_inventory_composition(inventory, register))
+    errors.extend(validate_inventory_provenance(inventory, register))
     return errors
 
 

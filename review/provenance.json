@@ -4,6 +4,7 @@
   "status": "draft",
   "asOf": "2026-10-11",
   "publicationDefault": "blocked",
+  "compositionModel": "Container assets declare direct compositionDependencies by provenance record ID, separate from reciprocal acyclic source/derivative lineage. Static HTML dependencies are matched to its exact local media and accessible-alternative links.",
   "permissionStates": [
     "approved",
     "authorized_internal_candidate_review_only",
@@ -650,6 +651,10 @@
           "Source file or exact verification/tooling record pinned to the integrated visual candidate."
         ]
       },
+      "compositionDependencies": [
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "PROV-DEMO-WORKFLOW-ALT-001"
+      ],
       "checksum": {
         "algorithm": "SHA-256",
         "value": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",

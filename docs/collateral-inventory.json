@@ -98,7 +98,15 @@
       "draft": "Exists but has not completed its required review.",
       "reviewed": "The named role reviewed this exact revision; reviewer and date must be recorded.",
       "released": "Destination-specific rights, claims, accessibility, and approval checks passed for the exact revision.",
-      "deprecated": "Retained for history, superseded by a recorded asset/path mapping, and no longer reusable."
+      "deprecated": "Retained for history, superseded by a recorded asset/path mapping, and no longer reusable.",
+      "not_applicable": "Supporting or control material outside release eligibility; it cannot be used as a released submission deliverable."
+    },
+    "releaseEligibilityByLifecycle": {
+      "draft": false,
+      "reviewed": false,
+      "released": true,
+      "deprecated": false,
+      "not_applicable": false
     },
     "uncreatedAssetLifecycle": "null means no asset exists, so draft/reviewed/released/deprecated cannot yet apply."
   },
@@ -913,7 +921,8 @@
       "editableSourceLocations": [
         "demo/product-explanation.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "DEMO-STORYBOARD-001",
@@ -1054,7 +1063,8 @@
       "editableSourceLocations": [
         "demo/submission-narrative.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "DEMO-SUBMISSION-VIDEO-001",
@@ -1093,7 +1103,8 @@
       ],
       "exportLocations": [
         "demo/exports/v1-demo.mp4"
-      ]
+      ],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "DEMO-WORKFLOW-DIAGRAM-001",
@@ -1194,8 +1205,14 @@
       ],
       "provenanceReferences": [
         "DEMO-DECK-SUPPORT-001",
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "PROV-DEMO-WORKFLOW-ALT-001",
         "PROV-VISUAL-BROWSER-001",
         "PROV-VISUAL-ACCESSIBILITY-001"
+      ],
+      "compositionDependencies": [
+        "DEMO-WORKFLOW-DIAGRAM-001",
+        "PROV-DEMO-WORKFLOW-ALT-001"
       ],
       "v1": false,
       "intendedAudience": "Hackathon judges, the team, demo viewers and the receiving teammate.",
@@ -1249,7 +1266,8 @@
       "editableSourceLocations": [
         "launch/announcement-copy.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "LAUNCH-X-KEY-VISUAL-001",
@@ -1292,7 +1310,10 @@
       "exportLocations": [
         "launch/assets/x-submission-key-visual.png"
       ],
-      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "LAUNCH-X-KEY-VISUAL-001"
+      ]
     },
     {
       "assetId": "LAUNCH-X-ALT-TEXT-001",
@@ -1331,7 +1352,10 @@
         "launch/assets/x-submission-alt-text.md"
       ],
       "exportLocations": [],
-      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending."
+      "currentScope": "Exact tracked draft file(s) only; independent, source-owner rights, destination and final content approvals remain pending.",
+      "provenanceRecordIds": [
+        "LAUNCH-X-ALT-TEXT-001"
+      ]
     },
     {
       "assetId": "LAUNCH-X-CTA-001",
@@ -1365,7 +1389,8 @@
       "editableSourceLocations": [
         "launch/announcement-copy.md"
       ],
-      "exportLocations": []
+      "exportLocations": [],
+      "provenanceRecordIds": []
     },
     {
       "assetId": "LAUNCH-UPDATE-RECAP-001",
@@ -2392,7 +2417,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "f74c2ee4fa0034b6992f91f8b2401dd61f9d4934a693dc18721ba35963bf4457"
+      "sha256": "556939b3a0b09cd4830c6f93caeefac703dc2993e9eb0d771bedea68ffda900d"
     },
     {
       "fileId": "TEST-VISUAL-ACCESSIBILITY-001",
@@ -2439,7 +2464,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "364d40038d80c270c2cb79f540cc385733e79507e12881ca9758e7b44932da75"
+      "sha256": "8de1f254d192522add4970f5fc5270eff97a1aa0b64f1ca36d073be0b0cecb5c"
     },
     {
       "fileId": "PROV-PREVIEW-DECK-DESKTOP-FULL-001",
@@ -2644,6 +2669,6 @@
         "reReviewTrigger": "Official post, event format, demo requirements, X destination or confirmed cutoff changes."
       }
     ],
-    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals."
+    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals."
   }
 }
