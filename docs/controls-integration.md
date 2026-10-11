@@ -1,3 +1,5 @@
+Current actual Apply→CE09 consumer details and boundaries are in [actual saved-artwork inspection](controls/actual-inspection.md). Earlier checkpoint statements below retain their historical scope; they do not describe current inspection as unimplemented.
+
 # Structured controls and actual local Apply integration
 
 CE-05 (#17) now supplies an allowlisted schema, defensive browser consumer,
@@ -227,7 +229,7 @@ These are required local integrations, not scope waivers or external blockers:
 | `creative.compound.consume/1` | Consume separately ordered composition/artwork tasks with the same action identity and per-component durable outcomes, current rights, cancellation/lease/publication fences and bounded costs | Typed unavailable; no partial image dispatch |
 | Research correction consumer | Accept typed factual correction against exact package/fact/brief identity; return durable research request and approval invalidation requirement, then consume a new source package; never mutate a verified fact as a preference | Pending; controls expose no fabricated correction success |
 | Native image adapter | Wire the merged selected native provider/codec through actual API/store with valid encoded artifacts, exact parent/action/usage identity and route negatives | Executable offline through intercepted fetch and declared MOCK authorities at base `5ab7f0e`; live model/authority acceptance remains pending |
-| Inspection adapter | Wire reviewed, merged inspection ports into the same actual API/store journey with current rights and native route negatives | Required local integration pending; no import from an unmerged candidate |
+| Inspection adapter | Wire qualified merged inspection ports into the same actual API/store journey with current rights and native route negatives | Actual local saved Apply→inspect consumer implemented on qualified18b; see current details above. Live/acceptance remains pending |
 
 A future composition port must minimally provide
 `consume({ principal, operation, task, expected_brief_hash,

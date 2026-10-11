@@ -11,6 +11,7 @@ const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/
   '/inspection-presentation.html': ['inspection-presentation.html', 'text/html'],
   '/inspection-presentation.mjs': ['inspection-presentation.mjs', 'text/javascript'],
   '/inspection-consumer.mjs': ['../../src/controls/inspection-consumer.mjs', 'text/javascript'],
+  '/inspection-view.mjs': ['../../src/controls/inspection-view.mjs', 'text/javascript'],
   '/public-result.mjs': ['../../src/controls/public-result.mjs', 'text/javascript'],
   '/inspection-inputs.json': ['../../fixtures/controls/inspection-presentation-inputs.json', 'application/json'] };
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
@@ -23,6 +24,7 @@ const server = createServer(async (req, res) => {
         'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'" });
       return res.end(await readFile(new URL(file, import.meta.url)));
     }
+    if (req.method === 'GET' && path === '/api/inspection/latest') return json(res, { view: await host.inspection.latest(fixturePrincipal), repair: await host.inspection.latestRepair(fixturePrincipal), source: await host.inspection.currentSource(fixturePrincipal), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/schema') return json(res, { ...mode, schema: host.schema(), counters: host.counts() });
     if (req.method === 'GET' && path === '/api/counters') return json(res, { ...mode, ...host.counts() });
     if (req.method === 'GET' && path === '/__fixture/native-evidence') {
@@ -36,11 +38,15 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': value.artifact.media_type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" }); return res.end(Buffer.from(value.bytes));
     }
-    if (req.method !== 'POST' || !['/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset'].includes(path)) return json(res, { code: 'not_found' }, 404);
+    if (req.method !== 'POST' || !['/api/inspection', '/api/inspection/lookup', '/api/inspection/cancel', '/api/inspection/repair', '/api/apply', '/api/cancel', '/api/dispatch', '/api/compare', '/api/restore', '/__fixture/state', '/__fixture/reset'].includes(path)) return json(res, { code: 'not_found' }, 404);
     if (!req.headers['content-type']?.startsWith('application/json')) return json(res, { code: 'validation' }, 415);
     if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, { code: 'permission' }, 403);
     let bytes = '', size = 0; for await (const chunk of req) { size += chunk.length; if (size > 32768) return json(res, { code: 'validation' }, 413); bytes += chunk; }
     const payload = JSON.parse(bytes);
+    if (path === '/api/inspection') return json(res, { view: await host.inspection.start(fixturePrincipal, payload), counters: host.counts() });
+    if (path === '/api/inspection/lookup') return json(res, { view: await host.inspection.lookup(fixturePrincipal, payload.inspection_action_id), counters: host.counts() });
+    if (path === '/api/inspection/cancel') return json(res, { view: await host.inspection.cancel(fixturePrincipal, payload.inspection_action_id), counters: host.counts() });
+    if (path === '/api/inspection/repair') return json(res, { repair: await host.inspection.repair(fixturePrincipal, payload), counters: host.counts() });
     if (path === '/api/apply') return json(res, { ...mode, ...await host.adapter.apply(fixturePrincipal, payload), counters: host.counts() });
     if (path === '/api/cancel') return json(res, { ...mode, ...await host.adapter.cancel(fixturePrincipal, payload.operation_id ?? host.adapter.lookup(fixturePrincipal, payload.action_id)?.operation_id), counters: host.counts() });
     if (path === '/api/compare') return json(res, { ...mode, ...await host.compare(payload.design_version_id), counters: host.counts() });
@@ -53,6 +59,14 @@ const server = createServer(async (req, res) => {
       host = await createIntegratedHost(dir, { nativeFormat });
     }
     else {
+      if (payload.inspection_fault) host.policy.inspection_fault = payload.inspection_fault;
+      if (payload.inspection_usage) host.policy.inspection_usage = payload.inspection_usage;
+      if (payload.inspection_bucket) host.policy.inspection_bucket = payload.inspection_bucket;
+      if (payload.recommend_repair) host.policy.recommend_repair = true;
+      if (typeof payload.repair_units === 'number') host.policy.repair_units = payload.repair_units;
+      if (payload.revoke_inspect) host.policy.can_inspect = false;
+      if (payload.actor_expired) host.policy.actor_expired = true;
+      if (payload.advance_ms) host.advance(payload.advance_ms);
       if (payload.revoke) host.policy.can_apply = false;
       if (payload.revoke_read) host.policy.can_read = false;
       if (payload.revoke_asset) host.policy.permitted_asset_ids = [];

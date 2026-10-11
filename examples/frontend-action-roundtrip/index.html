@@ -4,7 +4,7 @@
 <body><main>
   <p class="eyebrow">CREATIVE ENGINE · LOCAL FIXTURE</p><h1>Review your changes</h1>
   <p class="intro">Choose a draft, then Apply to validate a typed operation.</p>
-  <aside aria-label="Evidence mode"><strong>Mock boundaries</strong><p>MOCK host authority declares synthetic identity and rights. The public brief planner, creative API, native image provider and decoder, immutable version store and usage outbox run locally. Native requests use intercepted offline fetch and a declared MOCK usage profile. Finance is simulated. Composition, inspection, approval, production and purchase integrations are pending.</p></aside>
+  <aside aria-label="Evidence mode"><strong>Mock boundaries</strong><p id="evidence-description">MOCK host authority declares synthetic identity and rights. The public brief planner, creative API, native image provider and decoder, immutable version store and usage outbox run locally. Native requests use intercepted offline fetch and a declared MOCK usage profile. Finance is simulated. Inspection runs through the public CE09 backend with labeled offline observer and DecisionPort doubles. Composition, approval, production and purchase integrations are pending.</p></aside>
   <form id="controls" aria-label="Design controls"><fieldset id="fields"><legend>Draft selections</legend></fieldset>
     <p id="draft-state" class="hint">Loading controls…</p>
     <p class="hint">Draft changes make zero JEV, image or reservation calls. Apply artwork edits through the local backend with fixture transport. Composition changes require the pending zero-image backend bridge.</p>
@@ -14,6 +14,17 @@
     <p id="artifact" hidden></p>
     <img id="artwork-preview" alt="Saved artwork from the immutable local version" width="128" height="128" hidden>
     <div class="actions"><button id="retry" type="button" disabled>Retry last Apply</button><button id="handoff" type="button" disabled>Validate handoff</button><button id="cancel" type="button" disabled>Cancel operation</button></div>
+  </section>
+  <section id="inspection-section" aria-label="Saved artwork inspection">
+    <h2>Inspect saved artwork</h2>
+    <p>Inspect the exact saved version separately from Apply. Offline observation and decision fixtures provide no production quality certification.</p>
+    <div class="actions"><button id="inspect" type="button" disabled>Inspect saved artwork</button><button id="inspect-retry" type="button" disabled>Retry existing inspection</button><button id="inspect-lookup" type="button" disabled>Recover inspection status</button><button id="inspect-cancel" type="button" disabled>Cancel inspection</button></div>
+    <p id="inspection-status" role="status" aria-live="polite" tabindex="-1">Save an artwork revision before inspection.</p>
+    <p id="inspection-error" role="alert" tabindex="-1" hidden></p><p id="inspection-refs"></p><p id="inspection-usage"></p><p id="inspection-limits"></p>
+    <p>Usage and total cost are separate. Reservation status is unknown here; unresolved in-flight holds remain held for reconciliation.</p>
+    <button id="inspection-repair" type="button" disabled>Request image repair preserving the brief and locks</button>
+    <p>Repair requires a separate explicit action and current backend authorization. Recommendations never approve artwork or authorize purchase.</p>
+    <p id="inspection-counters"></p>
   </section>
   <section id="history-section" aria-label="Immutable version history" hidden><h2>Saved versions</h2>
     <label for="history-version">Historical artwork version</label><select id="history-version"></select>

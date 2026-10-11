@@ -25,9 +25,9 @@ function run(command, argv, cwd, label, env = {}) {
   results.push({ command: label, exit_code: result.status, passed: result.status === 0, ...(Object.keys(counts).length ? { counts } : {}) });
   for (const line of (result.stdout ?? '').split('\n')) if (line.startsWith('# {"controls_probe":')) reviewProbes.push(JSON.parse(line.slice(2)));
 }
-run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs', 'tests/controls/inspection-consumer.test.mjs', 'tests/controls/public-result.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs tests/controls/inspection-consumer.test.mjs tests/controls/public-result.test.mjs');
+run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs', 'tests/controls/inspection-consumer.test.mjs', 'tests/controls/public-result.test.mjs', 'tests/controls/actual-inspection.test.mjs', 'tests/controls/inspection-result.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs tests/controls/inspection-consumer.test.mjs tests/controls/public-result.test.mjs tests/controls/actual-inspection.test.mjs tests/controls/inspection-result.test.mjs');
 if (runBrowser || args.includes('--types')) run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', '../../tests/controls/types/tsconfig.json'],
-  fixtureDir, 'tsc --strict --module NodeNext (source ESM consumer; package export pending)');
+  fixtureDir, 'tsc --strict --module NodeNext (source and public actual inspection consumers)');
 if (runBrowser) run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--reporter=list,json'], fixtureDir,
   'npm test (Playwright Chromium + axe)', { PLAYWRIGHT_JSON_OUTPUT_FILE: join(fixtureDir, 'test-results/browser-results.json') });
 const digest = createHash('sha256');
@@ -48,7 +48,7 @@ for (const rel of ['.github/workflows/controls.yml', 'docs/controls-integration.
 }
 const transcript = await integratedTranscript();
 const dependency_files = {};
-for (const directory of ['src/api', 'src/runtime', 'src/planning', 'src/versions', 'src/storage', 'src/telemetry', 'src/contracts', 'src/models']) {
+for (const directory of ['src/api', 'src/runtime', 'src/planning', 'src/versions', 'src/storage', 'src/telemetry', 'src/inspection', 'src/contracts', 'src/models']) {
   function fingerprint(path) { for (const item of readdirSync(path, { withFileTypes: true })) { if (item.name === 'node_modules') continue; const name = join(path, item.name); if (item.isDirectory()) fingerprint(name); else dependency_files[relative(root, name)] = createHash('sha256').update(readFileSync(name)).digest('hex'); } }
   fingerprint(join(root, directory));
 }
@@ -62,14 +62,14 @@ const evidence = { evidence_version: 'controls-offline-evidence/2.0', dependency
   contract_status: 'local-consumer-proposal', source_fingerprint_sha256: digest.digest('hex'), source_files: sourceFiles,
   fixture_schema_sha256: hash(createControlSchema(state)), fixture_action_sha256: hash(action(state)),
   checks: results, review_probes: reviewProbes, browser_summary, browser_exercised: runBrowser && results.find(r => r.command === 'npm test (Playwright Chromium + axe)')?.passed === true,
-  types_checked: results.find(r => r.command === 'tsc --strict --module NodeNext (source ESM consumer; package export pending)')?.passed === true,
+  types_checked: results.find(r => r.command === 'tsc --strict --module NodeNext (source and public actual inspection consumers)')?.passed === true,
   dependency_files,
-  base_revision: '5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74',
+  base_revision: '18b5e6076f6275af763bdd45bf77c6a644a8bddc',
   authoritative_contract_revision: 'c4caaccc2ea63b273eeac17ed89af8ac64f6bbde',
   authoritative_checklist_revision: 'ff1f6d2df816ebbff34742f51be728fcb5c28cb5',
   actual_api_transcript: transcript,
   calls: { application_provider_live: 0, fixture_apply_image: transcript.final_counters.image_calls, fixture_apply_jev: transcript.final_counters.jev_calls, fixture_apply_reservations: transcript.final_counters.reservations }, approval_created: false, purchase_created: false,
-  pending: ['canonical external schema publication and consumer acknowledgement', 'actual CE06 composition, compound and correction consumers', 'actual inspection integration', 'public controls package export/build and package consumer', 'application authentication/authorization',
+  pending: ['canonical external schema publication and consumer acknowledgement', 'actual CE06 composition, compound and correction consumers', 'live observer/JEV execution and external inspection policy acceptance', 'application authentication/authorization',
     'harness outbox consumer and paid artwork dispatch', 'live providers and external release acceptance',
     'CloudLinux/CageFS x86_64 host validation (exact Node 22 patch unknown)'],
   passed: results.every(r => r.passed) };
