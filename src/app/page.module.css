@@ -1,0 +1,202 @@
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ts-space-3);
+  padding: calc(var(--ts-space-3) + env(safe-area-inset-top)) var(--ts-space-4) var(--ts-space-3);
+  max-width: 1120px;
+  width: 100%;
+  margin: 0 auto;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.wordmark {
+  display: block;
+  height: 28px;
+  width: auto;
+}
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--ts-space-1);
+}
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--ts-space-2);
+  font-weight: 500;
+  text-underline-offset: 3px;
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--ts-space-5) var(--ts-space-4) var(--ts-space-7);
+  display: grid;
+  gap: var(--ts-space-6);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ts-space-4);
+}
+.headline {
+  font-size: clamp(var(--ts-step-4), 9vw, var(--ts-step-6));
+  line-height: var(--ts-lh-tight);
+  font-variation-settings: "SOFT" 50, "WONK" 1;
+}
+.lede {
+  color: var(--ts-text-muted);
+  max-width: 34em;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ts-space-2);
+  padding: var(--ts-space-4);
+  border: 1.5px dashed color-mix(in srgb, var(--ts-text) 45%, transparent);
+  border-radius: var(--ts-radius-control);
+  background: var(--ts-surface);
+}
+.label {
+  font-weight: 600;
+}
+.inputRow {
+  display: flex;
+  gap: var(--ts-space-2);
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 17px;
+  color: var(--ts-text);
+  background: var(--ts-bg);
+  border: 1.5px solid var(--ts-text);
+  border-radius: var(--ts-radius-control);
+}
+.input::placeholder {
+  color: var(--ts-text-muted);
+}
+.pasteBtn {
+  min-height: 52px;
+  flex: none;
+}
+.message {
+  min-height: 1.4em;
+  font-size: var(--ts-step--1);
+  color: var(--ts-text-muted);
+}
+.cta {
+  min-height: 56px;
+  font-size: var(--ts-step-1);
+}
+
+.sectionTitle {
+  font-size: var(--ts-step-2);
+}
+
+.noLink {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ts-space-3);
+}
+.searchBtn {
+  align-self: flex-start;
+}
+.dropZone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ts-space-2);
+  min-height: 72px;
+  padding: var(--ts-space-3) var(--ts-space-4);
+  border: 1.5px dashed color-mix(in srgb, var(--ts-text) 30%, transparent);
+  border-radius: var(--ts-radius-control);
+  color: var(--ts-text-muted);
+}
+
+.demos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ts-space-2);
+  font-size: 13px;
+}
+.demoLabel {
+  color: var(--ts-text-muted);
+}
+.demoChip {
+  min-height: 44px;
+  text-decoration: none;
+}
+
+.wallPeek {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ts-space-3);
+}
+.wallHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.peekRow {
+  display: flex;
+  gap: var(--ts-space-4);
+  padding: var(--ts-space-4) var(--ts-space-2) var(--ts-space-5);
+  overflow-x: auto;
+  text-decoration: none;
+  border-radius: var(--ts-radius-control);
+  background:
+    radial-gradient(circle at 20% 30%, rgb(180 105 62 / 0.12), transparent 60%),
+    var(--ts-surface);
+  scrollbar-width: none;
+}
+.peekItem {
+  flex: none;
+  display: block;
+  pointer-events: none;
+  transition: transform var(--ts-dur-base) var(--ts-ease-standard);
+}
+.peekRow:hover .peekItem {
+  transform: translateY(-4px);
+}
+
+@media (min-width: 960px) {
+  .main {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    column-gap: var(--ts-space-8);
+    align-items: start;
+    padding-top: var(--ts-space-8);
+  }
+  .hero {
+    grid-row: 1 / span 2;
+  }
+  .noLink {
+    padding-top: var(--ts-space-7);
+  }
+  .demos,
+  .wallPeek {
+    grid-column: 1 / -1;
+  }
+}

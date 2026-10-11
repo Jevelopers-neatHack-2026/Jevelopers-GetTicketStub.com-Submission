@@ -1,0 +1,105 @@
+.layout {
+  display: grid;
+  gap: 32px;
+}
+.main {
+  display: grid;
+  gap: 16px;
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+}
+.pass {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--ts-ink);
+  color: var(--ts-cream);
+  box-shadow: var(--ts-shadow-lifted);
+}
+.passTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+}
+.passBrand {
+  font-weight: 600;
+}
+.passDate {
+  margin-left: auto;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.strip {
+  height: 120px;
+  background: var(--ts-foil);
+  background-size: cover;
+  background-position: center;
+}
+.passBody {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+.passLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(244 236 221 / 0.66);
+}
+.passTitle {
+  font-family: var(--font-display), var(--ts-font-display);
+  font-size: var(--ts-step-3);
+  line-height: 1.1;
+}
+.passRow {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.passQr {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding-top: 8px;
+}
+.passQr svg {
+  max-width: 140px;
+}
+.passSmall {
+  font-size: 12px;
+  color: rgb(244 236 221 / 0.7);
+  text-align: center;
+}
+.buttons {
+  display: grid;
+  gap: 8px;
+}
+.walletBtn {
+  background: var(--ts-text);
+  color: var(--ts-bg);
+  border-color: var(--ts-text);
+  font-weight: 600;
+}
+.phone {
+  display: none;
+}
+@media (min-width: 960px) {
+  .layout {
+    grid-template-columns: 420px 320px;
+    justify-content: center;
+    gap: 80px;
+    align-items: start;
+  }
+  .phone {
+    display: grid;
+    gap: 14px;
+    justify-items: center;
+    text-align: center;
+    position: sticky;
+    top: 96px;
+    padding: 24px;
+    border-radius: var(--ts-radius-sheet);
+    background: var(--ts-surface);
+  }
+}

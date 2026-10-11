@@ -1,0 +1,142 @@
+.layout {
+  display: grid;
+  gap: 24px;
+}
+.items {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+.item {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--ts-radius-sheet);
+  border: 1.5px solid color-mix(in srgb, var(--ts-text) 18%, transparent);
+}
+.itemHead {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.thumb {
+  flex: none;
+  width: 96px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.thumb > * {
+  max-width: 100%;
+}
+.thumbEmpty {
+  width: 80px;
+  height: 140px;
+  border-radius: 4px;
+  background: var(--ts-surface);
+}
+.itemInfo {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-width: 0;
+}
+.itemTitle {
+  font-size: var(--ts-step-1);
+}
+.remove {
+  margin-top: 4px;
+  margin-left: -8px;
+  padding: 0 8px;
+}
+.seats {
+  display: grid;
+  gap: 8px;
+}
+.seatList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.seatRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: var(--ts-radius-control);
+  background: var(--ts-surface);
+  text-decoration: none;
+}
+.seatOpen {
+  border: 1.5px dashed var(--ts-orange);
+  font-weight: 600;
+}
+.seatStatus {
+  font-size: 13px;
+  color: var(--ts-text-muted);
+  text-align: right;
+}
+.seatOpen .seatStatus {
+  color: var(--ts-text);
+}
+.summary {
+  align-content: start;
+}
+.dl {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dl dt,
+.dl dd {
+  margin: 0;
+}
+.dl dt {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.total {
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--ts-text) 15%, transparent);
+  font-weight: 700;
+  font-size: var(--ts-step-1);
+}
+.pay {
+  background: var(--ts-text);
+  color: var(--ts-bg);
+  border-color: var(--ts-text);
+  font-weight: 600;
+}
+.sandboxNote {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+@media (min-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 40px;
+    align-items: start;
+  }
+  .summary {
+    position: sticky;
+    top: 96px;
+  }
+}
