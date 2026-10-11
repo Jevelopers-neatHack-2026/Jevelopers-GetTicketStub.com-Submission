@@ -37,7 +37,8 @@ Local: copy `.env.example` to `.env` (git-ignored by `.gitignore`) and fill in t
 1. Durable workflow events are projected into `agent-harness.telemetry.v1` records with HMAC `tok1_` tokens (`projectTelemetryEvent`). Raw IDs, checkpoints, URLs, customer text and errors never leave this step.
 2. The existing pinned SDK capture (`neatlogs@1.1.28`, local exporter, owned mask) produces a sanitized `captured_local` envelope. This step is unchanged.
 3. `planNeatlogsExport` turns each root plus completion marker into one trace:
-   - `traceId` and span IDs are derived from the event token, so retries and replays address the same remote trace.
+   - `traceId` and span IDs are derived from the event token and a delivery generation (0–3). Retries within a generation resend the same IDs.
+   - Neatlogs can silently and permanently drop a trace ID whose first delivery it lost: re-deliveries return HTTP 200 with 0 rejected spans and are discarded (observed 2026-10-11; see the evidence note). Recovery therefore moves only readback-confirmed `missing` traces to the next generation (new IDs, same content and session) and keeps the earlier IDs as `priorTraceIds`.
    - The session ID is the workflow token, which groups one job's events.
    - Tags are `agent-harness@<40-char commit>` and `evidence:synthetic` for verification runs.
    - The root span input is the canonical JSON of the validated projected record, and nothing else.
@@ -67,10 +68,12 @@ Retries (at most 5, default 3) resend identical bytes with the same deterministi
 Readback results:
 
 - `verified`: every trace is finalized and its IDs, session, workflow name, tags, span tree and input match.
-- `pending`: not found or not finalized within the poll budget.
+- `pending`: found but not finalized within the poll budget.
+- `missing`: never found within the poll budget. This is the only state that `--recover` re-sends, under the next generation.
 - `mismatch`: duplicate span IDs, unexpected spans, altered input, missing tags, dead-lettered trace or wrong project.
 - `readback_failed`: 401/403, rate limit or transport failure.
 - `readback_unavailable`: no token or project UUID.
+- `duplicateEventDeliveries` counts events found under more than one generation, which happens when a "lost" ID appears late. The event is delivered, but it exists twice remotely, so this is reported rather than hidden.
 
 Only `verified` sets `deliveryConfirmed: true` in evidence. The completion marker may or may not be stored as a span by the receiver. Both are accepted, and `markerStored` records which happened.
 
@@ -95,8 +98,8 @@ node tools/neatlogs-live-verify.mjs --mode send --env-file .env \
 node tools/neatlogs-live-verify.mjs --mode readback --env-file .env \
   --plan /tmp/neatlogs-plan.json --evidence /tmp/neatlogs-readback.json
 
-# Both in one run.
-node tools/neatlogs-live-verify.mjs --mode send-and-readback --env-file .env \
+# Both in one run; --recover re-sends `missing` traces once under the next generation.
+node tools/neatlogs-live-verify.mjs --mode send-and-readback --recover --env-file .env \
   --component-revision "$(git rev-parse HEAD)" \
   --evidence /tmp/neatlogs-live.json --plan /tmp/neatlogs-plan.json
 

@@ -16,6 +16,7 @@ import {
   canonicalNeatlogsInput,
   deterministicNeatlogsIds,
   encodeNeatlogsExportRequest,
+  nextNeatlogsGeneration,
   planNeatlogsExport,
   validateNeatlogsTags
 } from '../src/observability/private/neatlogs-otlp.js';
@@ -41,7 +42,7 @@ function usage(message) {
   process.stderr.write([
     'Usage: node tools/neatlogs-live-verify.mjs --mode <offline|send|readback|send-and-readback>',
     '         --evidence <path> [--env-file <path>] [--plan <path>] [--component-revision <sha>]',
-    '         [--max-polls <n>] [--poll-interval-ms <ms>]',
+    '         [--max-polls <n>] [--poll-interval-ms <ms>] [--recover]',
     ''
   ].join('\n'));
   process.exit(2);
@@ -122,6 +123,8 @@ function serializablePlan(plan) {
       traceId: trace.traceId,
       rootSpanId: trace.rootSpanId,
       markerSpanId: trace.markerSpanId,
+      generation: trace.generation,
+      priorTraceIds: [...trace.priorTraceIds],
       sessionId: trace.sessionId,
       eventToken: trace.eventToken,
       sequence: trace.sequence,
@@ -139,18 +142,46 @@ function loadPlan(path) {
   const records = validateNeatlogsSourceRecords(parsed.traces.map(trace => JSON.parse(trace.input)));
   const traces = parsed.traces.map((trace, index) => {
     const record = records[index];
-    const ids = deterministicNeatlogsIds(record.eventId);
+    const generation = trace.generation ?? 0;
+    const priorTraceIds = trace.priorTraceIds ?? [];
+    const ids = deterministicNeatlogsIds(record.eventId, generation);
+    const priorIds = Array.from({ length: generation }, (_, index) => (
+      deterministicNeatlogsIds(record.eventId, index).traceId));
+    if (JSON.stringify(priorTraceIds) !== JSON.stringify(priorIds)) {
+      throw new Error('Plan file does not match its derived identifiers.');
+    }
     if (trace.traceId !== ids.traceId || trace.rootSpanId !== ids.rootSpanId
         || trace.markerSpanId !== ids.markerSpanId || trace.input !== canonicalNeatlogsInput(record)
         || trace.sessionId !== record.workflowId) {
       throw new Error('Plan file does not match its derived identifiers.');
     }
-    return Object.freeze({ ...trace, ...ids, record });
+    return Object.freeze({ ...trace, ...ids, generation, priorTraceIds: Object.freeze([...priorTraceIds]), record });
   });
   return Object.freeze({
     workflowName: parsed.workflowName,
     tags: validateNeatlogsTags(parsed.tags),
     traces: Object.freeze(traces)
+  });
+}
+
+// A regenerated trace is a new remote trace, so it gets fresh export times.
+function withFreshTimes(plan) {
+  const now = Date.now() * 1e6;
+  return Object.freeze({
+    ...plan,
+    traces: Object.freeze(plan.traces.map((trace, index) => Object.freeze({
+      ...trace,
+      root: Object.freeze({ start: now + index * 1e6, end: now + index * 1e6 + 100_000 }),
+      marker: Object.freeze({ start: now + index * 1e6 + 200_000, end: now + index * 1e6 + 210_000 })
+    })))
+  });
+}
+
+function mergePlan(plan, regenerated, previousIds) {
+  const byPrevious = new Map(regenerated.traces.map((trace, index) => [previousIds[index], trace]));
+  return Object.freeze({
+    ...plan,
+    traces: Object.freeze(plan.traces.map(trace => byPrevious.get(trace.traceId) ?? trace))
   });
 }
 
@@ -173,6 +204,7 @@ const { values } = parseArgs({
     plan: { type: 'string' },
     'component-revision': { type: 'string' },
     'max-polls': { type: 'string' },
+    recover: { type: 'boolean' },
     'poll-interval-ms': { type: 'string' }
   },
   strict: true
@@ -243,6 +275,26 @@ if (mode === 'readback' || (mode === 'send-and-readback' && evidence.send?.statu
   if (values['max-polls']) options.maxPolls = Number(values['max-polls']);
   if (values['poll-interval-ms']) options.pollIntervalMs = Number(values['poll-interval-ms']);
   evidence.readback = await readbackNeatlogsPlan(config, plan, options);
+  // Recovery: traces never found are re-sent once under the next delivery
+  // generation (the receiver may permanently ignore the lost ID), then read
+  // back again. Pending or mismatched traces are never re-sent.
+  evidence.recovery = null;
+  const missing = evidence.readback.traces.filter(trace => trace.status === 'missing').map(trace => trace.traceId);
+  if (values.recover && evidence.readback.status === 'missing' && missing.length > 0) {
+    const regenerated = withFreshTimes(nextNeatlogsGeneration(plan, missing));
+    const send = await sendNeatlogsPlan(config, regenerated);
+    plan = mergePlan(plan, regenerated, missing);
+    evidence.plan = serializablePlan(plan);
+    if (values.plan) writeJsonAtomically(resolve(values.plan), serializablePlan(plan));
+    evidence.recovery = {
+      regeneratedFrom: missing,
+      regeneratedTo: regenerated.traces.map(trace => trace.traceId),
+      send
+    };
+    if (send.status === 'receiver_accepted') {
+      evidence.readback = await readbackNeatlogsPlan(config, plan, options);
+    }
+  }
   evidence.deliveryConfirmed = evidence.readback.status === 'verified';
 }
 

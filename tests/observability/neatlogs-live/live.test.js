@@ -21,6 +21,7 @@ import {
   decodeNeatlogsExportResponse,
   deterministicNeatlogsIds,
   encodeNeatlogsExportRequest,
+  nextNeatlogsGeneration,
   planNeatlogsExport
 } from '../../../src/observability/private/neatlogs-otlp.js';
 import { readbackNeatlogsPlan, sendNeatlogsPlan } from '../../../src/observability/private/neatlogs-live.js';
@@ -103,7 +104,10 @@ async function buildPlan() {
   }
 }
 
-function readbackServer({ finalizeAfter = 1, spans = 'both', tags, inputFor, projectId = PROJECT_ID } = {}) {
+function readbackServer({
+  finalizeAfter = 1, spans = 'both', tags, inputFor, projectId = PROJECT_ID,
+  served = plan, droppedIds = [], alsoStored = []
+} = {}) {
   const polls = new Map();
   return recordingFetch((url) => {
     const path = new URL(url).pathname.replace('/api/v1/public', '');
@@ -112,17 +116,22 @@ function readbackServer({ finalizeAfter = 1, spans = 'both', tags, inputFor, pro
     });
     if (path === '/project') return ok({ id: projectId, name: 'Synthetic project' });
     const match = /^\/traces\/([0-9a-f]{32})(\/spans(?:\/([0-9a-f]{16})\/payload)?)?$/.exec(path);
-    const trace = plan.traces.find(item => item.traceId === match?.[1]);
-    if (!trace) return response(404, '{}', { 'content-type': 'application/problem+json' });
+    if (alsoStored.includes(match?.[1]) && !match[2]) {
+      return ok({ traceId: match[1], finalizationStatus: 'finalized' });
+    }
+    const trace = served.traces.find(item => item.traceId === match?.[1]);
+    if (!trace || droppedIds.includes(trace.traceId)) {
+      return response(404, '{}', { 'content-type': 'application/problem+json' });
+    }
     if (!match[2]) {
       const count = (polls.get(trace.traceId) ?? 0) + 1;
       polls.set(trace.traceId, count);
       return ok({
         traceId: trace.traceId,
         sessionId: trace.sessionId,
-        workflowName: plan.workflowName,
+        workflowName: served.workflowName,
         traceName: 'agent_harness.workflow_event',
-        tags: tags ?? [...plan.tags],
+        tags: tags ?? [...served.tags],
         spansCount: spans === 'duplicate' ? 3 : 2,
         finalizationStatus: count >= finalizeAfter ? 'finalized' : 'pending'
       });
@@ -247,6 +256,27 @@ describe('export encoding', () => {
       error => error.code === 'MALFORMED_RESPONSE');
     assert.throws(() => decodeNeatlogsExportResponse(Buffer.from('<html>'), 'text/html'),
       error => error.code === 'UNEXPECTED_RESPONSE_TYPE');
+  });
+
+  test('delivery generations keep generation 0 stable and give new IDs after a loss', () => {
+    const trace = plan.traces[0];
+    assert.deepEqual(deterministicNeatlogsIds(trace.eventToken, 0), deterministicNeatlogsIds(trace.eventToken));
+    const next = nextNeatlogsGeneration(plan, [trace.traceId]);
+    assert.equal(next.traces.length, 1);
+    const moved = next.traces[0];
+    assert.equal(moved.generation, 1);
+    assert.deepEqual([...moved.priorTraceIds], [trace.traceId]);
+    assert.notEqual(moved.traceId, trace.traceId);
+    assert.notEqual(moved.rootSpanId, trace.rootSpanId);
+    assert.deepEqual(deterministicNeatlogsIds(trace.eventToken, 1), {
+      traceId: moved.traceId, rootSpanId: moved.rootSpanId, markerSpanId: moved.markerSpanId
+    });
+    assert.equal(moved.input, trace.input, 'content and session are unchanged');
+    assert.equal(moved.sessionId, trace.sessionId);
+    const third = nextNeatlogsGeneration(next, [moved.traceId]).traces[0];
+    assert.deepEqual([...third.priorTraceIds], [trace.traceId, moved.traceId]);
+    assert.throws(() => deterministicNeatlogsIds(trace.eventToken, 4), error => error.code === 'INVALID_GENERATION');
+    assert.throws(() => nextNeatlogsGeneration(plan, ['f'.repeat(32)]), error => error.code === 'UNKNOWN_TRACE');
   });
 
   test('refuses envelopes that are not complete sanitized captures', () => {
@@ -388,6 +418,33 @@ describe('readback', () => {
       fetch: readbackServer({ projectId: '00000000-0000-4000-8000-000000000002' }).fetchImpl, pollIntervalMs: 0
     });
     assert.equal(project.reasonCode, 'PROJECT_MISMATCH');
+  });
+
+  test('reports never-found traces as missing, not pending', async () => {
+    const dropped = plan.traces[2].traceId;
+    const result = await readbackNeatlogsPlan(configured(), plan, {
+      fetch: readbackServer({ droppedIds: [dropped] }).fetchImpl, pollIntervalMs: 0, maxPolls: 2
+    });
+    assert.equal(result.status, 'missing');
+    assert.equal(result.reasonCode, 'NOT_FOUND_AFTER_POLLS');
+    assert.deepEqual(result.traces.filter(trace => trace.status === 'missing').map(trace => trace.traceId), [dropped]);
+    assert.equal(result.traces.filter(trace => trace.status === 'verified').length, plan.traces.length - 1);
+  });
+
+  test('verifies a regenerated trace and reports an event stored under two generations', async () => {
+    const lost = plan.traces[2];
+    const regenerated = nextNeatlogsGeneration(plan, [lost.traceId]);
+    const clean = await readbackNeatlogsPlan(configured(), regenerated, {
+      fetch: readbackServer({ served: regenerated }).fetchImpl, pollIntervalMs: 0
+    });
+    assert.equal(clean.status, 'verified');
+    assert.equal(clean.duplicateEventDeliveries, 0);
+    const doubled = await readbackNeatlogsPlan(configured(), regenerated, {
+      fetch: readbackServer({ served: regenerated, alsoStored: [lost.traceId] }).fetchImpl, pollIntervalMs: 0
+    });
+    assert.equal(doubled.status, 'verified');
+    assert.equal(doubled.duplicateEventDeliveries, 1);
+    assert.deepEqual([...doubled.traces[0].duplicateTraceIds], [lost.traceId]);
   });
 
   test('stops on authorization failure', async () => {

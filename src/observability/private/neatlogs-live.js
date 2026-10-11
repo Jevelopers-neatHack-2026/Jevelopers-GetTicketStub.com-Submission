@@ -327,8 +327,10 @@ export async function readbackNeatlogsPlan(config, plan, options = {}) {
       eventType: trace.eventType,
       revision: trace.revision,
       fence: trace.fence,
+      generation: trace.generation ?? 0,
       status: 'pending',
-      problems: ['NOT_FOUND']
+      problems: ['NOT_FOUND'],
+      duplicateTraceIds: []
     }]));
     for (let poll = 1; poll <= limits.maxPolls; poll += 1) {
       for (const expected of plan.traces) {
@@ -356,6 +358,12 @@ export async function readbackNeatlogsPlan(config, plan, options = {}) {
           continue;
         }
         const comparison = compareTrace(plan, expected, trace.data, spans.data.spans ?? [], payload.data);
+        // An earlier generation of the same event that did get stored means
+        // the event now exists twice remotely. Report it; do not hide it.
+        for (const priorId of expected.priorTraceIds ?? []) {
+          const prior = await get(`/traces/${priorId}`, { allowMissing: true });
+          if (prior.data !== null) outcome.duplicateTraceIds.push(priorId);
+        }
         Object.assign(outcome, {
           status: comparison.problems.length === 0 ? 'verified' : 'mismatch',
           problems: comparison.problems,
@@ -369,16 +377,28 @@ export async function readbackNeatlogsPlan(config, plan, options = {}) {
       if (!pending || poll === limits.maxPolls) break;
       await sleep(limits.pollIntervalMs, signal);
     }
+    // Never found within the poll budget is reported as `missing`: the
+    // receiver may have dropped the trace ID, so only a new generation can
+    // recover it. Found but unfinalized stays `pending`.
+    for (const outcome of outcomes.values()) {
+      if (outcome.status === 'pending' && outcome.problems.includes('NOT_FOUND')) outcome.status = 'missing';
+    }
     const traces = Object.freeze([...outcomes.values()].map(outcome => Object.freeze({
       ...outcome,
-      problems: Object.freeze([...outcome.problems])
+      problems: Object.freeze([...outcome.problems]),
+      duplicateTraceIds: Object.freeze([...outcome.duplicateTraceIds])
     })));
     const status = traces.every(trace => trace.status === 'verified')
       ? 'verified'
-      : traces.some(trace => trace.status === 'mismatch') ? 'mismatch' : 'pending';
+      : traces.some(trace => trace.status === 'mismatch') ? 'mismatch'
+        : traces.some(trace => trace.status === 'pending') ? 'pending' : 'missing';
+    const reasonCodes = {
+      verified: null, pending: 'NOT_YET_READABLE', missing: 'NOT_FOUND_AFTER_POLLS', mismatch: 'READBACK_MISMATCH'
+    };
     return Object.freeze({
       status,
-      reasonCode: status === 'verified' ? null : status === 'pending' ? 'NOT_YET_READABLE' : 'READBACK_MISMATCH',
+      reasonCode: reasonCodes[status],
+      duplicateEventDeliveries: traces.filter(trace => trace.duplicateTraceIds.length > 0).length,
       project: Object.freeze({ id: project.data.id, name: typeof project.data.name === 'string' ? project.data.name : null }),
       traces
     });

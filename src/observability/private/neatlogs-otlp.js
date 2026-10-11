@@ -19,6 +19,7 @@ const MAX_TAGS = 10;
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_RESPONSE_BYTES = 16 * 1024;
 const SPAN_KIND_INTERNAL = 1;
+const MAX_GENERATION = 3;
 const STATUS_UNSET = 0;
 const STATUS_OK = 1;
 
@@ -35,19 +36,45 @@ function digestHex(...parts) {
 }
 
 /**
- * Trace and span IDs are derived from the projected (HMAC) event token, so a
- * retry or a replay of the same event always addresses the same remote trace.
- * The receiver can then deduplicate by ID, and readback can detect duplicates.
+ * Trace and span IDs are derived from the projected (HMAC) event token and a
+ * delivery generation. Retries within a generation resend the same IDs. The
+ * receiver can silently and permanently drop an ID whose first delivery it
+ * lost (observed 2026-10-11), so recovery after a readback-confirmed loss
+ * must use the next generation. Generation 0 keeps the original derivation.
  */
-export function deterministicNeatlogsIds(eventToken) {
-  const traceId = digestHex(ID_DOMAIN, 'trace', eventToken).slice(0, 32);
-  const rootSpanId = digestHex(ID_DOMAIN, 'root', eventToken).slice(0, 16);
-  const markerSpanId = digestHex(ID_DOMAIN, 'marker', eventToken).slice(0, 16);
+export function deterministicNeatlogsIds(eventToken, generation = 0) {
+  if (!Number.isSafeInteger(generation) || generation < 0 || generation > MAX_GENERATION) {
+    throw new NeatlogsOtlpError('INVALID_GENERATION');
+  }
+  const parts = generation === 0 ? [eventToken] : [eventToken, `g${generation}`];
+  const traceId = digestHex(ID_DOMAIN, 'trace', ...parts).slice(0, 32);
+  const rootSpanId = digestHex(ID_DOMAIN, 'root', ...parts).slice(0, 16);
+  const markerSpanId = digestHex(ID_DOMAIN, 'marker', ...parts).slice(0, 16);
   if (/^0+$/.test(traceId) || /^0+$/.test(rootSpanId) || /^0+$/.test(markerSpanId)
       || rootSpanId === markerSpanId) {
     throw new NeatlogsOtlpError('INVALID_DERIVED_ID');
   }
   return Object.freeze({ traceId, rootSpanId, markerSpanId });
+}
+
+/**
+ * Returns a plan containing only the named traces, moved to the next delivery
+ * generation with fresh IDs. Earlier trace IDs are kept so readback can detect
+ * an event stored under more than one generation.
+ */
+export function nextNeatlogsGeneration(plan, traceIds) {
+  const wanted = new Set(traceIds);
+  const traces = plan.traces.filter(trace => wanted.has(trace.traceId)).map(trace => {
+    const generation = trace.generation + 1;
+    return Object.freeze({
+      ...trace,
+      ...deterministicNeatlogsIds(trace.eventToken, generation),
+      generation,
+      priorTraceIds: Object.freeze([...trace.priorTraceIds, trace.traceId])
+    });
+  });
+  if (traces.length !== wanted.size) throw new NeatlogsOtlpError('UNKNOWN_TRACE');
+  return Object.freeze({ ...plan, traces: Object.freeze(traces) });
 }
 
 /** The only content exported as span input: the validated projected record. */
@@ -104,6 +131,8 @@ export function planNeatlogsExport(envelope, { tags = [] } = {}) {
     const ids = deterministicNeatlogsIds(record.eventId);
     traces.push(Object.freeze({
       ...ids,
+      generation: 0,
+      priorTraceIds: Object.freeze([]),
       sessionId: record.workflowId,
       eventToken: record.eventId,
       sequence: record.sequence,
@@ -208,7 +237,9 @@ function writeKeyValues(writer, field, entries) {
 
 function nanos(value) {
   if (!Number.isFinite(value) || value <= 0) throw new NeatlogsOtlpError('INVALID_TIME');
-  return BigInt(Math.round(value));
+  // Capture times are float nanoseconds; keep microsecond precision so float
+  // rounding noise is not exported as sub-microsecond digits.
+  return BigInt(Math.round(value / 1000)) * 1000n;
 }
 
 function writeSpan(writer, { traceId, spanId, parentSpanId, name, start, end, attributes }) {
@@ -389,5 +420,6 @@ export function decodeNeatlogsExportResponse(body, contentType = '') {
 export const NEATLOGS_OTLP_LIMITS = Object.freeze({
   requestBytes: MAX_REQUEST_BYTES,
   responseBytes: MAX_RESPONSE_BYTES,
-  tags: MAX_TAGS
+  tags: MAX_TAGS,
+  generations: MAX_GENERATION
 });
