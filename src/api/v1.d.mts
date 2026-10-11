@@ -416,6 +416,8 @@ export interface CreativeRuntimePorts {
     prepareDesignVersion?(input: { scope: TrustedScope; brief_id: string; design_version: DesignVersion;
       artifact_bytes: Uint8Array; selection_mode: "advance" | "branch";
       creation: CreativeVersionCreationEvidence; lease_token: string; job_result: unknown;
+      /** Complete current authority persisted with the intent for safe crash recovery. */
+      publication_fence: CreativeContextFence;
       expected_brief_hash: string; expected_current_design_version_id: string | null;
       expected_current_design_hash: string | null; expected_parent_design_version_id: string | null;
       expected_parent_design_hash: string | null }): Promise<PreparedDesignVersion> | PreparedDesignVersion;

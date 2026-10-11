@@ -37,6 +37,8 @@ export interface CreativeVersionRuntimeStorage extends BaseStorage {
     creation: CreativeVersionCreationEvidence;
     lease_token: string;
     job_result: unknown;
+    /** Complete current authority persisted with the intent for safe crash recovery. */
+    publication_fence: CreativeContextFence;
     expected_brief_hash: string;
     expected_current_design_version_id: string | null;
     expected_current_design_hash: string | null;
