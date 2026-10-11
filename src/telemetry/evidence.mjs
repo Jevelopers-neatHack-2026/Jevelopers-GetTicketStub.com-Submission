@@ -204,7 +204,8 @@ async function appendEvidence(port, event) {
   return acknowledgement.status;
 }
 
-function bindMeteringPort(port, capture, { observationOutbox, attempt, trustedScope }) {
+function bindMeteringPort(port, capture, { observationOutbox, attempt, trustedScope,
+  onReservation, reservationTransportId }) {
   const methods = [
     "reserveAttempt", "releaseBeforeDispatch", "markAttemptInFlight", "recordTransportAttempt",
     "recordUsageObservation", "settleReservation", "markOutcomeUnknown",
@@ -257,6 +258,18 @@ function bindMeteringPort(port, capture, { observationOutbox, attempt, trustedSc
         }
         if (method === "reserveAttempt" && result?.status === "reserved") {
           capture.reservationRef = result.reservation_id;
+          if (typeof onReservation === "function") {
+            try {
+              await onReservation(Object.freeze({ reservation: result,
+                transport_attempt_id: reservationTransportId,
+                attempt: deepFreeze(structuredClone(attempt)) }));
+            } catch {
+              // A durable owner-side attempt record is required before
+              // dispatch. Keep C03's actual reservation in control and block
+              // the first transport if local recording failed.
+              capture.reservationCaptureError = new TelemetryBoundaryError("reservation_evidence_unavailable");
+            }
+          }
         } else if (method === "recordUsageObservation") {
           capture.observation = args[0]?.observation;
           if (typeof observationOutbox.acknowledgeEnqueuedObservation === "function") {
@@ -374,6 +387,7 @@ export async function executeCreativeMeteredAttempt({
   idFactory = () => globalThis.crypto.randomUUID(),
   clock = () => new Date(),
   signal,
+  onReservation,
 }) {
   const attempt = validateAttemptSafely(request, trustedScope);
   safeAttempt(attempt);
@@ -413,8 +427,10 @@ export async function executeCreativeMeteredAttempt({
   await appendEvidence(evidence, intent);
   persistedEvidenceRefs.push(intent.event_id);
 
+  const reservationTransportId = typeof onReservation === "function" ? nextId("transport") : undefined;
   const captured = { reservationRef: undefined, observation: undefined, observationRef: undefined, lastHoldStatus: undefined };
-  const meter = bindMeteringPort(meteringPort, captured, { observationOutbox, attempt, trustedScope });
+  const meter = bindMeteringPort(meteringPort, captured, { observationOutbox, attempt, trustedScope,
+    onReservation, reservationTransportId });
   const transportIds = new Set();
   const authorizedTransports = new Map();
   let nextTransportId;
@@ -497,7 +513,8 @@ export async function executeCreativeMeteredAttempt({
     return Object.freeze({ transport_attempt_id: safeTransportId, dispatch_intent_ref: dispatchIntentRef });
   };
   const dispatchWithEvidence = async (context) => {
-    nextTransportId = nextId("transport");
+    if (captured.reservationCaptureError) throw captured.reservationCaptureError;
+    nextTransportId = reservationTransportId ?? nextId("transport");
     const initial = await recordTransport(context, nextTransportId);
     assertTransportActive(context.signal ?? signal);
     assertTransportActive(signal);

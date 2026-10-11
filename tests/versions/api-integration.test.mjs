@@ -1890,7 +1890,7 @@ test("CE09 acceptance case 6 calculates held-out error rates, latency and unknow
   assert.equal(metrics.promotion_status, "not_promoted");
 });
 
-test("populated BASE4e v4 database migrates to v7 and replays historical generation, edit, and inspection after restart", async (t) => {
+test("populated BASE4e v4 database migrates to v10 and replays historical generation, edit, and inspection after restart", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-base4e-v4-migration-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
   const fixtureRoot = new URL("../../fixtures/versions/base4-populated-v4/", import.meta.url);
@@ -1923,7 +1923,7 @@ test("populated BASE4e v4 database migrates to v7 and replays historical generat
   baseline.close();
 
   let migrated = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
-  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 7);
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 10);
   const v7DispatchColumns = migrated.db.prepare("PRAGMA table_info(creative_dispatch_intents)").all().map((column) => column.name);
   for (const column of ["reservation_ref", "provider_name", "provider_model"]) assert.equal(v7DispatchColumns.includes(column), true);
   assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='private_provider_attributions'").get());
@@ -1938,7 +1938,7 @@ test("populated BASE4e v4 database migrates to v7 and replays historical generat
 
   migrated = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
   t.after(() => migrated.close());
-  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 7);
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 10);
   const counters = { provider: 0, reserved: 0, inspection: 0 };
   let id = 0;
   const ports = portsFor(migrated, counters, () => `base4-replay-port-${++id}`);
@@ -2260,7 +2260,7 @@ test("populated V6 records migrate additively and replay legacy telemetry as unk
 
   let store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
   t.after(() => store.close());
-  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 7);
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 10);
   const inspectionTables = store.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?,?) ORDER BY name")
     .all("creative_inspection_sessions_v1", "creative_inspection_stages_v1").map((row) => row.name);
   assert.deepEqual(inspectionTables, ["creative_inspection_sessions_v1", "creative_inspection_stages_v1"]);

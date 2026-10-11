@@ -37,7 +37,7 @@ import type {
 } from "../planning/index.mjs";
 
 export type CreativeOperation =
-  | "generate" | "edit" | "inspect" | "list" | "compare" | "restore" | "cancel" | "handoff" | "job.status"
+  | "generate" | "edit" | "concepts.create" | "inspect" | "list" | "compare" | "restore" | "cancel" | "handoff" | "job.status"
   | "brief.create" | "brief.invalidate";
 export type CreativeJobStatus = "queued" | "running" | "completed" | "cancelled" | "failed";
 export type CreativeErrorCode =
@@ -86,6 +86,33 @@ export interface CreativeImageReferenceManifest {
     media_type: "image/png" | "image/jpeg" | "image/webp";
     width: number;
     height: number;
+  }>[];
+}
+
+/** Parentless initial-concept inputs. Unlike an edit manifest, this binds only the two
+ * authorized source assets and never invents an artwork parent. */
+export interface CreativeConceptReferenceManifest {
+  readonly contract: "CreativeConceptReferenceManifest";
+  readonly schema_version: "1.0";
+  readonly tenant_id: string;
+  readonly project_id: string;
+  readonly brief_id: string;
+  readonly brief_hash: `sha256:${string}`;
+  readonly research_package_id: string;
+  readonly research_package_hash: `sha256:${string}`;
+  readonly mapping_ref: string;
+  readonly mapping_version: string;
+  readonly prompt_template_ref: string;
+  readonly prompt_template_version: string;
+  readonly prompt_template_sha256: `sha256:${string}`;
+  readonly references: readonly Readonly<{
+    source_ref: string;
+    asset_id: string;
+    content_hash: `sha256:${string}`;
+    media_type: "image/png" | "image/jpeg" | "image/webp";
+    width: number;
+    height: number;
+    role_ref: string;
   }>[];
 }
 
@@ -253,6 +280,11 @@ export interface CreativeApiRequestEnvelope {
   source_refs: string[];
 }
 
+/** Concepts uses a separate, exact request envelope. Existing operations remain on 1.0. */
+export interface CreativeApiRequestV1_1Envelope extends Omit<CreativeApiRequestEnvelope, "schema_version"> {
+  schema_version: "1.1";
+}
+
 export type CreativeDecisionInput = Pick<DecisionPortRequest, "execution_mode" | "state" | "questions">;
 export interface InspectionRepairRequest {
   readonly contract: "CreativeInspectionRepairRequest";
@@ -276,7 +308,7 @@ export interface InspectionRepairExecutionEvidence {
   readonly output_design_hash: `sha256:${string}`;
   readonly billable_attempt_id: string;
 }
-export type CreativeApiRequest =
+export type CreativeApiRequestV1_0 =
   | (CreativeApiRequestEnvelope & { operation: "generate"; action_id: string;
       payload: { brief_id: string; plan: EditPlan; decision_request?: CreativeDecisionInput } })
   | (CreativeApiRequestEnvelope & { operation: "edit"; action_id: string;
@@ -309,6 +341,15 @@ export type CreativeApiRequest =
       } })
   | (CreativeApiRequestEnvelope & { operation: "brief.invalidate"; action_id: string;
       payload: { event_id: string } });
+
+export type CreativeApiRequestV1_1 = CreativeApiRequestV1_1Envelope & {
+  operation: "concepts.create";
+  action_id: string;
+  payload: { brief_id: string; plan_id: string; requested_count: number;
+    references: readonly Readonly<{ asset_id: string; role_ref: string }>[] };
+};
+
+export type CreativeApiRequest = CreativeApiRequestV1_0 | CreativeApiRequestV1_1;
 
 export interface TrustedCreativeActor extends TrustedScope {
   actor_id: string;
@@ -492,6 +533,26 @@ export interface CreativeRuntimePorts {
       Promise<CreativeProviderRoute> | CreativeProviderRoute;
     generate(input: ProviderInput): Promise<ProviderOutput>;
     edit(input: ProviderInput): Promise<ProviderOutput>;
+    getConceptConfiguration?(): Readonly<{ model_id: string; configuration: Readonly<{
+      quality: string; size: string; output_format: string; background: string; moderation: string;
+    }> }>;
+    /** Decode and hash the exact two authorized inputs before C03; the native edit rereads and verifies them. */
+    inspectConceptReferences?(input: { scope: TrustedScope;
+      references: CreativeConceptReferenceManifest["references"];
+      maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number }):
+      Promise<readonly Readonly<{ source_ref: string; asset_id: string; content_hash: `sha256:${string}`;
+        media_type: "image/png" | "image/jpeg" | "image/webp"; width: number; height: number;
+        byte_length: number; role_ref: string }>[]>;
+  };
+  /** Owner supplied policy and versioned offline native-edit adapter snapshots. */
+  concepts?: {
+    resolveTrustedSnapshots(input: { scope: TrustedScope & { brief_id: string }; actor_id: string;
+      brief: CreativeBrief; brief_hash: `sha256:${string}`; research_package: EventIntelligencePackage;
+      request: Readonly<{ action_id: string; brief_id: string; plan_id: string; requested_count: number;
+        references: readonly Readonly<{ asset_id: string; role_ref: string }>[] }>;
+      now: string }): Promise<Readonly<{ policy_snapshot: Readonly<Record<string, unknown>>;
+        adapter_snapshot: Readonly<Record<string, unknown>> }>> |
+      Readonly<{ policy_snapshot: Readonly<Record<string, unknown>>; adapter_snapshot: Readonly<Record<string, unknown>> }>;
   };
   metering?: MeteringPort;
   /** Required by generate/edit/inspect and JEV-backed operations. The outbox shares durable API SQLite state. */
@@ -595,6 +656,11 @@ export interface ProviderInput {
   plan: EditPlan;
   /** Versioned edit-only list of immutable, already permission-checked research image references. */
   readonly image_reference_manifest?: CreativeImageReferenceManifest;
+  /** Exactly two source references for a parentless initial concept native edit. */
+  readonly concept_reference_manifest?: CreativeConceptReferenceManifest;
+  /** Stable identities are created before dispatch and reused during exact response recovery. */
+  readonly concept_batch_id?: string;
+  readonly concept_id?: string;
   decision_result?: DecisionPortResult;
   /** Exact reservation reference validated and returned by the trusted C03 authority. */
   readonly reservation_ref: string;
@@ -610,6 +676,8 @@ export interface ProviderInput {
     target_binding_sha256: `sha256:${string}`;
     signal: AbortSignal;
   }>): Promise<string>;
+  /** Synchronous same-connection job, lease, context, and dispatch-intent fence immediately before POST. */
+  assertDispatchCurrent?(): string;
   /** Called as soon as an HTTP response exposes x-request-id; raw value is private and never public JSON. */
   recordPrivateProviderRequestId?(input: Readonly<{
     provider_request_id: string;
@@ -628,6 +696,26 @@ export interface ProviderInput {
     usage?: ProviderUsageRecord;
   }>): Promise<Readonly<{ status: "staged" | "replayed"; pending_ref: string;
     transport_attempt_id: string; payload_sha256: `sha256:${string}` }>>;
+  /** Durable exact response bytes are staged by the host before the provider call resolves. */
+  stageConceptResponse?(input: Readonly<{
+    concept_batch_id: string;
+    concept_id: string;
+    bytes: Uint8Array;
+    content_hash: `sha256:${string}`;
+    media_type: "image/png" | "image/jpeg" | "image/webp";
+    width: number;
+    height: number;
+    target_binding_sha256: `sha256:${string}`;
+  }>): Promise<Readonly<{ status: "staged" | "replayed"; stage_ref: string; content_hash: string }>>;
+  /** Persist the exact provider target hash before the final synchronous dispatch-owner fence. */
+  recordConceptDispatchBinding?(input: Readonly<{
+    concept_batch_id: string;
+    concept_id: string;
+    target_binding: Readonly<Record<string, unknown>>;
+    target_binding_sha256: `sha256:${string}`;
+    rendered_prompt_sha256: `sha256:${string}`;
+  }>): Promise<Readonly<{ status: "recorded" | "replayed"; transport_attempt_id: string;
+    target_binding_sha256: `sha256:${string}` }>>;
   signal: AbortSignal;
   deadline_at: string;
 }
@@ -656,6 +744,8 @@ export interface ProviderOutput {
   artifact_bytes: Uint8Array;
   provider: string;
   model: string;
+  /** Safe, hashed native provider request reference; raw request IDs remain in the private attribution store. */
+  provider_request_ref?: string;
   /** Exact target binding used for this response, when supplied by a typed provider adapter. */
   target_binding_sha256?: `sha256:${string}`;
   usage?: ProviderUsageRecord;
@@ -777,7 +867,7 @@ export interface InspectionOutput {
   readonly telemetry_evidence: readonly CreativeTelemetryEvidenceStatus[];
 }
 
-export type CreativeApiResult =
+export type CreativeApiResultV1_0 =
   | { design_version: DesignVersion; usage: UsageRecord; telemetry_evidence: CreativeTelemetryEvidenceStatus;
       inspection_repair?: InspectionRepairExecutionEvidence }
   | InspectionOutput
@@ -788,6 +878,86 @@ export type CreativeApiResult =
   | CreativeBriefPlan
   | { invalidation: CreativeInvalidationResult;
       local_status: "pending" | "acknowledged" };
+
+type DeepReadonly<T> = T extends readonly (infer Value)[] ? readonly DeepReadonly<Value>[]
+  : T extends object ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> } : T;
+
+export interface CreativeConceptLineage {
+  readonly contract: "CreativeConceptLineage";
+  readonly schema_version: "1.1";
+  readonly mapping_status: "local_mapping_external_acceptance_pending";
+  readonly concept_id: string;
+  readonly ordinal: number;
+  readonly parent_version_id: null;
+  readonly brief_sha256: `sha256:${string}`;
+  readonly package_id: string;
+  readonly package_sha256: `sha256:${string}`;
+  readonly plan_id: string;
+  readonly plan_sha256: `sha256:${string}`;
+  readonly policy_snapshot: DeepReadonly<Readonly<{
+    tenant_id: string; project_id: string; brief_id: string; policy_ref: string; policy_version: string;
+    evidence_ref: string; observed_at: string; expires_at: string; deadline_at: string;
+    maximum_concept_count: number; maximum_reference_count: number; maximum_elapsed_ms: number;
+    maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number;
+    budget_scope_id: string; budget_snapshot_ref: string; budget_expires_at: string;
+  }>>;
+  readonly adapter_snapshot: DeepReadonly<Readonly<{
+    capability_ref: string; capability_schema_version: string; provider_name: string; model: string;
+    endpoint: string; provider_operation: "edit"; operation_mapping_ref: string; operation_kind: string;
+    target_ref: string; sdk_name: string; sdk_version: string; configuration_ref: string;
+    configuration_sha256: `sha256:${string}`; configuration: Readonly<{
+      quality: string; size: string; output_format: string; background: string; moderation: string;
+    }>;
+    prompt_template_ref: string; prompt_template_version: string; prompt_template_sha256: `sha256:${string}`;
+  }>>;
+  readonly source_assets: readonly DeepReadonly<Readonly<{
+    asset_id: string; source_ref: string; content_hash: `sha256:${string}`; media_type: string;
+    role_ref: string; package_id: string; package_sha256: `sha256:${string}`;
+    permission_evidence_ref: string; permission_checked_at: string; permission_expires_at: string;
+    width: number; height: number; byte_length: number;
+  }>>[];
+  readonly attempt: DeepReadonly<MeteredAttemptRequest>;
+  readonly logical_operation_id: string;
+  readonly billable_attempt_id: string;
+  readonly transport_attempt_id: string;
+  readonly provider_request_ref: string | null;
+  readonly dispatch_intent_ref: string;
+  readonly provider_target_binding_sha256: `sha256:${string}`;
+  readonly rendered_prompt_sha256: `sha256:${string}`;
+  readonly usage_evidence_refs: readonly string[];
+  readonly usage_completeness: "complete" | "partial" | "unknown";
+  readonly unknown_financial_exposure: boolean;
+  readonly design_version_id: string;
+  readonly design_sha256: `sha256:${string}`;
+  readonly artifact_id: string;
+  readonly artifact_sha256: `sha256:${string}`;
+  readonly artifact_media_type: "image/png" | "image/jpeg" | "image/webp";
+}
+
+export interface CreativeConceptBatchResult {
+  readonly contract: "CreativeConceptBatchResult";
+  readonly schema_version: "1.1";
+  readonly batch_id: string;
+  readonly status: "completed" | "partial" | "running" | "unknown_hold" | "cancelled";
+  readonly requested_count: number;
+  readonly candidates: readonly Readonly<{
+    concept_id: string;
+    ordinal: number;
+    design_version: DesignVersion;
+    creative_concept_lineage: CreativeConceptLineage;
+    storage_commit_ref: string;
+    lineage_evidence_ref: string;
+  }>[];
+  readonly progress: readonly Readonly<{
+    concept_id: string;
+    ordinal: number;
+    status: string;
+    attempts: number;
+    billable_attempt_id: string | null;
+  }>[];
+}
+
+export type CreativeApiResult = CreativeApiResultV1_0 | CreativeConceptBatchResult;
 
 export interface CreativeInvalidationResult {
   event_id: string;
@@ -810,6 +980,10 @@ export interface CreativeApiErrorResponse {
   error: CreativeApiErrorShape;
 }
 
+export interface CreativeApiV1_1ErrorResponse extends Omit<CreativeApiErrorResponse, "schema_version"> {
+  schema_version: "1.1";
+}
+
 export interface CreativeApiSuccessResponse {
   ok: true;
   contract: "CreativeApiResponse";
@@ -817,10 +991,16 @@ export interface CreativeApiSuccessResponse {
   operation_id?: string;
   replayed?: boolean;
   job?: CreativeJob;
-  result?: CreativeApiResult;
+  result?: CreativeApiResultV1_0;
 }
 
-export type CreativeApiResponse = CreativeApiSuccessResponse | CreativeApiErrorResponse;
+export interface CreativeApiV1_1SuccessResponse extends Omit<CreativeApiSuccessResponse, "schema_version" | "result"> {
+  schema_version: "1.1";
+  result?: CreativeConceptBatchResult;
+}
+
+export type CreativeApiResponse = CreativeApiSuccessResponse | CreativeApiErrorResponse |
+  CreativeApiV1_1SuccessResponse | CreativeApiV1_1ErrorResponse;
 
 export declare class CreativeApiError extends Error {
   constructor(code: CreativeErrorCode, operation?: CreativeOperation | "unknown", field?: string,
@@ -834,6 +1014,7 @@ export declare class CreativeApiError extends Error {
 }
 
 export declare const CREATIVE_API_VERSION: "1.0";
+export declare const CREATIVE_API_VERSIONS: readonly ["1.0", "1.1"];
 export declare const CREATIVE_API_OPERATIONS: readonly CreativeOperation[];
 export declare function createCreativeApi(options?: {
   ports?: CreativeRuntimePorts;

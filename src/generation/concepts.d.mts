@@ -20,7 +20,7 @@ type DeepReadonly<T> = T extends readonly (infer Value)[]
 
 export declare const CREATIVE_CONCEPT_PROPOSAL: Readonly<{
   contract: "CreativeConceptBatchProposal";
-  schema_version: "0.1.0";
+  schema_version: "0.2.0";
   acceptance_status: "unaccepted_local_proposal";
 }>;
 
@@ -129,6 +129,13 @@ export interface ConceptProviderObservationProposal {
   readonly artifact_sha256: `sha256:${string}` | null;
   readonly usage_evidence_ref: string;
   readonly usage_completeness: "complete" | "partial" | "unknown";
+  readonly financial_exposure_status?: "settled";
+  readonly financial_settlement_evidence?: Readonly<{
+    status: "settled";
+    reservation_id: string;
+    source_observation_id: string;
+    effective_billable_attempt_id: string;
+  }>;
   readonly publication_suppressed?: true;
 }
 
@@ -140,7 +147,7 @@ export interface ConceptAttemptProposal {
   readonly lease_ref: string;
   readonly metering_attempt: DeepReadonly<MeteredAttemptRequest>;
   readonly status: string;
-  readonly financial_exposure_status: "reservation_active" | "in_flight" | "awaiting_c03_reconciliation" | "unknown_hold";
+  readonly financial_exposure_status: "reservation_active" | "in_flight" | "awaiting_c03_reconciliation" | "unknown_hold" | "settled";
   readonly unknown_financial_exposure: boolean;
   readonly provider_observations: readonly ConceptProviderObservationProposal[];
   readonly latest_provider_outcome: "succeeded" | "failed" | "unknown" | null;
@@ -198,7 +205,7 @@ export interface ConceptSlotProposal {
 
 export interface CreativeConceptBatchProposal {
   readonly contract: "CreativeConceptBatchProposal";
-  readonly schema_version: "0.1.0";
+  readonly schema_version: "0.1.0" | "0.2.0";
   readonly acceptance_status: "unaccepted_local_proposal";
   readonly batch_id: string;
   readonly tenant_id: string;
@@ -261,6 +268,13 @@ export type CreativeConceptBatchEvent =
       readonly artifact_sha256?: `sha256:${string}`;
       readonly usage_evidence_ref: string;
       readonly usage_completeness: "complete" | "partial" | "unknown";
+      readonly financial_exposure_status?: "settled";
+      readonly financial_settlement_evidence?: Readonly<{
+        status: "settled";
+        reservation_id: string;
+        source_observation_id: string;
+        effective_billable_attempt_id: string;
+      }>;
     })
   | (CreativeConceptEventContext & {
       readonly event_type: "artifact_rejected";

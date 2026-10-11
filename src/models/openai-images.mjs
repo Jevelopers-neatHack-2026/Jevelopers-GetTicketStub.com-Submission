@@ -155,12 +155,20 @@ function snapshotProviderInput(value) {
     ...(value.image_reference_manifest === undefined ? {} : {
       image_reference_manifest: snapshotJson(value.image_reference_manifest, "image_reference_manifest"),
     }),
+    ...(value.concept_reference_manifest === undefined ? {} : {
+      concept_reference_manifest: snapshotJson(value.concept_reference_manifest, "concept_reference_manifest"),
+    }),
+    ...(value.concept_batch_id === undefined ? {} : { concept_batch_id: value.concept_batch_id }),
+    ...(value.concept_id === undefined ? {} : { concept_id: value.concept_id }),
     ...(value.decision_result === undefined ? {} : { decision_result: snapshotJson(value.decision_result, "decision_result") }),
     transport_attempt_id: value.transport_attempt_id,
     dispatch_intent_ref: value.dispatch_intent_ref,
     reservation_ref: value.reservation_ref,
     recordTransportAttempt: value.recordTransportAttempt,
     revalidateDispatch: value.revalidateDispatch,
+    ...(typeof value.assertDispatchCurrent === "function" ? {
+      assertDispatchCurrent: value.assertDispatchCurrent,
+    } : {}),
     ...(typeof value.recordPrivateProviderRequestId === "function" ? {
       recordPrivateProviderRequestId: value.recordPrivateProviderRequestId,
     } : {}),
@@ -169,6 +177,12 @@ function snapshotProviderInput(value) {
     } : {}),
     ...(typeof value.stagePrivateProviderAttribution === "function" ? {
       stagePrivateProviderAttribution: value.stagePrivateProviderAttribution,
+    } : {}),
+    ...(typeof value.stageConceptResponse === "function" ? {
+      stageConceptResponse: value.stageConceptResponse,
+    } : {}),
+    ...(typeof value.recordConceptDispatchBinding === "function" ? {
+      recordConceptDispatchBinding: value.recordConceptDispatchBinding,
     } : {}),
     signal: value.signal,
     deadline_at: value.deadline_at,
@@ -968,22 +982,74 @@ function validateAttempt(input, operation, profile) {
       typeof input.transport_attempt_id !== "string" || !OPAQUE_REF.test(input.transport_attempt_id)) {
     fail("provider_attempt_mismatch", "Metered attempt does not match the pinned image operation.", { outcome: "failed" });
   }
-  const expectedPlan = operation === "generate" ? "concept.generate" : "image.edit";
+  const conceptMode = operation === "edit" && input.concept_reference_manifest !== undefined;
+  if (conceptMode && (input.base_design !== null || input.image_reference_manifest !== undefined ||
+      typeof input.concept_batch_id !== "string" || typeof input.concept_id !== "string" ||
+      typeof input.stageConceptResponse !== "function" || typeof input.recordConceptDispatchBinding !== "function" ||
+      typeof input.assertDispatchCurrent !== "function")) {
+    fail("invalid_reference_manifest", "Parentless concept edits require only the versioned concept reference manifest.", {
+      outcome: "failed", field: "concept_reference_manifest",
+    });
+  }
+  const expectedPlan = operation === "generate" || conceptMode ? "concept.generate" : "image.edit";
   if (input.plan.operation !== expectedPlan || !Array.isArray(input.plan.steps) || input.plan.steps.length < 1 || input.plan.steps.length > 16) {
     fail("unsupported_plan", "The edit plan is outside the supported direct Images operation.", { outcome: "failed" });
+  }
+  if (conceptMode) {
+    const manifest = input.concept_reference_manifest;
+    const manifestKeys = ["contract", "schema_version", "tenant_id", "project_id", "brief_id", "brief_hash",
+      "research_package_id", "research_package_hash", "mapping_ref", "mapping_version",
+      "prompt_template_ref", "prompt_template_version", "prompt_template_sha256", "references"];
+    if (!isRecord(manifest) || Object.keys(manifest).some((key) => !manifestKeys.includes(key)) ||
+        manifest.contract !== "CreativeConceptReferenceManifest" || manifest.schema_version !== "1.0" ||
+        manifest.tenant_id !== input.scope.tenant_id || manifest.project_id !== input.scope.project_id ||
+        manifest.brief_id !== input.brief.brief_id || !HASH.test(manifest.brief_hash) ||
+        manifest.research_package_id !== input.brief.research_package_ref?.package_id ||
+        !HASH.test(manifest.research_package_hash) || typeof manifest.mapping_ref !== "string" ||
+        typeof manifest.mapping_version !== "string" || typeof manifest.prompt_template_ref !== "string" ||
+        typeof manifest.prompt_template_version !== "string" || !HASH.test(manifest.prompt_template_sha256) ||
+        !Array.isArray(manifest.references) || manifest.references.length !== 2) {
+      fail("invalid_reference_manifest", "Exactly two trusted source references are required for initial concepts.", {
+        outcome: "failed", field: "concept_reference_manifest",
+      });
+    }
+    const seen = new Set();
+    for (const [index, reference] of manifest.references.entries()) {
+      const keys = ["source_ref", "asset_id", "content_hash", "media_type", "width", "height", "role_ref"];
+      if (!isRecord(reference) || Object.keys(reference).some((key) => !keys.includes(key)) ||
+          typeof reference.source_ref !== "string" || !OPAQUE_REF.test(reference.source_ref) ||
+          typeof reference.asset_id !== "string" || !OPAQUE_REF.test(reference.asset_id) ||
+          !HASH.test(reference.content_hash) || !["image/png", "image/jpeg", "image/webp"].includes(reference.media_type) ||
+          !Number.isSafeInteger(reference.width) || reference.width < 1 || reference.width > 4096 ||
+          !Number.isSafeInteger(reference.height) || reference.height < 1 || reference.height > 4096 ||
+          reference.width * reference.height > MAX_PIXELS || typeof reference.role_ref !== "string" ||
+          !OPAQUE_REF.test(reference.role_ref) || seen.has(reference.asset_id) ||
+          !input.plan.source_refs?.includes(reference.source_ref)) {
+        fail("invalid_reference_manifest", "Concept references must be distinct, bounded, and present in the validated plan.", {
+          outcome: "failed", field: `concept_reference_manifest.references[${index}]`,
+        });
+      }
+      seen.add(reference.asset_id);
+    }
+    if (input.plan.steps.length !== 1 || input.plan.steps[0]?.action !== "concept.generate") {
+      fail("unsupported_plan", "A parentless concept edit requires one concept.generate step.", { outcome: "failed", field: "plan.steps" });
+    }
   }
   if (operation === "edit") {
     const step = input.plan.steps[0];
     const parameters = step?.parameters;
     const allowedParameters = new Set(["design_version_id", "artifact_id", "instruction", "mask_source_ref"]);
-    if (input.plan.steps.length !== 1 || step?.action !== "image.edit" || !isRecord(parameters) ||
-        Object.keys(parameters).some((key) => !allowedParameters.has(key))) {
+    if (!conceptMode && (input.plan.steps.length !== 1 || step?.action !== "image.edit" || !isRecord(parameters) ||
+        Object.keys(parameters).some((key) => !allowedParameters.has(key)))) {
       fail("unsupported_plan", "Only one parent-based edit with an optional mask and a separately validated reference manifest is supported.", {
         outcome: "failed", field: "plan.steps",
       });
     }
+    if (conceptMode && input.image_reference_manifest !== undefined) {
+      fail("invalid_reference_manifest", "Concept edits cannot also contain a parent-based edit manifest.", { outcome: "failed" });
+    }
     const manifest = input.image_reference_manifest;
-    if (manifest !== undefined) {
+    if (!conceptMode && manifest !== undefined) {
       const manifestKeys = ["contract", "schema_version", "tenant_id", "project_id", "brief_id", "brief_hash",
         "research_package_id", "research_package_hash", "base_design_version_id", "base_design_hash", "references"];
       if (!isRecord(manifest) || Object.keys(manifest).some((key) => !manifestKeys.includes(key)) ||
@@ -1016,7 +1082,7 @@ function validateAttempt(input, operation, profile) {
         assets.add(reference.asset_id);
       }
     }
-  } else if (input.image_reference_manifest !== undefined) {
+  } else if (input.image_reference_manifest !== undefined || input.concept_reference_manifest !== undefined) {
     fail("invalid_reference_manifest", "Extra image inputs are supported only by the documented edit operation.", {
       outcome: "failed", field: "image_reference_manifest",
     });
@@ -1211,18 +1277,68 @@ async function prepareEditAssets(input, assetPort) {
   return { parent, references, mask, total_input_bytes: totalInputBytes };
 }
 
+async function prepareConceptReferenceBytes(input, assetPort) {
+  const manifest = input.concept_reference_manifest;
+  if (!assetPort || typeof assetPort.readReference !== "function" || !manifest ||
+      !Array.isArray(manifest.references) || manifest.references.length !== 2) {
+    fail("asset_unavailable", "Two scoped immutable source references are required for an initial concept edit.", {
+      outcome: "failed", field: "concept_reference_manifest",
+    });
+  }
+  const references = [];
+  let totalInputBytes = 0;
+  for (const reference of manifest.references) {
+    const raw = await callTrustedPort("asset_unavailable", "A scoped immutable concept reference could not be read.", () =>
+      assetPort.readReference({ scope: input.scope, source_ref: reference.source_ref,
+        asset_id: reference.asset_id, content_hash: reference.content_hash,
+        expected_media_type: reference.media_type, purpose: "concept_input" }), "failed");
+    if (!(raw instanceof Uint8Array) || raw.byteLength === 0 || raw.byteLength > MAX_IMAGE_BYTES ||
+        sha256(raw) !== reference.content_hash) {
+      fail("asset_integrity_error", "Concept reference bytes do not match the current authorized asset hash.", { outcome: "failed" });
+    }
+    totalInputBytes += raw.byteLength;
+    if (totalInputBytes > MAX_EDIT_INPUT_BYTES) {
+      fail("asset_invalid", "The two concept references exceed the bounded aggregate byte limit.", { outcome: "failed" });
+    }
+    const bytes = Buffer.from(raw);
+    const info = await inspectOpenAIImageBytes(bytes);
+    if (`image/${info.format}` !== reference.media_type || info.width !== reference.width || info.height !== reference.height) {
+      fail("asset_integrity_error", "Concept reference dimensions or media type do not match the immutable manifest.", {
+        outcome: "failed", field: "concept_reference_manifest.references",
+      });
+    }
+    references.push({ bytes, info, manifest: reference });
+  }
+  return { parent: null, references, mask: undefined, total_input_bytes: totalInputBytes };
+}
+
 function makePrompt(input, promptPort, operation) {
   if (!promptPort || typeof promptPort.render !== "function") {
     fail("prompt_unavailable", "An explicit local prompt renderer is required.", { outcome: "failed" });
   }
   return callTrustedPort("prompt_unavailable", "The local prompt renderer did not complete.", () =>
     promptPort.render({ operation, brief: input.brief, plan: input.plan,
-      base_design: input.base_design ?? null, decision_result: input.decision_result }), "failed")
+      base_design: input.base_design ?? null, decision_result: input.decision_result,
+      ...(input.concept_reference_manifest ? { prompt_template: Object.freeze({
+        template_ref: input.concept_reference_manifest.prompt_template_ref,
+        template_version: input.concept_reference_manifest.prompt_template_version,
+        template_sha256: input.concept_reference_manifest.prompt_template_sha256,
+      }) } : {}) }), "failed")
     .then((result) => {
       const text = typeof result === "string" ? result : result?.prompt;
       if (typeof text !== "string" || text.trim().length === 0 || Buffer.byteLength(text, "utf8") > 128_000 ||
           [...text].length > MAX_PROMPT_CODE_POINTS) {
         fail("prompt_invalid", "Prompt renderer did not return bounded prompt text.", { outcome: "failed" });
+      }
+      if (input.concept_reference_manifest) {
+        const template = input.concept_reference_manifest;
+        if (!isRecord(result) || result.template_ref !== template.prompt_template_ref ||
+            result.template_version !== template.prompt_template_version ||
+            result.template_sha256 !== template.prompt_template_sha256) {
+          fail("prompt_template_mismatch", "The prompt renderer did not prove the exact versioned concept prompt template.", {
+            outcome: "failed", field: "prompt_template",
+          });
+        }
       }
       return text;
     });
@@ -1250,10 +1366,13 @@ function makeBody(operation, input, config, profile, prompt, editAssets) {
   form.set("output_format", config.output_format);
   form.set("background", config.background);
   form.set("moderation", config.moderation);
-  form.append("image[]", new Blob([editAssets.parent.bytes], { type: input.base_design.artifact.media_type }), "parent-artwork");
+  if (editAssets.parent) {
+    form.append("image[]", new Blob([editAssets.parent.bytes], { type: input.base_design.artifact.media_type }), "parent-artwork");
+  }
   for (let index = 0; index < editAssets.references.length; index += 1) {
     const reference = editAssets.references[index];
-    form.append("image[]", new Blob([reference.bytes], { type: reference.manifest.media_type }), `reference-${index + 1}`);
+    form.append("image[]", new Blob([reference.bytes], { type: reference.manifest.media_type }),
+      input.concept_reference_manifest ? `concept-reference-${index + 1}` : `reference-${index + 1}`);
   }
   if (editAssets.mask) form.set("mask", new Blob([editAssets.mask.bytes], { type: "image/png" }), "edit-mask.png");
   return { content_type: undefined, body: form };
@@ -1413,6 +1532,7 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
     // Capture caller-owned JSON before the first awaited port call. Later
     // mutations cannot change the prompt, provider body, or authorization hash.
     const input = validateAttempt(snapshotProviderInput(rawInput), operation, profile);
+    const conceptMode = operation === "edit" && input.concept_reference_manifest !== undefined;
     const config = validateConfiguration(pinnedConfiguration, profile, operation);
     const endpoint = operation === "generate" ? GENERATION_ENDPOINT : EDIT_ENDPOINT;
     if (input.attempt.provider.endpoint !== endpoint) fail("provider_attempt_mismatch", "Metered endpoint does not match the requested operation.", { outcome: "failed" });
@@ -1431,8 +1551,10 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
     let editAssets;
     if (operation === "generate") prompt = await makePrompt(input, promptPort, operation);
     else {
-      editAssets = await prepareEditAssets(input, assetPort);
-      prompt = await makePrompt(input, promptPort, operation);
+      editAssets = input.concept_reference_manifest
+        ? await prepareConceptReferenceBytes(input, assetPort)
+        : await prepareEditAssets(input, assetPort);
+      prompt = await makePrompt(input, promptPort, input.concept_reference_manifest ? "generate" : operation);
     }
     const preparedAt = now();
     if (!Number.isFinite(preparedAt) || preparedAt >= deadlineMs || input.signal.aborted) {
@@ -1440,10 +1562,11 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
     }
     const promptSha256 = sha256(Buffer.from(prompt, "utf8"));
     const planSha256 = hashJson(input.plan);
-    const parentArtifactSha256 = editAssets ? sha256(editAssets.parent.bytes) : undefined;
+    const parentArtifactSha256 = editAssets?.parent ? sha256(editAssets.parent.bytes) : undefined;
     const maskContentSha256 = editAssets?.mask ? sha256(editAssets.mask.bytes) : undefined;
     const imageReferenceManifestSha256 = input.image_reference_manifest
-      ? hashJson(input.image_reference_manifest) : undefined;
+      ? hashJson(input.image_reference_manifest)
+      : input.concept_reference_manifest ? hashJson(input.concept_reference_manifest) : undefined;
     const referenceContentHashes = editAssets?.references.map((reference) => sha256(reference.bytes)) ?? [];
     const inputSha256 = hashJson({
       plan_sha256: planSha256,
@@ -1551,6 +1674,25 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
         reservation_ref: reservationRef, billable_attempt_id: expected.billable_attempt_id,
         deadline_at: input.deadline_at, phase: "post_transport_ack", checked_at: new Date(capabilityCheckAt).toISOString(),
       })), { ...capabilityExpected, account_ref: expected.account_ref, project_ref: expected.project_ref }, now());
+    if (conceptMode) {
+      let recorded;
+      try {
+        recorded = await input.recordConceptDispatchBinding(Object.freeze({
+          concept_batch_id: input.concept_batch_id,
+          concept_id: input.concept_id,
+          target_binding: binding,
+          target_binding_sha256: targetSha,
+          rendered_prompt_sha256: promptSha256,
+        }));
+      } catch {
+        fail("dispatch_fence_closed", "The exact concept dispatch target could not be durably bound.", { outcome: "unknown" });
+      }
+      if (!isRecord(recorded) || !["recorded", "replayed"].includes(recorded.status) ||
+          recorded.transport_attempt_id !== input.transport_attempt_id ||
+          recorded.target_binding_sha256 !== targetSha) {
+        fail("dispatch_fence_closed", "The durable concept dispatch target did not match this attempt.", { outcome: "unknown" });
+      }
+    }
     let finalDispatchIntent;
     try {
       finalDispatchIntent = await input.revalidateDispatch(Object.freeze({
@@ -1570,6 +1712,14 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
     const postAck = Object.freeze({ ...postAckAuthority, capability: postAckCapability });
     const fenceNow = now();
     assertLiveFence(input, postAck, credential, fenceNow, deadlineMs, expected, transportAckState);
+    if (conceptMode) {
+      let dispatchCurrent;
+      try { dispatchCurrent = input.assertDispatchCurrent(); }
+      catch { fail("dispatch_fence_closed", "The same-connection job and lease owner fence closed before the native edit request.", { outcome: "unknown" }); }
+      if (dispatchCurrent !== input.dispatch_intent_ref) {
+        fail("dispatch_fence_closed", "The same-connection job and lease owner fence did not confirm the current dispatch intent.", { outcome: "unknown" });
+      }
+    }
 
     let response;
     try {
@@ -1667,11 +1817,40 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
         private_provider_request_id: rawProviderRequestId,
       });
     }
+    if (conceptMode) {
+      const contentHash = sha256(bytes);
+      let staged;
+      try {
+        staged = await input.stageConceptResponse(Object.freeze({
+          concept_batch_id: input.concept_batch_id,
+          concept_id: input.concept_id,
+          bytes: Uint8Array.from(bytes),
+          content_hash: contentHash,
+          media_type: `image/${imageInfo.format}`,
+          width: imageInfo.width,
+          height: imageInfo.height,
+          target_binding_sha256: targetSha,
+        }));
+      } catch {
+        fail("provider_outcome_unknown", "The exact concept response could not be durably staged.", {
+          outcome: "unknown", provider_request_ref: providerRequestRef, usage: observedUsage,
+          private_provider_request_id: rawProviderRequestId,
+        });
+      }
+      if (!isRecord(staged) || !["staged", "replayed"].includes(staged.status) ||
+          typeof staged.stage_ref !== "string" || staged.content_hash !== contentHash) {
+        fail("provider_outcome_unknown", "The concept response staging acknowledgement did not match the exact bytes.", {
+          outcome: "unknown", provider_request_ref: providerRequestRef, usage: observedUsage,
+          private_provider_request_id: rawProviderRequestId,
+        });
+      }
+    }
     return Object.freeze({
       artifact: Object.freeze({ artifact_id: checkRef(`artifact-${idFactory()}`, "artifact_id"), content_hash: sha256(bytes), media_type: `image/${imageInfo.format}` }),
       artifact_bytes: Uint8Array.from(bytes),
       provider: "openai",
       model: profile.model_id,
+      ...(providerRequestRef ? { provider_request_ref: providerRequestRef } : {}),
       target_binding_sha256: targetSha,
       usage: parsedUsage.usage,
     });
@@ -1679,6 +1858,70 @@ export function createOpenAIImagesProvider({ model_id, configuration, capability
 
   return Object.freeze({
     resolveRoute,
+    getConceptConfiguration() {
+      return Object.freeze({ model_id: profile.model_id, configuration: pinnedConfiguration });
+    },
+    async inspectConceptReferences({ scope, references, maximum_single_reference_bytes, maximum_aggregate_reference_bytes }) {
+      // Snapshot every caller-owned field before the first read/decode await.
+      // The returned metadata and byte checks must remain bound to the exact
+      // asset identities the caller authorized at invocation time.
+      const preflightScope = snapshotJson(scope, "concept_reference_scope");
+      const preflightReferences = snapshotJson(references, "concept_reference_records");
+      const maximumSingleReferenceBytes = maximum_single_reference_bytes;
+      const maximumAggregateReferenceBytes = maximum_aggregate_reference_bytes;
+      if (!assetPort || typeof assetPort.readReference !== "function" || !isRecord(preflightScope) ||
+          !Array.isArray(preflightReferences) || preflightReferences.length !== 2 ||
+          !Number.isSafeInteger(maximumSingleReferenceBytes) || maximumSingleReferenceBytes < 1 ||
+          !Number.isSafeInteger(maximumAggregateReferenceBytes) || maximumAggregateReferenceBytes < 1) {
+        fail("asset_unavailable", "Two bounded scoped concept references are required before C03 reservation.", {
+          outcome: "failed", field: "concept_reference_manifest",
+        });
+      }
+      const seen = new Set();
+      const inspected = [];
+      let aggregateBytes = 0;
+      for (const [index, reference] of preflightReferences.entries()) {
+        if (!isRecord(reference) || typeof reference.source_ref !== "string" || !OPAQUE_REF.test(reference.source_ref) ||
+            typeof reference.asset_id !== "string" || !OPAQUE_REF.test(reference.asset_id) ||
+            !HASH.test(reference.content_hash) || !["image/png", "image/jpeg", "image/webp"].includes(reference.media_type) ||
+            typeof reference.role_ref !== "string" || !OPAQUE_REF.test(reference.role_ref) || seen.has(reference.asset_id)) {
+          fail("invalid_reference_manifest", "Concept reference metadata is invalid or duplicated.", {
+            outcome: "failed", field: `references[${index}]`,
+          });
+        }
+        seen.add(reference.asset_id);
+        const raw = await callTrustedPort("asset_unavailable", "A scoped immutable concept reference could not be read before reservation.", () =>
+          assetPort.readReference({ scope: preflightScope, source_ref: reference.source_ref, asset_id: reference.asset_id,
+            content_hash: reference.content_hash, expected_media_type: reference.media_type, purpose: "concept_preflight" }), "failed");
+        if (!(raw instanceof Uint8Array) || raw.byteLength === 0 || raw.byteLength > maximumSingleReferenceBytes) {
+          fail("asset_invalid", "A concept reference is empty or exceeds the trusted per-reference byte bound.", {
+            outcome: "failed", field: `references[${index}]`,
+          });
+        }
+        const bytes = Buffer.from(raw);
+        if (sha256(bytes) !== reference.content_hash) {
+          fail("asset_integrity_error", "Concept reference bytes changed or do not match the authorized package hash.", {
+            outcome: "failed", field: `references[${index}]`,
+          });
+        }
+        aggregateBytes += bytes.byteLength;
+        if (aggregateBytes > maximumAggregateReferenceBytes) {
+          fail("asset_invalid", "Concept reference bytes exceed the trusted aggregate byte bound.", {
+            outcome: "failed", field: "references",
+          });
+        }
+        const image = await inspectOpenAIImageBytes(bytes);
+        if (`image/${image.format}` !== reference.media_type) {
+          fail("asset_integrity_error", "The bounded image decoder disagreed with authorized concept media metadata.", {
+            outcome: "failed", field: `references[${index}]`,
+          });
+        }
+        inspected.push(Object.freeze({ source_ref: reference.source_ref, asset_id: reference.asset_id,
+          content_hash: reference.content_hash, media_type: reference.media_type,
+          width: image.width, height: image.height, byte_length: bytes.byteLength, role_ref: reference.role_ref }));
+      }
+      return Object.freeze(inspected);
+    },
     async generate(input) { return dispatch("generate", input); },
     async edit(input) { return dispatch("edit", input); },
   });

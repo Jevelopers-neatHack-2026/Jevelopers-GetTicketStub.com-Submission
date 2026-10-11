@@ -981,6 +981,117 @@ test("unknown attempt reconciles only on the same identity and keeps its unknown
   assert.equal(current.slots[0].output_lineage.usage_evidence_refs.includes("unknown-exposure-evidence"), true);
 });
 
+test("a settled complete-usage acknowledgement clears only the financial hold while preserving unknown provider output", () => {
+  eventSequence = 0;
+  const batch = createCreativeConceptBatchProposal(conceptProposalInput());
+  const reserved = reserve(batch, batch.slots[0], "settled-unknown-output");
+  const dispatching = dispatch(reserved.batch, reserved.batch.slots[0], reserved).batch;
+  const before = canonicalHash(dispatching);
+  const unsupportedClear = event(dispatching, dispatching.slots[0], "provider_outcome", {
+    billable_attempt_id: reserved.billableAttemptId,
+    transport_attempt_id: reserved.transportAttemptId,
+    outcome: "unknown",
+    outcome_evidence_ref: "settled-unknown-incomplete",
+    provider_request_id: "provider-settled-unknown-incomplete",
+    usage_evidence_ref: "usage-settled-unknown-incomplete",
+    usage_completeness: "unknown",
+    financial_exposure_status: "settled",
+    financial_settlement_evidence: { status: "settled", reservation_id: reserved.reservationRef,
+      source_observation_id: "usage-settled-unknown-incomplete",
+      effective_billable_attempt_id: reserved.billableAttemptId },
+  });
+  expectCode("invalid_financial_exposure_status", () => applyCreativeConceptEvent(dispatching, unsupportedClear));
+  assert.equal(canonicalHash(dispatching), before);
+
+  const mismatchedSettlement = event(dispatching, dispatching.slots[0], "provider_outcome", {
+    billable_attempt_id: reserved.billableAttemptId,
+    transport_attempt_id: reserved.transportAttemptId,
+    outcome: "unknown",
+    outcome_evidence_ref: "settled-unknown-mismatched",
+    provider_request_id: "provider-settled-unknown-mismatched",
+    usage_evidence_ref: "usage-settled-unknown-mismatched",
+    usage_completeness: "complete",
+    financial_exposure_status: "settled",
+    financial_settlement_evidence: { status: "settled", reservation_id: "foreign-reservation",
+      source_observation_id: "usage-settled-unknown-mismatched",
+      effective_billable_attempt_id: reserved.billableAttemptId },
+  });
+  expectCode("invalid_financial_exposure_status", () => applyCreativeConceptEvent(dispatching, mismatchedSettlement));
+  assert.equal(canonicalHash(dispatching), before);
+
+  for (const [eventName, name, evidence] of [
+    ["observation", "observation", { status: "settled", reservation_id: reserved.reservationRef,
+      source_observation_id: "foreign-usage-observation", effective_billable_attempt_id: reserved.billableAttemptId }],
+    ["effective-billable", "effective billable attempt", { status: "settled", reservation_id: reserved.reservationRef,
+      source_observation_id: "usage-settled-effective-billable", effective_billable_attempt_id: "foreign-billable-attempt" }],
+  ]) {
+    const mismatch = event(dispatching, dispatching.slots[0], "provider_outcome", {
+      billable_attempt_id: reserved.billableAttemptId,
+      transport_attempt_id: reserved.transportAttemptId,
+      outcome: "unknown",
+      outcome_evidence_ref: `settled-unknown-mismatched-${name}`,
+      provider_request_id: `provider-settled-unknown-mismatched-${name}`,
+      usage_evidence_ref: `usage-settled-${eventName}`,
+      usage_completeness: "complete",
+      financial_exposure_status: "settled",
+      financial_settlement_evidence: evidence,
+    });
+    expectCode("invalid_financial_exposure_status", () => applyCreativeConceptEvent(dispatching, mismatch));
+    assert.equal(canonicalHash(dispatching), before);
+  }
+
+  const settled = event(dispatching, dispatching.slots[0], "provider_outcome", {
+    billable_attempt_id: reserved.billableAttemptId,
+    transport_attempt_id: reserved.transportAttemptId,
+    outcome: "unknown",
+    outcome_evidence_ref: "settled-unknown-valid",
+    provider_request_id: "provider-settled-unknown-valid",
+    usage_evidence_ref: "usage-settled-unknown-valid",
+    usage_completeness: "complete",
+    financial_exposure_status: "settled",
+    financial_settlement_evidence: { status: "settled", reservation_id: reserved.reservationRef,
+      source_observation_id: "usage-settled-unknown-valid",
+      effective_billable_attempt_id: reserved.billableAttemptId },
+  });
+  const settledBatch = applyCreativeConceptEvent(dispatching, settled).batch;
+  const attempt = settledBatch.slots[0].attempts[0];
+  assert.equal(settledBatch.slots[0].status, "unknown");
+  assert.equal(attempt.latest_provider_outcome, "unknown");
+  assert.equal(attempt.unknown_financial_exposure, false);
+  assert.equal(attempt.financial_exposure_status, "settled");
+  assert.equal(attempt.provider_observations[0].financial_exposure_status, "settled");
+});
+
+test("proposal schema 0.1 remains readable but cannot accept the 0.2 C03 settlement extension", () => {
+  eventSequence = 0;
+  const input = conceptProposalInput();
+  const current = createCreativeConceptBatchProposal(input);
+  assert.equal(current.schema_version, "0.2.0");
+  const legacy = Object.freeze({ ...current, schema_version: "0.1.0" });
+  assert.equal(replayCreativeConceptBatch(legacy, { trusted_scope: input.trusted_scope, request: input.request }).status, "replayed");
+  const reserved = reserve(legacy, legacy.slots[0], "legacy-v1");
+  const dispatching = dispatch(reserved.batch, reserved.batch.slots[0], reserved).batch;
+  const settlementExtension = event(dispatching, dispatching.slots[0], "provider_outcome", {
+    billable_attempt_id: reserved.billableAttemptId,
+    transport_attempt_id: reserved.transportAttemptId,
+    outcome: "unknown",
+    outcome_evidence_ref: "legacy-settlement-extension",
+    provider_request_id: "legacy-settlement-extension",
+    usage_evidence_ref: "legacy-settlement-extension",
+    usage_completeness: "complete",
+    financial_exposure_status: "settled",
+    financial_settlement_evidence: { status: "settled", reservation_id: reserved.reservationRef,
+      source_observation_id: "legacy-settlement-extension",
+      effective_billable_attempt_id: reserved.billableAttemptId },
+  });
+  expectCode("unsupported_field", () => applyCreativeConceptEvent(dispatching, settlementExtension));
+  assert.equal(dispatching.slots[0].status, "dispatching");
+  assert.equal(dispatching.slots[0].attempts[0].unknown_financial_exposure, false);
+  const legacyOutcome = providerOutcome(dispatching, dispatching.slots[0], reserved, "unknown", null);
+  assert.equal(legacyOutcome.batch.slots[0].attempts[0].unknown_financial_exposure, true,
+    "legacy batches retain their original conservative unknown-exposure behavior");
+});
+
 test("cancellation suppresses same-attempt late success while retaining evidence and the unknown hold", () => {
   eventSequence = 0;
   const batch = createCreativeConceptBatchProposal(conceptProposalInput());

@@ -12,9 +12,13 @@ import { hashArtifactBytes } from "../storage/content-addressed.mjs";
 
 export const CREATIVE_CONCEPT_PROPOSAL = Object.freeze({
   contract: "CreativeConceptBatchProposal",
-  schema_version: "0.1.0",
+  schema_version: "0.2.0",
   acceptance_status: "unaccepted_local_proposal",
 });
+const LEGACY_CONCEPT_SCHEMA_VERSION = "0.1.0";
+function supportedConceptSchemaVersion(version) {
+  return version === LEGACY_CONCEPT_SCHEMA_VERSION || version === CREATIVE_CONCEPT_PROPOSAL.schema_version;
+}
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
 const FORMATS = Object.freeze({ png: "image/png", jpeg: "image/jpeg", webp: "image/webp" });
@@ -247,7 +251,7 @@ function packageReference(packageValue, assetId, field) {
   return asset;
 }
 
-function requestReferenceSet(request, packageValue, brief, permissionEvidence, scope, nowMs) {
+function requestReferenceSet(request, packageValue, brief, permissionEvidence, scope, nowMs, referenceMetadata = undefined) {
   if (!Array.isArray(request.references) || request.references.length === 0) {
     fail("missing_references", "request.references", "At least one explicitly requested reference asset is required.");
   }
@@ -259,6 +263,9 @@ function requestReferenceSet(request, packageValue, brief, permissionEvidence, s
       fail("duplicate_permission_evidence", `permission_evidence[${index}].asset_id`, "Permission evidence must be unique by asset.");
     }
     evidenceByAsset.set(evidence.asset_id, evidence);
+  }
+  if (referenceMetadata !== undefined && (!Array.isArray(referenceMetadata) || referenceMetadata.length !== request.references.length)) {
+    fail("reference_metadata_mismatch", "reference_metadata", "Native reference inspection must return metadata for every ordered authorized asset.");
   }
   const result = request.references.map((reference, index) => {
     const field = `request.references[${index}]`;
@@ -275,12 +282,25 @@ function requestReferenceSet(request, packageValue, brief, permissionEvidence, s
     if (!briefPermission || briefPermission.status !== "granted") {
       fail("reference_permission_denied", field, "The current brief projection does not grant reproduce permission for this asset.");
     }
+    const inspected = referenceMetadata?.[index];
+    if (inspected !== undefined) {
+      onlyKeys(inspected, ["asset_id", "source_ref", "content_hash", "media_type", "width", "height", "byte_length", "role_ref"],
+        `reference_metadata[${index}]`);
+      if (inspected.asset_id !== asset.asset_id || inspected.source_ref !== asset.source_id ||
+          inspected.content_hash !== asset.content_hash || inspected.media_type !== asset.media_type ||
+          inspected.role_ref !== roleRef || !Number.isSafeInteger(inspected.width) || inspected.width < 1 || inspected.width > 4096 ||
+          !Number.isSafeInteger(inspected.height) || inspected.height < 1 || inspected.height > 4096 ||
+          inspected.width * inspected.height > 16_777_216 || !Number.isSafeInteger(inspected.byte_length) || inspected.byte_length < 1) {
+        fail("reference_metadata_mismatch", `reference_metadata[${index}]`, "Inspected reference dimensions and bytes must bind to the exact ordered permission-verified asset.");
+      }
+    }
     return Object.freeze({
       asset_id: asset.asset_id,
       source_ref: asset.source_id,
       content_hash: asset.content_hash,
       media_type: asset.media_type,
       role_ref: roleRef,
+      ...(inspected ? { width: inspected.width, height: inspected.height, byte_length: inspected.byte_length } : {}),
       package_id: packageValue.package_id,
       package_sha256: canonicalHash(packageValue),
       permission_evidence_ref: checked.evidence_ref,
@@ -295,7 +315,7 @@ function requestReferenceSet(request, packageValue, brief, permissionEvidence, s
 }
 
 function validateProposalInput(input) {
-  onlyKeys(input, ["trusted_scope", "now", "brief", "brief_sha256", "research_package", "request", "permission_evidence", "policy_snapshot", "adapter_snapshot"], "input");
+  onlyKeys(input, ["trusted_scope", "now", "brief", "brief_sha256", "research_package", "request", "permission_evidence", "policy_snapshot", "adapter_snapshot", "reference_metadata"], "input");
   const scope = record(input.trusted_scope, "trusted_scope");
   if (Object.keys(scope).some((key) => !["tenant_id", "project_id", "brief_id", "job_id", "artifact_id", "design_version_id"].includes(key))) {
     fail("unsupported_field", "trusted_scope", "Trusted scope contains an unsupported field.");
@@ -338,7 +358,7 @@ function validateProposalInput(input) {
   const policy = validatePolicySnapshot(input.policy_snapshot, trustedScope, requestSnapshot, nowMs);
   const evidence = Array.isArray(input.permission_evidence) ? input.permission_evidence :
     fail("invalid_type", "permission_evidence", "Separate permission evidence must be supplied by the trusted rights adapter.");
-  const references = requestReferenceSet(requestSnapshot, packageValue, brief, evidence, trustedScope, nowMs);
+  const references = requestReferenceSet(requestSnapshot, packageValue, brief, evidence, trustedScope, nowMs, input.reference_metadata);
   const adapter = validateAdapterSnapshot(input.adapter_snapshot);
   const plan = Object.freeze({
     plan_id: requestSnapshot.plan_id,
@@ -417,9 +437,9 @@ export function replayCreativeConceptBatch(existing, incoming) {
   onlyKeys(request, ["action_id", "brief_id", "plan_id", "requested_count", "references"], "incoming_request.request");
   const actionId = nonEmpty(request.action_id, "incoming_request.request.action_id");
   if (existing.contract !== CREATIVE_CONCEPT_PROPOSAL.contract ||
-      existing.schema_version !== CREATIVE_CONCEPT_PROPOSAL.schema_version ||
+      !supportedConceptSchemaVersion(existing.schema_version) ||
       existing.acceptance_status !== CREATIVE_CONCEPT_PROPOSAL.acceptance_status) {
-    fail("unsupported_batch_version", "existing_batch", "Only this explicitly local proposal version can be replayed.");
+    fail("unsupported_batch_version", "existing_batch", "Only explicitly supported local proposal versions can be replayed.");
   }
   if (scope.tenant_id !== existing.tenant_id || scope.project_id !== existing.project_id ||
       scope.brief_id !== existing.brief_id || actionId !== existing.action_id) {
@@ -447,9 +467,10 @@ export function replayCreativeConceptBatch(existing, incoming) {
 function contextSlot(batch, event) {
   record(batch, "batch");
   record(event, "event");
-  if (batch.contract !== CREATIVE_CONCEPT_PROPOSAL.contract || batch.schema_version !== CREATIVE_CONCEPT_PROPOSAL.schema_version ||
+  if (batch.contract !== CREATIVE_CONCEPT_PROPOSAL.contract ||
+      !supportedConceptSchemaVersion(batch.schema_version) ||
       batch.acceptance_status !== CREATIVE_CONCEPT_PROPOSAL.acceptance_status) {
-    fail("unsupported_batch_version", "batch", "Only the explicit local proposal version can accept source events.");
+    fail("unsupported_batch_version", "batch", "Only explicitly supported local proposal versions can accept source events.");
   }
   for (const field of ["tenant_id", "project_id", "action_id", "batch_id"]) {
     if (event[field] !== batch[field]) fail("event_scope_mismatch", `event.${field}`, `Event ${field} must match the stored scoped batch identity.`);
@@ -469,6 +490,10 @@ function contextSlot(batch, event) {
     cancel_concept: ["billable_attempt_id", "transport_attempt_id", "cancellation_evidence_ref"],
     late_provider_evidence: ["billable_attempt_id", "transport_attempt_id", "outcome", "outcome_evidence_ref", "provider_request_id", "artifact_sha256", "usage_evidence_ref", "usage_completeness"],
   };
+  if (batch.schema_version === CREATIVE_CONCEPT_PROPOSAL.schema_version) {
+    eventFields.provider_outcome.push("financial_exposure_status", "financial_settlement_evidence");
+    eventFields.reconcile_unknown_attempt.push("financial_exposure_status", "financial_settlement_evidence");
+  }
   if (!eventFields[event.event_type]) fail("unsupported_event", "event.event_type", `Unsupported concept event ${String(event.event_type)}.`);
   onlyKeys(event, [...common, ...eventFields[event.event_type]], "event");
   if (event.concept_id === undefined || event.concept_id === null) return null;
@@ -581,6 +606,28 @@ function validateReservation(event, batch, slot) {
 }
 
 function appendProviderObservation(attempt, event, outcome) {
+  const financialExposureStatus = event.financial_exposure_status;
+  const settlementEvidence = event.financial_settlement_evidence;
+  if (financialExposureStatus !== undefined && financialExposureStatus !== "settled") {
+    fail("invalid_financial_exposure_status", "event.financial_exposure_status",
+      "Only an explicit C03 settlement may resolve unknown financial exposure.");
+  }
+  if (financialExposureStatus === "settled" && (!settlementEvidence || event.usage_completeness !== "complete")) {
+    fail("invalid_financial_exposure_status", "event.financial_exposure_status",
+      "A settled attempt must carry complete usage and exact C03 settlement evidence.");
+  }
+  if (settlementEvidence !== undefined) {
+    onlyKeys(settlementEvidence, ["status", "reservation_id", "source_observation_id", "effective_billable_attempt_id"],
+      "event.financial_settlement_evidence");
+    if (financialExposureStatus !== "settled" || settlementEvidence.status !== "settled" ||
+        settlementEvidence.reservation_id !== attempt.reservation_ref ||
+        settlementEvidence.source_observation_id !== event.usage_evidence_ref ||
+        settlementEvidence.effective_billable_attempt_id !== attempt.billable_attempt_id ||
+        event.usage_completeness !== "complete") {
+      fail("invalid_financial_exposure_status", "event.financial_settlement_evidence",
+        "The C03 settlement, observation, usage reference, and billable attempt must bind exactly.");
+    }
+  }
   const observation = Object.freeze({
     event_id: event.event_id,
     outcome,
@@ -589,6 +636,10 @@ function appendProviderObservation(attempt, event, outcome) {
     artifact_sha256: event.artifact_sha256 === undefined ? null : hash(event.artifact_sha256, "event.artifact_sha256"),
     usage_evidence_ref: nonEmpty(event.usage_evidence_ref, "event.usage_evidence_ref"),
     usage_completeness: event.usage_completeness,
+    ...(financialExposureStatus ? { financial_exposure_status: financialExposureStatus,
+      financial_settlement_evidence: Object.freeze({ status: settlementEvidence.status,
+        reservation_id: settlementEvidence.reservation_id, source_observation_id: settlementEvidence.source_observation_id,
+        effective_billable_attempt_id: settlementEvidence.effective_billable_attempt_id }) } : {}),
   });
   if (!["complete", "partial", "unknown"].includes(observation.usage_completeness)) {
     fail("invalid_usage_completeness", "event.usage_completeness", "Usage completeness must preserve complete, partial, or unknown status.");
@@ -602,9 +653,10 @@ function appendProviderObservation(attempt, event, outcome) {
   attempt.usage_evidence_refs.push(observation.usage_evidence_ref);
   attempt.usage_evidence_ref = observation.usage_evidence_ref;
   attempt.usage_completeness = observation.usage_completeness;
-  attempt.unknown_financial_exposure = attempt.unknown_financial_exposure || outcome === "unknown" || observation.usage_completeness !== "complete";
+  attempt.unknown_financial_exposure = financialExposureStatus === "settled" ? false :
+    attempt.unknown_financial_exposure || outcome === "unknown" || observation.usage_completeness !== "complete";
   if (attempt.unknown_financial_exposure) attempt.financial_exposure_status = "unknown_hold";
-  else attempt.financial_exposure_status = "awaiting_c03_reconciliation";
+  else attempt.financial_exposure_status = financialExposureStatus === "settled" ? "settled" : "awaiting_c03_reconciliation";
   return observation;
 }
 
@@ -713,9 +765,13 @@ export function applyCreativeConceptEvent(batch, incomingEvent) {
       return Object.freeze({ status: "applied", batch: freezeDeep(next) });
     }
     case "provider_outcome": {
-      if (nextSlot.status !== "dispatching") fail("outcome_state_conflict", "event.concept_id", "A first provider outcome requires the same attempt to be dispatching.");
+      if (nextSlot.status !== "dispatching" && !(nextSlot.status === "reserved" && event.outcome === "unknown")) {
+        fail("outcome_state_conflict", "event.concept_id", "A first provider outcome requires the same attempt to be dispatching; a reserved attempt can only be conservatively marked unknown.");
+      }
       const attempt = eventRelatedAttempt(nextSlot, event);
-      if (attempt.status !== "dispatching" || nextSlot.current_billable_attempt_id !== attempt.billable_attempt_id) {
+      if (!(["dispatching", "reserved"].includes(attempt.status) && attempt.status === nextSlot.status) ||
+          nextSlot.current_billable_attempt_id !== attempt.billable_attempt_id ||
+          attempt.status === "reserved" && event.outcome !== "unknown") {
         fail("attempt_state_conflict", "event.billable_attempt_id", "Provider outcome must bind the current in-flight attempt.");
       }
       if (!["succeeded", "failed", "unknown"].includes(event.outcome)) fail("invalid_outcome", "event.outcome", "Provider outcome must be succeeded, failed, or unknown.");
@@ -728,7 +784,7 @@ export function applyCreativeConceptEvent(batch, incomingEvent) {
         attempt.status = "failed";
         nextSlot.status = "failed";
       } else {
-        attempt.status = "unknown";
+      attempt.status = "unknown";
         nextSlot.status = "unknown";
       }
       appendEvent(next, event, canonicalHash(event));
@@ -817,7 +873,8 @@ export function applyCreativeConceptEvent(batch, incomingEvent) {
       const designVersion = record(event.design_version, "event.design_version");
       const designVersionId = nonEmpty(designVersion.design_version_id, "event.design_version.design_version_id");
       const version = validateDesignVersion(event.design_version, {
-        trustedScope: { tenant_id: next.tenant_id, project_id: next.project_id, design_version_id: designVersionId },
+        trustedScope: { tenant_id: next.tenant_id, project_id: next.project_id, brief_id: next.brief_id,
+          design_version_id: designVersionId },
         brief_hash: next.brief_sha256,
         known_source_refs: next.references.map((item) => item.source_ref),
       });
@@ -981,8 +1038,8 @@ export async function inspectCreativeConceptImageBytes(input) {
 
 export async function inspectCreativeConceptReferenceBytes(batch, resolvedReferences) {
   record(batch, "batch");
-  if (batch.contract !== CREATIVE_CONCEPT_PROPOSAL.contract || batch.schema_version !== CREATIVE_CONCEPT_PROPOSAL.schema_version) {
-    fail("unsupported_batch_version", "batch", "Reference-byte checks require the explicit local proposal version.");
+  if (batch.contract !== CREATIVE_CONCEPT_PROPOSAL.contract || !supportedConceptSchemaVersion(batch.schema_version)) {
+    fail("unsupported_batch_version", "batch", "Reference-byte checks require an explicitly supported local proposal version.");
   }
   if (!Array.isArray(resolvedReferences) || resolvedReferences.length !== batch.references.length) {
     fail("reference_set_mismatch", "resolved_references", "The trusted resolver must return exactly one byte buffer for each ordered authorized asset.");

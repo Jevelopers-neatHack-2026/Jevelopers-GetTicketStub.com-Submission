@@ -46,6 +46,30 @@ jobs:
         run: make check TARGET=brief MODE=mock
       - name: CE-03 native Images adapter and actual API/C03/CE08 fixtures
         run: make check TARGET=image-adapter MODE=mock
+      - name: CE-04 parentless concepts API, recovery, metering, package and type fixtures
+        run: make check TARGET=concepts MODE=CI
+      - name: Verify CE-04 external live execution stays fail-closed
+        shell: bash
+        run: |
+          set +e
+          make check TARGET=concepts MODE=failclosedlive > build/concepts-failclosedlive.stdout.json
+          gate_status=$?
+          set -e
+          if [ "$gate_status" -ne 2 ]; then
+            echo "Expected the pending CE-04 live gate to exit 2; got $gate_status." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const gate = JSON.parse(readFileSync('build/concepts-failclosedlive.stdout.json', 'utf8'));
+          assert.equal(gate.target, 'CE-04');
+          assert.equal(gate.status, 'blocked');
+          assert.equal(gate.acceptance_allowed, false);
+          assert.equal(gate.provider_dispatches, 0);
+          assert.equal(gate.paid_provider_calls, 0);
+          assert.equal(gate.provider_credentials_read, false);
+          NODE
       - name: CE-09 public inspection, seven fixtures, migration and restart evidence
         run: make check TARGET=inspection MODE=mock
       - name: Verify CE-09 live inspection gate fails before any dispatch

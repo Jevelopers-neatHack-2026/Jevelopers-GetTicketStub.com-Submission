@@ -2,17 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as apiModule from "creative-engine/api/v1";
 
-test("public API subpath exports the typed runtime symbols and errors", async () => {
+test("public API subpath exports versioned runtime symbols and errors", async () => {
   assert.deepEqual(Object.keys(apiModule).sort(), [
     "CREATIVE_API_OPERATIONS",
     "CREATIVE_API_VERSION",
+    "CREATIVE_API_VERSIONS",
     "CreativeApiError",
     "createCreativeApi",
     "createCreativeRuntime",
   ]);
   assert.equal(apiModule.CREATIVE_API_VERSION, "1.0");
+  assert.deepEqual(apiModule.CREATIVE_API_VERSIONS, ["1.0", "1.1"]);
   assert.deepEqual(apiModule.CREATIVE_API_OPERATIONS, [
-    "generate", "edit", "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status",
+    "generate", "edit", "concepts.create", "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status",
     "brief.create", "brief.invalidate",
   ]);
   const error = new apiModule.CreativeApiError("invalid_request", "generate", "plan");

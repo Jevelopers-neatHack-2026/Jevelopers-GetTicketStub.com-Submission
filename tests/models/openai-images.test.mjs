@@ -362,6 +362,135 @@ test("edit sends scoped immutable parent and matching alpha mask as multipart by
   assert.match(binding.input_sha256, /^sha256:[a-f0-9]{64}$/);
 });
 
+test("parentless concept edit preflights and posts exactly two authorized image references", async () => {
+  const referenceBytes = [makePng(), makePng({ transparent: true, width: 16, height: 16 })];
+  const references = referenceBytes.map((bytes, index) => ({ source_ref: `source-concept-${index + 1}`,
+    asset_id: `asset-concept-${index + 1}`, content_hash: HASH(bytes), media_type: "image/png",
+    role_ref: `role-concept-${index + 1}` }));
+  const assetReads = [];
+  const bindingAcks = [];
+  const stagedResponses = [];
+  let posted;
+  const ctx = input("edit", {
+    base_design: null,
+    brief: { brief_id: "brief-test", research_package_ref: { package_id: "research-package-01" } },
+    plan: { operation: "concept.generate", plan_id: "plan-concept-01",
+      source_refs: references.map((item) => item.source_ref),
+      steps: [{ step_id: "concept-step-01", action: "concept.generate",
+        source_refs: references.map((item) => item.source_ref), parameters: { variant_count: 1 } }] },
+    concept_reference_manifest: { contract: "CreativeConceptReferenceManifest", schema_version: "1.0",
+      tenant_id: "tenant-test", project_id: "creative-project-test", brief_id: "brief-test",
+      brief_hash: TEST_HASH, research_package_id: "research-package-01", research_package_hash: TEST_HASH,
+      mapping_ref: "openai-image-edit-native-concepts", mapping_version: "1",
+      prompt_template_ref: "prompt-template-concepts-v1", prompt_template_version: "1",
+      prompt_template_sha256: TEST_HASH,
+      references: references.map((item, index) => ({ ...item, ...({ width: 16, height: 16 }) })) },
+    concept_batch_id: "batch-concept-01", concept_id: "concept-slot-01",
+    async recordConceptDispatchBinding(binding) {
+      bindingAcks.push(binding);
+      return { status: "recorded", transport_attempt_id: "transport-image-001",
+        target_binding_sha256: binding.target_binding_sha256 };
+    },
+    async stageConceptResponse(stage) {
+      stagedResponses.push(stage);
+      return { status: "staged", stage_ref: "concept-response-stage-01", content_hash: stage.content_hash };
+    },
+    assertDispatchCurrent() { events.push("dispatch.sync-final"); return "dispatch-image-001"; },
+  });
+  const events = [];
+  const harness = providerHarness({ operation: "edit", inputOverride: ctx, ports: { events },
+    promptPort: { async render({ prompt_template }) { return { prompt: "A synthetic offline test image.",
+      template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+      template_sha256: prompt_template.template_sha256 }; } },
+    assetPort: { async readReference(args) {
+      assetReads.push(args);
+      const index = references.findIndex((item) => item.asset_id === args.asset_id);
+      return referenceBytes[index];
+    } },
+    fetchImpl: async (url, init) => { posted = { url, init }; return responseImage(); } });
+  const inspected = await harness.provider.inspectConceptReferences({
+    scope: ctx.scope, references: ctx.concept_reference_manifest.references,
+    maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024,
+  });
+  assert.deepEqual(inspected.map(({ asset_id, content_hash, width, height }) => ({ asset_id, content_hash, width, height })),
+    references.map((item) => ({ asset_id: item.asset_id, content_hash: item.content_hash, width: 16, height: 16 })));
+  const output = await harness.provider.edit(harness.ctx);
+  assert.equal(output.artifact.media_type, "image/png");
+  assert.equal(posted.url, "https://api.openai.com/v1/images/edits");
+  assert.equal(posted.init.method, "POST");
+  assert.equal(posted.init.headers["content-type"], undefined);
+  assert.equal(posted.init.body.get("model"), MODEL);
+  assert.equal(posted.init.body.get("n"), "1");
+  assert.equal(posted.init.body.has("mask"), false);
+  const postedImages = await Promise.all(posted.init.body.getAll("image[]").map(async (blob) =>
+    Buffer.from(await blob.arrayBuffer())));
+  assert.equal(postedImages.length, 2);
+  assert.deepEqual(postedImages, referenceBytes);
+  assert.deepEqual(postedImages.map(HASH), references.map((item) => item.content_hash));
+  assert.equal(bindingAcks.length, 1);
+  assert.equal(bindingAcks[0].concept_id, "concept-slot-01");
+  assert.match(bindingAcks[0].target_binding_sha256, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(stagedResponses.length, 1);
+  assert.equal(stagedResponses[0].content_hash, HASH(makePng()));
+  assert.equal(assetReads.filter((item) => item.purpose === "concept_preflight").length, 2);
+  assert.deepEqual(harness.events.slice(-2), ["dispatch.sync-final", "fetch.called"]);
+});
+
+test("concept reference preflight binds reads and returned provenance to an invocation-time snapshot", async () => {
+  const referenceBytes = [makePng(), makePng({ transparent: true, width: 16, height: 16 })];
+  const references = referenceBytes.map((bytes, index) => ({ source_ref: `source-snapshot-${index + 1}`,
+    asset_id: `asset-snapshot-${index + 1}`, content_hash: HASH(bytes), media_type: "image/png",
+    role_ref: `role-snapshot-${index + 1}` }));
+  const expectedReferences = references.map((reference) => ({ ...reference }));
+  const scope = { tenant_id: "tenant-snapshot", project_id: "project-snapshot" };
+  let enteredRead;
+  const firstReadEntered = new Promise((resolve) => { enteredRead = resolve; });
+  let releaseFirstRead;
+  const firstReadGate = new Promise((resolve) => { releaseFirstRead = resolve; });
+  const reads = [];
+  const harness = providerHarness({ operation: "edit", assetPort: { async readReference(args) {
+    reads.push(args);
+    if (reads.length === 1) {
+      enteredRead();
+      await firstReadGate;
+    }
+    const index = expectedReferences.findIndex((item) => item.asset_id === args.asset_id);
+    return referenceBytes[index];
+  } } });
+  const maximumSingleReferenceBytes = 1024 * 1024;
+  const maximumAggregateReferenceBytes = 2 * 1024 * 1024;
+  const preflight = harness.provider.inspectConceptReferences({ scope, references,
+    maximum_single_reference_bytes: maximumSingleReferenceBytes,
+    maximum_aggregate_reference_bytes: maximumAggregateReferenceBytes });
+  await firstReadEntered;
+  scope.tenant_id = "tenant-mutated";
+  scope.project_id = "project-mutated";
+  references[0].source_ref = "source-mutated-1";
+  references[0].asset_id = "asset-mutated-1";
+  references[0].content_hash = HASH(Buffer.from("wrong content"));
+  references[0].media_type = "image/jpeg";
+  references[0].role_ref = "role-mutated-1";
+  references[1].source_ref = "source-mutated-2";
+  references[1].asset_id = "asset-mutated-2";
+  references[1].content_hash = HASH(Buffer.from("wrong content"));
+  references[1].media_type = "image/webp";
+  references[1].role_ref = "role-mutated-2";
+  releaseFirstRead();
+  const inspected = await preflight;
+  assert.equal(reads.length, 2);
+  assert.ok(reads.every((entry) => entry.scope.tenant_id === "tenant-snapshot" &&
+    entry.scope.project_id === "project-snapshot"));
+  assert.deepEqual(reads.map(({ source_ref, asset_id, content_hash, expected_media_type }) =>
+    ({ source_ref, asset_id, content_hash, media_type: expected_media_type })),
+  referenceBytes.map((bytes, index) => ({ source_ref: `source-snapshot-${index + 1}`,
+    asset_id: `asset-snapshot-${index + 1}`, content_hash: HASH(bytes), media_type: "image/png" })));
+  assert.deepEqual(inspected.map(({ source_ref, asset_id, content_hash, media_type, role_ref }) =>
+    ({ source_ref, asset_id, content_hash, media_type, role_ref })),
+  referenceBytes.map((bytes, index) => ({ source_ref: `source-snapshot-${index + 1}`,
+    asset_id: `asset-snapshot-${index + 1}`, content_hash: HASH(bytes), media_type: "image/png",
+    role_ref: `role-snapshot-${index + 1}` })));
+});
+
 test("unsupported extra edit references and additional edit steps fail before asset access or transport", async (t) => {
   await t.test("extra reference image parameter", async () => {
     const ctx = input("edit");
