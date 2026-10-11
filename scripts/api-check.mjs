@@ -56,7 +56,7 @@ const evidence = {
     working_tree_clean: status.status === 0 && status.stdout.trim() === "",
   },
   schemas: {
-    creative_api: "1.0",
+    creative_api: ["1.0", "1.1"],
     creative_brief: "1.0",
     edit_plan: "1.0",
     design_version: "1.0",

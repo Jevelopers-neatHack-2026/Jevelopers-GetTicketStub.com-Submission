@@ -18,8 +18,9 @@ import {
 import { createCreativeBriefStore } from "../planning/index.mjs";
 import { initializeCreativeBriefDatabase } from "../planning/store.mjs";
 import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
+import { applyCreativeConceptEvent, inspectCreativeConceptImageBytes } from "../generation/concepts.mjs";
 
-const STORAGE_VERSION = 7;
+const STORAGE_VERSION = 10;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9_.:-]{1,256}$/;
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -28,6 +29,52 @@ const ATTEMPT_FIELDS = [
   "parent_design_hash", "transport_attempt_ids", "provider_request_ids", "usage_refs", "trace_refs",
 ];
 const publicationTransactionRegistries = new WeakMap();
+
+function providerTargetHash(value) {
+  let serialized;
+  try { serialized = JSON.stringify(value); } catch { reject("invalid_request", "concept.target_binding"); }
+  if (typeof serialized !== "string") reject("invalid_request", "concept.target_binding");
+  return `sha256:${createHash("sha256").update(serialized, "utf8").digest("hex")}`;
+}
+
+function creativeConceptLineage(batch, slot, version) {
+  const attempt = slot?.attempts?.find((item) => item.billable_attempt_id === slot.current_billable_attempt_id);
+  if (!slot || !attempt || !attempt.metering_attempt || !attempt.dispatch_intent_ref ||
+      !attempt.provider_target_binding_sha256 || !attempt.rendered_prompt_sha256 ||
+      !attempt.usage_evidence_ref) reject("integrity_error", "concept.lineage_attempt");
+  return {
+    contract: "CreativeConceptLineage",
+    schema_version: "1.1",
+    mapping_status: "local_mapping_external_acceptance_pending",
+    concept_id: slot.concept_id,
+    ordinal: slot.ordinal,
+    parent_version_id: null,
+    brief_sha256: batch.brief_sha256,
+    package_id: batch.package_id,
+    package_sha256: batch.package_sha256,
+    plan_id: batch.plan_id,
+    plan_sha256: batch.plan_sha256,
+    policy_snapshot: batch.policy_snapshot,
+    adapter_snapshot: batch.adapter_snapshot,
+    source_assets: batch.references,
+    attempt: attempt.metering_attempt,
+    logical_operation_id: slot.logical_operation_id,
+    billable_attempt_id: attempt.billable_attempt_id,
+    transport_attempt_id: attempt.transport_attempt_id,
+    provider_request_ref: attempt.latest_provider_request_id,
+    dispatch_intent_ref: attempt.dispatch_intent_ref,
+    provider_target_binding_sha256: attempt.provider_target_binding_sha256,
+    rendered_prompt_sha256: attempt.rendered_prompt_sha256,
+    usage_evidence_refs: [...attempt.usage_evidence_refs],
+    usage_completeness: attempt.usage_completeness ?? "unknown",
+    unknown_financial_exposure: attempt.unknown_financial_exposure,
+    design_version_id: version.design_version_id,
+    design_sha256: version.design_hash,
+    artifact_id: version.artifact.artifact_id,
+    artifact_sha256: version.artifact.content_hash,
+    artifact_media_type: version.artifact.media_type,
+  };
+}
 
 const ERROR_MESSAGES = Object.freeze({
   invalid_request: "The version write does not match the supported local contract.",
@@ -75,6 +122,13 @@ function deepFreeze(value) {
     Object.freeze(value);
   }
   return value;
+}
+
+function activeJobLease(row, scope, actorId, leaseToken, now) {
+  return Boolean(row && row.tenant_id === scope.tenant_id && row.project_id === scope.project_id &&
+    row.actor_id === actorId && row.status === "running" &&
+    row.lease_hash === createHash("sha256").update(leaseToken).digest("hex") &&
+    Date.parse(row.lease_expires_at) > now);
 }
 
 function reference(value, field, max = 256) {
@@ -127,7 +181,7 @@ function selectionRequest(value, design) {
   if (!isRecord(value) || Object.keys(value).some((key) => ![
     "mode", "expected_revision", "expected_selected_design_version_id", "expected_selected_design_hash",
   ].includes(key))) reject("invalid_request", "selection");
-  if (value.mode !== "advance" && value.mode !== "branch") reject("invalid_request", "selection.mode");
+  if (value.mode !== "advance" && value.mode !== "branch" && value.mode !== "concept") reject("invalid_request", "selection.mode");
   if (value.mode === "advance") {
     if (!Number.isSafeInteger(value.expected_revision) || value.expected_revision < 0) reject("invalid_request", "selection.expected_revision");
     const id = value.expected_selected_design_version_id;
@@ -138,10 +192,12 @@ function selectionRequest(value, design) {
       reference(id, "selection.expected_selected_design_version_id");
       hash(parentHash, "selection.expected_selected_design_hash");
     }
-  } else {
+  } else if (value.mode === "branch") {
     if (design.parent_version_id === null) reject("invalid_request", "selection.mode");
     if (Object.hasOwn(value, "expected_revision") || Object.hasOwn(value, "expected_selected_design_version_id") ||
       Object.hasOwn(value, "expected_selected_design_hash")) reject("invalid_request", "selection");
+  } else if (design.parent_version_id !== null || Object.keys(value).length !== 1) {
+    reject("invalid_request", "selection");
   }
   if (value.mode === "advance" && design.parent_version_id !== value.expected_selected_design_version_id &&
     !(design.parent_version_id === null && value.expected_selected_design_version_id !== null)) {
@@ -546,7 +602,7 @@ function readStoredObjectSync(objectRoot, contentHash) {
 
 function makeSchema(db) {
   const version = db.prepare("PRAGMA user_version").get().user_version;
-  if (![0, 1, 2, 3, 4, 5, 6, STORAGE_VERSION].includes(version)) {
+  if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, STORAGE_VERSION].includes(version)) {
     db.close();
     reject("unsupported_version", "storage_version");
   }
@@ -623,6 +679,121 @@ function makeSchema(db) {
       PRIMARY KEY(tenant_id, project_id, job_id),
       UNIQUE(tenant_id, project_id, action_id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS creative_concept_batches_v1 (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      brief_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      job_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      request_hash TEXT NOT NULL,
+      batch_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('running','partial','completed','unknown_hold','cancelled')),
+      batch_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,brief_id,action_id),
+      UNIQUE(tenant_id,project_id,brief_id,batch_id),
+      UNIQUE(tenant_id,project_id,job_id)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS creative_concept_events_v1 (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      brief_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL CHECK(sequence > 0),
+      event_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      event_hash TEXT NOT NULL,
+      event_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,brief_id,action_id,sequence),
+      UNIQUE(tenant_id,project_id,brief_id,event_id),
+      FOREIGN KEY(tenant_id,project_id,brief_id,action_id)
+        REFERENCES creative_concept_batches_v1(tenant_id,project_id,brief_id,action_id)
+    ) STRICT;
+    CREATE TRIGGER IF NOT EXISTS creative_concept_events_no_update
+      BEFORE UPDATE ON creative_concept_events_v1 BEGIN SELECT RAISE(ABORT,'concept events are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS creative_concept_events_no_delete
+      BEFORE DELETE ON creative_concept_events_v1 BEGIN SELECT RAISE(ABORT,'concept events are immutable'); END;
+    CREATE TABLE IF NOT EXISTS creative_concept_response_stages_v1 (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      brief_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      concept_id TEXT NOT NULL,
+      billable_attempt_id TEXT NOT NULL,
+      transport_attempt_id TEXT NOT NULL,
+      reservation_ref TEXT NOT NULL,
+      dispatch_intent_ref TEXT NOT NULL,
+      target_binding_sha256 TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      width INTEGER NOT NULL CHECK(width > 0),
+      height INTEGER NOT NULL CHECK(height > 0),
+      byte_length INTEGER NOT NULL CHECK(byte_length > 0),
+      response_bytes BLOB NOT NULL,
+      stage_ref TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('response_received','published','rejected','unknown_hold')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,brief_id,action_id,concept_id),
+      UNIQUE(tenant_id,project_id,brief_id,billable_attempt_id),
+      UNIQUE(tenant_id,project_id,brief_id,transport_attempt_id),
+      FOREIGN KEY(tenant_id,project_id,brief_id,action_id)
+        REFERENCES creative_concept_batches_v1(tenant_id,project_id,brief_id,action_id)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS creative_concept_dispatch_bindings_v1 (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      brief_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      job_id TEXT NOT NULL,
+      billable_attempt_id TEXT NOT NULL,
+      transport_attempt_id TEXT NOT NULL,
+      reservation_ref TEXT NOT NULL,
+      dispatch_intent_ref TEXT NOT NULL,
+      target_binding_sha256 TEXT NOT NULL,
+      target_binding_json TEXT NOT NULL,
+      rendered_prompt_sha256 TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,brief_id,action_id,transport_attempt_id),
+      UNIQUE(tenant_id,project_id,dispatch_intent_ref),
+      FOREIGN KEY(tenant_id,project_id,brief_id,action_id)
+        REFERENCES creative_concept_batches_v1(tenant_id,project_id,brief_id,action_id),
+      FOREIGN KEY(tenant_id,project_id,job_id,transport_attempt_id)
+        REFERENCES creative_dispatch_intents(tenant_id,project_id,job_id,transport_attempt_id)
+    ) STRICT;
+    CREATE TRIGGER IF NOT EXISTS creative_concept_dispatch_bindings_no_update
+      BEFORE UPDATE ON creative_concept_dispatch_bindings_v1 BEGIN SELECT RAISE(ABORT,'concept dispatch bindings are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS creative_concept_dispatch_bindings_no_delete
+      BEFORE DELETE ON creative_concept_dispatch_bindings_v1 BEGIN SELECT RAISE(ABORT,'concept dispatch bindings are immutable'); END;
+    CREATE TABLE IF NOT EXISTS creative_concept_versions_v1 (
+      tenant_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      brief_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      concept_id TEXT NOT NULL,
+      ordinal INTEGER NOT NULL CHECK(ordinal > 0),
+      design_version_id TEXT NOT NULL,
+      design_hash TEXT NOT NULL,
+      artifact_id TEXT NOT NULL,
+      artifact_hash TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      parent_version_id TEXT CHECK(parent_version_id IS NULL),
+      lineage_json TEXT NOT NULL,
+      design_version_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,brief_id,action_id,concept_id),
+      UNIQUE(tenant_id,project_id,brief_id,design_version_id),
+      UNIQUE(tenant_id,project_id,brief_id,ordinal,action_id),
+      FOREIGN KEY(tenant_id,project_id,brief_id,action_id)
+        REFERENCES creative_concept_batches_v1(tenant_id,project_id,brief_id,action_id)
+    ) STRICT;
+    CREATE TRIGGER IF NOT EXISTS creative_concept_versions_no_update
+      BEFORE UPDATE ON creative_concept_versions_v1 BEGIN SELECT RAISE(ABORT,'concept versions are immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS creative_concept_versions_no_delete
+      BEFORE DELETE ON creative_concept_versions_v1 BEGIN SELECT RAISE(ABORT,'concept versions are immutable'); END;
     CREATE TABLE IF NOT EXISTS creative_dispatch_intents (
       tenant_id TEXT NOT NULL,
       project_id TEXT NOT NULL,
@@ -634,6 +805,9 @@ function makeSchema(db) {
       provider_model TEXT,
       dispatch_intent_ref TEXT NOT NULL,
       context_fence_json TEXT NOT NULL,
+      target_binding_sha256 TEXT,
+      target_binding_json TEXT,
+      rendered_prompt_sha256 TEXT,
       authorized_at TEXT NOT NULL,
       PRIMARY KEY(tenant_id, project_id, job_id, transport_attempt_id),
       UNIQUE(tenant_id, project_id, dispatch_intent_ref),
@@ -647,7 +821,7 @@ function makeSchema(db) {
       action_id TEXT NOT NULL,
       actor_id TEXT NOT NULL,
       request_hash TEXT NOT NULL,
-      operation TEXT NOT NULL CHECK(operation IN ('generate','edit')),
+      operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
       provider_name TEXT NOT NULL CHECK(provider_name='openai'),
       provider_model TEXT NOT NULL,
       reservation_ref TEXT NOT NULL,
@@ -673,7 +847,7 @@ function makeSchema(db) {
       action_id TEXT NOT NULL,
       actor_id TEXT NOT NULL,
       request_hash TEXT NOT NULL,
-      operation TEXT NOT NULL CHECK(operation IN ('generate','edit')),
+      operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
       provider_name TEXT NOT NULL CHECK(provider_name='openai'),
       provider_model TEXT NOT NULL,
       reservation_ref TEXT NOT NULL,
@@ -882,9 +1056,83 @@ function makeSchema(db) {
     db.exec("ALTER TABLE creative_jobs ADD COLUMN attempt_evidence_json TEXT");
   }
   const dispatchColumns = db.prepare("PRAGMA table_info(creative_dispatch_intents)").all();
-  for (const [name, type] of [["reservation_ref", "TEXT"], ["provider_name", "TEXT"], ["provider_model", "TEXT"]]) {
+  for (const [name, type] of [["reservation_ref", "TEXT"], ["provider_name", "TEXT"], ["provider_model", "TEXT"],
+    ["target_binding_sha256", "TEXT"], ["target_binding_json", "TEXT"], ["rendered_prompt_sha256", "TEXT"]]) {
     if (!dispatchColumns.some((column) => column.name === name)) {
       db.exec(`ALTER TABLE creative_dispatch_intents ADD COLUMN ${name} ${type}`);
+    }
+  }
+  const conceptBindingColumns = db.prepare("PRAGMA table_info(creative_concept_dispatch_bindings_v1)").all();
+  for (const [name, type] of [["target_binding_json", "TEXT"], ["rendered_prompt_sha256", "TEXT"]]) {
+    if (!conceptBindingColumns.some((column) => column.name === name)) {
+      db.exec(`ALTER TABLE creative_concept_dispatch_bindings_v1 ADD COLUMN ${name} ${type}`);
+    }
+  }
+  db.exec(`CREATE TRIGGER IF NOT EXISTS creative_dispatch_target_binding_once
+    BEFORE UPDATE ON creative_dispatch_intents
+    WHEN NEW.tenant_id!=OLD.tenant_id OR NEW.project_id!=OLD.project_id OR NEW.job_id!=OLD.job_id OR
+      NEW.transport_attempt_id!=OLD.transport_attempt_id OR NEW.billable_attempt_id IS NOT OLD.billable_attempt_id OR
+      NEW.reservation_ref IS NOT OLD.reservation_ref OR NEW.provider_name IS NOT OLD.provider_name OR
+      NEW.provider_model IS NOT OLD.provider_model OR NEW.dispatch_intent_ref!=OLD.dispatch_intent_ref OR
+      NEW.context_fence_json!=OLD.context_fence_json OR NEW.authorized_at!=OLD.authorized_at OR
+      OLD.target_binding_sha256 IS NOT NULL OR OLD.target_binding_json IS NOT NULL OR OLD.rendered_prompt_sha256 IS NOT NULL OR
+      NEW.target_binding_sha256 IS NULL OR NEW.target_binding_json IS NULL OR NEW.rendered_prompt_sha256 IS NULL
+    BEGIN SELECT RAISE(ABORT,'dispatch target binding is immutable'); END;`);
+  if (version > 0 && version < STORAGE_VERSION) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.exec(`CREATE TABLE private_provider_attributions_v10 (
+        tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, job_id TEXT NOT NULL, action_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL, request_hash TEXT NOT NULL,
+        operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
+        provider_name TEXT NOT NULL CHECK(provider_name='openai'), provider_model TEXT NOT NULL,
+        reservation_ref TEXT NOT NULL, billable_attempt_id TEXT NOT NULL, transport_attempt_id TEXT NOT NULL,
+        dispatch_intent_ref TEXT NOT NULL, provider_request_id TEXT NOT NULL, provider_request_ref TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        PRIMARY KEY(tenant_id,project_id,job_id,transport_attempt_id),
+        UNIQUE(tenant_id,project_id,dispatch_intent_ref),
+        FOREIGN KEY(tenant_id,project_id,job_id,transport_attempt_id)
+          REFERENCES creative_dispatch_intents(tenant_id,project_id,job_id,transport_attempt_id)
+      ) STRICT;
+      INSERT INTO private_provider_attributions_v10 SELECT tenant_id,project_id,job_id,action_id,actor_id,request_hash,
+        operation,provider_name,provider_model,reservation_ref,billable_attempt_id,transport_attempt_id,
+        dispatch_intent_ref,provider_request_id,provider_request_ref,captured_at FROM private_provider_attributions;
+      DROP TABLE private_provider_attributions;
+      ALTER TABLE private_provider_attributions_v10 RENAME TO private_provider_attributions;
+      CREATE TRIGGER private_provider_attributions_no_update
+        BEFORE UPDATE ON private_provider_attributions BEGIN SELECT RAISE(ABORT,'private provider attribution is immutable'); END;
+      CREATE TRIGGER private_provider_attributions_no_delete
+        BEFORE DELETE ON private_provider_attributions BEGIN SELECT RAISE(ABORT,'private provider attribution is immutable'); END;
+
+      CREATE TABLE private_provider_usage_attributions_v10 (
+        tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, job_id TEXT NOT NULL, action_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL, request_hash TEXT NOT NULL,
+        operation TEXT NOT NULL CHECK(operation IN ('generate','edit','concepts.create')),
+        provider_name TEXT NOT NULL CHECK(provider_name='openai'), provider_model TEXT NOT NULL,
+        reservation_ref TEXT NOT NULL, billable_attempt_id TEXT NOT NULL, transport_attempt_id TEXT NOT NULL,
+        dispatch_intent_ref TEXT NOT NULL, target_binding_sha256 TEXT NOT NULL, usage_sha256 TEXT NOT NULL,
+        usage_json TEXT NOT NULL, captured_at TEXT NOT NULL,
+        PRIMARY KEY(tenant_id,project_id,job_id,transport_attempt_id),
+        UNIQUE(tenant_id,project_id,dispatch_intent_ref),
+        FOREIGN KEY(tenant_id,project_id,job_id,transport_attempt_id)
+          REFERENCES creative_dispatch_intents(tenant_id,project_id,job_id,transport_attempt_id)
+      ) STRICT;
+      INSERT INTO private_provider_usage_attributions_v10 SELECT tenant_id,project_id,job_id,action_id,actor_id,request_hash,
+        operation,provider_name,provider_model,reservation_ref,billable_attempt_id,transport_attempt_id,
+        dispatch_intent_ref,target_binding_sha256,usage_sha256,usage_json,captured_at FROM private_provider_usage_attributions;
+      DROP TABLE private_provider_usage_attributions;
+      ALTER TABLE private_provider_usage_attributions_v10 RENAME TO private_provider_usage_attributions;
+      CREATE TRIGGER private_provider_usage_attributions_no_update
+        BEFORE UPDATE ON private_provider_usage_attributions BEGIN SELECT RAISE(ABORT,'private provider usage attribution is immutable'); END;
+      CREATE TRIGGER private_provider_usage_attributions_no_delete
+        BEFORE DELETE ON private_provider_usage_attributions BEGIN SELECT RAISE(ABORT,'private provider usage attribution is immutable'); END;
+      PRAGMA user_version=10;
+      COMMIT;
+      `);
+    } catch (error) {
+      if (db.isTransaction) db.exec("ROLLBACK");
+      db.close();
+      reject("migration_failed", "storage_version");
     }
   }
   db.exec(`PRAGMA user_version=${STORAGE_VERSION};`);
@@ -929,6 +1177,12 @@ export class CreativeVersionStore {
 
   assertOpen() {
     if (this.closed) reject("unavailable", "database");
+  }
+
+  assertNoBorrowedTransaction(field) {
+    // These methods own their complete BEGIN IMMEDIATE transaction. A SAVEPOINT
+    // would still borrow and later roll back the caller's surrounding transaction.
+    if (this.db.isTransaction) reject("unavailable", field, true);
   }
 
   timestamp() {
@@ -1223,7 +1477,7 @@ export class CreativeVersionStore {
         FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
         .get(scope.tenant_id, scope.project_id, job_id);
       if (!row || row.actor_id !== actor_id || row.action_id !== action_id || row.request_hash !== request_hash ||
-        !["generate", "edit"].includes(row.operation) || !["running", "cancelled", "failed"].includes(row.status) ||
+        !["generate", "edit", "concepts.create"].includes(row.operation) || !["running", "cancelled", "failed"].includes(row.status) ||
         row.lease_hash !== createHash("sha256").update(lease_token).digest("hex")) {
         reject("cancelled", "job.lease_token");
       }
@@ -1264,7 +1518,7 @@ export class CreativeVersionStore {
     const job_id = reference(input.job_id, "job_id");
     const action_id = reference(input.action_id, "action_id");
     const request_hash = hash(input.request_hash, "request_hash");
-    if (!['generate', 'edit'].includes(input.operation) || input.provider !== "openai") {
+    if (!['generate', 'edit', 'concepts.create'].includes(input.operation) || input.provider !== "openai") {
       reject("invalid_request", "provider_attribution.operation");
     }
     const provider_model = reference(input.model, "provider_attribution.model", 256);
@@ -1338,7 +1592,7 @@ export class CreativeVersionStore {
     const job_id = reference(input.job_id, "job_id");
     const action_id = reference(input.action_id, "action_id");
     const request_hash = hash(input.request_hash, "request_hash");
-    if (!["generate", "edit"].includes(input.operation) || input.provider !== "openai") {
+    if (!["generate", "edit", "concepts.create"].includes(input.operation) || input.provider !== "openai") {
       reject("invalid_request", "provider_usage_attribution.operation");
     }
     const provider_model = reference(input.model, "provider_usage_attribution.model", 256);
@@ -1441,7 +1695,7 @@ export class CreativeVersionStore {
     const job_id = reference(input.job_id, "job_id");
     const action_id = reference(input.action_id, "action_id");
     const request_hash = hash(input.request_hash, "request_hash");
-    if (!["generate", "edit"].includes(input.operation) || input.provider !== "openai") {
+    if (!["generate", "edit", "concepts.create"].includes(input.operation) || input.provider !== "openai") {
       reject("invalid_request", "provider_attribution_pending.operation");
     }
     const provider_model = reference(input.model, "provider_attribution_pending.model", 256);
@@ -1609,7 +1863,662 @@ export class CreativeVersionStore {
     return freezeReturned({ reconciled, remaining });
   }
 
-  prepareWrite(input) {
+  beginConceptBatch(input) {
+    this.assertOpen();
+    this.assertNoBorrowedTransaction("concept.batch.transaction");
+    if (!isRecord(input) || !isRecord(input.batch)) reject("invalid_request", "concept.batch");
+    const scope = validScope(input.scope, input.brief_id ?? input.batch.brief_id);
+    const actor_id = reference(input.actor_id, "actor_id");
+    const job_id = reference(input.job_id, "job_id");
+    const action_id = reference(input.action_id, "action_id");
+    const request_hash = hash(input.request_hash, "request_hash");
+    const batch = snapshotJson(input.batch, "invalid_request", "concept.batch");
+    if (batch.tenant_id !== scope.tenant_id || batch.project_id !== scope.project_id ||
+        batch.brief_id !== scope.brief_id || batch.action_id !== action_id ||
+        typeof batch.batch_id !== "string" || !Array.isArray(batch.slots) || batch.slots.length < 1 || batch.slots.length > 2) {
+      reject("scope_denied", "concept.batch");
+    }
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const job = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+        .get(scope.tenant_id, scope.project_id, job_id);
+      if (!activeJobLease(job, scope, actor_id, input.lease_token, this.now()) ||
+          job.operation !== "concepts.create" || job.action_id !== action_id || job.request_hash !== request_hash) {
+        reject("cancelled", "concept.job");
+      }
+      const prior = this.db.prepare(`SELECT * FROM creative_concept_batches_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+      if (prior) {
+        if (prior.job_id !== job_id || prior.actor_id !== actor_id || prior.request_hash !== request_hash ||
+            prior.batch_id !== batch.batch_id || prior.batch_json !== canonicalSerialize(batch)) reject("conflict", "concept.action_id");
+        this.db.exec("COMMIT");
+        return freezeReturned({ status: "existing", batch: JSON.parse(prior.batch_json), batch_status: prior.status });
+      }
+      const now = this.timestamp();
+      this.db.prepare(`INSERT INTO creative_concept_batches_v1
+        (tenant_id,project_id,brief_id,action_id,job_id,actor_id,request_hash,batch_id,status,batch_json,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?, 'running',?,?,?)`)
+        .run(scope.tenant_id, scope.project_id, scope.brief_id, action_id, job_id, actor_id, request_hash,
+          batch.batch_id, canonicalSerialize(batch), now, now);
+      this.db.exec("COMMIT");
+      return freezeReturned({ status: "created", batch, batch_status: "running" });
+    } catch (error) {
+      this.rollback();
+      if (error instanceof VersionStoreError) throw error;
+      reject("unavailable", "concept.batch", true);
+    }
+  }
+
+  appendConceptEvent(input) {
+    this.assertOpen();
+    this.assertNoBorrowedTransaction("concept.event.transaction");
+    if (!isRecord(input) || !isRecord(input.event)) reject("invalid_request", "concept.event");
+    const scope = validScope(input.scope, input.brief_id ?? input.scope?.brief_id);
+    const action_id = reference(input.action_id, "action_id");
+    const job_id = reference(input.job_id, "job_id");
+    const actor_id = reference(input.actor_id, "actor_id");
+    const request_hash = hash(input.request_hash, "request_hash");
+    const event = snapshotJson(input.event, "invalid_request", "concept.event");
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const row = this.db.prepare(`SELECT * FROM creative_concept_batches_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+      const job = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+        .get(scope.tenant_id, scope.project_id, job_id);
+      const active = activeJobLease(job, scope, actor_id, input.lease_token, this.now());
+      let postFenceUnknown = false;
+      if (!active && row && job && row.job_id === job_id && row.actor_id === actor_id &&
+          row.request_hash === request_hash && job.actor_id === actor_id && job.action_id === action_id &&
+          job.request_hash === request_hash && job.operation === "concepts.create" &&
+          job.lease_hash === createHash("sha256").update(input.lease_token).digest("hex") &&
+          (job.status === "cancelled" || job.status === "running" && Date.parse(job.lease_expires_at) <= this.now()) &&
+          event.event_type === "provider_outcome" && event.outcome === "unknown" &&
+          event.usage_completeness === "unknown" && event.provider_request_id === undefined &&
+          event.artifact_sha256 === undefined && Object.keys(event).every((key) => [
+            "tenant_id", "project_id", "action_id", "batch_id", "concept_id", "event_id", "event_type",
+            "billable_attempt_id", "transport_attempt_id", "outcome", "outcome_evidence_ref",
+            "usage_evidence_ref", "usage_completeness",
+          ].includes(key))) {
+        const currentBatch = snapshotJson(JSON.parse(row.batch_json), "integrity_error", "concept.batch");
+        const slot = currentBatch.slots.find((item) => item.concept_id === event.concept_id);
+        const attempt = slot?.attempts.find((item) => item.billable_attempt_id === event.billable_attempt_id);
+        const dispatch = this.db.prepare(`SELECT billable_attempt_id,reservation_ref,dispatch_intent_ref,
+          target_binding_sha256 FROM creative_dispatch_intents
+          WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`)
+          .get(scope.tenant_id, scope.project_id, job_id, event.transport_attempt_id);
+        const stage = this.db.prepare(`SELECT 1 AS present FROM creative_concept_response_stages_v1
+          WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND concept_id=?`)
+          .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id, event.concept_id);
+        const expectedOutcomeRef = slot && attempt
+          ? `concept-outcome:${canonicalHash({ batch_id: currentBatch.batch_id, concept_id: slot.concept_id,
+            billable_attempt_id: attempt.billable_attempt_id, outcome: "unknown", artifact_sha256: null }).slice(7)}`
+          : null;
+        const expectedUsageRef = slot && attempt
+          ? `concept-usage-unknown:${canonicalHash({ batch_id: currentBatch.batch_id, concept_id: slot.concept_id,
+            billable_attempt_id: attempt.billable_attempt_id }).slice(7)}`
+          : null;
+        let safeUnknownUsageRef = event.usage_evidence_ref === expectedUsageRef;
+        if (!safeUnknownUsageRef && slot && attempt && typeof event.usage_evidence_ref === "string") {
+          try {
+            const usageRecordRef = reference(event.usage_evidence_ref, "concept.usage_evidence_ref");
+            const usageRow = this.db.prepare(`SELECT record_ref,tenant_id,project_id,budget_scope_id,logical_operation_id,
+              billable_attempt_id,source_observation_id,payload_json,payload_sha256 FROM creative_telemetry_observations_v1
+              WHERE record_ref=?`).get(usageRecordRef);
+            const payload = usageRow ? JSON.parse(usageRow.payload_json) : null;
+            const observedAttempt = payload?.attempt;
+            const observation = payload?.observation;
+            const meteringAttempt = attempt.metering_attempt;
+            const usageChecks = {
+              row: Boolean(usageRow), payload: isRecord(payload), attempt: isRecord(observedAttempt), observation: isRecord(observation),
+              payload_canonical: Boolean(usageRow && canonicalSerialize(payload) === usageRow.payload_json),
+              payload_hash: Boolean(usageRow && canonicalHash(payload).slice(7) === usageRow.payload_sha256),
+              record_ref: usageRow?.record_ref === usageRecordRef, tenant: usageRow?.tenant_id === scope.tenant_id,
+              project: usageRow?.project_id === scope.project_id, budget: usageRow?.budget_scope_id === meteringAttempt?.budget_scope_id,
+              logical: usageRow?.logical_operation_id === slot.logical_operation_id,
+              billable: usageRow?.billable_attempt_id === attempt.billable_attempt_id,
+              source: usageRow?.source_observation_id === observation?.source_observation_id,
+              attempt_tenant: observedAttempt?.tenant_id === scope.tenant_id,
+              attempt_project: observedAttempt?.project_id === scope.project_id,
+              attempt_budget: observedAttempt?.budget_scope_id === meteringAttempt?.budget_scope_id,
+              attempt_logical: observedAttempt?.logical_operation_id === slot.logical_operation_id,
+              attempt_billable: observedAttempt?.billable_attempt_id === attempt.billable_attempt_id,
+              operation_kind: observedAttempt?.operation_kind === meteringAttempt?.operation_kind,
+              attempt_provider: observedAttempt?.provider?.name === meteringAttempt?.provider?.name,
+              attempt_model: observedAttempt?.provider?.model === meteringAttempt?.provider?.model,
+              observation_tenant: observation?.tenant_id === scope.tenant_id,
+              observation_project: observation?.project_id === scope.project_id,
+              observation_budget: observation?.budget_scope_id === meteringAttempt?.budget_scope_id,
+              observation_logical: observation?.logical_operation_id === slot.logical_operation_id,
+              observation_billable: observation?.billable_attempt_id === attempt.billable_attempt_id,
+              transport: observation?.transport_attempt_id === attempt.transport_attempt_id,
+              observation_source: observation?.source_observation_id === usageRow?.source_observation_id,
+              provider: observation?.provider_name === meteringAttempt?.provider?.name,
+              model: observation?.model === meteringAttempt?.provider?.model,
+            };
+            safeUnknownUsageRef = Object.values(usageChecks).every(Boolean);
+          } catch { safeUnknownUsageRef = false; }
+        }
+        postFenceUnknown = row.status === "running" && row.job_id === job_id && row.batch_id === event.batch_id &&
+          currentBatch.action_id === action_id && currentBatch.batch_id === row.batch_id && slot?.status === "dispatching" &&
+          slot.current_billable_attempt_id === event.billable_attempt_id && attempt?.status === "dispatching" &&
+          attempt.transport_attempt_id === event.transport_attempt_id && attempt.dispatch_intent_ref !== null &&
+          dispatch?.billable_attempt_id === attempt.billable_attempt_id &&
+          dispatch.reservation_ref === attempt.reservation_ref && dispatch.dispatch_intent_ref === attempt.dispatch_intent_ref &&
+          dispatch.target_binding_sha256 === attempt.provider_target_binding_sha256 && !stage &&
+          event.outcome_evidence_ref === expectedOutcomeRef && safeUnknownUsageRef &&
+          event.tenant_id === scope.tenant_id && event.project_id === scope.project_id &&
+          event.action_id === action_id && event.batch_id === currentBatch.batch_id;
+      }
+      if (!row || row.job_id !== job_id || row.actor_id !== actor_id || row.request_hash !== request_hash ||
+          !active && !postFenceUnknown) {
+        reject("cancelled", "concept.job");
+      }
+      const batch = snapshotJson(JSON.parse(row.batch_json), "integrity_error", "concept.batch");
+      let applied;
+      try { applied = applyCreativeConceptEvent(batch, event); }
+      catch { reject("conflict", "concept.event"); }
+      if (applied.status === "duplicate") {
+        this.db.exec("COMMIT");
+        return freezeReturned({ status: "replayed", batch: applied.batch, batch_status: row.status });
+      }
+      const next = applied.batch;
+      const hasUnknown = next.slots.some((slot) => slot.attempts.some((attempt) => attempt.unknown_financial_exposure));
+      const allSucceeded = next.slots.every((slot) => slot.status === "succeeded");
+      const hasSuccess = next.slots.some((slot) => slot.status === "succeeded");
+      const hasTerminalPartial = next.slots.some((slot) => ["failed", "cancelled", "unknown"].includes(slot.status));
+      const status = hasUnknown ? "unknown_hold" : allSucceeded ? "completed" :
+        hasSuccess || hasTerminalPartial ? "partial" : "running";
+      const eventHash = canonicalHash(event);
+      const priorEvent = this.db.prepare(`SELECT event_hash,event_json FROM creative_concept_events_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND event_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, event.event_id);
+      if (priorEvent && (priorEvent.event_hash !== eventHash || priorEvent.event_json !== canonicalSerialize(event))) {
+        reject("conflict", "concept.event_id");
+      }
+      if (!priorEvent) {
+        const sequence = this.db.prepare(`SELECT COALESCE(MAX(sequence),0)+1 AS next FROM creative_concept_events_v1
+          WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+          .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id).next;
+        this.db.prepare(`INSERT INTO creative_concept_events_v1
+          (tenant_id,project_id,brief_id,action_id,sequence,event_id,event_type,event_hash,event_json,created_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`).run(scope.tenant_id, scope.project_id, scope.brief_id, action_id,
+          sequence, event.event_id, event.event_type, eventHash, canonicalSerialize(event), this.timestamp());
+      }
+      this.db.prepare(`UPDATE creative_concept_batches_v1 SET batch_json=?,status=?,updated_at=?
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+        .run(canonicalSerialize(next), status, this.timestamp(), scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+      this.db.exec("COMMIT");
+      return freezeReturned({ status: "recorded", batch: next, batch_status: status });
+    } catch (error) {
+      this.rollback();
+      if (error instanceof VersionStoreError) throw error;
+      reject("unavailable", "concept.event", true);
+    }
+  }
+
+  async stageConceptResponse(input) {
+    this.assertOpen();
+    this.assertNoBorrowedTransaction("concept.response.transaction");
+    if (!isRecord(input) || !(input.bytes instanceof Uint8Array) || input.bytes.byteLength === 0 ||
+        input.bytes.byteLength > this.maxArtifactBytes) reject("invalid_request", "concept.response");
+    // Snapshot every mutable input before the first await. Image inspection is
+    // asynchronous, so retaining a caller-owned view could otherwise hash and
+    // inspect one buffer then persist different bytes or metadata.
+    const bytes = Uint8Array.from(input.bytes);
+    const scope = validScope(input.scope, input.brief_id ?? input.scope?.brief_id);
+    const brief_id = scope.brief_id;
+    const action_id = reference(input.action_id, "action_id");
+    const job_id = reference(input.job_id, "job_id");
+    const actor_id = reference(input.actor_id, "actor_id");
+    const request_hash = hash(input.request_hash, "request_hash");
+    const lease_token = reference(input.lease_token, "lease_token");
+    const concept_id = reference(input.concept_id, "concept_id");
+    const billable_attempt_id = reference(input.billable_attempt_id, "billable_attempt_id");
+    const transport_attempt_id = reference(input.transport_attempt_id, "transport_attempt_id");
+    const reservation_ref = reference(input.reservation_ref, "reservation_ref");
+    const dispatch_intent_ref = reference(input.dispatch_intent_ref, "dispatch_intent_ref");
+    const target_binding_sha256 = hash(input.target_binding_sha256, "target_binding_sha256");
+    const expected_content_hash = hash(input.content_hash, "content_hash");
+    const media_type = input.media_type;
+    const width = input.width;
+    const height = input.height;
+    if (typeof media_type !== "string" || !["image/png", "image/jpeg", "image/webp"].includes(media_type) ||
+        !Number.isSafeInteger(width) || width < 1 || !Number.isSafeInteger(height) || height < 1) {
+      reject("invalid_request", "concept.response.metadata");
+    }
+    const content_hash = hashArtifactBytes(bytes);
+    if (content_hash !== expected_content_hash) reject("integrity_error", "concept.response_hash");
+    let decoded;
+    try {
+      decoded = await inspectCreativeConceptImageBytes({ bytes,
+        expected_media_type: media_type, maximum_bytes: this.maxArtifactBytes,
+        expected_dimensions: { width, height } });
+    } catch { reject("integrity_error", "concept.response_image"); }
+    const stage_ref = `concept-stage:${canonicalHash({ action_id, concept_id, billable_attempt_id, transport_attempt_id, content_hash }).slice(7)}`;
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const job = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+        .get(scope.tenant_id, scope.project_id, job_id);
+      const batch = this.db.prepare(`SELECT * FROM creative_concept_batches_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+        .get(scope.tenant_id, scope.project_id, brief_id, action_id);
+      const dispatchBinding = this.db.prepare(`SELECT target_binding_sha256,target_binding_json,rendered_prompt_sha256
+        FROM creative_concept_dispatch_bindings_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND job_id=? AND transport_attempt_id=?
+          AND billable_attempt_id=? AND reservation_ref=? AND dispatch_intent_ref=?`)
+        .get(scope.tenant_id, scope.project_id, brief_id, action_id, job_id, transport_attempt_id,
+          billable_attempt_id, reservation_ref, dispatch_intent_ref);
+      const dispatch = this.db.prepare(`SELECT billable_attempt_id,reservation_ref,dispatch_intent_ref,target_binding_sha256,
+        target_binding_json,rendered_prompt_sha256 FROM creative_dispatch_intents
+        WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`)
+        .get(scope.tenant_id, scope.project_id, job_id, transport_attempt_id);
+      if (!activeJobLease(job, scope, actor_id, lease_token, this.now()) ||
+          !batch || batch.job_id !== job_id || batch.request_hash !== request_hash ||
+          !dispatch || dispatch.billable_attempt_id !== billable_attempt_id || dispatch.reservation_ref !== reservation_ref ||
+          dispatch.dispatch_intent_ref !== dispatch_intent_ref || !dispatchBinding ||
+          dispatchBinding.target_binding_sha256 !== target_binding_sha256 || dispatch.target_binding_sha256 !== target_binding_sha256 ||
+          dispatchBinding.target_binding_json !== dispatch.target_binding_json ||
+          dispatchBinding.rendered_prompt_sha256 !== dispatch.rendered_prompt_sha256) reject("cancelled", "concept.response_authority");
+      let durableTarget;
+      try { durableTarget = JSON.parse(dispatch.target_binding_json); }
+      catch { reject("integrity_error", "concept.dispatch_target"); }
+      if (!isRecord(durableTarget) || providerTargetHash(durableTarget) !== target_binding_sha256 ||
+          durableTarget.prompt_sha256 !== dispatch.rendered_prompt_sha256 ||
+          durableTarget.billable_attempt_id !== billable_attempt_id ||
+          durableTarget.tenant_id !== scope.tenant_id || durableTarget.project_id !== scope.project_id ||
+          durableTarget.operation_kind !== "image_edit") reject("integrity_error", "concept.dispatch_target");
+      const prior = this.db.prepare(`SELECT * FROM creative_concept_response_stages_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND concept_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id, concept_id);
+      if (prior) {
+        if (prior.billable_attempt_id !== billable_attempt_id || prior.transport_attempt_id !== transport_attempt_id ||
+            prior.content_hash !== content_hash || prior.media_type !== media_type || prior.width !== decoded.width ||
+            prior.height !== decoded.height || !Buffer.from(prior.response_bytes).equals(Buffer.from(bytes))) {
+          reject("conflict", "concept.response_identity");
+        }
+        this.db.exec("COMMIT");
+        return freezeReturned({ status: "replayed", stage_ref: prior.stage_ref, content_hash: prior.content_hash });
+      }
+      const now = this.timestamp();
+      this.db.prepare(`INSERT INTO creative_concept_response_stages_v1
+        (tenant_id,project_id,brief_id,action_id,concept_id,billable_attempt_id,transport_attempt_id,reservation_ref,
+         dispatch_intent_ref,target_binding_sha256,content_hash,media_type,width,height,byte_length,response_bytes,stage_ref,status,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'response_received',?,?)`)
+        .run(scope.tenant_id, scope.project_id, scope.brief_id, action_id, concept_id, billable_attempt_id,
+          transport_attempt_id, reservation_ref, dispatch_intent_ref, target_binding_sha256, content_hash,
+          media_type, decoded.width, decoded.height, bytes.byteLength, Buffer.from(bytes), stage_ref, now, now);
+      this.db.exec("COMMIT");
+      return freezeReturned({ status: "staged", stage_ref, content_hash });
+    } catch (error) {
+      this.rollback();
+      if (error instanceof VersionStoreError) throw error;
+      reject("unavailable", "concept.response_stage", true);
+    }
+  }
+
+  recordConceptDispatchBinding(input) {
+    this.assertOpen();
+    this.assertNoBorrowedTransaction("concept.dispatch_binding.transaction");
+    if (!isRecord(input) || !isRecord(input.scope)) reject("invalid_request", "concept.dispatch_binding");
+    const scope = validScope(input.scope, input.brief_id ?? input.scope.brief_id);
+    const actor_id = reference(input.actor_id, "actor_id");
+    const job_id = reference(input.job_id, "job_id");
+    const action_id = reference(input.action_id, "action_id");
+    const request_hash = hash(input.request_hash, "request_hash");
+    const lease_token = reference(input.lease_token, "lease_token");
+    const billable_attempt_id = reference(input.billable_attempt_id, "billable_attempt_id");
+    const transport_attempt_id = reference(input.transport_attempt_id, "transport_attempt_id");
+    const reservation_ref = reference(input.reservation_ref, "reservation_ref");
+    const dispatch_intent_ref = reference(input.dispatch_intent_ref, "dispatch_intent_ref");
+    if (!isRecord(input.target_binding)) reject("invalid_request", "concept.target_binding");
+    let target_binding_json;
+    let target_binding;
+    try {
+      target_binding_json = JSON.stringify(input.target_binding);
+      if (typeof target_binding_json !== "string" || Buffer.byteLength(target_binding_json, "utf8") > 32 * 1024) {
+        reject("invalid_request", "concept.target_binding");
+      }
+      target_binding = JSON.parse(target_binding_json);
+      if (JSON.stringify(target_binding) !== target_binding_json) reject("invalid_request", "concept.target_binding");
+    } catch (error) {
+      if (error instanceof VersionStoreError) throw error;
+      reject("invalid_request", "concept.target_binding");
+    }
+    const target_binding_sha256 = hash(input.target_binding_sha256, "target_binding_sha256");
+    const rendered_prompt_sha256 = hash(input.rendered_prompt_sha256, "rendered_prompt_sha256");
+    if (providerTargetHash(target_binding) !== target_binding_sha256 || !isRecord(target_binding) ||
+        target_binding.service !== "openai" || target_binding.endpoint !== "https://api.openai.com/v1/images/edits" ||
+        target_binding.operation !== "edit" || target_binding.operation_kind !== "image_edit" ||
+        target_binding.sdk_name !== "native-fetch" || target_binding.prompt_sha256 !== rendered_prompt_sha256 ||
+        target_binding.tenant_id !== scope.tenant_id || target_binding.project_id !== scope.project_id ||
+        target_binding.billable_attempt_id !== billable_attempt_id ||
+        !isRecord(target_binding.transport_policy) || target_binding.transport_policy.maximum_transport_attempts !== 1 ||
+        target_binding.transport_policy.automatic_retry !== false || !Array.isArray(target_binding.transport_policy.stop_on)) {
+      reject("integrity_error", "concept.target_binding");
+    }
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const job = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+        .get(scope.tenant_id, scope.project_id, job_id);
+      const batch = this.db.prepare(`SELECT job_id,request_hash FROM creative_concept_batches_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+      const dispatch = this.db.prepare(`SELECT billable_attempt_id,reservation_ref,dispatch_intent_ref,provider_name,provider_model,
+        target_binding_sha256,target_binding_json,rendered_prompt_sha256
+        FROM creative_dispatch_intents WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`)
+        .get(scope.tenant_id, scope.project_id, job_id, transport_attempt_id);
+      if (!activeJobLease(job, scope, actor_id, lease_token, this.now()) ||
+          job.operation !== "concepts.create" || job.action_id !== action_id || job.request_hash !== request_hash ||
+          !batch || batch.job_id !== job_id || batch.request_hash !== request_hash ||
+          !dispatch || dispatch.billable_attempt_id !== billable_attempt_id || dispatch.reservation_ref !== reservation_ref ||
+          dispatch.dispatch_intent_ref !== dispatch_intent_ref) reject("cancelled", "concept.dispatch_binding.authority");
+      if (!dispatch || dispatch.billable_attempt_id !== billable_attempt_id || dispatch.reservation_ref !== reservation_ref ||
+          dispatch.dispatch_intent_ref !== dispatch_intent_ref || dispatch.provider_name !== "openai" ||
+          dispatch.provider_model !== target_binding.model) reject("integrity_error", "concept.dispatch_target");
+      const prior = this.db.prepare(`SELECT target_binding_sha256,target_binding_json,rendered_prompt_sha256
+        FROM creative_concept_dispatch_bindings_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND transport_attempt_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id, transport_attempt_id);
+      if (prior) {
+        if (prior.target_binding_sha256 !== target_binding_sha256 || prior.target_binding_json !== target_binding_json ||
+            prior.rendered_prompt_sha256 !== rendered_prompt_sha256) reject("conflict", "concept.dispatch_binding.identity");
+        this.db.exec("COMMIT");
+        return freezeReturned({ status: "replayed", transport_attempt_id, target_binding_sha256 });
+      }
+      if (dispatch.target_binding_sha256 !== null || dispatch.target_binding_json !== null ||
+          dispatch.rendered_prompt_sha256 !== null) reject("conflict", "concept.dispatch_binding.identity");
+      const boundDispatch = this.db.prepare(`UPDATE creative_dispatch_intents
+        SET target_binding_sha256=?,target_binding_json=?,rendered_prompt_sha256=?
+        WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?
+          AND target_binding_sha256 IS NULL AND target_binding_json IS NULL AND rendered_prompt_sha256 IS NULL`)
+        .run(target_binding_sha256, target_binding_json, rendered_prompt_sha256,
+          scope.tenant_id, scope.project_id, job_id, transport_attempt_id).changes;
+      if (boundDispatch !== 1) reject("conflict", "concept.dispatch_binding.identity");
+      this.db.prepare(`INSERT INTO creative_concept_dispatch_bindings_v1
+        (tenant_id,project_id,brief_id,action_id,job_id,billable_attempt_id,transport_attempt_id,reservation_ref,
+         dispatch_intent_ref,target_binding_sha256,target_binding_json,rendered_prompt_sha256,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(scope.tenant_id, scope.project_id, scope.brief_id, action_id, job_id, billable_attempt_id,
+          transport_attempt_id, reservation_ref, dispatch_intent_ref, target_binding_sha256, target_binding_json,
+          rendered_prompt_sha256, this.timestamp());
+      this.db.exec("COMMIT");
+      return freezeReturned({ status: "recorded", transport_attempt_id, target_binding_sha256 });
+    } catch (error) {
+      this.rollback();
+      if (error instanceof VersionStoreError) throw error;
+      reject("unavailable", "concept.dispatch_binding", true);
+    }
+  }
+
+  async prepareConceptArtifactObjects(input) {
+    this.assertOpen();
+    this.assertNoBorrowedTransaction("concept.artifact_prepare.transaction");
+    if (!isRecord(input) || !Array.isArray(input.concept_ids) || input.concept_ids.length < 1 || input.concept_ids.length > 2) {
+      reject("invalid_request", "concept.artifact_prepare");
+    }
+    const scope = validScope(input.scope, input.brief_id ?? input.scope?.brief_id);
+    const action_id = reference(input.action_id, "action_id");
+    const concept_ids = input.concept_ids.map((value, index) => reference(value, `concept_ids[${index}]`));
+    if (new Set(concept_ids).size !== concept_ids.length) reject("invalid_request", "concept_ids");
+    const results = [];
+    for (const concept_id of concept_ids) {
+      const stage = this.getConceptResponseStage({ scope, action_id, concept_id });
+      if (!stage || !["response_received", "published"].includes(stage.status)) {
+        reject("conflict", "concept.response_stage");
+      }
+      try {
+        const written = await writeContentAddressedObject(this.objectRoot, stage.response_bytes, stage.content_hash);
+        if (written?.content_hash !== stage.content_hash) reject("integrity_error", "concept.artifact_hash");
+      } catch (error) {
+        if (error instanceof VersionStoreError) throw error;
+        if (error instanceof ContentAddressedStorageError && error.code === "hash_mismatch") {
+          reject("integrity_error", "concept.artifact_hash");
+        }
+        reject("unavailable", "concept.artifact_storage", true);
+      }
+      results.push(Object.freeze({ concept_id, content_hash: stage.content_hash,
+        byte_length: stage.byte_length, status: "object_durable" }));
+    }
+    return freezeReturned({ action_id, artifacts: results });
+  }
+
+  publishConceptBatch(input, transaction) {
+    this.assertOpen();
+    const publication = this.publicationTransactionData(transaction);
+    if (!publication || this.db.isTransaction !== true || !isRecord(input) || !Array.isArray(input.publications) ||
+        input.publications.length > 2) reject("scope_denied", "publication_transaction");
+    const scope = validScope(input.scope, input.brief_id ?? input.scope?.brief_id);
+    const actor_id = reference(input.actor_id, "actor_id");
+    const job_id = reference(input.job_id, "job_id");
+    const action_id = reference(input.action_id, "action_id");
+    const request_hash = hash(input.request_hash, "request_hash");
+    if (publication.actor_id !== actor_id || publication.job_id !== job_id || publication.action_id !== action_id ||
+        publication.request_hash !== request_hash || publication.scope.tenant_id !== scope.tenant_id ||
+        publication.scope.project_id !== scope.project_id || publication.scope.brief_id !== scope.brief_id) {
+      reject("scope_denied", "publication_transaction");
+    }
+    const batchRow = this.db.prepare(`SELECT * FROM creative_concept_batches_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+      .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+    const job = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+      .get(scope.tenant_id, scope.project_id, job_id);
+    if (!batchRow || batchRow.job_id !== job_id || batchRow.actor_id !== actor_id || batchRow.request_hash !== request_hash ||
+        !activeJobLease(job, scope, actor_id, publication.lease_token, this.now())) reject("cancelled", "concept.publication_authority");
+    let batch = snapshotJson(JSON.parse(batchRow.batch_json), "integrity_error", "concept.batch");
+    const seen = new Set();
+    const published = [];
+    const genericWrites = [];
+    let lastOrdinal = 0;
+    for (const candidate of input.publications) {
+      if (!isRecord(candidate) || Object.keys(candidate).some((key) => ![
+        "concept_id", "ordinal", "design_version", "creation", "storage_commit_ref", "lineage_evidence_ref",
+        "creative_concept_lineage", "event_id",
+      ].includes(key))) reject("invalid_request", "concept.publication");
+      const concept_id = reference(candidate.concept_id, "concept_id");
+      if (seen.has(concept_id)) reject("invalid_request", "concept.publication.concept_id");
+      seen.add(concept_id);
+      const design = snapshotJson(candidate.design_version, "invalid_request", "concept.design_version");
+      const design_version_id = reference(design.design_version_id, "design_version_id");
+      const version = validateDesignVersion(design, {
+        trustedScope: { ...scope, design_version_id },
+        brief_hash: batch.brief_sha256,
+        known_source_refs: batch.references.map((reference) => reference.source_ref),
+      });
+      const expectedSourceRefs = [...new Set(batch.references.map((reference) => reference.source_ref))];
+      if (version.parent_version_id !== null || version.brief_id !== scope.brief_id ||
+          version.source_refs.length !== expectedSourceRefs.length ||
+          !expectedSourceRefs.every((sourceRef) => version.source_refs.includes(sourceRef))) {
+        reject("integrity_error", "concept.design_version_lineage");
+      }
+      const stage = this.db.prepare(`SELECT * FROM creative_concept_response_stages_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND concept_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id, concept_id);
+      if (!stage || stage.status !== "response_received" || stage.content_hash !== version.artifact.content_hash ||
+          stage.media_type !== version.artifact.media_type || stage.target_binding_sha256 === null ||
+          candidate.storage_commit_ref !== `concept-store:${canonicalHash({ concept_id, design_hash: version.design_hash,
+            artifact_hash: version.artifact.content_hash })}`) {
+        reject("integrity_error", "concept.publication_stage");
+      }
+      const object = readStoredObjectSync(this.objectRoot, stage.content_hash);
+      if (!object || object.byteLength !== stage.byte_length || hashArtifactBytes(object) !== stage.content_hash ||
+          !Buffer.from(object).equals(Buffer.from(stage.response_bytes))) reject("integrity_error", "concept.artifact_object");
+      const slot = batch.slots.find((item) => item.concept_id === concept_id);
+      const attempt = slot?.attempts.find((item) => item.billable_attempt_id === stage.billable_attempt_id);
+      if (!slot || !attempt || slot.status !== "staged" || slot.current_billable_attempt_id !== stage.billable_attempt_id ||
+          attempt.transport_attempt_id !== stage.transport_attempt_id ||
+          attempt.provider_target_binding_sha256 !== stage.target_binding_sha256) reject("conflict", "concept.publication_attempt");
+      if (candidate.ordinal !== slot.ordinal || slot.ordinal <= lastOrdinal || !isRecord(candidate.creation)) {
+        reject("integrity_error", "concept.publication_order");
+      }
+      lastOrdinal = slot.ordinal;
+      const candidateActionId = slot.ordinal === 1
+        ? action_id : `concept-version-${canonicalHash({ action_id, concept_id }).slice(7)}`;
+      const creation = snapshotJson({ ...candidate.creation, job_id, actor_id, request_hash, action_id: candidateActionId },
+        "invalid_request", "concept.version_creation");
+      if (creation.billable_attempt_id !== stage.billable_attempt_id ||
+          !Array.isArray(creation.transport_attempt_ids) || !creation.transport_attempt_ids.includes(stage.transport_attempt_id)) {
+        reject("integrity_error", "concept.version_creation");
+      }
+      const brief = this.getBrief({ scope, brief_id: scope.brief_id });
+      if (!brief || canonicalHash(brief) !== batch.brief_sha256) reject("stale_version", "concept.brief_hash");
+      genericWrites.push({ scope, brief_id: scope.brief_id, actor_id, brief_snapshot: brief,
+        design_version: version, artifact_bytes: Uint8Array.from(stage.response_bytes), selection: { mode: "concept" },
+        creation, configuration_snapshot: batch.adapter_snapshot.configuration,
+        concept_identity: { concept_id, ordinal: slot.ordinal } });
+      const event = snapshotJson({
+        tenant_id: batch.tenant_id, project_id: batch.project_id, action_id,
+        batch_id: batch.batch_id, concept_id, event_id: candidate.event_id,
+        event_type: "candidate_published", billable_attempt_id: stage.billable_attempt_id,
+        transport_attempt_id: stage.transport_attempt_id, design_version: version,
+        storage_commit_ref: candidate.storage_commit_ref, lineage_evidence_ref: candidate.lineage_evidence_ref,
+      }, "invalid_request", "concept.publication_event");
+      let applied;
+      try { applied = applyCreativeConceptEvent(batch, event); }
+      catch { reject("integrity_error", "concept.publication_event"); }
+      if (applied.status !== "applied") reject("conflict", "concept.publication_event");
+      batch = applied.batch;
+      const publishedSlot = batch.slots.find((item) => item.concept_id === concept_id);
+      const conceptLineage = creativeConceptLineage(batch, publishedSlot, version);
+      if (!isRecord(candidate.creative_concept_lineage) ||
+          canonicalSerialize(candidate.creative_concept_lineage) !== canonicalSerialize(conceptLineage) ||
+          candidate.lineage_evidence_ref !== `concept-lineage:${canonicalHash(conceptLineage)}`) {
+        reject("integrity_error", "concept.publication_lineage");
+      }
+      const eventHash = canonicalHash(event);
+      const nextSequence = this.db.prepare(`SELECT COALESCE(MAX(sequence),0)+1 AS next FROM creative_concept_events_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id).next;
+      this.db.prepare(`INSERT INTO creative_concept_events_v1
+        (tenant_id,project_id,brief_id,action_id,sequence,event_id,event_type,event_hash,event_json,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?)`).run(scope.tenant_id, scope.project_id, scope.brief_id, action_id,
+        nextSequence, event.event_id, event.event_type, eventHash, canonicalSerialize(event), this.timestamp());
+      this.db.prepare(`INSERT INTO creative_concept_versions_v1
+        (tenant_id,project_id,brief_id,action_id,concept_id,ordinal,design_version_id,design_hash,artifact_id,
+         artifact_hash,media_type,parent_version_id,lineage_json,design_version_json,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?)`)
+        .run(scope.tenant_id, scope.project_id, scope.brief_id, action_id, concept_id, slot.ordinal,
+          version.design_version_id, version.design_hash, version.artifact.artifact_id, version.artifact.content_hash,
+          version.artifact.media_type, canonicalSerialize({ output_lineage: publishedSlot.output_lineage,
+            creative_concept_lineage: conceptLineage, storage_commit_ref: candidate.storage_commit_ref,
+            lineage_evidence_ref: candidate.lineage_evidence_ref }),
+          canonicalSerialize(version), this.timestamp());
+      this.db.prepare(`UPDATE creative_concept_response_stages_v1 SET status='published',updated_at=?
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND concept_id=? AND status='response_received'`)
+        .run(this.timestamp(), scope.tenant_id, scope.project_id, scope.brief_id, action_id, concept_id);
+      published.push({ concept_id, ordinal: slot.ordinal, design_version: version,
+        creative_concept_lineage: conceptLineage, storage_commit_ref: candidate.storage_commit_ref,
+        lineage_evidence_ref: candidate.lineage_evidence_ref });
+    }
+    const genericVersions = genericWrites.length ? this.commitConceptDesignVersions(genericWrites, transaction) : [];
+    if (genericVersions.length !== published.length || genericVersions.some((value, index) =>
+      canonicalSerialize(value.design_version) !== canonicalSerialize(published[index].design_version))) {
+      reject("integrity_error", "concept.public_design_versions");
+    }
+    const hasUnknown = batch.slots.some((slot) => slot.attempts.some((attempt) => attempt.unknown_financial_exposure));
+    const allSucceeded = batch.slots.every((slot) => slot.status === "succeeded");
+    const hasSuccess = batch.slots.some((slot) => slot.status === "succeeded");
+    const hasTerminalPartial = batch.slots.some((slot) => ["failed", "cancelled", "unknown"].includes(slot.status));
+    const status = hasUnknown ? "unknown_hold" : allSucceeded ? "completed" :
+      hasSuccess || hasTerminalPartial ? "partial" : "running";
+    this.db.prepare(`UPDATE creative_concept_batches_v1 SET batch_json=?,status=?,updated_at=?
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+      .run(canonicalSerialize(batch), status, this.timestamp(), scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+    const allCandidates = this.getConceptVersions({ scope, action_id });
+    const result = freezeReturned({ contract: "CreativeConceptBatchResult", schema_version: "1.1",
+      batch_id: batch.batch_id, status, requested_count: batch.requested_count,
+      progress: batch.slots.map((slot) => ({ concept_id: slot.concept_id, ordinal: slot.ordinal,
+        status: slot.status, attempts: slot.attempts.length,
+        billable_attempt_id: slot.current_billable_attempt_id })), candidates: allCandidates });
+    if (canonicalSerialize(publication.result) !== canonicalSerialize(input.expected_result) ||
+        canonicalSerialize(publication.result.candidate_batch) !== canonicalSerialize(result)) {
+      reject("integrity_error", "concept.publication_result");
+    }
+    return result;
+  }
+
+  getConceptVersions(input) {
+    this.assertOpen();
+    const scope = validScope(input?.scope, input?.brief_id ?? input?.scope?.brief_id);
+    const action_id = reference(input?.action_id, "action_id");
+    const rows = this.db.prepare(`SELECT * FROM creative_concept_versions_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? ORDER BY ordinal`)
+      .all(scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+    return freezeReturned(rows.map((row) => {
+      const design_version = snapshotJson(JSON.parse(row.design_version_json), "integrity_error", "concept.design_version");
+      const lineageRecord = snapshotJson(JSON.parse(row.lineage_json), "integrity_error", "concept.lineage");
+      const output_lineage = lineageRecord.output_lineage;
+      const creative_concept_lineage = lineageRecord.creative_concept_lineage;
+      const generic = this.getDesignVersion({ scope, brief_id: scope.brief_id, design_version_id: row.design_version_id });
+      if (row.parent_version_id !== null || design_version.parent_version_id !== null ||
+          design_version.design_version_id !== row.design_version_id || design_version.design_hash !== row.design_hash ||
+          design_version.artifact?.content_hash !== row.artifact_hash || output_lineage.design_version_id !== row.design_version_id ||
+          output_lineage.design_sha256 !== row.design_hash || output_lineage.artifact_id !== row.artifact_id ||
+          output_lineage.artifact_sha256 !== row.artifact_hash || output_lineage.artifact_media_type !== row.media_type ||
+          !generic || canonicalSerialize(generic) !== canonicalSerialize(design_version)) reject("integrity_error", "concept.version");
+      const batchRow = this.db.prepare(`SELECT batch_json,job_id FROM creative_concept_batches_v1
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, row.action_id);
+      if (!batchRow) reject("integrity_error", "concept.batch");
+      const batch = snapshotJson(JSON.parse(batchRow.batch_json), "integrity_error", "concept.batch");
+      const slot = batch.slots.find((item) => item.concept_id === row.concept_id);
+      const expectedActionId = row.ordinal === 1 ? action_id
+        : `concept-version-${canonicalHash({ action_id, concept_id: row.concept_id }).slice(7)}`;
+      const versionIdentity = this.db.prepare(`SELECT action_id,creation_job_id FROM design_versions
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=?`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, row.design_version_id);
+      if (!slot || slot.ordinal !== row.ordinal || versionIdentity?.action_id !== expectedActionId ||
+          versionIdentity.creation_job_id !== batchRow.job_id) reject("integrity_error", "concept.version_identity");
+      const expectedLineage = creativeConceptLineage(batch, slot, design_version);
+      if (!isRecord(lineageRecord) || canonicalSerialize(Object.keys(lineageRecord).sort()) !==
+          canonicalSerialize(["creative_concept_lineage", "lineage_evidence_ref", "output_lineage", "storage_commit_ref"].sort()) ||
+          canonicalSerialize(creative_concept_lineage) !== canonicalSerialize(expectedLineage) ||
+          lineageRecord.storage_commit_ref !== `concept-store:${canonicalHash({ concept_id: row.concept_id,
+            design_hash: design_version.design_hash, artifact_hash: design_version.artifact.content_hash })}` ||
+          lineageRecord.lineage_evidence_ref !== `concept-lineage:${canonicalHash(expectedLineage)}`) reject("integrity_error", "concept.lineage");
+      const object = readStoredObjectSync(this.objectRoot, row.artifact_hash);
+      if (!object || hashArtifactBytes(object) !== row.artifact_hash) reject("integrity_error", "concept.artifact_object");
+      return { concept_id: row.concept_id, ordinal: row.ordinal, design_version,
+        creative_concept_lineage, storage_commit_ref: lineageRecord.storage_commit_ref,
+        lineage_evidence_ref: lineageRecord.lineage_evidence_ref };
+    }));
+  }
+
+  getConceptBatch(input) {
+    this.assertOpen();
+    const scope = validScope(input?.scope, input?.brief_id ?? input?.scope?.brief_id);
+    const action_id = reference(input?.action_id, "action_id");
+    const row = this.db.prepare(`SELECT * FROM creative_concept_batches_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+      .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id);
+    if (!row) return null;
+    const batch = snapshotJson(JSON.parse(row.batch_json), "integrity_error", "concept.batch");
+    if (batch.batch_id !== row.batch_id || batch.action_id !== row.action_id || batch.tenant_id !== row.tenant_id ||
+        batch.project_id !== row.project_id || batch.brief_id !== row.brief_id) reject("integrity_error", "concept.batch_identity");
+    return freezeReturned({ batch, status: row.status, job_id: row.job_id, request_hash: row.request_hash,
+      actor_id: row.actor_id, updated_at: row.updated_at });
+  }
+
+  getConceptResponseStage(input) {
+    this.assertOpen();
+    const scope = validScope(input?.scope, input?.brief_id ?? input?.scope?.brief_id);
+    const action_id = reference(input?.action_id, "action_id");
+    const concept_id = reference(input?.concept_id, "concept_id");
+    const row = this.db.prepare(`SELECT * FROM creative_concept_response_stages_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND concept_id=?`)
+      .get(scope.tenant_id, scope.project_id, scope.brief_id, action_id, concept_id);
+    if (!row) return null;
+    const bytes = Uint8Array.from(row.response_bytes);
+    if (bytes.byteLength !== row.byte_length || hashArtifactBytes(bytes) !== row.content_hash) reject("integrity_error", "concept.response_bytes");
+    return Object.freeze({ concept_id, billable_attempt_id: row.billable_attempt_id,
+      transport_attempt_id: row.transport_attempt_id, reservation_ref: row.reservation_ref,
+      dispatch_intent_ref: row.dispatch_intent_ref, target_binding_sha256: row.target_binding_sha256,
+      content_hash: row.content_hash, media_type: row.media_type, width: row.width, height: row.height,
+      byte_length: row.byte_length, response_bytes: bytes, stage_ref: row.stage_ref, status: row.status });
+  }
+
+  prepareWrite(input, { allowConcept = false } = {}) {
     this.assertOpen();
     if (!isRecord(input)) reject("invalid_request", "write");
     const designInput = snapshotJson(input.design_version, "invalid_request", "design_version");
@@ -1635,6 +2544,7 @@ export class CreativeVersionStore {
     const creation = attemptEvidence(input.creation);
     if (creation.actor_id !== actor_id) reject("scope_denied", "creation.actor_id");
     const selection = selectionRequest(input.selection, design);
+    if (selection.mode === "concept" && allowConcept !== true) reject("invalid_request", "selection.mode");
     const parentDesignHash = design.parent_version_id === null
       ? null : getDesignHashAt(this.db, scope, design.parent_version_id);
     if (design.parent_version_id !== null && parentDesignHash === null) reject("not_found", "design_version.parent_version_id");
@@ -1810,6 +2720,142 @@ export class CreativeVersionStore {
     return this.finalizeAction(scope, actionId, publication.faultInjector, transaction);
   }
 
+  commitConceptDesignVersions(inputs, transaction) {
+    this.assertOpen();
+    const publication = this.publicationTransactionData(transaction);
+    if (!publication || this.db.isTransaction !== true || !Array.isArray(inputs) || inputs.length < 1 || inputs.length > 2) {
+      reject("scope_denied", "publication_transaction");
+    }
+    const conceptIdentities = [];
+    const prepared = inputs.map((input, index) => {
+      if (!isRecord(input)) reject("invalid_request", `concept.design_versions[${index}]`);
+      const identity = snapshotJson(input.concept_identity, "invalid_request", `concept.design_versions[${index}].identity`);
+      if (!isRecord(identity) || Object.keys(identity).some((key) => !["concept_id", "ordinal"].includes(key)) ||
+          Object.keys(identity).length !== 2 || !Number.isSafeInteger(identity.ordinal) || ![1, 2].includes(identity.ordinal)) {
+        reject("invalid_request", `concept.design_versions[${index}].identity`);
+      }
+      const { concept_identity: _conceptIdentity, ...writeInput } = input;
+      const value = this.prepareWrite(writeInput, { allowConcept: true });
+      conceptIdentities.push(identity);
+      const expectedActionId = identity.ordinal === 1 ? publication.action_id
+        : `concept-version-${canonicalHash({ action_id: publication.action_id, concept_id: identity.concept_id }).slice(7)}`;
+      if (value.selection.mode !== "concept" || value.design.parent_version_id !== null ||
+          value.creation.job_id !== publication.job_id || value.creation.actor_id !== publication.actor_id ||
+          value.creation.request_hash !== publication.request_hash ||
+          value.creation.action_id !== expectedActionId ||
+          value.scope.tenant_id !== publication.scope.tenant_id || value.scope.project_id !== publication.scope.project_id ||
+          value.scope.brief_id !== publication.scope.brief_id) reject("scope_denied", "concept.design_version_identity");
+      return value;
+    });
+    if (new Set(conceptIdentities.map((identity) => identity.concept_id)).size !== conceptIdentities.length ||
+        new Set(conceptIdentities.map((identity) => identity.ordinal)).size !== conceptIdentities.length ||
+        conceptIdentities.some((identity, index) => index > 0 && identity.ordinal <= conceptIdentities[index - 1].ordinal)) {
+      reject("integrity_error", "concept.design_version_identity");
+    }
+    const scope = prepared[0].scope;
+    const job = this.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
+      .get(scope.tenant_id, scope.project_id, publication.job_id);
+    if (!activeJobLease(job, scope, publication.actor_id, publication.lease_token, this.now()) ||
+        job.action_id !== publication.action_id || job.request_hash !== publication.request_hash || job.operation !== "concepts.create") {
+      reject("cancelled", "concept.publication_authority");
+    }
+    const conceptBatchRow = this.db.prepare(`SELECT batch_json,job_id FROM creative_concept_batches_v1
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+      .get(scope.tenant_id, scope.project_id, scope.brief_id, publication.action_id);
+    const conceptBatch = conceptBatchRow
+      ? snapshotJson(JSON.parse(conceptBatchRow.batch_json), "integrity_error", "concept.batch") : null;
+    if (!conceptBatch || conceptBatchRow.job_id !== publication.job_id || conceptBatch.action_id !== publication.action_id ||
+        conceptIdentities.some((identity) => {
+          const slot = conceptBatch.slots.find((item) => item.concept_id === identity.concept_id);
+          return !slot || slot.ordinal !== identity.ordinal || slot.status !== "staged";
+        })) reject("integrity_error", "concept.design_version_identity");
+    const brief = this.getBrief({ scope, brief_id: scope.brief_id });
+    if (!brief || canonicalHash(brief) !== prepared[0].design.brief_hash ||
+        prepared.some((value) => canonicalSerialize(value.brief) !== canonicalSerialize(brief))) {
+      reject("stale_version", "concept.brief_hash");
+    }
+    const priorAction = this.db.prepare(`SELECT 1 AS present FROM creation_actions
+      WHERE tenant_id=? AND project_id=? AND action_id=?`).get(scope.tenant_id, scope.project_id, publication.action_id);
+    const priorJob = this.db.prepare(`SELECT 1 AS present FROM creation_actions
+      WHERE tenant_id=? AND project_id=? AND job_id=?`).get(scope.tenant_id, scope.project_id, publication.job_id);
+    if (priorAction || priorJob) reject("conflict", "concept.creation_action");
+    const uniqueActionIds = new Set();
+    const uniqueVersionIds = new Set();
+    for (const value of prepared) {
+      if (uniqueActionIds.has(value.creation.action_id) || uniqueVersionIds.has(value.design.design_version_id)) {
+        reject("invalid_request", "concept.design_version_identity");
+      }
+      uniqueActionIds.add(value.creation.action_id);
+      uniqueVersionIds.add(value.design.design_version_id);
+      const bytes = readStoredObjectSync(this.objectRoot, value.contentHash);
+      if (!bytes || bytes.byteLength !== value.artifactBytes.byteLength || hashArtifactBytes(bytes) !== value.contentHash ||
+          !Buffer.from(bytes).equals(Buffer.from(value.artifactBytes))) reject("integrity_error", "concept.artifact_object");
+      const existing = this.db.prepare(`SELECT 1 AS present FROM design_versions
+        WHERE tenant_id=? AND project_id=? AND brief_id=? AND (design_version_id=? OR action_id=?)`)
+        .get(scope.tenant_id, scope.project_id, scope.brief_id, value.design.design_version_id, value.creation.action_id);
+      if (existing) reject("conflict", "concept.design_version_identity");
+    }
+    const primary = prepared[0];
+    // The creation action is the immutable batch/job replay anchor. Its intent
+    // can describe a successful later ordinal while the public version keeps
+    // that candidate's own deterministic per-slot action identity.
+    const { concept_identity: _primaryConceptIdentity, ...primaryWriteInput } = inputs[0];
+    const anchor = primary.creation.action_id === publication.action_id ? primary : this.prepareWrite({
+      ...primaryWriteInput, creation: { ...primaryWriteInput.creation, action_id: publication.action_id },
+    }, { allowConcept: true });
+    this.db.prepare(`INSERT INTO creation_actions
+      (tenant_id,project_id,brief_id,action_id,actor_id,job_id,request_hash,payload_hash,state,intent_json,result_json,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,'commit_intent',?,NULL,?,?)`)
+      .run(scope.tenant_id, scope.project_id, scope.brief_id, publication.action_id, anchor.actor_id,
+        anchor.creation.job_id, anchor.creation.request_hash, anchor.payload_hash,
+        canonicalSerialize(anchor.intent), anchor.now, anchor.now);
+    const intentRow = this.db.prepare(`SELECT * FROM creation_actions WHERE tenant_id=? AND project_id=? AND action_id=?`)
+      .get(scope.tenant_id, scope.project_id, publication.action_id);
+    const intent = validateCommitIntentRow(intentRow, scope);
+    if (intent.selection.mode !== "concept" || intent.job_result !== null ||
+        intent.design_version.design_version_id !== primary.design.design_version_id) reject("integrity_error", "concept.creation_intent");
+    const results = [];
+    for (const value of prepared) {
+      this.#assertBriefNotInvalidated(scope, value.brief);
+      const createdAt = this.timestamp();
+      const metadata = {
+        design_version: value.design,
+        artifact: { content_hash: value.contentHash, byte_length: value.artifactBytes.byteLength },
+        creation: value.creation,
+        context_hash: canonicalHash(value.context),
+        evidence_hash: canonicalHash(value.evidence),
+      };
+      this.db.prepare(`INSERT INTO design_versions
+        (tenant_id,project_id,brief_id,design_version_id,parent_version_id,parent_design_hash,brief_hash,design_hash,
+         artifact_id,content_hash,media_type,occurred_at,metadata_json,creation_job_id,action_id,created_at)
+        VALUES(?,?,?,?,NULL,NULL,?,?,?,?,?,?,?,?,?,?)`)
+        .run(scope.tenant_id, scope.project_id, scope.brief_id, value.design.design_version_id,
+          value.design.brief_hash, value.design.design_hash, value.design.artifact.artifact_id,
+          value.design.artifact.content_hash, value.design.artifact.media_type, value.design.occurred_at,
+          canonicalSerialize(metadata), value.creation.job_id, value.creation.action_id, createdAt);
+      this.db.prepare(`INSERT INTO version_evidence
+        (tenant_id,project_id,brief_id,design_version_id,context_json,context_hash,evidence_json,evidence_hash)
+        VALUES(?,?,?,?,?,?,?,?)`)
+        .run(scope.tenant_id, scope.project_id, scope.brief_id, value.design.design_version_id,
+          canonicalSerialize(value.context), canonicalHash(value.context),
+          canonicalSerialize(value.evidence), canonicalHash(value.evidence));
+      results.push({ status: "saved", design_version: value.design, selection: null, created_at: createdAt });
+    }
+    const primaryResult = results[0];
+    const update = this.db.prepare(`UPDATE creation_actions SET state='committed',result_json=?,updated_at=?
+      WHERE tenant_id=? AND project_id=? AND action_id=? AND state='commit_intent'`)
+      .run(canonicalSerialize(primaryResult), primaryResult.created_at,
+        scope.tenant_id, scope.project_id, publication.action_id).changes;
+    if (update !== 1) reject("conflict", "concept.creation_action");
+    const durableRow = this.db.prepare(`SELECT * FROM creation_actions WHERE tenant_id=? AND project_id=? AND action_id=?`)
+      .get(scope.tenant_id, scope.project_id, publication.action_id);
+    const replay = this.readActionResult(durableRow, false);
+    if (canonicalSerialize(replay.design_version) !== canonicalSerialize(primary.design) || replay.selection !== null) {
+      reject("integrity_error", "concept.creation_result");
+    }
+    return freezeReturned(results);
+  }
+
   assertSameAction(row, prepared) {
     if (row.actor_id !== prepared.actor_id) reject("scope_denied", "creation.actor_id");
     if (row.request_hash !== prepared.creation.request_hash || row.payload_hash !== prepared.payload_hash ||
@@ -1836,9 +2882,21 @@ export class CreativeVersionStore {
       const versionRow = this.db.prepare(`SELECT action_id,creation_job_id,created_at FROM design_versions
         WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=?`)
         .get(scope.tenant_id, scope.project_id, scope.brief_id, result.design_version.design_version_id);
-      if (!versionRow || versionRow.action_id !== row.action_id || versionRow.creation_job_id !== row.job_id ||
+      const conceptIdentity = intent.selection.mode === "concept"
+        ? this.db.prepare(`SELECT concept_id,ordinal FROM creative_concept_versions_v1
+            WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=? AND design_version_id=?`)
+          .get(scope.tenant_id, scope.project_id, scope.brief_id, row.action_id, result.design_version.design_version_id)
+        : null;
+      const expectedVersionActionId = intent.selection.mode === "concept" && conceptIdentity
+        ? conceptIdentity.ordinal === 1 ? row.action_id
+          : `concept-version-${canonicalHash({ action_id: row.action_id, concept_id: conceptIdentity.concept_id }).slice(7)}`
+        : row.action_id;
+      if (!versionRow || versionRow.action_id !== expectedVersionActionId || versionRow.creation_job_id !== row.job_id ||
         result.created_at !== versionRow.created_at || result.created_at !== row.updated_at) {
         reject("integrity_error", "creation.result");
+      }
+      if (intent.selection.mode === "concept" && (!conceptIdentity || ![1, 2].includes(conceptIdentity.ordinal))) {
+        reject("integrity_error", "creation.result.concept_identity");
       }
       const stored = this.getDesignVersion({ scope, brief_id: scope.brief_id,
         design_version_id: result.design_version.design_version_id });
@@ -1858,7 +2916,7 @@ export class CreativeVersionStore {
           Object.keys(selection).some((key) => !["tenant_id", "project_id", "brief_id", "design_version_id", "design_hash", "revision"].includes(key))) {
           reject("integrity_error", "creation.result.selection");
         }
-      } else if (intent.selection.mode !== "branch") reject("integrity_error", "creation.result.selection");
+      } else if (intent.selection.mode !== "branch" && intent.selection.mode !== "concept") reject("integrity_error", "creation.result.selection");
       return deepFreeze({ ...result, status: "saved", replayed });
     }
     reject(row.state === "unknown" ? "unknown_completion" : "conflict", "creation.action_id");
@@ -2068,7 +3126,7 @@ export class CreativeVersionStore {
           reject("stale_version", "design_version.parent_version_id");
         }
         revision = currentRevision + 1;
-      } else if (design.parent_version_id === null || parentDesignHash === null) {
+      } else if (selection.mode !== "concept" && (design.parent_version_id === null || parentDesignHash === null)) {
         reject("invalid_request", "selection.mode");
       }
       const createdAt = this.timestamp();
@@ -2333,7 +3391,10 @@ export class CreativeVersionStore {
     const metadata = snapshotJson(JSON.parse(row.metadata_json), "integrity_error", "metadata");
     const evidence = this.readEvidence(scope, design_version_id);
     if (!evidence || canonicalHash(evidence.context) !== evidence.context_hash || canonicalHash(evidence.evidence) !== evidence.evidence_hash ||
-      metadata.context_hash !== evidence.context_hash || metadata.evidence_hash !== evidence.evidence_hash) reject("integrity_error", "version_evidence");
+      metadata.context_hash !== evidence.context_hash || metadata.evidence_hash !== evidence.evidence_hash ||
+      evidence.evidence.creation?.action_id !== row.action_id || evidence.evidence.creation?.job_id !== row.creation_job_id) {
+      reject("integrity_error", "version_evidence");
+    }
     validateContextRecord(evidence.context, { ...scope, design_version_id }, "version_evidence.context");
     const design = validateDesignVersion(metadata.design_version, {
       trustedScope: { ...scope, design_version_id },

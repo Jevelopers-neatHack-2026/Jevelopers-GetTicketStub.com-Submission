@@ -7,7 +7,7 @@
 
 # creative-engine
 
-Typed creative API runtime for TicketStub: creative briefs, immutable design versions and bounded creative controls around injected provider, metering and approval ports.
+Typed creative API runtime for TicketStub: creative briefs, immutable design versions, parentless concept creation and bounded creative controls around injected provider, metering and approval ports.
 
 <p>
   <a href="https://github.com/Jevelopers-neatHack-2026"><img alt="TicketStub ecosystem" src="https://img.shields.io/badge/TicketStub-ecosystem-E4572E?style=flat-square&labelColor=17140F"></a>
@@ -23,6 +23,7 @@ Typed creative API runtime for TicketStub: creative briefs, immutable design ver
 Implemented locally and exercised with synthetic fixtures (no paid provider calls):
 
 - A non-UI API handler for `generate`, `edit`, `inspect`, `list`, `compare`, `restore`, `cancel`, `handoff`, `job.status`, `brief.create` and `brief.invalidate` around injected ports. Missing ports return `unavailable`; the API never substitutes a mock success.
+- Parentless `concepts.create` is a separately versioned Creative API 1.1 operation. It edits two authorized image references and persists each candidate as an independent immutable version; legacy 1.0 requests and results retain their prior shape.
 - Deterministic brief planning, a durable SQLite version store with content-addressed bytes, a controls Apply outbox, inspection checks with a bounded repair counter, and a usage-evidence outbox. Brief history and attempt evidence share the API store's SQLite connection.
 
 Boundaries that local checks do not cross:
@@ -77,13 +78,16 @@ make check TARGET=versions MODE=mock   # durable store and process-restart cases
 make acceptance TARGET=all             # expected to exit 2 while owner evidence is pending
 ```
 
-Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `inspection`, `creative-metering`), live-gate behaviour, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The Chromium controls roundtrip has its own install steps in [controls integration](docs/controls-integration.md).
+Per-area targets (`brief`, `controls`, `contracts`, `decision-contract`, `eval-policy`, `metering-contract`, `handoff-contract`, `access-preflight`, `image-adapter`, `inspection`, `creative-metering`), their live-gate behaviour, evidence files and typecheck targets are listed in [development and acceptance gates](docs/development.md). The concepts target is described below. The Chromium controls roundtrip has its own install steps in [controls integration](docs/controls-integration.md).
+
+`make check TARGET=concepts MODE=mock` runs the native-edit fixture journey, public persistence and recovery cases, and an offline installed-package API consumer. `MODE=CI` runs the same local checks; `MODE=failclosedlive` exits 2 without dispatching or reading provider credentials. The local Creative API 1.1 mapping and external owner agreements remain pending acceptance.
 
 ## Docs
 
 - [Development, checks and acceptance gates](docs/development.md)
 - [Repository responsibilities](docs/architecture/OWNERSHIP.md) · [acceptance view](docs/architecture/ACCEPTANCE.md)
 - [Creative API v1, injected ports and dispatch fencing](docs/api/creative-api.md)
+- [Parentless concept creation and local CE-04 integration](docs/creative/concept-generation.md)
 - [Brief planning, rights checks and invalidation](docs/creative-brief.md) · [version state machine](docs/creative/version-state-machine.md)
 - [Controls integration](docs/controls-integration.md) · [controls package](docs/controls-package-integration.md) · [inspection consumer preparation](docs/controls/inspection-consumer-preparation.md)
 - [Inspection policy](docs/creative/inspection-policy.md) · [evaluation policy](docs/evaluation/creative-evaluation.md) · [rubric](docs/evaluation/creative-rubric.md)

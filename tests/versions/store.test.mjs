@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { fork, spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -31,6 +32,105 @@ test("versions public entrypoint exposes the runtime constructors and paired ada
   assert.equal(typeof publicVersions.CreativeVersionStore, "function");
   assert.equal(typeof publicVersions.VersionStoreError, "function");
   assert.equal(typeof publicVersions.createCreativeVersionApiPorts, "function");
+});
+
+test("concept response staging snapshots bytes and metadata before async inspection and never rolls back a borrowed transaction", async (t) => {
+  const { store } = await createStore(t);
+  const ports = publicVersions.createCreativeVersionApiPorts({ store, idFactory: (() => {
+    let index = 0;
+    return () => `concept-worker-${++index}`;
+  })() });
+  store.putBrief({ scope: { tenant_id: DEFAULT_SCOPE.tenant_id, project_id: DEFAULT_SCOPE.project_id }, brief: createBrief() });
+  const request_hash = canonicalHash({ action_id: "concept-action", payload: "two references" });
+  const started = await ports.jobs.begin({ scope: DEFAULT_SCOPE, actor_id: "actor-1", action_id: "concept-action",
+    request_hash, operation: "concepts.create" });
+  const batch = { contract: "CreativeConceptBatchProposal", schema_version: "0.1.0",
+    acceptance_status: "unaccepted_local_proposal", tenant_id: DEFAULT_SCOPE.tenant_id,
+    project_id: DEFAULT_SCOPE.project_id, brief_id: DEFAULT_SCOPE.brief_id, action_id: "concept-action",
+    batch_id: "concept-batch", slots: [{ concept_id: "concept-slot-1" }] };
+  store.beginConceptBatch({ scope: DEFAULT_SCOPE, actor_id: "actor-1", action_id: "concept-action",
+    job_id: started.job_id, lease_token: started.lease_token, request_hash, batch });
+  store.db.prepare(`INSERT INTO creative_dispatch_intents
+    (tenant_id,project_id,job_id,transport_attempt_id,billable_attempt_id,reservation_ref,provider_name,provider_model,
+      dispatch_intent_ref,context_fence_json,authorized_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id, started.job_id, "transport-1", "billable-1",
+      "reservation-1", "openai", "model-pinned", "dispatch-1", "{}", new Date(store.now()).toISOString());
+  const target_binding = {
+    service: "openai",
+    endpoint: "https://api.openai.com/v1/images/edits",
+    model: "model-pinned",
+    sdk_name: "native-fetch",
+    sdk_version: "v24.15.0",
+    configuration_sha256: `sha256:${"b".repeat(64)}`,
+    operation: "edit",
+    operation_kind: "image_edit",
+    input_sha256: `sha256:${"c".repeat(64)}`,
+    prompt_sha256: `sha256:${"d".repeat(64)}`,
+    plan_sha256: `sha256:${"e".repeat(64)}`,
+    image_reference_manifest_sha256: `sha256:${"f".repeat(64)}`,
+    deadline_at: "2026-10-10T12:30:20.000Z",
+    transport_policy: { maximum_transport_attempts: 1, automatic_retry: false,
+      stop_on: ["cancelled", "deadline", "revoked", "lease_expired", "capability_expired"] },
+    tenant_id: DEFAULT_SCOPE.tenant_id,
+    project_id: DEFAULT_SCOPE.project_id,
+    budget_scope_id: "budget-scope-1",
+    billable_attempt_id: "billable-1",
+  };
+  const target_binding_sha256 = `sha256:${createHash("sha256").update(JSON.stringify(target_binding), "utf8").digest("hex")}`;
+  store.recordConceptDispatchBinding({ scope: DEFAULT_SCOPE, actor_id: "actor-1", job_id: started.job_id,
+    action_id: "concept-action", request_hash, lease_token: started.lease_token, billable_attempt_id: "billable-1",
+    transport_attempt_id: "transport-1", reservation_ref: "reservation-1", dispatch_intent_ref: "dispatch-1",
+    target_binding, target_binding_sha256, rendered_prompt_sha256: target_binding.prompt_sha256 });
+
+  const fixture = new Uint8Array(await readFile(new URL("../../fixtures/models/valid-16x16.jpg", import.meta.url)));
+  const original = Uint8Array.from(fixture);
+  const input = { scope: DEFAULT_SCOPE, action_id: "concept-action", job_id: started.job_id,
+    actor_id: "actor-1", request_hash, lease_token: started.lease_token, concept_id: "concept-slot-1",
+    billable_attempt_id: "billable-1", transport_attempt_id: "transport-1", reservation_ref: "reservation-1",
+    dispatch_intent_ref: "dispatch-1", target_binding_sha256, bytes: fixture,
+    content_hash: hashArtifactBytes(original), media_type: "image/jpeg", width: 16, height: 16 };
+  const pending = store.stageConceptResponse(input);
+  fixture.fill(0);
+  input.content_hash = hashArtifactBytes(fixture);
+  input.media_type = "image/png";
+  input.width = 1;
+  input.height = 1;
+  input.target_binding_sha256 = `sha256:${"b".repeat(64)}`;
+  const staged = await pending;
+  assert.equal(staged.status, "staged");
+  const recovered = store.getConceptResponseStage({ scope: DEFAULT_SCOPE, action_id: "concept-action", concept_id: "concept-slot-1" });
+  assert.equal(recovered.content_hash, hashArtifactBytes(original));
+  assert.equal(recovered.media_type, "image/jpeg");
+  assert.deepEqual([recovered.width, recovered.height], [16, 16]);
+  assert.equal(recovered.target_binding_sha256, target_binding_sha256);
+  assert.deepEqual(recovered.response_bytes, original);
+
+  store.db.exec("BEGIN IMMEDIATE");
+  store.db.exec(`CREATE TABLE borrowed_transaction_sentinels (
+    id TEXT PRIMARY KEY, value TEXT NOT NULL
+  ) STRICT`);
+  store.db.prepare("INSERT INTO borrowed_transaction_sentinels VALUES(?,?)").run("outer", "caller-owned");
+  store.db.exec("SAVEPOINT borrowed_concept_stage");
+  store.db.prepare("INSERT INTO borrowed_transaction_sentinels VALUES(?,?)").run("savepoint", "caller-savepoint");
+  await assert.rejects(store.stageConceptResponse({ ...input, bytes: original,
+    content_hash: hashArtifactBytes(original), media_type: "image/jpeg", width: 16, height: 16,
+    target_binding_sha256 }), (error) => error instanceof VersionStoreError && error.code === "unavailable");
+  expectStoreError("unavailable", () => store.appendConceptEvent({ scope: DEFAULT_SCOPE,
+    action_id: "concept-action", job_id: started.job_id, actor_id: "actor-1", request_hash,
+    lease_token: started.lease_token, event: { event_type: "provider_outcome" } }));
+  assert.equal(store.db.isTransaction, true, "a rejected call must leave the caller transaction open");
+  assert.deepEqual(store.db.prepare("SELECT id,value FROM borrowed_transaction_sentinels ORDER BY id").all()
+    .map((row) => ({ ...row })), [
+    { id: "outer", value: "caller-owned" },
+    { id: "savepoint", value: "caller-savepoint" },
+  ], "the rejected call must preserve rows owned by both the outer transaction and active savepoint");
+  store.db.exec("ROLLBACK TO borrowed_concept_stage");
+  store.db.exec("RELEASE borrowed_concept_stage");
+  assert.deepEqual(store.db.prepare("SELECT id,value FROM borrowed_transaction_sentinels").all()
+    .map((row) => ({ ...row })), [
+    { id: "outer", value: "caller-owned" },
+  ], "rolling back the caller savepoint must remove only its own sentinel");
+  store.db.exec("ROLLBACK");
 });
 
 async function expectStoreReject(code, operation) {
@@ -431,7 +531,7 @@ test("content-addressed storage snapshots caller bytes before its first await", 
     Buffer.from("immutable original bytes"));
 });
 
-test("storage schema v2 migrates additively through private provider attribution and inspection integration v7", async (t) => {
+test("storage schema v2 migrates additively through private provider attribution, inspection, and concepts v10", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-version-v2-migration-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const databasePath = join(root, "versions.sqlite");
@@ -443,14 +543,37 @@ test("storage schema v2 migrates additively through private provider attribution
     status TEXT NOT NULL, lease_hash TEXT NOT NULL, lease_expires_at TEXT NOT NULL, result_json TEXT,
     error_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
     PRIMARY KEY(tenant_id,project_id,job_id), UNIQUE(tenant_id,project_id,action_id)
-  ) STRICT; PRAGMA user_version=2;`);
+  ) STRICT;
+  INSERT INTO creative_jobs VALUES('tenant-test','creative-project-test','legacy-job','brief-test',
+    'actor-legacy','action-legacy','generate','sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'completed','lease-hash-legacy','2026-10-10T12:30:00.000Z',NULL,NULL,
+    '2026-10-10T12:29:00.000Z','2026-10-10T12:30:00.000Z');
+  PRAGMA user_version=2;`);
   db.close();
   const migrated = new CreativeVersionStore({ databasePath, objectRoot });
-  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 7);
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 10);
+  const preserved = { ...migrated.db.prepare(`SELECT job_id,brief_id,actor_id,action_id,operation,request_hash,status,
+    lease_hash,lease_expires_at,result_json,error_json FROM creative_jobs WHERE job_id='legacy-job'`).get() };
+  assert.deepEqual(preserved, {
+    job_id: "legacy-job", brief_id: "brief-test", actor_id: "actor-legacy", action_id: "action-legacy",
+    operation: "generate", request_hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    status: "completed", lease_hash: "lease-hash-legacy", lease_expires_at: "2026-10-10T12:30:00.000Z",
+    result_json: null, error_json: null,
+  }, "the original v2 public job row and identity must survive the additive migration");
+  assert.ok(migrated.db.prepare("PRAGMA index_list(creative_jobs)").all().some((index) => index.unique === 1));
+  assert.throws(() => migrated.db.prepare(`INSERT INTO creative_jobs
+    (tenant_id,project_id,job_id,brief_id,actor_id,action_id,operation,request_hash,status,lease_hash,
+     lease_expires_at,result_json,error_json,created_at,updated_at,attempt_evidence_json)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run("tenant-test", "creative-project-test", "legacy-duplicate",
+      "brief-test", "actor-legacy", "action-legacy", "generate", "sha256:" + "b".repeat(64), "completed",
+      "lease-hash-legacy", "2026-10-10T12:30:00.000Z", null, null,
+      "2026-10-10T12:29:00.000Z", "2026-10-10T12:30:00.000Z", null),
+    "the unique scoped action constraint must survive migration");
   assert.equal(migrated.db.prepare("PRAGMA table_info(creative_jobs)").all()
     .some((column) => column.name === "attempt_evidence_json"), true);
   const dispatchColumns = migrated.db.prepare("PRAGMA table_info(creative_dispatch_intents)").all();
-  for (const name of ["reservation_ref", "provider_name", "provider_model"]) {
+  for (const name of ["reservation_ref", "provider_name", "provider_model", "target_binding_sha256",
+    "target_binding_json", "rendered_prompt_sha256"]) {
     assert.ok(dispatchColumns.some((column) => column.name === name));
   }
   assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='private_provider_attributions'").get());
@@ -458,6 +581,194 @@ test("storage schema v2 migrates additively through private provider attribution
   assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='private_provider_attribution_reconciliations'").get());
   assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='creative_inspection_sessions_v1'").get());
   assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='creative_inspection_stages_v1'").get());
+  for (const table of ["creative_concept_batches_v1", "creative_concept_events_v1",
+    "creative_concept_dispatch_bindings_v1", "creative_concept_response_stages_v1", "creative_concept_versions_v1"]) {
+    assert.ok(migrated.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table));
+  }
   assert.deepEqual(migrated.db.prepare("PRAGMA foreign_key_check").all(), []);
   migrated.close();
+});
+
+test("reconstructed v9 private attribution tables migrate to v10 with populated rows, CHECKs, triggers, and foreign keys", async (t) => {
+  const { root, store: originalStore } = await createStore(t);
+  const actor_id = "actor-v9-migration";
+  let portId = 0;
+  let migratedStore;
+  const makePorts = (store) => publicVersions.createCreativeVersionApiPorts({ store,
+    idFactory: () => `v9-migration-port-${++portId}` });
+  const originalPorts = makePorts(originalStore);
+  const makeJobAndDispatch = async (action_id, operation, transport_attempt_id) => {
+    const request_hash = canonicalHash({ action_id, operation });
+    const started = await originalPorts.jobs.begin({ scope: DEFAULT_SCOPE, actor_id, action_id, request_hash, operation });
+    assert.equal(started.kind, "started");
+    const dispatch_intent_ref = `dispatch:${action_id}`;
+    originalStore.db.prepare(`INSERT INTO creative_dispatch_intents
+      (tenant_id,project_id,job_id,transport_attempt_id,billable_attempt_id,reservation_ref,provider_name,provider_model,
+       dispatch_intent_ref,context_fence_json,authorized_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id, started.job_id, transport_attempt_id,
+        `billable:${action_id}`, `reservation:${action_id}`, "openai", "gpt-image-2.5-migration",
+        dispatch_intent_ref, "{}", "2026-10-10T12:30:00.000Z");
+    return { action_id, request_hash, job_id: started.job_id, transport_attempt_id,
+      billable_attempt_id: `billable:${action_id}`, reservation_ref: `reservation:${action_id}`, dispatch_intent_ref };
+  };
+  const providerRow = await makeJobAndDispatch("legacy-provider-action", "generate", "legacy-provider-transport");
+  const usageRow = await makeJobAndDispatch("legacy-usage-action", "edit", "legacy-usage-transport");
+  const pendingRow = await makeJobAndDispatch("legacy-pending-action", "edit", "legacy-pending-transport");
+
+  // This fixture reconstructs the two legacy private attribution tables and user_version 9 on the current
+  // store schema. It exercises the additive private-table rebuild without claiming a full historical v9 database.
+  originalStore.db.exec(`DROP TABLE private_provider_attributions;
+    DROP TABLE private_provider_usage_attributions;
+    CREATE TABLE private_provider_attributions (
+      tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, job_id TEXT NOT NULL, action_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL, request_hash TEXT NOT NULL, operation TEXT NOT NULL CHECK(operation IN ('generate','edit')),
+      provider_name TEXT NOT NULL CHECK(provider_name='openai'), provider_model TEXT NOT NULL,
+      reservation_ref TEXT NOT NULL, billable_attempt_id TEXT NOT NULL, transport_attempt_id TEXT NOT NULL,
+      dispatch_intent_ref TEXT NOT NULL, provider_request_id TEXT NOT NULL, provider_request_ref TEXT NOT NULL,
+      captured_at TEXT NOT NULL, PRIMARY KEY(tenant_id,project_id,job_id,transport_attempt_id),
+      UNIQUE(tenant_id,project_id,dispatch_intent_ref),
+      FOREIGN KEY(tenant_id,project_id,job_id,transport_attempt_id)
+        REFERENCES creative_dispatch_intents(tenant_id,project_id,job_id,transport_attempt_id)
+    ) STRICT;
+    CREATE TRIGGER private_provider_attributions_no_update BEFORE UPDATE ON private_provider_attributions
+      BEGIN SELECT RAISE(ABORT,'private provider attribution is immutable'); END;
+    CREATE TRIGGER private_provider_attributions_no_delete BEFORE DELETE ON private_provider_attributions
+      BEGIN SELECT RAISE(ABORT,'private provider attribution is immutable'); END;
+    CREATE TABLE private_provider_usage_attributions (
+      tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, job_id TEXT NOT NULL, action_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL, request_hash TEXT NOT NULL, operation TEXT NOT NULL CHECK(operation IN ('generate','edit')),
+      provider_name TEXT NOT NULL CHECK(provider_name='openai'), provider_model TEXT NOT NULL,
+      reservation_ref TEXT NOT NULL, billable_attempt_id TEXT NOT NULL, transport_attempt_id TEXT NOT NULL,
+      dispatch_intent_ref TEXT NOT NULL, target_binding_sha256 TEXT NOT NULL, usage_sha256 TEXT NOT NULL,
+      usage_json TEXT NOT NULL, captured_at TEXT NOT NULL,
+      PRIMARY KEY(tenant_id,project_id,job_id,transport_attempt_id),
+      UNIQUE(tenant_id,project_id,dispatch_intent_ref),
+      FOREIGN KEY(tenant_id,project_id,job_id,transport_attempt_id)
+        REFERENCES creative_dispatch_intents(tenant_id,project_id,job_id,transport_attempt_id)
+    ) STRICT;
+    CREATE TRIGGER private_provider_usage_attributions_no_update BEFORE UPDATE ON private_provider_usage_attributions
+      BEGIN SELECT RAISE(ABORT,'private provider usage attribution is immutable'); END;
+    CREATE TRIGGER private_provider_usage_attributions_no_delete BEFORE DELETE ON private_provider_usage_attributions
+      BEGIN SELECT RAISE(ABORT,'private provider usage attribution is immutable'); END;
+    PRAGMA user_version=9;`);
+  originalStore.db.prepare(`INSERT INTO private_provider_attributions
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id,
+      providerRow.job_id, providerRow.action_id, actor_id, providerRow.request_hash, "generate", "openai",
+      "gpt-image-2.5-migration", providerRow.reservation_ref, providerRow.billable_attempt_id,
+      providerRow.transport_attempt_id, providerRow.dispatch_intent_ref, "private-provider-request-legacy",
+      "provider-request:legacy", "2026-10-10T12:30:00.000Z");
+  originalStore.db.prepare(`INSERT INTO private_provider_usage_attributions
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id,
+      usageRow.job_id, usageRow.action_id, actor_id, usageRow.request_hash, "edit", "openai",
+      "gpt-image-2.5-migration", usageRow.reservation_ref, usageRow.billable_attempt_id,
+      usageRow.transport_attempt_id, usageRow.dispatch_intent_ref, `sha256:${"a".repeat(64)}`,
+      `sha256:${"b".repeat(64)}`, `{"input_tokens":3}`, "2026-10-10T12:31:00.000Z");
+  originalStore.db.prepare(`INSERT INTO private_provider_attribution_pending
+    (tenant_id,project_id,pending_ref,job_id,transport_attempt_id,payload_sha256,payload_json,created_at)
+    VALUES(?,?,?,?,?,?,?,?)`).run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id, "pending:legacy",
+      pendingRow.job_id, pendingRow.transport_attempt_id, `sha256:${"c".repeat(64)}`, `{"legacy":true}`,
+      "2026-10-10T12:32:00.000Z");
+  originalStore.db.prepare(`INSERT INTO private_provider_attribution_reconciliations
+    (tenant_id,project_id,pending_ref,payload_sha256,reconciled_at) VALUES(?,?,?,?,?)`)
+    .run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id, "pending:legacy", `sha256:${"d".repeat(64)}`,
+      "2026-10-10T12:33:00.000Z");
+  assert.deepEqual(originalStore.db.prepare("PRAGMA foreign_key_check").all(), []);
+  const expectedProvider = { ...originalStore.db.prepare(`SELECT * FROM private_provider_attributions`).get() };
+  const expectedUsage = { ...originalStore.db.prepare(`SELECT * FROM private_provider_usage_attributions`).get() };
+  const expectedPending = { ...originalStore.db.prepare(`SELECT * FROM private_provider_attribution_pending`).get() };
+  const expectedReconciliation = { ...originalStore.db.prepare(`SELECT * FROM private_provider_attribution_reconciliations`).get() };
+  const databasePath = originalStore.databasePath;
+  const objectRoot = originalStore.objectRoot;
+  originalStore.close();
+
+  migratedStore = new CreativeVersionStore({ databasePath, objectRoot });
+  t.after(() => migratedStore?.close());
+  assert.equal(migratedStore.db.prepare("PRAGMA user_version").get().user_version, 10);
+  assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_attributions`).get() }, expectedProvider);
+  assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_usage_attributions`).get() }, expectedUsage);
+  assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_attribution_pending`).get() }, expectedPending);
+  assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_attribution_reconciliations`).get() }, expectedReconciliation);
+  assert.deepEqual(migratedStore.db.prepare("PRAGMA foreign_key_check").all(), []);
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    assert.throws(() => migratedStore.db.prepare(`UPDATE ${table} SET provider_model='changed'`)
+      .run(), /immutable/);
+    assert.throws(() => migratedStore.db.prepare(`DELETE FROM ${table}`).run(), /immutable/);
+  }
+  assert.throws(() => migratedStore.db.prepare(`UPDATE private_provider_attribution_pending SET payload_sha256=?`)
+    .run(`sha256:${"e".repeat(64)}`), /immutable/);
+  assert.throws(() => migratedStore.db.prepare(`UPDATE private_provider_attribution_reconciliations SET payload_sha256=?`)
+    .run(`sha256:${"f".repeat(64)}`), /immutable/);
+  const makeMigratedJobAndDispatch = async (action_id, operation, transport_attempt_id) => {
+    const request_hash = canonicalHash({ action_id, operation });
+    const started = await makePorts(migratedStore).jobs.begin({ scope: DEFAULT_SCOPE, actor_id,
+      action_id, request_hash, operation });
+    assert.equal(started.kind, "started");
+    const dispatch_intent_ref = `dispatch:${action_id}`;
+    const billable_attempt_id = `billable:${action_id}`;
+    const reservation_ref = `reservation:${action_id}`;
+    migratedStore.db.prepare(`INSERT INTO creative_dispatch_intents
+      (tenant_id,project_id,job_id,transport_attempt_id,billable_attempt_id,reservation_ref,provider_name,provider_model,
+       dispatch_intent_ref,context_fence_json,authorized_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id, started.job_id,
+        transport_attempt_id, billable_attempt_id, reservation_ref, "openai", "gpt-image-2.5-migration",
+        dispatch_intent_ref, "{}", "2026-10-10T12:35:00.000Z");
+    return { action_id, request_hash, job_id: started.job_id, transport_attempt_id, billable_attempt_id,
+      reservation_ref, dispatch_intent_ref };
+  };
+  const insertProviderAttribution = (row, operation) => migratedStore.db.prepare(`INSERT INTO private_provider_attributions
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id,
+      row.job_id, row.action_id, actor_id, row.request_hash, operation, "openai", "gpt-image-2.5-migration",
+      row.reservation_ref, row.billable_attempt_id, row.transport_attempt_id, row.dispatch_intent_ref,
+      `private-provider-request:${row.action_id}`, `provider-request:${row.action_id}`, "2026-10-10T12:35:00.000Z");
+  const insertUsageAttribution = (row, operation) => migratedStore.db.prepare(`INSERT INTO private_provider_usage_attributions
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id,
+      row.job_id, row.action_id, actor_id, row.request_hash, operation, "openai", "gpt-image-2.5-migration",
+      row.reservation_ref, row.billable_attempt_id, row.transport_attempt_id, row.dispatch_intent_ref,
+      `sha256:${"1".repeat(64)}`, `sha256:${"2".repeat(64)}`, `{"input_tokens":3}`, "2026-10-10T12:35:00.000Z");
+
+  const conceptProviderRow = await makeMigratedJobAndDispatch("new-concept-provider-attribution", "concepts.create",
+    "new-concept-provider-transport");
+  const conceptUsageRow = await makeMigratedJobAndDispatch("new-concept-usage-attribution", "concepts.create",
+    "new-concept-usage-transport");
+  const invalidProviderOperationRow = await makeMigratedJobAndDispatch("invalid-provider-operation", "edit",
+    "invalid-provider-transport");
+  const invalidUsageOperationRow = await makeMigratedJobAndDispatch("invalid-usage-operation", "edit",
+    "invalid-usage-transport");
+  assert.doesNotThrow(() => insertProviderAttribution(conceptProviderRow, "concepts.create"));
+  assert.doesNotThrow(() => insertUsageAttribution(conceptUsageRow, "concepts.create"));
+  assert.throws(() => insertProviderAttribution(invalidProviderOperationRow, "handoff"),
+    (error) => /CHECK constraint failed: operation IN/.test(error.message));
+  assert.throws(() => insertUsageAttribution(invalidUsageOperationRow, "handoff"),
+    (error) => /CHECK constraint failed: operation IN/.test(error.message));
+  assert.deepEqual(migratedStore.db.prepare("PRAGMA foreign_key_check").all(), []);
+
+  const expectedProvidersAfterMigration = migratedStore.db.prepare(`SELECT * FROM private_provider_attributions ORDER BY job_id`)
+    .all().map((row) => ({ ...row }));
+  const expectedUsageAfterMigration = migratedStore.db.prepare(`SELECT * FROM private_provider_usage_attributions ORDER BY job_id`)
+    .all().map((row) => ({ ...row }));
+  migratedStore.close();
+  migratedStore = new CreativeVersionStore({ databasePath, objectRoot });
+  assert.equal(migratedStore.db.prepare("PRAGMA user_version").get().user_version, 10);
+  assert.deepEqual(migratedStore.db.prepare(`SELECT * FROM private_provider_attributions ORDER BY job_id`).all()
+    .map((row) => ({ ...row })), expectedProvidersAfterMigration);
+  assert.deepEqual(migratedStore.db.prepare(`SELECT * FROM private_provider_usage_attributions ORDER BY job_id`).all()
+    .map((row) => ({ ...row })), expectedUsageAfterMigration);
+  assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_attribution_pending`).get() }, expectedPending);
+  assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_attribution_reconciliations`).get() }, expectedReconciliation);
+  assert.deepEqual(migratedStore.db.prepare("PRAGMA foreign_key_check").all(), []);
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    assert.throws(() => migratedStore.db.prepare(`UPDATE ${table} SET provider_model='changed'`).run(), /immutable/);
+    assert.throws(() => migratedStore.db.prepare(`DELETE FROM ${table}`).run(), /immutable/);
+  }
+  assert.throws(() => migratedStore.db.prepare(`UPDATE private_provider_attribution_pending SET payload_sha256=?`)
+    .run(`sha256:${"e".repeat(64)}`), /immutable/);
+  assert.throws(() => migratedStore.db.prepare(`UPDATE private_provider_attribution_reconciliations SET payload_sha256=?`)
+    .run(`sha256:${"f".repeat(64)}`), /immutable/);
+  assert.throws(() => migratedStore.db.prepare(`INSERT INTO private_provider_attributions VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(DEFAULT_SCOPE.tenant_id, DEFAULT_SCOPE.project_id, "missing-job-provider-fk", "missing-provider-action", actor_id,
+      canonicalHash("missing-provider-action"), "edit", "openai", "gpt-image-2.5-migration", "missing-provider-reservation",
+      "missing-provider-billable", "missing-provider-transport", "missing-provider-dispatch", "private-provider-request:fk",
+      "provider-request:fk", "2026-10-10T12:36:00.000Z"), /FOREIGN KEY constraint failed/);
+  assert.deepEqual(migratedStore.db.prepare("PRAGMA foreign_key_check").all(), []);
 });

@@ -70,6 +70,44 @@ function substituteAttemptIdentity(intentJson) {
   return canonicalSerialize(intent);
 }
 
+function tamperDispatchFenceForRecoveryFixture(store, jobId, replacement) {
+  // Model an offline database writer, then restore and exercise the exact
+  // immutable-target trigger before recovery reads the damaged durable row.
+  const originalTrigger = store.db.prepare(`SELECT sql FROM sqlite_master
+    WHERE type='trigger' AND name='creative_dispatch_target_binding_once'`).get();
+  assert.ok(originalTrigger?.sql, "the current schema installs the dispatch target immutability trigger");
+  const firstDispatch = store.db.prepare(`SELECT transport_attempt_id,context_fence_json FROM creative_dispatch_intents
+    WHERE job_id=? ORDER BY transport_attempt_id LIMIT 1`).get(jobId);
+  assert.ok(firstDispatch, "corruption fixture has a durable dispatch row");
+  store.db.exec("DROP TRIGGER creative_dispatch_target_binding_once");
+  try {
+    store.db.prepare("UPDATE creative_dispatch_intents SET context_fence_json=? WHERE job_id=?")
+      .run(replacement, jobId);
+  } finally {
+    store.db.exec(originalTrigger.sql);
+  }
+  const restoredTrigger = store.db.prepare(`SELECT sql FROM sqlite_master
+    WHERE type='trigger' AND name='creative_dispatch_target_binding_once'`).get();
+  assert.equal(restoredTrigger?.sql, originalTrigger.sql, "the original immutability trigger is restored before recovery");
+
+  store.db.exec("SAVEPOINT fixture_dispatch_trigger_check");
+  let blocked;
+  try {
+    store.db.prepare(`UPDATE creative_dispatch_intents SET context_fence_json=?
+      WHERE job_id=? AND transport_attempt_id=?`).run("fixture-trigger-probe", jobId, firstDispatch.transport_attempt_id);
+  } catch (error) {
+    blocked = error;
+  }
+  assert.match(blocked?.message ?? "", /dispatch target binding is immutable/,
+    "the restored trigger still blocks ordinary changes to the durable dispatch row");
+  store.db.exec("ROLLBACK TO fixture_dispatch_trigger_check");
+  store.db.exec("RELEASE fixture_dispatch_trigger_check");
+  const afterProbe = store.db.prepare(`SELECT context_fence_json FROM creative_dispatch_intents
+    WHERE job_id=? AND transport_attempt_id=?`).get(jobId, firstDispatch.transport_attempt_id);
+  assert.equal(afterProbe?.context_fence_json, replacement,
+    "the enforcement probe leaves the deliberately corrupted bytes unchanged");
+}
+
 function portsFor(store, counters, idFactory, { leaseDurationMs = 60_000,
   artifactBytes = Buffer.from("durable exact artwork bytes"), artifactMediaType = "image/png" } = {}) {
   const bytes = Buffer.from(artifactBytes);
@@ -510,15 +548,13 @@ async function runScenario() {
     store.db.prepare("DELETE FROM creative_dispatch_intents WHERE job_id=?").run(prior.job.job_id);
   }
   if (mode === "corrupt-dispatch") {
-    store.db.prepare("UPDATE creative_dispatch_intents SET context_fence_json='not-json' WHERE job_id=?")
-      .run(prior.job.job_id);
+    tamperDispatchFenceForRecoveryFixture(store, prior.job.job_id, "not-json");
   }
   if (mode === "tampered-dispatch") {
-    store.db.prepare("UPDATE creative_dispatch_intents SET context_fence_json=? WHERE job_id=?")
-      .run(canonicalSerialize({ ...JSON.parse(prior.dispatch_intents[0].context_fence_json),
+    tamperDispatchFenceForRecoveryFixture(store, prior.job.job_id, canonicalSerialize({
+      ...JSON.parse(prior.dispatch_intents[0].context_fence_json),
         inspection_repair: { ...JSON.parse(prior.dispatch_intents[0].context_fence_json).inspection_repair,
-          deadline_at_ms: JSON.parse(prior.dispatch_intents[0].context_fence_json).inspection_repair.deadline_at_ms + 60_000 } }),
-      prior.job.job_id);
+          deadline_at_ms: JSON.parse(prior.dispatch_intents[0].context_fence_json).inspection_repair.deadline_at_ms + 60_000 } }));
   }
   if (mode === "tampered-publication-fence") {
     rewriteIntent(store, "recovery-repair", (intent) => {
@@ -527,9 +563,8 @@ async function runScenario() {
   }
   if (mode === "missing-rights-proof") {
     rewriteIntent(store, "recovery-repair", (intent) => { delete intent.publication_fence.inspection_rights; });
-    store.db.prepare("UPDATE creative_dispatch_intents SET context_fence_json=? WHERE job_id=?")
-      .run(canonicalSerialize((({ inspection_rights: _rights, ...rest }) => rest)(JSON.parse(prior.dispatch_intents[0].context_fence_json))),
-        prior.job.job_id);
+    tamperDispatchFenceForRecoveryFixture(store, prior.job.job_id,
+      canonicalSerialize((({ inspection_rights: _rights, ...rest }) => rest)(JSON.parse(prior.dispatch_intents[0].context_fence_json))));
   }
   if (mode === "corrupt-inspection-session") {
     store.db.prepare("UPDATE creative_inspection_sessions_v1 SET result_json='{}' WHERE action_id=?")

@@ -5,7 +5,7 @@ import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurren
 import { applyResearchInvalidation } from "../planning/index.mjs";
 import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 
-const OPERATIONS = new Set(["generate", "edit", "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
+const OPERATIONS = new Set(["generate", "edit", "concepts.create", "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
 const HASH = /^sha256:[a-f0-9]{64}$/;
 
 function record(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
@@ -203,6 +203,15 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
     getSelection(input) { return serial(() => store.getSelection(input)); },
     listDesignVersions(input) { return serial(() => store.listDesignVersions(input)); },
     getArtifactBytes(input) { return serial(() => store.getArtifactBytes(input)); },
+    beginConceptBatch(input) { return serial(() => store.beginConceptBatch(input)); },
+    appendConceptEvent(input) { return serial(() => store.appendConceptEvent(input)); },
+    recordConceptDispatchBinding(input) { return serial(() => store.recordConceptDispatchBinding(input)); },
+    stageConceptResponse(input) { return serial(() => store.stageConceptResponse(input)); },
+    getConceptBatch(input) { return serial(() => store.getConceptBatch(input)); },
+    getConceptResponseStage(input) { return serial(() => store.getConceptResponseStage(input)); },
+    prepareConceptArtifactObjects(input) { return serial(() => store.prepareConceptArtifactObjects(input)); },
+    publishConceptBatch(input, transaction) { return serial(() => store.publishConceptBatch(input, transaction)); },
+    getConceptVersions(input) { return serial(() => store.getConceptVersions(input)); },
     inspectionRepair,
     beginInspectionSession(input) {
       return serial(() => {
@@ -624,7 +633,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           const row = store.db.prepare(`SELECT * FROM creative_jobs WHERE tenant_id=? AND project_id=? AND job_id=?`)
             .get(scope.tenant_id, scope.project_id, job_id);
           if (!row || row.actor_id !== actor_id || row.action_id !== action_id || row.request_hash !== request_hash ||
-            row.operation !== "inspect") {
+            !["inspect", "concepts.create"].includes(row.operation)) {
             store.db.exec("ROLLBACK");
             return Object.freeze({ kind: "conflict" });
           }

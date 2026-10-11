@@ -1,4 +1,13 @@
-import type { ProviderInput, ProviderOutput, CreativeProviderRoute, UsageRecord } from "../api/v1.mjs";
+import type {
+  CreativeConceptProviderInput,
+  CreativeProviderRouteInput,
+  CreativeConceptReferenceInspection,
+  CreativeConceptReferencePreflight,
+  ProviderInput,
+  ProviderOutput,
+  CreativeProviderRoute,
+  UsageRecord,
+} from "../api/v1.mjs";
 
 export type OpenAIImageOperation = "generate" | "edit";
 export type OpenAIImageOutputFormat = "png" | "jpeg" | "webp";
@@ -33,6 +42,7 @@ export interface OpenAIImageUsage extends UsageRecord {
 }
 
 export type OpenAIImagesInput = ProviderInput & { readonly reservation_ref: string };
+export type OpenAIImagesConceptInput = CreativeConceptProviderInput;
 
 export interface OpenAIImagesOutput extends ProviderOutput {
   readonly target_binding_sha256: `sha256:${string}`;
@@ -208,9 +218,14 @@ export declare class OpenAIImagesProviderError extends Error {
 }
 
 export declare function createOpenAIImagesProvider(options: OpenAIImageProviderOptions): Readonly<{
-  resolveRoute(input: { operation: OpenAIImageOperation }): CreativeProviderRoute;
+  resolveRoute(input: Pick<CreativeProviderRouteInput, "operation">): CreativeProviderRoute;
+  getConceptConfiguration(): Readonly<{ model_id: string; configuration: OpenAIImageConfiguration }>;
+  inspectConceptReferences(input: { scope: ProviderInput["scope"];
+    references: readonly CreativeConceptReferencePreflight[];
+    maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number }):
+    Promise<readonly CreativeConceptReferenceInspection[]>;
   generate(input: OpenAIImagesInput): Promise<OpenAIImagesOutput>;
-  edit(input: OpenAIImagesInput): Promise<OpenAIImagesOutput>;
+  edit(input: OpenAIImagesInput | OpenAIImagesConceptInput): Promise<OpenAIImagesOutput>;
 }>;
 
 export declare function inspectOpenAIImageBytes(value: Uint8Array): Promise<Readonly<{
