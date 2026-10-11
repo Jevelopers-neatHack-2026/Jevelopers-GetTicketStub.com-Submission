@@ -590,6 +590,175 @@ test('synthetic live runner stops pre-cancelled and prepare-time-cancelled opera
   assert.equal(during.hostDispatches.length, 0, 'cancelled preparation never reaches billable host dispatch');
 });
 
+test('public runner preserves pre-cancellation hidden by an own aborted value or getter', async () => {
+  const nativeAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+  for (const shadow of [
+    (signal) => Object.defineProperty(signal, 'aborted', { value: false }),
+    (signal) => Object.defineProperty(signal, 'aborted', { get() { return false; } }),
+  ]) {
+    const controller = new AbortController();
+    controller.abort();
+    shadow(controller.signal);
+    assert.equal(controller.signal.aborted, false);
+    assert.equal(nativeAborted.call(controller.signal), true);
+
+    const run = createLiveOpenRouterRunner({ signal: controller.signal });
+    const result = await executeAuthorizedAccessCell(run.args);
+
+    assert.equal(result.status, 'failed');
+    assert.equal(result.reason_code, 'preflight_deadline_passed');
+    assert.equal(result.financial_hold, 'none');
+    assert.equal(run.fixture.calls.reserve, 0);
+    assert.equal(run.hostDispatches.length, 0);
+    assert.equal(run.requests.length, 0, 'pre-cancellation stops before adapter inspection or credential resolution');
+  }
+});
+
+test('public runner snapshots the signal property once before asynchronous work', async () => {
+  const cancelled = new AbortController();
+  cancelled.abort();
+  Object.defineProperty(cancelled.signal, 'aborted', { value: false });
+  const active = new AbortController();
+  const run = createLiveOpenRouterRunner();
+  let reads = 0;
+  Object.defineProperty(run.args, 'signal', {
+    configurable: true,
+    get() {
+      reads += 1;
+      return reads === 1 ? cancelled.signal : active.signal;
+    },
+  });
+
+  const result = await executeAuthorizedAccessCell(run.args);
+
+  assert.equal(reads, 1);
+  assert.equal(result.status, 'failed');
+  assert.equal(result.reason_code, 'preflight_deadline_passed');
+  assert.equal(result.financial_hold, 'none');
+  assert.equal(run.fixture.calls.reserve, 0);
+  assert.equal(run.hostDispatches.length, 0);
+});
+
+test('public runner rejects spoofed and throwing caller signals with sanitized failures', async () => {
+  const spoofed = Object.create(AbortSignal.prototype);
+  const invalid = createLiveOpenRouterRunner({ signal: spoofed });
+  const invalidResult = await executeAuthorizedAccessCell(invalid.args);
+  assert.equal(invalidResult.status, 'blocked');
+  assert.equal(invalidResult.reason_code, 'invalid_abort_signal');
+  assert.equal(invalidResult.financial_hold, 'none');
+  assert.equal(invalid.fixture.calls.reserve, 0);
+  assert.equal(invalid.hostDispatches.length, 0);
+  assert.ok(!JSON.stringify(invalidResult).includes(TOKEN_CANARY));
+
+  const throwing = createLiveOpenRouterRunner();
+  Object.defineProperty(throwing.args, 'signal', { get() { throw new Error(TOKEN_CANARY); } });
+  const throwingResult = await executeAuthorizedAccessCell(throwing.args);
+  assert.equal(throwingResult.status, 'blocked');
+  assert.equal(throwingResult.reason_code, 'invalid_abort_signal');
+  assert.equal(throwingResult.financial_hold, 'none');
+  assert.equal(throwing.fixture.calls.reserve, 0);
+  assert.equal(throwing.hostDispatches.length, 0);
+  assert.ok(!JSON.stringify(throwingResult).includes(TOKEN_CANARY));
+});
+
+test('public runner accepts active shadowed and proxied native signals and propagates later cancellation', async () => {
+  const nativeAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+  const variants = [
+    (signal) => signal,
+    (signal) => {
+      Object.defineProperty(signal, 'aborted', { value: false });
+      return signal;
+    },
+    (signal) => {
+      Object.defineProperty(signal, 'aborted', { get() { return false; } });
+      return signal;
+    },
+    (signal) => new Proxy(signal, {}),
+  ];
+  for (const wrap of variants) {
+    const controller = new AbortController();
+    const run = createLiveOpenRouterRunner({ signal: wrap(controller.signal) });
+    const result = await executeAuthorizedAccessCell(run.args);
+
+    assert.equal(result.status, 'verified');
+    assert.equal(result.financial_hold, 'settled');
+    assert.equal(run.fixture.calls.reserve, 1);
+    assert.equal(run.hostDispatches.length, 1);
+    assert.ok(run.hostDispatches[0].signal instanceof AbortSignal);
+    controller.abort();
+    assert.equal(nativeAborted.call(run.hostDispatches[0].signal), true);
+  }
+});
+
+test('public runner catches cancellation triggered by signal composition or its clock callback', async () => {
+  const compositionController = new AbortController();
+  let abortedGetterReads = 0;
+  Object.defineProperty(compositionController.signal, 'aborted', {
+    get() {
+      abortedGetterReads += 1;
+      if (abortedGetterReads === 1) compositionController.abort();
+      return false;
+    },
+  });
+  const composition = createLiveOpenRouterRunner({ signal: compositionController.signal });
+  const compositionResult = await executeAuthorizedAccessCell(composition.args);
+  assert.ok(abortedGetterReads > 0, 'AbortSignal.any reads the callback-capable own property');
+  assert.equal(Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get.call(compositionController.signal), true);
+  assert.equal(compositionResult.status, 'failed');
+  assert.equal(compositionResult.reason_code, 'preflight_deadline_passed');
+  assert.equal(compositionResult.financial_hold, 'none');
+  assert.equal(composition.fixture.calls.reserve, 0);
+  assert.equal(composition.hostDispatches.length, 0);
+
+  const clockController = new AbortController();
+  Object.defineProperty(clockController.signal, 'aborted', { value: false });
+  let clockArmed = false;
+  let clockAbortCalls = 0;
+  const nativeNow = Date.now;
+  const clock = createLiveOpenRouterRunner({ signal: clockController.signal, async prepareHost() {
+    clockArmed = true;
+    return { prepared_before_clock: true };
+  } });
+  let clockResult;
+  Date.now = () => {
+    if (clockArmed) {
+      clockArmed = false;
+      clockAbortCalls += 1;
+      clockController.abort();
+    }
+    return nativeNow();
+  };
+  try {
+    clockResult = await executeAuthorizedAccessCell(clock.args);
+  } finally {
+    Date.now = nativeNow;
+  }
+  assert.equal(clockAbortCalls, 1);
+  assert.equal(clockResult.status, 'failed');
+  assert.equal(clockResult.reason_code, 'preflight_deadline_passed');
+  assert.equal(clockResult.financial_hold, 'none');
+  assert.equal(clock.fixture.calls.reserve, 0);
+  assert.equal(clock.hostDispatches.length, 0);
+});
+
+test('public runner catches hidden native cancellation after awaited host preparation', async () => {
+  const controller = new AbortController();
+  Object.defineProperty(controller.signal, 'aborted', { value: false });
+  const run = createLiveOpenRouterRunner({ signal: controller.signal, async prepareHost() {
+    await Promise.resolve();
+    controller.abort();
+    return { prepared_before_cancellation_check: true };
+  } });
+
+  const result = await executeAuthorizedAccessCell(run.args);
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.reason_code, 'preflight_deadline_passed');
+  assert.equal(result.financial_hold, 'none');
+  assert.equal(run.fixture.calls.reserve, 0);
+  assert.equal(run.hostDispatches.length, 0);
+});
+
 test('synthetic live runner preserves the final synchronous fence when cancellation arrives before transport', async () => {
   const controller = new AbortController();
   let transportStarted = false;

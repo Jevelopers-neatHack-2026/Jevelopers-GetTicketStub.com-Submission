@@ -60,6 +60,31 @@ test('fixed required matrix retains all cells and mock evidence can never count 
   assert.equal(fixture.calls.settle, 1);
 });
 
+test('fixed matrix snapshots the caller signal once and keeps a hidden cancellation across cells', async () => {
+  const fixture = createMockAccessFixture();
+  const cancelled = new AbortController();
+  cancelled.abort();
+  Object.defineProperty(cancelled.signal, 'aborted', { value: false });
+  const active = new AbortController();
+  let reads = 0;
+  Object.defineProperty(fixture.args, 'signal', {
+    configurable: true,
+    get() {
+      reads += 1;
+      return reads === 1 ? cancelled.signal : active.signal;
+    },
+  });
+
+  const report = await runAccessPreflight(fixture.args);
+
+  assert.equal(reads, 1, 'the fixed runner snapshots the caller-supplied signal once');
+  assert.equal(report.cells[0].status, 'failed');
+  assert.equal(report.cells[0].reason_code, 'preflight_deadline_passed');
+  assert.equal(report.cells[0].financial_hold, 'none');
+  assert.equal(fixture.calls.reserve, 0);
+  assert.equal(fixture.calls.dispatch, 0);
+});
+
 test('fixture refuses to invent JEV, observer, baseline, planning, or Neatlogs targets', () => {
   for (const cellId of ['harness_jev', 'vision_observer', 'generative_classifier_baseline', 'planning', 'neatlogs_ingestion', 'neatlogs_readback']) {
     assert.throws(() => accessPlan({ cellId }), /only the two Images cells/);
