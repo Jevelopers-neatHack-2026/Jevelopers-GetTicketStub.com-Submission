@@ -61,6 +61,8 @@ export const POST = observeRoute("art", async (req: Request) => {
     return errorJson(400, "bad_request", "Send the event to remix.");
   }
 
+  // Like the agent route, treat a missing or malformed facts list as empty instead of failing the prompt build.
+  const event: EventData = { ...body.event, facts: Array.isArray(body.event.facts) ? body.event.facts : [] };
   const vibe = typeof body.vibe === "string" && body.vibe.trim() ? body.vibe.trim().slice(0, 120) : undefined;
   const seed = typeof body.seed === "number" && Number.isFinite(body.seed) ? Math.floor(body.seed) : freshSeed();
 
@@ -95,7 +97,7 @@ export const POST = observeRoute("art", async (req: Request) => {
 
   if (saving) {
     try {
-      const result = await generateImage(buildArtPrompt(body.event, vibe), req.signal, providerObserver());
+      const result = await generateImage(buildArtPrompt(event, vibe), req.signal, providerObserver());
       if (result) {
         annotate({ dependency: "provider" });
         const art: ArtLayer = { kind: "image", src: result.value, seed, vibe, provenance: "live", providerMetadata: result.metadata };

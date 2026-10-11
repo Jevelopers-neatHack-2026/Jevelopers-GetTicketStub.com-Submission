@@ -294,6 +294,22 @@ test("art OpenRouter: model check and generation are separate attempts of one op
   assertClean(png.slice(0, 20));
 });
 
+test("art without a facts list still generates an image (no internal error)", async () => {
+  configure("art", "openai/test-image");
+  globalThis.fetch = async (url) => url.endsWith("/images/models")
+    ? response({ data: [{ id: "openai/test-image", architecture: { output_modalities: ["image"] } }] })
+    : response({ data: [{ b64_json: png, media_type: "image/png" }], usage: { cost: 0.04 } });
+  for (const facts of [undefined, null, "not a list"]) {
+    sink.clear();
+    const res = await art.POST(req({ event: { type: "concert", title: "No facts", ...(facts === undefined ? {} : { facts }) } }));
+    assert.equal(res.status, 200, String(facts));
+    assert.equal((await res.json()).provenance, "live", String(facts));
+    const r = only("api_request");
+    assert.notEqual(r.fields.code, "internal", String(facts));
+    assert.equal(r.fields.dependency, "provider", String(facts));
+  }
+});
+
 test("art in demo is a procedural fallback with no attempts", async () => {
   delete process.env.TICKETSTUB_RUNTIME_MODE;
   globalThis.fetch = () => assert.fail("demo attempted network");
