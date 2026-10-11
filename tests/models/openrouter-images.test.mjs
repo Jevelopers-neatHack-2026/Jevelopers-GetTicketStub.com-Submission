@@ -150,6 +150,37 @@ test("catalog-shaped descriptors that list auto are accepted verbatim, but auto 
     "input_references is not pinnable");
 });
 
+test("capabilities are bound to the supplied n and input_references descriptors before any port is used", () => {
+  let portCalls = 0;
+  const trap = () => { portCalls += 1; throw new Error("port must not be called"); };
+  const base = (overrides) => ({ ...orProfile(), ...orAuthorityPorts(), promptPort: { render: trap },
+    credentialPort: { resolveCredential: trap }, assetPort: { read: trap }, fetchImpl: trap, configuration: {}, ...overrides });
+  const edit = (max) => ({ generation: true, edit: { max_input_references: max } });
+  const refs = (min, max) => ({ input_references: { type: "range", min, max } });
+  const denied = [
+    ["edit maximum above the descriptor maximum", { capabilities: edit(5), supported_parameters: refs(0, 4) }],
+    ["descriptor maximum zero while edit is claimed", { capabilities: edit(2), supported_parameters: refs(0, 0) }],
+    ["descriptor minimum above one while edit is claimed", { capabilities: edit(3), supported_parameters: refs(2, 8) }],
+    ["n maximum zero", { supported_parameters: { n: { type: "range", min: 0, max: 0 } } }],
+    ["n minimum above one", { supported_parameters: { n: { type: "range", min: 2, max: 4 } } }],
+  ];
+  for (const [name, overrides] of denied) {
+    assert.throws(() => createOpenRouterImagesProvider(base(overrides)),
+      (error) => error.code === "unsupported_model_profile" && error.field === "supported_parameters", name);
+  }
+  assert.equal(portCalls, 0);
+  // The same descriptors are fine when the profile makes no contradicting claim.
+  for (const overrides of [
+    { capabilities: edit(4), supported_parameters: refs(0, 4) },
+    { capabilities: edit(2), supported_parameters: refs(1, 16) },
+    { capabilities: { generation: true, edit: false }, supported_parameters: refs(0, 0) },
+    { capabilities: { generation: true, edit: false }, supported_parameters: refs(2, 8) },
+    { supported_parameters: { n: { type: "range", min: 1, max: 1 } } },
+    { supported_parameters: { n: { type: "range", min: 0, max: 10 } } },
+    { supported_parameters: { ...LIVE_DESCRIPTORS }, configuration: { quality: "low" } },
+  ]) assert.doesNotThrow(() => createOpenRouterImagesProvider(base(overrides)), JSON.stringify(overrides));
+});
+
 test("route is the exact OpenRouter endpoint and never a direct OpenAI one", () => {
   const harness = orHarness();
   for (const operation of ["generate", "edit"]) {

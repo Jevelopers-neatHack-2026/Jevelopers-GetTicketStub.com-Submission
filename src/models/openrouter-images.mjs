@@ -144,6 +144,23 @@ function validateSupportedParameters(value) {
   return deepFreeze(result);
 }
 
+/**
+ * Bind the declared capabilities to the catalog range descriptors the host supplied. The adapter always sends n:1 and,
+ * for an edit, sends the parent plus the references, so a descriptor that cannot admit that request is a contradictory
+ * profile and is refused before any port is touched. Absent descriptors add no constraint.
+ */
+function validateDescriptorBinding(capabilities, supported) {
+  const reject = () => fail("unsupported_model_profile", "The declared capabilities contradict the supplied parameter descriptors.", {
+    outcome: "failed", field: "supported_parameters",
+  });
+  const { n, input_references: references } = supported;
+  if (n && !(n.min <= 1 && n.max >= 1)) reject();
+  if (references && capabilities.edit !== false) {
+    // One parent is the smallest edit request, and the declared maximum may not exceed what the provider accepts.
+    if (references.max < 1 || references.min > 1 || capabilities.edit.max_input_references > references.max) reject();
+  }
+}
+
 function validateConfiguration(configuration, supported) {
   const reject = () => fail("unsupported_image_configuration",
     "Requested image configuration is outside the explicit OpenRouter model profile.", { outcome: "failed", field: "configuration" });
@@ -393,6 +410,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
     }
     const profileCapabilities = validateCapabilities(capabilities);
     const supported = validateSupportedParameters(supported_parameters);
+    validateDescriptorBinding(profileCapabilities, supported);
     const pinnedConfiguration = validateConfiguration(configuration, supported);
     if (!capabilityPort || typeof capabilityPort.verify !== "function" || typeof capabilityPort.revalidate !== "function" ||
         !authorizationPort || typeof authorizationPort.revalidate !== "function" ||
