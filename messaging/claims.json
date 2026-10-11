@@ -24,10 +24,10 @@
       "rank": 3,
       "subject": "Demonstrated product behavior",
       "canonicalSource": "Jevelopers-neatHack-2026/getticketstub.com",
-      "revision": "7f59d33922a0585205547d490b288b49eed32419",
+      "revision": "eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073",
       "path": "README.md",
-      "rule": "PR #22 at this pin integrates the existing Next.js App Router studio/runtime. The preview defaults to demo fixtures and simulated art/agent responses; this source does not prove deployed or production behavior. Use a sanitized versioned capability manifest and producer-reviewed GT-12 #6 acceptance evidence before whole-product claims.",
-      "sha256": "896457d9b29f1ced4b326143648261a15d047348a364e7375335164c5a1cee4b"
+      "rule": "This pin is after runtime PR #20 merged and includes demo-mode sign-in with sandbox mail, local SQLite/file storage and sandbox order routes on the existing Next.js App Router studio. The preview defaults to demo fixtures and simulated art; the agent route answers 204 outside live mode; arbitrary event links are demo-only. The source does not prove deployed, production, hosted-persistence, real-payment, email or fulfillment behavior. The earlier 7f59d339 pin (PR #22) is historical. Use a sanitized versioned capability manifest and producer-reviewed GT-10B/GT-12 #6 acceptance before whole-product claims.",
+      "sha256": "bc8beb6f077034d126756c064ea2b06c9dd1d755758be866bf47492c1442098c"
     },
     {
       "rank": 4,
@@ -161,9 +161,9 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/getticketstub.com",
         "path": "README.md",
-        "revision": "7f59d33922a0585205547d490b288b49eed32419",
-        "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/7f59d33922a0585205547d490b288b49eed32419/README.md",
-        "sha256": "896457d9b29f1ced4b326143648261a15d047348a364e7375335164c5a1cee4b"
+        "revision": "eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073",
+        "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073/README.md",
+        "sha256": "bc8beb6f077034d126756c064ea2b06c9dd1d755758be866bf47492c1442098c"
       },
       "evidenceReference": "PRODUCT-RELEASE-EVIDENCE-PENDING; GT-19 #19 capability manifest; GT-12 #6 acceptance",
       "evidenceClassification": "prototype_implementation_and_demo_mode_documentation",
@@ -172,8 +172,10 @@
       "reviewer": "Product release owner; evidence and review pending.",
       "reviewStatus": "blocked",
       "limitations": [
-        "PR #22, merged at commit 7f59d33922a0585205547d490b288b49eed32419, integrates the existing Next.js App Router studio/runtime; README says this does not complete issues #7, #1, or the product release criteria. PR #20 remains separate.",
-        "The documented preview defaults to demo research fixtures and simulated art/agent responses, disables arbitrary event URL fetching, and keeps checkout, sign-in, wallet passes, and QR codes simulated. The README says no live provider calls were made to validate the deployment fix.",
+        "Source availability, current: the pin is getticketstub.com commit eb8decceeffd29c3c1f1ebf4f6a653ef3a98e073, a revision after runtime PR #20 merged. At that exact revision the source contains demo-mode magic-link sign-in with sandbox mail, local SQLite and file-backed storage, and sandbox order routes; its README says real email delivery, target-host storage durability and integrated release acceptance remain unverified, and that wallet passes, QR codes and checkout remain simulated. Marketing read this source and did not run it; producer tests are not verified by the marketing package tests.",
+        "Demo-mode constraints at that revision: fixture research for three demo events, arbitrary event links refused as demo_only, simulated art and provider results, an /api/agent route that returns 204 outside live mode, and sandbox checkout in which only digital Matte and Foil variants are sandbox-orderable and physical variants are preview-only. Sandbox mail is needed to complete sign-in without a mail provider. No actual payment, email delivery, fulfillment, live upstream call or hosted persistence is shown.",
+        "This is source availability and a consumer observation, not producer acceptance or approved wording: the factual consumer request at https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/19#issuecomment-6111667826 is not a producer receipt, and GT-10B and GT-12 owner acceptance and approved wording remain pending. One demo path is not the full agent, customer or program journey.",
+        "Historical, dated: the earlier pin 7f59d33922a0585205547d490b288b49eed32419 (PR #22, checked 2026-10-11) described PR #20 as separate and its sign-in and checkout as simulated; that observation is superseded by the current pin and kept only as history. No media in this repository recorded the current UI, and the existing rehearsal remains conceptual rather than runtime video.",
         "A source tree, production build workflow, or README does not prove a deployed preview, an accepted end-to-end customer journey, live provider/sponsor activity, authentic sponsor results, or production readiness.",
         "Current whole-product capability remains pending a sanitized, versioned capability manifest and producer-reviewed acceptance evidence tracked by GT-19 #19 and GT-12 #6."
       ],
