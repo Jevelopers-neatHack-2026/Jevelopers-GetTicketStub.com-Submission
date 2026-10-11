@@ -358,6 +358,30 @@ class CoverageProjectionV2Tests(unittest.TestCase):
         self.assertEqual(self.coverage["entries"][0]["historical_body_sha256"], hashlib.sha256(b"AH-LEAF").hexdigest())
         self.assertIn("ISSUE_BODY_CHANGE_UNADJUDICATED", self.codes(self.validate(require_specialists=False)))
 
+    def test_readback_title_and_state_drift_remain_unadjudicated(self) -> None:
+        changed = copy.deepcopy(self.readbacks)
+        changed["issues"][0]["title"] = "Updated title"
+        self.coverage["entries"][0]["current_readback"]["title"] = "Updated title"
+        self.write(readbacks=changed)
+        self.assertIn("ISSUE_TITLE_CHANGE_UNADJUDICATED", self.codes(self.validate(require_specialists=False)))
+
+        changed = copy.deepcopy(self.readbacks)
+        changed["issues"][0]["state"] = "closed"
+        self.coverage["entries"][0]["current_readback"]["title"] = self.coverage["entries"][0]["historical_issue_title"]
+        self.coverage["entries"][0]["current_readback"]["state"] = "closed"
+        self.write(readbacks=changed)
+        codes = self.codes(self.validate(require_specialists=False))
+        self.assertIn("ISSUE_STATE_CHANGE_UNADJUDICATED", codes)
+        self.assertIn("CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", codes)
+
+    def test_incomplete_issue_readback_pages_fail_closed(self) -> None:
+        changed = copy.deepcopy(self.readbacks)
+        changed["pages_complete"] = False
+        self.write(readbacks=changed)
+        codes = self.codes(self.validate(require_specialists=False))
+        self.assertIn("ISSUE_READBACK_PIN_INCOMPLETE", codes)
+        self.assertIn("ISSUE_READBACK_PAGES_INCOMPLETE", codes)
+
     def test_historical_test_results_are_not_treated_as_required_test_declarations(self) -> None:
         entry = self.coverage["entries"][0]
         entry["tests"] = [{"command": "python -B -m unittest", "exit_status": 0, "passed": 12}]
@@ -390,10 +414,27 @@ class CoverageProjectionV2Tests(unittest.TestCase):
         self.paths["release"].write_bytes(_bytes(release))
         report = self.validate(release_path=self.paths["release"], require_specialists=False)
         self.assertEqual(report["status"], "SCOPED_RELEASE_EVIDENCE_READY")
-        release["stage_evidence"][0]["consumer_requirement_ids"] = ["REQ-GLOBAL"]
-        self.paths["release"].write_bytes(_bytes(release))
-        report = self.validate(release_path=self.paths["release"], require_specialists=False)
-        self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(report))
+        mutations = {
+            "consumer_key": "CE-LEAF",
+            "consumer_requirement_ids": ["REQ-GLOBAL"],
+            "consumer_stage": "canonical_agreement_and_fixture",
+            "producer_key": "CE-LEAF",
+            "producer_requirement_ids": ["REQ-LOCAL"],
+            "external_artifact_id": "EXT-CANONICAL",
+            "producer_stage": "fixture",
+            "evidence_id": "ev-missing",
+            "producer_evidence_id": "ev-missing",
+            "content_sha256": "f" * 64,
+            "source_revision": "b" * 40,
+            "mode": "recorded",
+        }
+        for field, value in mutations.items():
+            with self.subTest(field=field):
+                changed = copy.deepcopy(release)
+                changed["stage_evidence"][0][field] = value
+                self.paths["release"].write_bytes(_bytes(changed))
+                report = self.validate(release_path=self.paths["release"], require_specialists=False)
+                self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(report))
 
     def test_v2_release_cannot_lower_a_leafs_declared_stage(self) -> None:
         release, expected_paths = self._release_manifest()

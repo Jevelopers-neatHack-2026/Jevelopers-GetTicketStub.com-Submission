@@ -130,9 +130,9 @@ PL-13 has no title-based or inferred “overbroad dependency” policy. The suit
 | V1 stage names remain isolated; v2 keeps all six source stage names | `test_shared_edge_v1_stage_vocabulary_remains_unchanged`; `test_all_six_source_stages_are_admitted_without_collapsing_their_names` |
 | External artifact status/action is separate from local issue closure | `test_pending_external_artifact_is_not_mistaken_for_issue_closure`; `test_release_stays_blocked_when_external_artifact_is_pending` |
 | Canonical metadata and criteria outside subsystem scope are preserved | `test_canonical_metadata_and_out_of_scope_criteria_are_preserved` |
-| Current body digest drift does not overwrite historical identity | `test_readback_body_drift_blocks_without_overwriting_historical_digest` |
+| Body, title, or state drift stays unadjudicated; incomplete readback pages fail closed | `test_readback_body_drift_blocks_without_overwriting_historical_digest`; `test_readback_title_and_state_drift_remain_unadjudicated`; `test_incomplete_issue_readback_pages_fail_closed` |
 | Historical test results do not masquerade as required test declarations | `test_historical_test_results_are_not_treated_as_required_test_declarations` |
 | Unresolved accountability stays unresolved | `test_unresolved_accountability_decision_blocks_pair_instead_of_auto_adding` |
-| Directional release evidence binds exact endpoints, content, and the declared stage | `test_v2_release_binds_directional_stage_evidence_and_external_artifact`; `test_v2_release_cannot_lower_a_leafs_declared_stage` |
+| Directional release evidence binds exact producer/consumer, requirements, artifact, content, revision, mode, and stage | `test_v2_release_binds_directional_stage_evidence_and_external_artifact`; `test_v2_release_cannot_lower_a_leafs_declared_stage` |
 
 The v2 positive release control uses only temporary synthetic files and mock evidence. It validates relation binding behavior; it is not evidence of external contract agreement or a real release.
