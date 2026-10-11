@@ -427,6 +427,14 @@
 .frame[data-full="false"] .stampMark {
   display: block;
 }
+/* The mark and the handle stack in the rail, each centred on the icon column below. */
+.frame[data-full="false"] .mark {
+  justify-content: center;
+  align-self: stretch;
+}
+.frame[data-full="false"] .handle {
+  align-self: center;
+}
 .frame[data-full="false"] .item {
   justify-content: center;
   padding: 0;
