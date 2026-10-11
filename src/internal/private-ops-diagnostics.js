@@ -308,30 +308,90 @@ function elapsed(startedAt) {
   return finiteInt(value, 0) ? value : 0;
 }
 
-function safeSlotState(state, slot) {
-  const existing = state.slots[slot];
-  if (existing) return existing;
+export function closeOperationsDiagnosticDescriptor(state, descriptor, close = closeSync) {
+  if (!descriptor) return true;
+  if (descriptor.closeAttempted === true) return descriptor.closeFailed !== true;
+  descriptor.closeAttempted = true;
+  descriptor.closed = true;
+  try {
+    close(descriptor.fd);
+    descriptor.fd = -1;
+    return true;
+  } catch {
+    descriptor.closeFailed = true;
+    state.cleanupUncertain = true;
+    state.flags.writeFailed = true;
+    state.flags.cleanupIncomplete = true;
+    return false;
+  }
+}
+
+export function acquireOperationsDiagnosticSlot(state, filePath, operations = { openSync, fstatSync, closeSync }, now = () => performance.now()) {
+  if (state.pendingDescriptor) {
+    state.flags.writeFailed = true;
+    state.flags.cleanupIncomplete = true;
+    state.cleanupUncertain = true;
+    return null;
+  }
   if (state.slots.length >= 2) {
     state.flags.overflow = true;
     return null;
   }
   const index = state.slots.length;
+  let acquired = null;
   try {
-    const path = join(state.directory, `ops07-child-${index}.jsonl`);
-    const fd = openSync(path, 'wx', 0o600);
-    const stat = fstatSync(fd);
-    if (!stat.isFile() || (stat.mode & 0o777) !== 0o600) {
-      closeSync(fd);
+    const fd = operations.openSync(filePath, 'wx', 0o600);
+    acquired = {
+      slot: index, path: filePath, fd, dev: null, ino: null,
+      closed: false, closeAttempted: false, closeFailed: false, startedAt: 0
+    };
+    state.pendingDescriptor = acquired;
+    const stat = operations.fstatSync(fd);
+    if (!stat || typeof stat.isFile !== 'function' || !stat.isFile() || (stat.mode & 0o777) !== 0o600) {
       state.flags.writeFailed = true;
+      if (closeOperationsDiagnosticDescriptor(state, acquired, operations.closeSync)) {
+        state.pendingDescriptor = null;
+      }
       return null;
     }
-    const slotState = { slot: index, path, fd, dev: stat.dev, ino: stat.ino, closed: false, startedAt: performance.now() };
-    state.slots.push(slotState);
-    return slotState;
+    acquired.dev = stat.dev;
+    acquired.ino = stat.ino;
+    acquired.startedAt = now();
+    state.slots.push(acquired);
+    state.pendingDescriptor = null;
+    return acquired;
   } catch {
     state.flags.writeFailed = true;
+    if (acquired && closeOperationsDiagnosticDescriptor(state, acquired, operations.closeSync)) {
+      state.pendingDescriptor = null;
+    }
     return null;
   }
+}
+
+export function closeOperationsDiagnosticSessionFiles(state, close = closeSync) {
+  let confirmed = true;
+  const pending = state.pendingDescriptor;
+  if (pending) {
+    if (!pending.closeAttempted) {
+      if (closeOperationsDiagnosticDescriptor(state, pending, close)) state.pendingDescriptor = null;
+      else confirmed = false;
+    } else if (pending.closeFailed) {
+      confirmed = false;
+    } else {
+      state.pendingDescriptor = null;
+    }
+  }
+  for (const slot of state.slots) {
+    if (!closeOperationsDiagnosticDescriptor(state, slot, close)) confirmed = false;
+  }
+  return confirmed && state.cleanupUncertain !== true;
+}
+
+function safeSlotState(state) {
+  const index = state.slots.length;
+  const filePath = join(state.directory, `ops07-child-${index}.jsonl`);
+  return acquireOperationsDiagnosticSlot(state, filePath);
 }
 
 export function createOperationsDiagnosticSession(input) {
@@ -352,6 +412,8 @@ export function createOperationsDiagnosticSession(input) {
     slots: [],
     parentRecords: [],
     parentBytes: 0,
+    pendingDescriptor: null,
+    cleanupUncertain: false,
     flags: {
       enabled: true, complete: false, missingChildCapture: false, malformed: false,
       overflow: false, writeFailed: false, abruptExit: false, cleanupIncomplete: false
@@ -378,11 +440,9 @@ export function closeOperationsChildCapture(token, slotNumber) {
   const state = sessions.get(token);
   if (!state || !finiteInt(slotNumber, 0, 1)) return false;
   const slot = state.slots[slotNumber];
-  if (!slot || slot.closed) return true;
-  try { closeSync(slot.fd); } catch { state.flags.writeFailed = true; }
-  slot.closed = true;
-  slot.fd = -1;
-  return true;
+  if (!slot) return true;
+  if (slot.closeAttempted === true) return slot.closeFailed !== true;
+  return closeOperationsDiagnosticDescriptor(state, slot);
 }
 
 export function recordOperationsSupervisor(token, slotNumber, stage, input = Object.create(null)) {
@@ -674,6 +734,10 @@ export function readOperationsDiagnosticSession(token, input = Object.create(nul
     if (!suppliedSlots || suppliedSlots.some(slot => !finiteInt(slot, 0, 1))) state.flags.malformed = true;
     else abruptSlots = suppliedSlots;
   }
+  if (state.pendingDescriptor && !state.pendingDescriptor.closeAttempted
+      && closeOperationsDiagnosticDescriptor(state, state.pendingDescriptor)) {
+    state.pendingDescriptor = null;
+  }
   if (state.slots.length !== 2) state.flags.missingChildCapture = true;
   const children = [];
   for (let slotIndex = 0; slotIndex < state.slots.length; slotIndex += 1) {
@@ -733,10 +797,10 @@ export function readOperationsDiagnosticSession(token, input = Object.create(nul
 export function disposeOperationsDiagnosticSession(token) {
   const state = sessions.get(token);
   if (!state) return false;
-  if (state.disposed) return true;
-  for (let index = 0; index < state.slots.length; index += 1) closeOperationsChildCapture(token, index);
+  if (state.disposed) return state.cleanupUncertain !== true;
+  const closed = closeOperationsDiagnosticSessionFiles(state);
   state.disposed = true;
-  return true;
+  return closed;
 }
 
 export function parseOperationsCaptureFromTap(text) {

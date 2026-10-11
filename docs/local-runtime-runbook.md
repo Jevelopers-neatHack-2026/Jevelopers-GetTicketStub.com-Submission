@@ -63,11 +63,13 @@ Retention is `retention_not_configured`. The harness exposes a bounded owner req
 
 ## Exact offline checks
 
-Both required fixture targets execute all 13 named operations groups and 48 named local subcases (61 named test cases total), and fail on any missing case, test error, or skip:
+Both required fixture targets execute all 13 parent groups and 52 named local cases (65 named test cases total), and fail on any missing case, test error, or skip. Run them through the fixed owner routes so the process-group registry, watchdog, gated launch, and cleanup receipt are established:
 
 ```sh
-make verify CASE=AH-11-OPS MODE=mock FIXTURE=quota-shutdown-restart
-make verify CASE=AH-11-OPS MODE=mock FIXTURE=runbook-clean-start
+python3 .github/scripts/run_ops_owned_command.py --route ops-quota-shutdown-restart
+python3 .github/scripts/run_ops_owned_command.py --route ops-runbook-clean-start
 ```
+
+The quota route runs the existing inner command `make verify CASE=AH-11-OPS MODE=mock FIXTURE=quota-shutdown-restart`; the clean-start route runs `make verify CASE=AH-11-OPS MODE=mock FIXTURE=runbook-clean-start`. Keep these inner commands unchanged. Running either Make command directly remains fail-closed when the owner registry is missing.
 
 The tests use synthetic SQLite data and controlled DNS/HTTPS objects only. Provider/API calls are zero. Test instrumentation blocks uncontrolled Node network APIs inside the JEV boundary child, but is not OS-wide egress enforcement. Hosted Linux, the eventual deployment host, and external service or Finance acceptance require separate evidence.

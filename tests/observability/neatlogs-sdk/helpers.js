@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { open, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import {
@@ -9,6 +8,7 @@ import {
   createHmacTokenizer,
   projectTelemetryEvent
 } from '@jevelopers/agent-harness-runtime';
+export { writeJsonAtomically } from './atomic-json-publisher.js';
 
 export const SYNTHETIC_CANARIES = Object.freeze([
   'SYNTHETIC_RAW_ID_CANARY_41a',
@@ -134,30 +134,6 @@ export function spawnNodeFixture(name, args = [], options = {}) {
 
 export function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-}
-
-export async function writeJsonAtomically(path, value, { afterPartialWrite } = {}) {
-  const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  let handle;
-  try {
-    handle = await open(temporaryPath, 'wx', 0o600);
-    if (typeof afterPartialWrite === 'function') {
-      const partialLength = Math.max(1, Math.floor(bytes.length / 2));
-      await handle.writeFile(bytes.subarray(0, partialLength));
-      await afterPartialWrite({ temporaryPath, partialBytes: partialLength, totalBytes: bytes.length });
-      await handle.writeFile(bytes.subarray(partialLength));
-    } else {
-      await handle.writeFile(bytes);
-    }
-    await handle.close();
-    handle = null;
-    await rename(temporaryPath, path);
-  } catch (error) {
-    try { await handle?.close(); } catch {}
-    try { await rm(temporaryPath, { force: true }); } catch {}
-    throw error;
-  }
 }
 
 export function readJson(path) {

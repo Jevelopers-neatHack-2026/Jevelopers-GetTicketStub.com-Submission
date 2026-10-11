@@ -23,6 +23,9 @@ jobs:
           node --version
           npm --version
           npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check offline ownership-control fakes
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: node tests/operations/opsactual-ownership-controls.mjs
       - name: Build and import internal entrypoint
         run: make check
       - name: Run offline runtime tests
