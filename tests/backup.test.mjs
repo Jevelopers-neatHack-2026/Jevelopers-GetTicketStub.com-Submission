@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { registerHooks } from "node:module";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -37,7 +37,8 @@ registerHooks({
 const dir = mkdtempSync(join(tmpdir(), "ticketstub-backup-test-"));
 process.env.TICKETSTUB_DB = join(dir, "ticketstub.sqlite");
 process.env.TICKETSTUB_FILES = join(dir, "files");
-const { createBackup, listBackups, backupsDir } = await import("../src/server/backup.ts");
+const { createBackup, listBackups, backupsDir, withBackupLock, BackupBusy, backupDue, runScheduledBackup } = await import("../src/server/backup.ts");
+const { backupEveryDays } = await import("../src/server/backup-schedule.ts");
 const backupRoute = await import("../src/app/api/admin/backup/route.ts");
 
 const sha = (b) => createHash("sha256").update(b).digest("hex");
@@ -93,4 +94,39 @@ test("the route is a 404 for anyone who is not staff", async () => {
   assert.equal(get.status, 404);
   const foreign = await backupRoute.POST(new Request("http://localhost/api/admin/backup", { method: "POST", headers: { ...headers, origin: "https://evil.example" } }));
   assert.equal(foreign.status, 403);
+});
+
+const DAY = 24 * 60 * 60_000;
+
+test("a scheduled backup runs only when the newest is a week old", () => {
+  const db = process.env.TICKETSTUB_DB;
+  const newest = Date.parse(listBackups(db)[0].createdAt);
+  assert.equal(backupDue(db, newest + 6 * DAY, 7 * DAY), false);
+  assert.equal(runScheduledBackup({ dbFile: db, filesDir: process.env.TICKETSTUB_FILES, everyMs: 7 * DAY, now: new Date(newest + 6 * DAY) }), null);
+  const before = listBackups(db).length;
+  const m = runScheduledBackup({ dbFile: db, filesDir: process.env.TICKETSTUB_FILES, everyMs: 7 * DAY, now: new Date(newest + 7 * DAY) });
+  assert.ok(m && m.database.integrity === "ok");
+  assert.equal(listBackups(db).length, before + 1);
+  assert.equal(backupDue(db, newest + 8 * DAY, 7 * DAY), false, "the clock restarts from the new backup");
+});
+
+test("the lock keeps two backups apart, and a stale lock is taken over", () => {
+  const db = process.env.TICKETSTUB_DB;
+  assert.throws(() => withBackupLock(db, () => withBackupLock(db, () => 1)), BackupBusy);
+  assert.equal(existsSync(join(backupsDir(db), ".lock")), false, "released after an error");
+  writeFileSync(join(backupsDir(db), ".lock"), "999999 old");
+  const old = new Date(Date.now() - 31 * 60_000);
+  utimesSync(join(backupsDir(db), ".lock"), old, old);
+  assert.equal(withBackupLock(db, () => "ran"), "ran");
+});
+
+test("TICKETSTUB_BACKUP_EVERY_DAYS: default 7, 0 or off disables", () => {
+  const was = process.env.TICKETSTUB_BACKUP_EVERY_DAYS;
+  for (const [v, want] of [[undefined, 7], ["", 7], ["3", 3], ["0", 0], ["off", 0], ["nope", 7]]) {
+    if (v === undefined) delete process.env.TICKETSTUB_BACKUP_EVERY_DAYS;
+    else process.env.TICKETSTUB_BACKUP_EVERY_DAYS = v;
+    assert.equal(backupEveryDays(), want, String(v));
+  }
+  if (was === undefined) delete process.env.TICKETSTUB_BACKUP_EVERY_DAYS;
+  else process.env.TICKETSTUB_BACKUP_EVERY_DAYS = was;
 });

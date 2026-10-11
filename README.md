@@ -120,6 +120,8 @@ The database runs in WAL mode, so committed rows can sit in `ticketstub.sqlite-w
 2. Download the backup folder's files from the host's File Manager (Private Storage). GoDaddy limits each download to under 25 MB; the manifest's `downloadable` says whether every file fits. Keep downloads off GitHub and out of shared folders: they hold customer data.
 3. Restore into a new, empty folder, never over a live one: `node scripts/restore-backup.mjs <backup folder> <new folder>`. It checks every hash against the manifest, runs `integrity_check`, compares row counts and prints the command to start an isolated demo-mode server on the copy with no mail or provider keys.
 
+The server also takes the same backup on its own once a week. Each hour it checks whether the newest finished backup is at least `TICKETSTUB_BACKUP_EVERY_DAYS` old (default 7; `0` or `off` turns it off) and takes one if so, logging `[backup] scheduled <id> ok`. The age is read from the backups on disk, so restarts and deploys don't reset it. A lock file in `backups/` keeps the scheduled run, a staff POST and a second process (Preview and Publish share `/private` on Plus Launch) from running at once. It only runs when `TICKETSTUB_DB` and `TICKETSTUB_FILES` are both set. A scheduled backup still lives on the same disk as the database: download one now and then.
+
 Nothing deletes backups. Prune `/private/backups` by hand, and only after the newest one has been restored and checked.
 
 ### Verifying it (`verify:product`)
