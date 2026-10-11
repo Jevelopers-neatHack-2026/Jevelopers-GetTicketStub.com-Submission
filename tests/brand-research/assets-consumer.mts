@@ -1,7 +1,14 @@
-import type { AssetCandidateDescriptor, AssetCandidateDiscoveryOutcome } from '../../src/brand-research/assets.mjs';
-import type { AssetSourceAssociation, EvidenceStore } from '../../src/evidence/store.mjs';
+import type {
+  AssetCandidateDescriptor,
+  AssetCandidateDiscoveryOutcome,
+  AssetCandidateDiscoveryResult,
+  BrandRoleQuestionPreparationResult,
+  SuppliedAssetInspectionDocument,
+} from '../../src/brand-research/assets.mjs';
+import type { AssetSourceAssociation, EvidenceStore, EvidenceTenantScope } from '../../src/evidence/store.mjs';
+import type { QuestionPlan, StructuredVisualObservation } from '../../src/decisions/questions/index.mjs';
 import type { RetrievedDocument } from '../../src/security/index.mjs';
-import { discoverAssetCandidates } from '../../src/brand-research/assets.mjs';
+import { discoverAssetCandidates, prepareBrandRoleQuestionFromAssetCandidate } from '../../src/brand-research/assets.mjs';
 
 async function consumePrivateAssetSource<Request>(
   store: EvidenceStore<Request>,
@@ -27,3 +34,30 @@ async function consumePrivateAssetSource<Request>(
 }
 
 void consumePrivateAssetSource;
+
+async function prepareLocalBrandQuestion<Request>(
+  store: EvidenceStore<Request>,
+  scope: EvidenceTenantScope,
+  request: Request,
+  discovery: AssetCandidateDiscoveryResult<Request>,
+  candidateId: string,
+  assetDocument: SuppliedAssetInspectionDocument,
+  observation: StructuredVisualObservation & Readonly<{ candidateRef: string }>,
+): Promise<BrandRoleQuestionPreparationResult> {
+  const prepared = await prepareBrandRoleQuestionFromAssetCandidate({
+    store,
+    scope,
+    request,
+    discovery,
+    candidateId,
+    assetDocument,
+    observation,
+  });
+  const plan: QuestionPlan = prepared.plan;
+  const acquisition: 'caller_supplied_unverified' = prepared.assetInspection.acquisitionProvenance;
+  const observer: 'caller_asserted_unverified' = prepared.questionBinding.observerMetadataProvenance;
+  void [plan, acquisition, observer];
+  return prepared;
+}
+
+void prepareLocalBrandQuestion;
