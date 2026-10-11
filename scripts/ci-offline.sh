@@ -18,6 +18,7 @@ if [[ -e out/ci-workload-request.json ]]; then
   phase observer node --test scripts/security/renderer-observer.test.mjs
   phase launch-probe node --test scripts/security/browser-launch-probe.test.mjs
   phase launch-diagnostic node scripts/security/launch-diagnostic.mjs
+  phase pdf-position npm exec --offline -- node dist/scripts/diagnostics/pdf-position.js out/pdf-linux-position
   phase tests npm exec --offline -- node scripts/ci-workload.mjs run
   phase linux-browser node --test scripts/security/linux-browser.test.mjs
   phase calibration npm run verify -- --suite runtime --mode offline --evidence-dir out/evidence/linux-ci

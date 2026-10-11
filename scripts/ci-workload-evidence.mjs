@@ -68,6 +68,7 @@ export const phaseNames = Object.freeze([
 	"observer",
 	"launch-probe",
 	"launch-diagnostic",
+	"pdf-position",
 	"tests",
 	"linux-browser",
 	"calibration",

@@ -30,6 +30,13 @@ jobs:
           name: ci-workload-${{ matrix.group }}-${{ github.run_attempt }}
           path: out/ci-workload/${{ matrix.group }}.json
           if-no-files-found: error
+      - name: Preserve synthetic PDF coordinate diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pdf-position-${{ matrix.group }}-${{ github.run_attempt }}
+          path: out/pdf-linux-position/
+          if-no-files-found: error
   runtime:
     needs: workload
     if: always()
@@ -62,4 +69,11 @@ jobs:
         with:
           name: ci-workload-union-${{ github.run_attempt }}
           path: out/ci-workload/aggregate.json
+          if-no-files-found: error
+      - name: Preserve final synthetic PDF coordinate diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pdf-position-aggregate-${{ github.run_attempt }}
+          path: out/pdf-linux-position/
           if-no-files-found: error

@@ -80,6 +80,15 @@ proofs finish. A timeout/crash that prevents a complete receipt also blocks the
 final check. Matrix fail-fast is disabled so one failure cannot cancel other
 coverage. No failure is retried or accepted as positive evidence.
 
+The `pdf-position` phase also runs the six fixed synthetic coordinate fixtures
+inside each job's existing offline sandbox before its test group. It records the
+diagnostic command's actual exit code as a required receipt phase. Rejected
+geometry fails the phase while the remaining checks continue. An always-running
+artifact step preserves only `out/pdf-linux-position/`, including its synthetic
+JSON/PDF/PNG evidence, under a separate name for each group and attempt. These
+artifacts cannot enter the sanitized workload union input. This captures the
+numeric Linux evidence needed to diagnose a rejection without accepting it.
+
 The final `runtime` job always runs, downloads only this workflow attempt's
 artifacts, requires exactly the three expected input files, and validates them
 inside the unchanged offline driver. It rejects unknown fields, missing/duplicate
