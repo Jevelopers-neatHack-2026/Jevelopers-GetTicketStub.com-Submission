@@ -765,7 +765,7 @@ test('a clock that turns non-finite after construction fails closed on prepare, 
     const prepared = await adapter.prepare(input);
     reading = bad;
     await assert.rejects(adapter.prepare(input), (error) => error.code === 'adapter_unavailable', `prepare ${String(bad)}`);
-    await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'adapter_unavailable', `dispatch ${String(bad)}`);
+    await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'adapter_unavailable', `dispatch ${String(bad)}`);
     await assert.rejects(inspect(adapter), (error) => error.code === 'adapter_unavailable', `inspect ${String(bad)}`);
     assert.deepEqual(hostCalls, ['prepare'], 'only the prepare made while the clock was valid reached the host');
     assert.equal(requests.length, 0, 'inspect sent no metadata request');
@@ -802,13 +802,13 @@ test('a prepared value is single use and bound to the scope it was prepared for'
   const input = billable();
   input.scope = { ...input.scope };
   const prepared = await adapter.prepare(input);
-  await assert.rejects(adapter.dispatch({ ...input, prepared, scope: { ...input.scope, project_ref: 'project:other' } }),
+  await assert.rejects(adapter.dispatch(dispatchInput({ ...input, scope: { ...input.scope, project_ref: 'project:other' } }, prepared)),
     (error) => error.code === 'credential_unavailable');
   assert.equal(dispatches, 0, 'a scope mismatch never reaches the host and does not consume the value');
   input.scope.project_ref = 'project:other';
-  await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable');
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
   input.scope.project_ref = fixtureScope.project_ref;
-  await adapter.dispatch({ ...input, prepared });
-  await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable');
+  await adapter.dispatch(dispatchInput(input, prepared));
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'credential_unavailable');
   assert.equal(dispatches, 1, 'the replay was refused before the host port');
 });
