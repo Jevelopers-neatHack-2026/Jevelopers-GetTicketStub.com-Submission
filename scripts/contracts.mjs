@@ -8,6 +8,7 @@ import { checkOperation, compareUsageIdentity } from '../tooling/operations.mjs'
 import { checkResearchCreative } from '../tooling/research-creative.mjs';
 import { checkCommerceEvidence } from '../tooling/commerce-evidence.mjs';
 import { schemaImpact } from './compatibility.mjs';
+import { dependencyErrors, deliverableGraph, graphErrors } from './dependency-map.mjs';
 
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 export async function catalog() {
@@ -199,6 +200,8 @@ export async function execute(command, options) {
       const schemaManifest = await readJson('generated/schema-manifest.json');
       for (const schema of schemaManifest.schemas) if (!fixtureManifest.contracts.some(row => row.contract === schema.contract && row.version === schema.version)) add('MISSING_VERSION_FIXTURE', null, { contract: schema.contract, version: schema.version });
       const requirements = await readJson('docs/requirements.json');
+      const authority = await readJson('docs/authority-dependencies.json');
+      failures.push(...dependencyErrors(requirements, authority), ...graphErrors(deliverableGraph(requirements)));
       const criteria = (await readJson('docs/acceptance-criteria.json')).criteria;
       const expectedIds = requirements.issues.flatMap(row => row.acceptance_ids).concat(['SC-EPIC.1', 'SC-EPIC.2', 'SC-EPIC.3']);
       if (new Set(criteria.map(row => row.id)).size !== criteria.length || expectedIds.some(id => !criteria.some(row => row.id === id)) || criteria.some(row => !expectedIds.includes(row.id))) add('INCOMPLETE_ACCEPTANCE_COVERAGE');

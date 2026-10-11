@@ -1,0 +1,38 @@
+{
+  "source_checkpoint": "d969f68a13fc4c3e71d59b635ffd29b65d3205d5",
+  "review": "finance_only_REQUEST_CHANGES_not_whole_PR_or_adoption",
+  "original_adapted_controls": {
+    "total": 40,
+    "met": 40
+  },
+  "new_boundary_probes": {
+    "total": 18,
+    "met": 11,
+    "counterexamples": 7
+  },
+  "verified_probe_sha256": "a21deaeed94f3ff005bb206fca0356bd4f7504412ef881cbe325edc12a262ef6",
+  "status": "queued_separate_bounded_finance_delta_repair",
+  "findings": [
+    {
+      "id": "FC-003",
+      "behavior": "QueryResult successful disposition can contradict current reservation lifecycle/consumption",
+      "status": "unresolved_delta"
+    },
+    {
+      "id": "FC-004",
+      "behavior": "Reusable reservation/query routes permit terminal release without complete finality/exposure evidence",
+      "status": "unresolved_delta"
+    },
+    {
+      "id": "GAP-002",
+      "behavior": "Partial dispatch cap acknowledgement lacks versioned allowed-work/replan binding",
+      "status": "unresolved_delta"
+    }
+  ],
+  "locally_fixed_reviewed_v2": [
+    "FC-001",
+    "FC-002"
+  ],
+  "accepted_dependency_upgrade": false,
+  "real_finance_runtime_or_database_conformance": false
+}

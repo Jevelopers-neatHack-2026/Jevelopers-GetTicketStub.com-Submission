@@ -7,6 +7,7 @@ import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { hashBytes, hashManifest } from '../tooling/runtime.mjs';
 import { contentManifestPath, safePackagePath, verifyPackageContents } from './package-content.mjs';
+import { observeConsumerDriver } from './consumer-observer.mjs';
 
 export const knownConsumers = Object.freeze(['agent-harness', 'event-intelligence', 'creative-engine', 'print-production', 'fulfillment-connectors', 'cost-intelligence', 'team-dashboard', 'integration-evals', 'getticketstub.com']);
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
@@ -141,21 +142,23 @@ export async function consumerChecks(manifest, paths = {}) {
       temp = await mkdtemp(join(tmpdir(), 'shared-contracts-pin-'));
       const snapshot = join(temp, 'package');
       await bindPackage(entry, expectedPackage, snapshot);
-      const nonce = randomUUID(), audit = join(temp, 'audit.jsonl'), config = join(temp, 'binding.json');
+      const nonce = randomUUID(), config = join(temp, 'binding.json');
       const binding = { repository, consumer_sha: entry.source_sha, shared_source_revision: entry.shared_source_revision, package_integrity: entry.package_integrity ?? null, package_content_digest: expectedPackage.digest, fixture_digest: fixtureManifest.digest, nonce };
-      await writeFile(config, JSON.stringify({ snapshot, audit, binding, required: requiredNames, required_fixtures: requiredFixtures, files: expectedPackage.files }));
-      const result = spawnSync(process.execPath, ['--import', join(root, 'scripts/consumer-import-hook.mjs'), script], { cwd: checkout, encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024, env: { PATH: process.env.PATH, SHARED_CONTRACTS_ROOT: snapshot, SHARED_CONTRACTS_OFFLINE: '1', SHARED_CONTRACTS_BINDING_CONFIG: config } });
+      await writeFile(config, JSON.stringify({ snapshot, binding, required: requiredNames, required_fixtures: requiredFixtures, files: expectedPackage.files }));
+      const verification = spawnSync(process.execPath, [join(root, 'scripts/consumer-trusted-probe.mjs'), config], { cwd: checkout, encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024, env: { PATH: process.env.PATH } });
+      if (verification.status !== 0) throw new Error('TRUSTED_PACKAGE_FIXTURE_FAILED');
+      const trustedRecords = JSON.parse(verification.stdout).records;
+      const result = await observeConsumerDriver({ script, checkout, snapshot, hook: join(root, 'scripts/consumer-import-hook.mjs'), requiredFixtures, expectedFiles: expectedPackage.files, env: { PATH: process.env.PATH, SHARED_CONTRACTS_ROOT: snapshot, SHARED_CONTRACTS_OFFLINE: '1', SHARED_CONTRACTS_BINDING_CONFIG: config } });
       if (result.status !== 0) { block('CONSUMER_CHECK_FAILED'); continue; }
       let receipt;
       try { receipt = JSON.parse(result.stdout); } catch (error) { if (!(error instanceof SyntaxError)) throw error; block('MISSING_CONSUMER_RECEIPT'); continue; }
-      const observed = (await readFile(audit, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
-      const coverage = observed.filter(row => row.kind === 'fixture_run' && row.bound && row.failures === 0);
+      const coverage = result.coverage.filter(row => row.bound && row.failures === 0);
       if (requiredFixtures.some(item => !coverage.some(row => row.contract === item.contract && row.version === item.version && row.positive > 0 && row.negative > 0 && row.semantic === (item.contract === 'CommonEnvelope' || item.contract === 'EvidenceProjection' ? 0 : 1)))) { block('MISSING_OBSERVED_PACKAGE_COVERAGE'); continue; }
       if (receipt.status !== 'passed' || receipt.consumer_sha !== binding.consumer_sha || receipt.shared_source_revision !== binding.shared_source_revision || receipt.fixture_digest !== binding.fixture_digest || receipt.package_content_digest !== binding.package_content_digest || receipt.package_integrity !== binding.package_integrity || receipt.binding_nonce !== nonce || !Array.isArray(receipt.contracts_tested) || !same([...receipt.contracts_tested].sort(), [...requiredNames].sort())) { block('INVALID_CONSUMER_RECEIPT'); continue; }
       if (!await verifyPackageContents(snapshot, expectedPackage) || !await verifyPackageContents(root, expectedPackage)) { block('PACKAGE_CHANGED_DURING_DRIVER'); continue; }
       const changed = await checkoutCode(checkout, entry.source_sha);
       if (changed) { block(changed); continue; }
-      records.push({ repository, source_sha: entry.source_sha, shared_source_revision: binding.shared_source_revision, package_content_digest: binding.package_content_digest, package_integrity: binding.package_integrity, fixture_digest: binding.fixture_digest, schema_pins: entry.schema_pins, status: 'passed', command: entry.command, observed_contracts: [...new Set(coverage.map(row => row.contract))].sort(), acknowledgement_provenance: { reviewer: acknowledgement.reviewer, record_ref: acknowledgement.record_ref, reviewed_at: acknowledgement.reviewed_at }, authority_authenticity: 'external_owner_review_required' });
+      records.push({ repository, source_sha: entry.source_sha, shared_source_revision: binding.shared_source_revision, package_content_digest: binding.package_content_digest, package_integrity: binding.package_integrity, fixture_digest: binding.fixture_digest, schema_pins: entry.schema_pins, status: 'passed', command: entry.command, observed_contracts: [...new Set(coverage.map(row => row.contract))].sort(), trusted_fixture_verification: trustedRecords, import_observations: result.imports, execution_evidence: 'parent_collected_native_debugger_not_driver_audit', driver_receipt: 'separate_declared_adapter_result', acknowledgement_provenance: { reviewer: acknowledgement.reviewer, record_ref: acknowledgement.record_ref, reviewed_at: acknowledgement.reviewed_at }, authority_authenticity: 'external_owner_review_required' });
     } catch (error) {
       if (!(error instanceof Error)) throw error;
       const codes = ['BLOCKED_SHARED_REVISION_MISMATCH', 'BLOCKED_DIRTY_SHARED_CHECKOUT', 'ARTIFACT_INTEGRITY_MISMATCH', 'INVALID_PACKAGE_ARCHIVE', 'PACKAGE_CONTENT_MISMATCH', 'INVALID_PACKAGE_PATH'];

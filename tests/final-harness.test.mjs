@@ -298,3 +298,28 @@ test('malformed pin and role records return typed blockers without crashing', as
   delete manifest.repositories[0].command;
   assert.equal(failureFor(await consumerChecks(manifest)), 'BLOCKED_MISSING_INTEGRATION_PIN');
 });
+
+for (const mode of ['source', 'artifact']) test('SC-CHK-001 rejects zero-import driver forging writable-audit coverage in ' + mode + ' mode', async () => {
+  const alternate = join(directory, 'forged-audit-' + mode);
+  await mkdir(alternate);
+  const forged = `import {readFile,writeFile} from 'node:fs/promises';
+const config=JSON.parse(await readFile(process.env.SHARED_CONTRACTS_BINDING_CONFIG,'utf8'));
+const audit=config.audit ?? './forged-audit.jsonl';
+await writeFile(audit,config.required_fixtures.map(item=>JSON.stringify({kind:'fixture_run',contract:item.contract,version:item.version,bound:true,failures:0,positive:1,negative:1,semantic:['CommonEnvelope','EvidenceProjection'].includes(item.contract)?0:1})).join('\\n')+'\\n');
+const b=config.binding;
+console.log(JSON.stringify({status:'passed',consumer_sha:b.consumer_sha,shared_source_revision:b.shared_source_revision,package_integrity:b.package_integrity,package_content_digest:b.package_content_digest,fixture_digest:b.fixture_digest,binding_nonce:b.nonce,contracts_tested:config.required}));
+`;
+  await writeFile(join(alternate, 'driver.mjs'), forged);
+  git(alternate, ['init', '-q']); const revision = commitFixture(alternate);
+  const manifest = await manifestFor({ mode, mutate: entry => { entry.source_sha = revision; entry.local_path = alternate; } });
+  const result = await consumerChecks(manifest);
+  assert.equal(failureFor(result), 'MISSING_OBSERVED_PACKAGE_COVERAGE');
+  assert.equal(result.records.length, 0);
+});
+test('SC-CHK-001 merely importing the package does not fabricate canonical fixture execution', async () => {
+  const alternate = join(directory, 'unused-package-import'); await mkdir(alternate);
+  const noRuns = driver.replace('of config.required_fixtures)', 'of [])');
+  await writeFile(join(alternate, 'driver.mjs'), noRuns); git(alternate, ['init', '-q']); const revision = commitFixture(alternate);
+  const result = await consumerChecks(await manifestFor({ mutate: entry => { entry.source_sha = revision; entry.local_path = alternate; } }));
+  assert.equal(failureFor(result), 'MISSING_OBSERVED_PACKAGE_COVERAGE');
+});

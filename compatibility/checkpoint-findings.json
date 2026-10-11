@@ -6,7 +6,7 @@
     {
       "id": "SC-CHK-001",
       "behavior": "driver-writable audit forgery",
-      "status": "unaddressed_separate_task"
+      "status": "locally_repaired_review_pending"
     },
     {
       "id": "SC-CHK-002",
@@ -16,33 +16,35 @@
     {
       "id": "SC-CHK-003",
       "behavior": "consumption approval/handoff linkage",
-      "status": "unaddressed_separate_task"
+      "status": "locally_repaired_review_pending"
     },
     {
       "id": "SC-CHK-004",
       "behavior": "status regression through unknown states",
-      "status": "unaddressed_separate_task"
+      "status": "locally_repaired_review_pending"
     },
     {
       "id": "SC-CHK-005",
       "behavior": "ResearchAnswerReceipt exact request reference",
-      "status": "unaddressed_separate_task"
+      "status": "locally_repaired_review_pending"
     },
     {
       "id": "SC-CHK-006",
       "behavior": "ResearchBatchReceipt malformed-context exception",
-      "status": "unaddressed_separate_task"
+      "status": "locally_repaired_review_pending"
     },
     {
       "id": "SC-CHK-007",
       "behavior": "private/public evidence ID projection",
-      "status": "unaddressed_separate_task"
+      "status": "locally_repaired_review_pending"
     },
     {
       "id": "SC-CHK-008",
       "behavior": "missing authoritative dependency DAG edges",
-      "status": "unaddressed_separate_task"
+      "status": "locally_repaired_review_pending"
     }
   ],
-  "note": "Checkpoint review intentionally excluded this later finance repair. Remaining seven findings keep the candidate blocked; no approval or resolution is fabricated."
+  "note": "All eight checkpoint findings have local repair evidence; SC-CHK-002 came from finance checkpoint. Fresh exact-candidate independent review remains pending. Finance delta FC-003/004/GAP-002 is separately unresolved, and no adoption/merge/release approval is claimed.",
+  "repair_checkpoint": "d969f68a13fc4c3e71d59b635ffd29b65d3205d5",
+  "repair_package_version": "0.7.0"
 }

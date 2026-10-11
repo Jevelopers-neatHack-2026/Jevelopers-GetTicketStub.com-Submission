@@ -57,7 +57,7 @@ npm run test:installed
 
 The catalog and fixture manifest index all 54 supported contract/version pairs across 45 names. The compatibility matrix executes current/current, retained-old/current and current/old-rejection cases using actual exact-version validators. Unknown versions reject. Old schema/fixture SHA histories remain pinned at the 0.5.0 checkpoint. Real consumers must review the impact, pin the new package/source/schema/fixture bytes and return actual exact-revision results and acknowledgements; rollback retains the old immutable archive and encoding with its documented limits.
 
-QueryRequest/Result still concern one reservation. FinancialSummary is a projection, not a reporting/query/export API. Reporting GAP-001 stays in [proposal intake](../compatibility/proposal-intake.json). Other checkpoint findings SC-CHK-001 and SC-CHK-003..008 remain assigned to a separate repair task; this proposal does not claim those fixes or full release acceptance.
+QueryRequest/Result still concern one reservation. FinancialSummary is a projection, not a reporting/query/export API. Reporting GAP-001 stays in [proposal intake](../compatibility/proposal-intake.json). Checkpoint findings SC-CHK-001 and SC-CHK-003..008 now have local repairs in0.7.0 pending fresh review. The [fresh finance delta](../compatibility/finance-delta-findings.json) retains unresolved query disposition, reusable terminal finality and partial allowed-work/replan binding. No full finance conformance, dependency adoption or release acceptance is claimed.
 # Per-version artifacts
 
 | Name | Retained legacy candidate | Current unaccepted proposal |

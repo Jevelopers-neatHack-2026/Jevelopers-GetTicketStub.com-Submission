@@ -1,0 +1,174 @@
+{
+  "source_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+  "status": "authoritative_issue_snapshot_not_acceptance",
+  "issues": [
+    {
+      "issue": 3,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/3",
+      "body_sha256": "accfba4d145227d732fef9cc04d6d6328cd46d8ca3babcf5c1551039ae190bf6",
+      "blocked_by_source": " every required leaf below. #1 is the parent coverage tracker, not a prerequisite whose closure precedes this gate.\n\n- [ ] #4 \u2014 SC-01: Inventory contracts and record authoritative producer and consumer ownership\n- [ ] #5 \u2014 SC-02: Establish canonical JSON Schemas, generated ESM types and offline validators\n- [ ] #6 \u2014 SC-03: Define compatibility, versioning, deprecation and immutable consumer pins\n- [ ] #7 \u2014 SC-04: Standardize scoped identities, correlation, provenance and ID assignment\n- [ ] #8 \u2014 SC-11: Specify field privacy, evidence projection and stable hashing rules\n- [ ] #9 \u2014 SC-08A: Define typed error, partial-failure and blocking envelopes\n- [ ] #10 \u2014 SC-08B: Define async job status, progress, cancellation and resume envelopes\n- [ ] #11 \u2014 SC-06A: Define UsageEvent and operation, provider, transport and billed attempt semantics\n- [ ] #12 \u2014 SC-06B: Define BudgetReservation commands, decisions and uncertain-attempt bindings\n- [ ] #13 \u2014 SC-06C: Define FinancialSummary precision, coverage and reconciliation projection\n- [ ] #14 \u2014 SC-05: Specify injected DecisionPort, JEV result variants and DecisionReceipt\n- [ ] #15 \u2014 SC-C01: Define ProjectRequest and trusted application-to-harness ingress\n- [ ] #16 \u2014 SC-C02: Define ResearchRequest with bounded scope, policy and evidence expectations\n- [ ] #17 \u2014 SC-C03: Define EventIntelligencePackage with facts, uncertainty and permitted assets\n- [ ] #18 \u2014 SC-C08: Define research correction and invalidation events with immutable references\n- [ ] #19 \u2014 SC-C04: Define CreativeBrief with exact facts, visual intent and bounded model policy\n- [ ] #20 \u2014 SC-C05: Define DesignControlSchema allowlists and safe declarative values\n- [ ] #21 \u2014 SC-C06: Define immutable DesignVersion identity, lineage and artwork references\n- [ ] #22 \u2014 SC-07A: Define externally issued ApprovalReference and ApprovalReceipt binding\n- [ ] #23 \u2014 SC-07B: Define ArtifactHandoffManifest for exact approved artwork transfer\n- [ ] #24 \u2014 SC-07C: Define ProductionBundle output composition and preflight manifest\n- [ ] #25 \u2014 SC-07D: Define FulfillmentQuote identity, applicability and exact monetary terms\n- [ ] #26 \u2014 SC-07E: Define OrderAuthorization bound to exact quote, purchase terms and bundle\n- [ ] #27 \u2014 SC-08C: Define normalized fulfillment status and duplicate observation envelopes\n- [ ] #28 \u2014 SC-C07: Define EvaluationEvidence with pinned revisions and sanitized proof references\n- [ ] #29 \u2014 SC-09: Build canonical positive, negative and cross-consumer contract fixture harness\n- [ ] #30 \u2014 SC-10: Publish discoverable catalog, generated-type guidance and consumer migration handoff"
+    },
+    {
+      "issue": 4,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/4",
+      "body_sha256": "472e3cfbcbccf585663092a2b89876e25b53f0a7d2f29693fee8000b2ea549b6",
+      "blocked_by_source": " [SC-02](https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/5) \u2014 canonical schema and toolchain agreement is required for machine-validatable inventory entries and executable validation; inventory inspection can proceed in parallel."
+    },
+    {
+      "issue": 5,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/5",
+      "body_sha256": "e67ed27845ffaa73b9cec7f435cca40c1d7daeba2a60b020d9aa252a03bd8268",
+      "blocked_by_source": " No implementation issue; assign accountable owner and reviewer at kickoff."
+    },
+    {
+      "issue": 6,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/6",
+      "body_sha256": "a92eecf9e2d1e93c35f2f5c6fc1ae292645890d6a3ca679b287cd4186b1ebe7d",
+      "blocked_by_source": " #4 (SC-01), #5 (SC-02)"
+    },
+    {
+      "issue": 7,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/7",
+      "body_sha256": "e64cf0e7cea8a993e14682fd4787caced07a9a9039b594d6a3a8c1f02cfd3d6b",
+      "blocked_by_source": " #5 (SC-02), #6 (SC-03)"
+    },
+    {
+      "issue": 8,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/8",
+      "body_sha256": "6eb8bbac278300e1916fcb93e3cc01b339ebffd7aec3edfd57168b1beba77aff",
+      "blocked_by_source": " #5 (SC-02), #6 (SC-03), #7 (SC-04)"
+    },
+    {
+      "issue": 9,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/9",
+      "body_sha256": "03c0f7a2f4268bb16466e9f0e97f48fa38f29e17b64d442cd54f84e5afc89406",
+      "blocked_by_source": " #5 (SC-02), #6 (SC-03), #7 (SC-04), #8 (SC-11)"
+    },
+    {
+      "issue": 10,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/10",
+      "body_sha256": "5bfdb8768c1560be86793fd33ecfb7b605c3f8577d570b82cc623348f5b2448e",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A)"
+    },
+    {
+      "issue": 11,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/11",
+      "body_sha256": "fe05d98e6e8585a65fe0925eeea07831a83fb45f5d9454072ae0ccf60af77caf",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A)"
+    },
+    {
+      "issue": 12,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/12",
+      "body_sha256": "a4a3ca7dadc1dec3fd4d056154589b6ba4f292578e637efad5e6a84abeef91b4",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #11 (SC-06A)"
+    },
+    {
+      "issue": 13,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/13",
+      "body_sha256": "42acde92dd00081531c4405b8a4ca91ff2cd1e53ba88d807662c26582c4f7625",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #11 (SC-06A), #12 (SC-06B)"
+    },
+    {
+      "issue": 14,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/14",
+      "body_sha256": "465ed129f948fe5b6dc3ef7e012e0c9f71ac3cd9b4f9a5b5891383990807f6a4",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #11 (SC-06A), #12 (SC-06B), #10 (SC-08B)"
+    },
+    {
+      "issue": 15,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/15",
+      "body_sha256": "b2275224bb4378f9b93523ede69336e54cda53bafca90d923da519b6e1e36fdf",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #10 (SC-08B)"
+    },
+    {
+      "issue": 16,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/16",
+      "body_sha256": "e2a22b3a0fad2d20c2eb2f7ef5cd88dbbab0465756e31277860ac2bd64e2a471",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #15 (SC-C01), #14 (SC-05)"
+    },
+    {
+      "issue": 17,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/17",
+      "body_sha256": "3bdae4c00934c6fbc4ceb2efc61f54a4704a9001fadec50a6a37c00da63e9dca",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #16 (SC-C02), #14 (SC-05)"
+    },
+    {
+      "issue": 18,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/18",
+      "body_sha256": "17b9edaaa982fc96578cc670819ab7efc0ba467a3b20fbfe47ea20a97f944452",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #17 (SC-C03), #10 (SC-08B)"
+    },
+    {
+      "issue": 19,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/19",
+      "body_sha256": "3db9e9ced94f4267f528007a8bdbb75f97aadf26ff6cd7a068d7c7c12a8a719e",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #17 (SC-C03), #18 (SC-C08)"
+    },
+    {
+      "issue": 20,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/20",
+      "body_sha256": "bcad507c2644ceabd108bd81f61174ea4074ed5a473dacf025ee8bda195b1086",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A)"
+    },
+    {
+      "issue": 21,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/21",
+      "body_sha256": "1281a407c2c4f468a1851d9503e061009fea7c730921620e80b7a67c70d31ef4",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #19 (SC-C04), #20 (SC-C05), #11 (SC-06A)"
+    },
+    {
+      "issue": 22,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/22",
+      "body_sha256": "997b7bb547e0feedfb4927b2fe4e3a23b1a47b1862f0571f15bbc30c93f90a7e",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #21 (SC-C06), #17 (SC-C03)"
+    },
+    {
+      "issue": 23,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/23",
+      "body_sha256": "cb3ab15288edb5f6975c3636237c4e8dfff67bdb666bf1bf5e6dfeb41131b9e7",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #22 (SC-07A), #21 (SC-C06)"
+    },
+    {
+      "issue": 24,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/24",
+      "body_sha256": "c4fa169acfab473c3289d76ce777e184d0e70a0f5983ed4b041002698b53c219",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #23 (SC-07B)"
+    },
+    {
+      "issue": 25,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/25",
+      "body_sha256": "f6bc68a6ad7be4a09485d5fd9129dd0bf74af6fea4d74e94a05d2c5685a97894",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #24 (SC-07C)"
+    },
+    {
+      "issue": 26,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/26",
+      "body_sha256": "909b5540330a55ac6b3f9012a4e552560bdd0535ea66c3b6694348c4fc48c594",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #25 (SC-07D), #22 (SC-07A)"
+    },
+    {
+      "issue": 27,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/27",
+      "body_sha256": "c393e0da830135ff21d3fc3944b2bfbcc84c32d1c131a2fc297cfd6ce9bf7107",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #26 (SC-07E), #11 (SC-06A), #10 (SC-08B)"
+    },
+    {
+      "issue": 28,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/28",
+      "body_sha256": "33d792bd61cf826a2a9a2b7fb12b9f9b0439bf6542ea8924106f1e1e5d2836c0",
+      "blocked_by_source": " #7 (SC-04), #8 (SC-11), #9 (SC-08A), #14 (SC-05), #11 (SC-06A), #23 (SC-07B)"
+    },
+    {
+      "issue": 29,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/29",
+      "body_sha256": "fa7450dac36523cbf40f8fe052f628427ac80125ca2b85a01c07e16f9c855c08",
+      "blocked_by_source": " #5 (SC-02), #6 (SC-03), #7 (SC-04), #8 (SC-11), #9 (SC-08A), #10 (SC-08B), #11 (SC-06A), #12 (SC-06B), #13 (SC-06C), #14 (SC-05), #15 (SC-C01), #16 (SC-C02), #17 (SC-C03), #18 (SC-C08), #19 (SC-C04), #20 (SC-C05), #21 (SC-C06), #22 (SC-07A), #23 (SC-07B), #24 (SC-07C), #25 (SC-07D), #26 (SC-07E), #27 (SC-08C), #28 (SC-C07)"
+    },
+    {
+      "issue": 30,
+      "source_url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/30",
+      "body_sha256": "678b08ed4f1497f4d608b902a6219cc3baa62f9e20e2374a3e255c5725695be5",
+      "blocked_by_source": " #4 (SC-01), #5 (SC-02), #6 (SC-03), #29 (SC-09)"
+    }
+  ]
+}

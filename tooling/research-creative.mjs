@@ -151,6 +151,8 @@ export function checkResearchAnswerReceipt(input, context) {
   const request = validateContract('ResearchRequest', context.request), pkg = validateContract('EventIntelligencePackage', context.package);
   if (!request.ok || !pkg.ok || !checkTrustedContext(request.value, context.scope).ok || !checkTrustedContext(pkg.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT');
   const v = parsed.value;
+  if (v.request_ref.contract !== request.value.contract || v.request_ref.schema_version !== request.value.schema_version ||
+      v.request_ref.id !== request.value.request_id || v.request_ref.content_hash !== hashManifest(request.value)) return fail('INVALID_RECEIPT', '/request_ref');
   if (v.request_id !== request.value.request_id || v.batch_id !== request.value.batch_id || v.package_ref.id !== pkg.value.package_id || v.package_ref.revision !== pkg.value.package_version || v.package_ref.content_hash !== pkg.value.package_hash) return fail('INVALID_RECEIPT', '/package_ref');
   if (!sameSet(v.answer_ids, v.fact_refs.map(ref => ref.id)) || v.fact_refs.some(ref => !pkg.value.facts.some(fact => fact.fact_id === ref.id && fact.revision === ref.revision && fact.fact_hash === ref.content_hash))) return fail('INVALID_RECEIPT', '/fact_refs');
   if (v.status === 'complete' && !sameSet(v.answer_ids, pkg.value.facts.map(fact => fact.fact_id))) return fail('INVALID_RECEIPT', '/answer_ids');
@@ -161,7 +163,8 @@ export function checkResearchBatchReceipt(input, context) {
   const parsed = boundary('ResearchBatchReceipt', input, context); if (!parsed.ok) return parsed;
   const v = parsed.value, ids = [...v.successful_request_ids, ...v.failed_request_ids, ...v.pending_request_ids];
   if (!sameSet(v.request_ids, context.request_ids) || !sameSet(ids, v.request_ids)) return fail('INVALID_BATCH', '/request_ids');
-  if (!Array.isArray(context.request_receipts) || !sameSet(context.request_receipts.map(receipt => receipt.request_id), v.request_ids) || v.request_receipt_refs.length !== context.request_receipts.length) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
+  if (!Array.isArray(context.request_receipts) || context.request_receipts.some(receipt => !validateContract('ResearchRequestReceipt', receipt).ok || !checkTrustedContext(receipt, context.scope).ok)) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
+  if (!sameSet(context.request_receipts.map(receipt => receipt.request_id), v.request_ids) || v.request_receipt_refs.length !== context.request_receipts.length) return fail('INVALID_TRUST_CONTEXT', '/request_receipts');
   for (const receipt of context.request_receipts) {
     if (!validateContract('ResearchRequestReceipt', receipt).ok || !checkTrustedContext(receipt, context.scope).ok || !v.request_receipt_refs.some(ref => ref.contract === 'ResearchRequestReceipt' && ref.id === receipt.receipt_id && ref.content_hash === hashManifest(receipt))) return fail('INVALID_RECEIPT', '/request_receipt_refs');
   }

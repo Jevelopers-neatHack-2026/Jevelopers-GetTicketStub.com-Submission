@@ -1,5 +1,11 @@
 # Candidate changes
 
+## 0.7.0 (unreleased)
+
+The consumer runner independently verifies the package fixtures and collects actual module/call evidence through parent-owned native debugger observations; driver-written audit rows and public nonce echoes are not execution proof. Approval consumption binds the exact production handoff, current approval and immutable artwork/preview/facts/composition. Fulfillment progress survives unknown and cancellation intermediates. Research answer references bind exact requests; malformed batch records return typed failures. Public evaluation projection requires a separate adapter-supplied public ID. Requirements retain authoritative dependency/body-hash data and distinguish artifact stages from release closure evidence.
+
+These seven checkpoint repairs await fresh exact-candidate review. Fresh finance delta FC-003/004 and GAP-002 remains separately queued; owner/consumer adoption and release acceptance are pending.
+
 ## 0.6.0 (unreleased)
 
 Finance protocol 2.0.0 proposals add cumulative partial/final settlement, independently bound modes and exact result economics, uncapped actual cost/overrun, conserved exposure/release, opted-in partial grants and scoped acknowledgement, replay and correction evidence. All nine 1.0.0 wire schemas/fixtures remain immutable; current operational helpers fail closed on those semantics and historical fixture records are explicitly non-authoritative. DecisionPort v1 now needs an independent validated v2 Finance record and exact full-grant projection, binding modes before callbacks and across outputs. Nine new schemas bring the catalog to 54 supported versions over 45 names.

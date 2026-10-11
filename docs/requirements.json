@@ -58,7 +58,15 @@
       ],
       "body_sha256": "678b08ed4f1497f4d608b902a6219cc3baa62f9e20e2374a3e255c5725695be5",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        4,
+        5,
+        6,
+        29
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 29,
@@ -111,7 +119,35 @@
       ],
       "body_sha256": "fa7450dac36523cbf40f8fe052f628427ac80125ca2b85a01c07e16f9c855c08",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 28,
@@ -141,7 +177,17 @@
       ],
       "body_sha256": "33d792bd61cf826a2a9a2b7fb12b9f9b0439bf6542ea8924106f1e1e5d2836c0",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        11,
+        14,
+        23
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 27,
@@ -171,7 +217,17 @@
       ],
       "body_sha256": "c393e0da830135ff21d3fc3944b2bfbcc84c32d1c131a2fc297cfd6ce9bf7107",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        26
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 26,
@@ -200,7 +256,16 @@
       ],
       "body_sha256": "909b5540330a55ac6b3f9012a4e552560bdd0535ea66c3b6694348c4fc48c594",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        22,
+        25
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 25,
@@ -228,7 +293,15 @@
       ],
       "body_sha256": "f6bc68a6ad7be4a09485d5fd9129dd0bf74af6fea4d74e94a05d2c5685a97894",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        24
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 24,
@@ -256,7 +329,15 @@
       ],
       "body_sha256": "c4fa169acfab473c3289d76ce777e184d0e70a0f5983ed4b041002698b53c219",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        23
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 23,
@@ -285,7 +366,16 @@
       ],
       "body_sha256": "cb3ab15288edb5f6975c3636237c4e8dfff67bdb666bf1bf5e6dfeb41131b9e7",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        21,
+        22
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 22,
@@ -315,7 +405,16 @@
       ],
       "body_sha256": "997b7bb547e0feedfb4927b2fe4e3a23b1a47b1862f0571f15bbc30c93f90a7e",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        17,
+        21
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 21,
@@ -345,7 +444,17 @@
       ],
       "body_sha256": "1281a407c2c4f468a1851d9503e061009fea7c730921620e80b7a67c70d31ef4",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        11,
+        19,
+        20
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 20,
@@ -372,7 +481,14 @@
       ],
       "body_sha256": "bcad507c2644ceabd108bd81f61174ea4074ed5a473dacf025ee8bda195b1086",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 19,
@@ -401,7 +517,16 @@
       ],
       "body_sha256": "3db9e9ced94f4267f528007a8bdbb75f97aadf26ff6cd7a068d7c7c12a8a719e",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        17,
+        18
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 18,
@@ -430,7 +555,16 @@
       ],
       "body_sha256": "17b9edaaa982fc96578cc670819ab7efc0ba467a3b20fbfe47ea20a97f944452",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        10,
+        17
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 17,
@@ -459,7 +593,16 @@
       ],
       "body_sha256": "3bdae4c00934c6fbc4ceb2efc61f54a4704a9001fadec50a6a37c00da63e9dca",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        14,
+        16
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 16,
@@ -488,7 +631,16 @@
       ],
       "body_sha256": "e2a22b3a0fad2d20c2eb2f7ef5cd88dbbab0465756e31277860ac2bd64e2a471",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        14,
+        15
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 15,
@@ -516,7 +668,15 @@
       ],
       "body_sha256": "b2275224bb4378f9b93523ede69336e54cda53bafca90d923da519b6e1e36fdf",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        10
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 14,
@@ -548,7 +708,17 @@
       ],
       "body_sha256": "465ed129f948fe5b6dc3ef7e012e0c9f71ac3cd9b4f9a5b5891383990807f6a4",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 13,
@@ -577,7 +747,16 @@
       ],
       "body_sha256": "42acde92dd00081531c4405b8a4ca91ff2cd1e53ba88d807662c26582c4f7625",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        11,
+        12
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 12,
@@ -605,7 +784,15 @@
       ],
       "body_sha256": "a4a3ca7dadc1dec3fd4d056154589b6ba4f292578e637efad5e6a84abeef91b4",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9,
+        11
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 11,
@@ -632,7 +819,14 @@
       ],
       "body_sha256": "fe05d98e6e8585a65fe0925eeea07831a83fb45f5d9454072ae0ccf60af77caf",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 10,
@@ -659,7 +853,14 @@
       ],
       "body_sha256": "5bfdb8768c1560be86793fd33ecfb7b605c3f8577d570b82cc623348f5b2448e",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        7,
+        8,
+        9
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 9,
@@ -687,7 +888,15 @@
       ],
       "body_sha256": "03c0f7a2f4268bb16466e9f0e97f48fa38f29e17b64d442cd54f84e5afc89406",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 8,
@@ -714,7 +923,14 @@
       ],
       "body_sha256": "6eb8bbac278300e1916fcb93e3cc01b339ebffd7aec3edfd57168b1beba77aff",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        5,
+        6,
+        7
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 7,
@@ -740,7 +956,13 @@
       ],
       "body_sha256": "e64cf0e7cea8a993e14682fd4787caced07a9a9039b594d6a3a8c1f02cfd3d6b",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        5,
+        6
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 6,
@@ -766,7 +988,13 @@
       ],
       "body_sha256": "a92eecf9e2d1e93c35f2f5c6fc1ae292645890d6a3ca679b287cd4186b1ebe7d",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        4,
+        5
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 5,
@@ -790,14 +1018,19 @@
       ],
       "body_sha256": "e67ed27845ffaa73b9cec7f435cca40c1d7daeba2a60b020d9aa252a03bd8268",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 4,
       "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/4",
       "title": "[P0 SC-01] Inventory contracts and record authoritative producer and consumer ownership",
       "stable_key": "SC-01",
-      "dependencies": [],
+      "dependencies": [
+        5
+      ],
       "checks": [
         "npm run docs:check",
         "npm run contracts:inventory -- --require-owner --require-consumer --require-leaf"
@@ -812,14 +1045,47 @@
       ],
       "body_sha256": "472e3cfbcbccf585663092a2b89876e25b53f0a7d2f29693fee8000b2ea549b6",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [
+        5
+      ],
+      "closure_dependencies": [],
+      "dependency_interpretation": "consumed implementation artifacts; not prerequisite issue closure"
     },
     {
       "issue": 3,
       "url": "https://github.com/Jevelopers-neatHack-2026/shared-contracts/issues/3",
       "title": "[P0 SC-12] Gate shared-contracts v1 release and eight-repository handoff",
       "stable_key": "SC-12",
-      "dependencies": [],
+      "dependencies": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
       "checks": [
         "npm run contracts:inventory -- --require-owner --require-consumer --require-leaf --require-fixtures --require-docs --require-consumer-pins --require-field-classification",
         "npm run contracts:check",
@@ -843,7 +1109,38 @@
       ],
       "body_sha256": "accfba4d145227d732fef9cc04d6d6328cd46d8ca3babcf5c1551039ae190bf6",
       "owner_role": "Agent and research (shared-contracts maintainer)",
-      "named_owner": null
+      "named_owner": null,
+      "artifact_dependencies": [],
+      "closure_dependencies": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
+      "dependency_interpretation": "release waits for every leaf's accepted closure evidence"
     }
   ]
 }

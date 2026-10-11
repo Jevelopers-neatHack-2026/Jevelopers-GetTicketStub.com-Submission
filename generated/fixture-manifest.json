@@ -17,7 +17,7 @@
     "fixtures/DesignControlSchema.json": "sha256:ccbf3a9921d0fe7f3d4e891f2044f913c3583b8f8137b3829266cbde04ee70ba",
     "fixtures/DesignVersion.json": "sha256:3c670cb9ca80aad58c37282f5b647557004a5dcc0e09233c8fdb2c0f4d916695",
     "fixtures/ErrorEnvelope.json": "sha256:9a0eef8627ed0692a5cac2004269c32601eb01fa4c482a4bb91934afafe72899",
-    "fixtures/EvaluationEvidence.json": "sha256:5b7f4a737a071fa3b5c9b3369a7dfec5e484b4a08b1d04f4a7a809792a0b31a9",
+    "fixtures/EvaluationEvidence.json": "sha256:68c861c9f88d74874feff28c4b29ce0f3d788abce168e5509d3b3588c96e747a",
     "fixtures/EventIntelligencePackage.json": "sha256:0ab1c2710489d7120418b023f92605d46e3d0e4df6371a084bebc3c3aa0cf5a7",
     "fixtures/EvidenceProjection.json": "sha256:b8750bad839c7f4262ef9bcdcb464a50a68bff9ddf1524bc93a88e709ef7912b",
     "fixtures/FinancialSummary.json": "sha256:ac30f110ef9777177feabae9cb00286e946a86caff106d029c65d25bf325d19d",
@@ -56,7 +56,7 @@
     "fixtures/SettleResult.json": "sha256:f1727555000cad209b3bcb54d09ec3a3ca66d7c07b6e55882762e44a27d5eeb2",
     "fixtures/UsageEvent.json": "sha256:c3261936892562c1b0dbf57a665d5d460c8c462ac85dce15fbc05846a7b71cdb"
   },
-  "digest": "sha256:e7bcbecadee73e4f911b6c1ae60fb250e38783affec93ec00f217c0b9805e7f7",
+  "digest": "sha256:04c148dc47b64d76929a9cc01ada24dbca061e9ed5a087a791b75e7a558dc102",
   "status": "synthetic_candidates_only",
   "contracts": [
     {

@@ -112,12 +112,26 @@ export function checkArtifactConsumptionReceipt(input, context) {
   const handoff = validateContract('ArtifactHandoffManifest', context.handoff); if (!handoff.ok || !checkTrustedContext(handoff.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/handoff');
   const approval = approvalState(context); if (!approval.ok) return approval;
   const v = parsed.value, h = handoff.value;
+  const binding = approval.value.binding;
+  if (h.manifest_hash !== commerceContentHash(h, 'manifest_hash')) return fail('INVALID_TRUST_CONTEXT', '/handoff/manifest_hash');
+  if (!same(v.approval_ref, h.approval_ref) || h.approval_ref.contract !== 'ApprovalReceipt' || h.approval_ref.id !== approval.value.approval_id ||
+      h.approval_ref.content_hash !== approval.value.receipt_hash || binding.intended_use !== 'production' || binding.subject_type !== 'artwork' ||
+      binding.subject_ref.contract !== 'Artifact' || !same(binding.subject_ref, h.artwork_ref) || !same(binding.preview_ref, h.preview_ref) ||
+      !same(binding.facts_ref, h.facts_ref) || binding.facts_hash !== h.facts_ref.content_hash || binding.composition_hash !== h.composition_hash ||
+      !same(context.artwork_ref, h.artwork_ref) || !same(context.preview_ref, h.preview_ref) ||
+      h.artwork_ref.id !== h.artwork.artifact_id || h.artwork_ref.content_hash !== h.artwork.byte_hash) return fail('STALE_APPROVAL', '/approval_ref');
+  const design = validateContract('DesignVersion', context.design);
+  if (!design.ok || !checkTrustedContext(design.value, context.scope).ok || !design.value.artwork || !design.value.preview ||
+      h.design_ref.id !== design.value.design_version_id || h.design_ref.revision !== design.value.revision || h.design_ref.content_hash !== design.value.design_hash ||
+      ['artifact_id', 'role', 'byte_hash', 'byte_size', 'media_type'].some(key => h.artwork[key] !== design.value.artwork[key]) ||
+      h.preview_ref.id !== design.value.preview.artifact_id || h.preview_ref.content_hash !== design.value.preview.byte_hash) return fail('INVALID_TRUST_CONTEXT', '/handoff/design_ref');
   if (!token(context.consumer_id)) return fail('INVALID_TRUST_CONTEXT', '/consumer_id');
   if (v.consumer_id !== context.consumer_id || v.manifest_ref.id !== h.handoff_id || v.manifest_ref.revision !== h.revision || v.manifest_ref.content_hash !== h.manifest_hash || v.approval_ref.id !== approval.value.approval_id || v.approval_ref.content_hash !== approval.value.receipt_hash) return fail('INVALID_RECEIPT', '/manifest_ref');
-  if (v.consumed_artifacts.length !== 1 || !same(v.consumed_artifacts[0], h.artwork) || Date.parse(v.consumed_at) > Date.parse(context.now)) return fail('INVALID_RECEIPT', '/consumed_artifacts');
+  if (v.consumed_artifacts.length !== 1 || !same(v.consumed_artifacts[0], h.artwork) || Date.parse(v.consumed_at) > Date.parse(context.now) ||
+      Date.parse(v.consumed_at) >= Date.parse(h.access.expires_at)) return fail('INVALID_RECEIPT', '/consumed_artifacts');
   const bytes = verifyBytes(v.consumed_artifacts[0], context.artifact_bytes, '/consumed_artifacts/0'); if (!bytes.ok) return bytes;
   if (context.prior_consumption) {
-    const old = validateContract('ArtifactConsumptionReceipt', context.prior_consumption); if (!old.ok) return fail('INVALID_TRUST_CONTEXT', '/prior_consumption');
+    const old = validateContract('ArtifactConsumptionReceipt', context.prior_consumption); if (!old.ok || !checkTrustedContext(old.value, context.scope).ok) return fail('INVALID_TRUST_CONTEXT', '/prior_consumption');
     if (old.value.idempotency_key === v.idempotency_key && !same(old.value, v)) return fail('IDENTITY_COLLISION', '/idempotency_key');
   }
   return parsed;
@@ -204,9 +218,12 @@ export function checkFulfillmentStatus(input, context) {
     if (v.revision !== old.value.revision + 1 || Date.parse(v.effective_at) < Date.parse(old.value.effective_at)) return fail('STALE_REVISION', '/revision');
     if (v.source_observation_id === old.value.source_observation_id || v.event_id === old.value.event_id) return fail('IDENTITY_COLLISION', '/source_observation_id');
     const rank = { created: 0, submission_pending: 1, accepted: 2, in_production: 3, shipped: 4, fulfilled: 5 };
-    if (Object.hasOwn(rank, old.value.normalized_status) && Object.hasOwn(rank, v.normalized_status) && rank[v.normalized_status] < rank[old.value.normalized_status]) return fail('INVALID_TRANSITION', '/normalized_status');
+    const intermediate = ['unknown', 'cancel_requested', 'cancel_rejected'];
+    const known = intermediate.includes(old.value.normalized_status) ? old.value.last_known_status : old.value.normalized_status;
+    if (Object.hasOwn(rank, known) && Object.hasOwn(rank, v.normalized_status) && rank[v.normalized_status] < rank[known]) return fail('INVALID_TRANSITION', '/normalized_status');
     if (['fulfilled', 'cancelled', 'rejected'].includes(old.value.normalized_status) && v.normalized_status !== old.value.normalized_status) return fail('INVALID_TRANSITION', '/normalized_status');
-    if (v.normalized_status === 'unknown' && v.last_known_status !== (old.value.normalized_status === 'unknown' ? old.value.last_known_status : old.value.normalized_status)) return fail('INVALID_TRANSITION', '/last_known_status');
+    if (intermediate.includes(v.normalized_status) && v.last_known_status !== known) return fail('INVALID_TRANSITION', '/last_known_status');
+    if (['fulfilled', 'cancelled', 'rejected'].includes(known) && !intermediate.includes(v.normalized_status) && v.normalized_status !== known) return fail('INVALID_TRANSITION', '/normalized_status');
   } else if (v.revision !== 1) return fail('INVALID_TRUST_CONTEXT', '/prior_status');
   return parsed;
 }
@@ -238,7 +255,8 @@ export function projectEvaluationEvidence(input, context) {
   const parsed = checkEvaluationEvidence(input, context); if (!parsed.ok) return parsed;
   const v = parsed.value, component = v.components.find(component => component.name === 'integration-evals');
   if (!component) return fail('INVALID_PAYLOAD', '/components');
-  return projectEvidence({ evidence_id: v.evidence_id, environment: v.environment, billing_mode: v.billing_mode, outcome: ['passed', 'failed', 'blocked'].includes(v.status) ? v.status : 'unknown', component: { name: component.name, source_revision: component.source_revision } });
+  if (!validatePrimitive('EvidenceId', context.public_evidence_id).ok || context.public_evidence_id === v.evidence_id) return fail('INVALID_TRUST_CONTEXT', '/public_evidence_id');
+  return projectEvidence({ evidence_id: context.public_evidence_id, environment: v.environment, billing_mode: v.billing_mode, outcome: ['passed', 'failed', 'blocked'].includes(v.status) ? v.status : 'unknown', component: { name: component.name, source_revision: component.source_revision } });
 }
 
 export function checkCommerceEvidence(contract, value, context) {

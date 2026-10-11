@@ -1,5 +1,5 @@
 import { registerHooks } from 'node:module';
-import { readFileSync, appendFileSync, realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -36,29 +36,6 @@ registerHooks({
     const name = relative(snapshot, path).split('\\').join('/');
     const bytes = readFileSync(path);
     if (hash(bytes) !== config.files[name]) throw new Error('Imported package bytes differ from tested pin');
-    appendFileSync(config.audit, JSON.stringify({ kind: 'import', path: name, sha256: config.files[name] }) + '\n');
-    if (name !== 'tooling/fixture-harness.mjs') return loaded;
-    const original = bytes.toString('utf8');
-    const marker = 'export function runCanonicalFixtures(';
-    if (!original.includes(marker)) throw new Error('Fixture API instrumentation mismatch');
-    const extra = `
-import { readFileSync as __fixtureRead, appendFileSync as __fixtureAppend } from 'node:fs';
-import { hashManifest as __fixtureHash } from './runtime.mjs';
-export function runCanonicalFixtures(contract, manifest) {
-  const result = __observedRunCanonicalFixtures(contract, manifest);
-  if (${JSON.stringify(config.required)}.includes(contract)) {
-    const fixture = ${JSON.stringify(config.required_fixtures)}.find(row => row.contract === contract && row.version === manifest.schema_version);
-    const expected = fixture ? JSON.parse(__fixtureRead(new URL('../' + fixture.path, import.meta.url), 'utf8')) : null;
-    __fixtureAppend(${JSON.stringify(config.audit)}, JSON.stringify({
-      kind: 'fixture_run', contract, version: manifest.schema_version, bound: expected !== null && __fixtureHash(manifest) === __fixtureHash(expected),
-      failures: result.failures.length, positive: result.records.filter(row => row.expected.ok).length,
-      negative: result.records.filter(row => !row.expected.ok).length,
-      semantic: result.records.some(row => ['semantic', 'research_creative', 'commerce_evidence'].includes(row.mode)) ? 1 : 0
-    }) + '\\n');
-  }
-  return result;
-}
-`;
-    return { ...loaded, source: original.replace(marker, 'function __observedRunCanonicalFixtures(') + extra };
+    return loaded;
   }
 });
