@@ -175,6 +175,8 @@ export interface AccessProviderAdapter {
 }
 
 export interface AccessProviderMeteringContext extends MeteredDispatchContext {
+  /** Native runner cancellation/deadline signal; required for every billable provider dispatch. */
+  readonly signal: AbortSignal;
   /** Revalidate the current grant, provider capability, and Finance lease after transport acknowledgement. */
   authorizeTransport(): Promise<void>;
   /** Perform the final synchronous deadline, cancellation, expiry, and freshness fence before network I/O. */

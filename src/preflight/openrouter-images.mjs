@@ -17,7 +17,7 @@ import { canonicalHash } from '../contracts/validation.mjs';
 // authorized_billable_operation, bound to the grant and the exact target, valid through the operation deadline)
 // before the port runs, and passes it as `credential`. The host port must still: send exactly one request using only
 // that credential, enforce the pinned provider tag / no fallbacks / the pinned profile, honor the abort `signal`
-// derived from the deadline, run the metering fence calls (recordTransportAttempt, authorizeTransport,
+// combining runner cancellation with the bounded deadline, run the metering fence calls (recordTransportAttempt, authorizeTransport,
 // assertTransportReady) in order, and never log or return the token. The credential is never placed in the
 // prepared value the runner sees.
 
@@ -33,9 +33,66 @@ const hashString = (value) => typeof value === 'string' && HASH.test(value);
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}$/;
 const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const METADATA_TIMEOUT_MS = 15_000;
+const BILLABLE_TIMEOUT_MAX_MS = 120_000;
+// Read the native slot through its getter; `instanceof` alone accepts prototype-spoofed objects.
+const nativeAbortSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
 
 function error(code, message) {
   return new AccessPreflightError(code, message);
+}
+
+function finiteNow(now) {
+  let value;
+  try { value = now(); } catch { /* reported below */ }
+  if (!Number.isFinite(value)) {
+    throw error('adapter_unavailable', 'The clock stopped returning a finite number of milliseconds.');
+  }
+  return value;
+}
+
+function remainingUntil(deadlineAt, now) {
+  const remaining = Date.parse(deadlineAt) - finiteNow(now);
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
+  }
+  return remaining;
+}
+
+function isNativeAbortSignal(value) {
+  try { return typeof nativeAbortSignalAborted?.call(value) === 'boolean'; }
+  catch { return false; }
+}
+
+function runnerCancellationSignal(input) {
+  let signal;
+  try {
+    const metering = input.metering;
+    if (!metering || typeof metering !== 'object' || Array.isArray(metering)) {
+      throw new TypeError('invalid metering context');
+    }
+    signal = metering.signal;
+  } catch {
+    throw error('invalid_abort_signal', 'Billable dispatch requires a native runner cancellation signal.');
+  }
+  if (!isNativeAbortSignal(signal)) {
+    throw error('invalid_abort_signal', 'Billable dispatch requires a native runner cancellation signal.');
+  }
+  return signal;
+}
+
+function boundedTransportSignal(deadlineAt, callerSignal, now) {
+  if (!isNativeAbortSignal(callerSignal)) {
+    throw error('invalid_abort_signal', 'A native runner cancellation signal is required for billable dispatch.');
+  }
+  const remaining = remainingUntil(deadlineAt, now);
+  const deadlineSignal = AbortSignal.timeout(Math.min(Math.max(1, Math.ceil(remaining)), BILLABLE_TIMEOUT_MAX_MS));
+  let signal;
+  try { signal = AbortSignal.any([callerSignal, deadlineSignal]); }
+  catch { throw error('invalid_abort_signal', 'The runner cancellation signal is not a native AbortSignal.'); }
+  if (signal.aborted) {
+    throw error('preflight_deadline_passed', 'Cancellation or the approved operation deadline stopped dispatch.');
+  }
+  return signal;
 }
 
 function digest(bytes) {
@@ -142,13 +199,17 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
       throw error('credential_unavailable', 'Trusted credential resolver did not return a usable bearer token.');
     }
     safeCredentialEvidence(resolved.evidence);
-    if (typeof resolved.expires_at !== 'string' || !Number.isFinite(Date.parse(resolved.expires_at))
-      || Date.parse(resolved.expires_at) <= now()
-      || (deadlineAt && Date.parse(resolved.expires_at) < Date.parse(deadlineAt))) {
+    const checkedAt = finiteNow(now);
+    const expiresAt = Date.parse(resolved.expires_at);
+    const deadline = deadlineAt ? Date.parse(deadlineAt) : undefined;
+    if (typeof resolved.expires_at !== 'string' || !Number.isFinite(expiresAt)
+      || expiresAt <= checkedAt
+      || (deadlineAt && (!Number.isFinite(deadline) || deadline <= checkedAt || expiresAt < deadline))) {
       throw error('credential_unavailable', 'Scoped credential is expired or will not remain valid through the operation deadline.');
     }
     return resolved.token;
-  } catch {
+  } catch (cause) {
+    if (cause instanceof AccessPreflightError && cause.code === 'adapter_unavailable') throw cause;
     throw error('credential_unavailable', 'Credential provider did not return a usable access token.');
   }
 }
@@ -314,29 +375,35 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       validateOpenRouterImageTarget(input.cell_id, input.target);
       if (typeof input.grant_ref !== 'string' || !SAFE_REF.test(input.grant_ref)
         || typeof input.deadline_at !== 'string' || !Number.isFinite(Date.parse(input.deadline_at))
-        || Date.parse(input.deadline_at) <= now()) {
+        || Date.parse(input.deadline_at) <= finiteNow(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
       const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
         target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at, now });
+      // Credential lookup is asynchronous. Recheck the clock/deadline before handing its token to host preparation.
+      remainingUntil(input.deadline_at, now);
       const credential = Object.freeze({ token });
       const hostPrepared = dispatchPort.prepare ? await dispatchPort.prepare({ ...input, credential }) : undefined;
+      // Host preparation is also asynchronous. Never mint a dispatchable value after the grant's deadline.
+      remainingUntil(input.deadline_at, now);
       const prepared = Object.freeze({ prepared: true });
       preparedState.set(prepared, { cell_id: input.cell_id, target: input.target, grant_ref: input.grant_ref,
         deadline_at: input.deadline_at, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {
+      if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        throw error('invalid_abort_signal', 'Billable dispatch requires the runner input and metering context.');
+      }
       validateOpenRouterImageTarget(input.cell_id, input.target);
       const state = isRecord(input.prepared) ? preparedState.get(input.prepared) : undefined;
       if (!state || state.cell_id !== input.cell_id || state.target !== input.target
         || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at) {
         throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, and target.');
       }
-      const remaining = Date.parse(state.deadline_at) - now();
-      if (!Number.isFinite(remaining) || remaining <= 0) throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
+      const signal = boundedTransportSignal(state.deadline_at, runnerCancellationSignal(input), now);
       return dispatchPort.dispatch({ ...input, prepared: state.hostPrepared, credential: state.credential,
-        signal: AbortSignal.timeout(Math.min(remaining, 120_000)) });
+        signal });
     };
   } else {
     adapter.dispatch = async () => {

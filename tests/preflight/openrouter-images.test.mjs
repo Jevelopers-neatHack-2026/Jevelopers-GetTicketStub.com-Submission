@@ -19,6 +19,12 @@ const TOKEN_CANARY = 'canary-openrouter-token-never-in-evidence';
 const KEY_URL = 'https://openrouter.ai/api/v1/key';
 const CATALOG_URL = 'https://openrouter.ai/api/v1/images/models/synthetic-lab/image-model-offline/endpoints';
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 function target(cellId = 'image_generation') {
   return structuredClone(accessPlan({ cellId, provider: 'openrouter' }).cells.find((cell) => cell.cell_id === cellId).target);
 }
@@ -212,11 +218,78 @@ const GRANT = 'grant:test:1';
 const deadline = (offsetMs = 120_000) => new Date(clock() + offsetMs).toISOString();
 const billable = (cellId = 'image_generation', overrides = {}) => ({ run_id: 'test:run', cell_id: cellId, target: target(cellId),
   configuration: target(cellId).configuration, scope: fixtureScope, grant_ref: GRANT, deadline_at: deadline(), ...overrides });
+const meteringInput = (signal = new AbortController().signal) => ({ signal });
+const dispatchInput = (input, prepared, signal = new AbortController().signal) => ({ ...input, prepared, metering: meteringInput(signal) });
 // A credential port that honors grant_ref like a real resolver would, with per-test mutation of the answer.
 function grantCredentialPort({ mutate = (value) => value, calls = [] } = {}) {
   return credentialPort({ calls, mutate: (value) => mutate({ ...value,
     binding: { ...value.binding, ...(calls.at(-1)?.grant_ref ? { grant_ref: calls.at(-1).grant_ref } : {}) },
     expires_at: new Date(clock() + 600_000).toISOString() }) });
+}
+
+function markLive(port, methods, transform = (decision) => decision) {
+  port.evidence_mode = 'live';
+  for (const name of methods) {
+    const method = port[name].bind(port);
+    port[name] = async (input) => ({ ...transform(await method(input), input), evidence_mode: 'live' });
+  }
+}
+
+function createLiveOpenRouterRunner({ signal, deadlineOffsetMs, prepareHost, dispatchHost } = {}) {
+  const fixture = createMockAccessFixture({ cellId: 'image_generation', provider: 'openrouter' });
+  if (deadlineOffsetMs !== undefined) fixture.cell.spend.deadline_at = new Date(Date.now() + deadlineOffsetMs).toISOString();
+  markLive(fixture.pinVerifier, ['verifyPin']);
+  markLive(fixture.capabilityVerifier, ['verifyCapability', 'revalidateCapability']);
+  markLive(fixture.authorizationPort, ['verifyGrant', 'revalidateGrant'], (decision) => {
+    decision.grant.expires_at = new Date(Date.parse(fixture.cell.spend.deadline_at) - 100).toISOString();
+    return decision;
+  });
+  markLive(fixture.reservationVerifier, ['verifyReservation']);
+  fixture.authority.evidence_mode = 'live';
+
+  const credentialCalls = [];
+  const resolvedCredentials = [];
+  const credentialResolver = {
+    evidence_mode: 'live',
+    async resolveCredential(input) {
+      credentialCalls.push(input);
+      const deadlineAt = Date.parse(fixture.cell.spend.deadline_at);
+      const resolved = {
+        decision: 'resolved',
+        evidence_mode: 'live',
+        binding: {
+          service: input.service,
+          account_ref: input.account_ref,
+          project_ref: input.project_ref,
+          target_binding_sha256: digest(JSON.stringify(input.target_binding)),
+          ...(input.grant_ref ? { grant_ref: input.grant_ref } : {}),
+        },
+        token: TOKEN_CANARY,
+        expires_at: new Date(Math.max(Date.now() + 60_000, deadlineAt + 60_000)).toISOString(),
+        evidence: pinned('runner-credential'),
+      };
+      resolvedCredentials.push(resolved);
+      return resolved;
+    },
+  };
+  const { fetchImpl, requests } = interceptedFetch();
+  const hostDispatches = [];
+  const adapter = createOpenRouterImagesAdapter({ credentialPort: credentialResolver, fetchImpl, now: Date.now,
+    dispatchPort: {
+      async prepare(input) {
+        if (prepareHost) return prepareHost(input, fixture);
+        return { prepared_for: input.cell_id };
+      },
+      async dispatch(input) {
+        hostDispatches.push(input);
+        if (dispatchHost) return await dispatchHost(input, fixture);
+        const result = await fixture.adapter.dispatch(input);
+        return { ...result, evidence_mode: 'live', evidence: { ...result.evidence,
+          artifact_sha256: digest('synthetic fixture artifact'), artifact_width: 1024, artifact_height: 1024 } };
+      },
+    } });
+  const args = { ...fixture.args, mode: 'live', adapter, ...(signal ? { signal } : {}) };
+  return { args, fixture, credentialCalls, resolvedCredentials, requests, hostDispatches };
 }
 
 test('the clock option must be a function returning a finite number', () => {
@@ -244,7 +317,7 @@ test('billable dispatch exists only through a trusted host port and re-checks th
   assert.equal(calls[0].purpose, 'authorized_billable_operation', 'the OpenAI billable purpose');
   assert.equal(calls[0].grant_ref, GRANT);
   assert.ok(!JSON.stringify(prepared).includes(TOKEN_CANARY), 'the credential is not in the value the runner holds');
-  assert.deepEqual(await composed.dispatch({ ...input, prepared }), { host: 'result' });
+  assert.deepEqual(await composed.dispatch(dispatchInput(input, prepared)), { host: 'result' });
   assert.deepEqual(seen, [['prepare', 'image_edit', TOKEN_CANARY], ['dispatch', 'image_edit', TOKEN_CANARY, { host_prepared: 'image_edit' }, true]]);
   // The pin is re-checked on both entry points, and a dispatch needs a prepared value this adapter minted.
   const wrong = billable('image_generation');
@@ -261,14 +334,15 @@ test('billable dispatch exists only through a trusted host port and re-checks th
     ['different deadline', { ...ok, prepared: okPrepared, deadline_at: deadline(10_000) }],
     ['different target object', { ...ok, prepared: okPrepared, target: target('image_generation') }],
     ['mismatched pin', { ...ok, prepared: okPrepared, target: wrong.target }],
-  ]) await assert.rejects(composed.dispatch(bad), (error) => ['credential_unavailable', 'unsupported_image_configuration'].includes(error.code), name);
+  ]) await assert.rejects(composed.dispatch({ ...bad, metering: meteringInput() }),
+    (error) => ['credential_unavailable', 'unsupported_image_configuration'].includes(error.code), name);
   assert.equal(seen.filter(([kind]) => kind === 'dispatch').length, 1, 'no rejected dispatch reached the host port');
   assert.equal(seen.length, before + 1, 'only the one valid prepare ran after the rejections');
   assert.equal(requests.length, 0, 'the metadata adapter never sends a paid request');
   // A port without prepare still gets a credential-bound prepare step.
   const noPrepare = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl, dispatchPort: {
     async dispatch(input) { return { token_seen: input.credential.token === TOKEN_CANARY, prepared: input.prepared }; } } });
-  assert.deepEqual(await noPrepare.dispatch({ ...ok, prepared: await noPrepare.prepare(ok) }), { token_seen: true, prepared: undefined });
+  assert.deepEqual(await noPrepare.dispatch(dispatchInput(ok, await noPrepare.prepare(ok))), { token_seen: true, prepared: undefined });
 });
 
 test('billable prepare resolves a grant-bound credential through the deadline, or no host port runs', async () => {
@@ -305,8 +379,267 @@ test('billable prepare resolves a grant-bound credential through the deadline, o
   const input = billable('image_generation', { deadline_at: soon });
   const prepared = await late.prepare(input);
   nowMs += 80; // the injected clock passes the deadline between prepare and dispatch
-  await assert.rejects(late.dispatch({ ...input, prepared }), (error) => error.code === 'preflight_deadline_passed');
+  await assert.rejects(late.dispatch(dispatchInput(input, prepared)), (error) => error.code === 'preflight_deadline_passed');
   assert.deepEqual(hostCalls, ['prepare', 'prepare']);
+});
+
+test('billable dispatch requires a native runner signal and combines it with the bounded deadline', async () => {
+  const { fetchImpl } = interceptedFetch();
+  const hostSignals = [];
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl,
+    dispatchPort: { async dispatch(input) { hostSignals.push(input.signal); return { host: 'result' }; } } });
+  const input = billable();
+  const prepared = await adapter.prepare(input);
+
+  const getterSignal = {};
+  Object.defineProperty(getterSignal, 'aborted', { get() { throw new Error(TOKEN_CANARY); } });
+  const proxySignal = new Proxy({}, { getPrototypeOf() { throw new Error(TOKEN_CANARY); } });
+  const spoofedSignal = Object.create(AbortSignal.prototype);
+  assert.equal(spoofedSignal instanceof AbortSignal, true, 'prototype spoof defeats instanceof alone');
+  for (const signal of [undefined, null, {}, { aborted: false }, getterSignal, proxySignal, spoofedSignal]) {
+    await assert.rejects(adapter.dispatch({ ...input, prepared, metering: { signal } }),
+      (error) => error.code === 'invalid_abort_signal' && !error.message.includes(TOKEN_CANARY));
+  }
+  const hostileContext = { ...input, prepared };
+  Object.defineProperty(hostileContext, 'metering', { get() { throw new Error(TOKEN_CANARY); } });
+  await assert.rejects(adapter.dispatch(hostileContext),
+    (error) => error.code === 'invalid_abort_signal' && !error.message.includes(TOKEN_CANARY));
+  const preCancelled = new AbortController();
+  preCancelled.abort();
+  await assert.rejects(adapter.dispatch(dispatchInput(input, prepared, preCancelled.signal)),
+    (error) => error.code === 'preflight_deadline_passed');
+  assert.deepEqual(hostSignals, [], 'invalid or missing caller signals never reach the host');
+
+  const caller = new AbortController();
+  assert.deepEqual(await adapter.dispatch(dispatchInput(input, prepared, caller.signal)), { host: 'result' });
+  assert.equal(hostSignals.length, 1);
+  assert.ok(hostSignals[0] instanceof AbortSignal);
+  assert.notEqual(hostSignals[0], caller.signal, 'the host receives the combined signal');
+  caller.abort();
+  assert.equal(hostSignals[0].aborted, true, 'runner cancellation reaches the host signal');
+
+  const proxiedCaller = new AbortController();
+  const proxiedSignal = new Proxy(proxiedCaller.signal, {});
+  assert.deepEqual(await adapter.dispatch(dispatchInput(input, prepared, proxiedSignal)), { host: 'result' },
+    'Node accepts a proxy over a genuine native signal through its native composition API');
+  assert.ok(hostSignals[1] instanceof AbortSignal, 'the host receives the native composite, not the caller proxy');
+  proxiedCaller.abort();
+  assert.equal(hostSignals[1].aborted, true, 'cancellation through the native caller target reaches the host');
+});
+
+test('prepare rechecks finite clock and deadline after credential and host preparation awaits', async () => {
+  const { fetchImpl } = interceptedFetch();
+  const hostCalls = [];
+  const dispatchPort = {
+    async prepare() { hostCalls.push('prepare'); return { host_prepared: true }; },
+    async dispatch() { hostCalls.push('dispatch'); return {}; },
+  };
+
+  nowMs = Date.parse('2031-03-04T05:06:07.000Z');
+  const invalidAfterCredential = createOpenRouterImagesAdapter({ now: clock, fetchImpl, dispatchPort,
+    credentialPort: grantCredentialPort({ mutate(value) { nowMs = NaN; return value; } }) });
+  await assert.rejects(invalidAfterCredential.prepare(billable()), (error) => error.code === 'adapter_unavailable');
+  assert.deepEqual(hostCalls, [], 'a non-finite clock after credential resolution never reaches host preparation');
+
+  nowMs = Date.parse('2031-03-04T05:06:07.000Z');
+  const expiredWhileResolving = createOpenRouterImagesAdapter({ now: clock, fetchImpl, dispatchPort,
+    credentialPort: grantCredentialPort({ mutate(value) { nowMs += 500; return value; } }) });
+  await assert.rejects(expiredWhileResolving.prepare(billable('image_generation', { deadline_at: deadline(100) })),
+    (error) => error.code === 'credential_unavailable');
+  assert.deepEqual(hostCalls, [], 'a deadline that passes during credential resolution never reaches host preparation');
+
+  nowMs = Date.parse('2031-03-04T05:06:07.000Z');
+  const hostCrossesDeadline = createOpenRouterImagesAdapter({ now: clock, fetchImpl, credentialPort: grantCredentialPort(),
+    dispatchPort: { async prepare() { hostCalls.push('prepare'); nowMs += 500; return { host_prepared: true }; },
+      async dispatch() { hostCalls.push('dispatch'); return {}; } } });
+  const hostDeadline = deadline(100);
+  const hostInput = billable('image_generation', { deadline_at: hostDeadline });
+  await assert.rejects(hostCrossesDeadline.prepare(hostInput), (error) => error.code === 'preflight_deadline_passed');
+  assert.deepEqual(hostCalls, ['prepare'], 'the adapter does not mint dispatch authority after an awaited host preparation crosses the deadline');
+  await assert.rejects(hostCrossesDeadline.dispatch(dispatchInput(hostInput, { prepared: true })),
+    (error) => error.code === 'credential_unavailable');
+  assert.deepEqual(hostCalls, ['prepare'], 'a rejected preparation never reaches host dispatch');
+
+  for (const failingClock of [() => NaN, () => { throw new Error(TOKEN_CANARY); }]) {
+    let hostPrepared = false;
+    const invalidAfterHostPrepare = createOpenRouterImagesAdapter({ now() {
+      if (hostPrepared) return failingClock();
+      return Date.parse('2031-03-04T05:06:07.000Z');
+    }, fetchImpl, credentialPort: grantCredentialPort(), dispatchPort: {
+      async prepare() { hostPrepared = true; return { host_prepared: true }; },
+      async dispatch() { hostCalls.push('dispatch'); return {}; },
+    } });
+    await assert.rejects(invalidAfterHostPrepare.prepare(billable()),
+      (error) => error.code === 'adapter_unavailable' && !error.message.includes(TOKEN_CANARY));
+    assert.equal(hostPrepared, true);
+    assert.deepEqual(hostCalls, ['prepare'], 'a non-finite or throwing clock after host preparation does not mint dispatch authority');
+  }
+
+  nowMs = Date.parse('2031-03-04T05:06:07.000Z');
+  for (const failingClock of [() => NaN, () => { throw new Error(TOKEN_CANARY); }]) {
+    let failBeforeDispatch = false;
+    const preDispatchHostCalls = [];
+    const invalidBeforeDispatch = createOpenRouterImagesAdapter({ now() {
+      return failBeforeDispatch ? failingClock() : Date.parse('2031-03-04T05:06:07.000Z');
+    }, fetchImpl, credentialPort: grantCredentialPort(), dispatchPort: {
+      async prepare() { preDispatchHostCalls.push('prepare'); return { host_prepared: true }; },
+      async dispatch() { preDispatchHostCalls.push('dispatch'); return {}; },
+    } });
+    const invalidClockInput = billable();
+    const invalidClockPrepared = await invalidBeforeDispatch.prepare(invalidClockInput);
+    failBeforeDispatch = true;
+    await assert.rejects(invalidBeforeDispatch.dispatch(dispatchInput(invalidClockInput, invalidClockPrepared)),
+      (error) => error.code === 'adapter_unavailable' && !error.message.includes(TOKEN_CANARY));
+    assert.deepEqual(preDispatchHostCalls, ['prepare'], 'a non-finite or throwing pre-dispatch clock blocks host transport');
+  }
+  nowMs = Date.parse('2031-03-04T05:06:07.000Z');
+});
+
+test('synthetic live runner stops pre-cancelled and prepare-time-cancelled operations before reservation', async () => {
+  const beforeController = new AbortController();
+  beforeController.abort();
+  const before = createLiveOpenRouterRunner({ signal: beforeController.signal });
+  const beforeResult = await executeAuthorizedAccessCell(before.args);
+  assert.equal(beforeResult.status, 'failed');
+  assert.equal(beforeResult.financial_hold, 'none');
+  assert.equal(before.fixture.calls.reserve, 0);
+  assert.equal(before.hostDispatches.length, 0);
+
+  const controller = new AbortController();
+  const started = deferred();
+  const release = deferred();
+  const during = createLiveOpenRouterRunner({ signal: controller.signal,
+    async prepareHost() { started.resolve(); await release.promise; return { prepared_after_wait: true }; } });
+  const pending = executeAuthorizedAccessCell(during.args);
+  await started.promise;
+  controller.abort();
+  release.resolve();
+  const duringResult = await pending;
+  assert.equal(duringResult.status, 'failed');
+  assert.equal(duringResult.financial_hold, 'none');
+  assert.equal(during.fixture.calls.reserve, 0, 'runner cancellation during host preparation is checked before reservation');
+  assert.equal(during.hostDispatches.length, 0, 'cancelled preparation never reaches billable host dispatch');
+});
+
+test('synthetic live runner preserves the final synchronous fence when cancellation arrives before transport', async () => {
+  const controller = new AbortController();
+  let transportStarted = false;
+  const run = createLiveOpenRouterRunner({ signal: controller.signal,
+    async dispatchHost(input) {
+      await input.metering.recordTransportAttempt('test:openrouter-presend-cancel');
+      await input.metering.authorizeTransport();
+      controller.abort();
+      input.metering.assertTransportReady();
+      transportStarted = true;
+      return { provider_outcome: 'succeeded' };
+    } });
+  const result = await executeAuthorizedAccessCell(run.args);
+  assert.equal(transportStarted, false);
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.verified, false);
+  assert.equal(result.financial_hold, 'retained_for_reconciliation');
+  assert.equal(run.fixture.calls.settle, 0);
+  assert.equal(run.fixture.authority.reservationFor(run.fixture.meteringRequest.billable_attempt_id).state, 'held_for_reconciliation');
+});
+
+test('synthetic live runner propagates in-flight cancellation to host and retains unknown hold without publication', async () => {
+  const controller = new AbortController();
+  const entered = deferred();
+  const abortObserved = deferred();
+  const run = createLiveOpenRouterRunner({ signal: controller.signal,
+    async dispatchHost(input) {
+      await input.metering.recordTransportAttempt('test:openrouter-inflight-cancel');
+      await input.metering.authorizeTransport();
+      input.metering.assertTransportReady();
+      assert.ok(input.signal instanceof AbortSignal);
+      entered.resolve(input.signal);
+      return new Promise((resolve) => {
+        const finish = () => {
+          abortObserved.resolve();
+          resolve({ provider_outcome: 'unknown' });
+        };
+        if (input.signal.aborted) finish();
+        else input.signal.addEventListener('abort', finish, { once: true });
+      });
+    } });
+  const pending = executeAuthorizedAccessCell(run.args);
+  const hostSignal = await entered.promise;
+  controller.abort();
+  await abortObserved.promise;
+  const result = await pending;
+  assert.equal(hostSignal.aborted, true, 'the host transport signal observes runner cancellation');
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.verified, false);
+  assert.equal(result.financial_hold, 'retained_for_reconciliation');
+  assert.equal(result.operation_evidence, null, 'cancelled work is not published as provider evidence');
+  assert.equal(run.fixture.calls.settle, 0);
+  assert.equal(run.fixture.authority.reservationFor(run.fixture.meteringRequest.billable_attempt_id).state, 'held_for_reconciliation');
+});
+
+test('synthetic live runner bounds an in-flight host signal by the operation deadline', async () => {
+  const entered = deferred();
+  const abortObserved = deferred();
+  const run = createLiveOpenRouterRunner({ deadlineOffsetMs: 3_000,
+    async dispatchHost(input) {
+      await input.metering.recordTransportAttempt('test:openrouter-deadline-cancel');
+      await input.metering.authorizeTransport();
+      input.metering.assertTransportReady();
+      assert.ok(input.signal instanceof AbortSignal);
+      entered.resolve(input.signal);
+      return new Promise((resolve) => {
+        const finish = () => {
+          abortObserved.resolve();
+          resolve({ provider_outcome: 'unknown' });
+        };
+        if (input.signal.aborted) finish();
+        else input.signal.addEventListener('abort', finish, { once: true });
+      });
+    } });
+  const pending = executeAuthorizedAccessCell(run.args);
+  const hostSignal = await entered.promise;
+  const keepAlive = setTimeout(() => {}, 4_000);
+  await abortObserved.promise;
+  const result = await pending;
+  clearTimeout(keepAlive);
+  assert.equal(hostSignal.aborted, true, 'the host transport signal aborts at the approved deadline');
+  assert.equal(result.status, 'unknown');
+  assert.equal(result.verified, false);
+  assert.equal(result.financial_hold, 'retained_for_reconciliation');
+  assert.equal(run.fixture.calls.settle, 0);
+  assert.equal(run.fixture.authority.reservationFor(run.fixture.meteringRequest.billable_attempt_id).state, 'held_for_reconciliation');
+});
+
+test('synthetic live runner accepts exact bound credential and completes a valid operation', async () => {
+  const run = createLiveOpenRouterRunner();
+  const result = await executeAuthorizedAccessCell(run.args);
+  assert.equal(result.status, 'verified', JSON.stringify(result));
+  assert.equal(result.financial_hold, 'settled');
+  assert.equal(run.fixture.calls.settle, 1);
+  assert.equal(run.hostDispatches.length, 1);
+  assert.equal(run.requests.length, 2, 'only the two in-memory non-billable metadata reads occur');
+
+  const billableInput = run.credentialCalls.find((call) => call.purpose === 'authorized_billable_operation');
+  assert.ok(billableInput);
+  assert.equal(billableInput.service, 'openrouter');
+  assert.equal(billableInput.account_ref, fixtureScope.account_ref);
+  assert.equal(billableInput.project_ref, fixtureScope.project_ref);
+  assert.equal(billableInput.grant_ref, run.args.grantRef);
+  assert.deepEqual(billableInput.target_binding, {
+    service: 'openrouter',
+    endpoint: 'https://openrouter.ai/api/v1/images',
+    model: OPENROUTER_FIXTURE_MODEL,
+    sdk_name: 'native-fetch',
+    sdk_version: process.versions.node,
+    configuration_sha256: run.fixture.target.configuration_sha256,
+    account_ref: fixtureScope.account_ref,
+    project_ref: fixtureScope.project_ref,
+  });
+  const resolved = run.resolvedCredentials[run.credentialCalls.indexOf(billableInput)];
+  assert.equal(resolved.binding.target_binding_sha256, digest(JSON.stringify(billableInput.target_binding)));
+  assert.equal(resolved.binding.grant_ref, run.args.grantRef);
+  assert.ok(Date.parse(resolved.expires_at) >= Date.parse(run.fixture.cell.spend.deadline_at));
+  assert.equal(run.hostDispatches[0].credential.token, TOKEN_CANARY);
+  assert.ok(run.hostDispatches[0].signal instanceof AbortSignal);
 });
 
 test('model_listing is tag presence unless the target pins the catalog entry hash; a different live entry is unknown', async () => {
