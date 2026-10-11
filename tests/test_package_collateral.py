@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import subprocess
 import tempfile
@@ -79,6 +80,189 @@ class PackagePolicyTests(unittest.TestCase):
         errors = package.validate_manifest_files(ROOT, tampered)
         self.assertTrue(any("exact inventory/provenance copy reference is missing" in item for item in errors), errors)
 
+    def test_manifest_binds_direct_readiness_inputs_and_discovery_census(self) -> None:
+        manifest = self.current_manifest
+        support_by_path = {row["path"]: row for row in manifest["supportFiles"]}
+        for relative in (
+            "tools/validate_collateral.py",
+            "review/fixtures/synthetic-canaries.json",
+            "demo/exports/rehearsal-render-plan.json",
+        ):
+            with self.subTest(input=relative):
+                self.assertTrue(support_by_path[relative]["exists"])
+                self.assertRegex(support_by_path[relative]["sha256"], r"^[0-9a-f]{64}$")
+                self.assertRegex(support_by_path[relative]["sourceCommitId"], r"^[0-9a-f]{40}$")
+
+        census = manifest["sourceDiscovery"]
+        self.assertEqual(package.SOURCE_DISCOVERY_ALGORITHM, census["algorithm"])
+        roots = {row["rootKey"]: row for row in census["roots"]}
+        self.assertEqual({"videoRoot", "captionRoot", "reviewRoot"}, set(roots))
+        for record in roots.values():
+            self.assertEqual(sorted(set(record["extensions"])), record["extensions"])
+            self.assertEqual(sorted(set(record["paths"])), record["paths"])
+
+    def test_source_discovery_detects_candidate_only_video_caption_and_receipt_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "baseline.txt").write_text("candidate baseline\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "discovery roots are empty"], check=True)
+            empty_commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            cases = (
+                ("videoRoot", "demo/exports", [".mp4"], "demo/exports/rehearsal.mp4"),
+                ("captionRoot", "demo/captions", [".srt", ".vtt"], "demo/captions/rehearsal.srt"),
+                ("reviewRoot", "review/visual/rehearsal", [".json"], "review/visual/rehearsal/extra.json"),
+            )
+            for _, _, _, path in cases:
+                file_path = root / path
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text(f"synthetic discovery input: {path}\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "discovery inputs added"], check=True)
+            present_commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            for _, _, _, path in cases:
+                (root / path).unlink()
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "discovery inputs removed"], check=True)
+
+            for root_key, directory, extensions, path in cases:
+                with self.subTest(root=root_key):
+                    census = {"algorithm": package.SOURCE_DISCOVERY_ALGORITHM, "roots": [{
+                        "rootKey": root_key,
+                        "root": directory,
+                        "extensions": extensions,
+                        "paths": [],
+                    }]}
+                    self.assertEqual([], package.source_discovery_snapshot_errors(root, empty_commit, census))
+                    errors = package.source_discovery_snapshot_errors(root, present_commit, census)
+                    self.assertIn(f"candidate-only=['{path}']", errors[0])
+
+    def test_source_snapshot_census_binds_all_inventory_tracked_blobs_and_selfpairs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest_path = f"release/{package.DEFAULT_VERSION}/manifest.json"
+            source_bytes = {
+                "tracked.txt": b"exact tracked source\n",
+                "messaging/claims.json": b'{"claims":[]}\n',
+                manifest_path: b'{"releaseClass":"draft_rehearsal_only"}\n',
+            }
+            for relative, content in source_bytes.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+
+            rows = [
+                {"path": "docs/collateral-inventory.json", "exists": True, "sha256": None, "provenanceRecordId": "PROV-FILE-E018FDB8D981"},
+                {"path": "messaging/claims.json", "exists": True, "sha256": None, "provenanceRecordId": "MSG-CLAIMS-001"},
+                {"path": "review/provenance.json", "exists": True, "sha256": None},
+                {"path": manifest_path, "exists": True, "sha256": package.sha256_bytes(source_bytes[manifest_path]), "provenanceRecordId": "HANDOFF-MANIFEST-001"},
+                {"path": "tracked.txt", "exists": True, "sha256": package.sha256_bytes(source_bytes["tracked.txt"])},
+            ]
+            inventory = {"schemaVersion": "1.0", "trackedFiles": rows}
+            inventory_path = root / package.SOURCE_INVENTORY_PATH
+            inventory_path.parent.mkdir(parents=True, exist_ok=True)
+            inventory_bytes = (package.json.dumps(inventory, indent=2) + "\n").encode("utf-8")
+            inventory_path.write_bytes(inventory_bytes)
+            inventory_digest = package.sha256_bytes(inventory_bytes)
+            claims_digest = package.sha256_bytes(source_bytes["messaging/claims.json"])
+            provenance_records = []
+            for identifier, relative, digest in (
+                ("HANDOFF-MANIFEST-001", manifest_path, package.sha256_bytes(source_bytes[manifest_path])),
+                ("PROV-FILE-E018FDB8D981", package.SOURCE_INVENTORY_PATH, inventory_digest),
+                ("MSG-CLAIMS-001", "messaging/claims.json", claims_digest),
+            ):
+                provenance_records.append({
+                    "assetId": identifier,
+                    "source": {
+                        "repo": "Jevelopers-neatHack-2026/marketing-material",
+                        "path": relative,
+                        "revision": f"sha256:{digest}",
+                        "url": None,
+                    },
+                    "checksum": {"algorithm": "SHA-256", "value": digest},
+                })
+            provenance_path = root / package.SOURCE_PROVENANCE_PATH
+            provenance_path.parent.mkdir(parents=True, exist_ok=True)
+            provenance_path.write_text(
+                package.json.dumps({"schemaVersion": "1.0", "records": provenance_records}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "complete tracked source census"], check=True)
+            candidate = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            tree, error = package.git_tree_entries(root, candidate)
+            self.assertIsNone(error)
+            self.assertEqual([], package.source_inventory_snapshot_errors(root, tree))
+
+            (root / "extra.txt").write_text("candidate-only tracked file\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "extra.txt"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "unindexed tracked source"], check=True)
+            extra_commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            tree, error = package.git_tree_entries(root, extra_commit)
+            self.assertIsNone(error)
+            errors = package.source_inventory_snapshot_errors(root, tree)
+            self.assertTrue(any("candidate-only=['extra.txt']" in item for item in errors), errors)
+
+            (root / "tracked.txt").write_bytes(b"different exact source bytes\n")
+            (root / "extra.txt").unlink()
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "inventory checksum mismatch"], check=True)
+            changed_commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            tree, error = package.git_tree_entries(root, changed_commit)
+            self.assertIsNone(error)
+            errors = package.source_inventory_snapshot_errors(root, tree)
+            self.assertIn("candidate source inventory checksum does not match candidate bytes: tracked.txt", errors)
+
+    def test_canonical_blocker_normalization_is_stable_across_iteration_order(self) -> None:
+        blockers = ["rights pending", "claim review pending", "source pin missing"]
+        expected = sorted(blockers)
+        self.assertEqual(expected, package._normalise_policy_blockers(blockers))
+        self.assertEqual(expected, package._normalise_policy_blockers(tuple(reversed(blockers))))
+        self.assertEqual(expected, package._normalise_policy_blockers(set(blockers)))
+
+    def test_fresh_gate_outputs_are_stable_across_python_hash_seeds(self) -> None:
+        script = (
+            "import json, sys; sys.path.insert(0, 'tools'); import package_collateral as p; "
+            "m = p.build_manifest(p.ROOT, materialized=False); "
+            "keys = ('collateralPackageReadiness', 'externalSubmissionReadiness'); "
+            "gates = {'canonicalPolicySelectedAssetIds': m['buildDiagnostics']['canonicalPolicySelectedAssetIds'], "
+            "'readiness': {name: {field: m[name].get(field) for field in ('decision', 'scope', 'blockers')} "
+            "for name in keys}}; "
+            "print(json.dumps(gates, "
+            "sort_keys=True, separators=(',', ':')))"
+        )
+        outputs = []
+        for seed in ("1", "2"):
+            env = os.environ.copy()
+            env["PYTHONHASHSEED"] = seed
+            completed = subprocess.run(
+                [sys.executable, "-c", script],
+                cwd=ROOT,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            outputs.append(completed.stdout)
+        self.assertEqual(outputs[0], outputs[1])
+
     def test_forged_manifest_pass_is_rejected_against_current_gate_recomputation(self) -> None:
         cached = package.json.loads(package.json.dumps(self.current_manifest))
         for field in ("collateralPackageReadiness", "externalSubmissionReadiness"):
@@ -145,6 +329,7 @@ class PackagePolicyTests(unittest.TestCase):
             current = {
                 "assets": [{"file": {"exists": True, "path": "input.txt", "sha256": digest}}],
                 "supportFiles": [],
+                "sourceDiscovery": {"algorithm": package.SOURCE_DISCOVERY_ALGORITHM, "roots": []},
                 "policyInputHashes": {
                     f"release/{package.DEFAULT_VERSION}/package-spec.json": {
                         "path": f"release/{package.DEFAULT_VERSION}/package-spec.json",
@@ -156,7 +341,11 @@ class PackagePolicyTests(unittest.TestCase):
             self.assertEqual([], package.source_snapshot_errors(root, cached, current))
 
             wrong_binding = {"assets": [{"file": {"exists": True, "path": "input.txt", "sha256": "0" * 64}}]}
-            wrong_binding.update(supportFiles=[], policyInputHashes={})
+            wrong_binding.update(
+                supportFiles=[],
+                sourceDiscovery={"algorithm": package.SOURCE_DISCOVERY_ALGORITHM, "roots": []},
+                policyInputHashes={},
+            )
             self.assertIn(
                 "candidate source snapshot input differs from manifest binding: input.txt",
                 package.source_snapshot_errors(root, cached, wrong_binding),
@@ -190,6 +379,129 @@ class PackagePolicyTests(unittest.TestCase):
                 "candidateSourceCommitAtGeneration is not an ancestor of the current source snapshot",
                 package.source_snapshot_errors(root, cached, current),
             )
+
+    def test_source_snapshot_binds_declared_absence_at_generation_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "baseline.txt").write_text("candidate baseline\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Package Test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "package-test@example.invalid"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "declared source paths are absent"], check=True)
+            absent_commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+
+            def empty_manifest():
+                return {
+                    "assets": [],
+                    "captionSidecars": [],
+                    "supportFiles": [],
+                    "policyInputHashes": {},
+                    "sourceDiscovery": {"algorithm": package.SOURCE_DISCOVERY_ALGORITHM, "roots": []},
+                    "rehearsalEvidenceFiles": [],
+                    "requiredSubmissionArtifact": {},
+                    "scenes": {"scenes": []},
+                }
+
+            def add_missing_fact(manifest, kind, path):
+                if kind == "asset.file":
+                    manifest["assets"].append({"file": {"path": path, "exists": False, "sha256": None}})
+                elif kind == "asset.source":
+                    manifest["assets"].append({"source": {"path": path, "sha256": None, "sourcePinStatus": "missing"}})
+                elif kind == "asset.source_pin":
+                    manifest["assets"].append({"sourcePins": [{"localFile": {"path": path, "exists": False, "sha256": None}}]})
+                elif kind == "asset.package_copy":
+                    manifest["assets"].append({"packageCopy": {"path": path, "exists": False, "expectedSha256": None}})
+                elif kind == "asset.alt":
+                    manifest["assets"].append({"accessibleAlternative": {"path": path, "exists": False, "sha256": None}})
+                elif kind == "asset.render_receipt":
+                    manifest["assets"].append({"renderReceipt": {"path": path, "status": "missing", "sha256": None}})
+                elif kind == "dependency.source":
+                    manifest["assets"].append({"compositionDependencies": [{"source": {"path": path, "sourcePinStatus": "missing", "sha256": None}}]})
+                elif kind == "dependency.package_copy":
+                    manifest["assets"].append({"compositionDependencies": [{"packageCopy": {"path": path, "exists": False, "expectedSha256": None}}]})
+                elif kind == "caption.file":
+                    manifest["captionSidecars"].append({"path": path, "exists": False, "sha256": None})
+                elif kind == "caption.package_copy":
+                    manifest["captionSidecars"].append({"packageCopy": {"path": path, "exists": False, "expectedSha256": None}})
+                elif kind == "support":
+                    manifest["supportFiles"].append({"path": path, "exists": False, "sha256": None})
+                elif kind == "policy":
+                    manifest["policyInputHashes"][path] = {"path": path, "exists": False, "sha256": None}
+                elif kind == "evidence":
+                    manifest["rehearsalEvidenceFiles"].append({"path": path, "exists": False, "sha256": None})
+                elif kind == "required":
+                    manifest["requiredSubmissionArtifact"] = {"path": path, "exists": False, "sha256": None}
+                elif kind == "scene.asset":
+                    manifest["scenes"]["scenes"].append({"assetPath": path, "assetSha256": None})
+                elif kind == "scene.source_pin":
+                    manifest["scenes"]["scenes"].append({"sourcePins": [{"localFile": {"path": path, "exists": False, "sha256": None}}]})
+                else:
+                    self.fail(f"unhandled missing-source test kind: {kind}")
+
+            cases = [
+                ("asset.file", "demo/missing-export.svg"),
+                ("asset.source", "demo/sources/missing-editable.svg"),
+                ("asset.source_pin", "messaging/missing-source.json"),
+                ("asset.package_copy", "release/missing-asset.bin"),
+                ("asset.alt", "demo/alternatives/missing-alt.md"),
+                ("asset.render_receipt", "review/visual/missing-render.json"),
+                ("dependency.source", "demo/diagrams/missing-dependency.svg"),
+                ("dependency.package_copy", "release/context/missing-dependency.svg"),
+                ("caption.file", "demo/captions/missing.srt"),
+                ("caption.package_copy", "release/captions/missing.srt"),
+                ("support", "review/missing-support.md"),
+                ("policy", "review/missing-policy.json"),
+                ("evidence", "review/visual/missing-evidence.png"),
+                ("required", "demo/exports/v1-demo.mp4"),
+                ("scene.asset", "demo/screenshots/missing-scene.png"),
+                ("scene.source_pin", "demo/sources/missing-scene-input.md"),
+            ]
+            absent_facts = empty_manifest()
+            for kind, path in cases:
+                add_missing_fact(absent_facts, kind, path)
+            cached = {
+                "packageVersion": package.DEFAULT_VERSION,
+                "candidateSourceCommitAtGeneration": absent_commit,
+            }
+            self.assertEqual([], package.source_snapshot_errors(root, cached, absent_facts))
+
+            content_by_path = {}
+            for _, path in cases:
+                file_path = root / path
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                content = f"candidate generation contained {path}\n".encode("utf-8")
+                content_by_path[path] = content
+                file_path.write_bytes(content)
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "declared missing paths were present"], check=True)
+            present_commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+            for _, path in cases:
+                (root / path).unlink()
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "declared missing paths removed"], check=True)
+            forged_generation = {**cached, "candidateSourceCommitAtGeneration": present_commit}
+            for kind, path in cases:
+                with self.subTest(source_fact=kind):
+                    one_fact = empty_manifest()
+                    add_missing_fact(one_fact, kind, path)
+                    errors = package.source_snapshot_errors(root, forged_generation, one_fact)
+                    self.assertIn(
+                        f"candidate source snapshot contains manifest-declared-absent input: {path}",
+                        errors,
+                    )
+
+            stale_receipt = empty_manifest()
+            stale_receipt["assets"].append({"renderReceipt": {
+                "path": "review/visual/missing-render.json",
+                "status": "missing_or_stale_output_hash",
+                "sha256": package.sha256_bytes(content_by_path["review/visual/missing-render.json"]),
+            }})
+            self.assertEqual([], package.source_snapshot_errors(root, forged_generation, stale_receipt))
 
     def test_validate_cli_rejects_manifest_that_omits_required_records(self) -> None:
         omitted = package.json.loads(package.json.dumps(self.current_manifest))

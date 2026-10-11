@@ -293,7 +293,10 @@
     "review/official-format-sources.json",
     "review/visual/browser-render-evidence.json",
     "tools/render_collateral.mjs",
-    "tools/package_collateral.py"
+    "tools/package_collateral.py",
+    "tools/validate_collateral.py",
+    "review/fixtures/synthetic-canaries.json",
+    "demo/exports/rehearsal-render-plan.json"
   ],
   "rehearsalDiscovery": {
     "videoRoot": "demo/exports",
@@ -301,6 +304,7 @@
     "reviewRoot": "review/visual/rehearsal",
     "acceptedVideoExtensions": [".mp4"],
     "captionExtensions": [".srt", ".vtt"],
+    "reviewExtensions": [".json", ".png", ".jpg", ".jpeg", ".md", ".txt"],
     "receiptMustPinVideoPathAndSha256": true,
     "reviewerRole": "User-assigned accountable root supervisor (AI session); independent Astra model receiver dry-run pending"
   },

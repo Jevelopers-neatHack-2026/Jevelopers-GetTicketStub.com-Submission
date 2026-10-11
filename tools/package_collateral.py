@@ -40,6 +40,15 @@ TIMESTAMP = re.compile(
 )
 TEXT_FORMATS = {".md", ".txt", ".json", ".html", ".srt", ".vtt"}
 POLICY_HASH_ALGORITHM = "sha256-canonical-json-self-reference-projection-v2"
+SOURCE_DISCOVERY_ALGORITHM = "git-tree-recursive-regular-files-by-root-and-extension-v1"
+SOURCE_INVENTORY_PATH = "docs/collateral-inventory.json"
+SOURCE_PROVENANCE_PATH = "review/provenance.json"
+SOURCE_MANIFEST_PATH = f"release/{DEFAULT_VERSION}/manifest.json"
+SOURCE_INVENTORY_NULL_HASH_PATHS = {
+    SOURCE_INVENTORY_PATH,
+    "messaging/claims.json",
+    SOURCE_PROVENANCE_PATH,
+}
 POLICY_JSON_BINDINGS = {
     "docs/collateral-inventory.json": {
         "kind": "canonical_json_semantic_field_binding",
@@ -171,6 +180,76 @@ def git_bytes(root: Path, *args: str) -> Optional[bytes]:
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
     return completed.stdout
+
+
+def git_tree_entries(root: Path, revision: str) -> Tuple[Optional[Dict[str, Tuple[str, str]]], Optional[str]]:
+    raw_tree = git_bytes(root, "ls-tree", "-r", "-z", "--full-tree", revision)
+    if raw_tree is None:
+        return None, f"could not read Git tree for candidate source snapshot {revision}"
+    entries: Dict[str, Tuple[str, str]] = {}
+    for row in raw_tree.split(b"\0"):
+        if not row:
+            continue
+        try:
+            metadata, raw_path = row.split(b"\t", 1)
+            mode, object_type, object_id = metadata.decode("ascii").split(" ")
+            relative = raw_path.decode("utf-8")
+        except (UnicodeDecodeError, ValueError):
+            return None, "candidate source snapshot Git tree contains a malformed record"
+        if object_type not in {"blob", "commit"} or relative in entries:
+            return None, "candidate source snapshot Git tree contains an unsupported or duplicate record"
+        entries[relative] = (mode, object_id)
+    return entries, None
+
+
+def git_blob_bytes_by_path(
+    root: Path,
+    tree: Dict[str, Tuple[str, str]],
+    paths: Iterable[str],
+) -> Tuple[Optional[Dict[str, bytes]], Optional[str]]:
+    unique_paths = sorted(set(paths))
+    missing = [relative for relative in unique_paths if relative not in tree]
+    if missing:
+        return None, f"candidate source snapshot is missing bound input {missing[0]}"
+    unsupported = [relative for relative in unique_paths if tree[relative][0] not in {"100644", "100755"}]
+    if unsupported:
+        return None, f"candidate source snapshot has a non-regular bound input {unsupported[0]}"
+    object_ids = sorted({tree[relative][1] for relative in unique_paths})
+    if not object_ids:
+        return {}, None
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "--batch"],
+            input=("\n".join(object_ids) + "\n").encode("ascii"),
+            check=True,
+            capture_output=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None, "candidate source snapshot could not read bound Git blobs"
+    raw = result.stdout
+    cursor = 0
+    by_object_id: Dict[str, bytes] = {}
+    for expected_oid in object_ids:
+        newline = raw.find(b"\n", cursor)
+        if newline < 0:
+            return None, "candidate source snapshot blob stream is truncated"
+        fields = raw[cursor:newline].decode("ascii", errors="replace").split()
+        if len(fields) != 3 or fields[0] != expected_oid or fields[1] != "blob":
+            return None, "candidate source snapshot blob stream has an invalid header"
+        try:
+            size = int(fields[2])
+        except ValueError:
+            return None, "candidate source snapshot blob stream has an invalid size"
+        cursor = newline + 1
+        end = cursor + size
+        if end >= len(raw) or raw[end:end + 1] != b"\n":
+            return None, "candidate source snapshot blob stream is truncated"
+        by_object_id[expected_oid] = raw[cursor:end]
+        cursor = end + 1
+    if cursor != len(raw):
+        return None, "candidate source snapshot blob stream has trailing data"
+    return {relative: by_object_id[tree[relative][1]] for relative in unique_paths}, None
 
 
 def _parse_svg_length(value: Optional[str]) -> Optional[int]:
@@ -984,9 +1063,43 @@ def _find_media(root: Path, directory: str, extensions: Sequence[str]) -> List[s
     )
 
 
+def _source_discovery_snapshot(root: Path, spec: Dict[str, Any]) -> Dict[str, Any]:
+    discovery = spec.get("rehearsalDiscovery", {})
+    configurations = (
+        ("videoRoot", "acceptedVideoExtensions", "demo/exports", [".mp4"]),
+        ("captionRoot", "captionExtensions", "demo/captions", [".srt", ".vtt"]),
+        ("reviewRoot", "reviewExtensions", "review/visual/rehearsal", [".json", ".png", ".jpg", ".jpeg", ".md", ".txt"]),
+    )
+    entries = []
+    for root_key, extensions_key, default_root, default_extensions in configurations:
+        directory = discovery.get(root_key, default_root)
+        extensions = discovery.get(extensions_key, default_extensions)
+        if not isinstance(directory, str) or not directory:
+            raise ValueError(f"rehearsalDiscovery.{root_key} must be a nonempty relative path")
+        if not isinstance(extensions, list) or not all(isinstance(value, str) and value.startswith(".") for value in extensions):
+            raise ValueError(f"rehearsalDiscovery.{extensions_key} must be a list of dotted extensions")
+        normalized_extensions = sorted(set(value.lower() for value in extensions))
+        entries.append({
+            "rootKey": root_key,
+            "root": directory,
+            "extensions": normalized_extensions,
+            "paths": _find_media(root, directory, normalized_extensions),
+        })
+    return {"algorithm": SOURCE_DISCOVERY_ALGORITHM, "roots": entries}
+
+
+def _discovery_paths(snapshot: Dict[str, Any], root_key: str) -> List[str]:
+    entry = next((row for row in snapshot.get("roots", []) if row.get("rootKey") == root_key), None)
+    if not isinstance(entry, dict):
+        raise ValueError(f"source discovery snapshot is missing {root_key}")
+    paths = entry.get("paths")
+    if not isinstance(paths, list):
+        raise ValueError(f"source discovery paths for {root_key} are malformed")
+    return paths
+
+
 def _media_receipt(root: Path, directory: str, video_path: str, video_sha: str) -> Dict[str, Any]:
-    base = safe_path(root, directory)
-    receipts = sorted(path for path in base.rglob("*.json") if path.is_file()) if base.exists() else []
+    receipts = [safe_path(root, relative) for relative in _find_media(root, directory, [".json"])]
     for path in receipts:
         try:
             data = read_json(path)
@@ -1148,12 +1261,19 @@ def validate_caption_content(root: Path, caption_path: str, scenes: Sequence[Dic
     return errors
 
 
-def _dynamic_video_records(root: Path, spec: Dict[str, Any], context: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[str]]:
+def _dynamic_video_records(
+    root: Path,
+    spec: Dict[str, Any],
+    context: Dict[str, Any],
+    source_discovery: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[str]]:
     discovery = spec.get("rehearsalDiscovery", {})
-    video_paths = _find_media(root, discovery.get("videoRoot", "demo/exports"), discovery.get("acceptedVideoExtensions", [".mp4"]))
-    caption_paths = _find_media(root, discovery.get("captionRoot", "demo/captions"), discovery.get("captionExtensions", [".srt", ".vtt"]))
+    if source_discovery is None:
+        source_discovery = _source_discovery_snapshot(root, spec)
+    video_paths = _discovery_paths(source_discovery, "videoRoot")
+    caption_paths = _discovery_paths(source_discovery, "captionRoot")
     review_root = discovery.get("reviewRoot", "review/visual/rehearsal")
-    review_files = _find_media(root, review_root, [".json", ".png", ".jpg", ".jpeg", ".md", ".txt"])
+    review_files = _discovery_paths(source_discovery, "reviewRoot")
     scenes = (context.get("sceneMap") or {}).get("scenes", [])
     all_scene_ids = [scene.get("sceneId") for scene in scenes]
     scene_refs = _references_for_scenes(context, all_scene_ids)
@@ -1518,8 +1638,9 @@ def _input_hashes(root: Path, spec: Dict[str, Any]) -> Dict[str, Any]:
 def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materialized: bool = False) -> Dict[str, Any]:
     context = _load_context(root, version)
     spec = context["spec"]
+    source_discovery = _source_discovery_snapshot(root, spec)
     rows = [_asset_record(root, row, spec, context) for row in spec.get("assets", [])]
-    video_records, caption_records, dynamic_errors = _dynamic_video_records(root, spec, context)
+    video_records, caption_records, dynamic_errors = _dynamic_video_records(root, spec, context, source_discovery)
     actual_asset_records = [row for row in rows if row["file"].get("exists")]
     all_records = rows + video_records
     selected_asset_ids = _unique(
@@ -1536,7 +1657,7 @@ def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materializ
     else:
         canonical_blocks = canonical_readiness_blockers(root, canonical_selected_asset_ids)
     rehearsal_evidence = []
-    for relative in _find_media(root, spec.get("rehearsalDiscovery", {}).get("reviewRoot", "review/visual/rehearsal"), [".json", ".png", ".jpg", ".jpeg", ".md", ".txt"]):
+    for relative in _discovery_paths(source_discovery, "reviewRoot"):
         fact = _file_fact(root, relative)
         rehearsal_evidence.append({
             "path": relative,
@@ -1607,6 +1728,7 @@ def build_manifest(root: Path = ROOT, version: str = DEFAULT_VERSION, materializ
             "dimensions": real_product_fact.get("dimensions"),
             "status": "present_but_not_auto_approved" if real_product_fact.get("exists") else "missing",
         },
+        "sourceDiscovery": source_discovery,
         "scenes": scene_map,
         "assets": all_records,
         "captionSidecars": caption_records,
@@ -1770,7 +1892,10 @@ def _normalise_policy_blockers(result: Any) -> List[str]:
     if isinstance(result, str):
         return [result]
     if isinstance(result, (list, tuple, set)) and all(isinstance(item, str) for item in result):
-        return [item for item in result if item]
+        # The policy may build blocker lists by traversing sets. Normalize at
+        # this consumer boundary so cached manifests reproduce byte-for-byte
+        # across Python processes with different hash seeds.
+        return sorted(item for item in result if item)
     raise TypeError("policy API must return a blocker sequence or {blockers: sequence}")
 
 
@@ -2237,6 +2362,207 @@ def manifest_snapshot_errors(cached_manifest: Dict[str, Any], current_manifest: 
     ]
 
 
+def source_discovery_snapshot_errors(
+    root: Path,
+    candidate: str,
+    snapshot: Any,
+    candidate_tree: Optional[Dict[str, Tuple[str, str]]] = None,
+) -> List[str]:
+    if not isinstance(snapshot, dict) or snapshot.get("algorithm") != SOURCE_DISCOVERY_ALGORITHM:
+        return ["sourceDiscovery algorithm is missing or unsupported"]
+    roots = snapshot.get("roots")
+    if not isinstance(roots, list):
+        return ["sourceDiscovery roots are missing or malformed"]
+    if candidate_tree is None:
+        candidate_tree, tree_error = git_tree_entries(root, candidate)
+        if tree_error or candidate_tree is None:
+            return [tree_error or "candidate source snapshot Git tree is unavailable"]
+    seen_root_keys: set = set()
+    for entry in roots:
+        if not isinstance(entry, dict):
+            return ["sourceDiscovery contains a malformed root record"]
+        root_key = entry.get("rootKey")
+        directory = entry.get("root")
+        extensions = entry.get("extensions")
+        paths = entry.get("paths")
+        if not isinstance(root_key, str) or not root_key or root_key in seen_root_keys:
+            return ["sourceDiscovery root keys are missing or duplicated"]
+        seen_root_keys.add(root_key)
+        if not isinstance(directory, str) or not directory:
+            return [f"sourceDiscovery root {root_key} has an invalid path"]
+        try:
+            safe_path(root, directory)
+        except ValueError:
+            return [f"sourceDiscovery root path is unsafe: {directory}"]
+        if (
+            not isinstance(extensions, list)
+            or not extensions
+            or any(not isinstance(value, str) or not value.startswith(".") or value != value.lower() for value in extensions)
+            or extensions != sorted(set(extensions))
+        ):
+            return [f"sourceDiscovery extensions for {directory} are malformed or noncanonical"]
+        if (
+            not isinstance(paths, list)
+            or any(not isinstance(value, str) for value in paths)
+            or paths != sorted(set(paths))
+        ):
+            return [f"sourceDiscovery paths for {directory} are malformed or noncanonical"]
+        prefix = directory.rstrip("/") + "/"
+        allowed = set(extensions)
+        for relative in paths:
+            try:
+                safe_path(root, relative)
+            except ValueError:
+                return [f"sourceDiscovery input path is unsafe: {relative}"]
+            if not relative.startswith(prefix) or PurePosixPath(relative).suffix.lower() not in allowed:
+                return [f"sourceDiscovery path does not match its root/extension policy: {relative}"]
+        candidate_paths = sorted(
+            relative
+            for relative, (mode, _) in candidate_tree.items()
+            if mode in {"100644", "100755"}
+            and relative.startswith(prefix)
+            and PurePosixPath(relative).suffix.lower() in allowed
+        )
+        if candidate_paths != paths:
+            candidate_only = sorted(set(candidate_paths) - set(paths))
+            current_only = sorted(set(paths) - set(candidate_paths))
+            return [
+                f"candidate source snapshot discovery differs for {directory}: "
+                f"candidate-only={candidate_only}; current-only={current_only}"
+            ]
+    return []
+
+
+def source_inventory_snapshot_errors(
+    root: Path,
+    candidate_tree: Dict[str, Tuple[str, str]],
+) -> List[str]:
+    """Bind the complete recorded source tree through its canonical inventory.
+
+    The inventory and provenance registries have narrowly defined self-reference
+    records. Their non-self policy fields remain separately bound by the manifest
+    policy-input projections; this routine verifies their candidate-time digest
+    joins and every ordinary tracked-file checksum.
+    """
+    registry_paths = [SOURCE_INVENTORY_PATH, SOURCE_PROVENANCE_PATH]
+    registry_bytes, blob_error = git_blob_bytes_by_path(root, candidate_tree, registry_paths)
+    if blob_error or registry_bytes is None:
+        return [blob_error or "candidate source inventory registries are unavailable"]
+    try:
+        inventory = json.loads(registry_bytes[SOURCE_INVENTORY_PATH].decode("utf-8"))
+        provenance = json.loads(registry_bytes[SOURCE_PROVENANCE_PATH].decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        return [f"candidate source inventory/provenance JSON is invalid ({exc})"]
+    if not isinstance(inventory, dict) or inventory.get("schemaVersion") != "1.0":
+        return ["candidate source inventory schema is missing or unsupported"]
+    if not isinstance(provenance, dict) or provenance.get("schemaVersion") != "1.0":
+        return ["candidate source provenance schema is missing or unsupported"]
+    rows = inventory.get("trackedFiles")
+    if not isinstance(rows, list):
+        return ["candidate source inventory trackedFiles is missing or malformed"]
+    rows_by_path: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            return ["candidate source inventory contains a malformed trackedFiles row"]
+        relative = row.get("path")
+        if not isinstance(relative, str) or not relative or relative in rows_by_path:
+            return ["candidate source inventory contains a missing or duplicate tracked path"]
+        if "sha256" not in row:
+            return [f"candidate source inventory checksum field is missing for tracked file {relative}"]
+        try:
+            safe_path(root, relative)
+        except ValueError:
+            return [f"candidate source inventory contains an unsafe tracked path: {relative}"]
+        if row.get("exists") is not True:
+            return [f"candidate source inventory marks a tracked file absent: {relative}"]
+        rows_by_path[relative] = row
+
+    non_regular = sorted(path for path, (mode, _) in candidate_tree.items() if mode not in {"100644", "100755"})
+    if non_regular:
+        return [f"candidate source snapshot contains a non-regular tracked path: {non_regular[0]}"]
+    tree_paths = set(candidate_tree)
+    inventory_paths = set(rows_by_path)
+    if tree_paths != inventory_paths:
+        candidate_only = sorted(tree_paths - inventory_paths)
+        inventory_only = sorted(inventory_paths - tree_paths)
+        return [
+            "candidate source snapshot tracked paths differ from collateral inventory: "
+            f"candidate-only={candidate_only}; inventory-only={inventory_only}"
+        ]
+
+    all_candidate_bytes, blob_error = git_blob_bytes_by_path(root, candidate_tree, tree_paths)
+    if blob_error or all_candidate_bytes is None:
+        return [blob_error or "candidate source snapshot tracked blobs are unavailable"]
+    for relative, row in sorted(rows_by_path.items()):
+        digest = row.get("sha256")
+        if relative == SOURCE_MANIFEST_PATH:
+            if not isinstance(digest, str) or not SHA256.fullmatch(digest):
+                return ["candidate source inventory manifest self-reference checksum is missing or malformed"]
+            continue
+        if digest is None:
+            if relative not in SOURCE_INVENTORY_NULL_HASH_PATHS:
+                return [f"candidate source inventory checksum is missing for tracked file {relative}"]
+            continue
+        if not isinstance(digest, str) or not SHA256.fullmatch(digest):
+            return [f"candidate source inventory checksum is malformed for tracked file {relative}"]
+        if sha256_bytes(all_candidate_bytes[relative]) != digest:
+            return [f"candidate source inventory checksum does not match candidate bytes: {relative}"]
+
+    records = provenance.get("records")
+    if not isinstance(records, list):
+        return ["candidate source provenance records are missing or malformed"]
+
+    def provenance_digest_join(asset_id: str, relative: str, digest: str) -> Optional[str]:
+        matches = [row for row in records if isinstance(row, dict) and row.get("assetId") == asset_id]
+        if len(matches) != 1:
+            return f"candidate source provenance requires exactly one {asset_id} record"
+        row = matches[0]
+        source = row.get("source")
+        checksum = row.get("checksum")
+        if (
+            not isinstance(source, dict)
+            or source.get("repo") != "Jevelopers-neatHack-2026/marketing-material"
+            or source.get("path") != relative
+            or source.get("revision") != f"sha256:{digest}"
+            or source.get("url") is not None
+            or not isinstance(checksum, dict)
+            or checksum.get("algorithm") != "SHA-256"
+            or checksum.get("value") != digest
+        ):
+            return f"candidate source provenance {asset_id} digest join does not match exact candidate bytes for {relative}"
+        return None
+
+    manifest_digest = sha256_bytes(all_candidate_bytes[SOURCE_MANIFEST_PATH])
+    manifest_row = rows_by_path.get(SOURCE_MANIFEST_PATH, {})
+    if manifest_row.get("sha256") != manifest_digest:
+        return ["candidate source inventory manifest checksum does not match its candidate bytes"]
+    manifest_provenance_id = manifest_row.get("provenanceRecordId")
+    if manifest_provenance_id != "HANDOFF-MANIFEST-001":
+        return ["candidate source inventory manifest provenance reference is missing or unsupported"]
+    join_error = provenance_digest_join(manifest_provenance_id, SOURCE_MANIFEST_PATH, manifest_digest)
+    if join_error:
+        return [join_error]
+
+    inventory_digest = sha256_bytes(all_candidate_bytes[SOURCE_INVENTORY_PATH])
+    inventory_row = rows_by_path[SOURCE_INVENTORY_PATH]
+    if inventory_row.get("provenanceRecordId") != "PROV-FILE-E018FDB8D981":
+        return ["candidate source inventory self-provenance reference is missing or unsupported"]
+    join_error = provenance_digest_join("PROV-FILE-E018FDB8D981", SOURCE_INVENTORY_PATH, inventory_digest)
+    if join_error:
+        return [join_error]
+
+    claims_path = "messaging/claims.json"
+    claims_row = rows_by_path[claims_path]
+    claims_record_id = claims_row.get("provenanceRecordId")
+    if not isinstance(claims_record_id, str) or not claims_record_id:
+        return ["candidate source claims inventory provenance reference is missing"]
+    claims_digest = sha256_bytes(all_candidate_bytes[claims_path])
+    join_error = provenance_digest_join(claims_record_id, claims_path, claims_digest)
+    if join_error:
+        return [join_error]
+    return []
+
+
 def source_snapshot_errors(root: Path, cached_manifest: Dict[str, Any], current_manifest: Dict[str, Any]) -> List[str]:
     """Prove the recorded generation commit contains the inputs bound by the manifest."""
     if cached_manifest.get("packageVersion") != DEFAULT_VERSION:
@@ -2261,69 +2587,147 @@ def source_snapshot_errors(root: Path, cached_manifest: Dict[str, Any], current_
         return ["candidateSourceCommitAtGeneration ancestry check failed closed"]
     if ancestry.returncode != 0:
         return ["candidateSourceCommitAtGeneration is not an ancestor of the current source snapshot"]
+    candidate_tree, tree_error = git_tree_entries(root, candidate)
+    if tree_error or candidate_tree is None:
+        return [tree_error or "candidate source snapshot Git tree is unavailable"]
+    discovery_errors = source_discovery_snapshot_errors(
+        root, candidate, current_manifest.get("sourceDiscovery"), candidate_tree
+    )
+    if discovery_errors:
+        return discovery_errors
+    if current_manifest.get("schemaVersion") == "1.0":
+        inventory_errors = source_inventory_snapshot_errors(root, candidate_tree)
+        if inventory_errors:
+            return inventory_errors
 
     bound_paths: Dict[str, Tuple[Optional[str], Optional[Dict[str, Any]]]] = {}
+    absent_paths: set = set()
     conflicting_paths: set = set()
 
     def add(path: Any, digest: Any, binding: Any = None) -> None:
         if isinstance(path, str) and path and isinstance(digest, str) and SHA256.fullmatch(digest):
+            if path in absent_paths:
+                conflicting_paths.add(path)
             value = (digest, binding if isinstance(binding, dict) else None)
             if path in bound_paths and bound_paths[path] != value:
                 conflicting_paths.add(path)
             else:
                 bound_paths[path] = value
 
+    def add_absent(path: Any) -> None:
+        if isinstance(path, str) and path:
+            if path in bound_paths:
+                conflicting_paths.add(path)
+            absent_paths.add(path)
+
     for asset in current_manifest.get("assets", []):
         file_row = asset.get("file", {})
-        if file_row.get("exists"):
+        if file_row.get("exists") is True:
             add(file_row.get("path"), file_row.get("sha256"))
+        elif file_row.get("exists") is False:
+            add_absent(file_row.get("path"))
         source_row = asset.get("source", {})
-        add(source_row.get("path"), source_row.get("sha256"))
+        if source_row.get("exists") is False or source_row.get("sourcePinStatus") in {"missing", "invalid_path"}:
+            add_absent(source_row.get("path"))
+        else:
+            add(source_row.get("path"), source_row.get("sha256"))
+        for pin in asset.get("sourcePins", []):
+            local_file = pin.get("localFile", {})
+            if local_file.get("exists") is False:
+                add_absent(local_file.get("path"))
+            else:
+                add(local_file.get("path"), local_file.get("sha256"))
         package_row = asset.get("packageCopy", {})
-        add(package_row.get("path"), package_row.get("expectedSha256"))
+        if package_row.get("exists") is False:
+            add_absent(package_row.get("path"))
+        else:
+            add(package_row.get("path"), package_row.get("expectedSha256"))
         alternative = asset.get("accessibleAlternative", {})
-        if alternative.get("exists"):
+        if alternative.get("exists") is True:
             add(alternative.get("path"), alternative.get("sha256"))
+        elif alternative.get("exists") is False:
+            add_absent(alternative.get("path"))
         render = asset.get("renderReceipt", {})
-        add(render.get("path"), render.get("sha256"))
+        if render.get("exists") is False or render.get("status") == "missing":
+            add_absent(render.get("path"))
+        else:
+            add(render.get("path"), render.get("sha256"))
         for dependency in asset.get("compositionDependencies", []):
             dep_source = dependency.get("source", {})
             dep_copy = dependency.get("packageCopy", {})
-            add(dep_source.get("path"), dep_source.get("sha256"))
-            add(dep_copy.get("path"), dep_copy.get("expectedSha256"))
+            if dep_source.get("sourcePinStatus") in {"missing", "invalid_path"}:
+                add_absent(dep_source.get("path"))
+            else:
+                add(dep_source.get("path"), dep_source.get("sha256"))
+            if dep_copy.get("exists") is False:
+                add_absent(dep_copy.get("path"))
+            else:
+                add(dep_copy.get("path"), dep_copy.get("expectedSha256"))
     for caption in current_manifest.get("captionSidecars", []):
-        add(caption.get("path"), caption.get("sha256"))
+        if caption.get("exists") is False:
+            add_absent(caption.get("path"))
+        else:
+            add(caption.get("path"), caption.get("sha256"))
         copy = caption.get("packageCopy", {})
-        add(copy.get("path"), copy.get("expectedSha256"))
+        if copy.get("exists") is False:
+            add_absent(copy.get("path"))
+        else:
+            add(copy.get("path"), copy.get("expectedSha256"))
     for support in current_manifest.get("supportFiles", []):
-        add(support.get("path"), support.get("sha256"), support.get("binding"))
+        if support.get("exists") is False:
+            add_absent(support.get("path"))
+        else:
+            add(support.get("path"), support.get("sha256"), support.get("binding"))
     policy_inputs = current_manifest.get("policyInputHashes", {})
     if not isinstance(policy_inputs, dict):
         return ["candidate source snapshot policyInputHashes are missing or invalid"]
     for map_path, policy_input in policy_inputs.items():
         if not isinstance(policy_input, dict) or policy_input.get("path") != map_path:
             return [f"candidate source snapshot has an invalid policy input record for {map_path}"]
-        add(policy_input.get("path"), policy_input.get("sha256"), policy_input.get("binding"))
+        if policy_input.get("exists") is False:
+            add_absent(policy_input.get("path"))
+        else:
+            add(policy_input.get("path"), policy_input.get("sha256"), policy_input.get("binding"))
     for evidence in current_manifest.get("rehearsalEvidenceFiles", []):
-        add(evidence.get("path"), evidence.get("sha256"))
+        if evidence.get("exists") is False:
+            add_absent(evidence.get("path"))
+        else:
+            add(evidence.get("path"), evidence.get("sha256"))
     required = current_manifest.get("requiredSubmissionArtifact", {})
-    if required.get("exists"):
+    if required.get("exists") is True:
         add(required.get("path"), required.get("sha256"))
+    elif required.get("exists") is False:
+        add_absent(required.get("path"))
     for scene in current_manifest.get("scenes", {}).get("scenes", []):
-        add(scene.get("assetPath"), scene.get("assetSha256"))
+        if scene.get("assetPath") and not scene.get("assetSha256"):
+            add_absent(scene.get("assetPath"))
+        else:
+            add(scene.get("assetPath"), scene.get("assetSha256"))
+        for pin in scene.get("sourcePins", []):
+            local_file = pin.get("localFile", {})
+            if local_file.get("exists") is False:
+                add_absent(local_file.get("path"))
+            else:
+                add(local_file.get("path"), local_file.get("sha256"))
     if conflicting_paths:
         return [
             "candidate source snapshot has conflicting manifest bindings for: "
             + ", ".join(sorted(conflicting_paths))
         ]
+    for relative in bound_paths:
+        try:
+            safe_path(root, relative)
+        except ValueError:
+            return [f"candidate source input path is unsafe: {relative}"]
+    present_paths, blob_error = git_blob_bytes_by_path(root, candidate_tree, bound_paths)
+    if blob_error or present_paths is None:
+        return [blob_error or "candidate source snapshot bound blobs are unavailable"]
     for relative, (expected_digest, binding) in sorted(bound_paths.items()):
         try:
             safe_path(root, relative)
         except ValueError:
             return [f"candidate source input path is unsafe: {relative}"]
-        source_bytes = git_bytes(root, "show", f"{candidate}:{relative}")
-        if source_bytes is None:
-            return [f"candidate source snapshot is missing bound input {relative}"]
+        source_bytes = present_paths[relative]
         if binding is not None:
             if binding != POLICY_JSON_BINDINGS.get(relative):
                 return [f"candidate source input {relative} has an unsupported semantic binding"]
@@ -2336,6 +2740,13 @@ def source_snapshot_errors(root: Path, cached_manifest: Dict[str, Any], current_
             candidate_digest = sha256_bytes(source_bytes)
         if candidate_digest != expected_digest:
             return [f"candidate source snapshot input differs from manifest binding: {relative}"]
+    for relative in sorted(absent_paths):
+        try:
+            safe_path(root, relative)
+        except ValueError:
+            return [f"candidate source input path is unsafe: {relative}"]
+        if relative in candidate_tree:
+            return [f"candidate source snapshot contains manifest-declared-absent input: {relative}"]
     return []
 
 
