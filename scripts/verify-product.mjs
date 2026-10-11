@@ -1,10 +1,11 @@
 // One entry point for the product checks, with evidence.
-//   npm run verify:product -- --suite <foundation|access|approval|research|creative|review|capabilities|messages|a11y|production|degraded> --mode fixture --evidence-dir <dir>
+//   npm run verify:product -- --suite <foundation|access|approval|order-auth|research|creative|review|capabilities|messages|a11y|production|degraded> --mode fixture --evidence-dir <dir>
 // (`accessibility` is an alias of `a11y`: GT-11 names the suite that way.)
 // Every suite runs offline: in fixture mode a preload (scripts/lib/fixture-network-guard.mjs) refuses any host but
 // loopback, and the server started here has no provider keys. A missing build or fixture, an unknown suite and
 // any skipped check exit nonzero. Each run writes <evidence-dir>/<suite>-<timestamp>.json.
 import { spawn, execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,6 +26,14 @@ const SUITES = {
   access: { server: true, needs: [".next/BUILD_ID", "scripts/smoke-server.mjs"], run: (ctx) => script("scripts/smoke-server.mjs", [ctx.base], { SMOKE_ADMIN_EMAIL: STAFF_EMAIL }) },
   // GT-06B: the artwork approval and its verifier (two accounts, stale, revoke, 404 parity, Origin, fixtures), against the production build.
   approval: { server: true, needs: [".next/BUILD_ID", "scripts/check-approval.mjs", "fixtures/approval/index.json", "fixtures/approval/verify.mjs"], run: (ctx) => script("scripts/check-approval.mjs", [ctx.base]) },
+  // GT-07: the order authorization (issuer, verifier, atomic claim, lookup, dispatch-time revalidate), against the production build.
+  // The server and the script share a random per-run CONTEXT_SECRET (to mint an expired row) and ORDER_AUTH_CONSUMER_KEY (to sign consumer requests); neither is the published fixture key.
+  "order-auth": {
+    server: true,
+    env: () => ({ CONTEXT_SECRET: randomBytes(24).toString("hex"), ORDER_AUTH_CONSUMER_KEY: randomBytes(24).toString("hex") }),
+    needs: [".next/BUILD_ID", "scripts/check-order-auth.mjs", "fixtures/order-authorization/index.json", "fixtures/order-authorization/verify.mjs"],
+    run: (ctx) => script("scripts/check-order-auth.mjs", [ctx.base], ctx.env),
+  },
   research: { server: false, needs: ["scripts/smoke-ticketmaster.mjs", "scripts/fixtures/ticketmaster-discovery-event.json"], run: () => script("scripts/smoke-ticketmaster.mjs") },
   creative: { server: false, needs: ["scripts/check-creative-adapter.mjs", "src/customer/studio/creative/fixtures"], run: () => script("scripts/check-creative-adapter.mjs") },
   review: { server: false, needs: ["scripts/check-review-versions.mjs", "src/customer/studio/facts/corrections.ts"], run: () => script("scripts/check-review-versions.mjs") },
@@ -308,6 +317,13 @@ async function degraded(ctx) {
     ["GET", "/api/approvals?project=stub:s1"],
     ["POST", "/api/approvals/revoke", { stubId: "s1", approvalId: "apr_x" }],
     ["POST", "/api/approvals/verify", { token: "x", expect: {} }],
+    ["POST", "/api/order-authorizations", { stubId: "s1", approvalId: "apr_x", expectedVersionId: "v1", orderRef: "ord_00000001", quote: { id: "q", amountMinor: 1, currency: "USD" }, destination: { ref: "dst_00000001", digest: "0".repeat(64) }, idempotencyKey: "issue_00000001", confirm: true }],
+    ["GET", "/api/order-authorizations?project=stub:s1"],
+    ["POST", "/api/order-authorizations/revoke", { stubId: "s1", authorizationId: "oau_x" }],
+    ["POST", "/api/order-authorizations/verify", { token: "x", expect: {} }],
+    ["POST", "/api/order-authorizations/claim", { token: "x", expect: {}, idempotencyKey: "claim_00000001" }],
+    ["POST", "/api/order-authorizations/revalidate", { token: "x", expect: {} }],
+    ["POST", "/api/order-authorizations/claims/lookup", { tenant: "t", project: "stub:s1", idempotencyKey: "claim_00000001" }],
     ["POST", "/api/orders", { order: {} }],
     ["GET", "/api/orders"],
     ["POST", "/api/organizer/events", { title: "x" }],
@@ -376,11 +392,12 @@ try {
     const ctx = {};
     if (suite.server) {
       let extra = {};
+      if (suite.env) extra = ctx.env = suite.env();
       if (suite.unwritableStorage) {
         // A path under a file is not creatable on any OS, whoever runs it.
         const blocker = join(tmp, "not-a-directory");
         writeFileSync(blocker, "x");
-        extra = { TICKETSTUB_DB: join(blocker, "ticketstub.sqlite"), TICKETSTUB_FILES: join(blocker, "files") };
+        extra = { ...extra, TICKETSTUB_DB: join(blocker, "ticketstub.sqlite"), TICKETSTUB_FILES: join(blocker, "files") };
       }
       server = await startServer(extra);
       ctx.base = server.base;
