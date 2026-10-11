@@ -14,9 +14,11 @@ import pytest
 
 from integration_evals.processes import ProcessSettings, invoke
 from tests.fixtures.process_cancel import (
+    LEASE_OBSERVATION_SECONDS,
     WATCHDOG_SECONDS,
     CancellationTrace,
     Gate,
+    LeaseObservation,
     Ready,
     Role,
     write_value,
@@ -92,6 +94,7 @@ class Observer:
     dispatch_lock: LockType = field(default_factory=Lock)
     events: list[str] = field(default_factory=list)
     joined: Event = field(default_factory=Event)
+    lease_observations: list[LeaseObservation] = field(default_factory=list)
 
 
 def wait_observation(observer: Observer, predicate: Callable[[], bool]) -> bool:
@@ -166,13 +169,35 @@ def assert_fixture_scope(root: Path, depth: int, events: list[str]) -> None:
         events.append("linux-detached-observer-lease-closed")
 
 
+def observe_natural_lease_release(observer: Observer) -> bool:
+    assert (observer.root / "gate").read_text(encoding="utf-8") == Gate.PROBE.value
+    started = monotonic()
+    deadline = started + LEASE_OBSERVATION_SECONDS
+    observer.events.append("unassisted-lease-observation-started")
+
+    def sample() -> bool:
+        available = lease_available(observer.root / "lease")
+        elapsed = monotonic() - started
+        observer.lease_observations.append(
+            LeaseObservation(elapsed_seconds=elapsed, available=available)
+        )
+        return available and elapsed <= LEASE_OBSERVATION_SECONDS
+
+    released = wait_observation(Observer(observer.root, deadline), sample)
+    assert (observer.root / "gate").read_text(encoding="utf-8") == Gate.PROBE.value
+    observer.events.append(
+        "natural-lease-closure-observed" if released else "natural-lease-closure-deadline"
+    )
+    return released
+
+
 def cleanup_trace(observer: Observer, depth: int) -> CancellationTrace:
     root = observer.root
     with observer.dispatch_lock:
         observer.armed.clear()
     observer.stop.set()
     write_value(root / "gate", Gate.QUIT.value)
-    cleanup = Observer(root, monotonic() + 3)
+    cleanup = Observer(root, monotonic() + LEASE_OBSERVATION_SECONDS)
     released = (
         wait_observation(cleanup, lambda: lease_available(root / "lease"))
         if (root / "lease").exists()
@@ -196,6 +221,8 @@ def cleanup_trace(observer: Observer, depth: int) -> CancellationTrace:
         else "unreached",
         observer_thread_stopped=observer.joined.is_set(),
         cleanup_lease_released=released,
+        natural_lease_observations=tuple(observer.lease_observations),
+        natural_lease_observed="natural-lease-closure-observed" in observer.events,
     )
     _ = (root / "cancellation-trace.json").write_text(
         trace.model_dump_json(indent=2), encoding="utf-8"
@@ -222,7 +249,7 @@ def test_process_namespace_stops_when_invocation_is_cancelled(
                 invoke_observed(settings, observer, depth)
         # Then the actual lease is released before any cooperative fixture cleanup.
         assert observer.joined.is_set()
-        assert monotonic() - started < WATCHDOG_SECONDS
+        assert monotonic() - started + LEASE_OBSERVATION_SECONDS < WATCHDOG_SECONDS
         assert events == [
             "owner-and-observer-ready",
             "lifetime-lease-held",
@@ -231,7 +258,8 @@ def test_process_namespace_stops_when_invocation_is_cancelled(
             "invoke-interrupted",
             "observer-joined",
         ]
-        assert lease_available(tmp_path / "lease")
+        assert observe_natural_lease_release(observer)
+        assert monotonic() - started < WATCHDOG_SECONDS
         events.append("lifetime-lease-reacquired-after-invoke")
         write_value(tmp_path / "gate", Gate.RELEASE.value)
         assert (tmp_path / "sentinel").read_text(encoding="utf-8") == "probe-confirmed"

@@ -17,6 +17,7 @@ from typing import Final, assert_never
 from integration_evals.models import Record
 
 WATCHDOG_SECONDS: Final = 15
+LEASE_OBSERVATION_SECONDS: Final = 3
 
 
 class InvalidDepth(SystemExit):
@@ -42,6 +43,11 @@ class Ready(Record):
     session_leader: bool
 
 
+class LeaseObservation(Record):
+    elapsed_seconds: float
+    available: bool
+
+
 class CancellationTrace(Record):
     platform: str
     depth: int
@@ -52,6 +58,9 @@ class CancellationTrace(Record):
     marker: str
     observer_thread_stopped: bool
     cleanup_lease_released: bool | None
+    natural_lease_observations: tuple[LeaseObservation, ...] = ()
+    natural_lease_observed: bool = False
+    natural_observation_budget_seconds: int = LEASE_OBSERVATION_SECONDS
 
 
 def write_value(path: Path, value: str) -> None:
