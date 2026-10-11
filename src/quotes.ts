@@ -434,6 +434,10 @@ function safeText(value: unknown, maximum = 512): string {
   return value;
 }
 
+function safeScopeIdentifier(value: unknown): string {
+  return safeText(value, 128);
+}
+
 function safeReference(value: unknown): string {
   const result = safeText(value, 256);
   if (!OPAQUE_REFERENCE.test(result)) return invalid("provider_response_invalid");
@@ -466,8 +470,8 @@ function safeUnknownReason(value: unknown): QuoteUnknownReason {
 function snapshotScope(value: unknown): TrustedScope {
   const scope = record(safeTree(value));
   exactKeys(scope, ["tenantId", "projectId"]);
-  const tenantId = safeText(scope.tenantId, 128);
-  const projectId = safeText(scope.projectId, 128);
+  const tenantId = safeScopeIdentifier(scope.tenantId);
+  const projectId = safeScopeIdentifier(scope.projectId);
   if (tenantId.length === 0 || projectId.length === 0) return invalid("scope_mismatch");
   return Object.freeze({ tenantId, projectId });
 }
@@ -726,9 +730,9 @@ function contractBinding(validator: unknown, scope: TrustedScope): {
     const binding = record(safeTree(rawBinding));
     const allowedKeys = ["shape", "ownerRepository", "upstreamIssue", "state", "schemaVersion", "sourceRevision", "fixtureDigest"];
     if (Object.keys(binding).some((key) => !allowedKeys.includes(key))) return invalid("contract_missing");
+    const schemaVersion = safePinMetadata(binding.schemaVersion);
     if (binding.shape !== "fulfillment_quote" || binding.ownerRepository !== "shared-contracts" || binding.upstreamIssue !== "#25" ||
-        (binding.state !== "development_fixture" && binding.state !== "accepted") ||
-        typeof binding.schemaVersion !== "string" || SCHEMA_VERSION.exec(binding.schemaVersion) === null) return invalid("contract_missing");
+        (binding.state !== "development_fixture" && binding.state !== "accepted") || SCHEMA_VERSION.exec(schemaVersion) === null) return invalid("contract_missing");
     const fixtureDigest = safePinMetadata(binding.fixtureDigest);
     let sourceRevision: string | undefined;
     if (binding.state === "accepted") {
@@ -738,7 +742,7 @@ function contractBinding(validator: unknown, scope: TrustedScope): {
     }
     return Object.freeze({
       state: binding.state,
-      schemaVersion: binding.schemaVersion,
+      schemaVersion,
       ...(sourceRevision === undefined ? {} : { sourceRevision }),
       fixtureDigest,
       validateOutbound
@@ -764,14 +768,14 @@ function validateBoundaryReceipt(value: unknown, binding: ReturnType<typeof cont
   const receipt = record(result.receipts[0]);
   exactKeys(receipt, ["shape", "schemaVersion", "tenantId", "projectId"]);
   if (receipt.shape !== "fulfillment_quote" || receipt.tenantId !== scope.tenantId || receipt.projectId !== scope.projectId) return invalid("scope_mismatch");
-  if (typeof receipt.schemaVersion !== "string") return invalid("contract_rejected");
-  const receiptVersion = SCHEMA_VERSION.exec(receipt.schemaVersion);
+  const receiptSchemaVersion = safePinMetadata(receipt.schemaVersion);
+  const receiptVersion = SCHEMA_VERSION.exec(receiptSchemaVersion);
   const bindingVersion = SCHEMA_VERSION.exec(binding.schemaVersion);
   if (receiptVersion === null || bindingVersion === null) return invalid("contract_rejected");
   if (receiptVersion[1] !== bindingVersion[1]) return invalid("unsupported_schema_major");
-  if (receipt.schemaVersion !== binding.schemaVersion && binding.state === "accepted") return invalid("contract_rejected");
+  if (receiptSchemaVersion !== binding.schemaVersion && binding.state === "accepted") return invalid("contract_rejected");
   const payload = safeTree(result.value);
-  ensurePrivacySafe(payload, quoteMoneyScalars(quote));
+  ensurePrivacySafe(payload, quoteMoneyScalars(quote), quoteOpaqueIdentifiers(quote));
   if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return invalid("contract_rejected");
   return payload;
 }
@@ -796,6 +800,14 @@ function quoteMoneyScalars(quote: PrivateQuoteSnapshot): ReadonlySet<string> {
   return values;
 }
 
+function quoteOpaqueIdentifiers(quote: PrivateQuoteSnapshot): ReadonlyMap<string, string> {
+  return new Map([
+    ["sku", quote.binding.sku],
+    ["tenantid", quote.binding.tenantId],
+    ["projectid", quote.binding.projectId]
+  ]);
+}
+
 function isCanonicalTimestampValue(value: string): boolean {
   if (!CANONICAL_TIMESTAMP.test(value)) return false;
   try {
@@ -810,7 +822,14 @@ function isFinancialField(value: string): boolean {
   return FINANCIAL_FIELD.test(value.replace(/[^A-Za-z0-9]/gu, "").toLowerCase());
 }
 
-function ensurePrivacySafe(value: unknown, moneyScalars: ReadonlySet<string>, depth = 0, field = "", parentField = ""): void {
+function ensurePrivacySafe(
+  value: unknown,
+  moneyScalars: ReadonlySet<string>,
+  opaqueIdentifiers: ReadonlyMap<string, string> = new Map(),
+  depth = 0,
+  field = "",
+  parentField = ""
+): void {
   if (depth > SAFE_TREE_MAX_DEPTH) return invalid("contract_rejected");
   if (typeof value === "string") {
     if (OPAQUE_QUOTE_ID.test(value) || OPAQUE_DIGEST.test(value)) return;
@@ -820,17 +839,18 @@ function ensurePrivacySafe(value: unknown, moneyScalars: ReadonlySet<string>, de
     const financialScalar = isFinancialField(field) || (fieldName === "value" && isFinancialField(parentField));
     const exactMoney = EXACT_MONEY.test(value) || ((fieldName.includes("minorunit") || parentName.includes("minorunit")) && EXACT_MINOR_UNITS.test(value));
     if (financialScalar && exactMoney && moneyScalars.has(value)) return;
-    if (EMAIL_OR_URL.test(value) || PHONE_LIKE.test(value) || ADDRESS_LIKE.test(value) || SECRET_LIKE.test(value)) return invalid("contract_rejected");
+    const validatedOpaqueIdentifier = opaqueIdentifiers.get(fieldName) === value;
+    if (EMAIL_OR_URL.test(value) || (!validatedOpaqueIdentifier && PHONE_LIKE.test(value)) || ADDRESS_LIKE.test(value) || SECRET_LIKE.test(value)) return invalid("contract_rejected");
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) ensurePrivacySafe(item, moneyScalars, depth + 1, field, parentField);
+    for (const item of value) ensurePrivacySafe(item, moneyScalars, opaqueIdentifiers, depth + 1, field, parentField);
     return;
   }
   if (value !== null && typeof value === "object") {
     for (const [key, child] of Object.entries(value)) {
       if (FORBIDDEN_KEY.test(key)) return invalid("contract_rejected");
-      ensurePrivacySafe(child, moneyScalars, depth + 1, key, field);
+      ensurePrivacySafe(child, moneyScalars, opaqueIdentifiers, depth + 1, key, field);
     }
   }
 }
@@ -1117,7 +1137,10 @@ async function validatePrivateQuoteSnapshot(value: unknown): Promise<PrivateQuot
 
   const binding = record(quote.binding);
   exactKeys(binding, PRIVATE_BINDING_KEYS);
-  for (const key of ["tenantId", "projectId", "providerId", "apiVersion", "catalogVersion", "sku", "variantId", "shippingMethod"] as const) {
+  for (const key of ["tenantId", "projectId"] as const) {
+    safeScopeIdentifier(binding[key]);
+  }
+  for (const key of ["providerId", "apiVersion", "catalogVersion", "sku", "variantId", "shippingMethod"] as const) {
     snapshotCode(binding[key]);
   }
   for (const key of ["catalogSnapshotIdentity", "catalogContentIdentity", "specIdentity", "selectionDigest", "requestDigest"] as const) {
@@ -1182,7 +1205,8 @@ async function validatePrivateQuoteSnapshot(value: unknown): Promise<PrivateQuot
       normalized.currency !== currency || normalized.currencyScale !== currencyScale || normalized.termsFingerprint !== termsFingerprint ||
       normalized.status !== quote.status) return invalid();
   if (typeof quoteId !== "string" || `quote:${await digest(quoteBody(quote))}` !== quoteId) return invalid();
-  ensurePrivacySafe(quote, quoteMoneyScalars(quote as unknown as PrivateQuoteSnapshot));
+  const typedQuote = quote as unknown as PrivateQuoteSnapshot;
+  ensurePrivacySafe(quote, quoteMoneyScalars(typedQuote), quoteOpaqueIdentifiers(typedQuote));
   return quote as unknown as PrivateQuoteSnapshot;
 }
 

@@ -42,11 +42,34 @@ function refreshQuoteFingerprints(quote) {
   return quote;
 }
 
-async function quoteOnce({ catalog = copyCatalog(catalogA), response = providerQuote(), policy, now, contracts, quote } = {}) {
+async function quoteOnce({ catalog = copyCatalog(catalogA), response = providerQuote(), policy, now, contracts, quote, scope } = {}) {
   const request = await requestFor(catalog);
-  const harness = quoteHarness({ response, policy, now, contracts, quote });
+  const harness = quoteHarness({ response, policy, now, contracts, quote, scope });
   const result = await executePrivateQuote(request, harness.dependencies);
   return { request, harness, result };
+}
+
+function mappedQuoteBoundary(schemaVersion = "0.1.0") {
+  return contractValidator({ validateOutbound: async (request) => ({
+    ok: true,
+    value: {
+      quote_reference: request.value.quoteId,
+      provider_reference: request.value.providerQuoteReference,
+      sku: request.value.binding.sku,
+      scope: {
+        tenantId: request.value.binding.tenantId,
+        projectId: request.value.binding.projectId
+      },
+      quantity: request.value.binding.quantity,
+      destination_reference: request.value.binding.destination.reference,
+      created_at: request.value.createdAt,
+      valid_until: request.value.expiry.effectiveValidUntil,
+      currency: request.value.currency,
+      total_amount: request.value.breakdown.total.value.decimal,
+      total_minor_units: request.value.breakdown.total.value.minorUnits
+    },
+    receipts: [{ shape: "fulfillment_quote", schemaVersion, ...request.trustedScope }]
+  }) });
 }
 
 async function expectQuoteError(promise, code) {
@@ -589,6 +612,74 @@ add("contract pin metadata rejects private or unbounded text before quote execut
   assert.equal(accepted.result.contractBinding.sourceRevision, sourceRevision);
   assert.equal(accepted.harness.calls.quote, 1);
   assertNoOrder(accepted.harness);
+
+  const secretLikeVersion = `0.1.0-sk-${"x".repeat(24)}`;
+  for (const state of ["development_fixture", "accepted"]) {
+    const contracts = contractValidator({ binding: {
+      state,
+      schemaVersion: secretLikeVersion,
+      fixtureDigest: digest,
+      ...(state === "accepted" ? { sourceRevision } : {})
+    } });
+    const harness = quoteHarness({ contracts });
+    await expectQuoteError(executePrivateQuote(await requestFor(), harness.dependencies), "contract_missing");
+    assert.equal(harness.calls.quote, 0);
+    assert.equal(contracts.receipts.length, 0);
+    assertNoOrder(harness);
+  }
+
+  for (const state of ["development_fixture", "accepted"]) {
+    for (const schemaVersion of ["0.1.0", "1.2.3-rc.1"]) {
+      const contracts = contractValidator({
+        binding: {
+          state,
+          schemaVersion,
+          fixtureDigest: digest,
+          ...(state === "accepted" ? { sourceRevision } : {})
+        },
+        validateOutbound: async (request) => ({
+          ok: true,
+          value: { quote_reference: request.value.quoteId, total_amount: request.value.breakdown.total.value.decimal },
+          receipts: [{ shape: "fulfillment_quote", schemaVersion, ...request.trustedScope }]
+        })
+      });
+      const versioned = await quoteOnce({ contracts });
+      assert.equal(versioned.result.contractBinding.schemaVersion, schemaVersion);
+      assert.equal(versioned.result.contractBinding.state, state);
+      assert.equal(versioned.harness.calls.quote, 1);
+      assertNoOrder(versioned.harness);
+    }
+  }
+});
+
+add("validated numeric SKU and spaced trusted scope stay current through a substantive mapped boundary", async () => {
+  const spacedScope = { tenantId: "tenant safe", projectId: "project safe" };
+  const numericCatalog = copyCatalog(catalogA);
+  numericCatalog.products[0].sku = "9781234567897";
+
+  for (const { catalog, scope, expectedSku } of [
+    { catalog: numericCatalog, scope: quoteScope, expectedSku: "9781234567897" },
+    { catalog: copyCatalog(catalogA), scope: spacedScope, expectedSku: copyCatalog(catalogA).products[0].sku },
+    { catalog: numericCatalog, scope: spacedScope, expectedSku: "9781234567897" }
+  ]) {
+    const { request, harness, result } = await quoteOnce({ catalog, scope, contracts: mappedQuoteBoundary() });
+    assert.equal(result.sharedPayload.sku, expectedSku);
+    assert.equal(result.sharedPayload.scope.tenantId, scope.tenantId);
+    assert.equal(result.sharedPayload.scope.projectId, scope.projectId);
+    assert.equal(result.sharedPayload.provider_reference, result.quote.providerQuoteReference);
+    assert.equal(result.sharedPayload.total_amount, result.quote.breakdown.total.value.decimal);
+    assert.equal(result.sharedPayload.total_minor_units, result.quote.breakdown.total.value.minorUnits);
+
+    const current = await evaluatePrivateQuoteCurrent(result.quote, request, harness.dependencies);
+    assert.deepEqual(current, {
+      status: "current",
+      reasons: [],
+      requiredActions: ["obtain_external_authorization"],
+      quoteMayBePresentedForExternalReview: true
+    });
+    assert.equal(harness.calls.quote, 1);
+    assertNoOrder(harness);
+  }
 });
 
 add("changed catalog, selection, destination, shipping, or quantity requires re-quote and renewed external authorization", async () => {
