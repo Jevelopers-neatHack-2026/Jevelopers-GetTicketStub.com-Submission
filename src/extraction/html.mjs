@@ -148,6 +148,7 @@ export async function collectHtmlEvidence({
 }) {
   const canonicalSuggestions = [];
   const pageMetadata = [];
+  const assetSources = [];
   const visibleText = [];
   const statusMentions = [];
   const accessSignals = [];
@@ -162,6 +163,7 @@ export async function collectHtmlEvidence({
   let resourceLimited = false;
   let visibleTextTruncated = false;
   let metadataTruncated = false;
+  let assetSourcesTruncated = false;
   let canonicalTruncated = false;
   let statusSignalsTruncated = false;
   let accessSignalsTruncated = false;
@@ -280,13 +282,27 @@ export async function collectHtmlEvidence({
           suggestionOnly: ["og:url", "og:image", "og:image:url", "og:image:secure_url"].includes(property),
         });
         if (candidate && pageMetadata.length < limits.maxPageMetadataCandidates) {
-          pageMetadata.push(Object.freeze({
+          const pageCandidate = Object.freeze({
             ...candidate,
             property,
             ...(field === "url" || field === "image"
               ? { urlSuggestion: resolveUrlSuggestion(content, document.url) }
               : {}),
-          }));
+          });
+          pageMetadata.push(pageCandidate);
+          if (field === "image") {
+            if (assetSources.length < limits.maxAssetSources) {
+              assetSources.push(Object.freeze({
+                candidate: pageCandidate,
+                sourceForm: "open-graph-image",
+                association: Object.freeze({ kind: "unassigned-page" }),
+              }));
+            } else if (!assetSourcesTruncated) {
+              addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
+              assetSourcesTruncated = true;
+              resourceLimited = true;
+            }
+          }
         } else if (candidate && !metadataTruncated) {
           addDiagnostic(diagnostics, limits, "PAGE_METADATA_LIMIT", null);
           metadataTruncated = true;
@@ -310,6 +326,72 @@ export async function collectHtmlEvidence({
           }));
         }
         else if (!span) addDiagnostic(diagnostics, limits, "JSONLD_SCRIPT_POSITION_UNAVAILABLE", null);
+      }
+    }
+
+    if (tagName === "img" && !insideTemplate) {
+      const src = attributeValue(node, "src");
+      const range = attributeValueRange(text, location, "src");
+      if (src !== undefined && range) {
+        const candidate = makeHtmlAttributeCandidate({
+          field: "img.src",
+          kind: "asset-source",
+          text,
+          sourceBytes,
+          byteOffsetMap,
+          range,
+          decodedValue: src,
+          property: "src",
+          suggestionOnly: true,
+        });
+        if (candidate && assetSources.length < limits.maxAssetSources) {
+          assetSources.push(Object.freeze({
+            candidate: Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(src, document.url) }),
+            sourceForm: "html-img-src",
+            association: Object.freeze({ kind: "unassigned-page" }),
+          }));
+        } else if (candidate && !assetSourcesTruncated) {
+          addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
+          assetSourcesTruncated = true;
+          resourceLimited = true;
+        } else if (!candidate) {
+          addDiagnostic(diagnostics, limits, "SOURCE_POSITION_UNAVAILABLE", null);
+        }
+      }
+    }
+
+    if (tagName === "link" && !insideTemplate) {
+      const relTokens = (attributeValue(node, "rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+      const iconRelation = ["icon", "apple-touch-icon", "mask-icon"].find((value) => relTokens.includes(value));
+      const isShortcutIcon = relTokens.includes("shortcut") && relTokens.includes("icon");
+      const href = attributeValue(node, "href");
+      const range = attributeValueRange(text, location, "href");
+      if ((iconRelation || isShortcutIcon) && href !== undefined && range) {
+        const relation = iconRelation ?? "shortcut-icon";
+        const candidate = makeHtmlAttributeCandidate({
+          field: "link.icon.href",
+          kind: "asset-source",
+          text,
+          sourceBytes,
+          byteOffsetMap,
+          range,
+          decodedValue: href,
+          property: relation,
+          suggestionOnly: true,
+        });
+        if (candidate && assetSources.length < limits.maxAssetSources) {
+          assetSources.push(Object.freeze({
+            candidate: Object.freeze({ ...candidate, urlSuggestion: resolveUrlSuggestion(href, document.url) }),
+            sourceForm: "html-icon-link",
+            association: Object.freeze({ kind: "unassigned-page" }),
+          }));
+        } else if (candidate && !assetSourcesTruncated) {
+          addDiagnostic(diagnostics, limits, "ASSET_SOURCE_LIMIT", null);
+          assetSourcesTruncated = true;
+          resourceLimited = true;
+        } else if (!candidate) {
+          addDiagnostic(diagnostics, limits, "SOURCE_POSITION_UNAVAILABLE", null);
+        }
       }
     }
 
@@ -390,6 +472,8 @@ export async function collectHtmlEvidence({
   return {
     canonicalSuggestions,
     pageMetadata,
+    assetSources,
+    assetSourcesTruncated,
     visibleText,
     statusMentions,
     accessSignals,

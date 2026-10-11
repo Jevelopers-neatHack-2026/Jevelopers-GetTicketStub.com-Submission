@@ -17,6 +17,8 @@ import path from 'node:path';
 import { types as utilTypes } from 'node:util';
 import { readTextPdf, PDF_TEXT_READER_LIMITS } from '../extraction/pdf/index.mjs';
 import { PDF_DECODER_VERSION, PDF_READER_CONFIG_VERSION } from '../extraction/pdf/constants.mjs';
+import { DETERMINISTIC_EXTRACTION_VERSION, extractDeterministically } from '../extraction/index.mjs';
+import { parseAndValidateUrl } from '../security/url-policy.mjs';
 
 const SUPPORTED_SOURCE_KINDS = new Set(['external', 'customer_supplied']);
 const FACT_STATUSES = new Set(['sourced', 'inferred', 'customer_supplied', 'missing', 'conflicting']);
@@ -68,6 +70,42 @@ const PDF_DERIVATION_BINDING_VERSION = 1;
 const PDF_DERIVED_DEFAULT_TIMEOUT_MS = 15_000;
 const PDF_DERIVED_CONTENT_TYPE = 'application/pdf';
 const PDF_DERIVED_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
+const ASSET_SOURCE_EXCERPT_REPRESENTATION = 'asset-source-excerpt';
+const ASSET_SOURCE_BUNDLE_VERSION = 3;
+const ASSET_SOURCE_BINDING_VERSION = 1;
+const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/1';
+const ASSET_SOURCE_MAX_SOURCE_BYTES = 2 * 1024 * 1024;
+const ASSET_SOURCE_MAX_POSITIONS = 64;
+const ASSET_SOURCE_MAX_EXCERPT_BYTES = 8 * 1024;
+const ASSET_SOURCE_MAX_EXCERPT_TOTAL_BYTES = 64 * 1024;
+const ASSET_SOURCE_MAX_METADATA_BYTES = 64 * 1024;
+const ASSET_SOURCE_MAX_DEADLINE_MS = 2_500;
+const ASSET_SOURCE_LIMITATIONS = Object.freeze([
+  'CSS_BACKGROUND_IMAGES_UNSUPPORTED',
+  'FONT_ASSETS_UNSUPPORTED',
+  'SRCSET_UNSUPPORTED',
+  'DYNAMIC_ASSETS_UNSUPPORTED',
+  'ZERO_REDIRECT_DOCUMENTS_ONLY',
+  'NO_ASSET_BYTES_FETCHED_OR_INSPECTED',
+]);
+// These profiles validate immutable encrypted derivations. When extraction or
+// selector output changes, add the new writer pair and retain every still-
+// readable historical pair here; never reparse or rewrite a sealed bundle.
+// Keep historical identifiers literal so a current writer bump cannot make
+// its existing records unreadable by changing a shared "current" constant.
+const ASSET_SOURCE_READ_PROFILES = new Map([['ei-asset-source-selector/1\u0000ei-deterministic-extraction/1.3.0', Object.freeze({
+  selectorVersion: 'ei-asset-source-selector/1',
+  extractorVersion: 'ei-deterministic-extraction/1.3.0',
+  completeness: 'static-selected-forms-only',
+  limitations: ASSET_SOURCE_LIMITATIONS,
+})]]);
+const ASSET_SOURCE_FORMS = new Set([
+  'html-img-src', 'html-icon-link', 'open-graph-image', 'jsonld-image', 'jsonld-logo',
+]);
+const ASSET_QUARANTINE_REASONS = new Set([
+  'invalid_or_empty', 'unresolvable_url', 'unsupported_scheme', 'sensitive_query', 'url_policy_denied',
+]);
+const ASSET_SENSITIVE_QUERY_KEY = /(?:token|key|auth|code|signature|sig|secret|session|password|credential|invite|ticket|admission)/i;
 
 export class EvidenceStoreError extends Error {
   constructor(code) {
@@ -482,19 +520,22 @@ function emptyManifest(tenantHash) {
 }
 
 function validateManifest(value, tenantHash) {
-  if (!isRecord(value) || ![1, 2].includes(value.schemaVersion) || value.tenantHash !== tenantHash
+  if (!isRecord(value) || ![1, 2, 3].includes(value.schemaVersion) || value.tenantHash !== tenantHash
     || !isRecord(value.records) || !isRecord(value.families) || !isRecord(value.facts)) fail('EVIDENCE_INTEGRITY');
   for (const record of Object.values(value.records)) {
     if (!isRecord(record)) continue;
     if (value.schemaVersion === 1 && Object.hasOwn(record, 'representation')) fail('EVIDENCE_INTEGRITY');
     if (record.representation !== undefined
-      && (value.schemaVersion !== 2 || record.representation !== PDF_DERIVED_REPRESENTATION
+      && (!((record.representation === PDF_DERIVED_REPRESENTATION && value.schemaVersion >= 2)
+        || (record.representation === ASSET_SOURCE_EXCERPT_REPRESENTATION && value.schemaVersion === 3))
         || !isDigest(record.derivationDigest))) fail('EVIDENCE_INTEGRITY');
     if (record.representation === undefined && Object.hasOwn(record, 'derivationDigest')) fail('EVIDENCE_INTEGRITY');
   }
   for (const family of Object.values(value.families)) {
     if (isRecord(family) && family.representation !== undefined
-      && family.representation !== PDF_DERIVED_REPRESENTATION) fail('EVIDENCE_INTEGRITY');
+      && ![PDF_DERIVED_REPRESENTATION, ASSET_SOURCE_EXCERPT_REPRESENTATION].includes(family.representation)) fail('EVIDENCE_INTEGRITY');
+    if (isRecord(family) && family.representation === ASSET_SOURCE_EXCERPT_REPRESENTATION
+      && value.schemaVersion !== 3) fail('EVIDENCE_INTEGRITY');
   }
   return value;
 }
@@ -663,6 +704,233 @@ function stableHmac(key, value) {
   return createHmac('sha256', key).update(value, 'utf8').digest('hex');
 }
 
+function assetUrlObservation(value, responseUrl) {
+  if (typeof value !== 'string' || value.trim() === '' || value.length > 8_192 || !isWellFormed(value)) {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'invalid_or_empty' };
+  }
+  let observed;
+  try {
+    observed = new URL(value.trim(), responseUrl);
+  } catch {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'unresolvable_url' };
+  }
+  if (observed.protocol !== 'http:' && observed.protocol !== 'https:') {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'unsupported_scheme' };
+  }
+  if (hasSensitiveAssetQuery(observed)) {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'sensitive_query' };
+  }
+  try {
+    const validated = parseAndValidateUrl(observed.href);
+    return {
+      normalizedSuggestion: observed.href,
+      fetchSuggestion: validated.url.href,
+      quarantineReason: null,
+    };
+  } catch {
+    return { normalizedSuggestion: null, fetchSuggestion: null, quarantineReason: 'url_policy_denied' };
+  }
+}
+
+function hasSensitiveAssetQuery(value) {
+  let parsed;
+  try { parsed = value instanceof URL ? value : new URL(value); } catch { return true; }
+  for (const key of parsed.searchParams.keys()) {
+    if (ASSET_SENSITIVE_QUERY_KEY.test(key)) return true;
+  }
+  return false;
+}
+
+function assetDerivationMaterial(sourceContentHash, assetSource, positions) {
+  return {
+    bindingVersion: assetSource.bindingVersion,
+    representation: ASSET_SOURCE_EXCERPT_REPRESENTATION,
+    sourceContentHash,
+    sourceUrl: assetSource.sourceUrl,
+    sourceKind: assetSource.sourceKind,
+    extractorVersion: assetSource.extractorVersion,
+    selectorVersion: assetSource.selectorVersion,
+    completeness: assetSource.completeness,
+    limitations: assetSource.limitations,
+    candidates: assetSource.candidates.map((candidate, index) => ({
+      ...candidate,
+      locator: positions[index].locator,
+      excerptHash: positions[index].contentHash,
+    })),
+  };
+}
+
+function assetJsonPointerParts(value) {
+  if (typeof value !== 'string' || value.length > 2_048 || !isWellFormed(value)
+    || (value !== '' && !value.startsWith('/')) || /~(?![01])/.test(value)) return null;
+  if (value === '') return [];
+  return value.slice(1).split('/').map((part) => part.replace(/~1/g, '/').replace(/~0/g, '~'));
+}
+
+function validAssetJsonPath(parts, sourceForm) {
+  let cursor = 0;
+  while (/^(?:0|[1-9][0-9]*)$/.test(parts[cursor] ?? '')) cursor += 1;
+  const expectedProperty = sourceForm === 'jsonld-logo' ? 'logo' : 'image';
+  if (parts[cursor]?.toLowerCase() !== expectedProperty) return false;
+  cursor += 1;
+  while (/^(?:0|[1-9][0-9]*)$/.test(parts[cursor] ?? '')) cursor += 1;
+  if (cursor === parts.length) return true;
+  return ['url', 'contenturl', '@id'].includes(parts[cursor]?.toLowerCase()) && cursor + 1 === parts.length;
+}
+
+function validAssetAssociation(value, sourceForm) {
+  if (!isRecord(value)) return false;
+  if (value.kind === 'unassigned-page') {
+    return Object.keys(value).length === 1
+      && ['html-img-src', 'html-icon-link', 'open-graph-image'].includes(sourceForm);
+  }
+  if (value.kind === 'entity-source-claim') {
+    const entityPointerParts = assetJsonPointerParts(value.entityPointer);
+    const assetPointerParts = assetJsonPointerParts(value.assetPointer);
+    return Object.keys(value).length === 6
+      && ['jsonld-image', 'jsonld-logo'].includes(sourceForm)
+      && ['event', 'organization'].includes(value.entityKind)
+      && typeof value.entityId === 'string' && value.entityId.length > 0 && value.entityId.length <= 4_096
+      && Number.isSafeInteger(value.blockIndex) && value.blockIndex >= 0 && value.blockIndex < 32
+      && entityPointerParts !== null && assetPointerParts !== null && assetPointerParts.length > entityPointerParts.length
+      && entityPointerParts.every((part, index) => assetPointerParts[index] === part)
+      && value.entityId === `${value.entityKind}:script-${value.blockIndex}:${value.entityPointer}`
+      && validAssetJsonPath(assetPointerParts.slice(entityPointerParts.length), sourceForm);
+  }
+  if (value.kind === 'nested-entity-source-claim') {
+    const parentPointerParts = assetJsonPointerParts(value.parentPointer);
+    const assetPointerParts = assetJsonPointerParts(value.assetPointer);
+    const entityId = typeof value.parentEntityId === 'string'
+      ? /^event:script-(0|[1-9][0-9]*):(.*)$/.exec(value.parentEntityId)
+      : null;
+    const relative = parentPointerParts && assetPointerParts
+      && parentPointerParts.length < assetPointerParts.length
+      && parentPointerParts.every((part, index) => assetPointerParts[index] === part)
+      ? assetPointerParts.slice(parentPointerParts.length)
+      : null;
+    let organizerIndex = 0;
+    while (/^(?:0|[1-9][0-9]*)$/.test(relative?.[organizerIndex] ?? '')) organizerIndex += 1;
+    return Object.keys(value).length === 6
+      && ['jsonld-image', 'jsonld-logo'].includes(sourceForm)
+      && value.parentEntityKind === 'event'
+      && typeof value.parentEntityId === 'string' && value.parentEntityId.length > 0 && value.parentEntityId.length <= 4_096
+      && value.roleHint === 'organizer'
+      && parentPointerParts !== null && assetPointerParts !== null && relative !== null
+      && entityId !== null && Number(entityId[1]) < 32 && entityId[2] === value.parentPointer
+      && relative[organizerIndex]?.toLowerCase() === 'organizer'
+      && validAssetJsonPath(relative.slice(organizerIndex + 1), sourceForm);
+  }
+  return false;
+}
+
+function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, budget) {
+  const stored = ownDataRecord(value, new Set([
+    'bindingVersion', 'selectorVersion', 'extractorVersion', 'sourceUrl', 'sourceKind',
+    'completeness', 'limitations', 'candidates', 'derivationDigest',
+  ]));
+  const profile = stored && ASSET_SOURCE_READ_PROFILES.get(`${stored.selectorVersion}\u0000${stored.extractorVersion}`);
+  if (!stored || stored.bindingVersion !== ASSET_SOURCE_BINDING_VERSION
+    || !profile
+    || stored.sourceUrl !== sourceUrl || stored.sourceKind !== 'external'
+    || stored.completeness !== profile.completeness
+    || !Array.isArray(stored.limitations)
+    || JSON.stringify(stored.limitations) !== JSON.stringify(profile.limitations)
+    || !isDigest(stored.derivationDigest) || stored.derivationDigest !== record.derivationDigest) fail('EVIDENCE_INTEGRITY');
+  try {
+    parseAndValidateUrl(stored.sourceUrl);
+    if (hasSensitiveAssetQuery(stored.sourceUrl)) fail('EVIDENCE_INTEGRITY');
+  } catch { fail('EVIDENCE_INTEGRITY'); }
+  const candidates = safeArray(stored.candidates, ASSET_SOURCE_MAX_POSITIONS);
+  if (!candidates || candidates.length !== record.positionIds.length || candidates.length === 0) fail('EVIDENCE_INTEGRITY');
+  const validated = [];
+  let previousStart = -1;
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = ownDataRecord(candidates[index], new Set([
+      'candidateId', 'positionIndex', 'sourceForm', 'field', 'relationHint', 'association',
+      'locator', 'excerptHash', 'normalizedSuggestion', 'fetchSuggestion', 'quarantineReason',
+      'role', 'permission', 'inspection',
+    ]));
+    const positionId = record.positionIds[index];
+    const position = positionsById.get(positionId);
+    const locator = candidate ? copyLocator(candidate.locator) : null;
+    if (!candidate || !position || candidate.candidateId !== `asset-${String(index + 1).padStart(2, '0')}`
+      || candidate.positionIndex !== index || !ASSET_SOURCE_FORMS.has(candidate.sourceForm)
+      || typeof candidate.field !== 'string' || candidate.field.length < 1 || candidate.field.length > 160
+      || (candidate.relationHint !== null && (typeof candidate.relationHint !== 'string' || candidate.relationHint.length > 80))
+      || !validAssetAssociation(candidate.association, candidate.sourceForm)
+      || locator?.kind !== 'text-range' || locator.startByte < previousStart
+      || JSON.stringify(locator) !== JSON.stringify(position.locator)
+      || position.byteLength !== locator.endByte - locator.startByte
+      || !isDigest(candidate.excerptHash) || candidate.excerptHash !== position.contentHash
+      || (candidate.normalizedSuggestion !== null && typeof candidate.normalizedSuggestion !== 'string')
+      || (candidate.fetchSuggestion !== null && typeof candidate.fetchSuggestion !== 'string')
+      || (candidate.quarantineReason !== null && !ASSET_QUARANTINE_REASONS.has(candidate.quarantineReason))
+      || (candidate.quarantineReason === null) !== (candidate.fetchSuggestion !== null)
+      || (candidate.role !== 'unknown' || candidate.permission !== 'unknown' || candidate.inspection !== 'pending')) {
+      fail('EVIDENCE_INTEGRITY');
+    }
+    if (candidate.fetchSuggestion !== null) {
+      try {
+        const valid = parseAndValidateUrl(candidate.fetchSuggestion).url.href;
+        if (valid !== candidate.fetchSuggestion || candidate.fetchSuggestion.includes('#')) fail('EVIDENCE_INTEGRITY');
+      } catch { fail('EVIDENCE_INTEGRITY'); }
+      let suggestion;
+      try { suggestion = new URL(candidate.normalizedSuggestion); } catch { fail('EVIDENCE_INTEGRITY'); }
+      if (suggestion.href !== candidate.normalizedSuggestion || (suggestion.protocol !== 'http:' && suggestion.protocol !== 'https:')) {
+        fail('EVIDENCE_INTEGRITY');
+      }
+      for (const key of suggestion.searchParams.keys()) {
+        if (ASSET_SENSITIVE_QUERY_KEY.test(key)) fail('EVIDENCE_INTEGRITY');
+      }
+      let normalizedFetchSuggestion;
+      try { normalizedFetchSuggestion = parseAndValidateUrl(suggestion.href).url.href; } catch { fail('EVIDENCE_INTEGRITY'); }
+      if (normalizedFetchSuggestion !== candidate.fetchSuggestion) fail('EVIDENCE_INTEGRITY');
+    } else if (candidate.normalizedSuggestion !== null) {
+      fail('EVIDENCE_INTEGRITY');
+    }
+    previousStart = locator.startByte;
+    const copy = {
+      candidateId: candidate.candidateId,
+      positionIndex: candidate.positionIndex,
+      sourceForm: candidate.sourceForm,
+      field: candidate.field,
+      relationHint: candidate.relationHint,
+      association: cloneJsonValue(candidate.association),
+      locator,
+      excerptHash: candidate.excerptHash,
+      normalizedSuggestion: candidate.normalizedSuggestion,
+      fetchSuggestion: candidate.fetchSuggestion,
+      quarantineReason: candidate.quarantineReason,
+      role: 'unknown',
+      permission: 'unknown',
+      inspection: 'pending',
+    };
+    addProvenanceBytes(budget, Buffer.byteLength(JSON.stringify(copy), 'utf8'));
+    validated.push(copy);
+  }
+  const assetSourceMetadata = {
+    bindingVersion: stored.bindingVersion,
+    selectorVersion: stored.selectorVersion,
+    extractorVersion: stored.extractorVersion,
+    sourceUrl: stored.sourceUrl,
+    sourceKind: stored.sourceKind,
+    completeness: stored.completeness,
+    limitations: [...stored.limitations],
+    candidates: validated,
+  };
+  if (Buffer.byteLength(JSON.stringify(assetSourceMetadata), 'utf8') > ASSET_SOURCE_MAX_METADATA_BYTES) fail('EVIDENCE_INTEGRITY');
+  const assetSource = {
+    ...assetSourceMetadata,
+    derivationDigest: stored.derivationDigest,
+  };
+  const expectedDigest = digest(Buffer.from(JSON.stringify(assetDerivationMaterial(record.contentHash, assetSource, record.positionIds.map((id) => ({
+    locator: positionsById.get(id).locator,
+    contentHash: positionsById.get(id).contentHash,
+  })))), 'utf8'));
+  if (expectedDigest !== record.derivationDigest) fail('EVIDENCE_INTEGRITY');
+  return deepFreeze(assetSource);
+}
+
 function frozenMetadata(record) {
   if (record.state === 'expired') return Object.freeze({ evidenceId: record.id, state: 'expired', positionCount: 0 });
   return Object.freeze({
@@ -679,8 +947,8 @@ function frozenMetadata(record) {
     accessPolicy: 'tenant_private',
     state: record.state,
     positionCount: record.positionIds?.length ?? 0,
-    ...(record.representation === PDF_DERIVED_REPRESENTATION ? {
-      representation: PDF_DERIVED_REPRESENTATION,
+    ...(record.representation === PDF_DERIVED_REPRESENTATION || record.representation === ASSET_SOURCE_EXCERPT_REPRESENTATION ? {
+      representation: record.representation,
       derivationDigest: record.derivationDigest,
     } : {}),
   });
@@ -1159,7 +1427,8 @@ export function createEvidenceStore(options) {
       fail('EVIDENCE_INTEGRITY');
     }
     if ((record.representation !== undefined
-      && (record.representation !== PDF_DERIVED_REPRESENTATION || !isDigest(record.derivationDigest)))
+      && (![PDF_DERIVED_REPRESENTATION, ASSET_SOURCE_EXCERPT_REPRESENTATION].includes(record.representation)
+        || !isDigest(record.derivationDigest)))
       || (record.representation === undefined && Object.hasOwn(record, 'derivationDigest'))) fail('EVIDENCE_INTEGRITY');
     const effectivePositionLimit = Math.min(limits.maxPositionCount, positionLimit);
     if (!Array.isArray(record.positionIds)) fail('EVIDENCE_INTEGRITY');
@@ -1201,8 +1470,8 @@ export function createEvidenceStore(options) {
       encryptionKeyId: record.encryptionKeyId,
       positionIds,
       positionHashes: cloneJsonValue(positionHashes),
-      ...(record.representation === PDF_DERIVED_REPRESENTATION ? {
-        representation: PDF_DERIVED_REPRESENTATION,
+      ...(record.representation === PDF_DERIVED_REPRESENTATION || record.representation === ASSET_SOURCE_EXCERPT_REPRESENTATION ? {
+        representation: record.representation,
         derivationDigest: record.derivationDigest,
       } : {}),
     };
@@ -1244,12 +1513,20 @@ export function createEvidenceStore(options) {
 
   function materializeEvidenceBundle(info, record, bundle, budget) {
     const representation = record.representation ?? 'raw';
-    if (representation !== 'raw' && representation !== PDF_DERIVED_REPRESENTATION) fail('EVIDENCE_INTEGRITY');
+    if (representation !== 'raw' && representation !== PDF_DERIVED_REPRESENTATION
+      && representation !== ASSET_SOURCE_EXCERPT_REPRESENTATION) fail('EVIDENCE_INTEGRITY');
+    const expectedBundleVersion = representation === PDF_DERIVED_REPRESENTATION ? PDF_DERIVED_BUNDLE_VERSION
+      : representation === ASSET_SOURCE_EXCERPT_REPRESENTATION ? ASSET_SOURCE_BUNDLE_VERSION : 1;
     if (!isRecord(bundle)
-      || bundle.schemaVersion !== (representation === PDF_DERIVED_REPRESENTATION ? PDF_DERIVED_BUNDLE_VERSION : 1)
+      || bundle.schemaVersion !== expectedBundleVersion
       || (representation === PDF_DERIVED_REPRESENTATION
         ? bundle.representation !== PDF_DERIVED_REPRESENTATION || record.derivationDigest !== bundle.derivationDigest
-        : Object.hasOwn(bundle, 'representation') || Object.hasOwn(bundle, 'derivedPdf') || Object.hasOwn(bundle, 'derivationDigest'))) {
+          || Object.hasOwn(bundle, 'assetSource')
+        : representation === ASSET_SOURCE_EXCERPT_REPRESENTATION
+          ? bundle.representation !== ASSET_SOURCE_EXCERPT_REPRESENTATION || record.derivationDigest !== bundle.derivationDigest
+            || Object.hasOwn(bundle, 'derivedPdf')
+          : Object.hasOwn(bundle, 'representation') || Object.hasOwn(bundle, 'derivedPdf')
+            || Object.hasOwn(bundle, 'derivationDigest') || Object.hasOwn(bundle, 'assetSource'))) {
       fail('EVIDENCE_INTEGRITY');
     }
     const storedSource = ownDataRecord(bundle.source, new Set([
@@ -1277,6 +1554,7 @@ export function createEvidenceStore(options) {
 
     let derivedPdf = null;
     let pageMetadata = null;
+    let assetSource = null;
     if (representation === PDF_DERIVED_REPRESENTATION) {
       if (storedSource.contentType.toLowerCase().split(';', 1)[0].trim() !== PDF_DERIVED_CONTENT_TYPE) fail('EVIDENCE_INTEGRITY');
       const stored = ownDataRecord(bundle.derivedPdf, new Set([
@@ -1350,8 +1628,13 @@ export function createEvidenceStore(options) {
       recordPositionBytes += positionBytes;
       if (!Number.isSafeInteger(recordPositionBytes)
         || recordPositionBytes > Math.min(limits.maxStoredPayloadBytes, SELECTED_BATCH_LIMITS.evidencePositionBytes)) fail('EVIDENCE_INVALID');
+      if (representation === ASSET_SOURCE_EXCERPT_REPRESENTATION
+        && (positionBytes > ASSET_SOURCE_MAX_EXCERPT_BYTES
+          || recordPositionBytes > ASSET_SOURCE_MAX_EXCERPT_TOTAL_BYTES)) fail('EVIDENCE_INTEGRITY');
       chargeBudget(budget, 'positionBytes', positionBytes, SELECTED_BATCH_LIMITS.positionBytes);
       const locator = copyStoredLocator(stored.locator, representation);
+      if (representation === ASSET_SOURCE_EXCERPT_REPRESENTATION
+        && locator.endByte > ASSET_SOURCE_MAX_SOURCE_BYTES) fail('EVIDENCE_INTEGRITY');
       if (representation === PDF_DERIVED_REPRESENTATION) {
         const page = pageMetadata[locator.pageIndex];
         if (!page || locator.textIndex >= page.textBoxCount || locator.pageWidth !== page.width
@@ -1371,7 +1654,7 @@ export function createEvidenceStore(options) {
       } finally {
         bytes.fill(0);
       }
-      positionById.set(stored.id, { locator, contentHash: stored.contentHash });
+      positionById.set(stored.id, { locator, contentHash: stored.contentHash, byteLength: positionBytes });
     }
     if (record.positionIds.some((id) => !positionById.has(id))) fail('EVIDENCE_INTEGRITY');
     if (representation === PDF_DERIVED_REPRESENTATION) {
@@ -1394,6 +1677,8 @@ export function createEvidenceStore(options) {
         }),
       };
       if (digest(Buffer.from(JSON.stringify(derivationMaterial), 'utf8')) !== record.derivationDigest) fail('EVIDENCE_INTEGRITY');
+    } else if (representation === ASSET_SOURCE_EXCERPT_REPRESENTATION) {
+      assetSource = validateAssetSourceProvenance(bundle.assetSource, record, storedSource.sourceUrl, positionById, budget);
     }
     const positions = record.positionIds.map((id) => {
       const position = positionById.get(id);
@@ -1416,6 +1701,7 @@ export function createEvidenceStore(options) {
         retrievedAtMs: storedSource.retrievedAtMs,
         contentHash: storedSource.contentHash,
         ...(derivedPdf ? { derivedPdf: deepFreeze(cloneJsonValue(derivedPdf)) } : {}),
+        ...(assetSource ? { assetSource } : {}),
       }),
       positions: Object.freeze(positions),
     });
@@ -1807,6 +2093,423 @@ export function createEvidenceStore(options) {
     }
   }
 
+  async function ingestAssetSourceEvidence(scope, inputValue, request, signal) {
+    const info = scopeInfo(scope);
+    const assetPositionLimit = Math.min(
+      ASSET_SOURCE_MAX_POSITIONS,
+      limits.maxPositionCount,
+      SELECTED_BATCH_LIMITS.positionCount,
+    );
+    const assetPositionBytesLimit = Math.min(
+      ASSET_SOURCE_MAX_EXCERPT_BYTES,
+      limits.maxPositionBytes,
+      SELECTED_BATCH_LIMITS.positionRecordBytes,
+    );
+    const assetPositionTotalBytesLimit = Math.min(
+      ASSET_SOURCE_MAX_EXCERPT_TOTAL_BYTES,
+      limits.maxStoredPayloadBytes,
+      SELECTED_BATCH_LIMITS.evidencePositionBytes,
+    );
+    const input = ownDataRecord(inputValue, new Set(['document', 'retentionHandle']));
+    const documentInput = ownDataRecord(input?.document, new Set(['url', 'contentType', 'bytes', 'fetchedAt', 'redirects', 'image']));
+    if (!input || !documentInput || typeof documentInput.url !== 'string'
+      || typeof documentInput.contentType !== 'string' || documentInput.contentType.length < 1
+      || documentInput.contentType.length > 160 || !/^[\x20-\x7e]+$/.test(documentInput.contentType)
+      || !validTimestamp(documentInput.fetchedAt) || documentInput.redirects !== 0
+      || typeof documentInput.bytes === 'string'
+      || !input.retentionHandle || typeof input.retentionHandle !== 'object') fail('EVIDENCE_INVALID');
+    const contentType = documentInput.contentType.toLowerCase().split(';', 1)[0].trim();
+    if (!['text/html', 'application/xhtml+xml', 'application/ld+json'].includes(contentType)) fail('EVIDENCE_INVALID');
+    const sourceUrl = documentInput.url;
+    try {
+      parseAndValidateUrl(sourceUrl);
+      if (hasSensitiveAssetQuery(sourceUrl)) {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_URL_POLICY_DENIED' });
+      }
+    } catch {
+      return Object.freeze({ outcome: 'rejected', code: 'SOURCE_URL_POLICY_DENIED' });
+    }
+    const sourceBytes = copyBytes(documentInput.bytes, Math.min(limits.maxSourceBytes, ASSET_SOURCE_MAX_SOURCE_BYTES));
+    const sourceContentHash = digest(sourceBytes);
+    const retrievedAt = documentInput.fetchedAt;
+    const retrievedAtMs = Date.parse(retrievedAt);
+    const sourceKind = 'external';
+    const parserDocument = Object.freeze({ url: sourceUrl, contentType: documentInput.contentType, bytes: sourceBytes, fetchedAt: retrievedAt });
+    const retentionStartMs = currentTime();
+    let retention;
+    let activeIndexKey;
+    let payloadKey;
+    let sealedBytes;
+    const historicalIndexKeys = [];
+    const positions = [];
+    const candidateBuffers = [];
+    let directoryForCleanup;
+    try {
+      checkCancellation(signal);
+      retention = await resolveRetention(info, 'evidence', retentionStartMs, sourceKind, undefined, input.retentionHandle);
+      if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+      let extraction;
+      try {
+        extraction = await extractDeterministically(parserDocument, {
+          signal,
+          limits: {
+            maxDocumentBytes: ASSET_SOURCE_MAX_SOURCE_BYTES,
+            maxAssetSources: assetPositionLimit,
+            parseTimeoutMs: ASSET_SOURCE_MAX_DEADLINE_MS,
+          },
+        });
+      } catch {
+        checkCancellation(signal);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_EXTRACTION_FAILURE' });
+      }
+      checkCancellation(signal);
+      if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+      if (!extraction || extraction.sourceHash !== `sha256:${sourceContentHash}`
+        || extraction.extractorVersion !== DETERMINISTIC_EXTRACTION_VERSION) fail('EVIDENCE_INTEGRITY');
+      if (extraction.status === 'CANCELED' || extraction.termination === 'CANCELED') fail('EVIDENCE_CANCELLED');
+      if (extraction.status === 'RESOURCE_LIMIT' || extraction.termination !== null || extraction.assetSourcesTruncated) {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_EXTRACTION_INCOMPLETE' });
+      }
+      if (extraction.status === 'ACCESS_RESTRICTED') {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_ACCESS_RESTRICTED' });
+      }
+      if (extraction.status === 'JS_REQUIRED') {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_DYNAMIC_OR_INCOMPLETE' });
+      }
+      if (['INVALID_INPUT', 'UNSUPPORTED_MEDIA', 'UNSUPPORTED_ENCODING', 'MALFORMED_ENCODING'].includes(extraction.status)) {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_UNSUPPORTED_OR_MALFORMED' });
+      }
+      const jsonLdBlocks = safeArray(extraction.jsonLdBlocks, 32);
+      if (!jsonLdBlocks) fail('EVIDENCE_INTEGRITY');
+      if (jsonLdBlocks.some((block) => block?.status === 'malformed')) {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_UNSUPPORTED_OR_MALFORMED' });
+      }
+      if (jsonLdBlocks.some((block) => block?.status === 'resource_limited')) {
+        return Object.freeze({ outcome: 'rejected', code: 'SOURCE_EXTRACTION_INCOMPLETE' });
+      }
+      const assetInputs = safeArray(extraction.assetSources, assetPositionLimit);
+      if (!assetInputs) return Object.freeze({ outcome: 'rejected', code: 'ASSET_CANDIDATE_LIMIT' });
+      if (assetInputs.length === 0) return Object.freeze({ outcome: 'no-candidates', code: 'NO_STATIC_ASSET_CANDIDATES' });
+      const currentProfile = ASSET_SOURCE_READ_PROFILES.get(`${ASSET_SOURCE_SELECTOR_VERSION}\u0000${extraction.extractorVersion}`);
+      if (!currentProfile || currentProfile.extractorVersion !== DETERMINISTIC_EXTRACTION_VERSION) fail('EVIDENCE_INTEGRITY');
+
+      const ordered = assetInputs.map((item) => {
+        const asset = ownDataRecord(item, new Set(['candidate', 'sourceForm', 'association']));
+        const candidate = ownDataRecord(asset?.candidate, new Set([
+          'field', 'rawValue', 'normalizedValue', 'source', 'suggestionOnly', 'urlSuggestion', 'property',
+        ]));
+        const candidateSource = ownDataRecord(candidate?.source, new Set(['kind', 'locator', 'jsonPointer', 'property']));
+        if (!asset || !candidate || !candidateSource || !ASSET_SOURCE_FORMS.has(asset.sourceForm)
+          || typeof candidate.field !== 'string' || candidate.field.length < 1 || candidate.field.length > 160
+          || !validAssetAssociation(asset.association, asset.sourceForm)
+          || !['asset-source', 'open-graph', 'jsonld'].includes(candidateSource.kind)) fail('EVIDENCE_INTEGRITY');
+        const locator = copyLocator(candidateSource.locator);
+        if (locator.kind !== 'text-range' || locator.endByte > sourceBytes.length) fail('EVIDENCE_INTEGRITY');
+        const excerptLength = locator.endByte - locator.startByte;
+        if (excerptLength < 1 || excerptLength > assetPositionBytesLimit) fail('EVIDENCE_INVALID');
+        const excerpt = Buffer.from(sourceBytes.subarray(locator.startByte, locator.endByte));
+        candidateBuffers.push(excerpt);
+        if (excerpt.toString('utf8') !== candidate.rawValue || !isWellFormed(candidate.rawValue)) {
+          excerpt.fill(0);
+          fail('EVIDENCE_INTEGRITY');
+        }
+        const normalized = typeof candidate.normalizedValue === 'string' ? candidate.normalizedValue : null;
+        const observation = assetUrlObservation(normalized, sourceUrl);
+        const relationHint = typeof candidate.property === 'string' ? candidate.property
+          : typeof candidateSource.property === 'string' ? candidateSource.property : null;
+        const sortPointer = typeof candidateSource.jsonPointer === 'string' ? candidateSource.jsonPointer : '';
+        return {
+          sourceForm: asset.sourceForm,
+          field: candidate.field,
+          relationHint,
+          association: cloneJsonValue(asset.association),
+          locator,
+          excerpt,
+          contentHash: digest(excerpt),
+          ...observation,
+          sortPointer,
+        };
+      });
+      ordered.sort((left, right) => left.locator.startByte - right.locator.startByte
+        || left.locator.endByte - right.locator.endByte
+        || left.sourceForm.localeCompare(right.sourceForm)
+        || left.sortPointer.localeCompare(right.sortPointer));
+      if (ordered.length > assetPositionLimit) fail('EVIDENCE_INVALID');
+      let excerptBytesTotal = 0;
+      for (let index = 0; index < ordered.length; index += 1) {
+        excerptBytesTotal += ordered[index].excerpt.byteLength;
+        if (!Number.isSafeInteger(excerptBytesTotal) || excerptBytesTotal > assetPositionTotalBytesLimit) fail('EVIDENCE_INVALID');
+        positions.push({
+          id: randomUUID(),
+          locator: ordered[index].locator,
+          contentHash: ordered[index].contentHash,
+          bytes: ordered[index].excerpt,
+        });
+      }
+      const candidates = ordered.map((candidate, index) => ({
+        candidateId: `asset-${String(index + 1).padStart(2, '0')}`,
+        positionIndex: index,
+        sourceForm: candidate.sourceForm,
+        field: candidate.field,
+        relationHint: candidate.relationHint,
+        association: candidate.association,
+        locator: candidate.locator,
+        excerptHash: candidate.contentHash,
+        normalizedSuggestion: candidate.normalizedSuggestion,
+        fetchSuggestion: candidate.fetchSuggestion,
+        quarantineReason: candidate.quarantineReason,
+        role: 'unknown',
+        permission: 'unknown',
+        inspection: 'pending',
+      }));
+      const assetSource = {
+        bindingVersion: ASSET_SOURCE_BINDING_VERSION,
+        selectorVersion: ASSET_SOURCE_SELECTOR_VERSION,
+        extractorVersion: extraction.extractorVersion,
+        sourceUrl,
+        sourceKind,
+        completeness: currentProfile.completeness,
+        limitations: [...currentProfile.limitations],
+        candidates,
+      };
+      const assetMetadataBytes = Buffer.byteLength(JSON.stringify(assetSource), 'utf8');
+      if (!Number.isSafeInteger(assetMetadataBytes) || assetMetadataBytes > ASSET_SOURCE_MAX_METADATA_BYTES) fail('EVIDENCE_INVALID');
+      const derivationDigest = digest(Buffer.from(JSON.stringify(assetDerivationMaterial(sourceContentHash, assetSource, positions)), 'utf8'));
+      assetSource.derivationDigest = derivationDigest;
+      const sourceProvenance = {
+        sourceUrl,
+        canonicalUrl: normalizeSourceUrl(sourceUrl),
+        redirectChain: [],
+        contentType: documentInput.contentType,
+        sourceKind,
+        retrievedAt,
+        retrievedAtMs,
+        contentHash: sourceContentHash,
+      };
+      const provenanceBytes = Buffer.byteLength(JSON.stringify({ source: sourceProvenance, assetSource }), 'utf8')
+        + positions.reduce((sum, position) => sum + Buffer.byteLength(JSON.stringify(position.locator), 'utf8') + 128, 0);
+      if (!Number.isSafeInteger(provenanceBytes) || provenanceBytes > SELECTED_BATCH_LIMITS.provenanceBytes) fail('EVIDENCE_INVALID');
+      const positionIds = positions.map((position) => position.id);
+      const positionHashes = Object.fromEntries(positions.map((position) => [position.id, position.contentHash]));
+      const bundle = {
+        schemaVersion: ASSET_SOURCE_BUNDLE_VERSION,
+        representation: ASSET_SOURCE_EXCERPT_REPRESENTATION,
+        derivationDigest,
+        source: sourceProvenance,
+        assetSource,
+        positions: positions.map((position) => ({
+          id: position.id,
+          locator: position.locator,
+          contentHash: position.contentHash,
+          content: position.bytes.toString('base64'),
+        })),
+      };
+      const serialized = JSON.stringify(bundle);
+      if (Buffer.byteLength(serialized, 'utf8') > SELECTED_BATCH_LIMITS.evidenceDecryptedBytes) fail('EVIDENCE_INVALID');
+      checkCancellation(signal);
+      if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+
+      const action = 'ingest_asset_source_evidence';
+      activeIndexKey = await resolveKey(info, 'source-index');
+      const sourceIdentity = `event-intelligence:source-family:${ASSET_SOURCE_EXCERPT_REPRESENTATION}:v1\u0000${sourceKind}\u0000${normalizeSourceUrl(sourceUrl)}`;
+      const currentFamilyHmac = stableHmac(activeIndexKey.key, sourceIdentity);
+      const directory = await tenantDirectory(info);
+      directoryForCleanup = directory;
+      const snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
+        const manifest = await readManifest(database, info.tenantHash);
+        await expireRecords(database, manifest, currentTime());
+        const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        return { document: row?.document ?? null };
+      });
+      const manifest = snapshot.document === null ? emptyManifest(info.tenantHash)
+        : validateManifest(JSON.parse(snapshot.document), info.tenantHash);
+      const sourceFamilies = Object.values(manifest.families)
+        .filter((family) => family.representation === ASSET_SOURCE_EXCERPT_REPRESENTATION);
+      if (sourceFamilies.length > 256) fail('EVIDENCE_BUSY');
+      let family = sourceFamilies.find((candidate) => candidate.sourceKeyId === activeIndexKey.keyId
+        && candidate.sourceKeyHmac === currentFamilyHmac);
+      if (!family) {
+        for (const candidate of sourceFamilies) {
+          if (candidate.sourceKeyId === activeIndexKey.keyId) continue;
+          const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId);
+          historicalIndexKeys.push(oldIndexKey.key);
+          if (candidate.sourceKeyHmac === stableHmac(oldIndexKey.key, sourceIdentity)) {
+            family = candidate;
+            break;
+          }
+        }
+      }
+      const familyRecordIds = family ? safeArray(family.recordIds, 100_000) : [];
+      if (!familyRecordIds) fail('EVIDENCE_INTEGRITY');
+      const existingRecord = familyRecordIds.map((id) => manifest.records[id]).find((candidate) =>
+        candidate?.state === 'available' && candidate.representation === ASSET_SOURCE_EXCERPT_REPRESENTATION
+          && candidate.contentHash === sourceContentHash && candidate.derivationDigest === derivationDigest);
+      if (existingRecord) {
+        const existingSnapshot = copyEvidenceRecord(existingRecord, ASSET_SOURCE_MAX_POSITIONS);
+        await authorize(info, request, action, [existingRecord.id]);
+        checkCancellation(signal);
+        authorizeCurrent(info, request, action, [existingRecord.id]);
+        checkCancellation(signal);
+        const finalNow = currentTime();
+        if (existingRecord.expiresAtMs <= finalNow) fail('EVIDENCE_EXPIRED');
+        if (existingRecord.expiresAtMs > retention.expiresAtMs) fail('EVIDENCE_DENIED');
+        const databasePath = path.join(directory, 'evidence.sqlite');
+        let database;
+        let transactionOpen = false;
+        try {
+          const before = lstatSync(databasePath);
+          if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
+          database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
+          const after = lstatSync(databasePath);
+          if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
+          database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
+          transactionOpen = true;
+          checkCancellation(signal);
+          if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+          const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+          if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
+          const bundleCount = Number(database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ? AND id = ?')
+            .get('evidence', existingRecord.id).count);
+          if (bundleCount !== 1) fail('EVIDENCE_EXPIRED');
+          checkCancellation(signal);
+          if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+          database.exec('COMMIT');
+          transactionOpen = false;
+        } catch (error) {
+          if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
+          if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
+          throw error;
+        } finally {
+          database?.close();
+        }
+        checkCancellation(signal);
+        if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        return Object.freeze({
+          outcome: 'stored',
+          evidence: newEvidenceHandle(info, existingRecord.id),
+          positions: Object.freeze(existingSnapshot.positionIds.map((id) => newPositionHandle(
+            info, existingRecord.id, id, sourceKind, ASSET_SOURCE_EXCERPT_REPRESENTATION,
+          ))),
+          created: false,
+          metadata: frozenMetadata(existingSnapshot),
+        });
+      }
+
+      const activeFamily = family;
+      const latestId = activeFamily?.recordIds.at(-1);
+      const latest = latestId ? manifest.records[latestId] : null;
+      const evidenceId = randomUUID();
+      payloadKey = await resolveKey(info, 'payload');
+      sealedBytes = encodeSealedPayload(info.tenantHash, evidenceId, 'evidence', serialized, payloadKey.keyId, payloadKey.key);
+      await authorize(info, request, action, [evidenceId]);
+      checkCancellation(signal);
+      authorizeCurrent(info, request, action, [evidenceId]);
+      checkCancellation(signal);
+      const finalNow = currentTime();
+      if (retention.expiresAtMs <= finalNow) fail('EVIDENCE_EXPIRED');
+      const nowIso = new Date(finalNow).toISOString();
+      const version = activeFamily ? (activeFamily.versionCount ?? activeFamily.recordIds.length) + 1 : 1;
+      const familyId = activeFamily?.id ?? randomUUID();
+      const record = {
+        id: evidenceId,
+        version,
+        previousId: latest?.id ?? null,
+        contentHash: sourceContentHash,
+        duplicateGroupId: digest(Buffer.from(`event-intelligence:duplicate:v1:${info.tenantHash}:${sourceContentHash}`, 'utf8')),
+        retrievedAt,
+        createdAt: nowIso,
+        createdAtMs: finalNow,
+        retrievedAtMs,
+        expiresAtMs: retention.expiresAtMs,
+        policyId: retention.policyId,
+        policyVersion: retention.policyVersion,
+        state: 'available',
+        encryptionKeyId: payloadKey.keyId,
+        positionIds,
+        positionHashes,
+        representation: ASSET_SOURCE_EXCERPT_REPRESENTATION,
+        derivationDigest,
+      };
+      const databasePath = path.join(directory, 'evidence.sqlite');
+      let database;
+      let transactionOpen = false;
+      try {
+        const before = lstatSync(databasePath);
+        if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
+        database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
+        const after = lstatSync(databasePath);
+        if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
+        database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
+        transactionOpen = true;
+        checkCancellation(signal);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
+        const currentManifest = snapshot.document === null ? emptyManifest(info.tenantHash)
+          : validateManifest(JSON.parse(currentRow.document), info.tenantHash);
+        if (currentManifest.records[evidenceId]) fail('EVIDENCE_BUSY');
+        currentManifest.schemaVersion = Math.max(currentManifest.schemaVersion, ASSET_SOURCE_BUNDLE_VERSION);
+        currentManifest.records[evidenceId] = record;
+        let currentFamily = activeFamily ? currentManifest.families[activeFamily.id] : null;
+        if (activeFamily && !currentFamily) fail('EVIDENCE_BUSY');
+        if (!currentFamily) {
+          currentFamily = {
+            id: familyId,
+            representation: ASSET_SOURCE_EXCERPT_REPRESENTATION,
+            sourceKeyId: activeIndexKey.keyId,
+            sourceKeyHmac: currentFamilyHmac,
+            versionCount: 0,
+            recordIds: [],
+          };
+          currentManifest.families[familyId] = currentFamily;
+        }
+        if (currentFamily.representation !== ASSET_SOURCE_EXCERPT_REPRESENTATION) fail('EVIDENCE_INTEGRITY');
+        currentFamily.recordIds.push(evidenceId);
+        currentFamily.versionCount = version;
+        const manifestDocument = JSON.stringify(currentManifest);
+        if (Buffer.byteLength(manifestDocument, 'utf8') > 16 * 1024 * 1024) fail('EVIDENCE_STORAGE');
+        database.prepare('INSERT INTO sealed_bundles (kind, id, sealed) VALUES (?, ?, ?)').run('evidence', evidenceId, sealedBytes);
+        database.prepare(`INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)
+          ON CONFLICT (tenant_hash) DO UPDATE SET document = excluded.document`).run(info.tenantHash, manifestDocument);
+        checkCancellation(signal);
+        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        database.exec('COMMIT');
+        transactionOpen = false;
+      } catch (error) {
+        if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
+        if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
+        throw error;
+      } finally {
+        database?.close();
+      }
+      checkCancellation(signal);
+      if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+      return Object.freeze({
+        outcome: 'stored',
+        evidence: newEvidenceHandle(info, evidenceId),
+        positions: Object.freeze(positions.map((position) => newPositionHandle(
+          info, evidenceId, position.id, sourceKind, ASSET_SOURCE_EXCERPT_REPRESENTATION,
+        ))),
+        created: true,
+        metadata: frozenMetadata(record),
+      });
+    } catch (error) {
+      if (error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED' && directoryForCleanup) {
+        try { await persistExpirySweep(info, directoryForCleanup); } catch (cleanupError) { throw safePublicError(cleanupError); }
+      }
+      throw safePublicError(error);
+    } finally {
+      sourceBytes.fill(0);
+      for (const position of positions) position.bytes.fill(0);
+      for (const bytes of candidateBuffers) bytes.fill(0);
+      activeIndexKey?.key.fill(0);
+      payloadKey?.key.fill(0);
+      for (const key of historicalIndexKeys) key.fill(0);
+      sealedBytes?.fill(0);
+    }
+  }
+
   async function ingestDerivedPdfEvidence(scope, inputValue, request, signal) {
     const info = scopeInfo(scope);
     const input = ownDataRecord(inputValue, new Set([
@@ -2142,7 +2845,7 @@ export function createEvidenceStore(options) {
           ? emptyManifest(info.tenantHash)
           : validateManifest(JSON.parse(currentRow.document), info.tenantHash);
         if (currentManifest.records[evidenceId]) fail('EVIDENCE_BUSY');
-        currentManifest.schemaVersion = PDF_DERIVED_BUNDLE_VERSION;
+        currentManifest.schemaVersion = Math.max(currentManifest.schemaVersion, PDF_DERIVED_BUNDLE_VERSION);
         currentManifest.records[evidenceId] = record;
         let currentFamily = activeFamily ? currentManifest.families[activeFamily.id] : null;
         if (activeFamily && !currentFamily) fail('EVIDENCE_BUSY');
@@ -2650,6 +3353,7 @@ export function createEvidenceStore(options) {
   return Object.freeze({
     scopeForAuthenticatedRequest: createScope,
     ingestEvidence,
+    ingestAssetSourceEvidence,
     ingestDerivedPdfEvidence,
     lookupEvidence,
     getEvidenceMetadata,

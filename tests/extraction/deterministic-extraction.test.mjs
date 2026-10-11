@@ -25,6 +25,7 @@ function assertExactRanges(result, sourceBytes) {
     ...result.visibleText,
     ...result.statusMentions,
     ...result.accessSignals,
+    ...result.assetSources.map((asset) => asset.candidate),
     ...result.events.flatMap((entity) => entity.candidates),
     ...result.organizations.flatMap((entity) => entity.candidates),
   ];
@@ -225,6 +226,130 @@ test("tracks empty, adjacent, chunked, and flushed XHTML CDATA content with sour
   assert.deepEqual(longJsonResult.jsonLdBlocks.map((block) => block.status), ["parsed"]);
   assert.ok(longJsonResult.statusMentions.some((candidate) => /Cancelled after long JSON/.test(candidate.normalizedValue)));
   assertExactRanges(longJsonResult, longJsonCdata.bytes);
+});
+
+test("discovers bounded HTML and JSON-LD asset source claims from exact parser locators", async () => {
+  const bytes = Buffer.from(`<!doctype html><html><head>
+    <meta property="og:image" content="https://img.example.com/page&amp;cover.png">
+    <link rel="apple-touch-icon" href="//cdn.example.com/icon.png">
+  </head><body>
+    <img src="../poster.png?size=small&amp;v=2" alt="unverified claim">
+    <script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Event", name: "Same-name festival",
+          image: ["https://img.example.com/event-a.png", { "@type": "ImageObject", url: "/event-a-2.png" }],
+          organizer: { name: "Unverified host", logo: { url: "//cdn.example.com/claimed-host.svg" } },
+          "organizer.logo": "https://img.example.com/literal-dotted-key.svg",
+          "image.url": "https://img.example.com/literal-image-key.svg",
+          "image/0/url": "https://img.example.com/literal-slash-key.svg",
+        },
+        {
+          "@type": "Event", name: "Same-name festival",
+          image: "https://img.example.com/event-b.png",
+        },
+      ],
+    })}</script>
+  </body></html>`);
+  const input = document(bytes);
+  const result = await extractDeterministically(input);
+  assert.equal(result.status, "PARTIAL");
+  assert.equal(result.assetSourcesTruncated, false);
+  assert.equal(result.events.length, 2);
+
+  const forms = result.assetSources.map((asset) => asset.sourceForm);
+  assert.deepEqual(forms.filter((form) => form === "open-graph-image").length, 1);
+  assert.deepEqual(forms.filter((form) => form === "html-icon-link").length, 1);
+  assert.deepEqual(forms.filter((form) => form === "html-img-src").length, 1);
+  const jsonAssets = result.assetSources.filter((asset) => formIsJsonLd(asset.sourceForm));
+  assert.equal(jsonAssets.length, 4);
+  assert.ok(jsonAssets.some((asset) => asset.candidate.normalizedValue === "https://img.example.com/event-a.png"));
+  assert.ok(jsonAssets.some((asset) => asset.candidate.normalizedValue === "/event-a-2.png"));
+  assert.ok(jsonAssets.some((asset) => asset.candidate.normalizedValue === "//cdn.example.com/claimed-host.svg"));
+  assert.ok(jsonAssets.some((asset) => asset.candidate.normalizedValue === "https://img.example.com/event-b.png"));
+  assert.equal(jsonAssets.some((asset) => /literal-(?:dotted|image|slash)-key/.test(asset.candidate.normalizedValue)), false);
+  const nestedOrganizer = jsonAssets.find((asset) => asset.candidate.normalizedValue === "//cdn.example.com/claimed-host.svg");
+  assert.deepEqual(nestedOrganizer.association.kind, "nested-entity-source-claim");
+  assert.equal(nestedOrganizer.association.parentEntityKind, "event");
+  assert.equal(nestedOrganizer.association.roleHint, "organizer");
+  assert.equal(nestedOrganizer.association.parentEntityId, result.events[0].entityId);
+  assert.equal(nestedOrganizer.association.parentPointer, result.events[0].jsonPointer);
+  assert.ok(nestedOrganizer.association.assetPointer.includes("/organizer/logo/url"));
+  const eventImages = jsonAssets.filter((asset) => asset.candidate.normalizedValue?.includes("event-"));
+  assert.equal(eventImages[0].association.entityId, result.events[0].entityId);
+  assert.ok(eventImages.some((asset) => asset.association.assetPointer.endsWith("/image/1/url")));
+  assert.equal(eventImages.at(-1).association.entityId, result.events[1].entityId);
+  assert.ok(result.assetSources.filter((asset) => asset.association.kind === "unassigned-page")
+    .every((asset) => asset.association.entityId === undefined));
+  assertExactRanges(result, bytes);
+});
+
+function formIsJsonLd(value) {
+  return value === "jsonld-image" || value === "jsonld-logo";
+}
+
+test("keeps XHTML image and icon attributes mapped to exact entity-decoded source bytes", async () => {
+  const input = document(Buffer.from(
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="icon" href="../icons/caf&#xE9;.svg" /></head>'
+    + '<body><img src="/caf&#xE9;.png" /><script type="application/ld+json"><![CDATA['
+    + '{"@type":"Event","name":"Café","logo":{"@type":"ImageObject","contentUrl":"https://cdn.example.com/caf\\u00e9.png"}}'
+    + ']]></script></body></html>',
+  ), "application/xhtml+xml");
+  const result = await extractDeterministically(input);
+  assert.equal(result.status, "PARTIAL");
+  assert.equal(result.assetSources.length, 3);
+  assert.ok(result.assetSources.some((asset) => asset.sourceForm === "html-icon-link" && asset.candidate.rawValue === "../icons/caf&#xE9;.svg"));
+  assert.ok(result.assetSources.some((asset) => asset.sourceForm === "html-img-src" && asset.candidate.rawValue === "/caf&#xE9;.png"));
+  assert.ok(result.assetSources.some((asset) => asset.sourceForm === "jsonld-logo" && asset.candidate.normalizedValue === "https://cdn.example.com/café.png"));
+  assertExactRanges(result, input.bytes);
+});
+
+test("a typed nested organizer logo is associated with its Organization only once", async () => {
+  const input = document(Buffer.from(`<script type="application/ld+json">${JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [{
+      "@type": "Event",
+      name: "Community Festival",
+      organizer: {
+        "@type": "Organization",
+        name: "Acme Arts",
+        logo: "https://cdn.example.com/acme.svg",
+      },
+    }],
+  })}</script>`));
+  const result = await extractDeterministically(input);
+
+  assert.equal(result.events.length, 1);
+  assert.equal(result.organizations.length, 1);
+  const logoSources = result.assetSources.filter((asset) => asset.sourceForm === "jsonld-logo");
+  assert.equal(logoSources.length, 1);
+  assert.equal(logoSources[0].association.kind, "entity-source-claim");
+  assert.equal(logoSources[0].association.entityKind, "organization");
+  assert.equal(logoSources[0].association.entityId, result.organizations[0].entityId);
+  assert.equal(logoSources[0].association.entityPointer, result.organizations[0].jsonPointer);
+  assert.equal(logoSources[0].association.entityId === result.events[0].entityId, false);
+  assertExactRanges(result, input.bytes);
+});
+
+test("marks asset-source candidate truncation as incomplete instead of returning a complete prefix", async () => {
+  const input = document(Buffer.from('<html><body><img src="/one.png"><img src="/two.png"></body></html>'));
+  const result = await extractDeterministically(input, { limits: { maxAssetSources: 1 } });
+  assert.equal(result.assetSources.length, 1);
+  assert.equal(result.assetSourcesTruncated, true);
+  assert.equal(result.status, "RESOURCE_LIMIT");
+  assert.ok(result.diagnostics.some((item) => item.code === "ASSET_SOURCE_LIMIT"));
+});
+
+test("a parser deadline returns an incomplete resource outcome rather than asset success", async () => {
+  const input = document(Buffer.from(
+    `<html><body>${"x".repeat(100_000)}<img src="/after-deadline.png"></body></html>`,
+  ));
+  const result = await extractDeterministically(input, { limits: { htmlChunkCodeUnits: 1, parseTimeoutMs: 1 } });
+  assert.equal(result.status, "RESOURCE_LIMIT");
+  assert.equal(result.termination, "PARSER_DEADLINE");
+  assert.ok(result.diagnostics.some((item) => item.code === "PARSER_DEADLINE"));
+  assert.equal(result.assetSources.length, 0);
 });
 
 test("parses XML-decoded XHTML JSON-LD while mapping candidates to original source bytes", async () => {
@@ -494,6 +619,9 @@ test("returns stable empty, unsupported media, and encoding outcomes", async () 
 
   const binary = await extractDeterministically(document(Buffer.from([0, 1, 2]), "application/octet-stream"));
   assert.equal(binary.status, "UNSUPPORTED_MEDIA");
+  assert.deepEqual(binary.assetSources, []);
+  assert.equal(binary.assetSourcesTruncated, false);
+  assert.equal(Object.isFrozen(binary.assetSources), true);
 
   const legacyCharset = await extractDeterministically(document(Buffer.from("<p>hello</p>"), "text/html; charset=windows-1252"));
   assert.equal(legacyCharset.status, "UNSUPPORTED_ENCODING");

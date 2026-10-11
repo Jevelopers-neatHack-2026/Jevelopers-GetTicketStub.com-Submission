@@ -13,7 +13,7 @@ import {
   textCandidate,
 } from "./source.mjs";
 
-export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.2.0";
+export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.3.0";
 
 export const EXTRACTION_LIMITS = Object.freeze({
   maxDocumentBytes: 2 * 1024 * 1024,
@@ -26,6 +26,7 @@ export const EXTRACTION_LIMITS = Object.freeze({
   maxVisibleTextBytes: 512 * 1024,
   maxStatusSignalCandidates: 128,
   maxPageMetadataCandidates: 1_000,
+  maxAssetSources: 128,
   maxCanonicalSuggestions: 256,
   maxNoscriptNodes: 1_024,
   maxNoscriptSignals: 64,
@@ -168,6 +169,8 @@ export async function extractDeterministically(documentInput, options = {}) {
     diagnostics,
     canonicalSuggestions: [],
     pageMetadata: [],
+    assetSources: [],
+    assetSourcesTruncated: false,
     visibleText: [],
     statusMentions: [],
     accessSignals: [],
@@ -242,6 +245,8 @@ export async function extractDeterministically(documentInput, options = {}) {
     sourceHash,
     canonicalSuggestions: Object.freeze(state.canonicalSuggestions),
     pageMetadata: Object.freeze(state.pageMetadata),
+    assetSources: Object.freeze(state.assetSources),
+    assetSourcesTruncated: state.assetSourcesTruncated,
     events: Object.freeze(state.events),
     organizations: Object.freeze(state.organizations),
     visibleText: Object.freeze(state.visibleText),
@@ -311,6 +316,8 @@ async function collectHtml(state, signal, contentType) {
   }
   state.canonicalSuggestions = html.canonicalSuggestions;
   state.pageMetadata = html.pageMetadata;
+  state.assetSources = html.assetSources;
+  state.assetSourcesTruncated = html.assetSourcesTruncated;
   state.visibleText = html.visibleText;
   state.statusMentions = html.statusMentions;
   state.accessSignals = html.accessSignals;
@@ -397,6 +404,9 @@ async function collectHtml(state, signal, contentType) {
     }
     state.events.push(...extracted.entities);
     state.organizations.push(...extracted.organizations);
+    const knownOrganizationAssetLocators = jsonLdAssetLocatorKeys(extracted.organizations, "organization");
+    appendJsonLdAssetSources(state, extracted.organizations, "organization");
+    appendJsonLdAssetSources(state, extracted.entities, "event", knownOrganizationAssetLocators);
     if (extracted.truncated) {
       state.termination = "RESOURCE_LIMIT";
       addDiagnostic(state, "JSONLD_ENTITY_LIMIT", { blockIndex: index });
@@ -485,6 +495,9 @@ async function collectStandaloneJsonLd(state, signal) {
   }
   state.events.push(...extracted.entities);
   state.organizations.push(...extracted.organizations);
+  const knownOrganizationAssetLocators = jsonLdAssetLocatorKeys(extracted.organizations, "organization");
+  appendJsonLdAssetSources(state, extracted.organizations, "organization");
+  appendJsonLdAssetSources(state, extracted.entities, "event", knownOrganizationAssetLocators);
   if (extracted.truncated || extracted.candidateTruncated) state.termination = "RESOURCE_LIMIT";
   state.jsonLdBlocks.push(Object.freeze({
     blockIndex: 0,
@@ -495,6 +508,108 @@ async function collectStandaloneJsonLd(state, signal) {
   }));
   if (extracted.truncated) addDiagnostic(state, "JSONLD_ENTITY_LIMIT", { blockIndex: 0 });
   if (extracted.candidateTruncated) addDiagnostic(state, "JSONLD_CANDIDATE_LIMIT", { blockIndex: 0 });
+}
+
+function jsonLdAssetLocatorKeys(entities, entityKind) {
+  const keys = new Set();
+  for (const entity of entities) {
+    for (const candidate of entity.candidates) {
+      if (!jsonLdAssetCandidateShape(candidate, entityKind, entity.jsonPointer)) continue;
+      const locator = candidate.source?.locator;
+      if (locator?.kind === "text-range") keys.add(`${locator.startByte}:${locator.endByte}`);
+    }
+  }
+  return keys;
+}
+
+function jsonPointerParts(pointer) {
+  if (typeof pointer !== "string" || (pointer !== "" && !pointer.startsWith("/")) || /~(?![01])/.test(pointer)) return null;
+  if (pointer === "") return [];
+  return pointer.slice(1).split("/").map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
+}
+
+function isArrayIndex(value) {
+  return /^(?:0|[1-9][0-9]*)$/.test(value);
+}
+
+function jsonLdAssetPath(parts, start = 0) {
+  let cursor = start;
+  while (isArrayIndex(parts[cursor] ?? "")) cursor += 1;
+  const family = parts[cursor]?.toLowerCase();
+  if (family !== "image" && family !== "logo") return null;
+  cursor += 1;
+  if (cursor === parts.length) return { family };
+
+  // Arrays of strings and arrays of ImageObject are both represented by actual
+  // numeric pointer segments. Do not use the flattened display field here: a
+  // JSON key such as "organizer.logo" is one pointer segment, not two.
+  while (isArrayIndex(parts[cursor] ?? "")) cursor += 1;
+  if (cursor === parts.length) return { family };
+  const leaf = parts[cursor]?.toLowerCase();
+  if (["url", "contenturl", "@id"].includes(leaf) && cursor + 1 === parts.length) return { family };
+  return null;
+}
+
+function jsonLdAssetCandidateShape(candidate, entityKind, entityPointer) {
+  if (typeof candidate.normalizedValue !== "string") return null;
+  const entityParts = jsonPointerParts(entityPointer);
+  const candidateParts = jsonPointerParts(candidate.source?.jsonPointer);
+  if (!entityParts || !candidateParts || candidateParts.length <= entityParts.length
+    || entityParts.some((part, index) => candidateParts[index] !== part)) return null;
+  const relative = candidateParts.slice(entityParts.length);
+  let shape = jsonLdAssetPath(relative);
+  let nestedOrganizer = false;
+  if (!shape && entityKind === "event") {
+    let organizerIndex = 0;
+    while (isArrayIndex(relative[organizerIndex] ?? "")) organizerIndex += 1;
+    if (relative[organizerIndex]?.toLowerCase() === "organizer") {
+      shape = jsonLdAssetPath(relative, organizerIndex + 1);
+      nestedOrganizer = shape !== null;
+    }
+  }
+  return shape ? { ...shape, nestedOrganizer } : null;
+}
+
+function appendJsonLdAssetSources(state, entities, entityKind, knownOrganizationAssetLocators = new Set()) {
+  for (const entity of entities) {
+    for (const candidate of entity.candidates) {
+      const shape = jsonLdAssetCandidateShape(candidate, entityKind, entity.jsonPointer);
+      if (!shape) continue;
+      const { family, nestedOrganizer } = shape;
+      const locator = candidate.source?.locator;
+      if (nestedOrganizer && locator?.kind === "text-range"
+        && knownOrganizationAssetLocators.has(`${locator.startByte}:${locator.endByte}`)) continue;
+      if (state.assetSources.length >= state.limits.maxAssetSources) {
+        if (!state.assetSourcesTruncated) {
+          state.assetSourcesTruncated = true;
+          state.termination = "RESOURCE_LIMIT";
+          addDiagnostic(state, "ASSET_SOURCE_LIMIT", { limit: state.limits.maxAssetSources });
+        }
+        return;
+      }
+      state.assetSources.push(Object.freeze({
+        candidate,
+        sourceForm: family === "logo" ? "jsonld-logo" : "jsonld-image",
+        association: nestedOrganizer
+          ? Object.freeze({
+            kind: "nested-entity-source-claim",
+            parentEntityKind: "event",
+            parentEntityId: entity.entityId,
+            roleHint: "organizer",
+            parentPointer: entity.jsonPointer,
+            assetPointer: candidate.source?.jsonPointer ?? "",
+          })
+          : Object.freeze({
+            kind: "entity-source-claim",
+            entityKind,
+            entityId: entity.entityId,
+            blockIndex: entity.blockIndex,
+            entityPointer: entity.jsonPointer,
+            assetPointer: candidate.source?.jsonPointer ?? "",
+          }),
+      }));
+    }
+  }
 }
 
 function collectPlainText(state) {
@@ -657,6 +772,8 @@ function emptyResult({ status, source, sourceHash, diagnostics, termination = nu
     sourceHash,
     canonicalSuggestions: Object.freeze([]),
     pageMetadata: Object.freeze([]),
+    assetSources: Object.freeze([]),
+    assetSourcesTruncated: false,
     events: Object.freeze([]),
     organizations: Object.freeze([]),
     visibleText: Object.freeze([]),

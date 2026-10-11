@@ -1,4 +1,5 @@
 import type { PdfTextReaderErrorCode } from '../extraction/pdf/index.mjs';
+import type { RetrievedDocument } from '../security/index.mjs';
 
 declare const tenantScopeBrand: unique symbol;
 declare const evidenceHandleBrand: unique symbol;
@@ -129,7 +130,7 @@ export interface AvailableEvidenceMetadata {
   readonly accessPolicy: 'tenant_private';
   readonly state: 'available';
   readonly positionCount: number;
-  readonly representation?: 'pdf-derived-text';
+  readonly representation?: 'pdf-derived-text' | 'asset-source-excerpt';
   readonly derivationDigest?: string;
 }
 
@@ -184,8 +185,99 @@ export interface PdfDerivedEvidenceIngestInput {
   readonly readerOptions?: PdfDerivedReaderOptions;
 }
 
+export type AssetSourceForm = 'html-img-src' | 'html-icon-link' | 'open-graph-image' | 'jsonld-image' | 'jsonld-logo';
+export type AssetSourceQuarantineReason =
+  | 'invalid_or_empty'
+  | 'unresolvable_url'
+  | 'unsupported_scheme'
+  | 'sensitive_query'
+  | 'url_policy_denied';
+export type AssetSourceAssociation =
+  | Readonly<{ kind: 'unassigned-page' }>
+  | Readonly<{
+    kind: 'entity-source-claim';
+    entityKind: 'event' | 'organization';
+    entityId: string;
+    blockIndex: number;
+    entityPointer: string;
+    assetPointer: string;
+  }>
+  | Readonly<{
+    kind: 'nested-entity-source-claim';
+    parentEntityKind: 'event';
+    parentEntityId: string;
+    roleHint: 'organizer';
+    parentPointer: string;
+    assetPointer: string;
+  }>;
+
+export interface StoredAssetSourceCandidate {
+  readonly candidateId: string;
+  readonly positionIndex: number;
+  readonly sourceForm: AssetSourceForm;
+  readonly field: string;
+  readonly relationHint: string | null;
+  /** A source claim only. It does not identify or verify an event or company. */
+  readonly association: AssetSourceAssociation;
+  readonly locator: TextRangeLocator;
+  /** SHA-256 of the exact private source excerpt, not of fetched asset bytes. */
+  readonly excerptHash: string;
+  readonly normalizedSuggestion: string | null;
+  readonly fetchSuggestion: string | null;
+  readonly quarantineReason: AssetSourceQuarantineReason | null;
+  readonly role: 'unknown';
+  readonly permission: 'unknown';
+  readonly inspection: 'pending';
+}
+
+export interface AssetSourceProvenance {
+  readonly bindingVersion: 1;
+  readonly selectorVersion: 'ei-asset-source-selector/1';
+  readonly extractorVersion: string;
+  readonly sourceUrl: string;
+  readonly sourceKind: 'external';
+  readonly completeness: 'static-selected-forms-only';
+  readonly limitations: readonly string[];
+  readonly candidates: readonly StoredAssetSourceCandidate[];
+  readonly derivationDigest: string;
+}
+
+export interface AssetSourceEvidenceIngestInput {
+  /** Completed HTML/XHTML/JSON-LD bytes from the existing retrieval boundary; redirects must be zero. */
+  readonly document: RetrievedDocument;
+  /** Existing app-issued tenant-private source retention capability. */
+  readonly retentionHandle: object;
+}
+
+export type AssetSourceEvidenceIngestResult =
+  | (Omit<EvidenceIngestResult, 'metadata'> & {
+    readonly outcome: 'stored';
+    readonly metadata: AvailableEvidenceMetadata & {
+      readonly representation: 'asset-source-excerpt';
+      readonly derivationDigest: string;
+    };
+  })
+  | { readonly outcome: 'no-candidates'; readonly code: 'NO_STATIC_ASSET_CANDIDATES' }
+  | {
+    readonly outcome: 'rejected';
+    readonly code:
+      | 'SOURCE_EXTRACTION_FAILURE'
+      | 'SOURCE_EXTRACTION_INCOMPLETE'
+      | 'SOURCE_URL_POLICY_DENIED'
+      | 'SOURCE_ACCESS_RESTRICTED'
+      | 'SOURCE_DYNAMIC_OR_INCOMPLETE'
+      | 'SOURCE_UNSUPPORTED_OR_MALFORMED'
+      | 'ASSET_CANDIDATE_LIMIT';
+  };
+
 export type PdfDerivedEvidenceIngestResult =
-  | (EvidenceIngestResult & { readonly outcome: 'stored' })
+  | (Omit<EvidenceIngestResult, 'metadata'> & {
+    readonly outcome: 'stored';
+    readonly metadata: AvailableEvidenceMetadata & {
+      readonly representation: 'pdf-derived-text';
+      readonly derivationDigest: string;
+    };
+  })
   | { readonly outcome: 'no-text'; readonly code: 'NO_EMBEDDED_TEXT'; readonly requiresInspection: true }
   | { readonly outcome: 'rejected'; readonly code: PdfTextReaderErrorCode };
 
@@ -288,6 +380,8 @@ export interface EvidencePrivatePayloadInput<Request = unknown> {
     contentHash: string;
     /** Present only for derived PDF text, and remains private provenance. */
     derivedPdf?: PdfDerivedProvenance;
+    /** Present only for the encrypted asset source excerpt representation. */
+    assetSource?: AssetSourceProvenance;
   }>;
   readonly positions: readonly Readonly<{
     locator: StoredEvidenceLocator;
@@ -322,6 +416,8 @@ export interface EvidenceSelectedEvidence {
     contentHash: string;
     /** Present only for derived PDF text. Contains no text bytes or text strings. */
     derivedPdf?: PdfDerivedProvenance;
+    /** Present only for asset source excerpts. Text remains behind the private payload capability. */
+    assetSource?: AssetSourceProvenance;
   }>;
   readonly positions: readonly Readonly<{
     handle: EvidencePositionHandle;
@@ -394,6 +490,13 @@ export interface EvidenceIntegritySnapshot {
 export interface EvidenceStore<Request = unknown> {
   scopeForAuthenticatedRequest(request: Request): Promise<EvidenceTenantScope>;
   ingestEvidence(scope: EvidenceTenantScope, input: EvidenceIngestInput): Promise<EvidenceIngestResult>;
+  /** Runs the existing bounded HTML/XHTML/JSON-LD parser and stores only exact private source excerpts. */
+  ingestAssetSourceEvidence(
+    scope: EvidenceTenantScope,
+    input: AssetSourceEvidenceIngestInput,
+    request: Request,
+    signal?: AbortSignal,
+  ): Promise<AssetSourceEvidenceIngestResult>;
   /** Invokes the pinned isolated PDF reader itself; caller-supplied observations and geometry are rejected. */
   ingestDerivedPdfEvidence(
     scope: EvidenceTenantScope,
