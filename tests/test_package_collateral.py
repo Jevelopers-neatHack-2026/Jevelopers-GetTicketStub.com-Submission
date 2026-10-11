@@ -381,12 +381,17 @@ class PackagePolicyTests(unittest.TestCase):
             updated_inventory = package.read_json(inventory_path)
             updated_provenance = package.read_json(provenance_path)
             updated_record = updated_provenance["records"][0]
+            updated_inventory_record = updated_provenance["records"][1]
+            inventory_digest = package.sha256_file(inventory_path)
             self.assertEqual(manifest_digest, updated_inventory["trackedFiles"][0]["sha256"])
             self.assertEqual("a" * 40, updated_inventory["trackedFiles"][0]["trackedAtRevision"])
             self.assertEqual("sha256:" + manifest_digest, updated_record["source"]["revision"])
             self.assertEqual("sha256_content_digest", updated_record["source"]["revisionKind"])
             self.assertIsNone(updated_record["source"]["url"])
             self.assertEqual(manifest_digest, updated_record["checksum"]["value"])
+            self.assertEqual("sha256:" + inventory_digest, updated_inventory_record["source"]["revision"])
+            self.assertIsNone(updated_inventory_record["source"]["url"], "inventory provenance URL stays bound and null")
+            self.assertEqual(inventory_digest, updated_inventory_record["checksum"]["value"])
             self.assertEqual(inventory_projection, package.projected_policy_digest("docs/collateral-inventory.json", updated_inventory))
             self.assertEqual(provenance_projection, package.projected_policy_digest("review/provenance.json", updated_provenance))
 

@@ -2222,8 +2222,9 @@ def bind_draft_manifest_self_reference(root: Path, version: str) -> str:
 
     inventory_rows = [row for row in inventory.get("trackedFiles", []) if row.get("path") == manifest_relative]
     provenance_rows = [row for row in provenance.get("records", []) if row.get("assetId") == "HANDOFF-MANIFEST-001"]
-    if len(inventory_rows) != 1 or len(provenance_rows) != 1:
-        raise ValueError("manifest self-reference requires exactly one inventory path and one HANDOFF-MANIFEST-001 provenance record")
+    inventory_provenance_rows = [row for row in provenance.get("records", []) if row.get("assetId") == "PROV-FILE-E018FDB8D981"]
+    if len(inventory_rows) != 1 or len(provenance_rows) != 1 or len(inventory_provenance_rows) != 1:
+        raise ValueError("manifest self-reference requires exactly one inventory path and both canonical manifest/inventory provenance records")
     inventory_row = inventory_rows[0]
     provenance_row = provenance_rows[0]
     source = provenance_row.get("source")
@@ -2237,11 +2238,25 @@ def bind_draft_manifest_self_reference(root: Path, version: str) -> str:
     source["revision"] = f"sha256:{digest}"
     source["url"] = None
     checksum["value"] = digest
+    inventory_provenance_source = inventory_provenance_rows[0].get("source")
+    inventory_provenance_checksum = inventory_provenance_rows[0].get("checksum")
+    if (
+        not isinstance(inventory_provenance_source, dict)
+        or inventory_provenance_source.get("path") != inventory_relative
+        or inventory_provenance_source.get("repo") != "Jevelopers-neatHack-2026/marketing-material"
+        or not isinstance(inventory_provenance_checksum, dict)
+        or inventory_provenance_checksum.get("algorithm") != "SHA-256"
+        or inventory_provenance_source.get("url") is not None
+    ):
+        raise ValueError("inventory provenance self-reference must bind its exact current content digest and keep its null URL")
+    inventory_encoded = json.dumps(inventory, indent=2, ensure_ascii=False) + "\n"
+    inventory_digest = sha256_bytes(inventory_encoded.encode("utf-8"))
+    inventory_provenance_source["revision"] = f"sha256:{inventory_digest}"
+    inventory_provenance_checksum["value"] = inventory_digest
 
     if projected_policy_digest(inventory_relative, inventory) != inventory_before or projected_policy_digest(provenance_relative, provenance) != provenance_before:
         raise ValueError("self-reference binding unexpectedly changed a nonexcluded canonical policy field")
-    for target, document in ((inventory_path, inventory), (provenance_path, provenance)):
-        encoded = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+    for target, encoded in ((inventory_path, inventory_encoded), (provenance_path, json.dumps(provenance, indent=2, ensure_ascii=False) + "\n")):
         temporary_path: Optional[Path] = None
         try:
             with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix=".self-reference-", suffix=".tmp", dir=target.parent, delete=False) as handle:
