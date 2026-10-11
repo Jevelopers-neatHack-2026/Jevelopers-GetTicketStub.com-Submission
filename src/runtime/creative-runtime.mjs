@@ -2918,7 +2918,9 @@ export function createCreativeApi(options = {}) {
     try { configuration = immutableRequestSnapshot(provider.getConceptConfiguration()); }
     catch { throw new CreativeApiError("unavailable", operation, "provider.concept_configuration"); }
     if (!isRecord(configuration) || configuration.model_id !== adapterSnapshot.model ||
-        canonicalSerialize(configuration.configuration) !== canonicalSerialize(adapterSnapshot.configuration)) {
+        canonicalSerialize(configuration.configuration) !== canonicalSerialize(adapterSnapshot.configuration) ||
+        (nativeRoute.name === "openrouter" && (configuration.provider_tag !== adapterSnapshot.provider_tag ||
+          canonicalSerialize(configuration.capabilities) !== canonicalSerialize(adapterSnapshot.capabilities)))) {
       throw new CreativeApiError("unavailable", operation, "concept_adapter_configuration");
     }
     const resolveRoute = requiredPort(ports, "provider.resolveRoute", operation);

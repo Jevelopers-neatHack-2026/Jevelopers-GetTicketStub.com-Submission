@@ -26,6 +26,8 @@ const ENUM_VALUES = Object.freeze({
   output_format: /^(?:png|jpeg|webp)$/,
   resolution: /^(?:512|768|1K|1\.5K|2K|4K)$/,
 });
+/** Maximum relative error between the decoded and the pinned aspect ratio. */
+const ASPECT_RATIO_TOLERANCE = 0.03;
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/;
 const COST_DETAIL_KEYS = Object.freeze(["upstream_inference_cost", "upstream_inference_prompt_cost", "upstream_inference_completions_cost"]);
 const USAGE_ROOT_KEYS = Object.freeze(["prompt_tokens", "completion_tokens", "total_tokens", "cost", "cost_details", "is_byok"]);
@@ -45,7 +47,7 @@ function asOpenRouterError(error) {
   if (!(error instanceof OpenAIImagesProviderError) || error instanceof OpenRouterImagesProviderError) return error;
   const converted = new OpenRouterImagesProviderError(error.code, error.message, {
     outcome: error.provider_outcome, http_status: error.http_status, retry: error.retry,
-    provider_request_ref: error.provider_request_ref, field: error.field,
+    provider_request_ref: error.provider_request_ref, field: error.field, embedded_code: error.embedded_code,
   });
   if (Object.hasOwn(error, "usage")) attachUsageObservation(converted, error.usage, PRIVATE_PROVIDER_REQUEST_IDS.get(error));
   const targetBinding = PRIVATE_TARGET_BINDING_SHA256.get(error);
@@ -143,13 +145,16 @@ function dimensionsMatch(info, config) {
   const ratio = typeof config.aspect_ratio === "string" ? /^(\d+):(\d+)$/.exec(config.aspect_ratio) : null;
   if (!ratio) return true;
   const [a, b] = [Number(ratio[1]), Number(ratio[2])];
-  // Providers round to whole pixels, so the pinned ratio is accepted within one pixel on the long side.
-  return Math.abs(info.width * b - info.height * a) <= Math.max(a, b);
+  // OpenRouter documents that providers clamp requested ratios and derive pixel sizes themselves, so the
+  // pinned ratio is a bounded relative tolerance (3%), not an exact match. A clearly different shape is rejected.
+  return Math.abs(info.width * b - info.height * a) <= ASPECT_RATIO_TOLERANCE * a * info.height;
 }
 
 function decimal(value) {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1_000_000) return undefined;
   const fixed = value.toFixed(9).replace(/\.?0+$/, "");
+  // A positive reported amount that rounds to zero at nine decimals is unknown, never recorded as 0.
+  if (value > 0 && Number(fixed) === 0) return undefined;
   return DECIMAL.test(fixed) ? { amount: fixed, exact: Number(fixed) === value } : undefined;
 }
 
@@ -260,7 +265,10 @@ function classifyError(payload, status) {
     case 400: case 413: return { code: "provider_request_failed", ...hard };
     case 408: case 524: return { code: "provider_outcome_unknown", outcome: "unknown" };
     case 429: return { code: "provider_rate_limited", outcome: "failed" };
-    case 500: case 502: case 503: case 529: return { code: "provider_request_failed", outcome: "failed" };
+    // Only 502 is documented as a failed, non-billed generation. 429 (rate limited) and 503 (no provider meets
+    // routing) are refusals before any generation. 500 and 529 do not document that, so the hold is retained.
+    case 502: case 503: return { code: "provider_request_failed", outcome: "failed" };
+    case 500: case 529: return { code: "provider_request_failed", outcome: "unknown" };
     default:
       if (Number.isInteger(status) && status >= 400 && status < 500) return { code: "provider_request_failed", ...hard };
       return { code: "provider_request_failed", outcome: "unknown" };
@@ -322,7 +330,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       preflight(input, operation, conceptMode) {
         requireOperation(operation);
         if (operation === "generate") return;
-        if (input.plan.steps[0]?.parameters?.mask_source_ref !== undefined) {
+        if (input.plan.steps.some((step) => isRecord(step?.parameters) && step.parameters.mask_source_ref !== undefined)) {
           fail("unsupported_operation", "OpenRouter has no documented mask or inpainting parameter.", {
             outcome: "failed", field: "plan.steps.parameters.mask_source_ref",
           });
@@ -393,7 +401,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       getConceptConfiguration() {
         return guarded(() => {
           requireOperation("edit");
-          return Object.freeze({ model_id, configuration: pinnedConfiguration });
+          return Object.freeze({ model_id, provider_tag, capabilities: profileCapabilities, configuration: pinnedConfiguration });
         });
       },
       inspectConceptReferences(args) {

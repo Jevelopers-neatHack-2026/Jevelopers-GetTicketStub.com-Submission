@@ -632,15 +632,24 @@ const PRIVATE_ATTRIBUTION_TRIGGERS = Object.freeze({
  * image provider allowlist. The rows, keys, foreign keys and immutability triggers are preserved and
  * the rebuild is idempotent, so user_version is unchanged.
  */
+const PRIVATE_MIGRATION_DIAGNOSTICS = new WeakMap();
+
+/** Internal accessor for tests and operators: a sanitized SQLite cause (no SQL text, paths, or values). */
+export function readPrivateStoreMigrationDiagnostic(error) {
+  return error !== null && typeof error === "object" ? PRIVATE_MIGRATION_DIAGNOSTICS.get(error) : undefined;
+}
+
 function widenPrivateAttributionProviderChecks(db) {
   const legacy = "CHECK(provider_name='openai')";
   const widened = "CHECK(provider_name IN ('openai','openrouter'))";
-  const stale = db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='table' AND name IN
+  const staleTables = () => db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='table' AND name IN
     ('private_provider_attributions','private_provider_usage_attributions')`).all()
     .filter((table) => typeof table.sql === "string" && table.sql.includes(legacy));
-  if (stale.length === 0) return;
+  if (staleTables().length === 0) return;
   db.exec("BEGIN IMMEDIATE");
   try {
+    // Re-read inside the write transaction: a concurrent opener may already have rebuilt the tables.
+    const stale = staleTables();
     for (const { name, sql } of stale) {
       db.exec(`ALTER TABLE ${name} RENAME TO ${name}_widen_old`);
       db.exec(sql.replace(legacy, widened));
@@ -649,10 +658,18 @@ function widenPrivateAttributionProviderChecks(db) {
       db.exec(PRIVATE_ATTRIBUTION_TRIGGERS[name]);
     }
     db.exec("COMMIT");
-  } catch {
+  } catch (cause) {
+    const diagnostic = Object.freeze({
+      sqlite_errcode: Number.isInteger(cause?.errcode) ? cause.errcode : undefined,
+      sqlite_errstr: typeof cause?.errstr === "string" ? cause.errstr.slice(0, 120) : undefined,
+      error_name: typeof cause?.name === "string" ? cause.name.slice(0, 64) : undefined,
+    });
     if (db.isTransaction) db.exec("ROLLBACK");
     db.close();
-    reject("migration_failed", "storage_version");
+    try { reject("migration_failed", "storage_version"); } catch (error) {
+      PRIVATE_MIGRATION_DIAGNOSTICS.set(error, diagnostic);
+      throw error;
+    }
   }
 }
 

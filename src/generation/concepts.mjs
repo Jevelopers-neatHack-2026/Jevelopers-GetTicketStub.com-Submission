@@ -240,12 +240,26 @@ function validatePolicySnapshot(value, scope, request, nowMs) {
 }
 
 function validateAdapterSnapshot(value) {
-  onlyKeys(value, ["capability_ref", "capability_schema_version", "provider_name", "model", "endpoint", "provider_operation", "operation_mapping_ref", "operation_kind", "target_ref", "sdk_name", "sdk_version", "configuration_ref", "configuration_sha256", "configuration", "prompt_template_ref", "prompt_template_version", "prompt_template_sha256"], "adapter_snapshot");
+  onlyKeys(value, ["capability_ref", "capability_schema_version", "provider_name", "model", "endpoint", "provider_operation", "operation_mapping_ref", "operation_kind", "target_ref", "sdk_name", "sdk_version", "configuration_ref", "configuration_sha256", "configuration", "prompt_template_ref", "prompt_template_version", "prompt_template_sha256", "provider_tag", "capabilities"], "adapter_snapshot");
   const nativeRoute = imageProviderRoute(value.provider_name);
   if (value.provider_operation !== "edit" || !nativeRoute || value.endpoint !== nativeRoute.edit_endpoint) {
     fail("unsupported_concept_route", "adapter_snapshot.endpoint", "Referenced initial concepts require the explicit native image-edit route proposal.");
   }
   const config = validateConfiguration(value.configuration, nativeRoute.name);
+  // An OpenRouter approval binds the pinned provider tag and the declared capabilities; direct OpenAI has neither.
+  let routing = {};
+  if (nativeRoute.name === "openrouter") {
+    const capabilities = value.capabilities;
+    if (typeof value.provider_tag !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/.test(value.provider_tag) ||
+        !isPlainRecord(capabilities) || typeof capabilities.generation !== "boolean" ||
+        !(capabilities.edit === false || (isPlainRecord(capabilities.edit) &&
+          Number.isSafeInteger(capabilities.edit.max_input_references) && capabilities.edit.max_input_references >= 2))) {
+      fail("unsupported_concept_route", "adapter_snapshot.provider_tag", "OpenRouter concepts must bind the pinned provider tag and an edit capability that admits both references.");
+    }
+    routing = { provider_tag: value.provider_tag, capabilities: cloned(capabilities) };
+  } else if (value.provider_tag !== undefined || value.capabilities !== undefined) {
+    fail("unsupported_concept_route", "adapter_snapshot.provider_tag", "Only OpenRouter adapter snapshots carry a provider tag or capabilities.");
+  }
   const configurationHash = hash(value.configuration_sha256, "adapter_snapshot.configuration_sha256");
   if (configurationHash !== canonicalHash(config)) {
     fail("configuration_hash_mismatch", "adapter_snapshot.configuration_sha256", "The configuration hash does not match the exact supplied configuration.");
@@ -273,7 +287,12 @@ function validateAdapterSnapshot(value) {
     prompt_template_ref: nonEmpty(value.prompt_template_ref, "adapter_snapshot.prompt_template_ref"),
     prompt_template_version: nonEmpty(value.prompt_template_version, "adapter_snapshot.prompt_template_version"),
     prompt_template_sha256: promptHash,
+    ...routing,
   });
+}
+
+function isPlainRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function packageReference(packageValue, assetId, field) {

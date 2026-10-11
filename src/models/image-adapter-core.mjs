@@ -32,7 +32,7 @@ const PRIVATE_RETRY_DISPOSITIONS = new WeakMap();
 
 
 export class OpenAIImagesProviderError extends Error {
-  constructor(code, message, { outcome = "unknown", http_status, retry, provider_request_ref, field } = {}) {
+  constructor(code, message, { outcome = "unknown", http_status, retry, provider_request_ref, field, embedded_code } = {}) {
     super(message);
     this.name = "OpenAIImagesProviderError";
     this.code = code;
@@ -41,6 +41,8 @@ export class OpenAIImagesProviderError extends Error {
     if (retry !== undefined) this.retry = Object.freeze(retry);
     if (provider_request_ref !== undefined) this.provider_request_ref = provider_request_ref;
     if (field !== undefined) this.field = field;
+    // Sanitized numeric code of an error body delivered with a different HTTP status (for example HTTP 200).
+    if (Number.isInteger(embedded_code)) this.embedded_code = embedded_code;
   }
 }
 
@@ -1498,7 +1500,8 @@ async function runImageDispatch(driver, operation, rawInput) {
     const embeddedStatus = driver.embeddedErrorStatus(payload, response.status);
     const mapped = driver.classifyError(payload, embeddedStatus);
     fail(mapped.code, "Provider refused the image request.", {
-      outcome: mapped.outcome, http_status: embeddedStatus, provider_request_ref: providerRequestRef, usage: observedUsage,
+      outcome: mapped.outcome, http_status: response.status,
+      ...(embeddedStatus !== response.status ? { embedded_code: embeddedStatus } : {}), provider_request_ref: providerRequestRef, usage: observedUsage,
       ...(driver.wantsRetryAdvisory(embeddedStatus, mapped, true)
         ? { retry: retryAdvisory(response, retryContext, now) } : {}),
       private_provider_request_id: rawProviderRequestId, private_retry_disposition: mapped.retry_disposition,

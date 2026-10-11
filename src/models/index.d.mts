@@ -206,6 +206,7 @@ export declare class OpenAIImagesProviderError extends Error {
     retry?: OpenAIImageRetryDecision;
     provider_request_ref?: string;
     field?: string;
+    embedded_code?: number;
   });
   readonly code: OpenAIImagesErrorCode | string;
   readonly provider_outcome: "succeeded" | "failed" | "partial" | "unknown";
@@ -213,6 +214,8 @@ export declare class OpenAIImagesProviderError extends Error {
   readonly retry?: OpenAIImageRetryDecision;
   readonly provider_request_ref?: string;
   readonly field?: string;
+  /** Sanitized numeric code of an error body delivered under a different HTTP status (for example 200). */
+  readonly embedded_code?: number;
   /** Raw allowlisted counters observed before a failed outcome; never implies settlement. */
   readonly usage?: OpenAIImageUsage;
 }
@@ -372,7 +375,8 @@ export declare class OpenRouterImagesProviderError extends OpenAIImagesProviderE
 
 export declare function createOpenRouterImagesProvider(options: OpenRouterImageProviderOptions): Readonly<{
   resolveRoute(input: Pick<CreativeProviderRouteInput, "operation">): CreativeProviderRoute;
-  getConceptConfiguration(): Readonly<{ model_id: string; configuration: OpenRouterImageConfiguration }>;
+  getConceptConfiguration(): Readonly<{ model_id: string; provider_tag: string; capabilities: OpenRouterImageCapabilities;
+    configuration: OpenRouterImageConfiguration }>;
   inspectConceptReferences(input: { scope: ProviderInput["scope"];
     references: readonly CreativeConceptReferencePreflight[];
     maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number }):

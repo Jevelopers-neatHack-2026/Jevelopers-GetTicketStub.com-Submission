@@ -69,7 +69,11 @@ OpenRouter edit is **reference-guided image-to-image**. It is not the direct ada
 
 The response must contain exactly one `data` item with canonical base64. It is decoded and inspected with the same bounded PNG/JPEG/WebP decoder the direct adapter uses (full pixel decode, 50 MiB and 16.7 megapixel limits). SVG, unknown formats, corrupt or oversize bytes, a second image, a data URL in place of base64, or a `media_type` that does not equal the decoded format (when present) reject the response with nothing published. A transparent request requires an alpha channel; a pinned `output_format` must equal the decoded format.
 
-Dimension choice: OpenRouter models may not allow pinning an exact pixel size, so exact size is **not** required. Output must be between 16 pixels and the decoder maximum per side and within the pixel budget. If the profile pins `aspect_ratio` as `W:H`, the decoded size must match it within one pixel of rounding (`|w*H - h*W| <= max(W, H)`). `resolution` is only a request hint because the documentation does not define it in pixels. This is consistent with how the runtime and version store consume output: they use the dimensions decoded from the stored bytes (the bounded decoder result), never an adapter-declared size.
+Dimension choice: OpenRouter models may not allow pinning an exact pixel size, so exact size is **not** required. Output must be between 16 pixels and the decoder maximum per side and within the pixel budget. If the profile pins `aspect_ratio` as `W:H`, the decoded aspect ratio must be within a bounded **3% relative error** of it (`|w*H - h*W| <= 0.03 * W * h`). OpenRouter documents that providers clamp requested ratios and derive pixel sizes themselves, so an exact or one-pixel match would reject legitimate paid output (for example a 1344x768 image for a pinned 16:9 is accepted: 1.75 against 1.778). A clearly different shape (for example 1:1 or 9:16 output for a pinned 16:9) is rejected with `provider_output_mismatch` and nothing is published. The profile does not declare accepted pixel sizes per ratio; the tolerance is the single, documented choice. `resolution` is only a request hint because the documentation does not define it in pixels.
+
+**Warning:** the 3% tolerance and any pinned `aspect_ratio` or `resolution` are untested assumptions about real provider output. They must be confirmed against actual output of the selected model and provider tag at the live smoke gate (G3) before relying on them; a mismatch after a paid call leaves the output unpublished and the hold retained.
+
+`aspect_ratio: "auto"` is deliberately not accepted: the output shape would then be unpredictable, so the adapter fails closed at construction. Pin an explicit `W:H` value or omit the key and accept the bounded size range. This is consistent with how the runtime and version store consume output: they use the dimensions decoded from the stored bytes (the bounded decoder result), never an adapter-declared size.
 
 ## Usage and cost
 
@@ -77,6 +81,7 @@ Usage is a raw allowlisted observation with `completeness: "unknown"` and `missi
 
 - Missing `usage`, a missing counter, or a missing `cost` is listed in `missing_fields` (`usage`, `usage.cost`, ...) and is never zero. A reported zero stays distinct from absent.
 - `cost` is preserved as `{amount, currency: "USD", provenance: "provider_reported_unsettled"}` with a decimal string of at most nine fractional digits. It is the provider's report only: it is never used as settlement, never converted to a rate, and never makes an observation complete. Finance must decide credits versus USD, BYOK, and the reconciliation source (G4).
+- A positive reported amount that would round to zero at nine fractional digits (for example `1e-10`) is treated as missing `usage.cost` (or `usage.cost_details.<key>`), never recorded as `0`.
 - More than 32 usage fields, accessor-backed fields, or proxies are rejected; the bounded counters are kept as an observation and nothing publishes.
 - The default usage profile maps nothing, so output stays unpublished and the C03 hold stays until an owner-supplied `usage_profile_authority` maps the observation. A usage map can mark an observation complete only when no field other than the adapter's `usage.profile_mapping_pending` marker is missing, so an absent `cost` keeps the hold.
 - The private usage attribution table stores the same bounded record with the `cost` fields (OpenRouter rows only).
@@ -97,14 +102,15 @@ Every failure uses a fixed message and the existing error vocabulary. The error 
 | 404 | `model_capability_unavailable` | failed | hard stop |
 | 413 | `provider_request_failed` | failed | hard stop |
 | 408, 524 | `provider_outcome_unknown` | unknown | hold retained |
-| 429 | `provider_rate_limited` | failed | advisory retry decision only |
-| 503 | `provider_request_failed` | failed | advisory retry decision only |
-| 500, 502, 529 | `provider_request_failed` | failed | |
+| 429 | `provider_rate_limited` | failed | rate limited before dispatch; advisory retry decision only |
+| 503 | `provider_request_failed` | failed | no provider met the routing constraints, so no generation ran; advisory retry decision only |
+| 502 | `provider_request_failed` | failed | the only status documented as a failed, non-billed generation |
+| 500, 529 | `provider_request_failed` | unknown | not documented as non-billed; the hold is retained |
 | other 5xx | `provider_request_failed` | unknown | conservative |
-| HTTP 200 with `error` | classified by `error.code` as above; an unrecognized code is `provider_request_failed` / unknown | | the accompanying image is ignored |
+| HTTP 200 with `error` | classified by `error.code` as above; an unrecognized code is `provider_request_failed` / unknown | | the accompanying image is ignored; `http_status` stays 200 and the embedded numeric code is kept separately as `embedded_code` |
 | transport rejection after send, abort, deadline after send | `provider_transport_unknown` / `provider_outcome_unknown` | unknown | hold retained |
 
-The advisory retry decision is `automatic_retry: false`; an eligible next attempt needs a fresh grant, capability and Finance authorization, a new billable identity, a new reservation and a new transport identity. A failed outcome reported by the adapter does not by itself release the C03 reservation: through the API the hold is still retained for reconciliation. The 500/529/429/503 "failed" classification follows the CE-03-OR issue; the documentation states non-billing only for 502, so Finance owner acceptance (G4) should confirm it.
+The advisory retry decision is `automatic_retry: false`; an eligible next attempt needs a fresh grant, capability and Finance authorization, a new billable identity, a new reservation and a new transport identity. A failed outcome reported by the adapter does not by itself release the C03 reservation: through the API the hold is still retained for reconciliation. Only 502 (documented), 429 and 503 (refusals before any generation) are reported as failed; 500 and 529 keep the hold. Finance owner acceptance (G4) should confirm the table.
 
 ## Credentials
 
@@ -120,7 +126,9 @@ That key must be a separate creative-engine key (G1). The adapter validates that
 
 The runtime, the concepts contract and the version store use an explicit allowlist (`src/models/image-routes.mjs`) instead of the hard-coded `"openai"` provider name and OpenAI edit endpoint. An entry names the exact provider, its exact endpoints, the concept mapping reference, and the target-binding operation kind of its edit. Every other check is unchanged and applies to both providers: scope, brief and rights, lineage, approval, lease and deadline, cancellation, the dispatch intent and final fence, Finance, and attribution. The `openai` entry keeps its exact previous values.
 
-Store notes: private attribution tables accept only the allowlisted provider names; databases created with the older `CHECK(provider_name='openai')` are rebuilt in place (rows, keys, foreign keys and immutability triggers preserved; `user_version` is unchanged). Routed model ids with a slash (`author/slug`) are accepted for dispatch and attribution records. The `cost` fields are accepted in the private usage record only for OpenRouter rows; the direct OpenAI usage allowlist is unchanged.
+Concept approval: the OpenRouter adapter snapshot binds `provider_tag` and `capabilities` in addition to the model, endpoint and configuration, and the runtime compares them with the provider's live profile, so re-pinning the tag or capabilities invalidates an approved concept batch before any reservation. Direct OpenAI snapshots carry neither field.
+
+Store notes: private attribution tables accept only the allowlisted provider names; databases created with the older `CHECK(provider_name='openai')` are rebuilt in place (rows, keys, foreign keys and immutability triggers preserved; `user_version` is unchanged; the rebuild re-checks the schema inside the write transaction, and a failure keeps a sanitized SQLite cause available only through a private accessor). Routed model ids with a slash (`author/slug`) are accepted for dispatch and attribution records. The `cost` fields are accepted in the private usage record only for OpenRouter rows; the direct OpenAI usage allowlist is unchanged.
 
 ## External gates that remain open
 

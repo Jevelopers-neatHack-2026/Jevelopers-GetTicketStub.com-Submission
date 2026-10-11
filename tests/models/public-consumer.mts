@@ -165,3 +165,28 @@ export function consumeOpenRouterError(error: unknown): string | undefined {
   }
   return normalizeOpenRouterImageUsage({ prompt_tokens: 1 }, { transport_attempt_id: "transport-01" }).transport_attempt_id;
 }
+
+// ---- Runtime port and attribution types admit both allowlisted native providers ----
+import type {
+  CreativeConceptDispatchTargetBinding,
+  CreativeRuntimePorts,
+  PrivateProviderRequestAttribution,
+} from "creative-engine/api/v1";
+
+export const openRouterRuntimeProvider: NonNullable<CreativeRuntimePorts["provider"]> = openRouterProvider;
+export const openAIRuntimeProvider: NonNullable<CreativeRuntimePorts["provider"]> = provider;
+
+export function consumeConceptBinding(binding: CreativeConceptDispatchTargetBinding): string {
+  if (binding.service === "openrouter") {
+    const kind: "image_reference_edit" = binding.operation_kind;
+    const tag: string = binding.provider_tag;
+    const endpoint: "https://openrouter.ai/api/v1/images" = binding.endpoint;
+    return `${kind}${tag}${endpoint}`;
+  }
+  const kind: "image_edit" = binding.operation_kind;
+  return kind;
+}
+
+export function consumeAttributionProvider(input: PrivateProviderRequestAttribution): "openai" | "openrouter" {
+  return input.provider;
+}

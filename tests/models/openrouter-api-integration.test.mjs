@@ -483,7 +483,7 @@ function installOrConceptAuthority(context, provider) {
     const observedAt = Date.parse(input.now);
     const expires = new Date(observedAt + 10 * 60_000).toISOString();
     const deadline = new Date(observedAt + 5 * 60_000).toISOString();
-    const configuration = provider.getConceptConfiguration().configuration;
+    const { configuration, provider_tag, capabilities } = provider.getConceptConfiguration();
     return { policy_snapshot: { tenant_id: input.scope.tenant_id, project_id: input.scope.project_id,
       brief_id: input.scope.brief_id, policy_ref: "local-concept-policy/1", policy_version: "1",
       evidence_ref: "synthetic-policy-evidence", observed_at: input.now, expires_at: expires, deadline_at: deadline,
@@ -494,6 +494,7 @@ function installOrConceptAuthority(context, provider) {
       provider_name: "openrouter", model: OR_MODEL, endpoint: OR_ENDPOINT, provider_operation: "edit",
       operation_mapping_ref: "creative-engine/concepts-to-openrouter-images-reference-edit/1",
       operation_kind: "image_edit", target_ref: "openrouter-reference-edit-target/fixture", sdk_name: "native-fetch",
+      provider_tag, capabilities,
       sdk_version: process.versions.node, configuration_ref: "openrouter-image-config/fixture",
       configuration_sha256: canonicalHash(configuration), configuration, prompt_template_ref: "concept-prompt/fixture",
       prompt_template_version: "1", prompt_template_sha256: canonicalHash("Synthetic integration prompt with no model authority.") } };
@@ -548,4 +549,29 @@ test("OpenRouter concepts.create sends only the two authorized references and pu
   const replay = await context.api.invoke(authorizedActor(), request);
   assert.equal(replay.replayed, true);
   assert.equal(posts.length, 2);
+});
+
+test("re-pinning the provider tag or capabilities invalidates an owner-approved concept snapshot", async (t) => {
+  const context = await setup(t);
+  context.outputSequence = 0;
+  let posts = 0;
+  const handler = async () => { posts += 1; return orResponseWith(makePng()); };
+  const approved = orProvider({ context, fetchImpl: handler,
+    promptPort: { async render({ prompt_template }) { return { prompt: "Synthetic integration prompt with no model authority.",
+      template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+      template_sha256: prompt_template.template_sha256 }; } } });
+  installOrConceptAuthority(context, approved);
+  const approvedSnapshots = context.ports.concepts.resolveTrustedSnapshots;
+  for (const [name, profile] of [["provider tag", { provider_tag: "re-pinned-provider" }],
+    ["capabilities", { capabilities: { generation: true, edit: { max_input_references: 5 } } }]]) {
+    const repinned = orProvider({ context, fetchImpl: handler, profile,
+      promptPort: { async render() { return "unused"; } } });
+    context.ports.provider = repinned;
+    context.ports.concepts = { resolveTrustedSnapshots: approvedSnapshots };
+    const result = await context.api.invoke(authorizedActor(), conceptRequest(`or-repin-${name.replace(" ", "-")}`));
+    assert.equal(result.ok, false, name);
+    assert.equal(result.error.code, "unavailable", name);
+  }
+  assert.equal(posts, 0, "a re-pinned route never reaches the provider");
+  assert.equal(context.counters.reserves, 0);
 });

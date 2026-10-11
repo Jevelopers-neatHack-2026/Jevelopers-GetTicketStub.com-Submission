@@ -245,7 +245,8 @@ test("parentless concept edit sends only authorized references and fabricates no
   const inspected = await harness.provider.inspectConceptReferences({ scope: ctx.scope, references,
     maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
   assert.equal(inspected.length, 2);
-  assert.deepEqual(harness.provider.getConceptConfiguration(), { model_id: OR_MODEL, configuration: orProfile().configuration });
+  assert.deepEqual(harness.provider.getConceptConfiguration(), { model_id: OR_MODEL, provider_tag: OR_PROVIDER_TAG,
+    capabilities: orProfile().capabilities, configuration: orProfile().configuration });
   await harness.provider.edit(harness.ctx);
   const body = JSON.parse(harness.requests[0].init.body);
   assert.equal(body.input_references.length, 2);
@@ -265,6 +266,11 @@ test("capability denial happens before credential resolution and transport", asy
       () => ({}), "operation_permission_denied"],
     ["parent plus references over the profile maximum", "edit", { capabilities: { generation: true, edit: { max_input_references: 3 } } },
       () => manifestEdit(refs).ctx, "unsupported_operation"],
+    ["a mask on a later plan step is rejected before any asset read", "edit", {}, () => {
+      const ctx = orInput("edit");
+      ctx.plan.steps.push({ action: "image.edit", parameters: { mask_source_ref: "mask-ref-01" } });
+      return ctx;
+    }, "unsupported_plan"],
     ["a mask is never accepted", "edit", {}, () => {
       const ctx = orInput("edit");
       ctx.plan.steps[0].parameters.mask_source_ref = "mask-ref-01";
@@ -314,11 +320,11 @@ test("provider failures map to the existing vocabulary, keep one transport, and 
     [408, "provider_outcome_unknown", "unknown", {}],
     [413, "provider_request_failed", "failed", {}],
     [429, "provider_rate_limited", "failed", {}, { "retry-after": "2" }],
-    [500, "provider_request_failed", "failed", {}],
+    [500, "provider_request_failed", "unknown", {}],
     [502, "provider_request_failed", "failed", {}],
     [503, "provider_request_failed", "failed", {}, { "retry-after": "2" }],
     [524, "provider_outcome_unknown", "unknown", {}],
-    [529, "provider_request_failed", "failed", {}],
+    [529, "provider_request_failed", "unknown", {}],
     [418, "provider_request_failed", "failed", {}],
     [504, "provider_request_failed", "unknown", {}],
   ];
@@ -365,6 +371,8 @@ test("provider failures map to the existing vocabulary, keep one transport, and 
       await assert.rejects(harness.provider.generate(harness.ctx), (error) => {
         assert.equal(error.code, code === 403 ? "moderation_blocked" : expected);
         assert.equal(error.provider_outcome, outcome);
+        assert.equal(error.http_status, 200, "the HTTP status stays the real transport status");
+        assert.equal(error.embedded_code, Number.isInteger(code) ? code : undefined);
         assertNoLeak(error, [FLAGGED, MESSAGE]);
         return true;
       });
@@ -440,16 +448,18 @@ test("pinned format, transparency, and aspect ratio are enforced; unpinned bound
       outputBytes: makePng({ transparent: true }) });
     assert.equal((await ok.provider.generate(ok.ctx)).artifact.media_type, "image/png");
   });
-  await t.test("a pinned aspect ratio rejects other shapes and tolerates one-pixel rounding", async () => {
+  await t.test("a pinned aspect ratio tolerates provider-derived sizes within 3% and rejects clearly different shapes", async () => {
     const wide = { aspect_ratio: "16:9", output_format: "png" };
     const bad = orHarness({ profile: { configuration: wide }, outputBytes: makePng({ width: 16, height: 16 }) });
     await assert.rejects(bad.provider.generate(bad.ctx), (error) => error.code === "provider_output_mismatch");
-    for (const [width, height] of [[32, 18], [33, 18], [160, 90]]) {
+    for (const [width, height] of [[32, 18], [160, 90], [1344, 768], [1280, 736]]) {
       const ok = orHarness({ profile: { configuration: wide }, outputBytes: makePng({ width, height }) });
       assert.equal((await ok.provider.generate(ok.ctx)).artifact.media_type, "image/png", `${width}x${height}`);
     }
-    const off = orHarness({ profile: { configuration: wide }, outputBytes: makePng({ width: 32, height: 20 }) });
-    await assert.rejects(off.provider.generate(off.ctx), (error) => error.code === "provider_output_mismatch");
+    for (const [width, height] of [[32, 20], [33, 18], [1024, 1024], [768, 1344]]) {
+      const off = orHarness({ profile: { configuration: wide }, outputBytes: makePng({ width, height }) });
+      await assert.rejects(off.provider.generate(off.ctx), (error) => error.code === "provider_output_mismatch", `${width}x${height}`);
+    }
   });
   await t.test("without a pinned ratio or format any inspected PNG/JPEG/WebP within bounds is accepted", async () => {
     const harness = orHarness({ profile: { configuration: {} }, outputBytes: makePng({ width: 48, height: 16 }) });
@@ -495,6 +505,18 @@ test("usage is raw, unknown, identity-bound, and missing values are reported, ne
     const zero = normalizeOpenRouterImageUsage({ prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost: 0 });
     assert.equal(zero.cost.amount, "0");
     assert.equal(zero.input_tokens, 0, "a provider-reported zero is kept distinct from absent");
+  });
+  await t.test("a positive cost that cannot be represented is unknown, never recorded as zero", () => {
+    for (const tiny of [1e-10, 4e-10, 1e-12]) {
+      const usage = normalizeOpenRouterImageUsage({ prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost: tiny,
+        cost_details: { upstream_inference_cost: tiny } });
+      assert.ok(!("cost" in usage), String(tiny));
+      assert.ok(usage.missing_fields.includes("usage.cost"));
+      assert.ok(!("upstream_inference_cost" in (usage.cost_details ?? {})));
+      assert.ok(usage.missing_fields.includes("usage.cost_details.upstream_inference_cost"));
+    }
+    assert.equal(normalizeOpenRouterImageUsage({ cost: 0 }).cost.amount, "0", "a reported zero stays zero");
+    assert.equal(normalizeOpenRouterImageUsage({ cost: 1e-9 }).cost.amount, "0.000000001");
   });
   await t.test("unmapped extensions and over-wide usage are flagged, and wide usage never publishes", async () => {
     const extension = normalizeOpenRouterImageUsage({ ...FULL_USAGE, prompt_tokens_details: { cached_tokens: 1 }, cost_details: { upstream_inference_cost: 0.1, extra: 1 } });
