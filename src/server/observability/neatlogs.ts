@@ -31,7 +31,6 @@ const MAX_BODY_BYTES = 256 * 1024;
 export interface NeatlogsConfig { apiKey: string; endpoint: string; tags: string[] }
 export interface NeatlogsStats { traces: number; accepted: number; rejectedSpans: number; failed: number; dropped: number }
 
-/** Reads the Neatlogs settings, or undefined when export cannot run. The key is never logged or returned elsewhere. */
 /** Host settings are often pasted with surrounding quotes; strip one matching pair, nothing else. */
 const unquote = (v: string | undefined) => v?.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
 
@@ -45,6 +44,7 @@ export function neatlogsConfigProblem(env: NodeJS.ProcessEnv = process.env): str
   return undefined;
 }
 
+/** Reads the Neatlogs settings, or undefined when export cannot run. The key is never logged or returned elsewhere. */
 export function neatlogsConfig(env: NodeJS.ProcessEnv = process.env): NeatlogsConfig | undefined {
   if (neatlogsConfigProblem(env)) return undefined;
   const apiKey = unquote(env.NEATLOGS_API_KEY)!;

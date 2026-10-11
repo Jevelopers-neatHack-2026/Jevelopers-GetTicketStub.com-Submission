@@ -38,7 +38,7 @@ export const POST = observeRoute("agent", async (req: Request) => {
     return errorJson(400, "bad_request", "Send a message.");
   }
 
-  const facts = (body.event.facts ?? []).map((f) => `- ${f.label} (${f.value}; source ${f.source}; ${f.provenance}; confidence ${f.confidence})`).join("\n");
+  const facts = (Array.isArray(body.event.facts) ? body.event.facts : []).filter((f) => !!f && typeof f === "object").map((f) => `- ${f.label} (${f.value}; source ${f.source}; ${f.provenance}; confidence ${f.confidence})`).join("\n");
   const system = `You are the TicketStub research agent helping someone design a keepsake stub for an event they attended.
 Voice: clear, short (max 2 sentences), benefit first, no exclamation marks, no puns.
 Only state facts listed below; if asked about something not listed, say you could not confirm it. Never invent sources.`;
