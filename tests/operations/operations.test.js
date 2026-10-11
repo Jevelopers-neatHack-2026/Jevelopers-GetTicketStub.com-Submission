@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, writeSync } from 'node:fs';
+import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, writeFileSync, existsSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -87,7 +87,8 @@ const METRICS = {
   ci1PhaseCaptures: [],
   ci1PhaseCaptureBytes: 0,
   ci1PhaseCaptureOverflow: false,
-  ci1PhaseCaptureIncomplete: false
+  ci1PhaseCaptureIncomplete: false,
+  ci1PhaseCaptureChildCloseUnconfirmed: false
 };
 
 const CI1_PHASES = new Set([
@@ -105,7 +106,8 @@ const CI1_CHILD_PHASE_STAGES = new Set([
 const CI1_PARENT_PHASE_STAGES = new Set([
   'shutdown_spawned', 'shutdown_marker_observed', 'sigterm_sent', 'shutdown_child_closed',
   'restart_spawned', 'restart_escalation_sent', 'restart_child_closed',
-  'shutdown_escalation_sent', 'cleanup_escalation_sent'
+  'shutdown_escalation_sent', 'cleanup_escalation_sent', 'child_close_unconfirmed',
+  'child_capture_missing', 'child_capture_invalid', 'child_capture_partial', 'child_capture_overflow'
 ]);
 const CI1_MAX_PHASE_RECORDS = 256;
 const CI1_MAX_PHASE_BYTES = 24_576;
@@ -126,42 +128,92 @@ function appendBoundedCi1PhaseCapture(state, record) {
   return true;
 }
 
-function appendCi1PhaseCapture(record) {
-  return appendBoundedCi1PhaseCapture(METRICS, record);
+function appendCi1PhaseCapture(record, state = METRICS) {
+  return appendBoundedCi1PhaseCapture(state, record);
 }
 
-function readCi1ChildPhaseCapture(path, phase, role, requireComplete = true) {
-  const bytes = readFileSync(path);
-  assert.ok(bytes.length > 0 && bytes.length <= 4_096, `${phase}/${role} phase capture is outside its byte bound`);
-  const text = bytes.toString('utf8');
-  assert.ok(text.endsWith('\n'));
-  const lines = text.slice(0, -1).split('\n');
-  assert.ok(lines.length > 0 && lines.length <= 16);
-  let priorElapsedMs = -1;
+function parseCi1ChildPhaseCaptureBytes(bytes, phase, role, state = METRICS) {
   const stages = [];
+  let failureCode = null;
+  let aggregateRejected = false;
+  let stopResultsComplete = true;
+  const setFailure = code => { if (!failureCode) failureCode = code; };
+  if (!Buffer.isBuffer(bytes)) {
+    setFailure('unreadable');
+    bytes = Buffer.alloc(0);
+  }
+  if (bytes.length === 0) setFailure('empty');
+  if (bytes.length > 4_096) {
+    setFailure('child_byte_limit');
+    state.ci1PhaseCaptureOverflow = true;
+  }
+  const boundedBytes = bytes.subarray(0, 4_096);
+  const text = boundedBytes.toString('utf8');
+  const endsWithNewline = text.endsWith('\n');
+  if (!endsWithNewline) setFailure('truncated');
+  const allLines = text.split('\n');
+  allLines.pop(); // The last split item is either the empty terminator or an untrusted partial row.
+  if (allLines.length === 0) setFailure('empty');
+  if (allLines.length > 16) {
+    setFailure('child_record_limit');
+    state.ci1PhaseCaptureOverflow = true;
+  }
+  const lines = allLines.slice(0, 16);
+  let priorElapsedMs = 0;
   for (let index = 0; index < lines.length; index += 1) {
-    const item = JSON.parse(lines[index]);
-    assert.ok(item && typeof item === 'object' && !Array.isArray(item));
+    let item;
+    try { item = JSON.parse(lines[index]); } catch {
+      setFailure('malformed');
+      break;
+    }
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      setFailure('shape');
+      break;
+    }
     const hasStopResult = item.stage === 'stop_settled' || item.stage === 'restart_stop_settled';
-    assert.deepEqual(Object.keys(item).sort(), hasStopResult
+    const keys = Object.keys(item).sort();
+    const expectedKeys = hasStopResult
       ? ['childrenReaped', 'elapsedMs', 'schema', 'sequence', 'stage', 'stopped', 'storeClosed']
-      : ['elapsedMs', 'schema', 'sequence', 'stage']);
-    assert.equal(item.schema, 1);
-    assert.equal(item.sequence, index + 1);
-    assert.equal(typeof item.stage, 'string');
-    assert.ok(CI1_CHILD_PHASE_STAGES.has(item.stage));
-    assert.ok(Number.isSafeInteger(item.elapsedMs) && item.elapsedMs >= priorElapsedMs);
-    if (hasStopResult) {
-      assert.equal(item.stopped, true);
-      assert.equal(item.childrenReaped, true);
-      assert.equal(item.storeClosed, true);
+      : ['elapsedMs', 'schema', 'sequence', 'stage'];
+    if (keys.length !== expectedKeys.length || keys.some((key, keyIndex) => key !== expectedKeys[keyIndex])) {
+      setFailure('shape');
+      break;
+    }
+    if (item.schema !== 1 || item.sequence !== index + 1) {
+      setFailure('sequence');
+      break;
+    }
+    if (typeof item.stage !== 'string' || !CI1_CHILD_PHASE_STAGES.has(item.stage)) {
+      setFailure('stage');
+      break;
+    }
+    if (!Number.isSafeInteger(item.elapsedMs) || item.elapsedMs < 0 || item.elapsedMs < priorElapsedMs) {
+      setFailure('clock');
+      break;
+    }
+    if (hasStopResult && !['stopped', 'childrenReaped', 'storeClosed'].every(key => typeof item[key] === 'boolean')) {
+      setFailure('stop_result');
+      break;
     }
     priorElapsedMs = item.elapsedMs;
     stages.push(item.stage);
-    assert.equal(appendCi1PhaseCapture({
+    const retained = {
       schema: 1, source: 'child', phase, role,
       sequence: item.sequence, stage: item.stage, elapsedMs: item.elapsedMs
-    }), true, `${phase}/${role} phase capture exceeded the aggregate evidence bound`);
+    };
+    if (hasStopResult) {
+      retained.stopped = item.stopped;
+      retained.childrenReaped = item.childrenReaped;
+      retained.storeClosed = item.storeClosed;
+      if (!item.stopped || !item.childrenReaped || !item.storeClosed) {
+        stopResultsComplete = false;
+        setFailure('stop_result');
+      }
+    }
+    if (!aggregateRejected && !appendCi1PhaseCapture(retained, state)) {
+      aggregateRejected = true;
+      setFailure('aggregate_limit');
+    }
   }
   const required = role === 'shutdown'
     ? ['fixture_started', 'store_opened', 'workflow_opened', 'worker_started', 'runner_claimed', 'marker_written',
@@ -169,25 +221,126 @@ function readCi1ChildPhaseCapture(path, phase, role, requireComplete = true) {
       'store_close_started', 'store_closed', 'fixture_finally_started', 'fixture_finally_complete']
     : ['fixture_started', 'restart_worker_started', 'restart_work_completed', 'restart_stop_settled',
       'restart_store_closed', 'restart_loop_settled', 'fixture_finally_started', 'fixture_finally_complete'];
-  const complete = required.every(stage => stages.includes(stage));
-  if (requireComplete) assert.equal(complete, true, `${phase}/${role} phase capture lacks required stages`);
-  if (requireComplete && role === 'shutdown') {
+  const hasRequiredStages = required.every(stage => stages.includes(stage));
+  if (!hasRequiredStages) setFailure('required_stages');
+  if (role === 'shutdown') {
     const ordered = [
       'fixture_started', 'store_opened', 'worker_started', 'runner_claimed', 'workflow_opened',
       'marker_written', 'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled',
       'shutdown_verified', 'store_close_started', 'store_closed', 'fixture_finally_started', 'fixture_finally_complete'
     ];
-    assert.ok(ordered.every((stage, index) => index === 0 || stages.indexOf(ordered[index - 1]) < stages.indexOf(stage)),
-      `${phase}/${role} phase order is incomplete`);
+    if (!ordered.every((stage, index) => index === 0 || stages.indexOf(ordered[index - 1]) < stages.indexOf(stage))) {
+      setFailure('order');
+    }
   }
-  if (requireComplete && role === 'restart') {
+  if (role === 'restart') {
     const ordered = ['fixture_started', 'restart_worker_started', 'restart_work_completed',
       'restart_stop_settled', 'restart_store_closed', 'restart_loop_settled',
       'fixture_finally_started', 'fixture_finally_complete'];
-    assert.ok(ordered.every((stage, index) => index === 0 || stages.indexOf(ordered[index - 1]) < stages.indexOf(stage)),
-      `${phase}/${role} phase order is incomplete`);
+    if (!ordered.every((stage, index) => index === 0 || stages.indexOf(ordered[index - 1]) < stages.indexOf(stage))) {
+      setFailure('order');
+    }
   }
-  return { stages, complete };
+  const complete = failureCode === null && hasRequiredStages && stopResultsComplete;
+  if (!complete) state.ci1PhaseCaptureIncomplete = true;
+  return { stages, complete, failureCode };
+}
+
+function readCi1ChildPhaseCapture(path, phase, role, requireComplete = true, state = METRICS) {
+  let fd;
+  let bytes;
+  try {
+    fd = openSync(path, 'r');
+    const buffer = Buffer.alloc(4_097);
+    let length = 0;
+    while (length < buffer.length) {
+      const count = readSync(fd, buffer, length, buffer.length - length, length);
+      if (count === 0) break;
+      length += count;
+    }
+    bytes = buffer.subarray(0, length);
+  } catch (error) {
+    const failureCode = error?.code === 'ENOENT' ? 'missing' : 'unreadable';
+    state.ci1PhaseCaptureIncomplete = true;
+    return { stages: [], complete: false, failureCode };
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { state.ci1PhaseCaptureIncomplete = true; }
+    }
+  }
+  const result = parseCi1ChildPhaseCaptureBytes(bytes, phase, role, state);
+  if (requireComplete && !result.complete) state.ci1PhaseCaptureIncomplete = true;
+  return result;
+}
+
+async function waitCi1ChildClose({ timeoutMs, escalationStage, waitForClose, reapOwnedChild, captureParent, state = METRICS }) {
+  let closeResult = await waitForClose(timeoutMs);
+  if (closeResult) return { closeResult, timedOut: false };
+  state.ci1PhaseCaptureIncomplete = true;
+  try {
+    if (captureParent(escalationStage) === false) state.ci1PhaseCaptureIncomplete = true;
+  } catch {
+    state.ci1PhaseCaptureIncomplete = true;
+  }
+  try { closeResult = await reapOwnedChild(); } catch { closeResult = null; }
+  return { closeResult, timedOut: true };
+}
+
+async function finalizeCi1ChildCapture({ phase, role, closeResult, closeOwnedChild, readCapture, captureParent, state = METRICS }) {
+  const safeParentCapture = stage => {
+    try {
+      if (captureParent(stage) === false) state.ci1PhaseCaptureIncomplete = true;
+    } catch {
+      state.ci1PhaseCaptureIncomplete = true;
+    }
+  };
+  let finalCloseResult = closeResult ?? null;
+  let captureResult = null;
+  if (!finalCloseResult) {
+    safeParentCapture('cleanup_escalation_sent');
+    try { finalCloseResult = await closeOwnedChild(); } catch { finalCloseResult = null; }
+  }
+  if (!finalCloseResult) {
+    state.ci1PhaseCaptureIncomplete = true;
+    state.ci1PhaseCaptureChildCloseUnconfirmed = true;
+    safeParentCapture('child_close_unconfirmed');
+    try { captureResult = readCapture(); } catch { state.ci1PhaseCaptureIncomplete = true; }
+    if (captureResult?.complete) captureResult = { ...captureResult, complete: false, failureCode: 'close_unconfirmed' };
+    if (!captureResult || !captureResult.complete) state.ci1PhaseCaptureIncomplete = true;
+    return { closeResult: null, captureResult, reaped: false };
+  }
+  safeParentCapture(`${role}_child_closed`);
+  try { captureResult = readCapture(); } catch { state.ci1PhaseCaptureIncomplete = true; }
+  if (!captureResult || !captureResult.complete) {
+    state.ci1PhaseCaptureIncomplete = true;
+    const failureCode = captureResult?.failureCode;
+    const stage = ['missing', 'unreadable', 'empty'].includes(failureCode)
+      ? 'child_capture_missing'
+      : ['child_byte_limit', 'child_record_limit', 'aggregate_limit'].includes(failureCode)
+        ? 'child_capture_overflow'
+        : failureCode === 'required_stages'
+          ? 'child_capture_partial'
+          : 'child_capture_invalid';
+    safeParentCapture(stage);
+  }
+  return { closeResult: finalCloseResult, captureResult, reaped: true };
+}
+
+async function executeCi1ChildWithFinalization(execute, finalize, state = METRICS) {
+  let execution;
+  let primaryFailure;
+  try { execution = await execute(); } catch (error) {
+    primaryFailure = error;
+    state.ci1PhaseCaptureIncomplete = true;
+  }
+  let finalization;
+  try { finalization = await finalize(); } catch {
+    state.ci1PhaseCaptureIncomplete = true;
+    if (primaryFailure) throw primaryFailure;
+    throw new Error('Owned CI1 child finalization did not complete.');
+  }
+  if (primaryFailure) throw primaryFailure;
+  return { execution, finalization };
 }
 
 function tempDirectory(prefix = 'ah11-ops-') {
@@ -2035,16 +2188,19 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
   const parentStartedAt = performance.now();
   const parentSequences = new Map();
   const captureParentPhase = (phase, role, stage) => {
-    assert.ok(CI1_PHASES.has(phase));
-    assert.ok(role === 'shutdown' || role === 'restart');
-    assert.ok(CI1_PARENT_PHASE_STAGES.has(stage));
+    if (!CI1_PHASES.has(phase) || !['shutdown', 'restart'].includes(role) || !CI1_PARENT_PHASE_STAGES.has(stage)) {
+      METRICS.ci1PhaseCaptureIncomplete = true;
+      return false;
+    }
     const key = `${phase}:${role}`;
     const sequence = (parentSequences.get(key) ?? 0) + 1;
     parentSequences.set(key, sequence);
-    assert.equal(appendCi1PhaseCapture({
+    const appended = appendCi1PhaseCapture({
       schema: 1, source: 'parent', phase, role, sequence, stage,
       elapsedMs: Math.max(0, Math.round(performance.now() - parentStartedAt))
-    }), true, 'parent phase capture exceeded the aggregate evidence bound');
+    });
+    if (!appended) METRICS.ci1PhaseCaptureIncomplete = true;
+    return appended;
   };
 
   const runChild = async (phase, role, expectedWorkflowId) => {
@@ -2052,6 +2208,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const marker = join(temporary.directory, `${phase}.marker`);
     const resultPath = join(temporary.directory, `${phase}.${role}.json`);
     const metricsPath = join(temporary.directory, `${phase}.${role}.metrics.jsonl`);
+    const phaseCapturePath = `${metricsPath}.${role}.phases.jsonl`;
     const child = spawn(process.execPath, [
       join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
       temporary.databasePath, phase, marker, resultPath, metricsPath, role,
@@ -2067,7 +2224,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     }));
     captureParentPhase(phase, role, `${role}_spawned`);
     let durationMs = null;
-    try {
+    let childResult;
+    const lifecycle = await executeCi1ChildWithFinalization(async () => {
       if (role === 'shutdown') {
         await waitForPath(marker, child);
         const barrier = JSON.parse(readFileSync(marker, 'utf8'));
@@ -2078,46 +2236,54 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         assert.equal(sent, true, `${phase}; exit=${child.exitCode}; signal=${child.signalCode}; result=${existsSync(resultPath)}`);
         if (sent) METRICS.processSigtermSignalsSent += 1;
         captureParentPhase(phase, role, 'sigterm_sent');
-        closeResult = await waitForCloseBounded(closed, 3_000);
-        if (!closeResult) {
-          captureParentPhase(phase, role, 'shutdown_escalation_sent');
-          closeResult = await killOwnedChildAndReap(child, closed);
-          assert.ok(closeResult, `The owned ${phase} shutdown child did not close within its signal budget.`);
+        const shutdownClose = await waitCi1ChildClose({
+          timeoutMs: 3_000, escalationStage: 'shutdown_escalation_sent',
+          waitForClose: timeoutMs => waitForCloseBounded(closed, timeoutMs),
+          reapOwnedChild: () => killOwnedChildAndReap(child, closed),
+          captureParent: stage => captureParentPhase(phase, role, stage), state: METRICS
+        });
+        closeResult = shutdownClose.closeResult;
+        if (shutdownClose.timedOut) {
+          if (!closeResult) throw new Error(`The owned ${phase} shutdown child could not be confirmed closed after bounded reaping.`);
           throw new Error(`The controlled JEV shutdown child did not close after SIGTERM at ${phase}.`);
         }
         durationMs = Math.max(0, performance.now() - sigtermSentAt);
         assert.ok(durationMs <= 3_000, `${phase} shutdown child exceeded its unchanged close deadline.`);
       } else {
-        closeResult = await waitForCloseBounded(closed, 8_000);
-        if (!closeResult) {
-          captureParentPhase(phase, role, 'restart_escalation_sent');
-          closeResult = await killOwnedChildAndReap(child, closed);
-          assert.ok(closeResult, `The owned ${phase} restart child did not close within its existing bound.`);
+        const restartClose = await waitCi1ChildClose({
+          timeoutMs: 8_000, escalationStage: 'restart_escalation_sent',
+          waitForClose: timeoutMs => waitForCloseBounded(closed, timeoutMs),
+          reapOwnedChild: () => killOwnedChildAndReap(child, closed),
+          captureParent: stage => captureParentPhase(phase, role, stage), state: METRICS
+        });
+        closeResult = restartClose.closeResult;
+        if (restartClose.timedOut) {
+          if (!closeResult) throw new Error(`The owned ${phase} restart child could not be confirmed closed after bounded reaping.`);
           throw new Error(`The controlled JEV restart child exceeded its existing 8,000 ms invocation bound at ${phase}.`);
         }
         durationMs = Math.max(0, performance.now() - invocationStartedAt);
       }
-      captureParentPhase(phase, role, `${role}_child_closed`);
-      const phaseCapturePath = `${metricsPath}.${role}.phases.jsonl`;
-      let captureResult;
-      try {
-        captureResult = readCi1ChildPhaseCapture(phaseCapturePath, phase, role, closeResult.code === 0);
-      } catch (error) {
-        METRICS.ci1PhaseCaptureIncomplete = true;
-        if (closeResult.code === 0) throw error;
-      }
+      return { durationMs };
+    }, async () => finalizeCi1ChildCapture({
+        phase, role, closeResult,
+        closeOwnedChild: () => killOwnedChildAndReap(child, closed),
+        readCapture: () => readCi1ChildPhaseCapture(phaseCapturePath, phase, role, closeResult?.code === 0),
+        captureParent: stage => captureParentPhase(phase, role, stage),
+        state: METRICS
+      }), METRICS);
+    const finalization = lifecycle.finalization;
+    closeResult = finalization.closeResult;
+    try {
+      assert.equal(finalization.reaped, true, `The owned ${phase}/${role} child close could not be confirmed.`);
       assert.equal(closeResult.code, 0, `${phase}/${role}: child stderr=${childStderr.slice(0, 2048)}`);
-      const childResult = JSON.parse(readFileSync(resultPath, 'utf8'));
+      childResult = JSON.parse(readFileSync(resultPath, 'utf8'));
       assert.equal(childResult.phaseCaptureComplete, true, `${phase}/${role} fixture reported incomplete phase capture`);
-      assert.equal(captureResult?.complete, true, `${phase}/${role} phase capture incomplete`);
-      return { childResult, metricsPath, durationMs, childStderr };
-    } finally {
-      if (!closeResult) {
-        captureParentPhase(phase, role, 'cleanup_escalation_sent');
-        closeResult = await killOwnedChildAndReap(child, closed);
-        assert.ok(closeResult, `The owned ${phase}/${role} child could not be reaped during test cleanup.`);
-      }
+      assert.equal(finalization.captureResult?.complete, true, `${phase}/${role} phase capture incomplete`);
+    } catch (error) {
+      METRICS.ci1PhaseCaptureIncomplete = true;
+      throw error;
     }
+    return { childResult, metricsPath, durationMs: lifecycle.execution.durationMs, childStderr };
   };
 
   for (const phase of phases) {
@@ -2167,7 +2333,13 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
   assert.equal(results.length, 5);
   assert.equal(METRICS.ci1PhaseCaptureOverflow, false);
   assert.equal(METRICS.ci1PhaseCaptureIncomplete, false);
+  assert.equal(METRICS.ci1PhaseCaptureChildCloseUnconfirmed, false);
   assert.ok(METRICS.ci1PhaseCaptures.length > 0 && METRICS.ci1PhaseCaptureBytes <= 24_576);
+  const retainedStopResults = METRICS.ci1PhaseCaptures.filter(record => record.source === 'child'
+    && ['stop_settled', 'restart_stop_settled'].includes(record.stage));
+  assert.equal(retainedStopResults.length, 10);
+  assert.ok(retainedStopResults.every(record => record.stopped === true
+    && record.childrenReaped === true && record.storeClosed === true));
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.controlledHttpsRequests, 3);
   assert.equal(METRICS.controlledHttpsWrites, 3);
@@ -2303,6 +2475,290 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         }
       }
     }
+
+    const freshCaptureState = () => ({
+      ci1PhaseCaptures: [], ci1PhaseCaptureBytes: 0,
+      ci1PhaseCaptureOverflow: false, ci1PhaseCaptureIncomplete: false,
+      ci1PhaseCaptureChildCloseUnconfirmed: false
+    });
+    const shutdownStages = [
+      'fixture_started', 'store_opened', 'worker_started', 'runner_claimed', 'workflow_opened', 'marker_written',
+      'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled', 'shutdown_verified',
+      'store_close_started', 'store_closed', 'fixture_finally_started', 'fixture_finally_complete'
+    ];
+    const restartStages = [
+      'fixture_started', 'restart_worker_started', 'restart_work_completed', 'restart_stop_settled',
+      'restart_store_closed', 'restart_loop_settled', 'fixture_finally_started', 'fixture_finally_complete'
+    ];
+    const makeChildRows = (role, stages = role === 'shutdown' ? shutdownStages : restartStages, flags = {}) => stages.map((stage, index) => {
+      const row = { schema: 1, sequence: index + 1, stage, elapsedMs: index };
+      if (stage === 'stop_settled' || stage === 'restart_stop_settled') {
+        Object.assign(row, { stopped: true, childrenReaped: true, storeClosed: true }, flags);
+      }
+      return row;
+    });
+    const encodeRows = rows => Buffer.from(`${rows.map(row => JSON.stringify(row)).join('\n')}\n`);
+    const fullShutdownBytes = encodeRows(makeChildRows('shutdown'));
+    const fullRestartBytes = encodeRows(makeChildRows('restart'));
+    const retainedTrueState = freshCaptureState();
+    const retainedTrue = parseCi1ChildPhaseCaptureBytes(fullShutdownBytes, 'before-marker', 'shutdown', retainedTrueState);
+    assert.equal(retainedTrue.complete, true);
+    assert.deepEqual(retainedTrueState.ci1PhaseCaptures.find(record => record.stage === 'stop_settled'), {
+      schema: 1, source: 'child', phase: 'before-marker', role: 'shutdown', sequence: 9,
+      stage: 'stop_settled', elapsedMs: 8, stopped: true, childrenReaped: true, storeClosed: true
+    });
+    assert.equal(parseCi1ChildPhaseCaptureBytes(fullRestartBytes, 'before-marker', 'restart', freshCaptureState()).complete, true);
+
+    for (const flag of ['stopped', 'childrenReaped', 'storeClosed']) {
+      const falseState = freshCaptureState();
+      const falseCapture = parseCi1ChildPhaseCaptureBytes(
+        encodeRows(makeChildRows('shutdown', shutdownStages, { [flag]: false })),
+        'after-write', 'shutdown', falseState
+      );
+      const retainedFalse = falseState.ci1PhaseCaptures.find(record => record.stage === 'stop_settled');
+      assert.equal(falseCapture.complete, false, `${flag}=false is a failed result after custody`);
+      assert.equal(retainedFalse[flag], false, `${flag}=false is retained as a primitive boolean`);
+      assert.equal(falseState.ci1PhaseCaptureIncomplete, true);
+    }
+
+    for (const malformedKind of ['nonboolean', 'missing', 'extra']) {
+      const rows = makeChildRows('shutdown');
+      const stop = rows.find(row => row.stage === 'stop_settled');
+      if (malformedKind === 'nonboolean') stop.stopped = 1;
+      if (malformedKind === 'missing') delete stop.storeClosed;
+      if (malformedKind === 'extra') stop.unexpected = true;
+      const state = freshCaptureState();
+      const parsed = parseCi1ChildPhaseCaptureBytes(encodeRows(rows), 'after-write', 'shutdown', state);
+      assert.equal(parsed.complete, false, `${malformedKind} stop result is rejected`);
+      assert.equal(state.ci1PhaseCaptureIncomplete, true);
+      assert.equal(state.ci1PhaseCaptures.some(record => record.stage === 'stop_settled'), false);
+      assert.equal(state.ci1PhaseCaptures.length, 8, 'valid rows before malformed stop evidence remain retained');
+    }
+
+    const partialState = freshCaptureState();
+    const partial = parseCi1ChildPhaseCaptureBytes(encodeRows(makeChildRows('shutdown').slice(0, 5)),
+      'after-marker-before-bytes', 'shutdown', partialState);
+    assert.equal(partial.complete, false, 'a nonzero child partial prefix remains incomplete');
+    assert.equal(partialState.ci1PhaseCaptures.length, 5, 'the valid partial prefix remains available');
+    assert.equal(partialState.ci1PhaseCaptureIncomplete, true);
+
+    const malformedLaterState = freshCaptureState();
+    const prefixRows = makeChildRows('shutdown').slice(0, 4);
+    const malformedLater = Buffer.concat([encodeRows(prefixRows), Buffer.from('{\n')]);
+    const malformedLaterResult = parseCi1ChildPhaseCaptureBytes(malformedLater, 'after-write', 'shutdown', malformedLaterState);
+    assert.equal(malformedLaterResult.failureCode, 'malformed');
+    assert.equal(malformedLaterState.ci1PhaseCaptures.length, 4, 'malformed later rows do not erase the valid prefix');
+    assert.equal(malformedLaterState.ci1PhaseCaptureIncomplete, true);
+
+    const negativeRows = makeChildRows('shutdown');
+    negativeRows[0].elapsedMs = -1;
+    const negativeState = freshCaptureState();
+    const negative = parseCi1ChildPhaseCaptureBytes(encodeRows(negativeRows), 'after-write', 'shutdown', negativeState);
+    assert.equal(negative.failureCode, 'clock');
+    assert.equal(negativeState.ci1PhaseCaptures.length, 0, 'negative first clock is rejected');
+    assert.equal(parseCi1ChildPhaseCaptureBytes(fullShutdownBytes, 'after-write', 'shutdown', freshCaptureState()).complete, true,
+      'zero first clock is accepted');
+    const backwardsRows = makeChildRows('shutdown');
+    backwardsRows[0].elapsedMs = 1;
+    backwardsRows[1].elapsedMs = 0;
+    const backwardsState = freshCaptureState();
+    assert.equal(parseCi1ChildPhaseCaptureBytes(encodeRows(backwardsRows), 'after-write', 'shutdown', backwardsState).failureCode, 'clock');
+    assert.equal(backwardsState.ci1PhaseCaptures.length, 1, 'a later backwards clock preserves the valid prefix');
+
+    const exactChildRows = makeChildRows('shutdown', [
+      ...shutdownStages.slice(0, 13), 'runner_escalation_sent', ...shutdownStages.slice(13)
+    ]);
+    const exactChildBase = encodeRows(exactChildRows);
+    const exactChildBytes = Buffer.concat([
+      exactChildBase.subarray(0, exactChildBase.length - 1),
+      Buffer.alloc(4_096 - exactChildBase.length, 0x20), Buffer.from('\n')
+    ]);
+    assert.equal(exactChildBytes.length, 4_096);
+    const exactChildState = freshCaptureState();
+    assert.equal(parseCi1ChildPhaseCaptureBytes(exactChildBytes, 'before-marker', 'shutdown', exactChildState).complete, true);
+    assert.equal(exactChildState.ci1PhaseCaptureOverflow, false, 'the exact 4,096-byte child boundary is accepted');
+    const oneOverChildBytes = Buffer.concat([
+      exactChildBase.subarray(0, exactChildBase.length - 1),
+      Buffer.alloc(4_097 - exactChildBase.length, 0x20), Buffer.from('\n')
+    ]);
+    assert.equal(oneOverChildBytes.length, 4_097);
+    const oneOverChildState = freshCaptureState();
+    const oneOverChild = parseCi1ChildPhaseCaptureBytes(oneOverChildBytes, 'before-marker', 'shutdown', oneOverChildState);
+    assert.equal(oneOverChild.complete, false);
+    assert.equal(oneOverChild.failureCode, 'child_byte_limit');
+    assert.equal(oneOverChildState.ci1PhaseCaptureOverflow, true, 'one byte over the child cap is explicit overflow');
+    assert.ok(oneOverChildState.ci1PhaseCaptures.length > 0, 'bounded complete prefix survives child overflow');
+
+    const exactRecordStages = [...shutdownStages.slice(0, 13), 'runner_escalation_sent', ...shutdownStages.slice(13)];
+    const exactRecordState = freshCaptureState();
+    assert.equal(parseCi1ChildPhaseCaptureBytes(encodeRows(makeChildRows('shutdown', exactRecordStages)),
+      'before-marker', 'shutdown', exactRecordState).complete, true);
+    assert.equal(exactRecordState.ci1PhaseCaptures.length, 16);
+    assert.equal(exactRecordState.ci1PhaseCaptureOverflow, false, 'exactly 16 child records are accepted');
+    const overRecordState = freshCaptureState();
+    const overRecordStages = [...exactRecordStages, 'runner_escalation_sent'];
+    const overRecord = parseCi1ChildPhaseCaptureBytes(encodeRows(makeChildRows('shutdown', overRecordStages)),
+      'before-marker', 'shutdown', overRecordState);
+    assert.equal(overRecord.complete, false);
+    assert.equal(overRecord.failureCode, 'child_record_limit');
+    assert.equal(overRecordState.ci1PhaseCaptures.length, 16);
+    assert.equal(overRecordState.ci1PhaseCaptureOverflow, true, 'the seventeenth child record is explicit overflow');
+
+    const missingFileState = freshCaptureState();
+    const missingFile = readCi1ChildPhaseCapture(join(failureDir.directory, 'missing-phase-capture.jsonl'),
+      'before-marker', 'shutdown', false, missingFileState);
+    assert.equal(missingFile.failureCode, 'missing');
+    assert.equal(missingFileState.ci1PhaseCaptureIncomplete, true, 'missing phase custody is not reported as complete');
+
+    for (const { role, timeoutMs, escalationStage } of [
+      { role: 'shutdown', timeoutMs: 3_000, escalationStage: 'shutdown_escalation_sent' },
+      { role: 'restart', timeoutMs: 8_000, escalationStage: 'restart_escalation_sent' }
+    ]) {
+      const timeoutState = freshCaptureState();
+      const timeoutControl = { requestedMs: null, escalationStage: null, reaped: false };
+      const timeoutOutcome = await waitCi1ChildClose({
+        timeoutMs, escalationStage,
+        waitForClose: async requestedMs => { timeoutControl.requestedMs = requestedMs; return null; },
+        reapOwnedChild: async () => { timeoutControl.reaped = true; return { code: null, signal: 'SIGKILL' }; },
+        captureParent: stage => { timeoutControl.escalationStage = stage; return true; },
+        state: timeoutState
+      });
+      assert.equal(timeoutOutcome.timedOut, true, `${role} timeout remains a failure even after successful escalation`);
+      assert.equal(timeoutOutcome.closeResult.signal, 'SIGKILL', `${role} escalated owned child is confirmed closed`);
+      assert.equal(timeoutControl.requestedMs, timeoutMs, `${role} deadline remains unchanged`);
+      assert.equal(timeoutControl.escalationStage, escalationStage);
+      assert.equal(timeoutControl.reaped, true);
+      assert.equal(timeoutState.ci1PhaseCaptureIncomplete, true, `${role} timeout is retained as incomplete status`);
+    }
+
+    const finalizationState = freshCaptureState();
+    const finalizationOrder = [];
+    const finalized = await finalizeCi1ChildCapture({
+      phase: 'after-write', role: 'shutdown', closeResult: null,
+      closeOwnedChild: async () => { finalizationOrder.push('reaped'); return { code: 1, signal: null }; },
+      readCapture: () => { finalizationOrder.push('capture'); return { complete: false, failureCode: 'truncated' }; },
+      captureParent: stage => {
+        finalizationOrder.push(stage);
+        if (stage === 'cleanup_escalation_sent') {
+          finalizationState.ci1PhaseCaptureOverflow = true;
+          throw new Error('injected parent append failure');
+        }
+        return true;
+      },
+      state: finalizationState
+    });
+    assert.equal(finalized.reaped, true);
+    assert.ok(finalizationOrder.indexOf('reaped') < finalizationOrder.indexOf('capture'),
+      'owned child reaping finishes before capture ingestion');
+    assert.equal(finalizationState.ci1PhaseCaptureOverflow, true);
+    assert.equal(finalizationState.ci1PhaseCaptureIncomplete, true,
+      'parent append failure and partial child evidence remain explicit while cleanup completes');
+
+    const boundedCleanupState = freshCaptureState();
+    const firstChildRecordBytes = Buffer.byteLength(JSON.stringify({
+      schema: 1, source: 'child', phase: 'after-write', role: 'shutdown',
+      sequence: 1, stage: 'fixture_started', elapsedMs: 0
+    }));
+    const parentCleanupRecordBytes = Buffer.byteLength(JSON.stringify({
+      schema: 1, source: 'parent', phase: 'after-write', role: 'shutdown',
+      sequence: 1, stage: 'cleanup_escalation_sent', elapsedMs: 0
+    }));
+    assert.ok(parentCleanupRecordBytes > firstChildRecordBytes,
+      'the parent cleanup marker is the first aggregate append to exceed this exact capacity');
+    const emptyPadding = { padding: '' };
+    const padding = { padding: 'x'.repeat(CI1_MAX_PHASE_BYTES - firstChildRecordBytes - Buffer.byteLength(JSON.stringify(emptyPadding))) };
+    assert.equal(appendBoundedCi1PhaseCapture(boundedCleanupState, padding), true);
+    assert.equal(boundedCleanupState.ci1PhaseCaptureBytes, CI1_MAX_PHASE_BYTES - firstChildRecordBytes);
+    const boundedCleanupOrder = [];
+    const boundedCleanup = await finalizeCi1ChildCapture({
+      phase: 'after-write', role: 'shutdown', closeResult: null,
+      closeOwnedChild: async () => { boundedCleanupOrder.push('reaped'); return { code: 1, signal: null }; },
+      readCapture: () => {
+        boundedCleanupOrder.push('capture');
+        return parseCi1ChildPhaseCaptureBytes(
+          encodeRows(makeChildRows('shutdown').slice(0, 2)), 'after-write', 'shutdown', boundedCleanupState
+        );
+      },
+      captureParent: stage => {
+        const record = {
+          schema: 1, source: 'parent', phase: 'after-write', role: 'shutdown', sequence: 1,
+          stage, elapsedMs: 0
+        };
+        if (stage === 'cleanup_escalation_sent') boundedCleanupOrder.push('cleanup-append');
+        return appendBoundedCi1PhaseCapture(boundedCleanupState, record);
+      },
+      state: boundedCleanupState
+    });
+    assert.equal(boundedCleanup.reaped, true);
+    assert.ok(boundedCleanupOrder.indexOf('reaped') < boundedCleanupOrder.indexOf('capture'));
+    assert.equal(boundedCleanupState.ci1PhaseCaptureOverflow, true);
+    assert.equal(boundedCleanupState.ci1PhaseCaptureIncomplete, true);
+    assert.equal(boundedCleanupState.ci1PhaseCaptures.filter(record => record.source === 'child').length, 1,
+      'the bounded valid child prefix still fits after the cleanup marker overflow');
+
+    const parentAssertionFailure = new Error('injected marker or timing assertion failure');
+    const primaryState = freshCaptureState();
+    const primaryOrder = [];
+    let observedPrimaryFailure;
+    try {
+      await executeCi1ChildWithFinalization(
+        async () => { primaryOrder.push('execute'); throw parentAssertionFailure; },
+        async () => {
+          primaryOrder.push('finalize');
+          return finalizeCi1ChildCapture({
+            phase: 'after-write', role: 'shutdown', closeResult: null,
+            closeOwnedChild: async () => { primaryOrder.push('reaped'); return { code: 1, signal: null }; },
+            readCapture: () => { primaryOrder.push('capture'); return { complete: false, failureCode: 'truncated' }; },
+            captureParent: () => true,
+            state: primaryState
+          });
+        },
+        primaryState
+      );
+    } catch (error) { observedPrimaryFailure = error; }
+    assert.equal(observedPrimaryFailure, parentAssertionFailure,
+      'the original parent assertion remains the reported failure after capture cleanup');
+    assert.deepEqual(primaryOrder, ['execute', 'finalize', 'reaped', 'capture']);
+    assert.equal(primaryState.ci1PhaseCaptureIncomplete, true);
+
+    const primaryAfterCleanupFailure = new Error('injected early child failure');
+    const cleanupFailureState = freshCaptureState();
+    let observedAfterCleanupFailure;
+    try {
+      await executeCi1ChildWithFinalization(
+        async () => { throw primaryAfterCleanupFailure; },
+        async () => {
+          await finalizeCi1ChildCapture({
+            phase: 'after-write', role: 'shutdown', closeResult: null,
+            closeOwnedChild: async () => ({ code: 1, signal: null }),
+            readCapture: () => ({ complete: false, failureCode: 'truncated' }),
+            captureParent: () => false,
+            state: cleanupFailureState
+          });
+          throw new Error('injected capture-finalization failure after bounded cleanup');
+        },
+        cleanupFailureState
+      );
+    } catch (error) { observedAfterCleanupFailure = error; }
+    assert.equal(observedAfterCleanupFailure, primaryAfterCleanupFailure,
+      'a cleanup failure cannot replace the original early child failure');
+    assert.equal(cleanupFailureState.ci1PhaseCaptureIncomplete, true);
+
+    const unconfirmedState = freshCaptureState();
+    let unconfirmedRead = false;
+    const unconfirmed = await finalizeCi1ChildCapture({
+      phase: 'after-write', role: 'restart', closeResult: null,
+      closeOwnedChild: async () => null,
+      readCapture: () => { unconfirmedRead = true; return { complete: true }; },
+      captureParent: () => true,
+      state: unconfirmedState
+    });
+    assert.equal(unconfirmed.reaped, false);
+    assert.equal(unconfirmedRead, true, 'bounded custody is still attempted after the final bounded reap attempt');
+    assert.equal(unconfirmed.captureResult.complete, false, 'an unconfirmed close never yields complete evidence');
+    assert.equal(unconfirmedState.ci1PhaseCaptureChildCloseUnconfirmed, true);
+    assert.equal(unconfirmedState.ci1PhaseCaptureIncomplete, true,
+      'unconfirmed close is explicit rather than a zero-survivor claim');
   });
   const reopened = openStore(temporary.databasePath);
   for (const result of results.filter(item => item.attemptCount > 0)) {

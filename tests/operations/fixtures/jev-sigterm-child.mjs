@@ -553,5 +553,14 @@ t:
   try { store?.close(); } catch {}
   try { tokenizer?.destroy(); } catch {}
   capturePhase('fixture_finally_complete');
+  if (phaseCaptureEnabled) {
+    try {
+      const persistedSummary = JSON.parse(readFileSync(resultPath, 'utf8'));
+      persistedSummary.phaseCaptureComplete = phaseCaptureComplete;
+      writeFileSync(resultPath, JSON.stringify(persistedSummary));
+    } catch {
+      phaseCaptureComplete = false;
+    }
+  }
 }
 process.exitCode = 0;
