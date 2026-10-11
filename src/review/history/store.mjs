@@ -54,6 +54,7 @@ const MAX_VERSION_SEALED_BYTES = 512 * 1024;
 const TENANT_DATABASE_QUEUES = new Map();
 const HISTORY_BINDING_PORTS = new WeakMap();
 const HISTORY_BINDING_PLANS = new WeakMap();
+const HISTORY_BINDING_CANDIDATES = new WeakMap();
 const ABORT_SIGNAL_ABORTED_GETTER = typeof AbortSignal === 'function'
   ? Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get
   : undefined;
@@ -929,15 +930,16 @@ export function createCorrectionHistoryStore(options) {
     const initialColumns = new Set(database.prepare('PRAGMA table_info(correction_cache_operations)').all()
       .map((column) => column.name));
     const marker = database.prepare("SELECT value FROM correction_cache_meta WHERE key = 'binding_operation_receipt_schema'").get();
-    const missing = ['base_version_id', 'base_content_hash', 'fence', 'phase']
+    const missing = ['base_version_id', 'base_content_hash', 'fence', 'phase', 'reserved_history_bytes']
       .some((name) => !initialColumns.has(name));
-    if (!missing && marker?.value === '2') return;
+    if (!missing && marker?.value === '3') return;
 
     database.exec('BEGIN IMMEDIATE');
     try {
       const columns = new Set(database.prepare('PRAGMA table_info(correction_cache_operations)').all()
         .map((column) => column.name));
-      for (const [name, type] of [['base_version_id', 'TEXT'], ['base_content_hash', 'TEXT'], ['fence', 'INTEGER'], ['phase', 'TEXT']]) {
+      for (const [name, type] of [['base_version_id', 'TEXT'], ['base_content_hash', 'TEXT'], ['fence', 'INTEGER'],
+        ['phase', 'TEXT'], ['reserved_history_bytes', 'INTEGER']]) {
         if (!columns.has(name)) database.exec(`ALTER TABLE correction_cache_operations ADD COLUMN ${name} ${type}`);
       }
 
@@ -971,7 +973,7 @@ export function createCorrectionHistoryStore(options) {
           operation.event_key, operation.operation_hash, operation.operation_id);
       }
       database.prepare(`INSERT INTO correction_cache_meta (key, value)
-        VALUES ('binding_operation_receipt_schema', '2')
+        VALUES ('binding_operation_receipt_schema', '3')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run();
       database.exec('COMMIT');
     } catch (error) {
@@ -1198,6 +1200,7 @@ export function createCorrectionHistoryStore(options) {
           base_content_hash TEXT,
           fence INTEGER,
           phase TEXT,
+          reserved_history_bytes INTEGER,
           PRIMARY KEY (event_key, operation_hash)
         ) STRICT;
         CREATE TABLE IF NOT EXISTS correction_cache_meta (
@@ -1381,6 +1384,80 @@ export function createCorrectionHistoryStore(options) {
       sealed: Buffer.from(row.sealed).toString('base64'),
     }))));
   }
+
+function historyStoredBytes(database) {
+  return database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
+    + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
+    + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
+}
+
+function activeHistoryBindingReservationBytes(database, exceptOperationId = undefined) {
+  const rows = database.prepare(`SELECT operation_id, reserved_history_bytes FROM correction_cache_operations
+    WHERE kind = 'bind' AND phase = 'pending_bind'
+      AND (? IS NULL OR operation_id <> ?)`)
+    .all(exceptOperationId ?? null, exceptOperationId ?? null);
+  let total = 0;
+  for (const row of rows) {
+    if (!Number.isSafeInteger(row.reserved_history_bytes) || row.reserved_history_bytes < 1) fail('REVIEW_BUSY');
+    total += row.reserved_history_bytes;
+    if (!Number.isSafeInteger(total)) fail('REVIEW_STORAGE_LIMIT');
+  }
+  return total;
+}
+
+function assertHistoryStoredCapacity(database, additionalBytes, maxStoredBytes, exceptOperationId = undefined) {
+  if (!Number.isSafeInteger(additionalBytes) || additionalBytes < 0) fail('REVIEW_STORAGE_LIMIT');
+  if (historyStoredBytes(database) + activeHistoryBindingReservationBytes(database, exceptOperationId)
+    + additionalBytes > maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+}
+
+function historySealedEnvelopeUpperBound(document) {
+  const plaintextBytes = Buffer.byteLength(canonical(document), 'utf8');
+  const ciphertextWidth = Math.ceil(plaintextBytes / 3) * 4;
+  return Buffer.byteLength(JSON.stringify({
+    version: 1,
+    keyId: 'k'.repeat(128),
+    iv: 'A'.repeat(16),
+    tag: 'A'.repeat(24),
+    ciphertext: 'A'.repeat(ciphertextWidth),
+  }), 'utf8');
+}
+
+function bindingHistoryReservationBytes(context, operationId, bindingId, head, normalizedInput) {
+  const profile = ownDataRecord(normalizedInput.profile,
+    new Set(['identity', 'contentHash', 'pins', 'facts', 'observation', 'freshnessTtlMs', 'expiresAtMs']));
+  if (!profile || !isRecord(profile.identity) || !isRecord(profile.pins)
+    || typeof profile.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(profile.contentHash)) fail('REVIEW_INVALID');
+  const binding = {
+    schemaVersion: 1,
+    bindingId,
+    operationId,
+    eventId: context.eventId,
+    historyVersionId: head.version_id,
+    historyContentHash: head.content_hash,
+    historyProjectionHash: '0'.repeat(64),
+    profileRef: 'p'.repeat(128),
+    cacheVersion: Number.MAX_SAFE_INTEGER,
+    scopeKind: 'tenant_private',
+    cacheBindingHash: '0'.repeat(64),
+    identity: profile.identity,
+    pins: profile.pins,
+    cacheSourceContentHash: profile.contentHash,
+    cacheExpiresAtMs: MAX_TIME,
+    historyExpiresAtMs: MAX_TIME,
+    expiresAtMs: MAX_TIME,
+  };
+  const reference = {
+    referenceId: bindingId,
+    kind: 'consumer_reference',
+    boundVersionId: head.version_id,
+    boundContentHash: head.content_hash,
+    createdAt: '+275760-09-13T00:00:00.000Z',
+  };
+  const total = historySealedEnvelopeUpperBound(binding) + historySealedEnvelopeUpperBound(reference);
+  if (!Number.isSafeInteger(total) || total <= 0) fail('REVIEW_STORAGE_LIMIT');
+  return total;
+}
 
   async function decryptVersion(info, row) {
     if (!row || row.state !== 'available' || !row.encryption_key_id || !row.sealed) fail('REVIEW_NOT_FOUND');
@@ -1716,10 +1793,7 @@ export function createCorrectionHistoryStore(options) {
           invalidations, indexKey });
         const sealed = seal(info, `${eventKey}:${snapshot.versionId}`, 'version', key.keyId, key.key, snapshot);
         if (sealed.byteLength > MAX_VERSION_SEALED_BYTES) fail('REVIEW_STORAGE_LIMIT');
-        const liveBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
-        if (liveBytes + sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+        assertHistoryStoredCapacity(database, sealed.byteLength, limits.maxStoredBytes);
         const currentRefs = current?.state === 'available' ? database.prepare(`SELECT r.* FROM downstream_references AS r
           WHERE r.event_key = ? AND r.bound_version_id = ? AND r.bound_content_hash = ?
           AND NOT EXISTS (SELECT 1 FROM invalidations AS i WHERE i.event_key = r.event_key
@@ -1754,10 +1828,7 @@ export function createCorrectionHistoryStore(options) {
         }
         database.prepare('INSERT INTO idempotency (event_key, key_hash, fingerprint, version_id) VALUES (?, ?, ?, ?)')
           .run(eventKey, keyHash, fingerprintValue, snapshot.versionId);
-        const usedBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
-        if (usedBytes > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+        assertHistoryStoredCapacity(database, 0, limits.maxStoredBytes);
         if (bindingOperation) recordBindingTargetInTransaction(database, bindingOperation, snapshot.versionId, snapshot.contentHash, transactionTime);
         return Object.freeze({ snapshot, replayed: false, invalidations: snapshot.invalidations });
       };
@@ -2323,10 +2394,7 @@ export function createCorrectionHistoryStore(options) {
           createdAt: new Date(time.now).toISOString(),
         };
         const sealed = seal(info, `${eventKey}:${referenceHash}:${versionId}`, 'reference', payloadKey.keyId, payloadKey.key, document);
-        const usedBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
-        if (usedBytes + sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+        assertHistoryStoredCapacity(database, sealed.byteLength, limits.maxStoredBytes);
         database.prepare(`INSERT INTO downstream_references
           (event_key, reference_hash, bound_version_id, bound_content_hash, encryption_key_id, sealed)
           VALUES (?, ?, ?, ?, ?, ?)`).run(eventKey, referenceHash, versionId, input.contentHash, payloadKey.keyId, sealed);
@@ -2468,6 +2536,10 @@ export function createCorrectionHistoryStore(options) {
     context.indexKey.fill(0);
   }
 
+  function disposeBindingCandidate(token) {
+    if (token && (typeof token === 'object' || typeof token === 'function')) HISTORY_BINDING_CANDIDATES.delete(token);
+  }
+
   async function bindingReadHead(context, request = context.request, action = context.action) {
     try {
       await reauthorizeRequest(context.info, request, context.eventId, action, context.actorId, context.field);
@@ -2515,49 +2587,80 @@ export function createCorrectionHistoryStore(options) {
         const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
         if (!head) fail('REVIEW_NOT_FOUND');
         if (head.state !== 'available' || head.expires_at_ms <= now) fail('REVIEW_EXPIRED');
+        const references = database.prepare('SELECT * FROM downstream_references WHERE event_key = ? ORDER BY reference_hash')
+          .all(context.eventKey);
         const receipt = database.prepare(`SELECT * FROM correction_cache_operations
           WHERE event_key = ? AND operation_hash = ?`).get(context.eventKey, operationHash);
         const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
         if (receipt) {
           if (receipt.kind !== 'bind' || receipt.fingerprint !== operationFingerprint) fail('REVIEW_IDEMPOTENCY_CONFLICT');
+          if (typeof receipt.operation_id !== 'string' || typeof receipt.binding_id !== 'string'
+            || !Number.isSafeInteger(receipt.fence) || receipt.fence < 1) fail('REVIEW_BUSY');
           if (receipt.target_version_id) {
             const target = rowForVersion(database, context.eventKey, receipt.target_version_id);
             if (!target || target.expires_at_ms <= now) fail('REVIEW_EXPIRED');
-            return { row: target, head, state, receipt, expiresAtMs: target.expires_at_ms };
+            return { row: target, head, state, receipt, references, expiresAtMs: target.expires_at_ms };
           }
           if (!state || state.operation_id !== receipt.operation_id || state.phase !== 'pending_bind'
             || state.base_version_id !== head.version_id || state.base_content_hash !== head.content_hash) fail('REVIEW_BUSY');
           const base = rowForVersion(database, context.eventKey, state.base_version_id);
           if (!base || base.content_hash !== state.base_content_hash) fail('REVIEW_INTEGRITY');
-          return { row: base, head, state, receipt, expiresAtMs: base.expires_at_ms };
+          return { row: base, head, state, receipt, references, expiresAtMs: base.expires_at_ms };
         }
         if (state && state.phase !== 'complete') fail('REVIEW_BUSY');
         const row = rowForVersion(database, context.eventKey, head.version_id);
         if (!row || row.content_hash !== head.content_hash) fail('REVIEW_INTEGRITY');
         if (row.expires_at_ms <= now) fail('REVIEW_EXPIRED');
-        return { row, head, state, receipt: null, expiresAtMs: row.expires_at_ms };
+        return { row, head, state, receipt: null, references, expiresAtMs: row.expires_at_ms };
       });
       const snapshot = await decryptVersion(context.info, raw.row);
       await reauthorizeRequest(context.info, request, context.eventId, 'read_history', context.actorId);
-      const result = Object.freeze({ snapshot, expiresAtMs: raw.expiresAtMs, eventKey: context.eventKey });
+      const operationId = raw.receipt?.operation_id ?? randomUUID();
+      const bindingId = raw.receipt?.binding_id ?? randomUUID();
+      if (raw.receipt?.phase !== 'complete' && raw.references.length >= 128) fail('REVIEW_STORAGE_LIMIT');
+      const reservedHistoryBytes = bindingHistoryReservationBytes(context, operationId, bindingId, raw.row, normalizedInput);
+      const candidateToken = createOpaque();
+      const candidateData = Object.freeze({
+        context,
+        operationKey,
+        operationHash,
+        operationFingerprint,
+        operationId,
+        bindingId,
+        phase: raw.receipt?.phase ?? 'new',
+        receipt: raw.receipt,
+        state: raw.state,
+        head: raw.head,
+        referenceCount: raw.references.length,
+        referenceDigest: bindingReferenceDigest(raw.references),
+        reservedHistoryBytes,
+      });
+      HISTORY_BINDING_CANDIDATES.set(candidateToken, candidateData);
+      const result = Object.freeze({ snapshot, expiresAtMs: raw.expiresAtMs, eventKey: context.eventKey,
+        operationId, bindingId, operationPhase: candidateData.phase, candidate: candidateToken });
       const allowPendingOperation = raw.state?.phase === 'pending_bind' ? {
         operationId: raw.state.operation_id, fence: raw.state.fence, phase: 'pending_bind',
       } : undefined;
-      return await guardHistoryDisclosure({ info: context.info, directory: context.directory,
-        eventId: context.eventId, eventKey: context.eventKey, actorId: context.actorId, request,
-        action: 'read_history', snapshot, value: result,
-        expiresAtMs: Math.min(raw.expiresAtMs, raw.head.expires_at_ms),
-        details: { bindingOperationId: allowPendingOperation?.operationId ?? null,
-          bindingOperationFence: allowPendingOperation?.fence ?? null },
-        allowPendingOperation,
-        verify(database, time) {
-          const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
-          const row = rowForVersion(database, context.eventKey, snapshot.versionId);
-          if (!head || head.state !== 'available' || head.version_id !== raw.head.version_id
-            || head.content_hash !== raw.head.content_hash || head.expires_at_ms !== raw.head.expires_at_ms
-            || head.expires_at_ms <= time.effectiveNow || !row || row.content_hash !== snapshot.contentHash
-            || row.expires_at_ms !== raw.row.expires_at_ms || row.expires_at_ms <= time.effectiveNow) fail('REVIEW_VERSION_CONFLICT');
-        } });
+      try {
+        return await guardHistoryDisclosure({ info: context.info, directory: context.directory,
+          eventId: context.eventId, eventKey: context.eventKey, actorId: context.actorId, request,
+          action: 'read_history', snapshot, value: result,
+          expiresAtMs: Math.min(raw.expiresAtMs, raw.head.expires_at_ms),
+          details: { bindingOperationId: allowPendingOperation?.operationId ?? null,
+            bindingOperationFence: allowPendingOperation?.fence ?? null },
+          allowPendingOperation,
+          verify(database, time) {
+            const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
+            const row = rowForVersion(database, context.eventKey, snapshot.versionId);
+            if (!head || head.state !== 'available' || head.version_id !== raw.head.version_id
+              || head.content_hash !== raw.head.content_hash || head.expires_at_ms !== raw.head.expires_at_ms
+              || head.expires_at_ms <= time.effectiveNow || !row || row.content_hash !== snapshot.contentHash
+              || row.expires_at_ms !== raw.row.expires_at_ms || row.expires_at_ms <= time.effectiveNow) fail('REVIEW_VERSION_CONFLICT');
+          } });
+      } catch (error) {
+        HISTORY_BINDING_CANDIDATES.delete(candidateToken);
+        throw error;
+      }
     } catch (error) {
       return throwAfterExpiredCleanup(context.info, context.directory, context.eventKey, error, undefined, {
         beforeBegin: () => reauthorizeRequest(context.info, request, context.eventId, 'purge_correction_history', context.actorId),
@@ -2728,6 +2831,7 @@ export function createCorrectionHistoryStore(options) {
     throwIfAborted(signal);
     const spec = ownDataRecord(specValue, new Set([
       'kind', 'operationKey', 'normalizedInput', 'baseVersionId', 'baseContentHash', 'action', 'field', 'preparedRevision',
+      'bindingCandidate',
     ]));
     if (!spec || !['bind', 'correction', 'source_refresh'].includes(spec.kind)
       || !validSafeString(spec.operationKey, 1, 180) || !isRecord(spec.normalizedInput)
@@ -2739,11 +2843,17 @@ export function createCorrectionHistoryStore(options) {
       || (spec.field !== undefined && !validSafeString(spec.field, 1, 80))) fail();
     const revisionPlan = spec.preparedRevision === undefined ? null : HISTORY_BINDING_PLANS.get(spec.preparedRevision);
     if (spec.kind === 'bind' && spec.preparedRevision !== undefined) fail('REVIEW_INVALID');
+    const bindCandidate = spec.bindingCandidate === undefined ? null : HISTORY_BINDING_CANDIDATES.get(spec.bindingCandidate);
+    if ((spec.kind === 'bind' && (!bindCandidate || bindCandidate.context !== context
+      || bindCandidate.operationKey !== spec.operationKey))
+      || (spec.kind !== 'bind' && spec.bindingCandidate !== undefined)) fail('REVIEW_INVALID');
     await reauthorizeRequest(context.info, request, context.eventId, spec.action, context.actorId, spec.field);
     throwIfAborted(signal);
     const operationHash = keyed(context.info, context.indexKey, 'binding-operation', spec.operationKey);
     const operationFingerprint = fingerprint(context.indexKey, context.info, context.eventKey, context.actorId,
       `correction_cache_${spec.kind}`, spec.normalizedInput);
+    if (bindCandidate && (bindCandidate.operationHash !== operationHash
+      || bindCandidate.operationFingerprint !== operationFingerprint)) fail('REVIEW_INVALID');
     if (revisionPlan && (revisionPlan.disposed || revisionPlan.context !== context
       || revisionPlan.bindingKind !== spec.kind || revisionPlan.bindingOperationKey !== spec.operationKey
       || revisionPlan.bindingFingerprint !== operationFingerprint
@@ -2766,11 +2876,25 @@ export function createCorrectionHistoryStore(options) {
       const receipt = database.prepare('SELECT * FROM correction_cache_operations WHERE event_key = ? AND operation_hash = ?')
         .get(context.eventKey, operationHash);
       const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
+      const references = spec.kind === 'bind'
+        ? database.prepare('SELECT * FROM downstream_references WHERE event_key = ? ORDER BY reference_hash').all(context.eventKey)
+        : null;
       const baseVersionId = spec.baseVersionId ?? head.version_id;
       const baseContentHash = spec.baseContentHash ?? head.content_hash;
-      return { head, receipt, state, baseVersionId, baseContentHash };
+      return { head, receipt, state, references, baseVersionId, baseContentHash };
     }, signal, () => reauthorizeRequest(context.info, request, context.eventId,
       spec.action, context.actorId, spec.field), preflightBoundary);
+    if (bindCandidate && (candidate.head.version_id !== bindCandidate.head.version_id
+      || candidate.head.content_hash !== bindCandidate.head.content_hash
+      || candidate.head.expires_at_ms !== bindCandidate.head.expires_at_ms
+      || candidate.head.revision !== bindCandidate.head.revision)) fail('REVIEW_VERSION_CONFLICT');
+    if (bindCandidate && ((candidate.receipt?.operation_id ?? null) !== (bindCandidate.receipt?.operation_id ?? null)
+      || (candidate.receipt?.fingerprint ?? null) !== (bindCandidate.receipt?.fingerprint ?? null)
+      || (candidate.state?.operation_id ?? null) !== (bindCandidate.state?.operation_id ?? null)
+      || (candidate.state?.fence ?? null) !== (bindCandidate.state?.fence ?? null)
+      || (candidate.state?.phase ?? null) !== (bindCandidate.state?.phase ?? null)
+      || candidate.references.length !== bindCandidate.referenceCount
+      || bindingReferenceDigest(candidate.references) !== bindCandidate.referenceDigest)) fail('REVIEW_BUSY');
     if (!candidate.receipt?.target_version_id
       && (candidate.head.version_id !== candidate.baseVersionId || candidate.head.content_hash !== candidate.baseContentHash)) {
       fail('REVIEW_VERSION_CONFLICT');
@@ -2791,10 +2915,13 @@ export function createCorrectionHistoryStore(options) {
     const resumesPending = candidate.receipt && !completedReceipt
       && candidate.state?.operation_id === candidate.receipt.operation_id && candidate.state.phase !== 'complete';
     if (revisionPlan && candidate.receipt?.target_version_id) fail('REVIEW_BUSY');
-    const candidateOperationId = candidate.receipt?.operation_id ?? randomUUID();
+    const candidateOperationId = bindCandidate?.operationId ?? candidate.receipt?.operation_id ?? randomUUID();
+    const candidateBindingId = bindCandidate?.bindingId ?? candidate.receipt?.binding_id ?? (spec.kind === 'bind' ? randomUUID() : null);
     const candidateFence = resumesPending ? candidate.state.fence + 1
       : completedReceipt ? candidate.receipt.fence
         : (candidate.state?.fence ?? 0) + 1;
+    if (bindCandidate && (candidateOperationId !== bindCandidate.operationId
+      || candidateBindingId !== bindCandidate.bindingId)) fail('REVIEW_BUSY');
     const boundaryAction = spec.kind === 'bind' ? 'review.history.cache_bind_begin' : 'review.history.revision_begin';
     const boundary = boundaryFor(context.info, context.actorId, context.eventId, boundaryAction, spec.field, request, {
       operationId: candidateOperationId,
@@ -2816,17 +2943,23 @@ export function createCorrectionHistoryStore(options) {
       const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
       if (!head || head.state !== 'available') fail(head ? 'REVIEW_EXPIRED' : 'REVIEW_NOT_FOUND');
       if (head.version_id !== candidate.head.version_id || head.content_hash !== candidate.head.content_hash
-        || head.expires_at_ms !== candidate.head.expires_at_ms || head.expires_at_ms <= effectiveNow) fail('REVIEW_BUSY');
+        || head.expires_at_ms !== candidate.head.expires_at_ms) fail('REVIEW_VERSION_CONFLICT');
+      if (head.expires_at_ms <= effectiveNow) fail('REVIEW_EXPIRED');
       const baseVersionId = spec.baseVersionId ?? head.version_id;
       const baseContentHash = spec.baseContentHash ?? head.content_hash;
       const receipt = database.prepare('SELECT * FROM correction_cache_operations WHERE event_key = ? AND operation_hash = ?')
         .get(context.eventKey, operationHash);
       const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
+      const references = spec.kind === 'bind'
+        ? database.prepare('SELECT * FROM downstream_references WHERE event_key = ? ORDER BY reference_hash').all(context.eventKey)
+        : null;
       if ((receipt?.operation_id ?? null) !== (candidate.receipt?.operation_id ?? null)
         || (receipt?.fingerprint ?? null) !== (candidate.receipt?.fingerprint ?? null)
         || (state?.operation_id ?? null) !== (candidate.state?.operation_id ?? null)
         || (state?.fence ?? null) !== (candidate.state?.fence ?? null)
         || (state?.phase ?? null) !== (candidate.state?.phase ?? null)) fail('REVIEW_BUSY');
+      if (bindCandidate && (references.length !== bindCandidate.referenceCount
+        || bindingReferenceDigest(references) !== bindCandidate.referenceDigest)) fail('REVIEW_BUSY');
       if (receipt) {
         if (receipt.fingerprint !== operationFingerprint || receipt.kind !== spec.kind) fail('REVIEW_IDEMPOTENCY_CONFLICT');
         if (receipt.phase === 'complete') {
@@ -2850,10 +2983,21 @@ export function createCorrectionHistoryStore(options) {
           if (expectedHead && head.version_id !== expectedHead) fail('REVIEW_VERSION_CONFLICT');
           const nextFence = candidateFence;
           if (revisionPlan) verifyPreparedRevisionAdmission(database, head, revisionPlan, time.prepared, effectiveNow);
+          let reservedHistoryBytes = receipt.reserved_history_bytes;
+          if (spec.kind === 'bind') {
+            if (references.length >= 128) fail('REVIEW_STORAGE_LIMIT');
+            const requiredReservation = bindCandidate.reservedHistoryBytes;
+            if (reservedHistoryBytes === null) {
+              assertHistoryStoredCapacity(database, requiredReservation, limits.maxStoredBytes, receipt.operation_id);
+              reservedHistoryBytes = requiredReservation;
+            } else if (!Number.isSafeInteger(reservedHistoryBytes) || reservedHistoryBytes < requiredReservation) {
+              fail('REVIEW_BUSY');
+            }
+          }
           database.prepare('UPDATE correction_cache_state SET fence = ?, updated_at_ms = ? WHERE event_key = ? AND operation_id = ? AND fence = ?')
             .run(nextFence, now, context.eventKey, state.operation_id, state.fence);
-          database.prepare('UPDATE correction_cache_operations SET fence = ?, phase = ? WHERE event_key = ? AND operation_hash = ? AND operation_id = ? AND fence = ?')
-            .run(nextFence, state.phase, context.eventKey, operationHash, receipt.operation_id, state.fence);
+          database.prepare('UPDATE correction_cache_operations SET fence = ?, phase = ?, reserved_history_bytes = ? WHERE event_key = ? AND operation_hash = ? AND operation_id = ? AND fence = ?')
+            .run(nextFence, state.phase, reservedHistoryBytes, context.eventKey, operationHash, receipt.operation_id, state.fence);
           return Object.freeze({ operationId: receipt.operation_id, bindingId: receipt.binding_id, fence: nextFence,
             kind: spec.kind, phase: state.phase, baseVersionId: state.base_version_id, baseContentHash: state.base_content_hash,
             targetVersionId: state.target_version_id, targetContentHash: state.target_content_hash, replayed: false });
@@ -2863,17 +3007,23 @@ export function createCorrectionHistoryStore(options) {
       if (state && state.phase !== 'complete') fail('REVIEW_BUSY');
       if (head.version_id !== baseVersionId || head.content_hash !== baseContentHash) fail('REVIEW_VERSION_CONFLICT');
       if (head.expires_at_ms <= effectiveNow) fail('REVIEW_EXPIRED');
+      let reservedHistoryBytes = null;
+      if (spec.kind === 'bind') {
+        if (references.length >= 128) fail('REVIEW_STORAGE_LIMIT');
+        reservedHistoryBytes = bindCandidate.reservedHistoryBytes;
+        assertHistoryStoredCapacity(database, reservedHistoryBytes, limits.maxStoredBytes);
+      }
       if (spec.kind !== 'bind') verifyPreparedRevisionAdmission(database, head, revisionPlan, time.prepared, effectiveNow);
       const count = database.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations WHERE event_key = ?').get(context.eventKey).count;
       if (count >= limits.maxRevisionsPerHistory + 128) fail('REVIEW_STORAGE_LIMIT');
       const operationId = candidateOperationId;
-      const bindingId = spec.kind === 'bind' ? randomUUID() : null;
+      const bindingId = candidateBindingId;
       const fence = candidateFence;
       database.prepare(`INSERT INTO correction_cache_operations
         (event_key, operation_hash, fingerprint, operation_id, binding_id, kind, target_version_id, target_content_hash,
-         base_version_id, base_content_hash, fence, phase)
-        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`).run(context.eventKey, operationHash, operationFingerprint,
-        operationId, bindingId, spec.kind, baseVersionId, baseContentHash, fence, phase);
+         base_version_id, base_content_hash, fence, phase, reserved_history_bytes)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)`).run(context.eventKey, operationHash, operationFingerprint,
+        operationId, bindingId, spec.kind, baseVersionId, baseContentHash, fence, phase, reservedHistoryBytes);
       database.prepare(`INSERT INTO correction_cache_state
         (event_key, operation_id, operation_hash, fingerprint, binding_id, fence, kind, phase,
          base_version_id, base_content_hash, target_version_id, target_content_hash, updated_at_ms)
@@ -3061,12 +3211,9 @@ export function createCorrectionHistoryStore(options) {
     const sealed = seal(plan.context.info, `${plan.eventKey}:${snapshot.versionId}`, 'version',
       plan.payloadKeyId, plan.payloadKey, snapshot);
     if (sealed.byteLength > MAX_VERSION_SEALED_BYTES) fail('REVIEW_STORAGE_LIMIT');
-    const liveBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
-      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
-      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
-    if (liveBytes + sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+    assertHistoryStoredCapacity(database, sealed.byteLength, limits.maxStoredBytes);
     return Object.freeze({ snapshot, sealed, currentHead: current, referenceDigest: plan.referenceDigest,
-      liveBytes, now: time.now, effectiveNow: time.effectiveNow });
+      liveBytes: historyStoredBytes(database), now: time.now, effectiveNow: time.effectiveNow });
   }
 
   function verifyPreparedRevisionAdmission(database, head, plan, prepared, effectiveNow) {
@@ -3083,10 +3230,7 @@ export function createCorrectionHistoryStore(options) {
         AND i.prior_content_hash = r.bound_content_hash) ORDER BY r.reference_hash LIMIT 129`)
       .all(plan.eventKey, head.version_id, head.content_hash);
     if (rows.length > 128 || bindingReferenceDigest(rows) !== plan.referenceDigest) fail('REVIEW_BUSY');
-    const liveBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
-      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
-      + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
-    if (liveBytes + prepared.sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+    assertHistoryStoredCapacity(database, prepared.sealed.byteLength, limits.maxStoredBytes);
     return true;
   }
 
@@ -3136,10 +3280,7 @@ export function createCorrectionHistoryStore(options) {
             AND i.prior_content_hash = r.bound_content_hash) ORDER BY r.reference_hash LIMIT 129`)
           .all(context.eventKey, head.version_id, head.content_hash);
         if (rows.length > 128 || bindingReferenceDigest(rows) !== plan.referenceDigest) fail('REVIEW_BUSY');
-        const liveBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
-        if (liveBytes + sealed.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+        assertHistoryStoredCapacity(database, sealed.byteLength, limits.maxStoredBytes);
         const existing = database.prepare('SELECT fingerprint, version_id FROM idempotency WHERE event_key = ? AND key_hash = ?')
           .get(context.eventKey, plan.keyHash);
         if (existing) {
@@ -3252,6 +3393,13 @@ export function createCorrectionHistoryStore(options) {
         const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
         if (!state || state.operation_id !== operation.operationId || state.fence !== operation.fence
           || state.phase !== 'pending_bind') fail('REVIEW_BUSY');
+        const operationRow = database.prepare(`SELECT reserved_history_bytes, phase, fence, binding_id, base_version_id,
+          base_content_hash FROM correction_cache_operations WHERE event_key = ? AND operation_id = ?`)
+          .get(context.eventKey, operation.operationId);
+        if (!operationRow || operationRow.phase !== 'pending_bind' || operationRow.fence !== operation.fence
+          || operationRow.binding_id !== operation.bindingId || operationRow.base_version_id !== operation.baseVersionId
+          || operationRow.base_content_hash !== operation.baseContentHash
+          || !Number.isSafeInteger(operationRow.reserved_history_bytes) || operationRow.reserved_history_bytes < 0) fail('REVIEW_BUSY');
         const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
         if (!head || head.state !== 'available' || head.version_id !== operation.baseVersionId
           || head.content_hash !== operation.baseContentHash || head.expires_at_ms <= effectiveNow) fail('REVIEW_VERSION_CONFLICT');
@@ -3259,10 +3407,9 @@ export function createCorrectionHistoryStore(options) {
           .get(context.eventKey, bindingHash)) fail('REVIEW_REFERENCE_CONFLICT');
         const refCount = database.prepare('SELECT COUNT(*) AS count FROM downstream_references WHERE event_key = ?').get(context.eventKey).count;
         if (refCount >= 128) fail('REVIEW_STORAGE_LIMIT');
-        const usedBytes = database.prepare("SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM versions WHERE state = 'available'").get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM downstream_references').get().bytes
-          + database.prepare('SELECT COALESCE(SUM(length(sealed)), 0) AS bytes FROM correction_cache_bindings').get().bytes;
-        if (usedBytes + sealedBinding.byteLength + sealedReference.byteLength > limits.maxStoredBytes) fail('REVIEW_STORAGE_LIMIT');
+        const actualBytes = sealedBinding.byteLength + sealedReference.byteLength;
+        if (actualBytes > operationRow.reserved_history_bytes) fail('REVIEW_STORAGE_LIMIT');
+        assertHistoryStoredCapacity(database, actualBytes, limits.maxStoredBytes, operation.operationId);
         database.prepare(`INSERT INTO downstream_references
           (event_key, reference_hash, bound_version_id, bound_content_hash, encryption_key_id, sealed)
           VALUES (?, ?, ?, ?, ?, ?)`).run(context.eventKey, referenceHash, operation.baseVersionId,
@@ -3277,7 +3424,7 @@ export function createCorrectionHistoryStore(options) {
           target_content_hash = ?, updated_at_ms = ? WHERE event_key = ? AND operation_id = ? AND fence = ?`)
           .run(operation.baseVersionId, operation.baseContentHash, now, context.eventKey, operation.operationId, operation.fence);
         database.prepare(`UPDATE correction_cache_operations SET target_version_id = ?, target_content_hash = ?,
-          base_version_id = ?, base_content_hash = ?, fence = ?, phase = 'complete'
+          base_version_id = ?, base_content_hash = ?, fence = ?, phase = 'complete', reserved_history_bytes = 0
           WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
           .run(operation.baseVersionId, operation.baseContentHash, operation.baseVersionId,
             operation.baseContentHash, operation.fence, context.eventKey, state.operation_hash, operation.operationId);
@@ -3538,6 +3685,7 @@ export function createCorrectionHistoryStore(options) {
   HISTORY_BINDING_PORTS.set(api, Object.freeze({
     context: bindingContext,
     disposeContext: disposeBindingContext,
+    disposeBindCandidate: disposeBindingCandidate,
     readHead: bindingReadHead,
     preflightBindHead: bindingPreflightBindHead,
     readVersion: bindingReadVersion,

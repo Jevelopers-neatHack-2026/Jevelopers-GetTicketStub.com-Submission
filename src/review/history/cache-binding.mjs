@@ -305,6 +305,7 @@ export function createCorrectionCacheBinding(options) {
       const { scopes, historyContext, cacheContext } = await pairedContexts(scope, request, eventId,
         'read_history', 'private_profile.write', undefined, signal);
       let preflightToken;
+      let bindCandidateToken;
       try {
         const operationInput = Object.freeze({
           eventId: historyContext.eventId,
@@ -315,6 +316,7 @@ export function createCorrectionCacheBinding(options) {
         });
         const bindHead = await historyPort.preflightBindHead(historyContext, input.idempotencyKey,
           operationInput, request);
+        bindCandidateToken = bindHead.candidate;
         if (signal.aborted) fail('REVIEW_ABORTED');
         const historyExpiresAtMs = bindHead.expiresAtMs;
         const effectiveProfile = Object.freeze({ ...profile,
@@ -329,6 +331,9 @@ export function createCorrectionCacheBinding(options) {
           historyContentHash: bindHead.snapshot.contentHash,
           historyProjectionHash: projectionHash,
           historyExpiresAtMs,
+          operationId: bindHead.operationId,
+          bindingId: bindHead.bindingId,
+          operationPhase: bindHead.operationPhase,
         });
         preflightToken = await cachePort.validateProfileInput(scopes.cacheScope, request,
           projectedProfile, signal, capability, profile.facts, historyBindingPreflight);
@@ -338,8 +343,9 @@ export function createCorrectionCacheBinding(options) {
           baseVersionId: bindHead.snapshot.versionId,
           baseContentHash: bindHead.snapshot.contentHash,
           action: 'record_downstream_reference',
+          bindingCandidate: bindHead.candidate,
         }, request, signal);
-        if (operation.replayed) return findCompletedBind(historyContext, operation);
+        if (operation.replayed) return await findCompletedBind(historyContext, operation);
         if (signal.aborted) fail('REVIEW_ABORTED');
         const pendingRead = Object.freeze({
           operationId: operation.operationId,
@@ -395,6 +401,7 @@ export function createCorrectionCacheBinding(options) {
         } finally { fence.close(); }
       } finally {
         if (preflightToken) cachePort.disposePreflight(preflightToken, capability);
+        if (bindCandidateToken) historyPort.disposeBindCandidate(bindCandidateToken);
         historyPort.disposeContext(historyContext);
       }
     }, call?.signal, operationTimeoutMs);

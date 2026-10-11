@@ -1123,65 +1123,323 @@ export function createScopedReuseStore(options) {
     });
   }
 
-  async function preflightBoundCacheCapacity({ info, keys, index, entryPayload, observation, consumers, binding, ttlMs }) {
-    const correctionSlots = Math.max(1, consumers.length);
-    const generalSlots = Math.max(1, consumers.length);
-    const additionalSlots = correctionSlots + generalSlots;
-    return withBindingRead((database, time) => {
-      if (time.clockRollback) fail('REUSE_DENIED');
-      const entryCount = database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count;
-      if (entryCount >= limits.maxEntries) fail('REUSE_CAPACITY');
-      const historicalCap = database.prepare(`SELECT MIN(expires_at_ms) AS expires_at_ms FROM reuse_entries
-        WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND identity_hash = ? AND cache_key_hash = ?`)
-        .get(keys.partitionHash, keys.identityHash, keys.cacheKeyHash).expires_at_ms;
-      const effectiveExpiry = Math.min(entryPayload.retentionPolicy.expiresAtMs,
-        binding.historyExpiresAtMs, historicalCap ?? MAX_TIME);
-      if (effectiveExpiry <= time.now || effectiveExpiry > binding.historyExpiresAtMs
-        || ttlMs > effectiveExpiry - time.now) fail('REUSE_POLICY_UNAVAILABLE');
-      const retentionPolicy = Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: effectiveExpiry });
-      const versionedPayload = freeze({ ...entryPayload, retentionPolicy, version: Number.MAX_SAFE_INTEGER });
-      const entry = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
-        'entry', 'p'.repeat(36), versionedPayload);
-      let additionalPayloadBytes = 0;
-      for (const consumerRef of consumers) {
-        const consumerHash = mac(keys.keyInfo.key, consumerRef);
-        const consumerPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
-          'consumer_ref', `${'p'.repeat(36)}:${consumerHash}`, { consumerRef });
-        additionalPayloadBytes += consumerPayload.byteLength;
+  function boundWriteFingerprint(keys, index, entryPayload, observation, binding, operationId) {
+    return mac(keys.keyInfo.key, stable({
+      operationId,
+      bindingId: binding.bindingId,
+      eventId: binding.eventId,
+      historyVersionId: binding.historyVersionId,
+      historyContentHash: binding.historyContentHash,
+      historyProjectionHash: binding.historyProjectionHash,
+      historyExpiresAtMs: binding.historyExpiresAtMs,
+      identity: index.identity,
+      pins: index.pins,
+      cacheSourceContentHash: index.contentHash,
+      facts: entryPayload.facts,
+      observation,
+      freshnessTtlMs: entryPayload.freshnessTtlMs,
+      retentionPolicy: entryPayload.retentionPolicy,
+    }));
+  }
+
+  function copySqliteRow(row) {
+    if (!row) return null;
+    const copy = { ...row };
+    for (const [name, value] of Object.entries(copy)) {
+      if (value instanceof Uint8Array) copy[name] = Buffer.from(value);
+    }
+    return copy;
+  }
+
+  function readBoundReplayRows(database, binding, keys) {
+    const receipt = copySqliteRow(database.prepare(`SELECT * FROM reuse_bound_writes
+      WHERE operation_id = ? AND partition_hash = ?`).get(binding.operationId, keys.partitionHash));
+    const bindingEntries = database.prepare(`SELECT * FROM reuse_entries WHERE scope_kind = 'tenant_private'
+      AND partition_hash = ? AND binding_hash = ? ORDER BY entry_id`)
+      .all(keys.partitionHash, mac(keys.keyInfo.key,
+        `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`))
+      .map(copySqliteRow);
+    const bindingReservations = database.prepare(`SELECT * FROM reuse_correction_reservations
+      WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND binding_hash = ? ORDER BY entry_id`)
+      .all(keys.partitionHash, mac(keys.keyInfo.key,
+        `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`))
+      .map(copySqliteRow);
+    const entry = receipt ? copySqliteRow(database.prepare(`SELECT * FROM reuse_entries WHERE entry_id = ?
+      AND scope_kind = 'tenant_private' AND partition_hash = ?`).get(receipt.entry_id, keys.partitionHash)) : null;
+    const reservation = receipt ? copySqliteRow(database.prepare(`SELECT * FROM reuse_correction_reservations
+      WHERE entry_id = ? AND scope_kind = 'tenant_private' AND partition_hash = ?`)
+      .get(receipt.entry_id, keys.partitionHash)) : null;
+    const consumers = receipt ? database.prepare(`SELECT * FROM reuse_consumer_refs WHERE entry_id = ?
+      AND scope_kind = 'tenant_private' AND partition_hash = ? ORDER BY consumer_hash`)
+      .all(receipt.entry_id, keys.partitionHash).map(copySqliteRow) : [];
+    const observation = receipt ? copySqliteRow(database.prepare(`SELECT * FROM reuse_observations
+      WHERE entry_id = ? AND sequence = 1`).get(receipt.entry_id)) : null;
+    const observationCount = receipt ? database.prepare('SELECT COUNT(*) AS count FROM reuse_observations WHERE entry_id = ?')
+      .get(receipt.entry_id).count : 0;
+    const outboxCount = receipt ? database.prepare('SELECT COUNT(*) AS count FROM reuse_outbox WHERE entry_id = ?')
+      .get(receipt.entry_id).count : 0;
+    const invalidationReceipts = database.prepare(`SELECT * FROM reuse_history_invalidation_ops
+      WHERE operation_id = ? AND partition_hash = ? ORDER BY entry_id`)
+      .all(binding.operationId, keys.partitionHash).map(copySqliteRow);
+    const entryCount = database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count;
+    const historicalCap = database.prepare(`SELECT MIN(expires_at_ms) AS expires_at_ms FROM reuse_entries
+      WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND identity_hash = ? AND cache_key_hash = ?`)
+      .get(keys.partitionHash, keys.identityHash, keys.cacheKeyHash).expires_at_ms;
+    return { receipt, bindingEntries, bindingReservations, entry, reservation, consumers,
+      observation, observationCount, outboxCount, invalidationReceipts, entryCount, historicalCap };
+  }
+
+  function sameSqliteRow(left, right) {
+    if (left === null || right === null) return left === right;
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    if (stable(leftKeys) !== stable(rightKeys)) return false;
+    return leftKeys.every((key) => {
+      const a = left[key];
+      const b = right[key];
+      if (a instanceof Uint8Array || b instanceof Uint8Array) {
+        return a instanceof Uint8Array && b instanceof Uint8Array && Buffer.from(a).equals(Buffer.from(b));
       }
-      const observationPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
-        'observation', 'o'.repeat(36), {
-          status: 'body_changed',
-          retrievedAtMs: observation.retrievedAtMs,
-          validatedAtMs: observation.validatedAtMs,
-          contentHash: index.contentHash,
-          sourceVersion: observation.sourceVersion,
-          attemptLineage: observation.attemptLineage,
-        });
-      additionalPayloadBytes += observationPayload.byteLength;
-      const reservation = {
-        bindingId: 'b'.repeat(36),
+      return a === b;
+    });
+  }
+
+  function sameBoundReplayRows(left, right) {
+    if (!sameSqliteRow(left.receipt, right.receipt) || !sameSqliteRow(left.entry, right.entry)
+      || !sameSqliteRow(left.reservation, right.reservation) || !sameSqliteRow(left.observation, right.observation)
+      || left.observationCount !== right.observationCount || left.outboxCount !== right.outboxCount
+      || left.historicalCap !== right.historicalCap
+      || left.invalidationReceipts.length !== right.invalidationReceipts.length
+      || left.bindingEntries.length !== right.bindingEntries.length
+      || left.bindingReservations.length !== right.bindingReservations.length
+      || left.consumers.length !== right.consumers.length) return false;
+    return left.bindingEntries.every((row, index) => sameSqliteRow(row, right.bindingEntries[index]))
+      && left.bindingReservations.every((row, index) => sameSqliteRow(row, right.bindingReservations[index]))
+      && left.invalidationReceipts.every((row, index) => sameSqliteRow(row, right.invalidationReceipts[index]))
+      && left.consumers.every((row, index) => sameSqliteRow(row, right.consumers[index]));
+  }
+
+  async function verifyBoundReplayRows({ info, request, signal, keys, index, binding, entryPayload,
+    observation, consumers, fixedExpiry, rows, now }) {
+    const operationPhase = binding.operationPhase;
+    if (!rows.receipt) {
+      if (operationPhase === 'complete' || rows.bindingEntries.length > 0
+        || rows.bindingReservations.length > 0 || rows.invalidationReceipts.length > 0) fail('REUSE_INTEGRITY');
+      return null;
+    }
+    if (!['pending_bind', 'complete'].includes(operationPhase)
+      || rows.receipt.operation_id !== binding.operationId
+      || rows.receipt.partition_hash !== keys.partitionHash
+      || rows.receipt.binding_hash !== binding.cacheBindingHash
+      || !/^[a-f0-9]{64}$/.test(rows.receipt.fingerprint ?? '')
+      || !/^[0-9a-f-]{36}$/i.test(rows.receipt.entry_id ?? '') || !Number.isSafeInteger(rows.receipt.version)
+      || rows.receipt.version < 1 || rows.bindingEntries.length !== 1
+      || rows.bindingReservations.length !== 1 || rows.invalidationReceipts.length !== 0
+      || !rows.entry || rows.entry.entry_id !== rows.receipt.entry_id
+      || rows.bindingEntries[0].entry_id !== rows.entry.entry_id
+      || rows.bindingReservations[0].entry_id !== rows.entry.entry_id
+      || !rows.reservation || rows.consumers.length !== consumers.length
+      || !rows.observation || rows.observation.sequence !== 1 || rows.observationCount < 1
+      || rows.observationCount > limits.maxObservationsPerEntry
+      || rows.outboxCount !== 0) fail('REUSE_INTEGRITY');
+
+    const entry = rows.entry;
+    if (entry.scope_kind !== 'tenant_private' || entry.partition_hash !== keys.partitionHash
+      || entry.version !== rows.receipt.version || entry.binding_hash !== binding.cacheBindingHash
+      || entry.identity_hash !== keys.identityHash || entry.content_hash_mac !== keys.contentMac
+      || entry.pins_hash !== keys.pinsHash || entry.eligible !== 1 || entry.payload_purged !== 0
+      || !Number.isSafeInteger(entry.created_at_ms) || entry.created_at_ms < 0
+      || !Number.isSafeInteger(entry.expires_at_ms) || entry.expires_at_ms <= now
+      || entry.created_at_ms > entry.expires_at_ms
+      || entry.expires_at_ms !== fixedExpiry || !Number.isSafeInteger(entry.payload_bytes)
+      || !(entry.payload instanceof Uint8Array)
+      || entry.payload_bytes !== entry.payload.byteLength || entry.payload_key_id !== rows.reservation.payload_key_id
+      || rows.reservation.scope_kind !== 'tenant_private' || rows.reservation.partition_hash !== keys.partitionHash
+      || rows.reservation.binding_hash !== binding.cacheBindingHash
+      || rows.reservation.outbox_slots !== Math.max(1, consumers.length)
+      || !(rows.reservation.payload instanceof Uint8Array)
+      || rows.reservation.payload_bytes !== rows.reservation.payload.byteLength) fail('REUSE_INTEGRITY');
+
+    if (!(rows.observation.payload instanceof Uint8Array) || !string(rows.observation.payload_key_id, 128)
+      || rows.consumers.some((row) => !(row.payload instanceof Uint8Array) || !string(row.payload_key_id, 128))) {
+      fail('REUSE_INTEGRITY');
+    }
+
+    const fingerprint = boundWriteFingerprint(keys, index,
+      Object.freeze({ ...entryPayload, retentionPolicy: Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: fixedExpiry }) }),
+      observation, binding, binding.operationId);
+    if (rows.receipt.fingerprint !== fingerprint) fail('REUSE_INTEGRITY');
+
+    const guard = authorizationGuard(info, request, 'private_profile.write', signal);
+    const ownedKeys = new Map();
+    const payloadKeyForStored = async (keyId) => {
+      if (keyId === keys.payloadKey.keyId) return keys.payloadKey;
+      if (ownedKeys.has(keyId)) return ownedKeys.get(keyId);
+      const key = await resolveKey(info, 'payload', keyId, guard);
+      ownedKeys.set(keyId, key);
+      return key;
+    };
+    try {
+      const entryKey = await payloadKeyForStored(entry.payload_key_id);
+      const entryPayloadStored = unseal(entryKey.key, keys.partitionHash, 'entry', entry.entry_id,
+        entry.payload, entry.payload_key_id);
+      const expectedBinding = Object.freeze({
+        bindingId: binding.bindingId,
         eventId: binding.eventId,
         historyVersionId: binding.historyVersionId,
         historyContentHash: binding.historyContentHash,
         historyProjectionHash: binding.historyProjectionHash,
-        operationId: 'o'.repeat(36),
-        profileRef: 'p'.repeat(36),
-        bindingHash: 'h'.repeat(64),
+        operationId: binding.operationId,
+        historyExpiresAtMs: binding.historyExpiresAtMs,
+      });
+      const expectedEntryPayload = freeze({
+        ...entryPayload,
+        correctionBinding: expectedBinding,
+        retentionPolicy: Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: fixedExpiry }),
+        version: entry.version,
+      });
+      if (stable(entryPayloadStored) !== stable(expectedEntryPayload)) fail('REUSE_INTEGRITY');
+
+      const reservationKey = await payloadKeyForStored(rows.reservation.payload_key_id);
+      const reservationStored = unseal(reservationKey.key, keys.partitionHash, 'correction_reservation', entry.entry_id,
+        rows.reservation.payload, rows.reservation.payload_key_id);
+      const expectedReservation = {
+        bindingId: binding.bindingId,
+        eventId: binding.eventId,
+        historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash,
+        historyProjectionHash: binding.historyProjectionHash,
+        operationId: binding.operationId,
+        profileRef: entry.entry_id,
+        bindingHash: binding.cacheBindingHash,
         identity: index.identity,
         pins: index.pins,
         contentHash: index.contentHash,
-        version: Number.MAX_SAFE_INTEGER,
-        expiresAtMs: effectiveExpiry,
-        outboxSlots: correctionSlots,
+        version: entry.version,
+        expiresAtMs: fixedExpiry,
+        outboxSlots: Math.max(1, consumers.length),
         consumers,
       };
-      const reserved = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
-        'correction_reservation', reservation.profileRef, reservation);
+      if (stable(reservationStored) !== stable(expectedReservation)) fail('REUSE_INTEGRITY');
+
+      const actualConsumers = [];
+      for (const row of rows.consumers) {
+        if (row.scope_kind !== 'tenant_private' || row.partition_hash !== keys.partitionHash
+          || !/^[a-f0-9]{64}$/.test(row.consumer_hash ?? '')) fail('REUSE_INTEGRITY');
+        const consumerKey = await payloadKeyForStored(row.payload_key_id);
+        const item = unseal(consumerKey.key, keys.partitionHash, 'consumer_ref',
+          `${entry.entry_id}:${row.consumer_hash}`, row.payload, row.payload_key_id);
+        const parsed = record(item, new Set(['consumerRef']));
+        if (!parsed || !string(parsed.consumerRef, 512)
+          || mac(keys.keyInfo.key, parsed.consumerRef) !== row.consumer_hash) fail('REUSE_INTEGRITY');
+        actualConsumers.push(parsed.consumerRef);
+      }
+      if (new Set(actualConsumers).size !== actualConsumers.length
+        || stable([...actualConsumers].sort()) !== stable([...consumers].sort())) fail('REUSE_INTEGRITY');
+
+      const observationKey = await payloadKeyForStored(rows.observation.payload_key_id);
+      const observationStored = unseal(observationKey.key, keys.partitionHash, 'observation',
+        rows.observation.observation_id, rows.observation.payload, rows.observation.payload_key_id);
+      const expectedObservation = {
+        status: 'body_changed',
+        retrievedAtMs: observation.retrievedAtMs,
+        validatedAtMs: observation.validatedAtMs,
+        contentHash: index.contentHash,
+        sourceVersion: observation.sourceVersion,
+        attemptLineage: observation.attemptLineage,
+      };
+      if (stable(observationStored) !== stable(expectedObservation)
+        || rows.observation.entry_id !== entry.entry_id
+        || rows.observation.observed_at_ms !== observation.validatedAtMs
+        || rows.observation.status !== 'body_changed') fail('REUSE_INTEGRITY');
+      return rows;
+    } finally {
+      for (const key of ownedKeys.values()) key.key.fill(0);
+    }
+  }
+
+  async function preflightBoundCacheCapacity({ info, request, signal, keys, index, entryPayload, observation, consumers, binding, ttlMs }) {
+    const correctionSlots = Math.max(1, consumers.length);
+    const generalSlots = Math.max(1, consumers.length);
+    const additionalSlots = correctionSlots + generalSlots;
+    const read = await withBindingRead((database, time) => {
+      if (time.clockRollback) fail('REUSE_DENIED');
+      const rows = readBoundReplayRows(database, binding, keys);
+      return { rows, now: time.now, clockRollback: time.clockRollback };
+    });
+    const effectiveExpiry = Math.min(entryPayload.retentionPolicy.expiresAtMs,
+      binding.historyExpiresAtMs, read.rows.historicalCap ?? MAX_TIME);
+    if (effectiveExpiry <= read.now || effectiveExpiry > binding.historyExpiresAtMs
+      || ttlMs > effectiveExpiry - read.now) fail('REUSE_POLICY_UNAVAILABLE');
+    const retentionPolicy = Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: effectiveExpiry });
+    const fixedRetention = Object.freeze({ ...retentionPolicy, expiresAtMs: effectiveExpiry });
+    const replayProof = await verifyBoundReplayRows({ info, request, signal, keys, index, binding,
+      entryPayload, observation, consumers, fixedExpiry: effectiveExpiry,
+      rows: read.rows, now: read.now });
+    if (replayProof) {
+      const confirmed = await withBindingRead((database, time) => {
+        if (time.clockRollback || time.now >= effectiveExpiry) fail('REUSE_POLICY_UNAVAILABLE');
+        const current = readBoundReplayRows(database, binding, keys);
+        if (!sameBoundReplayRows(read.rows, current)) fail('REUSE_BUSY');
+        return current;
+      });
+      return Object.freeze({ retention: fixedRetention, replayProof: confirmed, replayed: true });
+    }
+    if (read.rows.receipt || read.rows.bindingEntries.length > 0 || read.rows.bindingReservations.length > 0) fail('REUSE_INTEGRITY');
+    if (binding.operationPhase === 'complete') fail('REUSE_INTEGRITY');
+
+    // Capacity estimates are only required for a new cache write. A verified receipt
+    // is an exact replay and must remain usable at the same capacity that rejected
+    // a duplicate write.
+    const versionedPayload = freeze({ ...entryPayload, retentionPolicy, version: Number.MAX_SAFE_INTEGER });
+    const entry = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+      'entry', 'p'.repeat(36), versionedPayload);
+    let additionalPayloadBytes = 0;
+    for (const consumerRef of consumers) {
+      const consumerHash = mac(keys.keyInfo.key, consumerRef);
+      const consumerPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        'consumer_ref', `${'p'.repeat(36)}:${consumerHash}`, { consumerRef });
+      additionalPayloadBytes += consumerPayload.byteLength;
+    }
+    const observationPayload = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+      'observation', 'o'.repeat(36), {
+        status: 'body_changed',
+        retrievedAtMs: observation.retrievedAtMs,
+        validatedAtMs: observation.validatedAtMs,
+        contentHash: index.contentHash,
+        sourceVersion: observation.sourceVersion,
+        attemptLineage: observation.attemptLineage,
+      });
+    additionalPayloadBytes += observationPayload.byteLength;
+    const reservation = {
+      bindingId: binding.bindingId,
+      eventId: binding.eventId,
+      historyVersionId: binding.historyVersionId,
+      historyContentHash: binding.historyContentHash,
+      historyProjectionHash: binding.historyProjectionHash,
+      operationId: binding.operationId,
+      profileRef: 'p'.repeat(36),
+      bindingHash: binding.cacheBindingHash,
+      identity: index.identity,
+      pins: index.pins,
+      contentHash: index.contentHash,
+      version: Number.MAX_SAFE_INTEGER,
+      expiresAtMs: effectiveExpiry,
+      outboxSlots: correctionSlots,
+      consumers,
+    };
+    const reserved = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+      'correction_reservation', reservation.profileRef, reservation);
+    await withBindingRead((database, time) => {
+      if (time.clockRollback || time.now >= effectiveExpiry) fail('REUSE_POLICY_UNAVAILABLE');
+      const current = readBoundReplayRows(database, binding, keys);
+      if (current.receipt || current.bindingEntries.length > 0 || current.bindingReservations.length > 0
+        || current.invalidationReceipts.length > 0) fail('REUSE_BUSY');
+      if (current.entryCount >= limits.maxEntries) fail('REUSE_CAPACITY');
       assertOutboxHeadroom(database, additionalSlots);
       ensureStorageCapacity(database, entry.byteLength + reserved.byteLength + additionalPayloadBytes, 0, additionalSlots);
-      return Object.freeze({ ...entryPayload.retentionPolicy, expiresAtMs: effectiveExpiry });
     });
+    return Object.freeze({ retention: fixedRetention, replayProof: null, replayed: false });
   }
 
   function registeredConsumers(database, entry, payload, keys) {
@@ -1359,22 +1617,8 @@ export function createScopedReuseStore(options) {
       || !external.bindingOperation || typeof external.bindingOperation.operationId !== 'string'
       || !Number.isSafeInteger(external.bindingOperation.fence) || external.bindingOperation.fence < 1) fail('REUSE_DENIED');
     const bindingHash = mac(keys.keyInfo.key, `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
-    const writeFingerprint = mac(keys.keyInfo.key, stable({
-      operationId: external.bindingOperation.operationId,
-      bindingId: binding.bindingId,
-      eventId: binding.eventId,
-      historyVersionId: binding.historyVersionId,
-      historyContentHash: binding.historyContentHash,
-      historyProjectionHash: binding.historyProjectionHash,
-      historyExpiresAtMs: binding.historyExpiresAtMs,
-      identity: index.identity,
-      pins: index.pins,
-      cacheSourceContentHash: index.contentHash,
-      facts: entryPayload.facts,
-      observation,
-      freshnessTtlMs: entryPayload.freshnessTtlMs,
-      retentionPolicy: entryPayload.retentionPolicy,
-    }));
+    const writeFingerprint = boundWriteFingerprint(keys, index, entryPayload, observation,
+      binding, external.bindingOperation.operationId);
     const operationId = external.bindingOperation.operationId;
     const profileRef = randomUUID();
     await authorize(info, request, 'private_profile.write');
@@ -1400,15 +1644,23 @@ export function createScopedReuseStore(options) {
       const replay = database.prepare('SELECT * FROM reuse_bound_writes WHERE operation_id = ? AND partition_hash = ?')
         .get(operationId, keys.partitionHash);
       if (replay) {
-        if (replay.binding_hash !== bindingHash || replay.fingerprint !== writeFingerprint) fail('REUSE_DENIED');
-        const row = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
-          .get(replay.entry_id, 'tenant_private', keys.partitionHash);
-        if (!row || row.version !== replay.version || row.binding_hash !== bindingHash) fail('REUSE_INTEGRITY');
+        const preflight = external.boundProfilePreflight;
+        if (!preflight?.replayed || !preflight.replayProof) fail('REUSE_BUSY');
+        const currentProof = readBoundReplayRows(database, { ...binding, cacheBindingHash: bindingHash }, keys);
+        if (!sameBoundReplayRows(preflight.replayProof, currentProof)) fail('REUSE_BUSY');
+        if (replay.binding_hash !== bindingHash || replay.fingerprint !== writeFingerprint) fail('REUSE_INTEGRITY');
+        const row = currentProof.entry;
+        if (!row || row.version !== replay.version || row.binding_hash !== bindingHash
+          || row.expires_at_ms <= time.effectiveNow || row.eligible !== 1 || row.payload_purged !== 0) fail('REUSE_POLICY_UNAVAILABLE');
         return Object.freeze({ status: 'stored', profileRef: row.entry_id, version: row.version,
           freshness: row.expires_at_ms <= time.effectiveNow ? 'expired' : 'fresh', originalLineageStatus: 'unknown', replayed: true,
           expiresAtMs: row.expires_at_ms, bindingHash, identity: index.identity, pins: index.pins,
           cacheSourceContentHash: index.contentHash, scopeKind: 'tenant_private' });
       }
+      if (external.boundProfilePreflight?.replayed) fail('REUSE_BUSY');
+      const currentProof = readBoundReplayRows(database, { ...binding, cacheBindingHash: bindingHash }, keys);
+      if (currentProof.bindingEntries.length > 0 || currentProof.bindingReservations.length > 0
+        || currentProof.invalidationReceipts.length > 0) fail('REUSE_INTEGRITY');
       if (time.clockRollback || signalAborted(external.signal)) fail('REUSE_DENIED');
       const entryCount = database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count;
       if (entryCount >= limits.maxEntries) fail('REUSE_CAPACITY');
@@ -1737,6 +1989,8 @@ export function createScopedReuseStore(options) {
       historyContentHash: binding.historyContentHash,
       historyProjectionHash: binding.historyProjectionHash,
       historyExpiresAtMs: binding.historyExpiresAtMs,
+      operationId: operation.operationId,
+      bindingId: binding.bindingId,
     });
     const signature = boundProfileSignature(index, input, facts, bindingCoordinates);
     if (!preflight || preflight.used || preflight.info !== info || preflight.request !== request
@@ -1765,11 +2019,15 @@ export function createScopedReuseStore(options) {
     ]));
     const binding = record(bindingValue, new Set([
       'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash', 'historyExpiresAtMs',
+      'operationId', 'bindingId', 'operationPhase',
     ]));
     if (!input || !Object.hasOwn(input, 'facts') || !Object.hasOwn(input, 'observation')
       || !binding || !string(binding.eventId, 180) || !string(binding.historyVersionId, 180)
       || !/^[a-f0-9]{64}$/.test(binding.historyContentHash ?? '')
       || !/^[a-f0-9]{64}$/.test(binding.historyProjectionHash ?? '')
+      || !string(binding.operationId, 36) || !/^[0-9a-f-]{36}$/i.test(binding.operationId)
+      || !string(binding.bindingId, 36) || !/^[0-9a-f-]{36}$/i.test(binding.bindingId)
+      || !['new', 'pending_bind', 'complete'].includes(binding.operationPhase)
       || !Number.isSafeInteger(binding.historyExpiresAtMs) || binding.historyExpiresAtMs < 0
       || binding.historyExpiresAtMs > MAX_TIME) fail('REUSE_INVALID');
     const index = copyIndex(input);
@@ -1842,15 +2100,17 @@ export function createScopedReuseStore(options) {
       assertConsumersRevocable(consumers, keys, keys.partitionHash);
       const permissions = validatePermissions(privateReferences.permissions);
       const correctionBinding = Object.freeze({
-        bindingId: 'b'.repeat(36),
+        bindingId: binding.bindingId,
         eventId: binding.eventId,
         historyVersionId: binding.historyVersionId,
         historyContentHash: binding.historyContentHash,
         historyProjectionHash: binding.historyProjectionHash,
-        operationId: 'o'.repeat(36),
+        operationId: binding.operationId,
         historyExpiresAtMs: binding.historyExpiresAtMs,
       });
-      assertBoundHistoryEventsFit(consumers, keys, binding, index.contentHash);
+      const cacheBindingHash = mac(keys.keyInfo.key,
+        `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
+      const exactBinding = Object.freeze({ ...binding, cacheBindingHash });
       const entryPayload = freeze({
         kind: 'private',
         identity: index.identity,
@@ -1871,17 +2131,30 @@ export function createScopedReuseStore(options) {
         rights: 'not_asserted',
       });
       if (Buffer.byteLength(stable(entryPayload), 'utf8') > limits.maxEntryBytes) fail('REUSE_CAPACITY');
-      retention = await preflightBoundCacheCapacity({ info, keys, index, entryPayload, observation, consumers, binding, ttlMs });
+      if (binding.operationPhase === 'new') {
+        assertBoundHistoryEventsFit(consumers, keys, exactBinding, index.contentHash);
+      }
+      const capacity = await preflightBoundCacheCapacity({ info, request, signal, keys, index, entryPayload,
+        observation, consumers, binding: exactBinding, ttlMs });
+      retention = capacity.retention;
+      if (!capacity.replayed && binding.operationPhase !== 'new') {
+        assertBoundHistoryEventsFit(consumers, keys, exactBinding, index.contentHash);
+      }
       if (signalAborted(signal)) fail('REUSE_DENIED');
-      const cacheSignature = boundProfileSignature(index, input, facts, binding);
+      const signatureBinding = Object.freeze({ eventId: binding.eventId, historyVersionId: binding.historyVersionId,
+        historyContentHash: binding.historyContentHash, historyProjectionHash: binding.historyProjectionHash,
+        historyExpiresAtMs: binding.historyExpiresAtMs, operationId: binding.operationId, bindingId: binding.bindingId });
+      const cacheSignature = boundProfileSignature(index, input, facts, signatureBinding);
       const preflightToken = opaque();
       boundProfilePreflights.set(preflightToken, {
         info,
         request,
         signature: cacheSignature,
-        binding: Object.freeze({ ...binding }),
+        binding: Object.freeze({ ...signatureBinding }),
         observation,
         retention,
+        replayProof: capacity.replayProof,
+        replayed: capacity.replayed,
         ttlMs,
         nowMs: now,
         privateReferences,
@@ -2467,6 +2740,8 @@ export function createScopedReuseStore(options) {
       if (signalAborted(signal)) fail('REUSE_DENIED');
     };
     const keys = await keyParts(info, 'tenant_private', index, guard);
+    let retainedProofKey;
+    try {
     const expectedBindingHash = mac(keys.keyInfo.key,
       `event-intelligence:correction-cache-binding:v1:${keys.partitionHash}:${binding.bindingId}`);
     if (expectedBindingHash !== binding.cacheBindingHash) fail('REUSE_DENIED');
@@ -2514,6 +2789,7 @@ export function createScopedReuseStore(options) {
       if (!preflight.reservation) fail('REUSE_DENIED');
       reservationKey = preflight.reservation.payload_key_id === keys.payloadKey.keyId
         ? keys.payloadKey : await resolveKey(info, 'payload', preflight.reservation.payload_key_id, guard);
+      if (reservationKey !== keys.payloadKey) retainedProofKey = reservationKey;
       if (signalAborted(signal)) fail('REUSE_DENIED');
       reservation = unseal(reservationKey.key, keys.partitionHash, 'correction_reservation', binding.profileRef,
         preflight.reservation.payload, preflight.reservation.payload_key_id);
@@ -2594,6 +2870,8 @@ export function createScopedReuseStore(options) {
       const consumers = Object.freeze(reservationConsumers);
       const targetRefs = consumers.length > 0 ? consumers : [null];
       if (targetRefs.length !== reservation.outboxSlots) fail('REUSE_INTEGRITY');
+      const proofPayloadKey = reservationKey;
+      if (!proofPayloadKey) fail('REUSE_KEY_UNAVAILABLE');
       assertOutboxHeadroom(database, targetRefs.length);
       const prepared = [];
       for (const consumerRef of targetRefs) {
@@ -2606,7 +2884,7 @@ export function createScopedReuseStore(options) {
           targetHistoryVersionId: operation.targetVersionId,
           targetHistoryContentHash: operation.targetContentHash,
         };
-        const sealed = sealBounded(keys.payloadKey.key, keys.payloadKey.keyId, keys.partitionHash,
+        const sealed = sealBounded(proofPayloadKey.key, proofPayloadKey.keyId, keys.partitionHash,
           'outbox', event.eventId, event, MAX_INVALIDATION_RECORD_BYTES);
         prepared.push({ event, consumerRef, sealed });
       }
@@ -2619,7 +2897,7 @@ export function createScopedReuseStore(options) {
            has_consumer, payload_key_id, payload, payload_bytes)
           VALUES (?, ?, 'tenant_private', ?, 'pending', 0, ?, ?, ?, ?, ?)`)
           .run(event.eventId, binding.profileRef, keys.partitionHash, time.now, consumerRef === null ? 0 : 1,
-            keys.payloadKey.keyId, sealed, sealed.byteLength);
+            proofPayloadKey.keyId, sealed, sealed.byteLength);
       }
       const eventIds = prepared.map(({ event }) => event.eventId);
       database.prepare(`INSERT INTO reuse_history_invalidation_ops
@@ -2632,6 +2910,11 @@ export function createScopedReuseStore(options) {
     }, signal, boundary);
     await guard();
     return result;
+    } finally {
+      retainedProofKey?.key.fill(0);
+      keys.payloadKey.key.fill(0);
+      keys.keyInfo.key.fill(0);
+    }
   }
 
   async function getPublicProfile(scope, request, lookup) {

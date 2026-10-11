@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { access, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -181,6 +181,14 @@ function runWorker(args) {
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
   const exit = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal, stdout, stderr })));
   return { child, exit };
+}
+
+function runWorkerSync(args) {
+  const workerPath = path.resolve('tests/integration/review-cache-binding/worker.mjs');
+  return spawnSync(process.execPath, [workerPath, ...args], {
+    encoding: 'utf8',
+    timeout: 5_000,
+  });
 }
 
 async function waitForFile(filePath, timeoutMs = 5_000) {
@@ -1450,6 +1458,388 @@ test('real process death after cache invalidation commit replays its receipt wit
   } finally { finalHistory.close(); finalCache.close(); }
 });
 
+test('real process death after bind reservation reopens with the same durable history admission', async (t) => {
+  const f = await fixture(t);
+  await createSeed(f);
+  const marker = path.join(f.root, 'bind-reservation-marker');
+  const idempotencyKey = 'bind-process-death-after-reservation';
+  const worker = runWorker(['kill-after-bind-reservation', f.root, EVENT_ID, '', '', marker, idempotencyKey]);
+  t.after(() => { if (worker.child.exitCode === null && worker.child.signalCode === null) worker.child.kill('SIGKILL'); });
+  await waitForFile(marker);
+  const processResult = await worker.exit;
+  assert.equal(processResult.signal, 'SIGKILL');
+  assert.match(await readFile(marker, 'utf8'), /^bind reservation persisted:[1-9]\d*$/);
+  const reservationBytes = Number((await readFile(marker, 'utf8')).split(':').at(-1));
+
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  const cachePathExists = await access(cacheDatabasePath(f.root)).then(() => true, () => false);
+  let baseStoredBytes;
+  try {
+    const operation = history.prepare("SELECT operation_id, phase, reserved_history_bytes FROM correction_cache_operations WHERE kind = 'bind'").get();
+    assert.equal(operation.phase, 'pending_bind');
+    assert.ok(operation.reserved_history_bytes > 0);
+    assert.equal(operation.reserved_history_bytes, reservationBytes);
+    baseStoredBytes = history.prepare(`SELECT
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM versions WHERE state = 'available') +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM downstream_references) +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM correction_cache_bindings) AS bytes`).get().bytes;
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+  } finally { history.close(); }
+  if (cachePathExists) {
+    const cache = new DatabaseSync(cacheDatabasePath(f.root));
+    try {
+      assert.equal(cache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 0);
+      assert.equal(cache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count, 0);
+      assert.equal(cache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0);
+    } finally { cache.close(); }
+  }
+  await assert.rejects(f.store.getHistory(f.scope, EVENT_ID, f.authRequest),
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_BUSY');
+
+  f.historyOptions.maxStoredBytes = baseStoredBytes + reservationBytes;
+  const reopened = f.makeStore();
+  const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+  const bound = await reopened.bindPrivateProfile(scope, EVENT_ID,
+    { idempotencyKey, profile: cacheProfile() }, f.authRequest);
+  assert.equal(bound.status, 'bound');
+  assert.equal((await reopened.getHistory(scope, EVENT_ID, f.authRequest)).revision, 1);
+  const complete = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    const operation = complete.prepare("SELECT phase, reserved_history_bytes FROM correction_cache_operations WHERE kind = 'bind'").get();
+    assert.equal(operation.phase, 'complete');
+    assert.equal(operation.reserved_history_bytes, 0);
+    assert.equal(complete.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+    assert.equal(complete.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 1);
+    const actualPairBytes = complete.prepare(`SELECT
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM downstream_references) +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM correction_cache_bindings) AS bytes`).get().bytes;
+    assert.ok(actualPairBytes <= reservationBytes, `actual binding/reference ${actualPairBytes} exceeded reservation ${reservationBytes}`);
+    const actualTotalBytes = complete.prepare(`SELECT
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM versions WHERE state = 'available') +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM downstream_references) +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM correction_cache_bindings) AS bytes`).get().bytes;
+    assert.ok(actualTotalBytes <= baseStoredBytes + reservationBytes);
+  } finally { complete.close(); }
+
+  const below = await fixture(t);
+  await createSeed(below);
+  const belowHistory = new DatabaseSync(historyDatabasePath(below.root));
+  let belowBaseBytes;
+  try {
+    belowBaseBytes = belowHistory.prepare(`SELECT
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM versions WHERE state = 'available') +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM downstream_references) +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM correction_cache_bindings) AS bytes`).get().bytes;
+  } finally { belowHistory.close(); }
+  below.historyOptions.maxStoredBytes = belowBaseBytes + reservationBytes - 1;
+  const belowStore = below.makeStore();
+  const belowScope = await belowStore.scopeForAuthenticatedRequest(below.authRequest);
+  await assert.rejects(belowStore.bindPrivateProfile(belowScope, EVENT_ID,
+    { idempotencyKey, profile: cacheProfile() }, below.authRequest),
+  (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_STORAGE_LIMIT');
+  assert.equal((await belowStore.getHistory(belowScope, EVENT_ID, below.authRequest)).revision, 1);
+  const belowAfter = new DatabaseSync(historyDatabasePath(below.root));
+  try {
+    assert.equal(belowAfter.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count, 0);
+    assert.equal(belowAfter.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase = 'pending_bind'").get().count, 0);
+    assert.equal(belowAfter.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 0);
+    assert.equal(belowAfter.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+  } finally { belowAfter.close(); }
+});
+
+test('another process cannot spend tenant history bytes reserved by a pending bind', async (t) => {
+  let f;
+  let childAttempt;
+  let reservedLimit;
+  let liveBefore;
+  const peerEventId = 'event-binding-reservation-peer';
+  f = await fixture(t, { cache: {
+    authorizeAction({ tenantId, actorId, request: value }) {
+      if (!childAttempt && value === f?.authRequest && actorId === 'actor-binding') {
+        const history = new DatabaseSync(historyDatabasePath(f.root));
+        try {
+          const pending = history.prepare(`SELECT reserved_history_bytes FROM correction_cache_operations
+            WHERE kind = 'bind' AND phase = 'pending_bind'`).get();
+          if (pending) {
+            liveBefore = history.prepare(`SELECT
+              (SELECT COALESCE(SUM(length(sealed)), 0) FROM versions WHERE state = 'available') +
+              (SELECT COALESCE(SUM(length(sealed)), 0) FROM downstream_references) +
+              (SELECT COALESCE(SUM(length(sealed)), 0) FROM correction_cache_bindings) AS bytes`).get().bytes;
+            reservedLimit = liveBefore + pending.reserved_history_bytes;
+            childAttempt = runWorkerSync(['register-reference', f.root, peerEventId,
+              peerSnapshot.versionId, peerSnapshot.contentHash, String(reservedLimit), 'peer-reference-must-not-fit']);
+          }
+        } finally { history.close(); }
+      }
+      return value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === tenantId
+        && value?.principal?.actorId === actorId && actorId !== 'outsider';
+    },
+  } });
+  await createSeed(f);
+  const peerSnapshot = (await f.store.createHistory(f.scope, { eventId: peerEventId, sourceFacts: initialFacts(),
+    idempotencyKey: 'initialize-reservation-peer', retentionHandle: f.createPermit() }, f.authRequest)).snapshot;
+  const bound = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-reserves-tenant-wide-bytes', profile: cacheProfile() }, f.authRequest);
+  assert.equal(bound.status, 'bound');
+  assert.ok(childAttempt, 'the separate writer ran after pending_bind reservation persisted');
+  assert.equal(childAttempt.error, undefined);
+  assert.equal(childAttempt.status, 0, childAttempt.stderr);
+  assert.deepEqual(JSON.parse(childAttempt.stdout), { outcome: 'error', code: 'REVIEW_STORAGE_LIMIT' });
+  assert.ok(Number.isSafeInteger(reservedLimit) && reservedLimit > liveBefore);
+
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    const total = history.prepare(`SELECT
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM versions WHERE state = 'available') +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM downstream_references) +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM correction_cache_bindings) AS bytes`).get().bytes;
+    assert.ok(total <= reservedLimit, `stored bytes ${total} exceeded preflight limit ${reservedLimit}`);
+    assert.equal(history.prepare("SELECT COUNT(*) AS count FROM downstream_references WHERE bound_version_id = ?").get(peerSnapshot.versionId).count, 0);
+    const completed = history.prepare("SELECT phase, reserved_history_bytes FROM correction_cache_operations WHERE kind = 'bind'").get();
+    assert.deepEqual({ ...completed }, { phase: 'complete', reserved_history_bytes: 0 });
+  } finally { history.close(); }
+  assert.equal((await f.store.getHistory(f.scope, EVENT_ID, f.authRequest)).revision, 1);
+  assert.equal((await f.store.getHistory(f.scope, peerEventId, f.authRequest)).revision, 1);
+});
+
+test('real process death after bound cache commit replays at exhausted capacity without duplicate rows', async (t) => {
+  const f = await fixture(t, { cache: { maxEntries: 1, maxOutboxEntries: 2 } });
+  await createSeed(f);
+  const idempotencyKey = 'bind-process-death-after-cache-commit';
+  const marker = path.join(f.root, 'bind-cache-commit-marker');
+  const worker = runWorker(['kill-after-bind-cache-commit', f.root, EVENT_ID, '', '', marker, idempotencyKey]);
+  t.after(() => { if (worker.child.exitCode === null && worker.child.signalCode === null) worker.child.kill('SIGKILL'); });
+  await waitForFile(marker);
+  const processResult = await worker.exit;
+  assert.equal(processResult.signal, 'SIGKILL');
+  assert.equal(await readFile(marker, 'utf8'), 'bind cache receipt committed before history reference');
+
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  const cache = new DatabaseSync(cacheDatabasePath(f.root));
+  let beforeCounts;
+  let reservedHistoryBytes;
+  try {
+    const operation = history.prepare("SELECT phase, reserved_history_bytes FROM correction_cache_operations WHERE kind = 'bind'").get();
+    assert.equal(operation.phase, 'pending_bind');
+    assert.ok(operation.reserved_history_bytes > 0);
+    reservedHistoryBytes = operation.reserved_history_bytes;
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 0);
+    beforeCounts = {
+      entries: cache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count,
+      writes: cache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count,
+      reservations: cache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count,
+      consumers: cache.prepare('SELECT COUNT(*) AS count FROM reuse_consumer_refs').get().count,
+      observations: cache.prepare('SELECT COUNT(*) AS count FROM reuse_observations').get().count,
+      outbox: cache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count,
+    };
+    assert.deepEqual(beforeCounts, { entries: 1, writes: 1, reservations: 1, consumers: 1, observations: 1, outbox: 0 });
+  } finally { history.close(); cache.close(); }
+
+  const reopened = f.makeStore();
+  const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+  const bound = await reopened.bindPrivateProfile(scope, EVENT_ID,
+    { idempotencyKey, profile: cacheProfile() }, f.authRequest);
+  assert.equal(bound.status, 'bound');
+  assert.equal(bound.replayed, true);
+  const afterHistory = new DatabaseSync(historyDatabasePath(f.root));
+  const afterCache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    const operation = afterHistory.prepare("SELECT phase, reserved_history_bytes FROM correction_cache_operations WHERE kind = 'bind'").get();
+    assert.deepEqual({ ...operation }, { phase: 'complete', reserved_history_bytes: 0 });
+    assert.equal(afterHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+    const actualPairBytes = afterHistory.prepare(`SELECT
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM downstream_references) +
+      (SELECT COALESCE(SUM(length(sealed)), 0) FROM correction_cache_bindings) AS bytes`).get().bytes;
+    assert.ok(actualPairBytes <= reservedHistoryBytes,
+      `recovered binding/reference ${actualPairBytes} exceeded persisted reservation ${reservedHistoryBytes}`);
+    assert.deepEqual({
+      entries: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count,
+      writes: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count,
+      reservations: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count,
+      consumers: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_consumer_refs').get().count,
+      observations: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_observations').get().count,
+      outbox: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count,
+    }, beforeCounts);
+  } finally { afterHistory.close(); afterCache.close(); }
+});
+
+test('pending bind without a cache receipt keeps its reservation through capacity failure and exact retry', async (t) => {
+  let f;
+  let competingCache;
+  let competingScope;
+  let capacityConsumed = false;
+  let originalHistoryReservationBytes;
+  f = await fixture(t, { cache: {
+    maxEntries: 1,
+    async authorizeAction({ tenantId, actorId, action, request: value }) {
+      if (!capacityConsumed && value === f?.authRequest && action === 'private_profile.write') {
+        const history = new DatabaseSync(historyDatabasePath(f.root));
+        let pending;
+        try {
+          pending = history.prepare(`SELECT reserved_history_bytes FROM correction_cache_operations
+            WHERE kind = 'bind' AND phase = 'pending_bind'`).get();
+          if (pending) originalHistoryReservationBytes = pending.reserved_history_bytes;
+        } finally { history.close(); }
+        if (pending) {
+          capacityConsumed = true;
+          const competitorIdentity = Object.freeze({ occurrenceId: 'temporary-capacity-entry',
+            entityId: 'temporary-capacity-entry', editionId: 'temporary-capacity-entry' });
+          await competingCache.putPrivateProfile(competingScope, value, cacheProfile({
+            identity: competitorIdentity,
+            contentHash: 'c'.repeat(64),
+            freshnessTtlMs: 1,
+            expiresAtMs: EPOCH + 1,
+          }));
+        }
+      }
+      return value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === tenantId
+        && value?.principal?.actorId === actorId && actorId !== 'outsider';
+    },
+  } });
+  await createSeed(f);
+  competingCache = createScopedReuseStore({ ...f.cacheOptions, maxEntries: 1 });
+  competingScope = await competingCache.scopeForAuthenticatedRequest(f.authRequest);
+  const input = { idempotencyKey: 'bind-capacity-race-after-intent', profile: cacheProfile() };
+  await assert.rejects(f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest),
+    (error) => error?.code === 'REUSE_CAPACITY');
+  assert.equal(capacityConsumed, true, 'the independent cache write ran after the history barrier');
+  await assert.rejects(f.store.getHistory(f.scope, EVENT_ID, f.authRequest),
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_BUSY');
+  const pendingHistory = new DatabaseSync(historyDatabasePath(f.root));
+  const blockedCache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    const operation = pendingHistory.prepare("SELECT phase, reserved_history_bytes FROM correction_cache_operations WHERE kind = 'bind'").get();
+    assert.equal(operation.phase, 'pending_bind');
+    assert.ok(operation.reserved_history_bytes > 0);
+    assert.equal(operation.reserved_history_bytes, originalHistoryReservationBytes,
+      'the durable reservation is unchanged through deterministic cache-capacity failure');
+    assert.equal(blockedCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count, 0,
+      'the bind did not create a cache write receipt while capacity was unavailable');
+    assert.equal(blockedCache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0,
+      'the bind did not create a cache reservation while capacity was unavailable');
+    assert.equal(blockedCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 1,
+      'only the competing temporary cache entry exists');
+  } finally { pendingHistory.close(); blockedCache.close(); }
+
+  f.clock.value = EPOCH + 2;
+  const purged = await competingCache.purgeExpired(competingScope, f.authRequest);
+  assert.equal(purged.purged, 1);
+  const expiredSnapshot = await competingCache.integritySnapshot(competingScope, f.authRequest);
+  assert.equal(expiredSnapshot.entryCount, 1, 'retention keeps the expired entry tombstone for safe delivery');
+  assert.equal(expiredSnapshot.eligibleEntryCount, 0);
+  const expiredCache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(expiredCache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0,
+      'expired binding reservation payload is pruned at cache retention');
+  } finally { expiredCache.close(); }
+  // The tombstone still consumes the configured row slot. Restore capacity explicitly while
+  // preserving the same cache database and durable history operation for exact retry.
+  f.cacheOptions.maxEntries = 2;
+  const reopened = f.makeStore();
+  const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+  const retried = await reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+  assert.equal(retried.status, 'bound');
+  assert.equal(retried.replayed, false, 'there was no prior cache receipt, so the exact retry creates the first cache effect');
+  const completeHistory = new DatabaseSync(historyDatabasePath(f.root));
+  const completeCache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    const operation = completeHistory.prepare("SELECT phase, reserved_history_bytes FROM correction_cache_operations WHERE kind = 'bind'").get();
+    assert.deepEqual({ ...operation }, { phase: 'complete', reserved_history_bytes: 0 });
+    assert.equal(completeHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+    assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count, 1);
+    assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 2,
+      'the expired tombstone remains and the restored slot holds one bound profile');
+    assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries WHERE payload_purged = 1').get().count, 1);
+    assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries WHERE binding_hash IS NOT NULL AND eligible = 1').get().count, 1);
+  } finally { completeHistory.close(); completeCache.close(); }
+});
+
+test('completed exact bind replay at exhausted cache capacity awaits history validation before key disposal', async (t) => {
+  const f = await fixture(t, { cache: { maxEntries: 1, maxOutboxEntries: 2 } });
+  await createSeed(f);
+  const input = { idempotencyKey: 'completed-bind-replay-at-capacity', profile: cacheProfile() };
+  const original = await f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest);
+  assert.equal(original.status, 'bound');
+
+  const cache = new DatabaseSync(cacheDatabasePath(f.root));
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  let beforeCounts;
+  try {
+    beforeCounts = {
+      entries: cache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count,
+      writes: cache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count,
+      reservations: cache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count,
+      consumers: cache.prepare('SELECT COUNT(*) AS count FROM reuse_consumer_refs').get().count,
+      observations: cache.prepare('SELECT COUNT(*) AS count FROM reuse_observations').get().count,
+      outbox: cache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count,
+      operations: history.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count,
+      references: history.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count,
+      bindings: history.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count,
+    };
+    assert.deepEqual(beforeCounts, { entries: 1, writes: 1, reservations: 1, consumers: 1,
+      observations: 1, outbox: 0, operations: 1, references: 1, bindings: 1 });
+  } finally { cache.close(); history.close(); }
+
+  const events = [];
+  const prepareDescriptor = Object.getOwnPropertyDescriptor(DatabaseSync.prototype, 'prepare');
+  const fillDescriptor = Object.getOwnPropertyDescriptor(Buffer.prototype, 'fill');
+  let restored = false;
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    Object.defineProperty(DatabaseSync.prototype, 'prepare', prepareDescriptor);
+    Object.defineProperty(Buffer.prototype, 'fill', fillDescriptor);
+  };
+  t.after(restore);
+  Object.defineProperty(DatabaseSync.prototype, 'prepare', {
+    ...prepareDescriptor,
+    value(sql, ...args) {
+      const stack = new Error().stack ?? '';
+      if (String(sql).includes('SELECT * FROM correction_cache_bindings WHERE event_key')
+        && stack.includes('bindingRows')) events.push('binding-row-query');
+      return Reflect.apply(prepareDescriptor.value, this, [sql, ...args]);
+    },
+  });
+  Object.defineProperty(Buffer.prototype, 'fill', {
+    ...fillDescriptor,
+    value(...args) {
+      if ((new Error().stack ?? '').includes('disposeBindingContext')) events.push('context-index-key-zeroized');
+      return Reflect.apply(fillDescriptor.value, this, args);
+    },
+  });
+
+  const reopened = f.makeStore();
+  const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+  const replay = await reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+  assert.equal(replay.status, 'bound');
+  assert.equal(replay.replayed, true);
+  assert.ok(events.includes('binding-row-query'), `binding row query was observed: ${events}`);
+  assert.ok(events.includes('context-index-key-zeroized'), `context key disposal was observed: ${events}`);
+  assert.ok(events.indexOf('binding-row-query') < events.indexOf('context-index-key-zeroized'),
+    `HMAC-backed row validation must finish before key zeroization: ${events}`);
+
+  await assert.rejects(reopened.bindPrivateProfile(scope, EVENT_ID, {
+    idempotencyKey: 'new-bind-must-fail-at-exhausted-capacity',
+    profile: cacheProfile({ identity: Object.freeze({ ...IDENTITY, occurrenceId: 'new-bind-capacity-entry' }) }),
+  }, f.authRequest), (error) => error?.code === 'REUSE_CAPACITY');
+
+  const finalCache = new DatabaseSync(cacheDatabasePath(f.root));
+  const finalHistory = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.deepEqual({
+      entries: finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count,
+      writes: finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count,
+      reservations: finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count,
+      consumers: finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_consumer_refs').get().count,
+      observations: finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_observations').get().count,
+      outbox: finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count,
+      operations: finalHistory.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count,
+      references: finalHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count,
+      bindings: finalHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count,
+    }, beforeCounts);
+  } finally { finalCache.close(); finalHistory.close(); }
+});
+
 test('composed correction waits out a real cross-process SQLite writer lock', async (t) => {
   const f = await fixture(t);
   const seeded = await createSeed(f);
@@ -2433,6 +2823,63 @@ test('binding preflight accepts the cache projection maxima of 32 candidates and
   });
 });
 
+test('facade binds exactly 128 distinct history references and rejects bind 129 before effects', async (t) => {
+  const f = await fixture(t);
+  await createSeed(f);
+  for (let index = 0; index < 128; index += 1) {
+    const identity = Object.freeze({ ...IDENTITY, occurrenceId: `occurrence-binding-slot-${index}` });
+    const result = await f.store.bindPrivateProfile(f.scope, EVENT_ID, {
+      idempotencyKey: `bind-reference-slot-${index}`,
+      profile: cacheProfile({ identity }),
+    }, f.authRequest);
+    assert.equal(result.status, 'bound');
+  }
+
+  const beforeHistory = new DatabaseSync(historyDatabasePath(f.root));
+  const beforeCache = new DatabaseSync(cacheDatabasePath(f.root));
+  let beforeCounts;
+  try {
+    beforeCounts = {
+      references: beforeHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count,
+      bindings: beforeHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count,
+      operations: beforeHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = \'bind\'').get().count,
+      entries: beforeCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count,
+      writes: beforeCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count,
+      reservations: beforeCache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count,
+      observations: beforeCache.prepare('SELECT COUNT(*) AS count FROM reuse_observations').get().count,
+      outbox: beforeCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count,
+    };
+    assert.equal(beforeCounts.references, 128);
+    assert.equal(beforeCounts.bindings, 128);
+    assert.equal(beforeCounts.operations, 128);
+  } finally { beforeHistory.close(); beforeCache.close(); }
+
+  await assert.rejects(f.store.bindPrivateProfile(f.scope, EVENT_ID, {
+    idempotencyKey: 'bind-reference-slot-128', profile: cacheProfile(),
+  }, f.authRequest), (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_STORAGE_LIMIT');
+  assert.equal((await f.store.getHistory(f.scope, EVENT_ID, f.authRequest)).revision, 1);
+
+  const afterHistory = new DatabaseSync(historyDatabasePath(f.root));
+  const afterCache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(afterHistory.prepare("SELECT COUNT(*) AS count FROM correction_cache_state WHERE phase != 'complete'").get().count, 0);
+    assert.deepEqual({
+      references: afterHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count,
+      bindings: afterHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count,
+      operations: afterHistory.prepare("SELECT COUNT(*) AS count FROM correction_cache_operations WHERE kind = 'bind'").get().count,
+      entries: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count,
+      writes: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count,
+      reservations: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count,
+      observations: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_observations').get().count,
+      outbox: afterCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count,
+    }, beforeCounts);
+  } finally { afterHistory.close(); afterCache.close(); }
+
+  const reopened = f.makeStore();
+  const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+  assert.equal((await reopened.getHistory(scope, EVENT_ID, f.authRequest)).revision, 1);
+});
+
 test('unsupported accumulated projections fail before a durable bind barrier', async (t) => {
   const f = await fixture(t);
   let current = await createSeed(f);
@@ -2688,9 +3135,10 @@ test('receipt migration backfills only the exact current operation and keeps old
 
   const legacy = new DatabaseSync(historyDatabasePath(f.root));
   try {
-    for (const column of ['base_version_id', 'base_content_hash', 'fence', 'phase']) {
+    for (const column of ['base_version_id', 'base_content_hash', 'fence', 'phase', 'reserved_history_bytes']) {
       legacy.exec(`ALTER TABLE correction_cache_operations DROP COLUMN ${column}`);
     }
+    legacy.prepare("UPDATE correction_cache_meta SET value = '2' WHERE key = 'binding_operation_receipt_schema'").run();
   } finally { legacy.close(); }
 
   const reopened = f.makeStore();
@@ -2700,8 +3148,8 @@ test('receipt migration backfills only the exact current operation and keeps old
   const migrated = new DatabaseSync(historyDatabasePath(f.root));
   try {
     const schema = new Set(migrated.prepare('PRAGMA table_info(correction_cache_operations)').all().map((column) => column.name));
-    for (const column of ['base_version_id', 'base_content_hash', 'fence', 'phase']) assert.equal(schema.has(column), true);
-    assert.equal(migrated.prepare("SELECT value FROM correction_cache_meta WHERE key = 'binding_operation_receipt_schema'").get().value, '2');
+    for (const column of ['base_version_id', 'base_content_hash', 'fence', 'phase', 'reserved_history_bytes']) assert.equal(schema.has(column), true);
+    assert.equal(migrated.prepare("SELECT value FROM correction_cache_meta WHERE key = 'binding_operation_receipt_schema'").get().value, '3');
     const oldReceipt = migrated.prepare('SELECT base_version_id, base_content_hash, fence, phase FROM correction_cache_operations WHERE target_version_id = ?')
       .get(first.snapshot.versionId);
     assert.deepEqual({ ...oldReceipt }, { base_version_id: null, base_content_hash: null, fence: null, phase: null },
@@ -2791,6 +3239,72 @@ test('bound invalidation preflight accounts for escaped consumers and maximum ke
       }
     });
   }
+});
+
+test('history invalidation and every delivery reseal retain the bind-time proof key after rotation', async (t) => {
+  const originalKeyId = 'k';
+  const rotatedKeyId = '\u0000'.repeat(128);
+  const originalKey = createHash('sha256').update('retained-payload-key-k').digest();
+  const rotatedKey = createHash('sha256').update('rotated-payload-key-with-128-nuls').digest();
+  let rotated = false;
+  const f = await fixture(t, { cache: {
+    maxOutboxAttempts: 3,
+    resolveKey({ tenantId, scope, purpose, keyId }) {
+      if (purpose === 'payload') {
+        const requestedId = keyId ?? (rotated ? rotatedKeyId : originalKeyId);
+        if (requestedId === originalKeyId) return { keyId: originalKeyId, key: Buffer.from(originalKey) };
+        if (requestedId === rotatedKeyId) return { keyId: rotatedKeyId, key: Buffer.from(rotatedKey) };
+        throw new Error('synthetic payload key unavailable');
+      }
+      const resolvedId = `${scope}:${purpose}:${tenantId ?? 'global'}:v1`;
+      if (keyId && keyId !== resolvedId) throw new Error('synthetic non-payload key unavailable');
+      return { keyId: resolvedId, key: createHash('sha256').update(`${tenantId}:${scope}:${purpose}:cache-test-key`).digest() };
+    },
+    resolveInvalidationConsumers: () => ['é'.repeat(300)],
+    deliverInvalidation: async () => null,
+    verifyInvalidationAcknowledgement: () => false,
+  } });
+  const seeded = await createSeed(f);
+  const bound = await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-retained-envelope-key', profile: cacheProfile() }, f.authRequest);
+  assert.equal(bound.status, 'bound');
+  const beforeRotation = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(beforeRotation.prepare('SELECT payload_key_id FROM reuse_correction_reservations').get().payload_key_id,
+      originalKeyId);
+  } finally { beforeRotation.close(); }
+
+  rotated = true;
+  const corrected = await f.store.applyCorrection(f.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: seeded.snapshot.versionId,
+    baseContentHash: seeded.snapshot.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-28' },
+    idempotencyKey: 'correct-after-payload-key-rotation',
+    retentionHandle: f.createPermit(),
+  }, f.authRequest);
+  assert.equal(corrected.snapshot.revision, 2);
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    f.clock.value = EPOCH + (attempt - 1) * 60_000;
+    const result = await f.store.dispatchPendingInvalidations(f.scope, f.authRequest);
+    assert.equal(result.attempted, 1);
+    assert.equal(result.delivered, 0);
+    const cache = new DatabaseSync(cacheDatabasePath(f.root));
+    try {
+      const row = cache.prepare('SELECT status, attempt_count, payload_key_id, payload_bytes FROM reuse_outbox').get();
+      assert.equal(row.attempt_count, attempt);
+      assert.equal(row.payload_key_id, originalKeyId, 'delivery attempt reseals with the retained reservation key id');
+      assert.ok(row.payload_bytes <= 2_048);
+      assert.equal(row.status, attempt === 3 ? 'failed' : 'pending');
+    } finally { cache.close(); }
+  }
+  f.clock.value = EPOCH + 180_000;
+  const final = await f.store.outboxSnapshot(f.scope, f.authRequest);
+  assert.equal(final.failed, 1);
+  assert.equal(final.delivered, 0);
+  assert.equal(final.readiness, 'blocked_pending_external_ack');
 });
 
 test('bound consumer projection rejects oversized attempt envelopes before the history barrier', async (t) => {
