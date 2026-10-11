@@ -198,8 +198,8 @@
     },
     {
       "path": "demo/storyboard.md",
-      "sha256": "412840002cd4908961fc6a66166050307c1426c7be88062c6cd22ab94019f6da",
-      "bytes": 5125
+      "sha256": "90d237fe798274dcdbe024755654f88e629976b32c413b57cabc7998062a0ba3",
+      "bytes": 5121
     },
     {
       "path": "demo/narration.md",
@@ -654,7 +654,7 @@
     "durationSeconds": 150,
     "bytes": 2012777
   },
-  "sourceCommit": "75123ec8a99a94ecbb1227eae945efa62a175091",
+  "sourceCommit": "1d12448ed92de392f272743a19b7be87b0b301e7",
   "sourcePaths": [
     "demo/rehearsal-scenes.json",
     "demo/storyboard.md",
@@ -772,5 +772,19 @@
       "localPathFindingsInCurrentReports": 0,
       "regression": "Detects machine-local filesystem prefixes, allows public URL paths, rejects video paths outside repository, resolves macOS checkout directory aliases."
     }
+  },
+  "renderSourceCommit": "75123ec8a99a94ecbb1227eae945efa62a175091",
+  "sourceReceiptRefresh": {
+    "status": "PASS_AUTHOR_CHECK_ONLY_PENDING_INDEPENDENT_REVIEW",
+    "sourceRevision": "1d12448ed92de392f272743a19b7be87b0b301e7",
+    "path": "demo/storyboard.md",
+    "mechanicalAdoption": "Exact upstream blob; removes two trailing spaces on Asset and Status lines only. No wording or render-contract change.",
+    "previousSha256": "412840002cd4908961fc6a66166050307c1426c7be88062c6cd22ab94019f6da",
+    "sha256": "90d237fe798274dcdbe024755654f88e629976b32c413b57cabc7998062a0ba3",
+    "baselineMediaCommit": "c2badc5b297cea393c75dae28300fc60f69040b0",
+    "mediaReencoded": false,
+    "sourceSceneNarrationTranscriptBytesUnchanged": true,
+    "changedMediaCaptionHtmlInspectionPaths": [],
+    "relativeFfprobeFilenamePreserved": true
   }
 }
