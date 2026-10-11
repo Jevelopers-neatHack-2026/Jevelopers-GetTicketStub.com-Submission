@@ -486,10 +486,13 @@
 }
 .rulerTop .num {
   top: 3px;
+  left: 0;
   margin-left: 4px;
+  white-space: nowrap;
 }
 .rulerLeft .num {
   left: 3px;
+  top: 0;
   margin-top: 4px;
 }
 
@@ -513,7 +516,7 @@
 }
 .area {
   --cap-w: min(560px, calc(100cqw - 96px));
-  --cap-h: clamp(240px, calc(100dvh - 520px), 420px);
+  --cap-h: clamp(200px, calc(100dvh - 640px), 420px);
   --box-h: min(calc((var(--cap-w) - var(--mat)) / var(--ar) + var(--mat)), var(--cap-h));
   position: relative;
   flex: 1;
@@ -522,6 +525,39 @@
   place-items: center;
   container-type: inline-size;
   cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+.area:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: -4px;
+  border-radius: 4px;
+}
+.area[data-panning="true"],
+.area[data-panning="true"] * {
+  cursor: grabbing !important;
+}
+.area[data-space="true"],
+.area[data-space="true"] * {
+  cursor: grab !important;
+}
+/* the world layer is what the camera moves: transform from the area's top left, set by useCamera */
+/* the window onto the mat: the panned and zoomed stub is clipped here, the toolbar and the notes are not */
+.view {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+}
+.world {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transform-origin: 0 0;
+}
+/* kept as a layer while moving for smoothness, dropped at rest so the stub is re-sharpened at its size */
+.world[data-moving="true"] {
+  will-change: transform;
 }
 .stageBox {
   display: grid;
@@ -558,6 +594,14 @@
   min-width: 44px;
   padding: 0;
   justify-content: center;
+}
+.zoom > .fit {
+  min-width: 0;
+  padding: 0 14px;
+  transition: opacity 200ms var(--ts-ease-standard);
+}
+.zoom > .fit[data-fit="true"] {
+  opacity: 0.55;
 }
 .zoomValue {
   min-width: 48px;

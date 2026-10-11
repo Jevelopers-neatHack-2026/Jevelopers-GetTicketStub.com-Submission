@@ -25,10 +25,10 @@ import { Inspector } from "./Inspector";
 import { Tray } from "./Tray";
 import { FinishSheet, TearStage } from "./TearFlow";
 import { useIsClient, useMediaQuery } from "./useClient";
+import { useCamera } from "./useCamera";
 import styles from "./Editor.module.css";
 
 const HINT_KEY = "ticketstub.hint.swipe.v1";
-const ZOOMS = [0.75, 1, 1.25];
 type SheetName = null | "styles" | "remix" | "agent" | "finish";
 
 /** Width / height of each style, so the stage can be sized to the stub before it renders. */
@@ -67,6 +67,11 @@ function editionLabel(ed: Edition): string {
   return EDITION_META[ed]?.label ?? ed;
 }
 
+/** The stub's printed width in inches, for the camera's grid and rulers. */
+function inchesWide(ed: string): number {
+  return INCHES[ed as Edition]?.[0] ?? 2;
+}
+
 function fmtIn(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
@@ -91,14 +96,12 @@ function EditorLoaded({ id }: { id: string }) {
   const [dealing, setDealing] = useState<Dealing | null>(null);
   const [pressing, setPressing] = useState(false);
   const [agentSeed, setAgentSeed] = useState<{ text: string; n: number } | undefined>();
-  const [zoom, setZoom] = useState(1);
   const [preview, setPreview] = useState(false);
-  const [mat, setMat] = useState({ inch: 180, ox: 0, oy: 0, fw: 0, fh: 0, bw: 0, bh: 0 });
   const desktop = useMediaQuery("(min-width: 960px)");
 
   const areaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const matRef = useRef<HTMLDivElement>(null);
   const dealN = useRef(0);
   const timers = useRef<number[]>([]);
   const later = useCallback((fn: () => void, ms: number) => {
@@ -211,7 +214,7 @@ function EditorLoaded({ id }: { id: string }) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || camera.panning.current) return;
     if ((e.target as HTMLElement).closest("[role='toolbar'], [role='radiogroup'], a, input, textarea")) return;
     const s = g.current;
     clearPress();
@@ -311,36 +314,16 @@ function EditorLoaded({ id }: { id: string }) {
     onDragStart: (e: React.DragEvent) => e.preventDefault(),
   };
 
-  // Desktop: read the stub's real size off the screen so the cutting mat's grid and rulers are in inches.
-  const versionId = stub?.currentVersionId;
-  const materialId = stub?.material;
-  useEffect(() => {
-    if (!desktop) return;
-    const body = bodyRef.current;
-    if (!body) return;
-    let raf = 0;
-    const until = performance.now() + 1000;
-    const measure = () => {
-      const fig = body.querySelector<HTMLElement>("[data-card] figure[data-edition]");
-      if (!fig) return;
-      const ed = fig.dataset.edition as Edition;
-      const fr = fig.getBoundingClientRect();
-      const br = body.getBoundingClientRect();
-      const next = { inch: fr.width / (INCHES[ed]?.[0] ?? 2), ox: fr.left - br.left, oy: fr.top - br.top, fw: fr.width, fh: fr.height, bw: br.width, bh: br.height };
-      setMat((p) => (Object.keys(next) as (keyof typeof next)[]).every((k) => Math.abs(p[k] - next[k]) < 0.5) ? p : next);
-    };
-    const tick = () => {
-      measure();
-      if (performance.now() < until) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    const ro = new ResizeObserver(measure);
-    ro.observe(body);
-    return () => {
-      cancelAnimationFrame(raf);
-      ro.disconnect();
-    };
-  }, [desktop, versionId, materialId, zoom]);
+  // Desktop: the camera owns the mat. It reads the stub's real size off the screen so the grid and rulers are in inches.
+  const camera = useCamera({
+    enabled: desktop,
+    matRef,
+    areaRef,
+    layoutKey: `${stub?.currentVersionId}|${stub?.material}`,
+    inchesWide,
+    numClass: styles.num,
+    onCancelGesture: () => onPointerCancel(),
+  });
 
   const shareToken = useMemo(() => (stub ? encodeStub(stub) : ""), [stub]);
 
@@ -384,7 +367,7 @@ function EditorLoaded({ id }: { id: string }) {
 
   /** The stub on its stock, with the one being dealt off sliding away beside it. */
   const deck = (size: "md" | "lg") => (
-    <div className={styles.deck} data-stub-area style={desktop ? ({ "--zoom": zoom } as CSSProperties) : undefined}>
+    <div className={styles.deck} data-stub-area>
       {dealing && (
         <div
           key={`out-${dealing.n}`}
@@ -426,7 +409,7 @@ function EditorLoaded({ id }: { id: string }) {
   );
 
   const toolbar = (
-    <DockedToolbar container={areaRef} active={!!selected && !flipped} track={`${version.id}|${selected}|${zoom}|${stub.material}|${desktop}`}>
+    <DockedToolbar container={areaRef} clip={desktop} active={!!selected && !flipped} track={`${version.id}|${selected}|${stub.material}|${desktop}`}>
       {selected && <FloatingToolbar stub={stub} selected={selected} onChange={update} onDone={() => setSelected(null)} onRemix={() => setSheet("remix")} />}
     </DockedToolbar>
   );
@@ -490,9 +473,6 @@ function EditorLoaded({ id }: { id: string }) {
 
   /* ---------------- Desktop ---------------- */
   if (desktop) {
-    const nx = Math.ceil(mat.bw / mat.inch) + 1;
-    const ny = Math.ceil(mat.bh / mat.inch) + 1;
-    const matVars = { "--in": `${mat.inch}px`, "--ox": `${mat.ox}px`, "--oy": `${mat.oy}px` } as CSSProperties;
     return (
       <div className={`${styles.root} desk-surface`}>
         <div className={styles.desk}>
@@ -529,26 +509,29 @@ function EditorLoaded({ id }: { id: string }) {
                 </span>
               </div>
 
-              <div className={styles.mat} style={matVars}>
-                <div className={styles.rulerTop} aria-hidden="true">
-                  <span className={styles.band} style={{ left: mat.ox, width: mat.fw }} />
-                  {Array.from({ length: nx }, (_, i) => (
-                    <span key={i} className={styles.num} style={{ left: mat.ox + i * mat.inch }}>
-                      {i === 0 ? "0 in" : i}
-                    </span>
-                  ))}
+              <div ref={matRef} className={styles.mat}>
+                <div className={styles.rulerTop} data-cam-top aria-hidden="true">
+                  <span className={styles.band} data-cam-band-t />
                 </div>
-                <div className={styles.rulerLeft} aria-hidden="true">
-                  <span className={styles.band} style={{ top: mat.oy, height: mat.fh }} />
-                  {Array.from({ length: ny }, (_, i) => (
-                    <span key={i} className={styles.num} style={{ top: mat.oy + i * mat.inch }}>
-                      {i === 0 ? "0" : i}
-                    </span>
-                  ))}
+                <div className={styles.rulerLeft} data-cam-left aria-hidden="true">
+                  <span className={styles.band} data-cam-band-l />
                 </div>
-                <div ref={bodyRef} className={styles.matBody}>
-                  <div ref={areaRef} className={styles.area} data-pressing={pressing || undefined} style={stageVars} {...stageHandlers}>
-                    <div className={styles.stageBox}>{deck("lg")}</div>
+                <div className={styles.matBody} data-cam-body>
+                  <div
+                    ref={areaRef}
+                    className={styles.area}
+                    data-pressing={pressing || undefined}
+                    style={stageVars}
+                    tabIndex={0}
+                    role="group"
+                    aria-label="Cutting mat. Scroll to zoom, middle-drag or hold space to pan, 0 to fit."
+                    {...stageHandlers}
+                  >
+                    <div className={styles.view}>
+                      <div className={styles.world} data-cam-world>
+                        <div className={styles.stageBox}>{deck("lg")}</div>
+                      </div>
+                    </div>
                     {toolbar}
                   </div>
                   <div className={styles.margin}>
@@ -560,18 +543,21 @@ function EditorLoaded({ id }: { id: string }) {
               <div className={styles.deskFooter}>
                 <div className={styles.footTools}>{tools}</div>
                 <div className={styles.zoom} role="group" aria-label="Zoom">
-                  <PaperButton aria-label="Zoom out" disabled={zoom <= ZOOMS[0]} onClick={() => setZoom(ZOOMS[Math.max(0, ZOOMS.indexOf(zoom) - 1)])}>
+                  <PaperButton aria-label="Zoom out" onClick={() => camera.zoomBy(1 / 1.25)}>
                     −
                   </PaperButton>
-                  <span className={styles.zoomValue} aria-live="polite">
-                    {Math.round(zoom * 100)}%
+                  <span className={styles.zoomValue} data-cam-pct>
+                    100%
                   </span>
-                  <PaperButton aria-label="Zoom in" disabled={zoom >= ZOOMS[ZOOMS.length - 1]} onClick={() => setZoom(ZOOMS[Math.min(ZOOMS.length - 1, ZOOMS.indexOf(zoom) + 1)])}>
+                  <PaperButton aria-label="Zoom in" onClick={() => camera.zoomBy(1.25)}>
                     +
+                  </PaperButton>
+                  <PaperButton aria-label="Fit the stub to the mat" data-cam-fit className={styles.fit} onClick={camera.fit}>
+                    Fit
                   </PaperButton>
                 </div>
                 <p className={styles.keys}>
-                  <kbd>←</kbd> <kbd>→</kbd> style · <kbd>F</kbd> flip · <kbd>Esc</kbd> deselect · hold for all styles
+                  Scroll to zoom · middle-drag to pan · <kbd>0</kbd> fit · <kbd>←</kbd> <kbd>→</kbd> style · <kbd>F</kbd> flip
                 </p>
               </div>
             </main>
