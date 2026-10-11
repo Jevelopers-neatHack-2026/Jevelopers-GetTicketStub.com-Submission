@@ -1,0 +1,481 @@
+{
+  "evidence_version": "controls-offline-evidence/1.0",
+  "dependency_mode": "mock",
+  "billing_mode": "simulated",
+  "runtime": "v22.23.3",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "host_validation": "local_only",
+  "schema_version": "creative-controls/1.1",
+  "action_version": "creative-apply/1.1",
+  "contract_status": "local-consumer-proposal",
+  "source_fingerprint_sha256": "9c36a930e002b322bb6869f193ccf23716bacf6c299d7d13df5a07fe2e2571d6",
+  "source_files": [
+    "src/controls/actions.mjs",
+    "src/controls/contract.mjs",
+    "src/controls/index.d.mts",
+    "src/controls/index.mjs",
+    "src/controls/integration.mjs",
+    "src/controls/runtime.mjs",
+    "src/controls/schema.mjs",
+    "tests/controls/actions.test.mjs",
+    "tests/controls/concurrent-worker.mjs",
+    "tests/controls/integration.test.mjs",
+    "tests/controls/types/consumer.mts",
+    "tests/controls/types/tsconfig.json",
+    "examples/frontend-action-roundtrip/.gitignore",
+    "examples/frontend-action-roundtrip/app.mjs",
+    "examples/frontend-action-roundtrip/foundation-server.mjs",
+    "examples/frontend-action-roundtrip/index.html",
+    "examples/frontend-action-roundtrip/package-lock.json",
+    "examples/frontend-action-roundtrip/package.json",
+    "examples/frontend-action-roundtrip/playwright.config.mjs",
+    "examples/frontend-action-roundtrip/server.mjs",
+    "examples/frontend-action-roundtrip/style.css",
+    "examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
+    "examples/frontend-action-roundtrip/tests/roundtrip.spec.mjs",
+    "fixtures/controls/check.mjs",
+    "fixtures/controls/integrated-crash-worker.mjs",
+    "fixtures/controls/integrated-host.mjs",
+    "fixtures/controls/integrated-restart-worker.mjs",
+    "fixtures/controls/integrated-transcript.mjs",
+    "fixtures/controls/invalid.json",
+    "fixtures/controls/older.json",
+    "fixtures/controls/state.mjs",
+    "fixtures/controls/unknown-field.json",
+    "fixtures/controls/valid.json",
+    ".github/workflows/controls.yml",
+    "docs/controls-integration.md"
+  ],
+  "fixture_schema_sha256": "c8c4ec7ece4ea3b8a79eee93cbc704e0e3bf11a5ba123e220700192da6e34516",
+  "fixture_action_sha256": "0cf4804a8b81f338c9a9e17961b6d37b61266da7d20a72b8d6897f18c77c5dc3",
+  "checks": [
+    {
+      "command": "node --test tests/controls/actions.test.mjs tests/controls/integration.test.mjs",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "command": "tsc --strict --module NodeNext (public ESM consumer)",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "command": "npm test (Playwright Chromium + axe)",
+      "exit_code": 0,
+      "passed": true
+    }
+  ],
+  "browser_exercised": true,
+  "types_checked": true,
+  "actual_api_transcript": {
+    "evidence_version": "controls-actual-api-transcript/1",
+    "mode": "mock",
+    "authority": "MOCK trusted host fixture; no actual membership",
+    "transport": "intercepted fixture",
+    "local_modules": [
+      "public planning",
+      "public creative API",
+      "C03 port boundary",
+      "CE08 durable jobs/artifact/selection",
+      "CE11 durable usage evidence"
+    ],
+    "live_application_calls": 0,
+    "schema_hash": "sha256:9a70c95d2613a083265267922ce1c478a017aa05cc1495c67065af972a28501d",
+    "action_hash": "sha256:df4e1eb3e020eb405a70cf51795f3c1da6ba0d212b6fc7d5680972c6690250f9",
+    "schema": {
+      "schema_version": "creative-controls/1.1",
+      "contract_status": "local-consumer-proposal",
+      "tenant_id": "fixture_tenant",
+      "project_id": "fixture_project",
+      "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+      "expected_versions": {
+        "brief": "brief_830703dd3178299d298b2d2888b46aa530ec44326803cc4302b258d48ce5cd41",
+        "design": "selection_ea2f2e2de8c24dd0edcbb1f3c24d39ef34438af8bf71d8f5a1e2e5b97e916508",
+        "composition": "composition_661b173e84c4c5c04f88388a2440e53032af01df7eef7e55fce6b4150557c532"
+      },
+      "controls": [
+        {
+          "id": "c01",
+          "label": "Name size",
+          "kind": "select",
+          "value_type": "string",
+          "field": "name_size",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "small",
+              "label": "Small"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "large",
+              "label": "Large"
+            }
+          ],
+          "default_value": "medium",
+          "locked": false
+        },
+        {
+          "id": "c02",
+          "label": "Layout",
+          "kind": "select",
+          "value_type": "string",
+          "field": "layout",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "centered",
+              "label": "Centered"
+            },
+            {
+              "value": "stacked",
+              "label": "Stacked"
+            }
+          ],
+          "default_value": "centered",
+          "locked": false
+        },
+        {
+          "id": "c03",
+          "label": "Approved logo position",
+          "kind": "select",
+          "value_type": "string",
+          "field": "logo_position",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "top",
+              "label": "Top"
+            },
+            {
+              "value": "bottom",
+              "label": "Bottom"
+            }
+          ],
+          "default_value": "top",
+          "locked": true,
+          "asset_id": "asset-1"
+        },
+        {
+          "id": "c04",
+          "label": "Artwork style",
+          "kind": "select",
+          "value_type": "string",
+          "field": "style",
+          "route": "artwork.edit",
+          "options": [
+            {
+              "value": "calm",
+              "label": "Calm"
+            },
+            {
+              "value": "vibrant",
+              "label": "Vibrant"
+            }
+          ],
+          "default_value": "calm",
+          "locked": false
+        }
+      ],
+      "follow_up_questions": [
+        {
+          "id": "q01",
+          "label": "Stacked layout emphasis",
+          "field": "layout_emphasis",
+          "route": "composition.update",
+          "when": {
+            "control_id": "c02",
+            "value": "stacked"
+          },
+          "required": true,
+          "locked": false,
+          "options": [
+            {
+              "value": "balanced",
+              "label": "Balanced"
+            },
+            {
+              "value": "name",
+              "label": "Name"
+            }
+          ],
+          "default_value": "balanced"
+        }
+      ],
+      "submit_intent": "apply",
+      "approval": false,
+      "purchase": false
+    },
+    "action": {
+      "action_version": "creative-apply/1.1",
+      "schema_version": "creative-controls/1.1",
+      "action_id": "fixture-evidence-apply",
+      "tenant_id": "fixture_tenant",
+      "project_id": "fixture_project",
+      "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+      "expected_versions": {
+        "brief": "brief_830703dd3178299d298b2d2888b46aa530ec44326803cc4302b258d48ce5cd41",
+        "design": "selection_ea2f2e2de8c24dd0edcbb1f3c24d39ef34438af8bf71d8f5a1e2e5b97e916508",
+        "composition": "composition_661b173e84c4c5c04f88388a2440e53032af01df7eef7e55fce6b4150557c532"
+      },
+      "intent": "apply",
+      "draft": {
+        "selections": {
+          "c01": "medium",
+          "c02": "centered",
+          "c03": "top",
+          "c04": "vibrant"
+        },
+        "answers": {}
+      },
+      "draft_hash": "c857e921d4def49c79aae3977bac01530634279997ba6010720774dc5d113984",
+      "control_schema_hash": "sha256:9a70c95d2613a083265267922ce1c478a017aa05cc1495c67065af972a28501d"
+    },
+    "backend_request": {
+      "action_id": "controls:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "billing_mode": "simulated",
+      "contract": "CreativeApiRequest",
+      "correlation_id": "op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "environment": "test",
+      "event_id": "event:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "ingested_at": "2026-10-10T12:30:00.000Z",
+      "occurred_at": "2026-10-10T12:30:00.000Z",
+      "operation": "edit",
+      "payload": {
+        "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+        "design_version_id": "design:79d83f9c-3cc0-46f9-a709-096495fa8e58",
+        "plan": {
+          "base": {
+            "brief_hash": "sha256:770af3bbafc27b74e5675f06ffd602b2eef8bc85d8d7551a51d2be1fb669aaa6",
+            "design_hash": "sha256:d61a0ea3330e6e336d7fafe052d22df58007451cacaaf5652f27e1f7447675c8",
+            "design_version_id": "design:79d83f9c-3cc0-46f9-a709-096495fa8e58"
+          },
+          "billing_mode": "simulated",
+          "contract": "EditPlan",
+          "correlation_id": "op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+          "environment": "test",
+          "event_id": "event:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+          "expected_result": {
+            "artifact_kind": "image",
+            "contract": "DesignVersion",
+            "parent_version_id": "design:79d83f9c-3cc0-46f9-a709-096495fa8e58",
+            "schema_version": "1.0"
+          },
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "invalidates": [],
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "operation": "image.edit",
+          "plan_id": "plan:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+          "producer": "creative-controls-local-adapter/1",
+          "project_id": "fixture_project",
+          "schema_version": "1.0",
+          "source_refs": [
+            "page-1"
+          ],
+          "steps": [
+            {
+              "action": "image.edit",
+              "parameters": {
+                "artifact_id": "artifact:79d83f9c-3cc0-46f9-a709-096495fa8e58",
+                "design_version_id": "design:79d83f9c-3cc0-46f9-a709-096495fa8e58",
+                "instruction": "Set style to vibrant. Preserve verified facts, approved assets and locked fields."
+              },
+              "source_refs": [],
+              "step_id": "step:op_ab93f820-fa48-4ac5-97db-3787c48b2029"
+            }
+          ],
+          "tenant_id": "fixture_tenant"
+        },
+        "selection_mode": "advance"
+      },
+      "producer": "creative-controls-local-adapter/1",
+      "project_id": "fixture_project",
+      "request_id": "request:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "schema_version": "1.0",
+      "source_refs": [
+        "page-1"
+      ],
+      "tenant_id": "fixture_tenant"
+    },
+    "full_request_hash": "sha256:d33227f9bbc8bd6c9c163a0dd2792d5e8bf0aeddafeda8b301b7f3af44691bc6",
+    "backend_request_hash": "sha256:f8a999a926adbe02ff7d9ef35e71a428b05aa703d24f610175bb6b4d5cc85c1e",
+    "result": {
+      "ok": true,
+      "code": "completed",
+      "operation_id": "op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "status": "completed",
+      "replayed": false,
+      "audit_ref": "audit_adb3981c-e2a3-4459-b761-a2c5412fe16b",
+      "backend_job_id": "e3bc3afa-6c78-4420-adde-60c21d4b71cd",
+      "backend_operation_id": "e3bc3afa-6c78-4420-adde-60c21d4b71cd",
+      "result": {
+        "design_version": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0",
+          "event_id": "32c90739-3805-4bc5-87dd-ec43b3a03038",
+          "tenant_id": "fixture_tenant",
+          "project_id": "fixture_project",
+          "correlation_id": "op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+          "producer": "creative-runtime",
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [
+            "page-1"
+          ],
+          "logical_operation_id": "controls:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+          "design_version_id": "design:33e25ac8-4dec-4fb8-956a-f2714337a940",
+          "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+          "parent_version_id": "design:79d83f9c-3cc0-46f9-a709-096495fa8e58",
+          "brief_hash": "sha256:770af3bbafc27b74e5675f06ffd602b2eef8bc85d8d7551a51d2be1fb669aaa6",
+          "artifact": {
+            "artifact_id": "artifact:33e25ac8-4dec-4fb8-956a-f2714337a940",
+            "content_hash": "sha256:f48233068d15508c92f78d7a383afce4ff57cf88396d42f1e75449b32cb3f6b1",
+            "media_type": "image/png"
+          },
+          "provider": "fixture-provider",
+          "model": "fixture-image",
+          "billable_attempt_id": "33e25ac8-4dec-4fb8-956a-f2714337a940",
+          "usage_status": "complete",
+          "design_hash": "sha256:6a1331ec7555d7437979f3b9eb5562709cd513e86b1d16619b435a7e84c5129d"
+        },
+        "usage": {
+          "completeness": "complete"
+        },
+        "telemetry_evidence": {
+          "local_status": "recorded"
+        }
+      },
+      "action_id": "controls:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "request_hash": "sha256:d33227f9bbc8bd6c9c163a0dd2792d5e8bf0aeddafeda8b301b7f3af44691bc6",
+      "approval": false,
+      "purchase": false
+    },
+    "replay": {
+      "ok": true,
+      "code": "replayed",
+      "operation_id": "op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "status": "completed",
+      "replayed": true,
+      "audit_ref": "audit_0eebb5ae-49a2-429c-9d5a-5f1c56115b93",
+      "backend_job_id": "e3bc3afa-6c78-4420-adde-60c21d4b71cd",
+      "backend_operation_id": "e3bc3afa-6c78-4420-adde-60c21d4b71cd",
+      "result": {
+        "design_version": {
+          "artifact": {
+            "artifact_id": "artifact:33e25ac8-4dec-4fb8-956a-f2714337a940",
+            "content_hash": "sha256:f48233068d15508c92f78d7a383afce4ff57cf88396d42f1e75449b32cb3f6b1",
+            "media_type": "image/png"
+          },
+          "billable_attempt_id": "33e25ac8-4dec-4fb8-956a-f2714337a940",
+          "billing_mode": "simulated",
+          "brief_hash": "sha256:770af3bbafc27b74e5675f06ffd602b2eef8bc85d8d7551a51d2be1fb669aaa6",
+          "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+          "contract": "DesignVersion",
+          "correlation_id": "op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+          "design_hash": "sha256:6a1331ec7555d7437979f3b9eb5562709cd513e86b1d16619b435a7e84c5129d",
+          "design_version_id": "design:33e25ac8-4dec-4fb8-956a-f2714337a940",
+          "environment": "test",
+          "event_id": "32c90739-3805-4bc5-87dd-ec43b3a03038",
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "logical_operation_id": "controls:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+          "model": "fixture-image",
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "parent_version_id": "design:79d83f9c-3cc0-46f9-a709-096495fa8e58",
+          "producer": "creative-runtime",
+          "project_id": "fixture_project",
+          "provider": "fixture-provider",
+          "schema_version": "1.0",
+          "source_refs": [
+            "page-1"
+          ],
+          "tenant_id": "fixture_tenant",
+          "usage_status": "complete"
+        },
+        "usage": {
+          "completeness": "complete"
+        },
+        "telemetry_evidence": {
+          "local_status": "recorded"
+        }
+      },
+      "action_id": "controls:op_ab93f820-fa48-4ac5-97db-3787c48b2029",
+      "request_hash": "sha256:d33227f9bbc8bd6c9c163a0dd2792d5e8bf0aeddafeda8b301b7f3af44691bc6",
+      "approval": false,
+      "purchase": false
+    },
+    "draft_counters": {
+      "image_calls": 0,
+      "jev_calls": 0,
+      "reservations": 0,
+      "releases": 0,
+      "holds": 0,
+      "bootstrap_image_calls": 1,
+      "jobs": 0
+    },
+    "final_counters": {
+      "image_calls": 1,
+      "jev_calls": 0,
+      "reservations": 1,
+      "releases": 0,
+      "holds": 0,
+      "bootstrap_image_calls": 1,
+      "jobs": 1
+    },
+    "artifact_hash_verified": "sha256:f48233068d15508c92f78d7a383afce4ff57cf88396d42f1e75449b32cb3f6b1",
+    "trace_refs": [
+      {
+        "event_id": "016d90d8-dbc7-4c5d-a269-ded85270bb26",
+        "event_type": "attempt_intent",
+        "payload_hash": "sha256:a4a067b8b67d06df6868e9a9bb536705995f31de3fe675368cb1243a118ab566"
+      },
+      {
+        "event_id": "9a892f3b-1f61-4e62-8ac7-cc2ab8d46986",
+        "event_type": "transport_intent",
+        "payload_hash": "sha256:61cc63956abb7d036861b05d9554504517c36587b1b84affe77f52655b38379c"
+      },
+      {
+        "event_id": "7c9db781-43ad-4d1b-b429-dfd32df3c884",
+        "event_type": "attempt_outcome",
+        "payload_hash": "sha256:7a0446d3da35a85b2c4d95cf94fba5bf0f5cab2c8e681b5076b9bc3c6b380ed6"
+      }
+    ],
+    "approval_created": false,
+    "purchase_created": false,
+    "pending_local": [
+      "actual CE06 composition consumer",
+      "research correction consumer",
+      "native selected image/inspection integrations"
+    ],
+    "pending_external": [
+      "canonical contracts",
+      "real application identity",
+      "actual harness/JEV/provider/Finance/Neatlogs",
+      "production composition renderer",
+      "release acceptance"
+    ]
+  },
+  "calls": {
+    "application_provider_live": 0,
+    "fixture_apply_image": 1,
+    "fixture_apply_jev": 0,
+    "fixture_apply_reservations": 1
+  },
+  "approval_created": false,
+  "purchase_created": false,
+  "pending": [
+    "canonical external schema publication and consumer acknowledgement",
+    "actual CE06 composition and correction consumers",
+    "native selected image and inspection integrations",
+    "application authentication/authorization",
+    "harness outbox consumer and paid artwork dispatch",
+    "live providers and external release acceptance",
+    "CloudLinux/CageFS x86_64 host validation (exact Node 22 patch unknown)"
+  ],
+  "passed": true
+}

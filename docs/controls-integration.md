@@ -1,308 +1,322 @@
-# Structured controls and Apply: local consumer proposal
+# Structured controls and actual local Apply integration
 
-CE-05 (#17) implements an allowlisted control producer, defensive browser consumer,
-server validator, and durable creative Apply outbox. The executable roundtrip uses
-**mock application identity and mock brief/version state**. Validation, SQLite
-transactions, HTTP requests, browser interactions, hashes and durable restart
-checks are real local execution. Provider, harness, production, approval and
-financial integrations are pending. This is neither shared-contract publication
-nor an external consumer acknowledgement.
+CE-05 (#17) now supplies an allowlisted schema, defensive browser consumer,
+server validation, durable Apply identity and a local adapter to the actual public
+creative API, brief planner, selected native image provider and decoding codec,
+immutable version store and usage outbox. The
+browser's default fixture uses **MOCK trusted host authority and intercepted
+provider/Finance transport**. It authenticates no real membership and makes no
+network provider calls. Local API execution and persisted bytes, hashes, jobs,
+selection, replay and cancellation are real. Composition and correction
+consumers remain required local work; they are explicitly unavailable.
 
-## Run the checks
+This contributes to CON-01/02/03 (Agent and research), ART-01 (Creative and
+fulfillment), ART-02/EVAL-03 (Product and frontend), and EVAL-04 (Finance and
+reliability). Original IDs, roles and required-v1 scope remain unchanged. These
+fixtures establish neither canonical publication nor external consumer agreement,
+actual provider/JEV/Neatlogs acceptance, production rendering, approval or purchase.
 
-The production runtime target is **Node 22.23.3**, with **Node 24.15.0** retained
-for local development. Engines and runtime checks allow these patch levels or
-newer patches/minors within their respective 22.x/24.x lines; other majors and
-earlier versions are rejected. Exact evaluated pins are listed below, not every
-version admitted by that compatibility range. Production control validation/outbox
-uses native Node modules and needs no npm package. The browser fixture has its own
-pinned lockfile.
+## Reproduce
 
-The official [Node 22 SQLite API](https://nodejs.org/download/release/v22.23.3/docs/api/sqlite.html)
-documents `node:sqlite` from 22.5 and flag-free access from 22.13, while retaining
-its experimental status. Controls use string database paths, `DatabaseSync`,
-`exec`, `prepare`, statement `get`/`all`/`run`, and `close`; no loadable extension
-or Node 24-only SQLite API is required. **22.13 is documented API availability,
-not a tested/supported minimum for this implementation.** The evaluated Node 22
-pin is 22.23.3 and needs no `--experimental-sqlite` flag.
+The evaluated runtimes are Node **22.23.3** and **24.15.0**. SQLite is native and
+experimental on Node 22; its warnings remain visible. The browser example keeps
+its existing locked TypeScript 5.9.3, Playwright 1.58.2 and axe 4.11.1 dependencies.
+The codec uses the existing isolated lock for sharp 0.35.5, libvips 8.18.7 and
+libwebp 1.6.0. No dependency or lockfile changes are required.
 
 ```sh
-node --test tests/controls/actions.test.mjs
 npm ci --prefix examples/frontend-action-roundtrip
-```
-
-From `examples/frontend-action-roundtrip`, install the actual browser:
-
-```sh
+npm ci --ignore-scripts --offline --prefix src/models/codec-runtime
+cd examples/frontend-action-roundtrip
 npx playwright install chromium
+cd ../..
+make build
+make check TARGET=controls MODE=mock
+node fixtures/controls/check.mjs --browser --out examples/frontend-action-roundtrip/test-results/controls-evidence.json
 ```
 
-From the repository root, exercise both suites and write sanitized evidence:
+The combined runner executes the original foundation tests, actual local API
+integration tests, strict NodeNext consumer and two Chromium projects. The
+foundation project retains the original mocked brief/version projection on
+loopback port 4318. The actual API project runs on loopback port 4317; `npm start`
+in the example opens that fixture. `/__fixture/*` routes declare test authority,
+reset state and create deterministic wait barriers. They are not an application
+issuer. Temporary databases are deleted only on orderly fixture shutdown.
+Separate-process tests preserve their explicit database/object paths across exit.
 
-```sh
-node fixtures/controls/check.mjs --browser --out fixtures/controls/evidence-node22.json
-```
+The existing controls CI workflow defines the controls/browser checks on both
+pinned runtimes. Codec setup, public controls export/build and the actual package
+consumer require serialized root integration. A workflow definition is not a
+passing remote run; the supervisor must attach current exact-head CI evidence.
+CloudLinux/CageFS x86_64 host certification, exact host patch, SQLite/locking,
+backup and power-loss checks remain pending. Local macOS arm64 execution does not
+certify that host.
 
-To inspect the fixture manually, run `npm start` in
-`examples/frontend-action-roundtrip` and open `http://127.0.0.1:4317`. It listens
-only on loopback and always uses synthetic fixture identity. Its `/__fixture/*`
-state/reset routes exist solely for browser tests. Do not deploy this example as
-an application authentication service. Its temporary database is intentionally
-removed on orderly shutdown; durable adapter tests use an explicit database path
-and reopen it. Real applications own storage location and backup policies.
+## Public boundaries and compatibility
 
-The dedicated `Controls offline roundtrip` workflow uses an explicit
-**22.23.3 / 24.15.0** matrix and runs the same Node suite,
-locked `npm ci`, Chromium and axe tests, then uploads separate
-`controls-mock-evidence-node-<version>` artifacts.
-Remote CI results and artifact URLs must be recorded by the supervisor after
-publication. Workflow definition alone is not a successful remote CI run.
-The workflow pins Ubuntu 24.04 and official `actions/checkout`, `setup-node` and
-`upload-artifact` v4 tag targets to full commit SHAs. Tag refs were checked through
-the official repositories' GitHub API on 2026-10-10 before pinning.
+`src/controls/index.mjs` and `index.d.mts` expose the producer, ApplyStore and
+CreativeControlsAdapter. The adapter consumes the existing public
+`creative-engine/api/v1`, `creative-engine/contracts`, `creative-engine/versions`
+and `creative-engine/telemetry` contracts. The native fixture additionally uses
+the public `creative-engine/models` provider and byte inspector. Controls package-subpath publication
+and its strict package consumer remain a required serialized root integration;
+the current strict consumer checks the owned public source entrypoint.
 
-## Local contracts and migration
+Supported pairs remain `creative-controls/1.0` + `creative-apply/1.0` and
+`creative-controls/1.1` + `creative-apply/1.1`, with unchanged bounded action
+meaning. Clients explicitly negotiate a supported pair. Unknown Apply and
+rendered schema fields reject; optional `correlation_id` grants no authority and
+is bound into the full action hash. A changed correlation under the same action
+identity conflicts. IDs additionally admit bounded colon/dot/plus separators used
+by the actual planner and API. URL separators, HTML, credential prefixes and
+unbounded IDs are rejected. No generated HTML, handlers, scripts or URL fetching
+is implemented. UI labels and result strings render using text nodes.
 
-`src/controls/index.mjs` exports the runtime boundary; its matching `index.d.mts`
-declares the ESM types. A real `.mts` consumer imports this public `.mjs` path
-under TypeScript 5.9.3 with `strict`, `module: NodeNext`, `moduleResolution:
-NodeNext`, no `allowJs` and no `skipLibCheck`. It exercises the schema, Apply,
-outbox and wrapper APIs and checks that unsupported versions/privileged intents
-produce type errors. `npm run test:types` from the nested fixture runs this
-consumer; the combined `--browser` command and both CI runtimes include it.
-The current supported pairs are `creative-controls/1.0` with
-`creative-apply/1.0`, and `creative-controls/1.1` with `creative-apply/1.1`.
-Both pairs currently use the same bounded field semantics. An older client must
-explicitly negotiate a supported pair; the server never silently downgrades an
-Apply payload. An application can remove older support via the trusted
-`supported_schema_versions` projection. Unsupported versions and mismatched pairs
-return `unsupported_version`. Unknown Apply fields are **rejected**, including
-unknown additive fields. Optional `correlation_id` is accepted and conveys no
-authorization. Correlation is part of the stored full action hash: changing it
-under an existing action identity returns `action_conflict`. Schema labels are
-rendered as text, and controls are fixed native selects; generated code, HTML,
-handlers and privileged actions have no execution path.
+Own-data JSON snapshots precede validation/hashing/rendering. They reject
+accessors, custom prototypes, sparse or overridden arrays, symbols, methods,
+cycles and excessive depth/size without calling input getters, map, iterators or
+species. Public API responses pass the existing CE11 privacy projection; any
+redaction requirement fails the local result binding rather than exposing raw
+credentials, personal data or signed URLs.
 
-This is a local specialization of the documented
-[DesignControlSchema catalog entry](https://github.com/Jevelopers-neatHack-2026/shared-contracts/blob/c4caaccc2ea63b273eeac17ed89af8ac64f6bbde/docs/contract-catalog.md).
-The catalog describes a proposed interface, not an implemented canonical schema.
-CE-C01's separate local wrapper uses the following crosswalk:
+The existing C01 wrapper remains independently versioned: contract
+`DesignControlSchema`, wrapper schema `1.0`, control family `creative-controls`,
+inner control version, exact tenant/project/expected versions and canonical
+schema hash. `controlContractReference` and `assertControlContractBinding` check
+that crosswalk. Common producer/time/mode fields remain C01's responsibility.
+Authoritative maintained revisions are shared-contracts
+`c4caaccc2ea63b273eeac17ed89af8ac64f6bbde` and integration-evals
+`ff1f6d2df816ebbff34742f51be728fcb5c28cb5`; their design documents are not an accepted
+implementation or owner agreement.
 
-| Outer local wrapper | Control producer |
-| --- | --- |
-| `contract: DesignControlSchema`, `schema_version: 1.0` | Wrapper contract version, independently versioned |
-| `control_contract: creative-controls` | Local producer contract family |
-| `control_schema_version: 1.0` or `1.1` | Suffix of the inner `schema_version` |
-| `tenant_id`, `project_id` | Exact inner scope, checked against trusted context |
-| `expected_versions` | Exact brief, design and composition snapshot |
-| `control_schema_hash: sha256:<hex>` | SHA-256 of canonical, sorted-key inner schema JSON |
-| `event_id`, `correlation_id`, producer, `occurred_at`, `ingested_at`, environment, billing mode, source references | CE-C01/common envelope responsibility |
+## Current state, action and backend result
 
-`controlContractReference(schema)` generates the reference fields;
-`assertControlContractBinding(wrapper, schema)` validates their exact equality.
-It does not validate common envelope metadata or claim external agreement.
-Scope, versions, hash or control-version mismatches reject the binding. No
-automatic migration may expand options or permissions. Canonical publication and
-affected producer/consumer review remain prerequisites to external adoption.
-Serialized `valid.json`, `invalid.json`, `older.json` and `unknown-field.json`
-fixtures exercise producer/consumer compatibility and typed Apply outcomes.
+A trusted synchronous `readContext(principal)` reads the actual current brief,
+selected DesignVersion, selection revision, brief invalidation usability, current
+host actor and current operation/options/rights policy. The fixture reads these
+through public version-store methods. The application remains responsible for
+actual authentication/membership and policy. Brief preferences supply bounded
+values; documented local defaults apply to absent preferences. Brief locks and
+current asset grants determine disabled controls and eligible logo references.
+Historical selected styles come from the exact durable backend action/result
+binding for that immutable design hash. Restore never fabricates a new version.
 
-## Trusted state and Apply API
+Expected-version fields are opaque current identity tokens: the brief token binds
+the exact canonical brief hash; the design token binds the full selected
+ID/hash/revision; the composition token currently binds the explicit unavailable
+composition context. It is not an invented completed composition revision. These
+same tokens participate in the immutable schema/action hash. Any current-pointer
+change, including restore to the same bytes under a new selection revision,
+requires fresh review. The adapter's persisted API request carries the actual
+brief ID/hash, parent design ID/hash and artifact ID.
 
-```js
-import { ApplyStore, createControlSchema } from './src/controls/index.mjs';
+Dropdown and follow-up changes stay in browser draft state and make zero POSTs,
+image/JEV calls or reservations. Explicit Apply validates principal/scope,
+versions, schema hash, action identity, options and locks, then atomically persists
+one typed operation plus sanitized audit. SQLite uses WAL, FULL synchronization,
+bounded busy timeout and BEGIN IMMEDIATE. Duplicate or concurrent identical
+requests reuse one operation. Different bodies under that action identity
+conflict. Stale/conflicting requests return authorized current-version tokens and
+never silently rebase. One queued/ready operation per project prevents conflicting
+pending drafts.
 
-const outbox = new ApplyStore('/application-owned/creative-controls.sqlite',
-  trustedPrincipal => {
-    // Synchronous current projection from the application's authorized state.
-    const current = readCurrentAuthorizedState(trustedPrincipal);
-    return {
-      schema: createControlSchema(current),
-      can_apply: current.can_apply,
-      supported_schema_versions: ['creative-controls/1.0', 'creative-controls/1.1'],
-      permitted_asset_ids: current.permitted_asset_ids,
-      dispatchable_routes: current.dispatchable_routes,
-    };
-  });
+For an eligible artwork task, `CreativeControlsAdapter` stores the exact public
+API request before invoking the actual edit route. The API creates and fences its
+own durable job, reserves through the injected C03 authority, records CE11
+attempt/transport/outcome evidence and publishes exact bytes plus immutable
+version and selection through CE08. The adapter observes the public jobs port;
+it does not implement another provider executor, job lease service or ledger.
+The full request hash and backend's separately observed action-request hash are
+retained. Completion is accepted only after the trusted jobs port reports a
+completed matching action/request and the public storage port returns the same
+immutable design record. The browser cannot submit a completion receipt.
 
-const accepted = outbox.apply(serverAuthenticatedPrincipal, untrustedRequestBody);
-const handoff = outbox.dispatch(serverAuthenticatedPrincipal, accepted.operation_id);
-```
+Controls bind the original UI action to its control operation, deterministic
+`controls:<operation>` API action, backend job/operation, billable attempt and
+exact artifact/design hash. No provider-confirmed usage or real monetary cost is
+claimed by the fixture. The bootstrap creates a real locally persisted initial
+concept through intercepted transport; its one fixture image call is recorded
+separately as `bootstrap_image_calls`. Draft/Apply counters start at zero.
 
-`readCurrentAuthorizedState` and `serverAuthenticatedPrincipal` above are required
-application integrations, not supplied implementations. Trusted principal has
-`actor_id`, `tenant_id`, and `project_id`. The request body can repeat scope for
-binding but cannot supply principal, permissions, locks, asset URLs or executable
-handlers. `can_apply` must reflect current actor membership and project access.
-The synchronous projection must return current versions, available operations,
-allowed options, defaults, locks and asset grants. Creative brief and version
-stores remain their owners; the controls module stores no artwork or immutable
-DesignVersion. Failure to read the projection returns `unavailable`.
+The native fixture is pinned to merged base
+`5ab7f0ede215e62f6ddb5ef3472a2dc8e55cbc74`. Both bootstrap generation and explicit
+artwork Apply use the public native provider, selected for this offline fixture
+as `gpt-image-2.5-sunburst-2026-09-08`. This does not select an owner-approved live
+model. The provider builds its real JSON/multipart request; injected fetch
+intercepts it without a network call. Edit sends the exact scoped stored parent
+as `image[]`. Valid PNG/JPEG/still-WebP fixtures pass complete bounded native pixel
+decoding. Distinct PNG output pixels, original encoded byte hashes and immutable
+parent/action/job relationships are verified. The browser fetches saved bytes
+through a loopback route that checks actual API read permission and exact history
+membership, renders the PNG, and verifies its byte hash and decoded dimensions.
 
-Controls are derived from `available_operations` and the trusted brief projection.
-Supported composition fields are name size, layout and permitted logo position;
-style is an artwork edit. Logo controls require a durable permitted asset ID.
-Stacked layout asks a bounded follow-up question. Its baseline is supplied by
-the trusted version projection as `follow_up_answers: { q01: 'balanced' | 'name' }`;
-`follow_up_locks` independently lists locked question IDs. Missing baseline data
-fails closed when layout controls are available. The schema embeds that baseline
-and lock state in its hash, and `defaultDraft` includes currently active answers.
-A follow-up-only change emits the typed composition field `layout_emphasis`.
-Unchanged active answers are also included in the composition handoff. Each
-composition task carries `follow_up_state` for all exposed questions, including
-inactive baselines, and acknowledgement verifies that current trusted follow-up
-state matches it. This also prevents an unrelated edit from resetting a latent
-selection while its conditional question is hidden.
-The application/version store must persist this state with the composition
-version: a subsequent size edit must preserve the selected emphasis. An inactive
-question retains its trusted baseline for later reactivation, while inactive
-answers must be omitted from Apply. Updating to this local schema requires a
-fresh schema/hash; existing queued actions cannot be silently reinterpreted.
-Locked controls and follow-up questions remain visible
-and disabled in the consumer, and the server independently rejects changed locked
-values. Options, follow-up answers and all three versions are checked by the
-server. The fixture fixes the logo position to prove this boundary. Altered locks,
-options, asset grants and permissions are checked again at dispatch.
+MOCK capability, grant, in-memory credential and Finance authorities are explicitly
+synthetic and bound to the actual attempt, target and local reservation record.
+They issue no real membership or provider access. A separately injected declared
+MOCK usage profile maps only the exact pending-profile marker and known bounded
+token subsets; runtime validates its raw/target/attempt hashes. Raw private native
+attribution remains `unknown` with `usage.profile_mapping_pending`, while the
+separate synthetic C03 observation may settle. No production usage agreement,
+rate card or real charge is inferred. Unmapped, extended and malformed usage
+retain an unresolved hold and prevent publication/replay dispatch. Post-ACK
+revocation and cancellation recheck current authority before intercepted fetch;
+the recorded ACK conservatively retains the hold even with zero fetch POSTs.
+The adapter reports its already-persisted backend job identity on authorized
+error responses, without inferring dispatch, completion or settlement.
 
-An Apply body contains explicit versions and `intent: apply`, an opaque stable
-`action_id`, scope, `brief_id`, `draft: { selections, answers }` and a SHA-256
-`draft_hash` of canonical draft JSON. `control_schema_hash: sha256:<hex>` binds
-the exact inner schema bytes for the explicitly negotiated consumer version.
-Changed options, locks, defaults or task definitions under unchanged expected
-versions return `stale_schema`. Dispatch also compares recomputed tasks against
-the immutable stored tasks before returning them. An unchanged draft is rejected as
-`no_changes`. Dropdown changes remain entirely local: no request, JEV call or
-image call is triggered. The browser disables editing and refresh during a
-pending submission, retains its action identity for retry, and announces typed
-errors through a focused alert. Refresh resets the draft for fresh review and
-retains an already accepted operation so it can be cancelled.
+## Replay, cancellation and history
 
-## Durable identity and typed handoffs
+A lost HTTP response replays the persisted exact request and same durable backend
+result; it does not build a fresh plan. Separate-process restart preserves job,
+parent, bytes and hashes and makes no new provider/reservation call for completed
+work. A hard crash after a transport intent leaves the running backend outcome
+explicitly `unavailable` / `status: unknown` with the same job reference. Restart
+makes zero additional transport/reservation/release calls. It does not turn lease
+expiry into permission to regenerate. Finance hold durability/reconciliation
+remains the external authority's obligation.
 
-SQLite storage version 1 uses WAL, `synchronous=FULL`, bounded busy timeout and
-`BEGIN IMMEDIATE` transactions. The action dedup row and operation/outbox row are
-one record committed atomically with the sanitized audit entry. A unique
-`(tenant_id, project_id, action_id)` constraint provides durable identity across
-processes and restarts. An action is bound to its original actor and whole action
-hash. Duplicate delivery after a lost response returns the original operation
-reference; changed payload under that identity returns `action_conflict`.
-One queued/ready operation per tenant/project prevents conflicting Apply actions
-from silently rebasing. Stale or conflicting responses include current versions
-only after authorization. Unknown storage versions fail startup rather than
-silently changing persisted meaning.
+Current permissions/locks/options/source fences are rechecked around the jobs
+begin, dispatch authorization and final publication callback, including after
+awaited downstream authorization. Cancellation is recorded in the controls row
+and forwarded to the actual jobs cancellation port; cancellation during begin is
+observed when the job ID becomes available. A UI cancel or lost response does not
+release a financial hold. Fixture tests inspect the hold while transport remains
+unresolved and verify no late version/selection publication. Already-completed
+backend jobs cannot be retroactively cancelled.
 
-Accepted operations are `creative-control-operation/1.0`, kind
-`creative.control.apply`, with separate typed `composition.update` and
-`artwork.edit` tasks. Compound changes produce both tasks in a single durable
-operation identity. Composition tasks explicitly specify zero image and JEV
-calls; all typed controls bypass classification. Apply and handoff carry
-`approval: false` and `purchase: false`. Artwork choices are representable and
-queued in the fixture, but dispatch returns `unavailable` because the fixture has
-no billable artwork capability. No provider client is loaded by these modules.
+The controls database rejects an existing host-owned BEGIN or SAVEPOINT before
+reading authority or invoking a transaction callback. It only rolls back a BEGIN
+that the current invocation successfully opened. Completed historical Apply
+replay validates the original durable completion and backend result under current
+scoped read authority; it preserves the original applied versions and does not
+issue another edit request or alter today's selection.
 
-`dispatch(principal, operation_id)` rechecks current authorization, versions,
-locks, values, asset grants and eligible routes immediately before releasing a
-typed handoff. It records `ready` durably; repeated retrieval returns the same
-logical operation identity. **Ready means a validated handoff, not an executed
-job, published artifact or reserved financial hold.** The harness remains the
-owner of workflow jobs and leases. Its future consumer must deduplicate this
-logical operation identity and enforce fresh authorization/version checks at the
-actual billable/publication boundary. The local transaction does not atomically
-lock a remote brief/version/auth store; integrated concurrency/CAS behavior at
-that boundary remains pending. A ready operation continues to block another
-Apply until cancellation or an authorized downstream acknowledgement.
+The example lists immutable versions and compares actual artifact hashes through
+the public API. Restore validates expected selection revision and selects the
+exact saved record; it makes zero new image/JEV/reservation calls. The controls
+are refreshed for review after selection. The UI has native labelled selects,
+visible disabled locks, conditional required follow-ups, Tab/type-ahead/Enter
+navigation, focused error alerts and polite status announcements. Axe checks
+before/after Apply and historical restore supplement, without claiming,
+screen-reader or full storefront acceptance.
 
-`acknowledge(trustedConsumer, operation_id, receipt)` requires separate current
-`can_acknowledge: true` authority from the trusted state callback. Ordinary browser
-principals and the HTTP example cannot grant this authority or call this method.
-The receipt has an opaque `completion_id`, durable `result_ref` and exact
-`applied_versions`. A ready operation can complete only when the current trusted
-version projection matches the receipt, unrelated versions remain unchanged, each relevant
-design/composition version has changed identity, and the changed control defaults match
-the stored operation. Receipt hash/storage and the completed transition are atomic.
-Exact acknowledgements replay safely after restart; changed receipts conflict.
-Completed rows no longer occupy the queued/ready unique slot, so the next revision
-can Apply. A completed operation cannot be cancelled or redispatched. The local
-test advances a declared mock consumer projection to exercise this lifecycle;
-it does not generate an artifact or prove an external consumer integration.
-Harness/application integration must attest the actual result and reconcile
-the receipt with their immutable version store before acknowledgement.
+Generic unavailable/failed outcomes do not prove that no attempt was dispatched
+or that a reservation was released. The UI retains the returned operation ID
+and directs the user to the existing operation and usage evidence. Only an
+explicit predispatch composition/compound bridge result reports that this action
+dispatched no image and reserved no funds. Post-dispatch connection loss and
+artifact-hash failure tests run the actual local API/store with intercepted
+transport; their held/settled counters are MOCK evidence, not real charges.
+Typed Compare/Restore rejections use separate fixed history recovery text. A
+stale old-tab Restore directs the user to refresh and review the current saved
+selection; a revoked current read scope produces permission guidance. Real
+browser tests capture caught handler exceptions and verify both paths leave
+selection and attempt/reservation counters unchanged. Unknown history codes and
+backend messages render only fixed local recovery text.
+The trusted context policy declares optional `can_read`, with strict source
+consumers constructing both denied and omitted policies. Actual package-path
+publication and its consumer remain pending.
 
-`cancel(principal, operation_id)` can cancel the actor's own local queued/ready
-handoff even after edit permission is revoked. It never changes external jobs or
-financial holds. Late Apply replay or dispatch cannot revive a cancelled row.
-No UI timeout releases a hold: there is no ledger/hold lifecycle in this module.
-Cancellation of an already consumed external operation requires the harness's
-own cancellation protocol, and is not proved here.
+## Required backend bridges
 
-Audits contain typed result codes, hashes and opaque operation/audit references.
-Invalid payloads, source strings, credentials and customer text are never stored
-in audit records. Valid rows store only the allowlisted action and typed operation.
-If audit storage fails, the transaction rolls back; the response reports
-`audit_status: unavailable` rather than inventing a diagnostic reference.
-Durable retention/backup and data-access policy remain application obligations.
+These are required local integrations, not scope waivers or external blockers:
 
-## Executed evidence and acceptance limits
-
-The runtime addendum was locally exercised on **Node 22.23.3 and Node 24.15.0**,
-using Playwright 1.58.2, Chromium 145.0.7632.6 and axe 4.11.1. Each final combined
-command passed **19 server tests, the strict NodeNext consumer typecheck, and 13
-actual Chromium browser tests**, with no
-skipped scenarios. `fixtures/controls/evidence-node22.json` and
-`fixtures/controls/evidence-node24.json` retain the respective current results;
-`evidence-run.json` preserves the original pre-addendum Node 24 run (15 + 11).
-These sanitized records pin schema/action hashes and a SHA-256
-fingerprint of the controls source, server/browser tests, fixture inputs/runner,
-nested manifests and dependency lock, controls workflow and this documentation.
-The evidence lists every hashed path; generated evidence/reports and installed
-dependencies are excluded. Browser JSON output and a screenshot are generated under the ignored
-`examples/frontend-action-roundtrip/test-results` directory and uploaded by CI.
-No OpenAI, JEV or other paid application-provider calls were made.
-
-The isolated Node 22 toolchain was the official `node-v22.23.3-darwin-arm64`
-distribution. Its archive SHA-256
-`23b25245dcfb9af7262f8ff142e9e2e0af025368117329e7a7458a51e5922f53`
-matches the official
-[SHASUMS256](https://nodejs.org/download/release/v22.23.3/SHASUMS256.txt) entry.
-Both local runs are **macOS arm64 evidence**. The check runner puts its own Node
-directory first in child-process PATH, so Playwright, the HTTP server and workers
-use the same selected runtime. Node 22's experimental SQLite warnings remain
-visible. The explicit Ubuntu 24.04 CI matrix is configured but not yet a recorded
-remote result. **CloudLinux/CageFS x86_64 compatibility remains pending**: the
-user supplied only `node22`, not an exact patch or accessible server. No server
-connection, filesystem/SQLite locking probe, browser dependency install or
-deployment was performed there. Local runtime compatibility does not certify
-that target host; retain its exact patch, architecture, permissions and SQLite
-durability/locking validation as a release prerequisite.
-
-The browser exercised Tab navigation, native select type-ahead, skipped locked
-fields, required follow-up controls, Enter submission, focus on error and
-`role=status` announcements. Axe found zero violations before Apply and after
-handoff. The initial ArrowDown-only macOS headless test did not commit native
-selection; the executed test uses native keyboard type-ahead and Tab/Enter.
-This is actual browser evidence, not a screen-reader certification or full
-customer frontend acceptance.
-
-| Cases | Actual local evidence | Remaining acceptance |
+| Bridge | Required contract and result | Current outcome |
 | --- | --- | --- |
-| Valid draft/explicit Apply, CE-JEV-03/04/05 | No draft POSTs; one typed handoff; zero image/JEV paths; composition and artwork tasks distinct | Active harness routing and providers |
-| CON-01 / CON-03 | Supported old/current pairs; unknown fields, privileged intent, invalid values/code/schema rejected; exact wrapper crosswalk | Canonical schema and affected external consumer acknowledgement |
-| CON-02 | Forged tenant/project/actor denied; dispatch scope checked; browser negative requests | Actual application issuer and API/job/artifact integration |
-| Duplicate/concurrent/stale, ART-01 contribution | Four simultaneous SQLite connections; lost-response browser retry; restart; three-version stale checks; conflict retains current metadata | CE-08 actual version store and integrated CAS |
-| Cancellation/revocation | Real queued rows; post-validation permission/asset/lock/option/version recheck; cancelled replay denied | Harness cancellation and financial in-flight hold behavior |
-| ART-02 contribution | Every selection/Apply/handoff remains nonapproval/nonpurchase | External exact-artifact approval issuer and invalidation |
-| EVAL-03 / EVAL-04 contribution | Mock boundaries labelled in UI/docs/evidence; synthetic data; hashed sanitized audits | Actual release evidence and privacy review |
+| `creative.composition.consume/1` | Consume the exact ControlOperation composition task with trusted principal/current brief+selection+composition hashes; deduplicate the same action; atomically CAS immutable composition revision/hash, typed production handoff/hash and approval-staleness request; preserve artwork bytes and return durable receipt | Typed unavailable; task remains durable; zero image/JEV/reservations |
+| `creative.compound.consume/1` | Consume separately ordered composition/artwork tasks with the same action identity and per-component durable outcomes, current rights, cancellation/lease/publication fences and bounded costs | Typed unavailable; no partial image dispatch |
+| Research correction consumer | Accept typed factual correction against exact package/fact/brief identity; return durable research request and approval invalidation requirement, then consume a new source package; never mutate a verified fact as a preference | Pending; controls expose no fabricated correction success |
+| Native image adapter | Wire the merged selected native provider/codec through actual API/store with valid encoded artifacts, exact parent/action/usage identity and route negatives | Executable offline through intercepted fetch and declared MOCK authorities at base `5ab7f0e`; live model/authority acceptance remains pending |
+| Inspection adapter | Wire reviewed, merged inspection ports into the same actual API/store journey with current rights and native route negatives | Required local integration pending; no import from an unmerged candidate |
 
-Original global IDs and owner roles remain as defined in the
-[authoritative checklist](https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/ff1f6d2df816ebbff34742f51be728fcb5c28cb5/planning/acceptance-checklist.md).
-CON-01/02/03 belong to Agent and research; ART-01 to Creative and fulfillment;
-ART-02 and EVAL-03 to Product and frontend; EVAL-04 to Finance and reliability.
-This leaf contributes only its controls slice. CE-01 public API, CE-02 real brief,
-CE-08 version persistence, neutral contract publication and application identity
-are unsatisfied acceptance dependencies. The full CE-05 closure gate and release
-gate remain open after offline implementation.
+A future composition port must minimally provide
+`consume({ principal, operation, task, expected_brief_hash,
+expected_selection, expected_composition_hash })` and
+`getResult({ principal, logical_operation_id })`, returning a durable
+`composition_revision_id`, `composition_hash`, `handoff_ref`, `handoff_hash`,
+`approval_staleness_ref`, applied bounded values and backend operation identity.
+It must provide cancellation/current-state CAS at final use rather than trusting a
+caller-provided completed string. The backend owner must agree/publish this
+signature; it is currently a requested bridge, not an implemented contract.
 
-The fixture uses ordinary HTML and HTTP, not ChatKit. The current official
-[ChatKit action documentation](https://developers.openai.com/api/docs/guides/chatkit-actions)
-was read on 2026-10-10; its untrusted-action boundary informs the server validation.
-There is no claim of ChatKit SDK compatibility or actual ChatKit application use.
+## Evidence and remaining gates
+
+`fixtures/controls/check.mjs` emits measured test exits, source/dependency file
+hashes, schema/action/full-request/backend-request hashes, actual local job,
+artifact and trace references, draft/final counters and a sanitized backend
+transcript. Browser JSON, screenshots and failure traces live under the example's
+ignored `test-results` path. Generated evidence is excluded from the source
+fingerprint. Preserve failed runs alongside final results. The original
+`evidence-node22/24.json` records retain their historical foundation meaning;
+new integrated evidence is separately named. Despite its misleading historical
+filename, `evidence-initial-failed-node22.json` records a passing development run
+(`passed: true`, all three exits zero); it does not substantiate a failed
+hard-crash assertion or the current candidate. Its original bytes are retained.
+`evidence-followup-setup-failed-node22.json` is the authentic retained failed
+setup run (41 of 42 server tests passed). Review-fix evidence is separately
+named `evidence-review-fixed-node22/24.json`; the earlier integrated evidence
+retains its original source fingerprint. Current hard-crash assertions verify
+unavailable/unknown, the same persisted job and zero redispatch/release.
+`evidence-review-fix-browser-race-node22.json` retains the first review-fix run:
+all 51 server cases passed, while one new browser case selected the old field
+before the asynchronous refresh finished. The corrected case waits for the
+refreshed current schema and the second backend response before asserting replay.
+`evidence-outcomes-node22/24.json` records the later truthful-outcome/type
+corrections; prior review-fixed records retain their historical fingerprints.
+`evidence-history-node22/24.json` records the later typed history-error correction.
+All prior evidence bytes remain historical; the genuine before-fix browser
+failures and traces are retained separately in the correction receipt.
+The separately named `evidence-history-window-node22/24.json` records bound the
+debugger exception capture to the history handler before axe executes. The
+prior history records retain their passing assertions and original bytes; their
+live attachment arrays also contain subsequently caught axe constructor
+exceptions, qualified separately in the interim evidence receipt.
+
+All five issue cases remain mandatory. Local artwork Apply, negative validation,
+older/optional compatibility, duplicate/lost/restart/stale and cancellation paths
+are executable. Complete name-size/layout/logo/compound/correction journeys,
+reviewed native image/inspection pins, actual package consumer/root integration,
+fresh full Astra exact-head/base review and CI remain required before this
+integration can be accepted. Actual application/harness/JEV/provider/Finance,
+canonical owner agreements, Neatlogs ingestion/readback, production renderer,
+host evidence and authorized live release evaluation remain separate gates.
+Issue #17 and the release gate stay open.
+
+Apply alerts select fixed local guidance only for recognized string codes.
+Unknown, prototype-name and non-string error codes use fixed uncertainty and
+recovery wording; neither an upstream code nor a backend message is rendered.
+The fallback leaves dispatch and reservation status unconfirmed and directs the
+user to check the existing operation before retrying. Helper regressions and
+actual Chromium malformed-error interceptions cover synthetic credential-shaped
+codes, prototype names and non-string JSON values, focused alerts, empty handler
+exception windows, unchanged selection/counters and no canary in page text.
+These interceptions replace only failed Apply responses and prove no successful
+backend or live-provider outcome. Historical evidence remains unchanged.
+
+The native port preserves every committed historical evidence JSON from the
+source-reviewed `09335cd` candidate byte-for-byte; its source-only approval does
+not transfer to this changed base. New native evidence is separately named.
+Early native draft server runs observed 53/55 passes (frozen provider fault wrapper)
+and 8/11 passes (the new probe incorrectly read an absent error action ID).
+Their logs were placed under Playwright's disposable output directory and were
+purged by its first browser invocation. Complete raw-log custody is unavailable;
+these counts/errors are observed tool-output provenance, not reconstructed logs.
+Later genuine draft failures and all current command logs are retained outside
+that directory under ignored `playwright-report/native-evidence`. One later run
+passed 63/66: unknown-usage responses omitted the already-persisted backend job
+ID. Scoped current-read-authorized identity reporting corrected that behavior,
+and the same exact replay/hold assertions remain required.
+
+## UI consumer preparation after ccc9c74
+
+The next bounded source checkpoint extends actual native browser Apply/history/Restore/Compare/replay and cancellation/unknown-hold behavior to PNG, JPEG and WebP. JPEG/WebP remain static codec samples, with no visual-edit quality claim. A separate versioned, accessible local inspection presentation fixture and pure request-fragment builder prepare future consumption without enabling unqualified CE09. See [inspection consumer preparation](controls/inspection-consumer-preparation.md) for exact evidence boundaries, current-selection versus schema-token semantics, commands, failing public-package prerequisites and required local/external gaps. No old evidence or source approval transfers to this new checkpoint.
+
+## Defensive result references
+
+The browser consumes Apply and saved-version references through `src/controls/public-result.mjs`, using the existing bounded own-data snapshot and privacy-screened ID grammar. Failed Apply references are checked before they replace recovery state or enter status text. An unsafe or malformed reference produces fixed local uncertainty guidance; a previously known safe operation remains available for the same action retry, refresh/lookup and cancellation. Unknown or malformed status values do not overwrite the known lifecycle. Raw backend prose is never projected.
+
+The same presentation boundary checks saved version IDs, exact artifact hashes, backend job references, history selections/Compare/Restore results and numeric counters before display or artifact requests. Error formatters read only own data and never coerce unknown codes. Focused tests use explicitly synthetic failed Apply responses with real bootstrap/read APIs and exact unchanged backend counters; a separate recovery test starts from an actual intercepted-native connection-loss operation with an unresolved hold. Neither fixture fabricates a successful backend result or an inspection journey. Source-local declarations and strict consumers cover the projections; genuine controls package and actual downstream integration prerequisites remain required and unmet.
+
+The public Apply presentation also validates outcome consistency before promoting a reference or lifecycle. Queued acceptance, typed ready handoff, replay, cancellation and artwork completion have explicit supported forms. Completion requires the saved design/hash and backend job references; a safe operation ID alone cannot establish saved artwork. Contradictory failure statuses and incomplete success envelopes use fixed uncertainty guidance while retaining an earlier safe recovery identity and lifecycle. Actual native unavailable results without a top-level status remain supported. These consumer checks confer no backend, inspection, composition or handoff authority. Browser regressions inject malformed responses separately from the actual native unknown-hold journey, then verify same-action retry, refresh and cancellation without added image calls, reservations or hold release.
+
+A genuine metadata-only `replayed`/`ready` Apply result acknowledges an existing safe operation without supplying a fresh typed handoff. The public presentation marks this as acknowledgment only and offers Validate handoff for a current typed response; it never claims saved artwork. If an operation payload is supplied, it must still satisfy the typed handoff shape. Completion still requires saved design/hash/job evidence. The actual foundation browser Apply → Validate handoff → Retry Apply path verifies unchanged identity and zero image/JEV calls, then retains Refresh/cancellation recovery. This local foundation compatibility evidence does not complete the required actual CE06 consumer.

@@ -1,0 +1,563 @@
+{
+  "evidence_version": "controls-offline-evidence/2.0",
+  "dependency_mode": "mock",
+  "billing_mode": "simulated",
+  "runtime": "v24.15.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "host_validation": "local_only",
+  "schema_version": "creative-controls/1.1",
+  "action_version": "creative-apply/1.1",
+  "contract_status": "local-consumer-proposal",
+  "source_fingerprint_sha256": "abc783cc669b1a847ea22e62c3eeecb56d27aa058216356584012265197a142d",
+  "source_files": [
+    "src/controls/actions.mjs",
+    "src/controls/contract.mjs",
+    "src/controls/index.d.mts",
+    "src/controls/index.mjs",
+    "src/controls/integration.mjs",
+    "src/controls/runtime.mjs",
+    "src/controls/schema.mjs",
+    "tests/controls/actions.test.mjs",
+    "tests/controls/concurrent-worker.mjs",
+    "tests/controls/integration.test.mjs",
+    "tests/controls/review-regressions.test.mjs",
+    "tests/controls/types/consumer.mts",
+    "tests/controls/types/tsconfig.json",
+    "examples/frontend-action-roundtrip/.gitignore",
+    "examples/frontend-action-roundtrip/app.mjs",
+    "examples/frontend-action-roundtrip/foundation-server.mjs",
+    "examples/frontend-action-roundtrip/index.html",
+    "examples/frontend-action-roundtrip/package-lock.json",
+    "examples/frontend-action-roundtrip/package.json",
+    "examples/frontend-action-roundtrip/playwright.config.mjs",
+    "examples/frontend-action-roundtrip/server.mjs",
+    "examples/frontend-action-roundtrip/style.css",
+    "examples/frontend-action-roundtrip/tests/integrated.spec.mjs",
+    "examples/frontend-action-roundtrip/tests/roundtrip.spec.mjs",
+    "fixtures/controls/check.mjs",
+    "fixtures/controls/integrated-crash-worker.mjs",
+    "fixtures/controls/integrated-host.mjs",
+    "fixtures/controls/integrated-restart-worker.mjs",
+    "fixtures/controls/integrated-transcript.mjs",
+    "fixtures/controls/invalid.json",
+    "fixtures/controls/older.json",
+    "fixtures/controls/state.mjs",
+    "fixtures/controls/unknown-field.json",
+    "fixtures/controls/valid.json",
+    ".github/workflows/controls.yml",
+    "docs/controls-integration.md"
+  ],
+  "fixture_schema_sha256": "c8c4ec7ece4ea3b8a79eee93cbc704e0e3bf11a5ba123e220700192da6e34516",
+  "fixture_action_sha256": "0cf4804a8b81f338c9a9e17961b6d37b61266da7d20a72b8d6897f18c77c5dc3",
+  "checks": [
+    {
+      "command": "node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs",
+      "exit_code": 0,
+      "passed": true,
+      "counts": {
+        "tests": 51,
+        "pass": 51,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "command": "tsc --strict --module NodeNext (public ESM consumer)",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "command": "npm test (Playwright Chromium + axe)",
+      "exit_code": 0,
+      "passed": true
+    }
+  ],
+  "review_probes": [
+    {
+      "controls_probe": "own_arrays",
+      "cases": 49,
+      "hooks": 0
+    },
+    {
+      "controls_probe": "base_migration",
+      "base": "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe",
+      "populated_jobs": 1,
+      "completed_receipts": 1,
+      "jobs_hash": "d1a860c8540ac52070e90d57245048d4cefe8d02c85266b967440991719c8439",
+      "receipts_hash": "a94702c7d3c5ee1bd5526cdd5292a4c333ad4958b534ad6c0c6c3ca66477b3a7",
+      "exact_rows_preserved": true,
+      "fabricated_backend_bindings": 0,
+      "reopened_replay": "replayed"
+    }
+  ],
+  "browser_summary": {
+    "startTime": "2026-10-10T21:59:24.249Z",
+    "duration": 14267.175000000001,
+    "expected": 32,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "browser_exercised": true,
+  "types_checked": true,
+  "dependency_files": {
+    "src/api/v1.d.mts": "1fb5f83a85452351b1ef34f2b174ceafde16b3eada96a42a2f3f39ae73008223",
+    "src/api/v1.mjs": "a9e0fa7156b4e33817da68382e212b0a8bd62d158832d16f8fca5d5713b10d84",
+    "src/runtime/creative-runtime.mjs": "789fd895a400c730434b4596276108c538fa9f6cd95dcde77178436f8b7877aa",
+    "src/planning/index.d.mts": "5f405d1e40dedbc4c2b20a49bb5aa33252ac345c354a1001335f9093937bd0df",
+    "src/planning/index.mjs": "d23d4edf0ca885fd3773d680a188d918a22dfe68a82b4f6ef5042f4052dea7db",
+    "src/planning/store.mjs": "23b88b42e355806353482b59e9b1ce1f99264c41df8dc7e46dbc49b6ee78a20b",
+    "src/versions/api-ports.d.mts": "5f6c4264cdebd9a91174498cb71a39831d0c7ea1a688b951e2bff62dd2a24bfe",
+    "src/versions/api-ports.mjs": "9ba0e4bb0bdb636915ccb4655dd6c7dd8396002889d3eee7e7958698678b5341",
+    "src/versions/index.d.mts": "682820d8061ff853d48357a872b8d5dee5cebfabc71f1d026b4fe7715de2a39c",
+    "src/versions/index.mjs": "3181a0f8c84fdff36be208ac09add7e34069f263fab10524b2ab3c50c556445a",
+    "src/versions/store.d.mts": "6bb4e773c6af43a004e8833f86d6c3dd096eee89854aa10598a14043470b9349",
+    "src/versions/store.mjs": "dfa25e4c2413cfad933d955e33e7ef388d99b88377a55f434875d0e01227cd57",
+    "src/storage/content-addressed.d.mts": "e9da2f6ff88fadb23bd5782e2b0b1271dd138a6bc6f5c48a3bef9bfbdbfc1e5f",
+    "src/storage/content-addressed.mjs": "924ba59f00eaa2e60556f17b3cc7f709d049f182a4283fd49250ea4186c7af8b",
+    "src/telemetry/evidence.mjs": "db7dd70de421b7e355b8a37648d710ddf4c7f3f7a73db4a7ce195ac6ff7fa4d3",
+    "src/telemetry/index.d.mts": "2cd2c259d2a71f89bab55411731b58fca821a2435c13d62e0a424b79705e040d",
+    "src/telemetry/index.mjs": "8b0cadb13dbc55298bb8e9d4919e54684f21694d8759a5d060df2f1bcf5bc86b",
+    "src/telemetry/privacy.mjs": "acf33ba2310fd21b287e8efeb161d703239953f86b23299e0f1a908c57bd9cd1",
+    "src/telemetry/retry.mjs": "493304e86f621ee9d9aa4aef691eff6ca425686d6c2a02974312fa83bf7c65dd",
+    "src/telemetry/sqlite-outbox.mjs": "d8a963e5af0d838472fd11473b1bdf3cc817a75ad52914b4cd720643010f2c0d",
+    "src/telemetry/usage.mjs": "a933a02c80ccb56c327b5203b1ee90ad962b444cf8c2aa3bee7e6e4f6240695f",
+    "src/contracts/approval-handoff.d.mts": "cb7859a007e5e3a27386a15d061297252be88748b310b65b3db4b68864ca1f8b",
+    "src/contracts/approval-handoff.mjs": "5bbc71f5443d65b093682f95052f6cee08f083594190506160a310b8e23769e9",
+    "src/contracts/creative/v1.d.mts": "cd19cc754f7b9896026da02e36c972aa62dfa01d226ee750e59f79d163484237",
+    "src/contracts/creative/v1.mjs": "59982160a9b508203bae13f97e661977f7f24a610e0533ec9164bdc4908e1c1d",
+    "src/contracts/decision-port/v1.d.mts": "ce0ad8a53a32ecae747d07f6230d2fce87c16687c3652a642be4c9e73fb89563",
+    "src/contracts/decision-port/v1.mjs": "05f88b25bb8f1a5ecb808539400da4fb91e6dbddb34a61957fec5da2902dda6b",
+    "src/contracts/index.d.mts": "29261a67743868e363aa7c255614d69876f23ce1c6770187d79fe2e8493bf03d",
+    "src/contracts/index.mjs": "a299c4478b2a026856f20df4922122f1695b8b7543c1fc235e4aa9a91accc206",
+    "src/contracts/metering.d.mts": "aea8b94a94ae55841faae981146a473f2bc76eedf079b5ac3dbe0e97cac4e938",
+    "src/contracts/metering.mjs": "93b99bb745a1fb32818bada4b5c7e44db17556db2dca1bc3ba389e736dd14beb",
+    "src/contracts/scope.d.mts": "fd6d8d90f034a37d8357c21139b72ad8a7e0b266deff2d32902b9829ecd2adc4",
+    "src/contracts/scope.mjs": "48e9fb0d169490b9cfaa9e0582c322df9d646fa9f91ba51cf72cf378ffa403c5",
+    "src/contracts/validation.d.mts": "f66c7d85bf1e80413c9dc8ec63c46e54175981625f819131b57d622fd2e6dc36",
+    "src/contracts/validation.mjs": "0b0d86975d33359e30a49620ebe95cb83a870864493375f2a799155fc2a9ca7d",
+    "package.json": "f563d9e99592cf0d1c9952c3758c36dc838bbaee4d85bf17b0145bc3d1649613",
+    "package-lock.json": "b3ed125f7e401c6d01ccdf5f2d442991d18f869abbf3b2a3d501c3a78a4a5da4",
+    "Makefile": "5136cc35cad33f5df6726d378bae1f30d89f9577d831782c0f705d14ccad6397",
+    "fixtures/planning/research-packages.mjs": "d11782a3acdbeb21c4bbf146dece4f3ac872581c449993b1c0a679c665260740",
+    "fixtures/contracts/creative/current.json": "7fcafcdc22c57857e4f3b91930c6c93ac19d2e4c73642452f05b927be4292034"
+  },
+  "base_revision": "4e28839ea8baeb4112a4f12340ef2fe84f5c8efe",
+  "authoritative_contract_revision": "c4caaccc2ea63b273eeac17ed89af8ac64f6bbde",
+  "authoritative_checklist_revision": "ff1f6d2df816ebbff34742f51be728fcb5c28cb5",
+  "actual_api_transcript": {
+    "evidence_version": "controls-actual-api-transcript/1",
+    "mode": "mock",
+    "authority": "MOCK trusted host fixture; no actual membership",
+    "transport": "intercepted fixture",
+    "local_modules": [
+      "public planning",
+      "public creative API",
+      "C03 port boundary",
+      "CE08 durable jobs/artifact/selection",
+      "CE11 durable usage evidence"
+    ],
+    "live_application_calls": 0,
+    "schema_hash": "sha256:a1d28a67585e613e5e6c90c15250e5750ff6768e3271d88bb2c0bb572863d608",
+    "action_hash": "sha256:d39d829774decf2dd4e14bcc5e15731f05f43504dd827fe25e542104647e0d65",
+    "schema": {
+      "schema_version": "creative-controls/1.1",
+      "contract_status": "local-consumer-proposal",
+      "tenant_id": "fixture_tenant",
+      "project_id": "fixture_project",
+      "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+      "expected_versions": {
+        "brief": "brief_6a2a91384f12b26bfb583c72eb58576ff02f870c2faf1bc9c5b313bdd71f3f39",
+        "design": "selection_391834ec5c176ef4cb6030d6ea478a5fa52493e822354c5a0ca8615d1b9d382e",
+        "composition": "composition_661b173e84c4c5c04f88388a2440e53032af01df7eef7e55fce6b4150557c532"
+      },
+      "controls": [
+        {
+          "id": "c01",
+          "label": "Name size",
+          "kind": "select",
+          "value_type": "string",
+          "field": "name_size",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "small",
+              "label": "Small"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "large",
+              "label": "Large"
+            }
+          ],
+          "default_value": "medium",
+          "locked": false
+        },
+        {
+          "id": "c02",
+          "label": "Layout",
+          "kind": "select",
+          "value_type": "string",
+          "field": "layout",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "centered",
+              "label": "Centered"
+            },
+            {
+              "value": "stacked",
+              "label": "Stacked"
+            }
+          ],
+          "default_value": "centered",
+          "locked": false
+        },
+        {
+          "id": "c03",
+          "label": "Approved logo position",
+          "kind": "select",
+          "value_type": "string",
+          "field": "logo_position",
+          "route": "composition.update",
+          "options": [
+            {
+              "value": "top",
+              "label": "Top"
+            },
+            {
+              "value": "bottom",
+              "label": "Bottom"
+            }
+          ],
+          "default_value": "top",
+          "locked": true,
+          "asset_id": "asset-1"
+        },
+        {
+          "id": "c04",
+          "label": "Artwork style",
+          "kind": "select",
+          "value_type": "string",
+          "field": "style",
+          "route": "artwork.edit",
+          "options": [
+            {
+              "value": "calm",
+              "label": "Calm"
+            },
+            {
+              "value": "vibrant",
+              "label": "Vibrant"
+            }
+          ],
+          "default_value": "calm",
+          "locked": false
+        }
+      ],
+      "follow_up_questions": [
+        {
+          "id": "q01",
+          "label": "Stacked layout emphasis",
+          "field": "layout_emphasis",
+          "route": "composition.update",
+          "when": {
+            "control_id": "c02",
+            "value": "stacked"
+          },
+          "required": true,
+          "locked": false,
+          "options": [
+            {
+              "value": "balanced",
+              "label": "Balanced"
+            },
+            {
+              "value": "name",
+              "label": "Name"
+            }
+          ],
+          "default_value": "balanced"
+        }
+      ],
+      "submit_intent": "apply",
+      "approval": false,
+      "purchase": false
+    },
+    "action": {
+      "action_version": "creative-apply/1.1",
+      "schema_version": "creative-controls/1.1",
+      "action_id": "fixture-evidence-apply",
+      "tenant_id": "fixture_tenant",
+      "project_id": "fixture_project",
+      "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+      "expected_versions": {
+        "brief": "brief_6a2a91384f12b26bfb583c72eb58576ff02f870c2faf1bc9c5b313bdd71f3f39",
+        "design": "selection_391834ec5c176ef4cb6030d6ea478a5fa52493e822354c5a0ca8615d1b9d382e",
+        "composition": "composition_661b173e84c4c5c04f88388a2440e53032af01df7eef7e55fce6b4150557c532"
+      },
+      "intent": "apply",
+      "draft": {
+        "selections": {
+          "c01": "medium",
+          "c02": "centered",
+          "c03": "top",
+          "c04": "vibrant"
+        },
+        "answers": {}
+      },
+      "draft_hash": "c857e921d4def49c79aae3977bac01530634279997ba6010720774dc5d113984",
+      "control_schema_hash": "sha256:a1d28a67585e613e5e6c90c15250e5750ff6768e3271d88bb2c0bb572863d608"
+    },
+    "backend_request": {
+      "action_id": "controls:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "billing_mode": "simulated",
+      "contract": "CreativeApiRequest",
+      "correlation_id": "op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "environment": "test",
+      "event_id": "event:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "ingested_at": "2026-10-10T12:30:00.000Z",
+      "occurred_at": "2026-10-10T12:30:00.000Z",
+      "operation": "edit",
+      "payload": {
+        "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+        "design_version_id": "design:6e9d96ba-438b-4613-8d86-984305304bf6",
+        "plan": {
+          "base": {
+            "brief_hash": "sha256:03433fab5310806e12b03a0feced5f921099daffc3eb3d8f4a6534f6cc1bfcfa",
+            "design_hash": "sha256:d5b4a48ff4d0db276f3faf2d07017fab0bf72ae3577b2f336d01646a5192ce8a",
+            "design_version_id": "design:6e9d96ba-438b-4613-8d86-984305304bf6"
+          },
+          "billing_mode": "simulated",
+          "contract": "EditPlan",
+          "correlation_id": "op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+          "environment": "test",
+          "event_id": "event:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+          "expected_result": {
+            "artifact_kind": "image",
+            "contract": "DesignVersion",
+            "parent_version_id": "design:6e9d96ba-438b-4613-8d86-984305304bf6",
+            "schema_version": "1.0"
+          },
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "invalidates": [],
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "operation": "image.edit",
+          "plan_id": "plan:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+          "producer": "creative-controls-local-adapter/1",
+          "project_id": "fixture_project",
+          "schema_version": "1.0",
+          "source_refs": [
+            "page-1"
+          ],
+          "steps": [
+            {
+              "action": "image.edit",
+              "parameters": {
+                "artifact_id": "artifact:6e9d96ba-438b-4613-8d86-984305304bf6",
+                "design_version_id": "design:6e9d96ba-438b-4613-8d86-984305304bf6",
+                "instruction": "Set style to vibrant. Preserve verified facts, approved assets and locked fields."
+              },
+              "source_refs": [],
+              "step_id": "step:op_e8983469-f1c5-41cf-89d7-c0a233535a12"
+            }
+          ],
+          "tenant_id": "fixture_tenant"
+        },
+        "selection_mode": "advance"
+      },
+      "producer": "creative-controls-local-adapter/1",
+      "project_id": "fixture_project",
+      "request_id": "request:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "schema_version": "1.0",
+      "source_refs": [
+        "page-1"
+      ],
+      "tenant_id": "fixture_tenant"
+    },
+    "full_request_hash": "sha256:aec0e30caf4c0f160e876c9be20521e3ee351cb463830f8404846ac34bc9ea06",
+    "backend_request_hash": "sha256:ea858f52c6b7349870753d85e059197a1ed46056dc0c61c5cf572ed8870ac835",
+    "result": {
+      "ok": true,
+      "code": "completed",
+      "operation_id": "op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "status": "completed",
+      "replayed": false,
+      "audit_ref": "audit_4e863de4-8f0b-4d42-b839-94e907b06854",
+      "backend_job_id": "618682a3-fc36-405a-8b37-ab662ebece71",
+      "backend_operation_id": "618682a3-fc36-405a-8b37-ab662ebece71",
+      "result": {
+        "design_version": {
+          "contract": "DesignVersion",
+          "schema_version": "1.0",
+          "event_id": "bb32ad59-a76b-4cd4-8874-ff5b6686c682",
+          "tenant_id": "fixture_tenant",
+          "project_id": "fixture_project",
+          "correlation_id": "op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+          "producer": "creative-runtime",
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "environment": "test",
+          "billing_mode": "simulated",
+          "source_refs": [
+            "page-1"
+          ],
+          "logical_operation_id": "controls:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+          "design_version_id": "design:27cb2649-8c96-4360-bdc6-d453593c9567",
+          "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+          "parent_version_id": "design:6e9d96ba-438b-4613-8d86-984305304bf6",
+          "brief_hash": "sha256:03433fab5310806e12b03a0feced5f921099daffc3eb3d8f4a6534f6cc1bfcfa",
+          "artifact": {
+            "artifact_id": "artifact:27cb2649-8c96-4360-bdc6-d453593c9567",
+            "content_hash": "sha256:7c8397e621988c7a9a8b3120c5ab767b11a54a58d080b87712a20dccc7ebe98f",
+            "media_type": "image/png"
+          },
+          "provider": "fixture-provider",
+          "model": "fixture-image",
+          "billable_attempt_id": "27cb2649-8c96-4360-bdc6-d453593c9567",
+          "usage_status": "complete",
+          "design_hash": "sha256:9f01ea1df5f69a45e1997b2d53d470f2ef5f671280ba1946b9810f6860b4a819"
+        },
+        "usage": {
+          "completeness": "complete"
+        },
+        "telemetry_evidence": {
+          "local_status": "recorded"
+        }
+      },
+      "action_id": "controls:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "request_hash": "sha256:aec0e30caf4c0f160e876c9be20521e3ee351cb463830f8404846ac34bc9ea06",
+      "approval": false,
+      "purchase": false
+    },
+    "replay": {
+      "ok": true,
+      "code": "replayed",
+      "operation_id": "op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "status": "completed",
+      "replayed": true,
+      "audit_ref": "audit_57567256-b547-456b-812a-aa40bbe35822",
+      "backend_job_id": "618682a3-fc36-405a-8b37-ab662ebece71",
+      "backend_operation_id": "618682a3-fc36-405a-8b37-ab662ebece71",
+      "result": {
+        "design_version": {
+          "artifact": {
+            "artifact_id": "artifact:27cb2649-8c96-4360-bdc6-d453593c9567",
+            "content_hash": "sha256:7c8397e621988c7a9a8b3120c5ab767b11a54a58d080b87712a20dccc7ebe98f",
+            "media_type": "image/png"
+          },
+          "billable_attempt_id": "27cb2649-8c96-4360-bdc6-d453593c9567",
+          "billing_mode": "simulated",
+          "brief_hash": "sha256:03433fab5310806e12b03a0feced5f921099daffc3eb3d8f4a6534f6cc1bfcfa",
+          "brief_id": "brief:51275d9527f4fb178fe82326160eaab468929cfa2f46cdace91ca33fd13790a0",
+          "contract": "DesignVersion",
+          "correlation_id": "op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+          "design_hash": "sha256:9f01ea1df5f69a45e1997b2d53d470f2ef5f671280ba1946b9810f6860b4a819",
+          "design_version_id": "design:27cb2649-8c96-4360-bdc6-d453593c9567",
+          "environment": "test",
+          "event_id": "bb32ad59-a76b-4cd4-8874-ff5b6686c682",
+          "ingested_at": "2026-10-10T12:30:00.000Z",
+          "logical_operation_id": "controls:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+          "model": "fixture-image",
+          "occurred_at": "2026-10-10T12:30:00.000Z",
+          "parent_version_id": "design:6e9d96ba-438b-4613-8d86-984305304bf6",
+          "producer": "creative-runtime",
+          "project_id": "fixture_project",
+          "provider": "fixture-provider",
+          "schema_version": "1.0",
+          "source_refs": [
+            "page-1"
+          ],
+          "tenant_id": "fixture_tenant",
+          "usage_status": "complete"
+        },
+        "telemetry_evidence": {
+          "local_status": "recorded"
+        },
+        "usage": {
+          "completeness": "complete"
+        }
+      },
+      "action_id": "controls:op_e8983469-f1c5-41cf-89d7-c0a233535a12",
+      "request_hash": "sha256:aec0e30caf4c0f160e876c9be20521e3ee351cb463830f8404846ac34bc9ea06",
+      "approval": false,
+      "purchase": false
+    },
+    "draft_counters": {
+      "image_calls": 0,
+      "jev_calls": 0,
+      "reservations": 0,
+      "releases": 0,
+      "holds": 0,
+      "bootstrap_image_calls": 1,
+      "publication_waits": 0,
+      "jobs": 0
+    },
+    "final_counters": {
+      "image_calls": 1,
+      "jev_calls": 0,
+      "reservations": 1,
+      "releases": 0,
+      "holds": 0,
+      "bootstrap_image_calls": 1,
+      "publication_waits": 0,
+      "jobs": 1
+    },
+    "artifact_hash_verified": "sha256:7c8397e621988c7a9a8b3120c5ab767b11a54a58d080b87712a20dccc7ebe98f",
+    "trace_refs": [
+      {
+        "event_id": "aae6fd66-82b9-4d11-a4b6-a9321cd43e5c",
+        "event_type": "attempt_intent",
+        "payload_hash": "sha256:57c358d93a0ef10a219a583126b1d188895835602926ccbdabc36e77e6e8479d"
+      },
+      {
+        "event_id": "4d4fcba7-25cb-4a94-8386-4c8a6b05050e",
+        "event_type": "transport_intent",
+        "payload_hash": "sha256:f719f525751fc4fa3559f1edc0079c8395a29b9b2716686588b443b0a66ec46b"
+      },
+      {
+        "event_id": "93a95649-5441-49b7-8279-b45c061474f9",
+        "event_type": "attempt_outcome",
+        "payload_hash": "sha256:66307c3922690b0f95d5ab6384b0c2c3068b36783f5d63a93c8c9dc03d9912a4"
+      }
+    ],
+    "approval_created": false,
+    "purchase_created": false,
+    "pending_local": [
+      "actual CE06 composition consumer",
+      "research correction consumer",
+      "native selected image/inspection integrations"
+    ],
+    "pending_external": [
+      "canonical contracts",
+      "real application identity",
+      "actual harness/JEV/provider/Finance/Neatlogs",
+      "production composition renderer",
+      "release acceptance"
+    ]
+  },
+  "calls": {
+    "application_provider_live": 0,
+    "fixture_apply_image": 1,
+    "fixture_apply_jev": 0,
+    "fixture_apply_reservations": 1
+  },
+  "approval_created": false,
+  "purchase_created": false,
+  "pending": [
+    "canonical external schema publication and consumer acknowledgement",
+    "actual CE06 composition and correction consumers",
+    "native selected image and inspection integrations",
+    "application authentication/authorization",
+    "harness outbox consumer and paid artwork dispatch",
+    "live providers and external release acceptance",
+    "CloudLinux/CageFS x86_64 host validation (exact Node 22 patch unknown)"
+  ],
+  "passed": true
+}
