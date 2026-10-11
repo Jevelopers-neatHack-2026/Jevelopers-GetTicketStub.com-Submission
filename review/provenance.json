@@ -3699,14 +3699,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "README.md",
-        "revision": "sha256:6f9b4c61be96e697d727b1bb862b52e78c9105ef7bac22295fc645d403f2a200",
+        "revision": "sha256:f5201038ee6f856582cb846a8ee2e1789009cbf84b5d7f5183d9cfb29354704f",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "README refresh author subagent, authored on branch docs/readme-refresh-2026-10-11 and adopted into main by PR #16 (merge 353ad3e; exact banner blobs first committed at beb053f); current prose revision (PR #17 commits 8aae5e7 and 11a5512) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revision by Anthropic Claude Opus 5.5 (claude-opus-5-5), self-reported runtime identity, not independently verified. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: README refresh author subagent, authored on branch docs/readme-refresh-2026-10-11 and adopted into main by PR #16 (merge 353ad3e; exact banner blobs first committed at beb053f); current prose revision (PR #17 commits 8aae5e7 and 11a5512) by the Anthropic Claude Sonnet 5.5 session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; earlier revisions by the assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), runtime-confirmed by supervisor metadata for session 165db7ae-ef24-4813-a3eb-5df1b8f7b262; native effort and speed not exposed, no OpenAI effort or Fast setting claimed. Earlier revision by Anthropic Claude Opus 5.5 (claude-opus-5-5), self-reported runtime identity, not independently verified. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -3760,7 +3760,7 @@
       ],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "6f9b4c61be96e697d727b1bb862b52e78c9105ef7bac22295fc645d403f2a200",
+        "value": "f5201038ee6f856582cb846a8ee2e1789009cbf84b5d7f5183d9cfb29354704f",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -5908,14 +5908,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "demo/product-explanation.md",
-        "revision": "sha256:80a7c542ba6ccc230b130b60d377cf7bcc0f1910b7bcafa07a64fefbf070bc60",
+        "revision": "sha256:466d020a4d8d3e13a3b870a8bac5508b43e1d36bded53f574ecb00f7287de75a",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "draft_collateral",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -5969,7 +5969,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "80a7c542ba6ccc230b130b60d377cf7bcc0f1910b7bcafa07a64fefbf070bc60",
+        "value": "466d020a4d8d3e13a3b870a8bac5508b43e1d36bded53f574ecb00f7287de75a",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -5987,14 +5987,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "demo/recording-checklist.md",
-        "revision": "sha256:b1ec1323b648cb371c9e80fd9d52d6fbdf2321ab7d160fa077c512ddaa79afba",
+        "revision": "sha256:68c944642ea622e46234de3315cc4740b41ae88e7dc4acc8b02b09b778ebc326",
         "revisionKind": "sha256_content_digest",
         "url": null,
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "draft_collateral",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -6048,7 +6048,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "b1ec1323b648cb371c9e80fd9d52d6fbdf2321ab7d160fa077c512ddaa79afba",
+        "value": "68c944642ea622e46234de3315cc4740b41ae88e7dc4acc8b02b09b778ebc326",
         "status": "Exact SHA-256 content digest of current bytes; pin is external to the source file."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -8800,14 +8800,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "release/v0.1.0-rehearsal/package-spec.json",
-        "revision": "1d91f35e849097e04c3dba5d809322eec9c5dd9b",
+        "revision": "72d9f21466f767666df579480c25d81c4d4450e0",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/1d91f35e849097e04c3dba5d809322eec9c5dd9b/release/v0.1.0-rehearsal/package-spec.json",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/72d9f21466f767666df579480c25d81c4d4450e0/release/v0.1.0-rehearsal/package-spec.json",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -8858,7 +8858,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "37cabd5d8b2ad223c8e6b3486333fb1210ae45dc9a21794609532e590a17b1fd",
+        "value": "7155888883586bc5571d58baf54e5296755f850c1095897068eccc92973a1ebf",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -15256,14 +15256,14 @@
       "source": {
         "repo": "Jevelopers-neatHack-2026/marketing-material",
         "path": "tests/test_package_collateral.py",
-        "revision": "9b0f48ce5f8b7afaa0cbbd3ef0f1735cb3208fe8",
+        "revision": "72d9f21466f767666df579480c25d81c4d4450e0",
         "revisionKind": "git_commit",
-        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/9b0f48ce5f8b7afaa0cbbd3ef0f1735cb3208fe8/tests/test_package_collateral.py",
+        "url": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/72d9f21466f767666df579480c25d81c4d4450e0/tests/test_package_collateral.py",
         "restrictedOriginalReference": null
       },
       "createdAt": "2026-10-11",
-      "creator": "Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
-      "toolModel": "OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
+      "creator": "Current revision (r03 package revision and product source-status update, commit 72d9f21) by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647; earlier revisions: Assigned narrative metadata worker session /root/mm01_preflight; accountable owner tracked by the user-assigned supervisor.",
+      "toolModel": "Current revision: Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5), session 00802425-95c1-4549-8118-ca18e61fa647, firstParty provider; native effort not exposed, no OpenAI effort or Fast setting claimed. Earlier revisions: OpenAI gpt-6-luna/max per supervisor-verified runtime; launcher priority/Fast declaration; served tier unknown.",
       "evidenceClassification": "internal_candidate_evidence",
       "consent": {
         "status": "not_applicable_synthetic_or_first_party_candidate",
@@ -15314,7 +15314,7 @@
       "compositionDependencies": [],
       "checksum": {
         "algorithm": "SHA-256",
-        "value": "e76854e692d7604a45433bea4872b84f88e7efbf14c0118fa47cdbd34746e0e0",
+        "value": "111ce64b085b812e5b32d3a6c515b44c548ce6ed1a9fe285e2436601afe873f8",
         "status": "Exact SHA-256 content digest of current source bytes; source revision binds these exact bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor for marketing wording; independent and producer/source-owner review pending.",
@@ -18640,6 +18640,82 @@
       "checksum": {
         "algorithm": "SHA-256",
         "value": "dbfcedf7d6913a70be6c98c7893371b63cc9c1d00346e7c5c54226f576e37006",
+        "status": "Exact SHA-256 content digest of the immutable archived prior draft manifest bytes."
+      },
+      "reviewer": "User-assigned marketing-material supervisor (AI session); independent receiver review pending.",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "This record preserves prior draft manifest bytes and grants no external destination permission.",
+        "The archived draft is not an approved release or submission artifact."
+      ]
+    },
+    {
+      "assetId": "PROV-FILE-FEE133CCB9AC",
+      "kind": "internal_package_control",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "release/v0.1.0-rehearsal/history/manifest-1d7fd385a5bc291f.json",
+        "revision": "sha256:1d7fd385a5bc291f9e90d719530646a359b1d50e03bf7a90b41ad84cd67085db",
+        "revisionKind": "sha256_content_digest",
+        "url": null,
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Local draft manifest retention by the Anthropic Claude Sonnet 5.5 session 00802425-95c1-4549-8118-ca18e61fa647 for the user-assigned marketing-material supervisor; historical bytes preserved unchanged.",
+      "toolModel": "Local package_collateral.py draft-history archive convention applied by Anthropic Claude Sonnet 5.5 (claude-sonnet-5-5) session 00802425-95c1-4549-8118-ca18e61fa647; byte copy of the prior current manifest; native effort and speed not exposed; no external provider.",
+      "evidenceClassification": "internal_historical_draft_manifest",
+      "consent": {
+        "status": "not_applicable_synthetic_or_first_party_candidate",
+        "subjects": [],
+        "details": "No external subject or private customer material is asserted in this file; this classification does not establish source-owner or brand rights."
+      },
+      "permission": {
+        "status": "authorized_internal_candidate_review_only",
+        "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
+        "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
+        "approvedDestinations": [
+          "Internal repository candidate review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
+      },
+      "allowedDestinations": [
+        "Internal repository candidate review"
+      ],
+      "allowedModifications": [
+        "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
+      ],
+      "expiry": "No external-use permission granted; reassess before any proposed external use and at the next source review.",
+      "reviewTrigger": [
+        "Before any external reuse or publication.",
+        "Source bytes, copy, composition, accessibility alternative, evidence scope or destination changes.",
+        "At expiry or upon source-owner/rights update."
+      ],
+      "redaction": {
+        "required": false,
+        "method": "Format-scoped internal inspection only; no general redaction or privacy guarantee.",
+        "visualPixelReview": "See exact linked review/visual receipt when applicable; independent review pending.",
+        "renderedMetadataAndNotesReview": "Only receipt-scoped checks apply; otherwise not performed.",
+        "releaseExportExists": false,
+        "scope": "Internal candidate only; no released derivative."
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "Exact prior draft manifest bytes archived before regeneration; no release decision or approval is inferred."
+        ]
+      },
+      "compositionDependencies": [],
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "1d7fd385a5bc291f9e90d719530646a359b1d50e03bf7a90b41ad84cd67085db",
         "status": "Exact SHA-256 content digest of the immutable archived prior draft manifest bytes."
       },
       "reviewer": "User-assigned marketing-material supervisor (AI session); independent receiver review pending.",
