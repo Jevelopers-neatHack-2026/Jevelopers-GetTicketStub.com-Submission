@@ -12,9 +12,10 @@ test("public API subpath exports versioned runtime symbols and errors", async ()
     "createCreativeRuntime",
   ]);
   assert.equal(apiModule.CREATIVE_API_VERSION, "1.0");
-  assert.deepEqual(apiModule.CREATIVE_API_VERSIONS, ["1.0", "1.1", "1.2"]);
+  assert.deepEqual(apiModule.CREATIVE_API_VERSIONS, ["1.0", "1.1", "1.2", "1.3"]);
   assert.deepEqual(apiModule.CREATIVE_API_OPERATIONS, [
     "generate", "edit", "concepts.create", "composition.create", "composition.get", "composition.update",
+    "composition.history", "composition.revalidate",
     "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status",
     "brief.create", "brief.invalidate",
   ]);

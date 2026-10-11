@@ -4,8 +4,15 @@ import type {
   CreativeApiRequestV1_0,
   CreativeApiRequestV1_2,
   CreativeCompositionCommitInput,
+  CreativeCompositionActionIntentV1_0,
+  CreativeCompositionActionIntentV1_1,
+  CreativeCompositionAuthorityPorts,
   CreativeCompositionEditPlan,
+  CreativeCompositionHistoryResult,
+  CreativeCompositionRevalidationResult,
   CreativeCompositionStoragePort,
+  CreativeApiRequestV1_3,
+  CreativeApiV1_3SuccessResponse,
   CreativePublicationTransaction,
   CreativeRuntimePorts,
   TrustedCreativeActor,
@@ -64,6 +71,35 @@ const updateRequest: CreativeApiRequestV1_2 = { ...base, operation: "composition
   payload: { brief_id: "brief:consumer", design_version_id: "design:consumer", plan } };
 const compositionRequests: CreativeApiRequest[] = [createRequest, getRequest, updateRequest];
 
+const historyRequest: CreativeApiRequestV1_3 = { ...base, schema_version: "1.3", operation: "composition.history",
+  payload: { brief_id: "brief:consumer", design_version_id: "design:consumer", limit: 10 } };
+const revalidateRequest: CreativeApiRequestV1_3 = { ...base, schema_version: "1.3",
+  operation: "composition.revalidate", action_id: "action:revalidate", payload: {
+    brief_id: "brief:consumer", design_version_id: "design:consumer",
+    expected_current_revision_id: "revision:consumer", expected_current_revision_sha256: "sha256:revision",
+    candidate_revision_id: "revision:consumer-renewed" } };
+const compositionV13Requests: CreativeApiRequest[] = [historyRequest, revalidateRequest];
+
+const v10CreateIntent: CreativeCompositionActionIntentV1_0 = { contract: "CreativeCompositionActionIntent",
+  schema_version: "1.0", operation: "composition.create", composition_id: "composition:consumer",
+  candidate_revision_id: "revision:consumer", source_revision_id: null, source_revision_sha256: null, plan: null };
+const v11RevalidationIntent: CreativeCompositionActionIntentV1_1 = { contract: "CreativeCompositionActionIntent",
+  schema_version: "1.1", operation: "composition.revalidate", composition_id: "composition:consumer",
+  candidate_revision_id: "revision:consumer-renewed", source_revision_id: "revision:consumer",
+  source_revision_sha256: "sha256:revision", plan: null };
+const invalidV10RevalidationIntent: CreativeCompositionActionIntentV1_0 = { ...v10CreateIntent,
+  schema_version: "1.0",
+  // @ts-expect-error The closed v1.0 action intent keeps its original two operations.
+  operation: "composition.revalidate" };
+declare const v13Response: CreativeApiV1_3SuccessResponse;
+let historyNarrowed: CreativeCompositionHistoryResult | undefined;
+let renewalNarrowed: CreativeCompositionRevalidationResult | undefined;
+if (v13Response.result && "contract" in v13Response.result &&
+    v13Response.result.contract === "CreativeCompositionHistoryIdentity") historyNarrowed = v13Response.result;
+else if (v13Response.result) renewalNarrowed = v13Response.result;
+// @ts-expect-error API 1.3 results are operation-specific closed contracts.
+const untypedV13Result: CreativeApiV1_3SuccessResponse["result"] = { arbitrary: true };
+
 // The prior approval-handoff contract remains source compatible and can still
 // describe an incomplete draft. API 1.2 requires the completed non-empty form.
 const oldEmptyPlan: CompositionEditPlan = { ...plan, operations: [] };
@@ -97,6 +133,12 @@ const unsupportedLegacyComposition: CreativeApiRequestV1_0 = { ...base, schema_v
 const scope: VersionScope = { tenant_id: "tenant:consumer", project_id: "project:consumer", brief_id: "brief:consumer" };
 declare const store: CreativeVersionStore;
 declare const storagePort: CreativeCompositionStoragePort;
+type LegacyStorageProducer = Omit<CreativeCompositionStoragePort, "getCurrentCompositionIdentity">;
+declare const legacyApi12StorageProducer: LegacyStorageProducer;
+const stillValidApi12StorageProducer: CreativeCompositionStoragePort = legacyApi12StorageProducer;
+type LegacyAuthorityProducer = Omit<CreativeCompositionAuthorityPorts, "resolveRevalidation">;
+declare const legacyApi12AuthorityProducer: LegacyAuthorityProducer;
+const stillValidApi12AuthorityProducer: CreativeCompositionAuthorityPorts = legacyApi12AuthorityProducer;
 const currentStoreValue: ReturnType<CreativeVersionStore["getCurrentComposition"]> =
   store.getCurrentComposition({ scope, design_version_id: "design:consumer" });
 const historyStoreValue: ReturnType<CreativeVersionStore["listCompositionRevisions"]> =
@@ -125,7 +167,10 @@ const asynchronousBeforeCommit: SynchronousBeforeCommit = async () => true;
 const publicVersions: readonly string[] = CREATIVE_API_VERSIONS;
 const publicOperations: readonly string[] = CREATIVE_API_OPERATIONS;
 declare const actor: TrustedCreativeActor;
-void [compositionRequests, plan, oldEmptyPlan, emptyPlanUpdate, malformedOperation, malformedCreate, malformedGet,
+void [compositionRequests, compositionV13Requests, historyRequest, revalidateRequest, v10CreateIntent,
+  v11RevalidationIntent, invalidV10RevalidationIntent, historyNarrowed, renewalNarrowed, untypedV13Result,
+  stillValidApi12StorageProducer, stillValidApi12AuthorityProducer, plan, oldEmptyPlan, emptyPlanUpdate,
+  malformedOperation, malformedCreate, malformedGet,
   unsupportedCompositionOperation, preservedLegacyRequest, unsupportedLegacyComposition, currentStoreValue,
   historyStoreValue, currentPortValue, currentFenceStatus, asynchronousFence, committed, validBeforeCommit,
   asynchronousBeforeCommit, publicVersions, publicOperations, actor];

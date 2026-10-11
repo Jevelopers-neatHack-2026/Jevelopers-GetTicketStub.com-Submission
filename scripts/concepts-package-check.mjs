@@ -158,7 +158,7 @@ try {
   writeFileSync(join(consumerDir, "runtime-consumer.mjs"), `import assert from "node:assert/strict";\n` +
     `import { CREATIVE_API_VERSIONS, createCreativeApi } from "creative-engine/api/v1";\n` +
     `import { snapshotCompositionBytesRecord } from "creative-engine/contracts/composition-authority";\n` +
-    `assert.deepEqual(CREATIVE_API_VERSIONS, ["1.0", "1.1", "1.2"]);\n` +
+    `assert.deepEqual(CREATIVE_API_VERSIONS, ["1.0", "1.1", "1.2", "1.3"]);\n` +
     `assert.equal(typeof createCreativeApi().invoke, "function");\n` +
     `const hostile = new Uint8Array([1,2,3]); let byteLengthReads = 0; let iteratorReads = 0;\n` +
     `Object.defineProperty(hostile, "byteLength", { configurable: true, get() { byteLengthReads++; hostile[0]=99; return 1; } });\n` +
@@ -174,17 +174,10 @@ try {
   run("offline-installed-codec-dependencies", "npm", ["ci", "--offline", "--ignore-scripts", "--prefix", codecRoot], consumerDir);
   const runtime = run("installed-package-import-smoke", process.execPath, ["runtime-consumer.mjs"], consumerDir);
   const runtimeResult = JSON.parse(runtime.stdout.trim());
-  assert.deepEqual(runtimeResult, { versions: ["1.0", "1.1", "1.2"], concepts_runtime_imported: true,
+  assert.deepEqual(runtimeResult, { versions: ["1.0", "1.1", "1.2", "1.3"], concepts_runtime_imported: true,
     composition_runtime_imported: true, exact_hostile_byte_snapshot: true });
 
-  const installedJourney = run("installed-public-concepts-api-journey", process.execPath,
-    ["--test", "--test-concurrency=1", "--test-reporter=tap",
-      "--test-name-pattern=actual Creative API v1\\.1 concepts\\.create edits two authorized references and publishes parentless siblings|concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST|a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen|concept publication rejects a forged slot ordinal before either generic sibling becomes visible|completed concepts replay validates its retained brief after a legitimate brief revision|durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend|API 1\\.2 composition\\.get remains null until explicit create publishes exact owner bytes|composition create/get validate exact decoded PNG, JPEG, and WebP preview metadata|composition\\.create rejects preview bytes that are not the declared decoded image|composition completed replay rejects hash-consistent corrupt preview bytes without rerunning effects|composition\\.update rejects a preview provider result whose bytes do not decode to its metadata|composition\\.get rejects a locally expired rights proof after an awaited asset read|composition\\.get runs a synchronous local fence after the final awaited current read|composition publication rechecks queued owner revocation after awaited persistence and before commit|composition\\.update applies a typed plan, publishes a child preview once, and replays exact durable bytes|composition\\.update rolls back when rights are revoked in the final awaited publication gap|composition\\.update resumes an immutable staged preview after lease recovery without repeating the preview effect",
-      "tests/models/creative-api-integration.test.mjs"], consumerDir);
-  assert.match(installedJourney.stdout, /^# fail 0$/m, "The installed API and composition journeys must pass.");
-  assert.match(installedJourney.stdout, /^# skipped 0$/m, "The installed API and composition journeys must not skip cases.");
-  assert.match(installedJourney.stdout, /^# cancelled 0$/m, "The installed API and composition journeys must finish all cases.");
-  for (const title of [
+  const installedJourneyTitles = [
     "actual Creative API v1.1 concepts.create edits two authorized references and publishes parentless siblings",
     "concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST",
     "a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen",
@@ -192,17 +185,31 @@ try {
     "completed concepts replay validates its retained brief after a legitimate brief revision",
     "durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend",
     "API 1.2 composition.get remains null until explicit create publishes exact owner bytes",
+    "API 1.3 history exposes identity only and fresh revalidation restores current service after expiry and same-design restore",
     "composition create/get validate exact decoded PNG, JPEG, and WebP preview metadata",
     "composition.create rejects preview bytes that are not the declared decoded image",
     "composition completed replay rejects hash-consistent corrupt preview bytes without rerunning effects",
     "composition.update rejects a preview provider result whose bytes do not decode to its metadata",
     "composition.get rejects a locally expired rights proof after an awaited asset read",
     "composition.get runs a synchronous local fence after the final awaited current read",
+    "composition.get preserves final storage integrity errors separately from ordinary unavailability",
     "composition publication rechecks queued owner revocation after awaited persistence and before commit",
     "composition.update applies a typed plan, publishes a child preview once, and replays exact durable bytes",
     "composition.update rolls back when rights are revoked in the final awaited publication gap",
+    "public cancel recovers a pending composition.update in its brief scope",
     "composition.update resumes an immutable staged preview after lease recovery without repeating the preview effect",
-  ]) assert.ok(installedJourney.stdout.includes(`# Subtest: ${title}`), `Installed TAP is missing ${title}`);
+  ];
+  const installedJourneyPattern = installedJourneyTitles
+    .map((title) => title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const installedJourney = run("installed-public-composition-and-concepts-api-journey", process.execPath,
+    ["--test", "--test-concurrency=1", "--test-reporter=tap", `--test-name-pattern=${installedJourneyPattern}`,
+      "tests/models/creative-api-integration.test.mjs"], consumerDir);
+  assert.match(installedJourney.stdout, /^# fail 0$/m, "The installed API and composition journeys must pass.");
+  assert.match(installedJourney.stdout, /^# skipped 0$/m, "The installed API and composition journeys must not skip cases.");
+  assert.match(installedJourney.stdout, /^# cancelled 0$/m, "The installed API and composition journeys must finish all cases.");
+  for (const title of installedJourneyTitles) {
+    assert.ok(installedJourney.stdout.includes(`# Subtest: ${title}`), `Installed TAP is missing ${title}`);
+  }
   const installedTestCounts = {
     tests: Number(installedJourney.stdout.match(/^# tests (\d+)$/m)?.[1] ?? 0),
     passed: Number(installedJourney.stdout.match(/^# pass (\d+)$/m)?.[1] ?? 0),
@@ -248,8 +255,8 @@ try {
         "completed replay fails closed against missing or hash-tampered retained brief history",
         "auth, permission, quota, moderation, and malformed-request hard stops block fresh sibling spend and replay"],
       measured: { ...publicJourney, negatives: negativeJourney }, tap_sha256: sha256(Buffer.from(installedJourney.stdout)),
-      selected_journey_count: 17, test_summary: `${installedTestCounts.tests} TAP tests passed, 0 failed/skipped/cancelled`,
-      composition_journey_count: 11 },
+      selected_journey_count: installedJourneyTitles.length, test_summary: `${installedTestCounts.tests} TAP tests passed, 0 failed/skipped/cancelled`,
+      composition_journey_count: 14 },
       typescript: compilerVersion.stdout.trim(), typecheck: "strict NodeNext/ES2022/noUncheckedIndexedAccess against installed package with expected-negative version, plan, and async-fence assertions",
       fixture_tree_sha256: treeSha256(consumerDir) },
     install_mode: "fresh local tarball install; offline; lifecycle scripts disabled; intercepted fixture provider; no credentials or network",

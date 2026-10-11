@@ -1,0 +1,15 @@
+{
+  "schema": "creative-engine-historical-composition-producer-custody/v1",
+  "source_method": "full tracked tree from immutable historical Git commit via git archive --format=tar; compressed with gzip -n",
+  "producer": {
+    "storage_user_version": 12,
+    "commit": "7cba89a123a19a13e9dd17ed656785dede6b0052",
+    "tree": "39d8a8cf86bd6971210182f6954cfcd520e2415f",
+    "tracked_leaf_count": 309,
+    "archive": "schema-12-7cba89a.tar.gz",
+    "archive_bytes": 952681,
+    "archive_sha256": "9363769822c7fb6d6b18c879e6f78a2b8384ab98ec795cdddff74e115f28b525",
+    "git_archive_tar_bytes": 5632000,
+    "git_archive_tar_sha256": "44433d4fb388df512bd294d26a81c110f0c704254e0df07fcf59a2c2b32ea4aa"
+  }
+}

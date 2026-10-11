@@ -3,10 +3,12 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { execFileSync, spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
-import { existsSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { Worker } from "node:worker_threads";
 import test from "node:test";
 import { createCreativeApi } from "../../src/api/v1.mjs";
 import { createCompositionEditPlan } from "../../src/contracts/approval-handoff.mjs";
@@ -25,11 +27,19 @@ const NOW = Date.parse("2026-10-11T12:30:00.000Z");
 const ACTOR = "composition-test-actor";
 const PINNED_SCHEMA10_COMMIT = "dbbd10deabbac76930c6a7c9350bdae9c1a28258";
 const PINNED_SCHEMA10_TREE = "57bb6836680f363d587cb576d6ba51e15038bc2d";
+const PINNED_SCHEMA12_SOURCE = { commit: "7cba89a123a19a13e9dd17ed656785dede6b0052",
+  tree: "39d8a8cf86bd6971210182f6954cfcd520e2415f", archive: "schema-12-7cba89a.tar.gz",
+  archiveBytes: 952681, archiveSha256: "9363769822c7fb6d6b18c879e6f78a2b8384ab98ec795cdddff74e115f28b525",
+  tarBytes: 5632000, tarSha256: "44433d4fb388df512bd294d26a81c110f0c704254e0df07fcf59a2c2b32ea4aa", leaves: 309 };
 const HISTORICAL_CONCEPT_SOURCES = [
   { schemaVersion: "0.1.0", commit: "d986040244b2d0ae350184cc44b8baad9f5871a0",
-    tree: "4662fd1c0a09cf4a2cef5277a08148564db83448" },
+    tree: "4662fd1c0a09cf4a2cef5277a08148564db83448", archive: "schema-0.1.0-d986040.tar.gz",
+    archiveBytes: 621228, archiveSha256: "1beeaa414177919a58085b121b4d8bcf59ae5a82ff8628e0f440d21dce825208",
+    tarBytes: 3645440, tarSha256: "286682bcb8b29220f4159d51aaf7ee77aae27eaa566024a9f9a6332126610c6d", leaves: 256 },
   { schemaVersion: "0.2.0", commit: "27a1e6239d7dbc139497befce65024cbfeafbc2c",
-    tree: "6072ed0dab66331f517c5691c635b0b6fc111e89" },
+    tree: "6072ed0dab66331f517c5691c635b0b6fc111e89", archive: "schema-0.2.0-27a1e62.tar.gz",
+    archiveBytes: 803219, archiveSha256: "f8ee555147b22d641b66c18373d0b947a60554b221831b811e99c3c277938e97",
+    tarBytes: 4915200, tarSha256: "b106393ced0cb0883eb1221590056a2d1bc9b88e8e0d9bd060da5c50cb8f75d3", leaves: 285 },
 ];
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -37,8 +47,160 @@ function bytesHash(bytes) {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
+function verifyPinnedHistoricalArchive(compressed, historical) {
+  if (!(compressed instanceof Uint8Array)) {
+    assert.fail(`pinned schema-${historical.schemaVersion} source archive is missing`);
+  }
+  assert.equal(compressed.byteLength, historical.archiveBytes,
+    `the schema-${historical.schemaVersion} compressed source length matches its custody pin`);
+  assert.equal(createHash("sha256").update(compressed).digest("hex"), historical.archiveSha256,
+    `the schema-${historical.schemaVersion} compressed source matches its custody hash`);
+
+  let archive;
+  try { archive = gunzipSync(compressed); }
+  catch { assert.fail(`pinned schema-${historical.schemaVersion} source archive is not valid gzip`); }
+  assert.equal(archive.byteLength, historical.tarBytes,
+    `the schema-${historical.schemaVersion} original Git archive tar length matches its custody pin`);
+  assert.equal(createHash("sha256").update(archive).digest("hex"), historical.tarSha256,
+    `the schema-${historical.schemaVersion} original Git archive tar matches its custody hash`);
+  return archive;
+}
+
+async function unpackPinnedHistoricalConceptSource(historical, destination) {
+  const archiveRoot = join(REPO_ROOT, "fixtures/versions/historical-concept-producers");
+  let manifest;
+  try { manifest = JSON.parse(await readFile(join(archiveRoot, "manifest.json"), "utf8")); }
+  catch { assert.fail("historical concept producer custody manifest is missing or invalid JSON"); }
+  assert.equal(manifest.schema, "creative-engine-historical-concept-producer-custody/v1");
+  assert.equal(manifest.source_method,
+    "full tracked tree from immutable historical Git commit via git archive --format=tar; compressed with gzip mtime=0");
+  assert.equal(manifest.sources?.length, HISTORICAL_CONCEPT_SOURCES.length,
+    "the custody manifest names exactly the two historical producer trees");
+  const entry = manifest.sources.find((source) => source.schema_version === historical.schemaVersion);
+  assert.ok(entry, `the custody manifest contains schema-${historical.schemaVersion}`);
+  assert.deepEqual({ commit: entry.commit, tree: entry.tree, archive: entry.archive,
+    archive_bytes: entry.archive_bytes, archive_sha256: entry.archive_sha256,
+    git_archive_tar_bytes: entry.git_archive_tar_bytes, git_archive_tar_sha256: entry.git_archive_tar_sha256,
+    tracked_leaf_count: entry.tracked_leaf_count }, {
+    commit: historical.commit, tree: historical.tree, archive: historical.archive,
+    archive_bytes: historical.archiveBytes, archive_sha256: historical.archiveSha256,
+    git_archive_tar_bytes: historical.tarBytes, git_archive_tar_sha256: historical.tarSha256,
+    tracked_leaf_count: historical.leaves,
+  }, `the schema-${historical.schemaVersion} manifest row matches independent test pins`);
+  const archivePath = join(archiveRoot, historical.archive);
+  let compressed;
+  try { compressed = await readFile(archivePath); }
+  catch { assert.fail(`pinned schema-${historical.schemaVersion} source archive is missing: ${historical.archive}`); }
+  const archive = verifyPinnedHistoricalArchive(compressed, historical);
+  const names = execFileSync("tar", ["-tf", "-"], { cwd: REPO_ROOT, input: archive, encoding: "utf8" })
+    .split("\n").filter(Boolean);
+  assert.ok(names.length >= historical.leaves && new Set(names).size === names.length,
+    `the schema-${historical.schemaVersion} archive has unique members for its pinned tracked leaf count`);
+  assert.ok(names.every((name) => !name.startsWith("/") && !name.split("/").includes("..")),
+    `the schema-${historical.schemaVersion} archive has no absolute or parent-traversal paths`);
+  const verbose = execFileSync("tar", ["-tvf", "-"], { cwd: REPO_ROOT, input: archive, encoding: "utf8" });
+  assert.ok(verbose.split("\n").filter(Boolean).every((line) => /^[-d]/.test(line)),
+    `the schema-${historical.schemaVersion} archive contains only regular files and directories`);
+
+  await mkdir(destination, { recursive: true });
+  execFileSync("tar", ["-xf", "-", "-C", destination], { input: archive, maxBuffer: 16 * 1024 * 1024 });
+  execFileSync("git", ["init", "--quiet"], { cwd: destination });
+  execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: destination });
+  execFileSync("git", ["config", "core.filemode", "true"], { cwd: destination });
+  execFileSync("git", ["config", "core.safecrlf", "false"], { cwd: destination });
+  execFileSync("git", ["add", "--all", "--force"], { cwd: destination });
+  const reconstructedTree = execFileSync("git", ["write-tree"], { cwd: destination, encoding: "utf8" }).trim();
+  assert.equal(reconstructedTree, historical.tree,
+    `the extracted schema-${historical.schemaVersion} tree is the exact pinned historical Git tree`);
+  const trackedLeaves = execFileSync("git", ["ls-files", "-z"], { cwd: destination })
+    .toString("utf8").split("\0").filter(Boolean);
+  assert.equal(trackedLeaves.length, historical.leaves,
+    `the schema-${historical.schemaVersion} reconstructed tree has the pinned tracked leaf count`);
+  return destination;
+}
+
+async function unpackPinnedSchema12Producer(destination) {
+  const archiveRoot = join(REPO_ROOT, "fixtures/versions/schema12-composition-producer");
+  let manifest;
+  try { manifest = JSON.parse(await readFile(join(archiveRoot, "manifest.json"), "utf8")); }
+  catch { assert.fail("historical schema-12 composition producer manifest is missing or invalid JSON"); }
+  assert.equal(manifest.schema, "creative-engine-historical-composition-producer-custody/v1");
+  assert.equal(manifest.source_method,
+    "full tracked tree from immutable historical Git commit via git archive --format=tar; compressed with gzip -n");
+  assert.deepEqual(manifest.producer, { storage_user_version: 12, commit: PINNED_SCHEMA12_SOURCE.commit,
+    tree: PINNED_SCHEMA12_SOURCE.tree, tracked_leaf_count: PINNED_SCHEMA12_SOURCE.leaves,
+    archive: PINNED_SCHEMA12_SOURCE.archive, archive_bytes: PINNED_SCHEMA12_SOURCE.archiveBytes,
+    archive_sha256: PINNED_SCHEMA12_SOURCE.archiveSha256, git_archive_tar_bytes: PINNED_SCHEMA12_SOURCE.tarBytes,
+    git_archive_tar_sha256: PINNED_SCHEMA12_SOURCE.tarSha256 });
+  let compressed;
+  try { compressed = await readFile(join(archiveRoot, PINNED_SCHEMA12_SOURCE.archive)); }
+  catch { assert.fail(`pinned schema-12 composition producer archive is missing: ${PINNED_SCHEMA12_SOURCE.archive}`); }
+  const archive = verifyPinnedSchema12Archive(compressed);
+  const names = execFileSync("tar", ["-tf", "-"], { cwd: REPO_ROOT, input: archive, encoding: "utf8" })
+    .split("\n").filter(Boolean);
+  assert.ok(names.length >= PINNED_SCHEMA12_SOURCE.leaves);
+  assert.equal(new Set(names).size, names.length);
+  assert.ok(names.every((name) => !name.startsWith("/") && !name.split("/").includes("..")));
+  const verbose = execFileSync("tar", ["-tvf", "-"], { cwd: REPO_ROOT, input: archive, encoding: "utf8" });
+  assert.ok(verbose.split("\n").filter(Boolean).every((line) => /^[-d]/.test(line)));
+  await mkdir(destination, { recursive: true });
+  execFileSync("tar", ["-xf", "-", "-C", destination], { input: archive, maxBuffer: 16 * 1024 * 1024 });
+  execFileSync("git", ["init", "--quiet"], { cwd: destination });
+  execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: destination });
+  execFileSync("git", ["config", "core.filemode", "true"], { cwd: destination });
+  execFileSync("git", ["config", "core.safecrlf", "false"], { cwd: destination });
+  execFileSync("git", ["add", "--all", "--force"], { cwd: destination });
+  const reconstructedTree = execFileSync("git", ["write-tree"], { cwd: destination, encoding: "utf8" }).trim();
+  assert.equal(reconstructedTree, PINNED_SCHEMA12_SOURCE.tree,
+    "the archived schema-12 producer source reconstructs its pinned complete Git tree");
+  assert.equal(execFileSync("git", ["ls-files", "-z"], { cwd: destination }).toString("utf8").split("\0").filter(Boolean).length,
+    PINNED_SCHEMA12_SOURCE.leaves);
+  return destination;
+}
+
+function verifyPinnedSchema12Archive(compressed) {
+  if (!(compressed instanceof Uint8Array)) assert.fail("pinned schema-12 composition producer archive is missing");
+  assert.equal(compressed.byteLength, PINNED_SCHEMA12_SOURCE.archiveBytes,
+    "the compressed historical schema-12 archive length matches its custody pin");
+  assert.equal(createHash("sha256").update(compressed).digest("hex"), PINNED_SCHEMA12_SOURCE.archiveSha256,
+    "the compressed historical schema-12 archive matches its custody hash");
+  let archive;
+  try { archive = gunzipSync(compressed); }
+  catch { assert.fail("historical schema-12 composition producer archive is not valid gzip"); }
+  assert.equal(archive.byteLength, PINNED_SCHEMA12_SOURCE.tarBytes,
+    "the original Git archive tar length matches its custody pin");
+  assert.equal(createHash("sha256").update(archive).digest("hex"), PINNED_SCHEMA12_SOURCE.tarSha256,
+    "the original Git archive tar matches its custody hash");
+  return archive;
+}
+
+test("historical concept producer archive custody rejects missing and modified bytes", () => {
+  for (const historical of HISTORICAL_CONCEPT_SOURCES) {
+    assert.throws(() => verifyPinnedHistoricalArchive(null, historical), /archive is missing/);
+    const original = readFileSync(join(REPO_ROOT, "fixtures/versions/historical-concept-producers", historical.archive));
+    const changed = Buffer.from(original);
+    changed[changed.length - 1] ^= 1;
+    assert.throws(() => verifyPinnedHistoricalArchive(changed, historical), /custody hash/,
+      `schema-${historical.schemaVersion} rejects a byte-modified archive before extraction`);
+  }
+});
+
+test("pinned schema-12 producer archive reconstructs its tree and rejects byte tampering", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "schema12-source-custody-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await unpackPinnedSchema12Producer(join(root, "producer-source"));
+  const original = readFileSync(join(REPO_ROOT, "fixtures/versions/schema12-composition-producer",
+    PINNED_SCHEMA12_SOURCE.archive));
+  assert.throws(() => verifyPinnedSchema12Archive(null), /archive is missing/);
+  const changed = Buffer.from(original);
+  changed[changed.length - 1] ^= 1;
+  assert.throws(() => verifyPinnedSchema12Archive(changed), /custody hash/,
+    "schema-12 producer custody rejects a byte-modified archive before extracting or importing its source");
+});
+
 function migrationRows(database, table) {
-  return database.prepare(`SELECT * FROM ${table}`).all().map((raw) => Object.fromEntries(
+  const quoted = `"${String(table).replaceAll('"', '""')}"`;
+  return database.prepare(`SELECT * FROM ${quoted}`).all().map((raw) => Object.fromEntries(
     Object.entries(raw).map(([key, value]) => [key,
       value instanceof Uint8Array ? { base64: Buffer.from(value).toString("base64") } : value]))
   ).sort((left, right) => canonicalSerialize(left).localeCompare(canonicalSerialize(right)));
@@ -53,6 +215,13 @@ function migrationSchema(database) {
 function migrationSql(database) {
   return database.prepare(`SELECT type,name,tbl_name,sql FROM sqlite_master
     WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name`).all().map((row) => ({ ...row }));
+}
+
+function migrationState(database) {
+  const tables = database.prepare(`SELECT name FROM sqlite_master
+    WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`).all().map((row) => row.name);
+  return { user_version: database.prepare("PRAGMA user_version").get().user_version,
+    schema: migrationSql(database), tables: Object.fromEntries(tables.map((table) => [table, migrationRows(database, table)])) };
 }
 
 function migrationSchemaHash(schema) {
@@ -96,6 +265,9 @@ async function retainMigrationArtifact(label, root, producer) {
   await writeFile(join(destination, "producer.stdout.raw"), producerStdout);
   await writeFile(join(destination, "producer.stderr.raw"), producerStderr);
   await writeFile(join(destination, "artifact-inventory.json"), `${JSON.stringify(sourceInventory, null, 2)}\n`);
+  if (producer.migrationState) {
+    await writeFile(join(destination, "migration-state.json"), `${JSON.stringify(producer.migrationState, null, 2)}\n`);
+  }
   await writeFile(join(destination, "receipt.json"), `${JSON.stringify({
     label,
     created_at_utc: new Date().toISOString(),
@@ -105,8 +277,8 @@ async function retainMigrationArtifact(label, root, producer) {
     producer_signal: producer.signal,
     producer_stdout_sha256: createHash("sha256").update(producerStdout).digest("hex"),
     producer_stderr_sha256: createHash("sha256").update(producerStderr).digest("hex"),
-    source_commit: PINNED_SCHEMA10_COMMIT,
-    source_tree: PINNED_SCHEMA10_TREE,
+    source_commit: producer.sourceCommit ?? PINNED_SCHEMA10_COMMIT,
+    source_tree: producer.sourceTree ?? PINNED_SCHEMA10_TREE,
     source_inventory_count: sourceInventory.length,
     source_inventory_sha256: createHash("sha256").update(canonicalSerialize(sourceInventory)).digest("hex"),
     copied_inventory_matches: true,
@@ -301,7 +473,7 @@ function childCompositionRevision(current, previewBytes, plan, scope) {
   return createCompositionRevision(raw, { trustedScope: scope, previewBytes, nowMs: checkedAt }).revision;
 }
 
-test("reconstructed schema12 composition-test database reset to user_version10 preserves rows and CE11 queues through v12", async (t) => {
+test("reconstructed schema-10 composition-only reset preserves CE11 queues while rebuilding v11-v13 composition tables", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "composition-authority-v10-migration-"));
   const databasePath = join(root, "creative.sqlite");
   const objectRoot = join(root, "objects");
@@ -404,7 +576,7 @@ test("reconstructed schema12 composition-test database reset to user_version10 p
   store.close();
 
   store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
-  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 12);
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 13);
   assert.deepEqual(Object.fromEntries(preservedTables.map((table) => [table, migrationRows(store.db, table)])), before);
   assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
   assert.equal(store.getSelection({ scope, brief_id: scope.brief_id }).design_hash, design.design_hash);
@@ -423,29 +595,29 @@ test("reconstructed schema12 composition-test database reset to user_version10 p
 
   store.close();
   store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
-  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 12);
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 13);
   assert.deepEqual(Object.fromEntries(preservedTables.map((table) => [table, migrationRows(store.db, table)])), before,
     "second reopen preserves the same historical rows, unreconciled private attribution, and queued evidence");
   assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
 });
 
-test("schema-13 is rejected without rewriting the future database", async (t) => {
+test("schema-14 is rejected without rewriting the future database", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "composition-authority-migration-atomicity-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const futurePath = join(root, "future.sqlite");
   const future = new DatabaseSync(futurePath);
-  future.exec("PRAGMA user_version=13");
+  future.exec("PRAGMA user_version=14");
   future.close();
   assert.throws(() => new CreativeVersionStore({ databasePath: futurePath,
     objectRoot: join(root, "future-objects"), now: () => NOW }),
   (error) => error instanceof VersionStoreError && error.code === "unsupported_version");
   const futureAfter = new DatabaseSync(futurePath);
-  assert.equal(futureAfter.prepare("PRAGMA user_version").get().user_version, 13,
+  assert.equal(futureAfter.prepare("PRAGMA user_version").get().user_version, 14,
     "opening a future schema is rejected without rewriting its version");
   futureAfter.close();
 });
 
-test("pinned schema-10 producer database preserves the complete populated history through v12 and replays its recovered intent", async (t) => {
+test("pinned schema-10 producer database preserves the complete populated history through v13 and replays its recovered intent", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "composition-authority-pinned-v10-"));
   const baselineRoot = join(root, "pinned-schema10-source");
   const databasePath = join(root, "schema10.sqlite");
@@ -472,15 +644,7 @@ test("pinned schema-10 producer database preserves the complete populated histor
   const historicalConceptRoots = new Map();
   for (const historical of HISTORICAL_CONCEPT_SOURCES) {
     const historicalRoot = join(root, `concept-schema-${historical.schemaVersion}`);
-    const historicalTree = execFileSync("git", ["rev-parse", `${historical.commit}^{tree}`],
-      { cwd: REPO_ROOT, encoding: "utf8" }).trim();
-    assert.equal(historicalTree, historical.tree,
-      `the schema-${historical.schemaVersion} proposal source must match its immutable historical tree`);
-    const historicalArchive = execFileSync("git", ["archive", "--format=tar", historical.commit],
-      { cwd: REPO_ROOT, maxBuffer: 128 * 1024 * 1024 });
-    await mkdir(historicalRoot, { recursive: true });
-    execFileSync("tar", ["-xf", "-", "-C", historicalRoot],
-      { input: historicalArchive, maxBuffer: 16 * 1024 * 1024 });
+    await unpackPinnedHistoricalConceptSource(historical, historicalRoot);
     await symlink(codecNodeModules, join(historicalRoot, "src/models/codec-runtime/node_modules"), "dir");
     historicalConceptRoots.set(historical.schemaVersion, historicalRoot);
   }
@@ -601,14 +765,56 @@ test("pinned schema-10 producer database preserves the complete populated histor
     "failed migration cannot alter the producer's copied artwork object bytes");
   await retainMigrationArtifact("schema10-rollback-after", rollbackRoot, produced);
 
+  // Fail at the final (v13) action/lease rebuild, after the old v11/v12
+  // migrations have begun. This proves the combined 10→13 migration has one
+  // rollback boundary and never leaves the real producer at intermediate 12.
+  const finalRollbackRoot = join(root, "schema10-v13-rollback");
+  const finalRollbackDatabase = join(finalRollbackRoot, "schema10.sqlite");
+  const finalRollbackObjects = join(finalRollbackRoot, "schema10-objects");
+  await mkdir(finalRollbackRoot, { recursive: true });
+  await cp(databasePath, finalRollbackDatabase);
+  await cp(objectRoot, finalRollbackObjects, { recursive: true });
+  const finalRollbackSetup = new DatabaseSync(finalRollbackDatabase);
+  assert.equal(finalRollbackSetup.prepare("PRAGMA user_version").get().user_version, 10,
+    "the final-stage failure also starts from the exact pinned schema-10 producer database");
+  finalRollbackSetup.exec(`CREATE TABLE creative_composition_action_leases_v12 (sentinel TEXT NOT NULL);
+    INSERT INTO creative_composition_action_leases_v12 VALUES ('intentional-final-v13-collision');`);
+  const finalRollbackBefore = migrationState(finalRollbackSetup);
+  assert.equal(finalRollbackBefore.user_version, 10);
+  assert.deepEqual(finalRollbackSetup.prepare("PRAGMA foreign_key_check").all(), []);
+  finalRollbackSetup.close();
+  const finalRollbackObjectsBefore = await migrationArtifactInventory(finalRollbackObjects);
+  await retainMigrationArtifact("schema10-v13-final-stage-rollback-before", finalRollbackRoot,
+    { ...produced, migrationState: finalRollbackBefore });
+  let finalStageMigrationError;
+  try { new CreativeVersionStore({ databasePath: finalRollbackDatabase,
+    objectRoot: finalRollbackObjects, now: () => NOW }); }
+  catch (error) { finalStageMigrationError = error; }
+  assert.ok(finalStageMigrationError, "a final schema-13 rebuild collision aborts the complete genuine schema-10 upgrade");
+  assert.ok(finalStageMigrationError instanceof VersionStoreError,
+    `the final-stage migration reports a sanitized version-store error: ${finalStageMigrationError?.code}/${finalStageMigrationError?.field}`);
+  assert.equal(finalStageMigrationError.code, "unavailable",
+    "the constructor exposes the migration abort through its closed storage error set");
+  assert.equal(finalStageMigrationError.field, "storage_version");
+  const finalRollbackAfterDb = new DatabaseSync(finalRollbackDatabase);
+  const finalRollbackAfter = migrationState(finalRollbackAfterDb);
+  assert.deepEqual(finalRollbackAfter, finalRollbackBefore,
+    "a final-stage schema-13 error preserves complete original schema-10 sqlite_master and every row");
+  assert.deepEqual(finalRollbackAfterDb.prepare("PRAGMA foreign_key_check").all(), []);
+  finalRollbackAfterDb.close();
+  assert.deepEqual(await migrationArtifactInventory(finalRollbackObjects), finalRollbackObjectsBefore,
+    "final-stage v10 rollback does not alter any retained source artwork bytes");
+  await retainMigrationArtifact("schema10-v13-final-stage-rollback-after", finalRollbackRoot,
+    { ...produced, migrationState: finalRollbackAfter });
+
   store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
-  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 12);
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 13);
   const afterMigration = Object.fromEntries(legacyTables.map((table) => [table, migrationRows(store.db, table)]));
   assert.deepEqual(afterMigration, before,
-    "v10→v12 migration creates composition tables without rewriting any populated schema-10 row");
+    "v10→v13 migration creates composition tables without rewriting any populated schema-10 row");
   const legacySchemaAfter = migrationSchema(store.db).filter((entry) => !entry.name.startsWith("creative_composition_"));
   assert.deepEqual(legacySchemaAfter, legacySchemaBefore,
-    "v10→v12 migration preserves every old trigger and index definition exactly");
+    "v10→v13 migration preserves every old trigger and index definition exactly");
   assert.equal(migrationSchemaHash(legacySchemaAfter), legacySchemaHashBefore,
     "the old trigger and index inventory retains its exact canonical hash");
   assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -665,13 +871,162 @@ test("pinned schema-10 producer database preserves the complete populated histor
   assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
   store.close();
   store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
-  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 12);
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 13);
   assert.equal(store.getDesignVersion({ scope: DEFAULT_SCOPE, brief_id: DEFAULT_SCOPE.brief_id,
     design_version_id: "schema10-existing-commit-intent" }).design_hash, recoveredVersion.design_hash);
   assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
   store.close();
   store = null;
-  await retainMigrationArtifact("schema12-migrated-recovered", root, produced);
+  await retainMigrationArtifact("schema13-migrated-recovered", root, produced);
+});
+
+test("immutable schema-12 producer migrates its populated composition action and exact replay through v13", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "composition-authority-pinned-v12-"));
+  const producerRoot = join(root, "schema12-pinned-source");
+  const databasePath = join(root, "schema12.sqlite");
+  const objectRoot = join(root, "schema12-objects");
+  const rollbackRoot = join(root, "schema12-rollback");
+  const rollbackDatabasePath = join(rollbackRoot, "schema12.sqlite");
+  const rollbackObjectRoot = join(rollbackRoot, "schema12-objects");
+  let historicalStore;
+  let store;
+  t.after(async () => { try { historicalStore?.close(); } catch {} try { store?.close(); } catch {}
+    await rm(root, { recursive: true, force: true }); });
+
+  await unpackPinnedSchema12Producer(producerRoot);
+  await cp(join(REPO_ROOT, "fixtures/versions/schema12-composition-producer"), join(root, "producer-archive"),
+    { recursive: true, force: false });
+  const { CreativeVersionStore: HistoricalCreativeVersionStore } = await import(
+    pathToFileURL(join(producerRoot, "src/versions/store.mjs")).href);
+  const { createCreativeVersionApiPorts: createHistoricalPorts } = await import(
+    pathToFileURL(join(producerRoot, "src/versions/api-ports.mjs")).href);
+  const scope = DEFAULT_SCOPE;
+  const brief = createBrief(scope);
+  historicalStore = new HistoricalCreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  assert.equal(historicalStore.db.prepare("PRAGMA user_version").get().user_version, 12,
+    "the archived producer constructor emits storage schema 12 before the v13 opener is used");
+  historicalStore.putBrief({ scope: { tenant_id: scope.tenant_id, project_id: scope.project_id }, brief });
+  const design = (await historicalStore.saveDesignVersion(createWrite({ scope, id: "composition-hard-exit-design" }))).design_version;
+  const actionId = "schema12-public-composition-action";
+  const request = compositionApiRequest(actionId, "composition.create", {});
+  const requestHash = compositionRequestHash(request);
+  const oldPorts = createHistoricalPorts({ store: historicalStore, idFactory: () => "schema12-producer-id" });
+  const started = await oldPorts.jobs.begin({ scope, actor_id: ACTOR, action_id: actionId,
+    request_hash: requestHash, operation: "composition.create" });
+  const selection = historicalStore.getSelection({ scope, brief_id: scope.brief_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  const revision = revisionInput({ scope, brief, design, previewBytes, revisionId: "schema12-composition-revision" });
+  const intent = { contract: "CreativeCompositionActionIntent", schema_version: "1.0", operation: "composition.create",
+    composition_id: revision.composition_id, candidate_revision_id: revision.revision_id,
+    source_revision_id: null, source_revision_sha256: null, plan: null };
+  const begun = await oldPorts.storage.beginCompositionAction({ scope, actor_id: ACTOR, job_id: started.job_id,
+    lease_token: started.lease_token, action_id: actionId, operation: "composition.create", request_hash: requestHash,
+    intent, expected_current: null, expected_design_version_id: design.design_version_id,
+    expected_design_hash: design.design_hash, expected_selection_revision: selection.revision });
+  assert.equal(begun.status, "pending");
+  const staged = await oldPorts.storage.stageCompositionRevision({ scope, actor_id: ACTOR, job_id: started.job_id,
+    lease_token: started.lease_token, action_id: actionId, request_hash: requestHash, revision, preview_bytes: previewBytes });
+  assert.equal(staged.status, "staged");
+  const result = compositionResult(revision, previewBytes);
+  const published = await oldPorts.jobs.completeIfActive({ scope, actor_id: ACTOR, job_id: started.job_id,
+    lease_token: started.lease_token, action_id: actionId, operation: "composition.create", request_hash: requestHash,
+    result, publication_fence: publicationFence({ brief, design, actionId, jobId: started.job_id, revision }) },
+  (transaction) => oldPorts.storage.commitCompositionRevision({ scope, actor_id: ACTOR, job_id: started.job_id,
+    action_id: actionId, request_hash: requestHash, revision_sha256: revision.revision_sha256 }, transaction));
+  assert.equal(published.status, "completed");
+  assert.equal(published.result.revision_sha256, revision.revision_sha256);
+  assert.equal(historicalStore.db.prepare("SELECT status FROM creative_composition_actions_v1 WHERE action_id=?")
+    .get(actionId).status, "published");
+  assert.equal(historicalStore.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?").get(actionId).status,
+    "completed");
+  const before = migrationState(historicalStore.db);
+  assert.equal(before.user_version, 12);
+  const beforeAction = before.tables.creative_composition_actions_v1.find((row) => row.action_id === actionId);
+  const beforeLease = before.tables.creative_composition_action_leases_v1.find((row) => row.action_id === actionId);
+  assert.ok(beforeAction?.result_json && beforeAction.candidate_revision_json && beforeAction.preview_bytes?.base64,
+    "schema 12 contains published result JSON, immutable candidate JSON, and exact preview bytes");
+  assert.ok(beforeLease?.lease_hash, "schema 12 contains the exact action lease identity");
+  assert.deepEqual(historicalStore.db.prepare("PRAGMA foreign_key_check").all(), []);
+  assert.equal(historicalStore.db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get().busy, 0);
+  historicalStore.close();
+  historicalStore = null;
+  const producerReceipt = { status: 0, signal: null, sourceCommit: PINNED_SCHEMA12_SOURCE.commit,
+    sourceTree: PINNED_SCHEMA12_SOURCE.tree, stdout: `${JSON.stringify({ user_version: before.user_version,
+      action_id: actionId, revision_id: revision.revision_id, revision_sha256: revision.revision_sha256,
+      request_hash: requestHash, preview_sha256: revision.preview.preview_sha256,
+      tables_sha256: createHash("sha256").update(canonicalSerialize(before.tables)).digest("hex") })}\n`, stderr: "",
+    migrationState: before };
+  await retainMigrationArtifact("schema12-producer-before-v13", root, producerReceipt);
+
+  // Start from the genuine populated producer image and inject one named DDL
+  // collision so the final v13 migration stage fails inside its transaction.
+  await mkdir(rollbackRoot, { recursive: true });
+  await cp(databasePath, rollbackDatabasePath);
+  await cp(objectRoot, rollbackObjectRoot, { recursive: true });
+  const rollbackSetup = new DatabaseSync(rollbackDatabasePath);
+  rollbackSetup.exec(`CREATE TABLE creative_composition_action_leases_v12 (sentinel TEXT NOT NULL);
+    INSERT INTO creative_composition_action_leases_v12 VALUES ('intentional-v13-migration-collision');`);
+  const rollbackBefore = migrationState(rollbackSetup);
+  assert.equal(rollbackBefore.user_version, 12);
+  const rollbackObjectsBefore = await migrationArtifactInventory(rollbackObjectRoot);
+  rollbackSetup.close();
+  await retainMigrationArtifact("schema12-v13-collision-before", rollbackRoot,
+    { ...producerReceipt, migrationState: rollbackBefore });
+  assert.throws(() => new CreativeVersionStore({ databasePath: rollbackDatabasePath,
+    objectRoot: rollbackObjectRoot, now: () => NOW }),
+  (error) => error instanceof VersionStoreError && error.code === "unavailable" && error.field === "storage_version");
+  const rollbackAfterDb = new DatabaseSync(rollbackDatabasePath);
+  const rollbackAfter = migrationState(rollbackAfterDb);
+  assert.deepEqual(rollbackAfter, rollbackBefore,
+    "the failed schema-13 action/lease rebuild restores every v12 sqlite_master entry, row, blob, and user_version");
+  assert.deepEqual(rollbackAfterDb.prepare("PRAGMA foreign_key_check").all(), []);
+  rollbackAfterDb.close();
+  assert.deepEqual(await migrationArtifactInventory(rollbackObjectRoot), rollbackObjectsBefore,
+    "the failed final migration stage leaves the producer's object bytes unchanged");
+  await retainMigrationArtifact("schema12-v13-collision-after", rollbackRoot,
+    { ...producerReceipt, migrationState: rollbackAfter });
+
+  store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  const after = migrationState(store.db);
+  assert.equal(after.user_version, 13);
+  assert.deepEqual(Object.keys(after.tables).sort(), Object.keys(before.tables).sort());
+  for (const table of Object.keys(before.tables)) {
+    assert.deepEqual(after.tables[table], before.tables[table], `schema 12→13 preserves every ${table} row exactly`);
+  }
+  const afterAction = after.tables.creative_composition_actions_v1.find((row) => row.action_id === actionId);
+  const afterLease = after.tables.creative_composition_action_leases_v1.find((row) => row.action_id === actionId);
+  assert.equal(afterAction.result_json, beforeAction.result_json);
+  assert.equal(afterAction.candidate_revision_json, beforeAction.candidate_revision_json);
+  assert.deepEqual(afterAction.preview_bytes, beforeAction.preview_bytes);
+  assert.equal(afterLease.lease_hash, beforeLease.lease_hash);
+  const actionSchema = after.schema.find((row) => row.type === "table" && row.name === "creative_composition_actions_v1");
+  const leaseSchema = after.schema.find((row) => row.type === "table" && row.name === "creative_composition_action_leases_v1");
+  assert.match(actionSchema.sql, /composition\.revalidate/);
+  assert.match(leaseSchema.sql, /FOREIGN KEY/);
+  assert.deepEqual(store.db.prepare("PRAGMA foreign_key_check").all(), []);
+  const upgradedCurrent = store.getCurrentComposition({ scope, design_version_id: design.design_version_id });
+  assert.equal(upgradedCurrent.revision.revision_sha256, revision.revision_sha256);
+  assert.deepEqual(upgradedCurrent.preview_bytes, previewBytes);
+  store.close();
+  store = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 13);
+  assert.deepEqual(store.getCompositionAction({ scope, action_id: actionId }).preview_bytes, previewBytes);
+  const currentAdapter = createCreativeVersionApiPorts({ store, idFactory: () => "schema12-reopen-id" });
+  const replayApi = createCreativeApi({ ports: currentAdapter.ports, now: () => NOW,
+    idFactory: () => "schema12-replay-id" });
+  const replay = await replayApi.invoke({ actor_id: ACTOR, tenant_id: scope.tenant_id, project_id: scope.project_id,
+    expires_at: new Date(NOW + 60_000).toISOString(), permissions: ["creative.edit"],
+    budget_scope_id: "budget:schema12-replay", budget_policy_version: "fixture-policy-v1" }, request);
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.result.revision_sha256, revision.revision_sha256);
+  assert.deepEqual(Buffer.from(replay.result.preview_access.bytes_base64, "base64"), Buffer.from(previewBytes));
+  await retainMigrationArtifact("schema13-migrated-schema12-composition", root,
+    { ...producerReceipt, migrationState: after, stdout: `${JSON.stringify({ user_version: after.user_version,
+      action_id: actionId, revision_id: revision.revision_id, revision_sha256: revision.revision_sha256,
+      replayed: replay.replayed, result_sha256: replay.result.revision_sha256 })}\n` });
+  store.close();
+  store = null;
 });
 
 test("composition action stages and reopens exact bytes, then publishes two revisions through current-pointer fences", async (t) => {
@@ -887,6 +1242,176 @@ test("two SQLite connections cannot publish distinct current composition IDs for
     .get(scope.tenant_id, scope.project_id, scope.brief_id, design.design_version_id).count, 1);
   assert.equal((await portsB.storage.getCompositionAction({ scope, action_id: actions[1].action_id })).status, "staged",
     "stale publication preserves its immutable staged candidate for truthful recovery");
+});
+
+test("two SQLite connections race distinct children from one composition parent and only one CAS publishes", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "composition-same-parent-cas-"));
+  const databasePath = join(root, "creative.sqlite");
+  const objectRoot = join(root, "objects");
+  let storeA = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  let storeB;
+  t.after(async () => { try { storeA.close(); } catch {} try { storeB?.close(); } catch {}
+    await rm(root, { recursive: true, force: true }); });
+  const scope = DEFAULT_SCOPE;
+  const brief = createBrief(scope);
+  storeA.putBrief({ scope: { tenant_id: scope.tenant_id, project_id: scope.project_id }, brief });
+  const design = (await storeA.saveDesignVersion(createWrite({ id: "composition-same-parent-design" }))).design_version;
+  let portIdA = 0;
+  const portsA = createCreativeVersionApiPorts({ store: storeA, idFactory: () => `same-parent-a-${++portIdA}` });
+  const selection = storeA.getSelection({ scope, brief_id: scope.brief_id });
+  const parentAction = "composition-same-parent-create";
+  const parentRequestHash = canonicalHash({ action_id: parentAction, design_version_id: design.design_version_id });
+  const parentStarted = await portsA.jobs.begin({ scope, actor_id: ACTOR, action_id: parentAction,
+    request_hash: parentRequestHash, operation: "composition.create" });
+  const parentBytes = Uint8Array.from(Buffer.from("immutable parent preview bytes"));
+  const parent = revisionInput({ scope, brief, design, previewBytes: parentBytes,
+    revisionId: "composition-same-parent-root" });
+  const parentIntent = { contract: "CreativeCompositionActionIntent", schema_version: "1.0",
+    operation: "composition.create", composition_id: parent.composition_id,
+    candidate_revision_id: parent.revision_id, source_revision_id: null, source_revision_sha256: null, plan: null };
+  const parentActionBegin = await portsA.storage.beginCompositionAction({ scope, actor_id: ACTOR,
+    job_id: parentStarted.job_id, lease_token: parentStarted.lease_token, action_id: parentAction,
+    operation: "composition.create", request_hash: parentRequestHash, intent: parentIntent,
+    expected_current: null, expected_design_version_id: design.design_version_id,
+    expected_design_hash: design.design_hash, expected_selection_revision: selection.revision });
+  assert.equal(parentActionBegin.status, "pending");
+  const parentStage = await portsA.storage.stageCompositionRevision({ scope, actor_id: ACTOR,
+    job_id: parentStarted.job_id, lease_token: parentStarted.lease_token, action_id: parentAction,
+    request_hash: parentRequestHash, revision: parent, preview_bytes: parentBytes });
+  assert.equal(parentStage.status, "staged");
+  const parentPublished = await portsA.jobs.completeIfActive({ scope, actor_id: ACTOR, job_id: parentStarted.job_id,
+    lease_token: parentStarted.lease_token, action_id: parentAction, operation: "composition.create",
+    result: compositionResult(parent, parentBytes), publication_fence: publicationFence({ brief, design,
+      actionId: parentAction, jobId: parentStarted.job_id, revision: parent }) },
+  (transaction) => portsA.storage.commitCompositionRevision({ scope, actor_id: ACTOR,
+    job_id: parentStarted.job_id, action_id: parentAction, request_hash: parentRequestHash,
+    revision_sha256: parent.revision_sha256 }, transaction));
+  assert.equal(parentPublished.status, "completed");
+
+  storeB = new CreativeVersionStore({ databasePath, objectRoot, now: () => NOW });
+  let portIdB = 0;
+  const portsB = createCreativeVersionApiPorts({ store: storeB, idFactory: () => `same-parent-b-${++portIdB}` });
+  const children = [
+    { ports: portsA, suffix: "a", size: "25.00" },
+    { ports: portsB, suffix: "b", size: "27.00" },
+  ];
+  for (const child of children) {
+    child.action_id = `composition-same-parent-update-${child.suffix}`;
+    child.request_hash = canonicalHash({ action_id: child.action_id, parent_sha256: parent.revision_sha256 });
+    child.started = await child.ports.jobs.begin({ scope, actor_id: ACTOR, action_id: child.action_id,
+      request_hash: child.request_hash, operation: "composition.update" });
+    child.plan = createCompositionEditPlan({ plan_id: `same-parent-plan-${child.suffix}`,
+      binding: parent.binding, layer_manifest: parent.layer_manifest,
+      target_composition_revision_id: `composition-same-parent-child-${child.suffix}`,
+      operations: [{ operation_id: `same-parent-size-${child.suffix}`, kind: "set_text_size",
+        layer_id: "test:name-layer", size: { value: child.size, unit: "pt" } }], trustedScope: scope });
+    child.preview_bytes = Uint8Array.from(Buffer.from(`child preview ${child.suffix}`));
+    child.revision = childCompositionRevision(parent, child.preview_bytes, child.plan, scope);
+    child.intent = { contract: "CreativeCompositionActionIntent", schema_version: "1.0",
+      operation: "composition.update", composition_id: parent.composition_id,
+      candidate_revision_id: child.revision.revision_id, source_revision_id: parent.revision_id,
+      source_revision_sha256: parent.revision_sha256, plan: child.plan };
+    const begun = await child.ports.storage.beginCompositionAction({ scope, actor_id: ACTOR,
+      job_id: child.started.job_id, lease_token: child.started.lease_token, action_id: child.action_id,
+      operation: "composition.update", request_hash: child.request_hash, intent: child.intent,
+      expected_current: { revision_id: parent.revision_id, revision_sha256: parent.revision_sha256 },
+      expected_design_version_id: design.design_version_id, expected_design_hash: design.design_hash,
+      expected_selection_revision: selection.revision });
+    assert.equal(begun.status, "pending");
+    const staged = await child.ports.storage.stageCompositionRevision({ scope, actor_id: ACTOR,
+      job_id: child.started.job_id, lease_token: child.started.lease_token, action_id: child.action_id,
+      request_hash: child.request_hash, revision: child.revision, preview_bytes: child.preview_bytes });
+    assert.equal(staged.status, "staged");
+  }
+  const workerSource = `
+    const { parentPort, workerData } = require("node:worker_threads");
+    (async () => {
+      const [{ CreativeVersionStore }, { createCreativeVersionApiPorts }] = await Promise.all([
+        import(workerData.storeUrl), import(workerData.portsUrl),
+      ]);
+      const store = new CreativeVersionStore({ databasePath: workerData.databasePath,
+        objectRoot: workerData.objectRoot, now: () => workerData.now });
+      const ports = createCreativeVersionApiPorts({ store });
+      parentPort.once("message", async (task) => {
+        try {
+          const result = await ports.jobs.completeIfActive(task.input,
+            (transaction) => ports.storage.commitCompositionRevision(task.commitInput, transaction));
+          parentPort.postMessage({ type: "result", status: result.status });
+        } catch (error) {
+          parentPort.postMessage({ type: "result", error: error?.module === "creative-engine.versions"
+            ? error.code : "unexpected" });
+        } finally {
+          store.close();
+          parentPort.close();
+        }
+      });
+      parentPort.postMessage({ type: "ready" });
+    })().catch(() => parentPort.postMessage({ type: "setup_error" }));
+  `;
+  const workers = children.map(() => new Worker(workerSource, { eval: true, workerData: {
+    storeUrl: pathToFileURL(resolve(REPO_ROOT, "src/versions/store.mjs")).href,
+    portsUrl: pathToFileURL(resolve(REPO_ROOT, "src/versions/api-ports.mjs")).href,
+    databasePath, objectRoot, now: NOW,
+  } }));
+  t.after(async () => { await Promise.all(workers.map((worker) => worker.terminate().catch(() => undefined))); });
+  function receive(worker, expectedType) {
+    return new Promise((resolveMessage, rejectMessage) => {
+      const onMessage = (message) => {
+        if (message.type === "setup_error") return rejectMessage(new Error("composition publication worker failed to initialize"));
+        if (message.type !== expectedType) return;
+        cleanup();
+        if (message.error) rejectMessage(new Error(`composition publication worker returned ${message.error}`));
+        else resolveMessage(message);
+      };
+      const onError = (error) => { cleanup(); rejectMessage(error); };
+      const onExit = (code) => {
+        if (code !== 0) { cleanup(); rejectMessage(new Error(`composition publication worker exited ${code}`)); }
+      };
+      const cleanup = () => {
+        worker.off("message", onMessage);
+        worker.off("error", onError);
+        worker.off("exit", onExit);
+      };
+      worker.on("message", onMessage);
+      worker.on("error", onError);
+      worker.on("exit", onExit);
+    });
+  }
+  const ready = workers.map((worker) => receive(worker, "ready"));
+  const outcomesReady = Promise.all(workers.map((worker) => receive(worker, "result")));
+  await Promise.all(ready);
+  for (const [index, child] of children.entries()) {
+    workers[index].postMessage({
+      input: { scope, actor_id: ACTOR, job_id: child.started.job_id, lease_token: child.started.lease_token,
+        action_id: child.action_id, operation: "composition.update",
+        result: compositionResult(child.revision, child.preview_bytes),
+        publication_fence: publicationFence({ brief, design, actionId: child.action_id,
+          jobId: child.started.job_id, revision: child.revision,
+          expectedCurrent: { revision_id: parent.revision_id, revision_sha256: parent.revision_sha256 } }) },
+      commitInput: { scope, actor_id: ACTOR, job_id: child.started.job_id, action_id: child.action_id,
+        request_hash: child.request_hash, revision_sha256: child.revision.revision_sha256 },
+    });
+  }
+  const outcomes = await outcomesReady;
+  assert.deepEqual(outcomes.map((item) => item.status).sort(), ["completed", "stale_context"],
+    "both different children were staged against the same parent; only one current-pointer CAS can publish");
+  const winner = children[outcomes.findIndex((item) => item.status === "completed")];
+  const currentA = await portsA.storage.getCurrentComposition({ scope, design_version_id: design.design_version_id });
+  const currentB = await portsB.storage.getCurrentComposition({ scope, design_version_id: design.design_version_id });
+  assert.equal(currentA.revision.revision_id, winner.revision.revision_id);
+  assert.equal(currentB.revision.revision_sha256, winner.revision.revision_sha256);
+  assert.equal(currentA.revision.parent_revision_id, parent.revision_id);
+  assert.equal(currentA.revision.parent_revision_sha256, parent.revision_sha256);
+  assert.equal(storeA.db.prepare(`SELECT COUNT(*) AS count FROM creative_composition_revisions_v1
+    WHERE tenant_id=? AND project_id=? AND brief_id=? AND composition_id=?`)
+    .get(scope.tenant_id, scope.project_id, scope.brief_id, parent.composition_id).count, 2,
+  "history contains the root and one winning child, not the loser's staged candidate");
+  const retainedParent = await portsA.storage.getCompositionRevision({ scope,
+    composition_id: parent.composition_id, revision_id: parent.revision_id });
+  assert.deepEqual(retainedParent.preview_bytes, parentBytes, "the winning CAS preserves the parent's exact preview bytes");
+  const history = await portsB.storage.listCompositionRevisions({ scope, composition_id: parent.composition_id, limit: 10 });
+  assert.deepEqual(new Set(history.items.map((item) => item.revision_id)),
+    new Set([parent.revision_id, winner.revision.revision_id]));
 });
 
 test("publication hard-exit rolls back inserted revision/current pointer and resumes from the durable staged bytes", async (t) => {
