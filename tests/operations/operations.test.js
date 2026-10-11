@@ -574,6 +574,7 @@ function registerCi1OwnedTemporaryDirectoryFinalizer(testContext, cleanup, tempo
     if (!cleanupConfirmed) {
       state.ci1PhaseCaptureIncomplete = true;
       state.ci1PhaseCaptureOwnedGroupCloseUnconfirmed = true;
+      try { process.stderr.write('AH11_OPS_CI1_TEMP_CUSTODY_CLEANUP_UNCONFIRMED\n'); } catch {}
       throw new Error('AH11_OPS_CI1_TEMP_CUSTODY_CLEANUP_UNCONFIRMED');
     }
   });
@@ -6734,7 +6735,7 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     assert.equal(/PRIMARY_TEST_FAILURE_SENTINEL/u.test(finalizerPrimaryOutput), true,
       'cleanup failure does not erase the primary test failure');
     assert.equal(/AH11_OPS_CI1_TEMP_CUSTODY_CLEANUP_UNCONFIRMED/u.test(finalizerPrimaryOutput), true,
-      'the cleanup failure remains visible alongside the primary failure');
+      'the fixed cleanup diagnostic remains visible even though Node suppresses the secondary after-hook error');
 
     const custodyState = () => ({
       ci1PhaseCaptureIncomplete: false,
