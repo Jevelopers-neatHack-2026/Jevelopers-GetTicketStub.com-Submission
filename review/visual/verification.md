@@ -29,7 +29,7 @@ No font binaries, logos, sponsor marks, stock photos or generated media copied. 
 
 ## Executed browser and accessibility checks
 
-`node tools/render_collateral.mjs`: Chrome **154.0.8037.98**, Node **24.15.0**, Python **3.9.6**, Pillow **11.3.0**. Isolated temporary headless browser profile, local files only, real browser PNGs: **10 views, zero page console/runtime/network errors, zero external page requests**, no horizontal overflow. These are page-event checks, not a claim that all browser-process diagnostics were absent. A real Tab key event focused the deck text-equivalent link; visible solid outline was inspected. No transaction loading/error states exist in static collateral. Hold/revise/blocked labels explain conceptual states, not exercised product transitions.
+`node tools/render_collateral.mjs`: Chrome **154.0.8037.98**, Node **24.15.0**, Python **3.9.6**, Pillow **11.3.0**. Isolated temporary headless browser profile, local files only, real browser PNGs: **16 views, zero page console/runtime/network errors, zero external page requests**, no horizontal overflow. These are page-event checks, not a claim that all browser-process diagnostics were absent. A real Tab key event focused the deck text-equivalent link; visible solid outline was inspected. No transaction loading/error states exist in static collateral. Hold/revise/blocked labels explain conceptual states, not exercised product transitions.
 
 Inspected native X PNG, 390 × 220 feed image, 960 × 600 workflow, 720 × 540 mockup, 1440 × 1200 deck, mobile deck/full-page captures, and both 800 × 500 fixture PNGs. First mobile capture had unreadably small diagram labels; fixed by replacing mobile graphic with 20px ordered text. The complete corrected mobile capture was inspected. Presentation PNGs are not mobile-feed variants; their text equivalents serve small screens. At declared sizes no crop removes status, checkpoint or qualification.
 
@@ -76,6 +76,12 @@ node tools/render_collateral.mjs
 python3 -m unittest discover -s tests -p 'test_visual_*.py' -v
 ```
 
-Last run **6 tests passed**, zero skips. Early file-handle ResourceWarnings fixed with context managers; clean rerun passed. `browser-render-evidence.json` records SHA-256/bytes/dimensions/versions/page requests/errors. Browser/font/platform changes may alter raster hashes: rerender and re-review changed pixels; no cross-platform pixel identity promised.
+Latest responsive-fix run: **15 tests passed**, zero skips (including the original six visual checks). Early file-handle ResourceWarnings fixed with context managers; clean rerun passed. `browser-render-evidence.json` records SHA-256/bytes/dimensions/versions/page requests/errors. Browser/font/platform changes may alter raster hashes: rerender and re-review changed pixels; no cross-platform pixel identity promised.
 
 Remaining approvals: independent candidate review; brand subset/consumer contract and brand/landing review; privacy/rights and destination approval; product/evaluation evidence; marketing content/final CTA owner; authentic sponsor evidence/finished video; final official post/cutoff. No self-approval recorded.
+
+## MMREV-001 responsive correction
+
+The initial mobile-only fix did not protect intermediate widths. Independent review found 601/768px could display unreadably small diagram labels. The corrected support page uses readable 20px ordered text until its actual content container reaches 960px; a container query accounts for padding and the stable scrollbar gutter. At actual 959px it stays text; at 960px the smallest graphic label is 14.6667px (14.67 rounded).
+
+Chrome rendered viewport/full-page pairs at 600, 601, 768, 1038, 1039 and 1040px plus refreshed 390 and 1440px views. All eight corrected full-page captures were opened for author inspection. DOM measurements, state labels, alternative/order, Tab focus and console/network checks are in the refreshed browser receipt. No original SVG/PNG artwork or claim wording changed. Refreshed independent review remains pending.

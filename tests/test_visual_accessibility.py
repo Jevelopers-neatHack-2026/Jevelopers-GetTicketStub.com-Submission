@@ -23,6 +23,31 @@ class AccessibilityEvidenceChecks(unittest.TestCase):
                     self.assertTrue(digest_matches((ROOT/p).read_bytes(),hashes[p]),p)
         for p,digest in hashes.items():
             self.assertTrue(digest_matches((ROOT/p).read_bytes(),digest),p)
+    def test_responsive_diagram_never_shrinks_below_declared_presentation_floor(self):
+        html=[v for v in self.browser['results'] if v['file'].endswith('.html')]
+        by_width={v['width']:v for v in html}
+        self.assertTrue({390,600,601,768,1038,1039,1040,1440}.issubset(by_width))
+        for v in html:
+            r=v['responsive']
+            self.assertNotEqual(r['graphicDisplayed'],r['textDisplayed'])
+            if r['graphicDisplayed']:
+                self.assertGreaterEqual(r['graphicWidth'],960)
+                self.assertGreaterEqual(r['graphicMinimumEffectiveTextPx'],22*960/1440)
+            else:
+                self.assertTrue(r['textDisplayed'])
+                self.assertGreaterEqual(r['textFontPx'],20)
+            self.assertEqual([x.split(':')[0] for x in r['orderedLabels']],['Event context','Design draft','Human review','Handoff'])
+            self.assertIn('blocked pending owner approval',r['graphicAlt'])
+            self.assertIn('Hold or revise returns to design review',r['graphicAlt'])
+            self.assertEqual(v['keyboard']['tag'],'A')
+            self.assertEqual(v['keyboard']['outline'],'solid')
+        self.assertFalse(by_width[601]['responsive']['graphicDisplayed'])
+        self.assertFalse(by_width[768]['responsive']['graphicDisplayed'])
+        below=by_width[1038]['responsive'];above=by_width[1039]['responsive']
+        self.assertEqual(below['containerWidth'],959)
+        self.assertFalse(below['graphicDisplayed'])
+        self.assertEqual(above['graphicWidth'],960)
+        self.assertTrue(above['graphicDisplayed'])
     def test_changed_asset_invalidates_record(self):
         item=next(x for x in self.results['hashes'] if x['path'].endswith('.png'))
         data=(ROOT/item['path']).read_bytes()

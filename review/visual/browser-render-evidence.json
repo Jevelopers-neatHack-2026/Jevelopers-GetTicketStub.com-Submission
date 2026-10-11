@@ -170,7 +170,7 @@
       ],
       "externalRequests": [],
       "layout": {
-        "scrollWidth": 1440,
+        "scrollWidth": 1425,
         "innerWidth": 1440,
         "images": [
           {
@@ -178,7 +178,286 @@
             "width": 1440
           }
         ]
-      }
+      },
+      "responsive": {
+        "containerWidth": 1361,
+        "graphicDisplayed": true,
+        "graphicWidth": 1361,
+        "graphicMinimumEffectiveTextPx": 20.793055555555554,
+        "textDisplayed": false,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-presentation-1440-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-600.png",
+      "width": 600,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 585,
+        "innerWidth": 600,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 521,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-600-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-601.png",
+      "width": 601,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 586,
+        "innerWidth": 601,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 522,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-601-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-768.png",
+      "width": 768,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 753,
+        "innerWidth": 768,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 689,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-768-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-1038.png",
+      "width": 1038,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1023,
+        "innerWidth": 1038,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 959,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-1038-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-1039.png",
+      "width": 1039,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1024,
+        "innerWidth": 1039,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 960,
+        "graphicDisplayed": true,
+        "graphicWidth": 960,
+        "graphicMinimumEffectiveTextPx": 14.666666666666666,
+        "textDisplayed": false,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-1039-full.png"
+    },
+    {
+      "file": "demo/deck/concept-overview.html",
+      "output": "review/visual/previews/deck-responsive-1040.png",
+      "width": 1040,
+      "height": 900,
+      "browserErrors": [],
+      "requests": [
+        "local-file",
+        "local-file"
+      ],
+      "externalRequests": [],
+      "layout": {
+        "scrollWidth": 1025,
+        "innerWidth": 1040,
+        "images": [
+          {
+            "complete": true,
+            "width": 1440
+          }
+        ]
+      },
+      "responsive": {
+        "containerWidth": 961,
+        "graphicDisplayed": true,
+        "graphicWidth": 961,
+        "graphicMinimumEffectiveTextPx": 14.681944444444444,
+        "textDisplayed": false,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
+      },
+      "fullPageOutput": "review/visual/previews/deck-responsive-1040-full.png"
     },
     {
       "file": "demo/deck/concept-overview.html",
@@ -200,6 +479,26 @@
             "width": 1440
           }
         ]
+      },
+      "responsive": {
+        "containerWidth": 311,
+        "graphicDisplayed": false,
+        "graphicWidth": 0,
+        "graphicMinimumEffectiveTextPx": 0,
+        "textDisplayed": true,
+        "textFontPx": 20,
+        "orderedLabels": [
+          "Event context: synthetic details only; choose permitted material.",
+          "Design draft: conceptual artwork; check facts and appearance.",
+          "Human review: approval checkpoint; revise or hold if unclear.",
+          "Handoff: planned and blocked; owner approval required."
+        ],
+        "graphicAlt": "Conceptual workflow: synthetic context, design draft, human review, then a planned handoff blocked pending owner approval. Hold or revise returns to design review. No product or sponsor results are demonstrated."
+      },
+      "keyboard": {
+        "tag": "A",
+        "name": "Read the workflow text equivalent",
+        "outline": "solid"
       },
       "fullPageOutput": "review/visual/previews/deck-mobile-full.png"
     }
@@ -262,8 +561,8 @@
     },
     {
       "path": "demo/deck/concept-overview.html",
-      "sha256": "f3c81230dd797f5d9dfeb3880a53a5da1fabb8bb69f8be870c1f2c8ac8ee6f66",
-      "bytes": 1973
+      "sha256": "def05df0028adcaaac4f22612cb8b925cc9f22c310691c20abbc21e78cf78770",
+      "bytes": 1964
     },
     {
       "path": "launch/assets/x-submission-alt-text.md",
@@ -277,13 +576,78 @@
     },
     {
       "path": "review/visual/previews/deck-mobile-full.png",
-      "sha256": "7a9a6cdf0f440eff58482bef4dc8b63c4944071a867694128172cb8cd4a9002c",
-      "bytes": 102186
+      "sha256": "52f0d462cd8cab6f42c45a715756432d5732a8789e1e6f3fe17f4686e3473b95",
+      "bytes": 105121
+    },
+    {
+      "path": "review/visual/previews/deck-presentation-1440-full.png",
+      "sha256": "aaca5455e7ab6493761a81efe74f9d663082337285e02e5fdb44aed64463c5cf",
+      "bytes": 169262
     },
     {
       "path": "review/visual/previews/deck-presentation-1440.png",
-      "sha256": "77b83b36f26b1d6fcbdaf9826f176545cfcd2f56ca6317fe32a701d39a73d5f3",
-      "bytes": 174120
+      "sha256": "a390204fd455ddfeea8c867672a2452d2d043d4111e9246c0b9f8faa1bcd045f",
+      "bytes": 169207
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1038-full.png",
+      "sha256": "ddcd908ee8e1bc4d5dbbab428edf4e5bf739b5dfa25a1c9c8afcda35f72a9aaa",
+      "bytes": 92915
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1038.png",
+      "sha256": "e2e1e04cae82958d117ae139b4d2f38b0f46294fa9214ea563af81b3941e653e",
+      "bytes": 92865
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1039-full.png",
+      "sha256": "cd7515ba1f8cdff02bc2c05c902510b453fbcc8a00294b2ea54f83daf19eb4d2",
+      "bytes": 123525
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1039.png",
+      "sha256": "b839cd9022d02b1c79b31e9d5a8eb463378a2e7c819c2c10f974fd813779503a",
+      "bytes": 124172
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1040-full.png",
+      "sha256": "987e04db04c0305857f33fc861b4b8f5d0d876439b194f093016e6102ccb86f6",
+      "bytes": 123196
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-1040.png",
+      "sha256": "1599879a9d81c85e25315647cd4f789c2ef63b9f027db5a8d7406eb6a2a19639",
+      "bytes": 124008
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-600-full.png",
+      "sha256": "54ad8423920df32d03d6f1291631f7dd9b69391cd7f134d9ea0fcb32525cd3a6",
+      "bytes": 96455
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-600.png",
+      "sha256": "50e72ef3dc41be82b9f86d822c3e108153c12a618f62ed5629ed600fca1de409",
+      "bytes": 96404
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-601-full.png",
+      "sha256": "191dbf36db0d1b2d4e881baf80421f12ec942798e120bb1a5e7ea0f44df8ff87",
+      "bytes": 96469
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-601.png",
+      "sha256": "6f898f026e3c505d03ab095bda526f54f8982a741ee080297b897b6139a1df34",
+      "bytes": 96420
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-768-full.png",
+      "sha256": "14e7af082dfe616f8db854f2599d5872c0e7ea78f36b6f8d0274ee8215c7722e",
+      "bytes": 92222
+    },
+    {
+      "path": "review/visual/previews/deck-responsive-768.png",
+      "sha256": "aed63563590ea40a4185fcfe3f1e84caa1de0a10a487ad7ad8367adaa3cf0b99",
+      "bytes": 92170
     },
     {
       "path": "review/visual/previews/mockup-presentation-720.png",

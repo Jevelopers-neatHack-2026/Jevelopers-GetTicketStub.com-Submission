@@ -59,20 +59,28 @@ try{
   const external=requests.filter(u=>u!=='local-file'&&!u.startsWith('data:'));
   if(errors.length||external.length)throw Error(JSON.stringify({file,errors,external}));
   const layout=await send('Runtime.evaluate',{expression:`JSON.stringify({scrollWidth:document.documentElement.scrollWidth,innerWidth:window.innerWidth,images:[...document.images].map(i=>({complete:i.complete,width:i.naturalWidth}))})`,returnByValue:true});
-  results.push({file,output:dest,width:w,height:h,browserErrors:errors,requests,externalRequests:external,layout:JSON.parse(layout.result.value)});
+  const result={file,output:dest,width:w,height:h,browserErrors:errors,requests,externalRequests:external,layout:JSON.parse(layout.result.value)};
+  if(file.endsWith('.html')){
+   const responsive=await send('Runtime.evaluate',{expression:`JSON.stringify((()=>{const i=document.querySelector('img'),f=document.querySelector('.mobile-flow'),m=document.querySelector('main');return {containerWidth:parseFloat(getComputedStyle(m).width),graphicDisplayed:getComputedStyle(i).display!=='none',graphicWidth:i.getBoundingClientRect().width,graphicMinimumEffectiveTextPx:22*i.getBoundingClientRect().width/1440,textDisplayed:getComputedStyle(f).display!=='none',textFontPx:parseFloat(getComputedStyle(f.querySelector('li')).fontSize),orderedLabels:[...f.querySelectorAll('li')].map(n=>n.textContent),graphicAlt:i.alt}})())`,returnByValue:true});
+   result.responsive=JSON.parse(responsive.result.value);
+   await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+   await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+   const focus=await send('Runtime.evaluate',{expression:"JSON.stringify({tag:document.activeElement.tagName,name:document.activeElement.textContent,outline:getComputedStyle(document.activeElement).outlineStyle})",returnByValue:true});
+   result.keyboard=JSON.parse(focus.result.value);
+   const metrics=await send('Page.getLayoutMetrics');
+   const full=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:w,height:Math.ceil(metrics.cssContentSize.height),scale:1}});
+   result.fullPageOutput=w===390?`${out}/previews/deck-mobile-full.png`:dest.replace('.png','-full.png');
+   fs.writeFileSync(result.fullPageOutput,Buffer.from(full.data,'base64'));
+  }
+  results.push(result);
  }
  for(const [f,w,h] of inputs)await render(f,w,h,f.replace('.svg','.png'));
  await render('launch/assets/x-submission-key-visual.svg',390,220,`${out}/previews/x-feed-390.png`,true);
  await render('demo/diagrams/demo-workflow.svg',960,600,`${out}/previews/workflow-presentation-960.png`,true);
  await render('demo/screenshots/synthetic-stub-mockup.svg',720,540,`${out}/previews/mockup-presentation-720.png`,true);
  await render('demo/deck/concept-overview.html',1440,1200,`${out}/previews/deck-presentation-1440.png`);
+ for(const width of [600,601,768,1038,1039,1040])await render('demo/deck/concept-overview.html',width,900,`${out}/previews/deck-responsive-${width}.png`);
  await render('demo/deck/concept-overview.html',390,740,`${out}/previews/deck-mobile-390.png`);
- await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
- await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
- const metrics=await send('Page.getLayoutMetrics');
- const full=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:390,height:Math.ceil(metrics.cssContentSize.height),scale:1}});
- fs.writeFileSync(`${out}/previews/deck-mobile-full.png`,Buffer.from(full.data,'base64'));
- results.at(-1).fullPageOutput=`${out}/previews/deck-mobile-full.png`;
  const keyboard=await send('Runtime.evaluate',{expression:"JSON.stringify({tag:document.activeElement.tagName,name:document.activeElement.textContent,outline:getComputedStyle(document.activeElement).outlineStyle})",returnByValue:true});
  // Browser screenshot before contains a fake PNG metadata canary. After is recreated
  // from pixel bytes, so no text chunks or EXIF are carried forward.
