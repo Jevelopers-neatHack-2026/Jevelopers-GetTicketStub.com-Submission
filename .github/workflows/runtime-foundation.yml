@@ -50,5 +50,6 @@ jobs:
             .runtime-artifacts/neatlogs-sdk-local-capture.json
             .runtime-artifacts/AH-11-OPS-*.tap
             .runtime-artifacts/AH-11-OPS-*.json
+            .runtime-artifacts/AH-11-OPS-*.jsonl
             .runtime-artifacts/AH-11-OPS-*.json.sha256
           if-no-files-found: warn

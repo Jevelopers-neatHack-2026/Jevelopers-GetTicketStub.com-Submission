@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { performance } from 'node:perf_hooks';
 import { after, test } from 'node:test';
 import {
   createHmacTokenizer,
@@ -18,6 +19,7 @@ import { OPERATIONS_STORAGE_CAPABILITY } from '../../src/internal/private-ops-st
 import { operationsStoragePolicy, readOperationsConfig, validateLocalPlanWork } from '../../src/worker/private/config.js';
 import { createOperationsWorker } from '../../src/worker/private/worker.js';
 import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } from '../../src/health/private/health.js';
+import { runBoundedLocalPlan } from '../../src/orchestrator/internal/controller.js';
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
 const PLAN = JSON.stringify({
@@ -33,6 +35,7 @@ const PLAN_TWO = JSON.stringify({
 const METRICS = {
   processRuns: 0,
   processSigtermSignalsSent: 0,
+  processSigintSignalsSent: 0,
   processSigkillSignalsSent: 0,
   controlledDnsResolve4: 0,
   controlledDnsResolve6: 0,
@@ -47,6 +50,22 @@ const METRICS = {
   ownedRunnerShutdownSamples: 0,
   processSigtermDrainElapsedMsMax: 0,
   processSigtermDrainSamples: 0,
+  processCloseElapsedMsMax: 0,
+  processCloseSamples: 0,
+  runnerDeadlineCloseElapsedMsMax: 0,
+  runnerDeadlineCloseSamples: 0,
+  storeHighWaterBytes: 0,
+  storeReservedHighWaterBytes: 0,
+  databaseHighWaterBytes: 0,
+  walHighWaterBytes: 0,
+  shmHighWaterBytes: 0,
+  freeSpaceLowWaterBytes: Number.MAX_SAFE_INTEGER,
+  pendingEventHighWaterRecords: 0,
+  reservedEventHighWaterSlots: 0,
+  resourceHighWaterSamples: 0,
+  ownedRunnerCountHighWater: 0,
+  supervisorOpenFileDescriptors: 0,
+  runnerOpenFileDescriptors: 0,
   maxSupervisorRssBytes: 0,
   maxRunnerRssBytes: 0
 };
@@ -61,7 +80,14 @@ function tempDirectory(prefix = 'ah11-ops-') {
 }
 
 function openStore(databasePath, options = {}) {
-  return DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20, ...options });
+  const store = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20, ...options });
+  const config = readOperationsConfig();
+  store._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+    maxStoreBytes: config.maxStoreBytes,
+    maxWalBytes: config.maxWalBytes,
+    minFreeDiskBytes: config.minFreeDiskBytes
+  });
+  return store;
 }
 
 function admit(store, tenantId, projectId, idempotencyKey, work = PLAN, configInput = undefined) {
@@ -74,6 +100,18 @@ function admit(store, tenantId, projectId, idempotencyKey, work = PLAN, configIn
     workJson: validated.workJson,
     policy: operationsStoragePolicy(config)
   });
+}
+
+function planAtWorkByteLength(targetBytes, seedPlan = PLAN, configInput = undefined) {
+  const config = readOperationsConfig(configInput);
+  const initial = validateLocalPlanWork({ planJson: seedPlan, limitsJson: '{}' }, 'ops-validation-workflow', config);
+  const paddingBytes = targetBytes - initial.bytes;
+  assert.ok(paddingBytes >= 0, 'The selected work shape must fit below the requested boundary.');
+  const padded = validateLocalPlanWork({
+    planJson: seedPlan + ' '.repeat(paddingBytes), limitsJson: '{}'
+  }, 'ops-validation-workflow', config);
+  assert.equal(padded.bytes, targetBytes);
+  return padded;
 }
 
 async function runChild(script, args, { timeoutMs = 8_000, env = {} } = {}) {
@@ -173,7 +211,17 @@ function unusedProcessId() {
   throw new Error('The fixture could not find an unused process identifier.');
 }
 
-test('OPS01_CONFIG_HOSTILE rejects hostile option/job objects before getters, traps, or serialization run', () => {
+function countOpenFileDescriptors(pid) {
+  if (process.platform === 'linux') {
+    try { return readdirSync(`/proc/${pid}/fd`).length; } catch { return null; }
+  }
+  if (process.platform !== 'darwin') return null;
+  const result = spawnSync('/usr/sbin/lsof', ['-nP', '-p', String(pid), '-Fn'], { encoding: 'utf8', maxBuffer: 1_048_576 });
+  if (result.status !== 0) return null;
+  return result.stdout.split(/\r?\n/u).filter(line => /^f[^n]/u.test(line)).length;
+}
+
+test('OPS01_CONFIG_HOSTILE rejects hostile option/job objects before getters, traps, or serialization run', async t => {
   let getterCalls = 0;
   const accessor = {};
   Object.defineProperty(accessor, 'mode', { enumerable: true, get() { getterCalls += 1; return 'mock'; } });
@@ -195,6 +243,81 @@ test('OPS01_CONFIG_HOSTILE rejects hostile option/job objects before getters, tr
   assert.equal(stringifyCalls, 0);
   assert.throws(() => validateLocalPlanWork({ planJson: '{"kind":"x","kind":"y"}', limitsJson: '{}' }, 'x'));
   assert.equal(INTERNAL_SCHEMA_VERSION, 6);
+
+  const boundary = readOperationsConfig({ maxJobBytes: 65_536 });
+  assert.equal(boundary.maxJobBytes, 65_536);
+  assert.throws(() => readOperationsConfig({ maxJobBytes: 65_537 }), /configuration/u);
+
+  awaitTestCase();
+  function awaitTestCase() {
+    // Kept synchronous so hostile values are rejected before any persistence API exists.
+    const symbolConfig = { maxJobBytes: 36_864 };
+    symbolConfig[Symbol('private-marker')] = 'must-not-be-reflected';
+    assert.throws(() => readOperationsConfig(symbolConfig), /configuration/u);
+    const cyclic = { mode: 'mock' };
+    cyclic.self = cyclic;
+    assert.throws(() => readOperationsConfig(cyclic), /configuration/u);
+    const deeplyNested = { maxJobBytes: 36_864, extension: { nested: { value: 1 } } };
+    assert.throws(() => readOperationsConfig(deeplyNested), /configuration/u);
+  }
+
+  await t.test('OPS01.C01 accepts the exact UTF-8 work limit and rejects one byte over before admission', () => {
+    const exactPlan = PLAN + ' '.repeat(32_768 - Buffer.byteLength(PLAN, 'utf8'));
+    assert.equal(Buffer.byteLength(exactPlan, 'utf8'), 32_768);
+    assert.ok(validateLocalPlanWork({ planJson: exactPlan, limitsJson: '{}' }, 'ops01-boundary').bytes > 0);
+    assert.throws(() => validateLocalPlanWork({ planJson: `${exactPlan} `, limitsJson: '{}' }, 'ops01-over-boundary'));
+  });
+
+  await t.test('OPS01.C02 rejects unsafe counters and hostile job/health records before side effects', async t => {
+    for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      assert.throws(() => readOperationsConfig({ maxQueueRecords: value }), /configuration/u);
+    }
+    assert.throws(() => readOperationsConfig({ unrecognizedLimit: 1 }), /configuration/u);
+    const symbolic = { maxQueueRecords: 2 };
+    symbolic[Symbol('private-marker')] = 'must-not-be-copied';
+    assert.throws(() => readOperationsConfig(symbolic), /configuration/u);
+
+    let workGetterCalls = 0;
+    const accessorWork = {};
+    Object.defineProperty(accessorWork, 'planJson', {
+      enumerable: true, get() { workGetterCalls += 1; return PLAN; }
+    });
+    assert.throws(() => validateLocalPlanWork(accessorWork, 'ops01-hostile-work'));
+    const revokedWork = Proxy.revocable({ planJson: PLAN }, {});
+    revokedWork.revoke();
+    assert.throws(() => validateLocalPlanWork(revokedWork.proxy, 'ops01-revoked-work'));
+    let workToJsonCalls = 0;
+    assert.throws(() => validateLocalPlanWork({ planJson: PLAN, toJSON() { workToJsonCalls += 1; return {}; } }, 'ops01-json-work'));
+    assert.equal(workGetterCalls, 0);
+    assert.equal(workToJsonCalls, 0);
+
+    const hostileDir = tempDirectory('ah11-hostile-health-record-');
+    t.after(() => hostileDir.cleanup());
+    const hostileWorker = createOperationsWorker({ databasePath: hostileDir.databasePath, ownerId: 'review-worker-hostile-health' });
+    t.after(async () => { if (hostileWorker.lifecycle !== 'stopped') await hostileWorker.stop('test'); });
+    void hostileWorker.start();
+    let healthGetterCalls = 0;
+    const hostileHealth = {};
+    Object.defineProperty(hostileHealth, 'heartbeatAgeMs', {
+      enumerable: true, get() { healthGetterCalls += 1; return 0; }
+    });
+    assert.throws(() => readOperationsHealth(hostileHealth), /health input/u);
+    const revokedHealth = Proxy.revocable({}, {});
+    revokedHealth.revoke();
+    assert.throws(() => readOperationsHealth(revokedHealth.proxy), /health input/u);
+    let requestGetterCalls = 0;
+    const hostileRequest = {};
+    Object.defineProperty(hostileRequest, 'trustedSyntheticScope', {
+      enumerable: true, get() { requestGetterCalls += 1; return { tenantId: 'forged', projectId: 'forged' }; }
+    });
+    assert.throws(() => hostileWorker.submitSyntheticWork(hostileRequest), /operations request/u);
+    assert.equal(healthGetterCalls, 0);
+    assert.equal(requestGetterCalls, 0);
+    const check = new DatabaseSync(hostileDir.databasePath, { readOnly: true });
+    assert.equal(Number(check.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 0);
+    assert.equal(Number(check.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 0);
+    check.close();
+  });
 });
 
 test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and outbox together across processes', async t => {
@@ -211,6 +334,11 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
   const recovered = admit(afterCrash, 'tenant-crash', 'project-crash', 'lost-ack');
   assert.equal(recovered.accepted, true);
   assert.equal(recovered.duplicate, true);
+  assert.throws(() => admit(afterCrash, 'tenant-crash', 'project-crash', 'lost-ack', PLAN_TWO),
+    error => error.code === 'IDEMPOTENCY_CONFLICT');
+  const afterCrashRaw = new DatabaseSync(temporary.databasePath, { readOnly: true });
+  assert.equal(Number(afterCrashRaw.prepare('SELECT COUNT(*) AS count FROM operations_work WHERE idempotency_key=?').get('lost-ack').count), 1);
+  afterCrashRaw.close();
   afterCrash.close();
 
   const outFiles = Array.from({ length: 4 }, (_, index) => join(temporary.directory, `race-${index}.json`));
@@ -227,9 +355,380 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
   assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work WHERE idempotency_key = ?').get('same-key').count), 1);
   assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton = 1').get().pending_records) <= 2, true);
   raw.close();
+
+  await t.test('OPS02.C01 applies exact UTF-8 scope caps to first and existing rows', () => {
+    const quota = {
+      maxQueueRecords: 4, maxPerTenantRecords: 2, maxPerProjectRecords: 1,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768,
+      maxPerProjectBytes: 16_384, maxEventBacklog: 1_024
+    };
+    const projectBoundary = tempDirectory('ah11-project-boundary-');
+    t.after(() => projectBoundary.cleanup());
+    const projectStore = openStore(projectBoundary.databasePath);
+    const exactProject = planAtWorkByteLength(16_384, PLAN, quota);
+    assert.equal(admit(projectStore, 'tenant-first', 'project-first', 'exact-project', exactProject.work.planJson, quota).accepted, true);
+    const rawProject = new DatabaseSync(projectBoundary.databasePath, { readOnly: true });
+    assert.equal(Number(rawProject.prepare('SELECT pending_bytes FROM operations_projects WHERE tenant_id=? AND project_id=?').get('tenant-first', 'project-first').pending_bytes), 16_384);
+    rawProject.close();
+    projectStore.close();
+
+    const overProject = tempDirectory('ah11-project-over-');
+    t.after(() => overProject.cleanup());
+    const overProjectStore = openStore(overProject.databasePath);
+    const over = planAtWorkByteLength(16_385, PLAN, quota);
+    const rejected = admit(overProjectStore, 'tenant-first', 'project-first', 'over-project', over.work.planJson, quota);
+    assert.equal(rejected.accepted, false);
+    assert.equal(rejected.reasonCode, 'PROJECT_QUEUE_FULL');
+    const afterReject = new DatabaseSync(overProject.databasePath, { readOnly: true });
+    assert.equal(Number(afterReject.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 0);
+    assert.equal(Number(afterReject.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes), 0);
+    assert.equal(Number(afterReject.prepare('SELECT COUNT(*) AS count FROM operations_projects').get().count), 0);
+    afterReject.close();
+    overProjectStore.close();
+
+    const tenantBoundary = tempDirectory('ah11-tenant-boundary-');
+    t.after(() => tenantBoundary.cleanup());
+    const tenantStore = openStore(tenantBoundary.databasePath);
+    const half = planAtWorkByteLength(16_384, PLAN, quota);
+    assert.equal(admit(tenantStore, 'tenant-shared', 'project-one', 'tenant-half-one', half.work.planJson, quota).accepted, true);
+    assert.equal(admit(tenantStore, 'tenant-shared', 'project-two', 'tenant-half-two', half.work.planJson, quota).accepted, true);
+    const tenantOverflow = admit(tenantStore, 'tenant-shared', 'project-three', 'tenant-overflow', PLAN, quota);
+    assert.equal(tenantOverflow.accepted, false);
+    assert.equal(tenantOverflow.reasonCode, 'TENANT_QUEUE_FULL');
+    const tenantRaw = new DatabaseSync(tenantBoundary.databasePath, { readOnly: true });
+    assert.equal(Number(tenantRaw.prepare('SELECT pending_bytes FROM operations_tenants WHERE tenant_id=?').get('tenant-shared').pending_bytes), 32_768);
+    assert.equal(Number(tenantRaw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 2);
+    tenantRaw.close();
+    tenantStore.close();
+
+    const firstScopeOver = tempDirectory('ah11-tenant-first-over-');
+    t.after(() => firstScopeOver.cleanup());
+    const firstStore = openStore(firstScopeOver.databasePath);
+    const tooLarge = planAtWorkByteLength(32_769, PLAN, quota);
+    const firstReject = admit(firstStore, 'tenant-new', 'project-new', 'first-too-large', tooLarge.work.planJson, quota);
+    assert.equal(firstReject.accepted, false);
+    assert.equal(firstReject.reasonCode, 'TENANT_QUEUE_FULL');
+    const firstRaw = new DatabaseSync(firstScopeOver.databasePath, { readOnly: true });
+    assert.equal(Number(firstRaw.prepare('SELECT COUNT(*) AS count FROM operations_tenants').get().count), 0);
+    assert.equal(Number(firstRaw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 0);
+    firstRaw.close();
+    firstStore.close();
+
+    const multibyte = tempDirectory('ah11-multibyte-boundary-');
+    t.after(() => multibyte.cleanup());
+    const unicodePlan = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: [{ id: 'text', operation: 'text.concat', dependsOn: [], args: { parts: ['é'.repeat(300)] } }]
+    });
+    const unicodeWork = planAtWorkByteLength(16_384, unicodePlan, quota);
+    assert.ok(unicodeWork.workJson.includes('é'));
+    const unicodeStore = openStore(multibyte.databasePath);
+    assert.equal(admit(unicodeStore, 'tenant-unicode', 'project-unicode', 'unicode-exact', unicodeWork.work.planJson, quota).accepted, true);
+    const unicodeRaw = new DatabaseSync(multibyte.databasePath, { readOnly: true });
+    assert.equal(Number(unicodeRaw.prepare('SELECT work_bytes FROM operations_work').get().work_bytes), 16_384);
+    unicodeRaw.close();
+    unicodeStore.close();
+  });
+
+  await t.test('OPS02.C02 races distinct global/project record and byte caps across processes', async t => {
+    const capDirectory = tempDirectory('ah11-global-cap-race-');
+    t.after(() => capDirectory.cleanup());
+    const config = {
+      maxQueueRecords: 2, maxPerTenantRecords: 1, maxPerProjectRecords: 1,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
+      maxTenants: 16, maxProjects: 128, maxEventBacklog: 1_024
+    };
+    const store = openStore(capDirectory.databasePath);
+    assert.equal(admit(store, 'tenant-seed', 'project-seed', 'seed', PLAN, config).accepted, true);
+    store.close();
+    const outputs = [join(capDirectory.directory, 'cap-a.json'), join(capDirectory.directory, 'cap-b.json')];
+    const script = join(ROOT, 'tests/operations/fixtures/admission-store-child.mjs');
+    const races = await Promise.all(outputs.map((output, index) => runChild(script, [
+      capDirectory.databasePath, `tenant-cap-${index}`, `project-cap-${index}`, `cap-key-${index}`,
+      PLAN, JSON.stringify(config), output
+    ])));
+    assert.ok(races.every(result => result.code === 0), races.map(result => result.stderr).join('\n'));
+    const outcomes = outputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
+    assert.equal(outcomes.filter(result => result.accepted).length, 1);
+    assert.equal(outcomes.filter(result => !result.accepted && result.reasonCode === 'GLOBAL_QUEUE_FULL').length, 1);
+    const reopened = openStore(capDirectory.databasePath);
+    const raw = new DatabaseSync(capDirectory.databasePath, { readOnly: true });
+    assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 2);
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 2);
+    raw.close();
+    reopened.close();
+
+    const projectBytes = tempDirectory('ah11-project-byte-race-');
+    t.after(() => projectBytes.cleanup());
+    const bytePolicy = {
+      maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 4,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+    };
+    const seedStore = openStore(projectBytes.databasePath);
+    const seedWork = planAtWorkByteLength(8_000, PLAN, bytePolicy);
+    const contenderWork = planAtWorkByteLength(5_000, PLAN, bytePolicy);
+    assert.equal(admit(seedStore, 'tenant-byte-race', 'project-byte-race', 'byte-seed', seedWork.work.planJson, bytePolicy).accepted, true);
+    seedStore.close();
+    const byteOutputs = [join(projectBytes.directory, 'byte-a.json'), join(projectBytes.directory, 'byte-b.json')];
+    const byteScript = join(ROOT, 'tests/operations/fixtures/admission-store-child.mjs');
+    const byteRace = await Promise.all(byteOutputs.map((output, index) => runChild(byteScript, [
+      projectBytes.databasePath, 'tenant-byte-race', 'project-byte-race', `byte-race-${index}`,
+      contenderWork.work.planJson, JSON.stringify(bytePolicy), output
+    ])));
+    assert.ok(byteRace.every(result => result.code === 0), byteRace.map(result => result.stderr).join('\n'));
+    const byteResults = byteOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
+    assert.equal(byteResults.filter(result => result.accepted).length, 1);
+    assert.equal(byteResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length, 1);
+    const byteReopened = openStore(projectBytes.databasePath);
+    const byteRaw = new DatabaseSync(projectBytes.databasePath, { readOnly: true });
+    assert.equal(Number(byteRaw.prepare('SELECT pending_bytes FROM operations_projects WHERE tenant_id=? AND project_id=?')
+      .get('tenant-byte-race', 'project-byte-race').pending_bytes), 13_000);
+    assert.equal(Number(byteRaw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 2);
+    byteRaw.close();
+    byteReopened.close();
+
+    const firstScopeBytes = tempDirectory('ah11-first-project-byte-race-');
+    t.after(() => firstScopeBytes.cleanup());
+    const firstBytePolicy = {
+      maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 4,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+    };
+    const firstByteInit = openStore(firstScopeBytes.databasePath);
+    firstByteInit.close();
+    const firstByteWork = planAtWorkByteLength(10_000, PLAN, firstBytePolicy);
+    const firstByteOutputs = [join(firstScopeBytes.directory, 'first-a.json'), join(firstScopeBytes.directory, 'first-b.json')];
+    const firstByteRace = await Promise.all(firstByteOutputs.map((output, index) => runChild(byteScript, [
+      firstScopeBytes.databasePath, 'tenant-new-byte-race', 'project-new-byte-race', `first-byte-${index}`,
+      firstByteWork.work.planJson, JSON.stringify(firstBytePolicy), output
+    ])));
+    assert.ok(firstByteRace.every(result => result.code === 0), firstByteRace.map(result => result.stderr).join('\n'));
+    const firstByteResults = firstByteOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
+    assert.equal(firstByteResults.filter(result => result.accepted).length, 1);
+    assert.equal(firstByteResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length, 1);
+    const firstByteDb = openStore(firstScopeBytes.databasePath);
+    const firstByteSnapshot = new DatabaseSync(firstScopeBytes.databasePath, { readOnly: true });
+    assert.equal(Number(firstByteSnapshot.prepare('SELECT pending_bytes FROM operations_projects WHERE tenant_id=? AND project_id=?')
+      .get('tenant-new-byte-race', 'project-new-byte-race').pending_bytes), 10_000);
+    assert.equal(Number(firstByteSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 1);
+    assert.equal(Number(firstByteSnapshot.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes) > 0, true);
+    firstByteSnapshot.close();
+    firstByteDb.close();
+
+    const projectRecords = tempDirectory('ah11-project-record-race-');
+    t.after(() => projectRecords.cleanup());
+    const recordPolicy = {
+      maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 2,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+    };
+    const recordStore = openStore(projectRecords.databasePath);
+    assert.equal(admit(recordStore, 'tenant-record-race', 'project-record-race', 'record-seed', PLAN, recordPolicy).accepted, true);
+    recordStore.close();
+    const recordOutputs = [join(projectRecords.directory, 'record-a.json'), join(projectRecords.directory, 'record-b.json')];
+    const recordRace = await Promise.all(recordOutputs.map((output, index) => runChild(byteScript, [
+      projectRecords.databasePath, 'tenant-record-race', 'project-record-race', `project-record-${index}`,
+      PLAN, JSON.stringify(recordPolicy), output
+    ])));
+    assert.ok(recordRace.every(result => result.code === 0), recordRace.map(result => result.stderr).join('\n'));
+    const recordResults = recordOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
+    assert.equal(recordResults.filter(result => result.accepted).length, 1);
+    assert.equal(recordResults.filter(result => !result.accepted && result.reasonCode === 'PROJECT_QUEUE_FULL').length, 1);
+    const recordReopened = openStore(projectRecords.databasePath);
+    const recordSnapshot = new DatabaseSync(projectRecords.databasePath, { readOnly: true });
+    assert.equal(Number(recordSnapshot.prepare('SELECT pending_records FROM operations_projects WHERE tenant_id=? AND project_id=?')
+      .get('tenant-record-race', 'project-record-race').pending_records), 2);
+    assert.equal(Number(recordSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 2);
+    recordSnapshot.close();
+    recordReopened.close();
+
+    const globalBytes = tempDirectory('ah11-global-byte-race-');
+    t.after(() => globalBytes.cleanup());
+    const globalBytePolicy = {
+      maxQueueRecords: 8, maxPerTenantRecords: 4, maxPerProjectRecords: 2,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
+      maxTenants: 8, maxProjects: 32, maxEventBacklog: 2_048
+    };
+    const globalByteStore = openStore(globalBytes.databasePath);
+    const seedGlobalWork = planAtWorkByteLength(16_000, PLAN, globalBytePolicy);
+    for (const index of [0, 1, 2]) {
+      assert.equal(admit(globalByteStore, `tenant-global-byte-${index}`, `project-global-byte-${index}`,
+        `global-byte-seed-${index}`, seedGlobalWork.work.planJson, globalBytePolicy).accepted, true);
+    }
+    globalByteStore.close();
+    const globalContender = planAtWorkByteLength(10_000, PLAN, globalBytePolicy);
+    const globalOutputs = [join(globalBytes.directory, 'global-a.json'), join(globalBytes.directory, 'global-b.json')];
+    const globalRace = await Promise.all(globalOutputs.map((output, index) => runChild(byteScript, [
+      globalBytes.databasePath, `tenant-global-contender-${index}`, `project-global-contender-${index}`,
+      `global-byte-contender-${index}`, globalContender.work.planJson, JSON.stringify(globalBytePolicy), output
+    ])));
+    assert.ok(globalRace.every(result => result.code === 0), globalRace.map(result => result.stderr).join('\n'));
+    const globalResults = globalOutputs.map(path => JSON.parse(readFileSync(path, 'utf8')).result);
+    assert.equal(globalResults.filter(result => result.accepted).length, 1);
+    assert.equal(globalResults.filter(result => !result.accepted && result.reasonCode === 'GLOBAL_QUEUE_FULL').length, 1);
+    const globalReopened = openStore(globalBytes.databasePath);
+    const globalSnapshot = new DatabaseSync(globalBytes.databasePath, { readOnly: true });
+    assert.equal(Number(globalSnapshot.prepare('SELECT pending_bytes FROM operations_meta WHERE singleton=1').get().pending_bytes), 58_000);
+    assert.equal(Number(globalSnapshot.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 4);
+    globalSnapshot.close();
+    globalReopened.close();
+  });
+
+  await t.test('OPS02.C03 rolls admission and local completion back at each durable write boundary', async t => {
+    const admissionPoints = [
+      ['operations_tenants', 'INSERT', ''], ['operations_projects', 'INSERT', ''],
+      ['workflows', 'INSERT', ''], ['workflow_checkpoints', 'INSERT', ''],
+      ['operations_work', 'INSERT', ''],
+      ['operations_meta', 'UPDATE', ' WHEN NEW.pending_records > OLD.pending_records'],
+      ['operations_tenants', 'UPDATE', ''], ['operations_projects', 'UPDATE', ''],
+      ['workflow_events', 'INSERT', ''], ['outbox', 'INSERT', '']
+    ];
+    for (const [table, action, condition] of admissionPoints) {
+      const item = tempDirectory('ah11-admission-rollback-');
+      t.after(() => item.cleanup());
+      const store = openStore(item.databasePath);
+      const triggerDb = new DatabaseSync(item.databasePath);
+      triggerDb.exec(`CREATE TRIGGER injected_failure BEFORE ${action} ON ${table}${condition} BEGIN SELECT RAISE(ABORT, 'injected durable write failure'); END`);
+      assert.throws(() => admit(store, 'tenant-rollback', 'project-rollback', 'rollback', PLAN));
+      triggerDb.close();
+      store.close();
+      const reopened = openStore(item.databasePath);
+      const raw = new DatabaseSync(item.databasePath, { readOnly: true });
+      for (const tableName of ['operations_tenants', 'operations_projects', 'operations_work', 'workflows', 'workflow_checkpoints', 'workflow_events', 'outbox']) {
+        assert.equal(Number(raw.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get().count), 0, `${table}.${action} left partial ${tableName} state`);
+      }
+      assert.deepEqual({ ...raw.prepare('SELECT pending_records, pending_bytes, in_flight, reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get() }, {
+        pending_records: 0, pending_bytes: 0, in_flight: 0, reserved_event_slots: 0, reserved_disk_bytes: 0
+      });
+      raw.close();
+      reopened.close();
+    }
+
+    const completionPoints = [
+      ['workflows', 'UPDATE', ' WHEN NEW.checkpoint_sequence = 3'],
+      ['workflow_checkpoints', 'INSERT', ' WHEN NEW.sequence = 3'],
+      ['workflow_events', 'INSERT', " WHEN NEW.event_type = 'private_local_step_completed'"],
+      ['outbox', 'INSERT', " WHEN (SELECT event_type FROM workflow_events WHERE sequence=NEW.event_sequence) = 'private_local_step_completed'"]
+    ];
+    for (const [table, action, condition] of completionPoints) {
+      const item = tempDirectory('ah11-completion-rollback-');
+      t.after(() => item.cleanup());
+      const store = openStore(item.databasePath);
+      const accepted = admit(store, 'tenant-completion', 'project-completion', `completion-${table}`, PLAN);
+      const ownerId = 'review-worker';
+      const claimed = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        ownerId, policy: operationsStoragePolicy(readOperationsConfig())
+      });
+      assert.equal(claimed.claim.jobId, accepted.jobId);
+      const currentClaim = store._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: accepted.jobId, ownerId, generation: claimed.claim.generation, fence: claimed.claim.fence
+      });
+      const triggerDb = new DatabaseSync(item.databasePath);
+      triggerDb.exec(`CREATE TRIGGER injected_failure BEFORE ${action} ON ${table}${condition} BEGIN SELECT RAISE(ABORT, 'injected completion write failure'); END`);
+      const result = await runBoundedLocalPlan({
+        store, workflowId: accepted.workflowId, ownerId, fence: claimed.claim.fence,
+        planJson: currentClaim.work.planJson, limitsJson: currentClaim.work.limitsJson
+      });
+      assert.equal(result.status, 'stopped');
+      triggerDb.close();
+      store.close();
+      const reopened = openStore(item.databasePath);
+      const workflow = reopened.getWorkflow(accepted.workflowId);
+      const checkpoint = reopened.getCheckpoint(accepted.workflowId);
+      assert.equal(workflow.revision, 2);
+      assert.equal(workflow.checkpointSequence, 2);
+      assert.equal(checkpoint.sequence, 2);
+      assert.equal(checkpoint.data.kind, 'agent-harness.private-bounded-local-checkpoint');
+      const raw = new DatabaseSync(item.databasePath, { readOnly: true });
+      assert.equal(Number(raw.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE event_type='private_local_step_completed'").get().count), 0);
+      assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 1);
+      raw.close();
+      reopened._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: accepted.jobId, ownerId, generation: claimed.claim.generation,
+        fence: claimed.claim.fence, outcome: 'stopped'
+      });
+      reopened.close();
+    }
+  });
+
+  await t.test('OPS02.C05 rolls terminal queue, quota, workflow, event, and outbox writes back together', async t => {
+    const finishPoints = [
+      ['workflows', 'UPDATE', " WHEN NEW.state = 'succeeded'"],
+      ['workflow_events', 'INSERT', " WHEN NEW.event_type = 'operations_work_completed'"],
+      ['outbox', 'INSERT', " WHEN (SELECT event_type FROM workflow_events WHERE sequence=NEW.event_sequence) = 'operations_work_completed'"],
+      ['operations_work', 'UPDATE', " WHEN NEW.state = 'completed'"],
+      ['operations_meta', 'UPDATE', ' WHEN NEW.pending_records < OLD.pending_records'],
+      ['operations_tenants', 'UPDATE', ' WHEN NEW.pending_records < OLD.pending_records'],
+      ['operations_projects', 'UPDATE', ' WHEN NEW.pending_records < OLD.pending_records']
+    ];
+    for (const [table, action, condition] of finishPoints) {
+      const item = tempDirectory('ah11-finish-rollback-');
+      t.after(() => item.cleanup());
+      const store = openStore(item.databasePath);
+      const accepted = admit(store, 'tenant-finish', 'project-finish', `finish-${table}`, PLAN);
+      const ownerId = 'review-worker-finish';
+      const policy = operationsStoragePolicy(readOperationsConfig());
+      const claim = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId, policy }).claim;
+      const current = store._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: accepted.jobId, ownerId, generation: claim.generation, fence: claim.fence
+      });
+      const result = await runBoundedLocalPlan({
+        store, workflowId: accepted.workflowId, ownerId, fence: claim.fence,
+        planJson: current.work.planJson, limitsJson: current.work.limitsJson
+      });
+      assert.equal(result.status, 'completed');
+      const snapshot = () => {
+        const raw = new DatabaseSync(item.databasePath, { readOnly: true });
+        const value = {
+          workflow: raw.prepare('SELECT state, revision, fence_token, lease_owner, lease_expires_ms, cancellation_requested, checkpoint_sequence FROM workflows WHERE workflow_id=?').get(accepted.workflowId),
+          checkpoint: raw.prepare('SELECT sequence, payload_json, sha256 FROM workflow_checkpoints WHERE workflow_id=? ORDER BY sequence DESC LIMIT 1').get(accepted.workflowId),
+          work: raw.prepare('SELECT state, worker_id, generation, fence_token, runner_pid, reserved_event_slots, reserved_disk_bytes FROM operations_work WHERE job_id=?').get(accepted.jobId),
+          meta: raw.prepare('SELECT pending_records, pending_bytes, in_flight, reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get(),
+          tenant: raw.prepare('SELECT pending_records, pending_bytes, in_flight FROM operations_tenants WHERE tenant_id=?').get('tenant-finish'),
+          project: raw.prepare('SELECT pending_records, pending_bytes, in_flight FROM operations_projects WHERE tenant_id=? AND project_id=?').get('tenant-finish', 'project-finish'),
+          events: Number(raw.prepare('SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=?').get(accepted.workflowId).count),
+          outbox: Number(raw.prepare('SELECT COUNT(*) AS count FROM outbox').get().count)
+        };
+        raw.close();
+        return JSON.parse(JSON.stringify(value));
+      };
+      const before = snapshot();
+      const triggerDb = new DatabaseSync(item.databasePath);
+      triggerDb.exec(`CREATE TRIGGER injected_finish_failure BEFORE ${action} ON ${table}${condition} BEGIN SELECT RAISE(ABORT, 'injected terminal write failure'); END`);
+      assert.throws(() => store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: accepted.jobId, ownerId, generation: claim.generation,
+        fence: claim.fence, outcome: 'completed', childExited: true
+      }));
+      triggerDb.close();
+      store.close();
+      const reopened = openStore(item.databasePath);
+      assert.deepEqual(snapshot(), before, `${table}.${action} did not restore the exact pre-finish durable snapshot`);
+      reopened.close();
+    }
+  });
+
+  await t.test('OPS02.C04 rejects a second worker with a different quota policy before it can share the store', async t => {
+    const item = tempDirectory('ah11-policy-mismatch-');
+    t.after(() => item.cleanup());
+    const firstWorker = createOperationsWorker({ databasePath: item.databasePath, ownerId: 'review-worker-policy-a' });
+    t.after(async () => { if (firstWorker.lifecycle !== 'stopped') await firstWorker.stop('test'); });
+    assert.throws(() => createOperationsWorker({
+      databasePath: item.databasePath,
+      ownerId: 'review-worker-policy-b',
+      config: { maxInFlightTenant: 1 }
+    }), error => error.code === 'INVALID_INPUT');
+    assert.equal(firstWorker.lifecycle, 'starting');
+    const stopped = await firstWorker.stop('test');
+    assert.equal(stopped.stopped, true);
+    const raw = new DatabaseSync(item.databasePath, { readOnly: true });
+    assert.equal(raw.prepare('SELECT policy_json FROM operations_meta WHERE singleton=1').get().policy_json !== null, true);
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 0);
+    raw.close();
+  });
 });
 
-test('OPS03_FAIRNESS_BACKPRESSURE protects a second tenant and persists hierarchical turns across claims', t => {
+test('OPS03_FAIRNESS_BACKPRESSURE protects a second tenant and persists hierarchical turns across claims', async t => {
   const temporary = tempDirectory('ah11-fairness-');
   t.after(() => temporary.cleanup());
   const store = openStore(temporary.databasePath);
@@ -282,6 +781,246 @@ test('OPS03_FAIRNESS_BACKPRESSURE protects a second tenant and persists hierarch
   const byteBackpressure = admit(byteStore, 'tenant-bytes', 'project-bytes', 'bytes-2', largePlan, small);
   assert.equal(byteBackpressure.code, 'OPS_BACKPRESSURE');
   assert.equal(byteBackpressure.reasonCode, 'PROJECT_QUEUE_FULL');
+
+  await t.test('OPS03.C01 continuously refills both tenants, skips a blocked tenant head, and bounds hierarchical dispatch order', async t => {
+    const loadDir = tempDirectory('ah11-fairness-continuous-');
+    t.after(() => loadDir.cleanup());
+    const limits = readOperationsConfig({
+      workerCount: 2, maxQueueRecords: 16, maxPerTenantRecords: 8, maxPerProjectRecords: 4,
+      maxQueueBytes: 1_048_576, maxPerTenantBytes: 524_288, maxPerProjectBytes: 262_144,
+      maxTenants: 8, maxProjects: 32, maxInFlightGlobal: 2,
+      maxInFlightTenant: 1, maxInFlightProject: 1
+    });
+    const loadStore = openStore(loadDir.databasePath);
+    t.after(() => loadStore.close());
+    const policy = operationsStoragePolicy(limits);
+    const scopeNames = new Map();
+    const add = (tenantId, projectId, key) => {
+      const accepted = admit(loadStore, tenantId, projectId, key, PLAN, limits);
+      assert.equal(accepted.accepted, true, `${tenantId}/${projectId}/${key}`);
+      scopeNames.set(accepted.workflowId, `${tenantId}/${projectId}`);
+      return accepted;
+    };
+    for (let index = 0; index < 4; index += 1) {
+      add('tenant-a', 'project-a1', `flood-a1-${index}`);
+      add('tenant-a', 'project-a2', `flood-a2-${index}`);
+      add('tenant-b', 'project-b1', `flood-b-${index}`);
+    }
+    const first = loadStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'review-worker-a', policy }).claim;
+    assert.equal(scopeNames.get(first.workflowId), 'tenant-a/project-a1');
+    const second = loadStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'review-worker-b', policy }).claim;
+    assert.equal(scopeNames.get(second.workflowId), 'tenant-b/project-b1');
+    assert.equal(loadStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'review-worker-c', policy }), null);
+    for (const claim of [first, second]) {
+      loadStore._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: claim.jobId, ownerId: claim.ownerId, generation: claim.generation,
+        fence: claim.fence, outcome: 'shutdown'
+      });
+    }
+
+    const order = [];
+    let admissionNumber = 0;
+    for (let turn = 0; turn < 24; turn += 1) {
+      const selected = loadStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        ownerId: `review-worker-fair-${turn}`, policy
+      }).claim;
+      assert.ok(selected);
+      const scopeName = scopeNames.get(selected.workflowId);
+      order.push(scopeName);
+      const acceptedWork = loadStore._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: selected.jobId, ownerId: selected.ownerId,
+        generation: selected.generation, fence: selected.fence
+      });
+      const result = await runBoundedLocalPlan({
+        store: loadStore, workflowId: selected.workflowId, ownerId: selected.ownerId,
+        fence: selected.fence, planJson: acceptedWork.work.planJson, limitsJson: acceptedWork.work.limitsJson
+      });
+      assert.equal(result.status, 'completed');
+      loadStore._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: selected.jobId, ownerId: selected.ownerId, generation: selected.generation,
+        fence: selected.fence, outcome: 'completed', childExited: true
+      });
+      const [tenantId, projectId] = scopeName.split('/');
+      add(tenantId, projectId, `flood-refill-${admissionNumber++}`);
+    }
+    assert.equal(order.filter(name => name.startsWith('tenant-a/')).length, 12);
+    assert.equal(order.filter(name => name.startsWith('tenant-b/')).length, 12);
+    for (let index = 0; index < order.length; index += 1) {
+      assert.notEqual(order[index], order[index + 1], `The dispatcher exceeded its one-turn tenant gap at ${index}.`);
+    }
+    const aProjects = order.filter(name => name.startsWith('tenant-a/'));
+    assert.deepEqual(aProjects.slice(0, 6), [
+      'tenant-a/project-a2', 'tenant-a/project-a1', 'tenant-a/project-a2',
+      'tenant-a/project-a1', 'tenant-a/project-a2', 'tenant-a/project-a1'
+    ]);
+    for (let drain = 0; drain < 12; drain += 1) {
+      const selected = loadStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        ownerId: `review-worker-drain-${drain}`, policy
+      }).claim;
+      assert.ok(selected);
+      const acceptedWork = loadStore._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: selected.jobId, ownerId: selected.ownerId,
+        generation: selected.generation, fence: selected.fence
+      });
+      const result = await runBoundedLocalPlan({
+        store: loadStore, workflowId: selected.workflowId, ownerId: selected.ownerId,
+        fence: selected.fence, planJson: acceptedWork.work.planJson, limitsJson: acceptedWork.work.limitsJson
+      });
+      assert.equal(result.status, 'completed');
+      loadStore._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: selected.jobId, ownerId: selected.ownerId, generation: selected.generation,
+        fence: selected.fence, outcome: 'completed', childExited: true
+      });
+    }
+    assert.equal(loadStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'review-worker-empty', policy }), null);
+    add('tenant-a', 'project-a1', 'after-empty-a');
+    add('tenant-b', 'project-b1', 'after-empty-b');
+    assert.ok(loadStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'review-worker-refill', policy }).claim);
+  });
+
+  await t.test('OPS03.C02 scope metadata caps stay explicit and do not claim to provide fair admission', () => {
+    const metadataDir = tempDirectory('ah11-scope-metadata-cap-');
+    t.after(() => metadataDir.cleanup());
+    const capPolicy = readOperationsConfig({
+      maxQueueRecords: 2, maxPerTenantRecords: 1, maxPerProjectRecords: 1,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
+      maxTenants: 2, maxProjects: 2
+    });
+    const metadataStore = openStore(metadataDir.databasePath);
+    t.after(() => metadataStore.close());
+    assert.equal(admit(metadataStore, 'tenant-meta-a', 'project-meta-a', 'meta-a', PLAN, capPolicy).accepted, true);
+    assert.equal(admit(metadataStore, 'tenant-meta-b', 'project-meta-b', 'meta-b', PLAN, capPolicy).accepted, true);
+    const tenantLimit = admit(metadataStore, 'tenant-meta-c', 'project-meta-c', 'meta-c', PLAN, capPolicy);
+    assert.deepEqual({ accepted: tenantLimit.accepted, code: tenantLimit.code, reasonCode: tenantLimit.reasonCode }, {
+      accepted: false, code: 'OPS_BACKPRESSURE', reasonCode: 'SCOPE_CAPACITY'
+    });
+    const projectLimit = admit(metadataStore, 'tenant-meta-a', 'project-meta-c', 'meta-project', PLAN, capPolicy);
+    assert.deepEqual({ accepted: projectLimit.accepted, code: projectLimit.code, reasonCode: projectLimit.reasonCode }, {
+      accepted: false, code: 'OPS_BACKPRESSURE', reasonCode: 'SCOPE_CAPACITY'
+    });
+    const rawMetadata = new DatabaseSync(metadataDir.databasePath, { readOnly: true });
+    assert.equal(Number(rawMetadata.prepare('SELECT COUNT(*) AS count FROM operations_tenants').get().count), 2);
+    assert.equal(Number(rawMetadata.prepare('SELECT COUNT(*) AS count FROM operations_projects').get().count), 2);
+    rawMetadata.close();
+  });
+
+  await t.test('OPS03.C03 a local telemetry callback can reenter worker APIs without nesting admission or shutdown', async t => {
+    const callbackDir = tempDirectory('ah11-fairness-reentrant-callback-');
+    t.after(() => callbackDir.cleanup());
+    const callbackStore = openStore(callbackDir.databasePath);
+    t.after(() => callbackStore.close());
+    const tokenizer = createHmacTokenizer(Buffer.alloc(32, 31));
+    t.after(() => tokenizer.destroy());
+    let callbackWorker;
+    let callbackLoop;
+    let nestedStop;
+    let callbackAdmission;
+    let callbackHealth;
+    let sameStartLoop = false;
+    let callbackCount = 0;
+    const exporter = createTelemetryExporter({
+      store: callbackStore,
+      tokenizer,
+      sink: async records => {
+        callbackCount += 1;
+        if (callbackCount === 1) {
+          callbackAdmission = callbackWorker.submitSyntheticWork({
+            trustedSyntheticScope: { tenantId: 'reentrant-tenant', projectId: 'reentrant-project' },
+            idempotencyKey: 'reentrant-admission', planJson: PLAN
+          });
+          callbackHealth = callbackWorker.health();
+          sameStartLoop = callbackWorker.start() === callbackLoop;
+          nestedStop = callbackWorker.stop('signal');
+        }
+        return { accepted: true, acceptedCount: records.length };
+      },
+      limits: { queueRecords: 8, queueBytes: 8192, batchSize: 8, maxAttempts: 1,
+        retryDelayMs: 0, sinkTimeoutMs: 100, maxBatchesPerFlush: 2, maxPolicyDropsPerFlush: 2 }
+    });
+    callbackWorker = createOperationsWorker({
+      databasePath: callbackDir.databasePath, ownerId: 'review-worker-reentrant-callback', telemetry: exporter
+    });
+    t.after(async () => { if (callbackWorker.lifecycle !== 'stopped') await callbackWorker.stop('test'); });
+    callbackLoop = callbackWorker.start();
+    const first = callbackWorker.submitSyntheticWork({
+      trustedSyntheticScope: { tenantId: 'reentrant-tenant', projectId: 'reentrant-project' },
+      idempotencyKey: 'reentrant-seed', planJson: PLAN
+    });
+    assert.equal(first.accepted, true);
+    assert.equal((await waitForStatus(callbackWorker,
+      { tenantId: 'reentrant-tenant', projectId: 'reentrant-project' }, first.jobId, 'completed')).state, 'completed');
+    const flush = exporter.flush();
+    const flushResult = await flush;
+    assert.equal(callbackCount, 1);
+    assert.equal(flushResult.lastErrorCode, null);
+    assert.equal(callbackAdmission?.accepted, true);
+    assert.equal(sameStartLoop, true);
+    assert.equal(callbackHealth?.state, 'accepting');
+    assert.ok(nestedStop instanceof Promise);
+    const stopResult = await nestedStop;
+    await callbackLoop;
+    assert.equal(stopResult.stopped, true);
+    const reopened = openStore(callbackDir.databasePath);
+    const acceptedDuringCallback = reopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'reentrant-tenant', projectId: 'reentrant-project', jobId: callbackAdmission.jobId
+    });
+    assert.equal(acceptedDuringCallback.state, 'queued');
+    const raw = new DatabaseSync(callbackDir.databasePath, { readOnly: true });
+    assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 1);
+    assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 0);
+    raw.close();
+    reopened.close();
+  });
+
+  await t.test('OPS03.C04 a slow blocked tenant does not hold a second worker slot from eligible fast work', async t => {
+    const mixedDir = tempDirectory('ah11-fairness-mixed-speed-');
+    t.after(() => mixedDir.cleanup());
+    const mixedWorker = createOperationsWorker({
+      databasePath: mixedDir.databasePath, ownerId: 'review-worker-mixed-speed',
+      config: { workerCount: 2, maxInFlightGlobal: 2, maxInFlightTenant: 1,
+        maxInFlightProject: 1, pollIntervalMs: 10 }
+    });
+    t.after(async () => { if (mixedWorker.lifecycle !== 'stopped') await mixedWorker.stop('test'); });
+    void mixedWorker.start();
+    const slowScope = { tenantId: 'mixed-tenant-a', projectId: 'mixed-project-a1' };
+    const fastScope = { tenantId: 'mixed-tenant-b', projectId: 'mixed-project-b1' };
+    const slowPlan = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: Array.from({ length: 32 }, (_, index) => ({
+        id: `m${String(index).padStart(2, '0')}`, operation: 'text.concat',
+        dependsOn: index % 12 === 0 ? [] : [`m${String(index - 1).padStart(2, '0')}`],
+        args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `m${String(index - 1).padStart(2, '0')}` }, ''] }
+      }))
+    });
+    const slow = mixedWorker.submitSyntheticWork({ trustedSyntheticScope: slowScope, idempotencyKey: 'mixed-slow', planJson: slowPlan });
+    assert.equal(slow.accepted, true);
+    const startDeadline = Date.now() + 3_000;
+    while (Date.now() < startDeadline && mixedWorker.activeChildCount === 0) await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+    assert.equal(mixedWorker.activeChildCount, 1);
+    const runners = spawnSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' });
+    assert.equal(runners.status, 0, runners.stderr);
+    const runnerPid = Number(runners.stdout.trim().split(/\s+/u).at(-1));
+    assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
+    assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
+    const slow2 = mixedWorker.submitSyntheticWork({ trustedSyntheticScope: slowScope, idempotencyKey: 'mixed-slow-queued', planJson: PLAN });
+    const fast = mixedWorker.submitSyntheticWork({ trustedSyntheticScope: fastScope, idempotencyKey: 'mixed-fast', planJson: PLAN });
+    assert.equal(slow2.accepted, true);
+    assert.equal(fast.accepted, true);
+    const fastStatus = await waitForStatus(mixedWorker, fastScope, fast.jobId, 'completed', 4_000);
+    assert.equal(fastStatus.state, 'completed');
+    const slowStatus = mixedWorker.readScopedWorkPage({ trustedSyntheticScope: slowScope, limit: 4 }).items;
+    assert.equal(slowStatus.find(item => item.jobId === slow.jobId)?.state, 'running');
+    assert.equal(slowStatus.find(item => item.jobId === slow2.jobId)?.state, 'queued');
+    const raw = new DatabaseSync(mixedDir.databasePath, { readOnly: true });
+    const inFlight = Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight);
+    assert.equal(inFlight, 1);
+    assert.ok(inFlight <= 2);
+    raw.close();
+    try { process.kill(runnerPid, 'SIGCONT'); } catch {}
+    const stopped = await mixedWorker.stop('test');
+    assert.equal(stopped.stopped, true);
+    assert.equal(stopped.childrenReaped, true);
+  });
 });
 
 test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport boundary without a second transport', async t => {
@@ -327,6 +1066,8 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         const drainElapsedMs = Math.max(0, performance.now() - sigtermSentAt);
         METRICS.processSigtermDrainElapsedMsMax = Math.max(METRICS.processSigtermDrainElapsedMsMax, drainElapsedMs);
         METRICS.processSigtermDrainSamples += 1;
+        METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, drainElapsedMs);
+        METRICS.processCloseSamples += 1;
         assert.ok(drainElapsedMs <= 3_000, `${phase} SIGTERM drain exceeded its aggregate deadline.`);
         METRICS.processRuns += 1;
         assert.equal(closeResult.code, 0, `${phase}: child stderr=${childStderr.slice(0, 2048)}`);
@@ -370,6 +1111,24 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.controlledHttpsRequests, 3);
   assert.equal(METRICS.controlledHttpsWrites, 3);
+  await t.test('OPS04.C01 composes the existing sole JEV transport with owned worker shutdown, telemetry outage, reopen, and higher-fence restart', () => {
+    for (const result of results) {
+      assert.equal(result.operationsWorkerStopped, true, result.phase);
+      assert.equal(result.ownedRunnerReaped, true, result.phase);
+      assert.equal(result.operationsWorkStateAfterStop, 'queued', result.phase);
+      assert.equal(result.operationsInFlightAfterStop, 0, result.phase);
+      assert.equal(result.telemetryCursor, 0, result.phase);
+      assert.ok(result.telemetryPendingRecords > 0, result.phase);
+      assert.equal(result.telemetrySinkCalls, 1, result.phase);
+      assert.equal(result.operationsRestarted, true, result.phase);
+      assert.equal(result.operationsWorkflowStateAfterRestart, 'succeeded', result.phase);
+      assert.ok(result.operationsFenceAfterRestart > result.operationsFenceBeforeRestart, result.phase);
+      assert.ok(result.operationsGenerationAfterRestart > result.operationsGenerationBeforeRestart, result.phase);
+      assert.equal(result.providerAttemptCountAfterRestart, result.attemptCount, result.phase);
+      assert.equal(result.blockedExternalNetworkAttempts, 0, result.phase);
+      assert.ok(result.controlledHttpsWrites <= 1, result.phase);
+    }
+  });
   const reopened = openStore(temporary.databasePath);
   for (const result of results.filter(item => item.attemptCount > 0)) {
     const attempt = reopened.getAttempt(`ops-attempt-${result.phase}`);
@@ -395,6 +1154,10 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
   assert.throws(() => worker.cancelSyntheticWork({
     trustedSyntheticScope: scope, jobId: submitted.jobId, expectedGeneration: Math.max(0, done.generation - 1)
   }), error => error.code === 'CONCURRENT_MODIFICATION');
+  const repeatedCompletedCancel = worker.cancelSyntheticWork({
+    trustedSyntheticScope: scope, jobId: submitted.jobId, expectedGeneration: done.generation
+  });
+  assert.deepEqual(repeatedCompletedCancel, { accepted: false, state: 'completed', generation: done.generation });
   const stopped = await worker.stop('test');
   assert.equal(stopped.stopped, true);
   assert.equal(worker.activeChildCount, 0);
@@ -407,12 +1170,555 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
   reopened.close();
   assert.equal(METRICS.providerCalls, 0);
 
+  await t.test('OPS05.C01 reaps an uncooperative owned child at its monotonic deadline and settles an expired current fence', async t => {
+    const deadlineDir = tempDirectory('ah11-runtime-deadline-');
+    t.after(() => deadlineDir.cleanup());
+    const deadlineWorker = createOperationsWorker({
+      databasePath: deadlineDir.databasePath,
+      ownerId: 'review-worker',
+      config: { maxJobRuntimeMs: 250, childKillGraceMs: 40, childReapReserveMs: 200, shutdownTimeoutMs: 1_000 }
+    });
+    const stopWorker = async () => { if (deadlineWorker.lifecycle !== 'stopped') await deadlineWorker.stop('test'); };
+    t.after(stopWorker);
+    void deadlineWorker.start();
+    const deadlineScope = { tenantId: 'deadline-tenant', projectId: 'deadline-project' };
+    const deadlinePlan = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: Array.from({ length: 32 }, (_, index) => ({
+        id: `d${String(index).padStart(2, '0')}`, operation: 'text.concat',
+        dependsOn: index % 12 === 0 ? [] : [`d${String(index - 1).padStart(2, '0')}`],
+        args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `d${String(index - 1).padStart(2, '0')}` }, ''] }
+      }))
+    });
+    const accepted = deadlineWorker.submitSyntheticWork({
+      trustedSyntheticScope: deadlineScope, idempotencyKey: 'deadline-child', planJson: deadlinePlan,
+      limitsJson: JSON.stringify({ maxElapsedMs: 200, maxStepMs: 50 })
+    });
+    assert.equal(accepted.accepted, true);
+    const childDeadline = Date.now() + 3_000;
+    while (Date.now() < childDeadline && deadlineWorker.activeChildCount === 0) await new Promise(resolvePromise => setTimeout(resolvePromise, 1));
+    assert.equal(deadlineWorker.activeChildCount, 1);
+    const pgrep = spawnSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' });
+    assert.equal(pgrep.status, 0, pgrep.stderr);
+    const runnerPid = Number(pgrep.stdout.trim().split(/\s+/u).at(-1));
+    assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
+    const deadlineObservedAt = performance.now();
+    assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
+    const leaseDb = new DatabaseSync(deadlineDir.databasePath);
+    leaseDb.prepare('UPDATE workflows SET lease_expires_ms = 0 WHERE workflow_id = ?').run(accepted.workflowId);
+    leaseDb.close();
+    const parked = await waitForStatus(deadlineWorker, deadlineScope, accepted.jobId, 'parked', 2_000);
+    while (deadlineWorker.activeChildCount !== 0 && Date.now() < childDeadline + 2_000) await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+    assert.equal(deadlineWorker.activeChildCount, 0);
+    const actualCloseElapsedMs = performance.now() - deadlineObservedAt;
+    METRICS.runnerDeadlineCloseElapsedMsMax = Math.max(METRICS.runnerDeadlineCloseElapsedMsMax, actualCloseElapsedMs);
+    METRICS.runnerDeadlineCloseSamples += 1;
+    assert.ok(actualCloseElapsedMs < 1_500, `Owned child close took ${actualCloseElapsedMs} ms after deadline monitoring began.`);
+    assert.equal(parked.reasonCode, 'LOCAL_EXECUTION_STOPPED');
+    assert.throws(() => process.kill(runnerPid, 0), error => error.code === 'ESRCH');
+    assert.equal(deadlineWorker.health().process.lastSafeErrorCode, 'OPS_RUNNER_DEADLINE');
+    const stopped = await deadlineWorker.stop('test');
+    assert.equal(stopped.stopped, true);
+    assert.equal(stopped.childrenReaped, true);
+    const reopened = openStore(deadlineDir.databasePath);
+    const workflow = reopened.getWorkflow(accepted.workflowId);
+    const checkpoint = reopened.getCheckpoint(accepted.workflowId);
+    const raw = new DatabaseSync(deadlineDir.databasePath, { readOnly: true });
+    assert.equal(workflow.state, 'review_required');
+    assert.equal(workflow.leaseOwner, null);
+    assert.equal(raw.prepare('SELECT state FROM operations_work WHERE job_id = ?').get(accepted.jobId).state, 'parked');
+    assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 0);
+    assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 1);
+    assert.equal(Number(raw.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes) > 0, true);
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(accepted.workflowId).count), 0);
+    assert.equal(checkpoint.sequence, 1);
+    raw.close();
+    reopened.close();
+  });
+
+  await t.test('OPS05.C02 active cancellation commits one coherent terminal state after actual child exit and reopen', async t => {
+    const cancelDir = tempDirectory('ah11-active-cancel-');
+    t.after(() => cancelDir.cleanup());
+    const cancelWorker = createOperationsWorker({ databasePath: cancelDir.databasePath, ownerId: 'review-worker' });
+    t.after(async () => { if (cancelWorker.lifecycle !== 'stopped') await cancelWorker.stop('test'); });
+    void cancelWorker.start();
+    const cancelScope = { tenantId: 'cancel-tenant', projectId: 'cancel-project' };
+    const cancelPlan = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: Array.from({ length: 32 }, (_, index) => ({
+        id: `c${String(index).padStart(2, '0')}`, operation: 'text.concat',
+        dependsOn: index % 12 === 0 ? [] : [`c${String(index - 1).padStart(2, '0')}`],
+        args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `c${String(index - 1).padStart(2, '0')}` }, ''] }
+      }))
+    });
+    const accepted = cancelWorker.submitSyntheticWork({
+      trustedSyntheticScope: cancelScope, idempotencyKey: 'cancel-running', planJson: cancelPlan
+    });
+    assert.equal(accepted.accepted, true);
+    const childDeadline = Date.now() + 3_000;
+    while (Date.now() < childDeadline && cancelWorker.activeChildCount === 0) await new Promise(resolvePromise => setTimeout(resolvePromise, 1));
+    assert.equal(cancelWorker.activeChildCount, 1);
+    const pgrep = spawnSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' });
+    assert.equal(pgrep.status, 0, pgrep.stderr);
+    const runnerPid = Number(pgrep.stdout.trim().split(/\s+/u).at(-1));
+    assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
+    assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
+    const requested = cancelWorker.cancelSyntheticWork({
+      trustedSyntheticScope: cancelScope, jobId: accepted.jobId, expectedGeneration: 1
+    });
+    assert.deepEqual(requested, {
+      accepted: true, state: 'cancellation_requested', generation: 1,
+      ownerId: 'review-worker', fence: 1
+    });
+    const during = new DatabaseSync(cancelDir.databasePath, { readOnly: true });
+    assert.equal(during.prepare('SELECT state, cancellation_requested FROM workflows WHERE workflow_id=?').get(accepted.workflowId).state, 'running');
+    assert.equal(during.prepare('SELECT cancellation_requested FROM workflows WHERE workflow_id=?').get(accepted.workflowId).cancellation_requested, 1);
+    assert.equal(during.prepare('SELECT state FROM operations_work WHERE job_id=?').get(accepted.jobId).state, 'running');
+    during.close();
+    assert.equal(process.kill(runnerPid, 'SIGCONT'), true);
+    const cancelled = await waitForStatus(cancelWorker, cancelScope, accepted.jobId, 'cancelled', 3_000);
+    assert.equal(cancelled.generation, 1);
+    assert.equal(cancelWorker.activeChildCount, 0);
+    const stopped = await cancelWorker.stop('test');
+    assert.equal(stopped.stopped, true);
+    const reopened = openStore(cancelDir.databasePath);
+    const workflow = reopened.getWorkflow(accepted.workflowId);
+    const raw = new DatabaseSync(cancelDir.databasePath, { readOnly: true });
+    assert.equal(workflow.state, 'cancelled');
+    assert.equal(workflow.cancellationRequested, true);
+    assert.equal(raw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(accepted.jobId).state, 'cancelled');
+    assert.deepEqual({ ...raw.prepare('SELECT pending_records, pending_bytes, in_flight FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 0, pending_bytes: 0, in_flight: 0
+    });
+    assert.equal(Number(raw.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_cancelled'").get(accepted.workflowId).count), 1);
+    const beforeRepeated = Number(raw.prepare('SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=?').get(accepted.workflowId).count);
+    raw.close();
+    const repeated = reopened._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: cancelScope.tenantId, projectId: cancelScope.projectId,
+      jobId: accepted.jobId, expectedGeneration: 1
+    });
+    assert.deepEqual(repeated, { accepted: false, state: 'cancelled', generation: 1 });
+    const afterRepeated = new DatabaseSync(cancelDir.databasePath, { readOnly: true });
+    assert.equal(Number(afterRepeated.prepare('SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=?').get(accepted.workflowId).count), beforeRepeated);
+    afterRepeated.close();
+    reopened.close();
+  });
+
+  await t.test('OPS05.C03 queued cancellation is durable and idempotent without creating a claim', () => {
+    const queuedDir = tempDirectory('ah11-queued-cancel-');
+    t.after(() => queuedDir.cleanup());
+    const queuedStore = openStore(queuedDir.databasePath);
+    t.after(() => queuedStore.close());
+    const queued = admit(queuedStore, 'tenant-queued-cancel', 'project-queued-cancel', 'queued-cancel');
+    const cancelled = queuedStore._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'tenant-queued-cancel', projectId: 'project-queued-cancel',
+      jobId: queued.jobId, expectedGeneration: 0
+    });
+    assert.deepEqual(cancelled, { accepted: true, state: 'cancelled', generation: 0 });
+    assert.equal(queuedStore.getWorkflow(queued.workflowId).state, 'cancelled');
+    assert.deepEqual(queuedStore._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'tenant-queued-cancel', projectId: 'project-queued-cancel',
+      jobId: queued.jobId, expectedGeneration: 0
+    }), { accepted: false, state: 'cancelled', generation: 0 });
+    const raw = new DatabaseSync(queuedDir.databasePath, { readOnly: true });
+    assert.deepEqual({ ...raw.prepare('SELECT pending_records, pending_bytes, in_flight, reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get() }, {
+      pending_records: 0, pending_bytes: 0, in_flight: 0, reserved_event_slots: 0, reserved_disk_bytes: 0
+    });
+    raw.close();
+  });
+
+  await t.test('OPS05.C04 accepted nonprefixed and maximum-length owner IDs execute in the actual child runner', async t => {
+    const invalidOwnerPath = join(temporary.directory, 'invalid-owner.sqlite');
+    assert.throws(() => createOperationsWorker({ databasePath: invalidOwnerPath, ownerId: 'r'.repeat(129) }), /identity/u);
+    assert.equal(existsSync(invalidOwnerPath), false);
+    for (const [index, ownerId] of ['review-worker', 'r'.repeat(128)].entries()) {
+      const ownerDir = tempDirectory(`ah11-owner-domain-${index}-`);
+      t.after(() => ownerDir.cleanup());
+      const ownerWorker = createOperationsWorker({ databasePath: ownerDir.databasePath, ownerId });
+      t.after(async () => { if (ownerWorker.lifecycle !== 'stopped') await ownerWorker.stop('test'); });
+      void ownerWorker.start();
+      const ownerScope = { tenantId: `owner-tenant-${index}`, projectId: `owner-project-${index}` };
+      const ownerJob = ownerWorker.submitSyntheticWork({
+        trustedSyntheticScope: ownerScope, idempotencyKey: `owner-${index}`, planJson: PLAN
+      });
+      assert.equal(ownerJob.accepted, true);
+      const finished = await waitForStatus(ownerWorker, ownerScope, ownerJob.jobId, 'completed');
+      assert.equal(finished.state, 'completed');
+      const stopResult = await ownerWorker.stop('test');
+      assert.equal(stopResult.stopped, true);
+      const reopened = openStore(ownerDir.databasePath);
+      assert.equal(reopened.getWorkflow(ownerJob.workflowId).state, 'succeeded');
+      assert.equal(reopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+        tenantId: ownerScope.tenantId, projectId: ownerScope.projectId, jobId: ownerJob.jobId
+      }).state, 'completed');
+      reopened.close();
+    }
+  });
+
+  await t.test('OPS05.C05 expired cleanup from a superseded owner cannot mutate a newer claim', () => {
+    const ownerDir = tempDirectory('ah11-superseded-owner-');
+    t.after(() => ownerDir.cleanup());
+    let ownerNow = 30_000;
+    const ownerStore = openStore(ownerDir.databasePath, { clock: () => ownerNow });
+    t.after(() => ownerStore.close());
+    const accepted = admit(ownerStore, 'fence-tenant', 'fence-project', 'fence-race');
+    const policy = operationsStoragePolicy(readOperationsConfig());
+    const oldClaim = ownerStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-worker-old-owner', policy
+    }).claim;
+    ownerStore._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: oldClaim.jobId, ownerId: oldClaim.ownerId,
+      generation: oldClaim.generation, fence: oldClaim.fence, runnerPid: unusedProcessId()
+    });
+    ownerNow = oldClaim.leaseExpiresAtMs + 1;
+    assert.equal(ownerStore._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy }).items[0].jobId, accepted.jobId);
+    const newer = ownerStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-worker-new-owner', policy, recoverableJobIds: [accepted.jobId]
+    }).claim;
+    assert.equal(newer.generation, oldClaim.generation + 1);
+    assert.equal(newer.fence, oldClaim.fence + 1);
+    assert.throws(() => ownerStore._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: oldClaim.jobId, ownerId: oldClaim.ownerId,
+      generation: oldClaim.generation, fence: oldClaim.fence, outcome: 'stopped', childExited: true
+    }), error => error.code === 'STALE_FENCE');
+    const current = new DatabaseSync(ownerDir.databasePath, { readOnly: true });
+    const row = current.prepare('SELECT state, worker_id, generation, fence_token FROM operations_work WHERE job_id=?').get(accepted.jobId);
+    assert.deepEqual({ ...row }, {
+      state: 'running', worker_id: 'review-worker-new-owner',
+      generation: newer.generation, fence_token: newer.fence
+    });
+    assert.equal(Number(current.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 1);
+    current.close();
+  });
+
+  await t.test('OPS05.C06 cancellation of already-reconciliation-pending unknown work persists its flag without settling its hold', () => {
+    const unknownDir = tempDirectory('ah11-reconciliation-cancel-');
+    t.after(() => unknownDir.cleanup());
+    let unknownNow = 40_000;
+    const unknownStore = openStore(unknownDir.databasePath, { clock: () => unknownNow });
+    const accepted = admit(unknownStore, 'unknown-cancel-tenant', 'unknown-cancel-project', 'unknown-cancel');
+    const policy = operationsStoragePolicy(readOperationsConfig());
+    const claim = unknownStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-worker-unknown-owner', policy
+    }).claim;
+    unknownStore._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: claim.jobId, ownerId: claim.ownerId, generation: claim.generation,
+      fence: claim.fence, runnerPid: unusedProcessId()
+    });
+    unknownStore.recordDispatchIntent({
+      workflowId: claim.workflowId, ownerId: claim.ownerId, fence: claim.fence,
+      expectedRevision: claim.revision, attemptId: 'unknown-cancel-attempt',
+      logicalOperationRef: 'unknown-cancel-logical', authorityHoldRef: 'synthetic-local-bookkeeping:unknown-cancel-hold',
+      transportAttemptId: 'unknown-cancel-transport', eventId: 'unknown-cancel-intent'
+    });
+    unknownNow = claim.leaseExpiresAtMs + 1;
+    unknownStore._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy });
+    assert.equal(unknownStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-worker-unknown-recovery', policy, recoverableJobIds: [accepted.jobId]
+    }), null);
+    assert.equal(unknownStore.getWorkflow(accepted.workflowId).state, 'reconciliation_pending');
+    const cancellation = unknownStore._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'unknown-cancel-tenant', projectId: 'unknown-cancel-project',
+      jobId: accepted.jobId, expectedGeneration: claim.generation
+    });
+    assert.deepEqual(cancellation, { accepted: true, state: 'unknown', generation: claim.generation });
+    const once = new DatabaseSync(unknownDir.databasePath, { readOnly: true });
+    const workflow = unknownStore.getWorkflow(accepted.workflowId);
+    assert.equal(workflow.state, 'reconciliation_pending');
+    assert.equal(workflow.cancellationRequested, true);
+    assert.equal(once.prepare('SELECT state FROM operations_work WHERE job_id=?').get(accepted.jobId).state, 'unknown');
+    assert.equal(unknownStore.getAttempt('unknown-cancel-attempt').state, 'intent');
+    assert.equal(unknownStore.getAttempt('unknown-cancel-attempt').authorityHoldRef,
+      'synthetic-local-bookkeeping:unknown-cancel-hold');
+    const eventCount = Number(once.prepare('SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=?').get(accepted.workflowId).count);
+    const reservation = Number(once.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes);
+    once.close();
+    const repeated = unknownStore._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'unknown-cancel-tenant', projectId: 'unknown-cancel-project',
+      jobId: accepted.jobId, expectedGeneration: claim.generation
+    });
+    assert.deepEqual(repeated, { accepted: true, state: 'unknown', generation: claim.generation });
+    unknownStore.close();
+    const reopened = openStore(unknownDir.databasePath, { clock: () => unknownNow });
+    assert.equal(reopened.getWorkflow(accepted.workflowId).cancellationRequested, true);
+    assert.equal(reopened.getAttempt('unknown-cancel-attempt').authorityHoldRef,
+      'synthetic-local-bookkeeping:unknown-cancel-hold');
+    const after = new DatabaseSync(unknownDir.databasePath, { readOnly: true });
+    assert.equal(Number(after.prepare('SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=?').get(accepted.workflowId).count), eventCount);
+    assert.equal(Number(after.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes), reservation);
+    assert.equal(Number(after.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 0);
+    after.close();
+    reopened.close();
+  });
+
+  await t.test('OPS05.C07 parked cancellation rejects stale generations and commits one terminal event', () => {
+    const parkedDir = tempDirectory('ah11-parked-cancel-');
+    t.after(() => parkedDir.cleanup());
+    const parkedStore = openStore(parkedDir.databasePath);
+    t.after(() => parkedStore.close());
+    const accepted = admit(parkedStore, 'parked-tenant', 'parked-project', 'parked-cancel');
+    const ownerId = 'review-worker-parked';
+    const claim = parkedStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId, policy: operationsStoragePolicy(readOperationsConfig())
+    }).claim;
+    const parked = parkedStore._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: accepted.jobId, ownerId, generation: claim.generation,
+      fence: claim.fence, outcome: 'stopped', childExited: true
+    });
+    assert.equal(parked.state, 'parked');
+    assert.equal(parkedStore.getWorkflow(accepted.workflowId).state, 'review_required');
+    assert.throws(() => parkedStore._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'parked-tenant', projectId: 'parked-project', jobId: accepted.jobId,
+      expectedGeneration: claim.generation - 1
+    }), error => error.code === 'CONCURRENT_MODIFICATION');
+    const cancelled = parkedStore._operationsCancel(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'parked-tenant', projectId: 'parked-project', jobId: accepted.jobId,
+      expectedGeneration: claim.generation
+    });
+    assert.deepEqual(cancelled, { accepted: true, state: 'cancelled', generation: claim.generation });
+    assert.equal(parkedStore.getWorkflow(accepted.workflowId).state, 'cancelled');
+    const raw = new DatabaseSync(parkedDir.databasePath, { readOnly: true });
+    assert.equal(Number(raw.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_cancelled'").get(accepted.workflowId).count), 1);
+    raw.close();
+  });
+
+  await t.test('OPS05.C08 actual supervisor crash preserves a committed step and two restarted workers claim it once', async t => {
+    const crashDir = tempDirectory('ah11-worker-crash-race-');
+    t.after(() => crashDir.cleanup());
+    const fixture = join(ROOT, 'tests/operations/fixtures/worker-supervisor-child.mjs');
+    const children = new Set();
+    const runnerPids = new Set();
+    const openFixture = (ownerId, idempotencyKey = 'worker-crash-recovery') => {
+      const child = spawn(process.execPath, [fixture, crashDir.databasePath, ownerId, idempotencyKey], {
+        cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe']
+      });
+      METRICS.processRuns += 1;
+      children.add(child);
+      let output = '';
+      const records = [];
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', chunk => {
+        output += chunk;
+        const lines = output.split(/\r?\n/u);
+        output = lines.pop() ?? '';
+        for (const line of lines) {
+          try { records.push(JSON.parse(line)); } catch {}
+        }
+      });
+      child.stderr.on('data', chunk => { output += chunk; });
+      const closed = new Promise(resolvePromise => child.once('close', (code, signal) => {
+        children.delete(child);
+        resolvePromise({ code, signal });
+      }));
+      const ready = (async () => {
+        const deadline = Date.now() + 8_000;
+        while (Date.now() < deadline) {
+          const record = records.find(item => item.event === 'ready');
+          if (record) return record;
+          if (child.exitCode !== null || child.signalCode !== null) break;
+          await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+        }
+        throw new Error(`The owned supervisor did not publish its admission: ${output}`);
+      })();
+      return { child, closed, ready, records };
+    };
+    const waitUntil = async (predicate, timeoutMs, message) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const result = predicate();
+        if (result) return result;
+        await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+      }
+      throw new Error(message);
+    };
+    const pidIsGone = pid => {
+      try {
+        process.kill(pid, 0);
+        const ps = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+        return ps.status !== 0 || /^Z/u.test(ps.stdout.trim());
+      } catch (error) {
+        return error?.code === 'ESRCH';
+      }
+    };
+    t.after(async () => {
+      for (const pid of runnerPids) {
+        try { process.kill(pid, 'SIGCONT'); } catch {}
+        try { process.kill(pid, 'SIGKILL'); } catch {}
+      }
+      for (const child of children) {
+        try { child.kill('SIGKILL'); } catch {}
+      }
+      await Promise.all([...children].map(child => new Promise(resolvePromise => {
+        if (child.exitCode !== null || child.signalCode !== null) return resolvePromise();
+        child.once('close', resolvePromise);
+        setTimeout(resolvePromise, 1_500).unref();
+      })));
+    });
+
+    const oldOwner = 'ops-worker:crashed-supervisor';
+    const crashed = openFixture(oldOwner);
+    const admitted = await crashed.ready;
+    assert.equal(admitted.accepted, true);
+    const inspect = new DatabaseSync(crashDir.databasePath, { readOnly: true });
+    const committed = await waitUntil(() => {
+      const row = inspect.prepare(`
+        SELECT w.state, w.runner_pid, w.generation, w.fence_token,
+          f.state AS workflow_state, f.checkpoint_sequence,
+          c.payload_json
+        FROM operations_work w JOIN workflows f ON f.workflow_id=w.workflow_id
+        JOIN workflow_checkpoints c ON c.workflow_id=f.workflow_id AND c.sequence=f.checkpoint_sequence
+        WHERE w.job_id=?
+      `).get(admitted.jobId);
+      if (!row || row.state !== 'running' || !Number.isSafeInteger(row.runner_pid)
+          || row.checkpoint_sequence < 2 || row.workflow_state !== 'running') return null;
+      try {
+        const payload = JSON.parse(row.payload_json);
+        const state = payload.data ?? payload;
+        const completed = JSON.parse(state.completedResultsJson ?? '{}');
+        return Object.keys(completed).length > 0 ? { row, completedCount: Object.keys(completed).length } : null;
+      } catch { return null; }
+    }, 8_000, 'The actual runner did not durably commit a local step before the crash barrier.');
+    const oldRunnerPid = Number(committed.row.runner_pid);
+    runnerPids.add(oldRunnerPid);
+    assert.equal(process.kill(oldRunnerPid, 'SIGSTOP'), true);
+    const priorGeneration = Number(committed.row.generation);
+    const priorFence = Number(committed.row.fence_token);
+    assert.ok(priorGeneration >= 1);
+    assert.ok(priorFence >= 1);
+    const beforeCrash = {
+      state: committed.row.state,
+      workflowState: committed.row.workflow_state,
+      checkpointSequence: Number(committed.row.checkpoint_sequence),
+      committedStepCount: committed.completedCount,
+      generation: priorGeneration,
+      fence: priorFence,
+      inFlight: Number(inspect.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight),
+      attempts: Number(inspect.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(admitted.workflowId).count)
+    };
+    assert.equal(beforeCrash.inFlight, 1);
+    assert.equal(beforeCrash.attempts, 0);
+
+    const crashStartedAt = performance.now();
+    assert.equal(crashed.child.kill('SIGKILL'), true);
+    METRICS.processSigkillSignalsSent += 1;
+    const supervisorClose = await waitForCloseBounded(crashed.closed, 2_000);
+    assert.ok(supervisorClose);
+    assert.equal(supervisorClose.signal, 'SIGKILL');
+    const supervisorCloseElapsedMs = performance.now() - crashStartedAt;
+    METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, supervisorCloseElapsedMs);
+    METRICS.processCloseSamples += 1;
+    assert.equal(process.kill(oldRunnerPid, 'SIGKILL'), true);
+    METRICS.processSigkillSignalsSent += 1;
+    const runnerCloseStartedAt = performance.now();
+    const runnerGone = await waitUntil(() => pidIsGone(oldRunnerPid), 3_000,
+      'The exact orphaned runner PID did not exit after its explicit SIGKILL.');
+    assert.equal(runnerGone, true);
+    const runnerCloseElapsedMs = performance.now() - runnerCloseStartedAt;
+    METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, runnerCloseElapsedMs);
+    METRICS.processCloseSamples += 1;
+    runnerPids.delete(oldRunnerPid);
+    inspect.close();
+
+    const recoveryClock = new DatabaseSync(crashDir.databasePath);
+    recoveryClock.prepare('UPDATE workflows SET lease_expires_ms=0 WHERE workflow_id=?').run(admitted.workflowId);
+    recoveryClock.prepare('UPDATE operations_work SET lease_expires_ms=0 WHERE job_id=?').run(admitted.jobId);
+    recoveryClock.close();
+    const afterCrashDb = new DatabaseSync(crashDir.databasePath, { readOnly: true });
+    const crashedRows = afterCrashDb.prepare(`
+      SELECT w.state, w.runner_pid, w.generation, f.state AS workflow_state, f.checkpoint_sequence
+      FROM operations_work w JOIN workflows f ON f.workflow_id=w.workflow_id WHERE w.job_id=?
+    `).get(admitted.jobId);
+    assert.equal(crashedRows.state, 'running');
+    assert.equal(crashedRows.workflow_state, 'running');
+    assert.equal(Number(crashedRows.generation), priorGeneration);
+    assert.equal(Number(afterCrashDb.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 1);
+    assert.equal(Number(afterCrashDb.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(admitted.workflowId).count), 0);
+    afterCrashDb.close();
+
+    const raceA = openFixture('ops-worker:recovery-race-a');
+    const raceB = openFixture('ops-worker:recovery-race-b');
+    const [readyA, readyB] = await Promise.all([raceA.ready, raceB.ready]);
+    assert.equal(readyA.jobId, admitted.jobId);
+    assert.equal(readyB.jobId, admitted.jobId);
+    assert.equal(readyA.duplicate, true);
+    assert.equal(readyB.duplicate, true);
+    const completeDb = new DatabaseSync(crashDir.databasePath, { readOnly: true });
+    let finalRow;
+    try {
+      finalRow = await waitUntil(() => {
+      const row = completeDb.prepare(`
+        SELECT w.state, w.worker_id, w.runner_pid, w.generation, w.fence_token,
+          f.state AS workflow_state, f.fence_token AS workflow_fence, f.checkpoint_sequence
+        FROM operations_work w JOIN workflows f ON f.workflow_id=w.workflow_id WHERE w.job_id=?
+      `).get(admitted.jobId);
+      return row?.state === 'completed' ? row : null;
+      }, 12_000, 'The restarted worker race did not finish the admitted local plan.');
+    } catch (error) {
+      const row = completeDb.prepare(`
+        SELECT w.state, w.worker_id, w.runner_pid, w.generation, w.fence_token, w.lease_expires_ms, w.reason_code,
+          f.state AS workflow_state, f.fence_token AS workflow_fence, f.lease_owner, f.lease_expires_ms AS workflow_lease,
+          f.checkpoint_sequence
+        FROM operations_work w JOIN workflows f ON f.workflow_id=w.workflow_id WHERE w.job_id=?
+      `).get(admitted.jobId);
+      const events = completeDb.prepare('SELECT event_type, revision, fence_token FROM workflow_events WHERE workflow_id=? ORDER BY sequence').all(admitted.workflowId);
+      const meta = completeDb.prepare('SELECT pending_records, in_flight, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get();
+      const latestPayload = JSON.parse(completeDb.prepare('SELECT payload_json FROM workflow_checkpoints WHERE workflow_id=? ORDER BY sequence DESC LIMIT 1').get(admitted.workflowId).payload_json);
+      const latestState = latestPayload.data ?? latestPayload;
+      throw new Error(`${error.message} ${JSON.stringify({ row, meta, events, checkpoint: {
+        pendingStepId: latestState.pendingStepId, budget: latestState.budget,
+        resultCount: Object.keys(JSON.parse(latestState.completedResultsJson ?? '{}')).length,
+        resultBytes: Buffer.byteLength(latestState.completedResultsJson ?? '', 'utf8')
+      }, readyA, readyB, raceAExit: raceA.child.exitCode, raceBExit: raceB.child.exitCode })}`);
+    }
+    const claimCount = Number(completeDb.prepare("SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=? AND event_type='operations_work_claimed'").get(admitted.workflowId).count);
+    const attemptCount = Number(completeDb.prepare('SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?').get(admitted.workflowId).count);
+    const counters = completeDb.prepare('SELECT pending_records, pending_bytes, in_flight, reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get();
+    const checkpointPayload = JSON.parse(completeDb.prepare('SELECT payload_json FROM workflow_checkpoints WHERE workflow_id=? ORDER BY sequence DESC LIMIT 1').get(admitted.workflowId).payload_json);
+    const checkpointState = checkpointPayload.data ?? checkpointPayload;
+    const finalResults = JSON.parse(checkpointState.completedResultsJson);
+    assert.equal(finalRow.workflow_state, 'succeeded');
+    assert.equal(Number(finalRow.generation), priorGeneration + 1);
+    assert.equal(Number(finalRow.fence_token), priorFence + 1);
+    assert.equal(Number(finalRow.workflow_fence), priorFence + 1);
+    assert.equal(claimCount, 2, 'One initial and one recovered claim event must exist; the competing owner cannot claim twice.');
+    assert.equal(attemptCount, 0);
+    assert.equal(Object.keys(finalResults).length, 32);
+    assert.deepEqual({ ...counters }, {
+      pending_records: 0, pending_bytes: 0, in_flight: 0, reserved_event_slots: 0, reserved_disk_bytes: 0
+    });
+    completeDb.close();
+    const racersSignalAt = performance.now();
+    for (const supervisor of [raceA, raceB]) {
+      assert.equal(supervisor.child.kill('SIGTERM'), true);
+      METRICS.processSigtermSignalsSent += 1;
+    }
+    const closedRacers = await Promise.all([raceA.closed, raceB.closed]);
+    assert.deepEqual(closedRacers.map(item => item.code), [0, 0]);
+    const racersCloseElapsedMs = performance.now() - racersSignalAt;
+    METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, racersCloseElapsedMs);
+    METRICS.processCloseSamples += 2;
+    const reopened = openStore(crashDir.databasePath);
+    const finalWorkflow = reopened.getWorkflow(admitted.workflowId);
+    const finalCheckpoint = reopened.getCheckpoint(admitted.workflowId);
+    const finalEventCount = reopened.listEvents({ workflowId: admitted.workflowId }).length;
+    assert.throws(() => reopened._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: admitted.jobId, ownerId: oldOwner, generation: priorGeneration,
+      fence: priorFence, outcome: 'stopped', childExited: true
+    }), error => error.code === 'STALE_FENCE');
+    assert.equal(reopened.listEvents({ workflowId: admitted.workflowId }).length, finalEventCount);
+    assert.equal(finalWorkflow.state, 'succeeded');
+    assert.equal(Object.keys(JSON.parse(finalCheckpoint.data.completedResultsJson)).length, 32);
+    reopened.close();
+    assert.ok(supervisorCloseElapsedMs < 2_000);
+    assert.ok(runnerCloseElapsedMs < 3_000);
+    assert.ok(racersCloseElapsedMs < 2_000);
+  });
+
   let logicalNow = 10_000;
   const stale = tempDirectory('ah11-stale-runner-');
   t.after(() => stale.cleanup());
-  const staleStore = DurableWorkflowStore.open({
-    databasePath: stale.databasePath, busyTimeoutMs: 20, clock: () => logicalNow
-  });
+  const staleStore = openStore(stale.databasePath, { clock: () => logicalNow });
   t.after(() => staleStore.close());
   const policy = operationsStoragePolicy(readOperationsConfig());
   const liveWork = admit(staleStore, 'tenant-a', 'project-a', 'stale-live-pid');
@@ -453,6 +1759,10 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     jobId: reclaimed.jobId, ownerId: reclaimed.ownerId,
     generation: reclaimed.generation, fence: reclaimed.fence
   });
+  assert.throws(() => staleStore._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+    jobId: deadClaim.jobId, ownerId: deadClaim.ownerId,
+    generation: deadClaim.generation, fence: deadClaim.fence, outcome: 'stopped', childExited: true
+  }), error => error.code === 'STALE_FENCE');
   staleStore._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
     jobId: reclaimed.jobId, ownerId: reclaimed.ownerId,
     generation: reclaimed.generation, fence: reclaimed.fence, outcome: 'shutdown'
@@ -466,9 +1776,7 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
   let unknownNow = 20_000;
   const unknown = tempDirectory('ah11-stale-unknown-');
   t.after(() => unknown.cleanup());
-  const unknownStore = DurableWorkflowStore.open({
-    databasePath: unknown.databasePath, busyTimeoutMs: 20, clock: () => unknownNow
-  });
+  const unknownStore = openStore(unknown.databasePath, { clock: () => unknownNow });
   t.after(() => unknownStore.close());
   const uncertainWork = admit(unknownStore, 'tenant-unknown', 'project-unknown', 'stale-unknown-effect');
   const uncertainClaim = unknownStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
@@ -554,8 +1862,8 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
   if (Number.isSafeInteger(ownedPid) && ownedPid > 1) {
     try { process.kill(ownedPid, 'SIGSTOP'); } catch { ownedPid = null; }
   }
-  const waiters = Array.from({ length: 16 }, () => worker.waitForIdle(5_000));
-  assert.equal(await worker.waitForIdle(5_000), false);
+  const waiters = Array.from({ length: 16 }, () => worker.waitForOwnedChildrenIdle(5_000));
+  assert.equal(await worker.waitForOwnedChildrenIdle(5_000), false);
   const stopping = worker.stop('signal');
   assert.strictEqual(worker.stop('signal'), stopping);
   const rejectedDuringStop = worker.submitSyntheticWork({
@@ -578,9 +1886,94 @@ test('OPS06_UNCOOPERATIVE_REENTRANT sends signals only to owned children and esc
   assert.ok(stopped.elapsedMs <= 1_000);
   assert.equal(worker.activeChildCount, 0);
   assert.throws(() => worker.start());
+
+  await t.test('OPS06.C02 waitForOwnedChildrenIdle reports process-idle while durable accepted work remains queued', async t => {
+    const idleDir = tempDirectory('ah11-owned-idle-semantics-');
+    t.after(() => idleDir.cleanup());
+    const idleWorker = createOperationsWorker({ databasePath: idleDir.databasePath, ownerId: 'review-worker-idle' });
+    t.after(async () => { if (idleWorker.lifecycle !== 'stopped') await idleWorker.stop('test'); });
+    const idleStore = openStore(idleDir.databasePath);
+    t.after(() => idleStore.close());
+    const queued = admit(idleStore, 'idle-tenant', 'idle-project', 'idle-queued');
+    assert.equal(queued.accepted, true);
+    assert.equal(await idleWorker.waitForOwnedChildrenIdle(1), true);
+    const durable = idleStore._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'idle-tenant', projectId: 'idle-project', jobId: queued.jobId
+    });
+    assert.equal(durable.state, 'queued');
+    assert.equal(Number(new DatabaseSync(idleDir.databasePath, { readOnly: true })
+      .prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 1);
+    await idleWorker.stop('test');
+  });
+
+  await t.test('OPS06.C01 actual repeated mixed signals share one cleanup and close the owned process', async t => {
+  const flushMarker = join(temporary.directory, 'repeated-signal-flush.json');
+  const signalChild = spawn(process.execPath, [
+    join(ROOT, 'tests/operations/fixtures/repeated-signal-child.mjs'),
+    join(temporary.directory, 'repeated-signal.sqlite'), flushMarker
+  ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
+  METRICS.processRuns += 1;
+  let signalChildClosed = false;
+  t.after(async () => {
+    if (!signalChildClosed) await killOwnedChildAndReap(signalChild, closed);
+  });
+  let signalOutput = '';
+  let ready = false;
+  signalChild.stdout.setEncoding('utf8');
+  signalChild.stdout.on('data', chunk => {
+    signalOutput += chunk;
+    ready ||= signalOutput.includes('"event":"ready"');
+  });
+  signalChild.stderr.setEncoding('utf8');
+  signalChild.stderr.on('data', chunk => { signalOutput += chunk; });
+  const closed = new Promise(resolvePromise => signalChild.once('close', (code, signal) => resolvePromise({ code, signal })));
+  const readyDeadline = Date.now() + 5_000;
+  while (!ready && Date.now() < readyDeadline && signalChild.exitCode === null) await new Promise(resolvePromise => setTimeout(resolvePromise, 5));
+  assert.equal(ready, true, signalOutput);
+  const firstSignalAt = performance.now();
+  assert.equal(signalChild.kill('SIGTERM'), true);
+  METRICS.processSigtermSignalsSent += 1;
+  await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
+  assert.equal(signalChild.kill('SIGINT'), true);
+  METRICS.processSigintSignalsSent += 1;
+  await waitForPath(flushMarker, signalChild, 2_000);
+  await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
+  assert.equal(signalChild.kill('SIGTERM'), true);
+  METRICS.processSigtermSignalsSent += 1;
+  const signalExit = await waitForCloseBounded(closed, 2_000);
+  signalChildClosed = Boolean(signalExit);
+  if (!signalExit) await killOwnedChildAndReap(signalChild, closed);
+  assert.ok(signalExit, signalOutput);
+  const processCloseElapsedMs = performance.now() - firstSignalAt;
+  METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, processCloseElapsedMs);
+  METRICS.processCloseSamples += 1;
+  assert.equal(signalExit.code, 0, signalOutput);
+  const stoppedLine = signalOutput.split(/\r?\n/u).find(line => line.includes('"event":"stopped"'));
+  assert.ok(stoppedLine, signalOutput);
+  const stoppedRecord = JSON.parse(stoppedLine);
+  assert.equal(stoppedRecord.stopped.stopped, true);
+  assert.equal(stoppedRecord.stopped.childrenReaped, true);
+  assert.equal(stoppedRecord.stopped.storeClosed, true);
+  assert.equal(stoppedRecord.sinkCalls, 1);
+  assert.equal(stoppedRecord.providerCalls, 0);
+  assert.equal(stoppedRecord.workAfterStop.state, 'queued');
+  assert.equal(stoppedRecord.afterRestart.state, 'completed');
+  assert.equal(stoppedRecord.afterRestart.workflowState, 'succeeded');
+  assert.ok(stoppedRecord.afterRestart.fence > stoppedRecord.workAfterStop.fence);
+  assert.equal(stoppedRecord.attemptCount, 0);
+  assert.ok(processCloseElapsedMs < 1_500, `Actual process close took ${processCloseElapsedMs} ms.`);
+    await t.test('OPS06.C03 clears the losing shutdown timer and distinguishes stop return from process close', () => {
+      assert.ok(processCloseElapsedMs >= stoppedRecord.stopped.elapsedMs,
+        'The parent-observed process close must include at least the worker stop-return interval.');
+      assert.ok(processCloseElapsedMs < 1_500);
+      assert.equal(stoppedRecord.telemetry.cursor, 0);
+      assert.ok(stoppedRecord.telemetry.pendingRecords > 0);
+      assert.equal(stoppedRecord.sinkCalls, 1);
+    });
+  });
 });
 
-test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpressure and reports headroom', t => {
+test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpressure and reports headroom', async t => {
   const temporary = tempDirectory('ah11-store-busy-');
   t.after(() => temporary.cleanup());
   const worker = createOperationsWorker({ databasePath: temporary.databasePath, ownerId: 'ops-worker:busy' });
@@ -603,6 +1996,261 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
   assert.ok(health.resources.freeBytes > health.resources.minimumFreeBytes);
   assert.equal(health.process.workerCount, 4);
   assert.equal(worker.readScopedWorkPage({ trustedSyntheticScope: { tenantId: 'busy-tenant', projectId: 'busy-project' } }).items.length, 0);
+
+  await t.test('OPS07.C01 reserves a concurrent valid 32-step lifecycle before admission and bounds DB, WAL, SHM, events, and reopen state', async t => {
+    const nearCap = tempDirectory('ah11-lifecycle-reservation-');
+    t.after(() => nearCap.cleanup());
+    const nearCapConfig = readOperationsConfig({
+      workerCount: 2, maxInFlightGlobal: 2, maxInFlightTenant: 1,
+      maxStoreBytes: 67_108_864, maxWalBytes: 16_777_216, busyTimeoutMs: 100
+    });
+    const capacityWorker = createOperationsWorker({
+      databasePath: nearCap.databasePath, ownerId: 'review-worker', config: nearCapConfig
+    });
+    t.after(async () => { if (capacityWorker.lifecycle !== 'stopped') await capacityWorker.stop('test'); });
+    void capacityWorker.start();
+    const planJson = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: Array.from({ length: 32 }, (_, index) => ({
+        id: `h${String(index).padStart(2, '0')}`, operation: 'text.concat',
+        dependsOn: index % 12 === 0 ? [] : [`h${String(index - 1).padStart(2, '0')}`],
+        args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `h${String(index - 1).padStart(2, '0')}` }, ''] }
+      }))
+    });
+    const scopeA = { tenantId: 'highwater-tenant-a', projectId: 'highwater-project-a' };
+    const scopeB = { tenantId: 'highwater-tenant-b', projectId: 'highwater-project-b' };
+    const first = capacityWorker.submitSyntheticWork({ trustedSyntheticScope: scopeA, idempotencyKey: 'highwater-a', planJson });
+    const second = capacityWorker.submitSyntheticWork({ trustedSyntheticScope: scopeB, idempotencyKey: 'highwater-b', planJson });
+    assert.equal(first.accepted, true);
+    assert.equal(second.accepted, true);
+    const thirdScope = { tenantId: 'highwater-tenant-c', projectId: 'highwater-project-c' };
+    const rejected = capacityWorker.submitSyntheticWork({ trustedSyntheticScope: thirdScope, idempotencyKey: 'highwater-c', planJson });
+    assert.equal(rejected.accepted, false);
+    assert.equal(rejected.reasonCode, 'STORE_CAPACITY');
+    assert.ok(capacityWorker.health().degradedReasons.includes('STORE_CAPACITY'));
+    assert.equal(capacityWorker.readScopedWorkPage({ trustedSyntheticScope: thirdScope }).items.length, 0);
+
+    const concurrentDeadline = Date.now() + 3_000;
+    while (capacityWorker.activeChildCount < 2 && Date.now() < concurrentDeadline) {
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+    }
+    assert.equal(capacityWorker.activeChildCount, 2);
+    const ownedChildren = spawnSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' });
+    assert.equal(ownedChildren.status, 0, ownedChildren.stderr);
+    const runnerPids = ownedChildren.stdout.trim().split(/\s+/u).map(Number).filter(pid => {
+      const command = spawnSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8' });
+      return command.status === 0 && command.stdout.includes('runner.js');
+    });
+    assert.equal(runnerPids.length, 2);
+    METRICS.ownedRunnerCountHighWater = Math.max(METRICS.ownedRunnerCountHighWater, runnerPids.length);
+    const supervisorFdCount = countOpenFileDescriptors(process.pid);
+    assert.ok(Number.isSafeInteger(supervisorFdCount) && supervisorFdCount > 0);
+    METRICS.supervisorOpenFileDescriptors = Math.max(METRICS.supervisorOpenFileDescriptors, supervisorFdCount);
+    for (const pid of runnerPids) {
+      const fdCount = countOpenFileDescriptors(pid);
+      assert.ok(Number.isSafeInteger(fdCount) && fdCount > 0);
+      METRICS.runnerOpenFileDescriptors = Math.max(METRICS.runnerOpenFileDescriptors, fdCount);
+    }
+
+    const updateHighWater = () => {
+      const health = capacityWorker.health();
+      const actual = health.resources.storeBytes;
+      const reserved = health.resources.reservedCompletionBytes;
+      METRICS.storeHighWaterBytes = Math.max(METRICS.storeHighWaterBytes, actual);
+      METRICS.storeReservedHighWaterBytes = Math.max(METRICS.storeReservedHighWaterBytes, actual + reserved);
+      METRICS.databaseHighWaterBytes = Math.max(METRICS.databaseHighWaterBytes, health.resources.databaseBytes);
+      METRICS.walHighWaterBytes = Math.max(METRICS.walHighWaterBytes, health.resources.walBytes);
+      METRICS.shmHighWaterBytes = Math.max(METRICS.shmHighWaterBytes, health.resources.shmBytes);
+      METRICS.freeSpaceLowWaterBytes = Math.min(METRICS.freeSpaceLowWaterBytes, health.resources.freeBytes);
+      METRICS.pendingEventHighWaterRecords = Math.max(METRICS.pendingEventHighWaterRecords, health.telemetry.pendingRecords);
+      METRICS.reservedEventHighWaterSlots = Math.max(METRICS.reservedEventHighWaterSlots, health.telemetry.reservedEventSlots);
+      METRICS.resourceHighWaterSamples += 1;
+      assert.ok(actual + reserved <= nearCapConfig.maxStoreBytes,
+        `Actual store plus retained lifecycle reservation ${actual + reserved} exceeded ${nearCapConfig.maxStoreBytes}.`);
+      assert.ok(health.resources.walBytes <= nearCapConfig.maxWalBytes);
+      assert.ok(health.telemetry.pendingRecords + health.telemetry.reservedEventSlots <= nearCapConfig.maxEventBacklog);
+    };
+    const deadline = Date.now() + 20_000;
+    let rowA;
+    let rowB;
+    while (Date.now() < deadline) {
+      updateHighWater();
+      rowA = capacityWorker.readScopedWorkPage({ trustedSyntheticScope: scopeA }).items.find(row => row.jobId === first.jobId);
+      rowB = capacityWorker.readScopedWorkPage({ trustedSyntheticScope: scopeB }).items.find(row => row.jobId === second.jobId);
+      if (rowA?.state === 'completed' && rowB?.state === 'completed') break;
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
+    }
+    const completionDiagnostic = JSON.stringify({ rowA, rowB, health: capacityWorker.health() });
+    assert.equal(rowA?.state, 'completed', completionDiagnostic);
+    assert.equal(rowB?.state, 'completed', completionDiagnostic);
+    updateHighWater();
+    const stopped = await capacityWorker.stop('test');
+    assert.equal(stopped.stopped, true);
+    assert.equal(stopped.childrenReaped, true);
+    const reopened = openStore(nearCap.databasePath);
+    for (const [scope, item] of [[scopeA, first], [scopeB, second]]) {
+      const status = reopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+        tenantId: scope.tenantId, projectId: scope.projectId, jobId: item.jobId
+      });
+      assert.equal(status.state, 'completed');
+      const checkpoint = reopened.getCheckpoint(item.workflowId);
+      assert.equal(Object.keys(JSON.parse(checkpoint.data.completedResultsJson)).length, 32);
+      assert.equal(reopened.getWorkflow(item.workflowId).state, 'succeeded');
+    }
+    const raw = new DatabaseSync(nearCap.databasePath, { readOnly: true });
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operation_attempts').get().count), 0);
+    assert.equal(Number(raw.prepare(`SELECT COUNT(*) AS count FROM operations_work WHERE state='completed' AND reserved_disk_bytes=0 AND reserved_event_slots=0`).get().count), 2);
+    assert.equal(Number(raw.prepare('SELECT pending_records FROM operations_meta WHERE singleton=1').get().pending_records), 0);
+    assert.equal(Number(raw.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton=1').get().reserved_disk_bytes), 0);
+    raw.close();
+    const finalHealth = readOperationsHealth({ store: reopened, config: nearCapConfig, lifecycle: 'accepting', heartbeatAgeMs: 10 });
+    assert.ok(finalHealth.resources.storeBytes <= nearCapConfig.maxStoreBytes);
+    assert.ok(finalHealth.resources.walBytes <= nearCapConfig.maxWalBytes);
+    reopened.close();
+  });
+
+  await t.test('OPS07.C02 injected SQLite write failure leaves the prior durable snapshot intact', () => {
+    const failureDir = tempDirectory('ah11-resource-write-failure-');
+    t.after(() => failureDir.cleanup());
+    const failureStore = openStore(failureDir.databasePath);
+    const baseline = new DatabaseSync(failureDir.databasePath, { readOnly: true });
+    const before = {
+      workflows: Number(baseline.prepare('SELECT COUNT(*) AS count FROM workflows').get().count),
+      events: Number(baseline.prepare('SELECT COUNT(*) AS count FROM workflow_events').get().count),
+      work: Number(baseline.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count)
+    };
+    baseline.close();
+    const trigger = new DatabaseSync(failureDir.databasePath);
+    trigger.exec("CREATE TRIGGER disk_failure BEFORE INSERT ON outbox BEGIN SELECT RAISE(ABORT, 'injected local write failure'); END");
+    assert.throws(() => admit(failureStore, 'failure-tenant', 'failure-project', 'write-fail'));
+    trigger.close();
+    failureStore.close();
+    const reopened = openStore(failureDir.databasePath);
+    const after = new DatabaseSync(failureDir.databasePath, { readOnly: true });
+    assert.deepEqual({
+      workflows: Number(after.prepare('SELECT COUNT(*) AS count FROM workflows').get().count),
+      events: Number(after.prepare('SELECT COUNT(*) AS count FROM workflow_events').get().count),
+      work: Number(after.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count),
+      ...after.prepare('SELECT pending_records, pending_bytes, in_flight, reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1').get()
+    }, { ...before, pending_records: 0, pending_bytes: 0, in_flight: 0, reserved_event_slots: 0, reserved_disk_bytes: 0 });
+    after.close();
+    reopened.close();
+  });
+
+  await t.test('OPS07.C03 indexed page-plus-one reports bounded incomplete visibility', () => {
+    const pageDir = tempDirectory('ah11-page-plus-one-');
+    t.after(() => pageDir.cleanup());
+    const pageStore = openStore(pageDir.databasePath);
+    t.after(() => pageStore.close());
+    for (let index = 0; index < 3; index += 1) {
+      assert.equal(admit(pageStore, 'page-tenant', 'page-project', `page-${index}`).accepted, true);
+    }
+    const first = pageStore._operationsReadPage(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'page-tenant', projectId: 'page-project', limit: 2
+    });
+    assert.equal(first.items.length, 2);
+    assert.equal(first.hasMore, true);
+    assert.equal(first.incomplete, true);
+    assert.equal(first.nextAfterJobId, first.items[1].jobId);
+    const second = pageStore._operationsReadPage(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'page-tenant', projectId: 'page-project', afterJobId: first.nextAfterJobId, limit: 2
+    });
+    assert.equal(second.items.length, 1);
+    assert.equal(second.hasMore, false);
+    assert.equal(second.incomplete, false);
+    assert.notEqual(first.items[0].jobId, second.items[0].jobId);
+    const raw = new DatabaseSync(pageDir.databasePath, { readOnly: true });
+    const plan = raw.prepare(`EXPLAIN QUERY PLAN SELECT job_id FROM operations_work INDEXED BY operations_work_scope_page_idx
+      WHERE tenant_id=? AND project_id=? AND (? IS NULL OR job_id>?) ORDER BY job_id COLLATE BINARY LIMIT ?`)
+      .all('page-tenant', 'page-project', null, null, 3).map(row => row.detail).join(' ');
+    assert.match(plan, /operations_work_scope_page_idx/u);
+    assert.doesNotMatch(plan, /SCAN operations_work\b/u);
+    raw.close();
+  });
+
+  await t.test('OPS07.C04 stop reports incomplete durable cleanup while a second SQLite writer lock spans child reap', async t => {
+    const busyStop = tempDirectory('ah11-busy-stop-recovery-');
+    t.after(() => busyStop.cleanup());
+    const shutdownConfig = {
+      workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1,
+      shutdownTimeoutMs: 1_000, childKillGraceMs: 100, childReapReserveMs: 200,
+      busyTimeoutMs: 20, pollIntervalMs: 5
+    };
+    const worker = createOperationsWorker({
+      databasePath: busyStop.databasePath, ownerId: 'busy-stop-worker', config: shutdownConfig
+    });
+    t.after(async () => { if (worker.lifecycle !== 'stopped') await worker.stop('test'); });
+    void worker.start();
+    const scope = { tenantId: 'busy-stop-tenant', projectId: 'busy-stop-project' };
+    const planJson = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: Array.from({ length: 32 }, (_, index) => ({
+        id: `b${String(index).padStart(2, '0')}`, operation: 'text.concat',
+        dependsOn: index % 12 === 0 ? [] : [`b${String(index - 1).padStart(2, '0')}`],
+        args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `b${String(index - 1).padStart(2, '0')}` }, ''] }
+      }))
+    });
+    const accepted = worker.submitSyntheticWork({
+      trustedSyntheticScope: scope, idempotencyKey: 'busy-stop-held-work', planJson
+    });
+    assert.equal(accepted.accepted, true);
+    const raw = new DatabaseSync(busyStop.databasePath, { readOnly: true });
+    t.after(() => { try { raw.close(); } catch {} });
+    const runnerDeadline = Date.now() + 3_000;
+    let runnerPid = null;
+    while (Date.now() < runnerDeadline && runnerPid === null) {
+      const row = raw.prepare('SELECT state, runner_pid FROM operations_work WHERE job_id=?').get(accepted.jobId);
+      if (row?.state === 'running' && Number.isSafeInteger(row.runner_pid)) runnerPid = row.runner_pid;
+      else await new Promise(resolvePromise => setTimeout(resolvePromise, 1));
+    }
+    assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
+    assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
+    const writerLock = new DatabaseSync(busyStop.databasePath, { timeout: 20 });
+    writerLock.exec('BEGIN IMMEDIATE');
+    let firstStop;
+    try {
+      firstStop = await worker.stop('test');
+      assert.equal(firstStop.stopped, false);
+      assert.equal(firstStop.childrenReaped, true);
+      assert.equal(firstStop.durableCleanupComplete, false);
+      assert.equal(firstStop.pendingDurableCleanupCount, 1);
+      assert.equal(firstStop.storeClosed, false);
+      assert.ok(firstStop.elapsedMs <= firstStop.budgetMs + 100);
+      const retained = raw.prepare(`SELECT state, runner_pid FROM operations_work WHERE job_id=?`).get(accepted.jobId);
+      assert.equal(retained.state, 'running');
+      assert.equal(retained.runner_pid, runnerPid);
+      assert.throws(() => process.kill(runnerPid, 0), error => error.code === 'ESRCH');
+      assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 1);
+    } finally {
+      try { writerLock.exec('ROLLBACK'); } catch {}
+      writerLock.close();
+    }
+
+    const recoveredStop = await worker.stop('test');
+    assert.equal(recoveredStop.stopped, true);
+    assert.equal(recoveredStop.durableCleanupComplete, true);
+    assert.equal(recoveredStop.pendingDurableCleanupCount, 0);
+    assert.equal(recoveredStop.storeClosed, true);
+    const recovered = openStore(busyStop.databasePath);
+    const queuedRow = recovered._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: scope.tenantId, projectId: scope.projectId, jobId: accepted.jobId
+    });
+    assert.equal(queuedRow.state, 'queued');
+    assert.equal(raw.prepare('SELECT runner_pid FROM operations_work WHERE job_id=?').get(accepted.jobId).runner_pid, null);
+    assert.equal(Number(raw.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight), 0);
+    recovered.close();
+
+    const restart = createOperationsWorker({
+      databasePath: busyStop.databasePath, ownerId: 'busy-stop-restart', config: shutdownConfig
+    });
+    t.after(async () => { if (restart.lifecycle !== 'stopped') await restart.stop('test'); });
+    void restart.start();
+    const completed = await waitForStatus(restart, scope, accepted.jobId, 'completed', 8_000);
+    assert.equal(completed.state, 'completed');
+    const restartStop = await restart.stop('test');
+    assert.equal(restartStop.stopped, true);
+    raw.close();
+  });
 });
 
 test('OPS08_HEALTH_FAIL_CLOSED reports unavailable authority, provider, stale data, and secret-free status', async t => {
@@ -626,19 +2274,162 @@ test('OPS08_HEALTH_FAIL_CLOSED reports unavailable authority, provider, stale da
   const readyLocal = worker.health();
   METRICS.maxSupervisorRssBytes = Math.max(METRICS.maxSupervisorRssBytes, readyLocal.process.rssBytes);
   assert.equal(readyLocal.externalReady, false);
-  const directStore = openStore(join(temporary.directory, 'health-direct.sqlite'));
+  const directStorePath = join(temporary.directory, 'health-direct.sqlite');
+  const directStore = openStore(directStorePath);
   t.after(() => directStore.close());
   const direct = readOperationsHealth({ store: directStore, config: {}, lifecycle: 'accepting', heartbeatAgeMs: 10_000 });
   assert.ok(direct.degradedReasons.includes('DIAGNOSTICS_STALE'));
   assert.equal(direct.externalDispatchEnabled, false);
   const nonexistent = readStoreCompatibility(join(temporary.directory, 'missing.sqlite'));
   assert.equal(nonexistent.status, 'store_unavailable');
+
+  await t.test('OPS08.C01 health truth table reports lifecycle, stale data, unavailable authority/provider, lease, unknown, and telemetry states', () => {
+    const starting = readOperationsHealth({ store: directStore, config: {}, lifecycle: 'starting', heartbeatAgeMs: 10 });
+    assert.equal(starting.state, 'starting');
+    assert.equal(starting.live, false);
+    assert.equal(starting.localReady, false);
+    const acceptingStale = readOperationsHealth({ store: directStore, config: {}, lifecycle: 'accepting', heartbeatAgeMs: 10_000 });
+    assert.equal(acceptingStale.state, 'degraded');
+    assert.ok(acceptingStale.degradedReasons.includes('DIAGNOSTICS_STALE'));
+    assert.ok(acceptingStale.degradedReasons.includes('POLICY_UNCONFIGURED'));
+    const stopping = readOperationsHealth({ store: directStore, config: {}, lifecycle: 'stopping', heartbeatAgeMs: 10 });
+    assert.equal(stopping.state, 'stopping');
+    assert.ok(stopping.degradedReasons.includes('SHUTTING_DOWN'));
+    const telemetryBad = readOperationsHealth({
+      store: directStore, config: {}, lifecycle: 'accepting', heartbeatAgeMs: 10,
+      telemetrySinkState: 'unavailable', telemetrySinkFailed: true, telemetrySinkPendingRecords: 2
+    });
+    assert.equal(telemetryBad.localReady, false);
+    assert.ok(telemetryBad.degradedReasons.includes('TELEMETRY_SINK_UNAVAILABLE'));
+    assert.ok(telemetryBad.degradedReasons.includes('TELEMETRY_SINK_ERROR'));
+    assert.equal(telemetryBad.authority.status, 'authority_unavailable');
+    assert.equal(telemetryBad.provider.status, 'provider_unavailable');
+    assert.equal(telemetryBad.externalReady, false);
+    assert.equal(telemetryBad.externalDispatchEnabled, false);
+    const stoppedHealth = readOperationsHealth({ store: directStore, config: {}, lifecycle: 'stopped', heartbeatAgeMs: 10 });
+    assert.equal(stoppedHealth.state, 'stopped');
+    assert.equal(stoppedHealth.localReady, false);
+
+    const futureVersionDb = new DatabaseSync(directStorePath);
+    futureVersionDb.exec('PRAGMA user_version=99');
+    futureVersionDb.close();
+    const futureSchema = readOperationsHealth({ store: directStore, config: {}, lifecycle: 'accepting', heartbeatAgeMs: 10 });
+    assert.ok(futureSchema.degradedReasons.includes('SCHEMA_UNSUPPORTED'));
+    assert.equal(futureSchema.localReady, false);
+    const restoreSchemaDb = new DatabaseSync(directStorePath);
+    restoreSchemaDb.exec('PRAGMA user_version=6');
+    restoreSchemaDb.close();
+
+    let now = 50_000;
+    const leaseDir = tempDirectory('ah11-health-lease-state-');
+    t.after(() => leaseDir.cleanup());
+    const leaseStore = openStore(leaseDir.databasePath, { clock: () => now });
+    t.after(() => leaseStore.close());
+    const accepted = admit(leaseStore, 'health-tenant', 'health-project', 'health-stale-lease');
+    const policy = operationsStoragePolicy(readOperationsConfig());
+    const claim = leaseStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, { ownerId: 'review-worker-health', policy }).claim;
+    leaseStore._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: claim.jobId, ownerId: claim.ownerId, generation: claim.generation,
+      fence: claim.fence, runnerPid: unusedProcessId()
+    });
+    leaseStore.recordDispatchIntent({
+      workflowId: claim.workflowId, ownerId: claim.ownerId, fence: claim.fence,
+      expectedRevision: claim.revision, attemptId: 'health-unknown-attempt',
+      logicalOperationRef: 'health-unknown-logical', authorityHoldRef: 'synthetic-local-bookkeeping:health-hold',
+      transportAttemptId: 'health-unknown-transport', eventId: 'health-unknown-intent'
+    });
+    now = claim.leaseExpiresAtMs + 1;
+    const leaseHealth = readOperationsHealth({ store: leaseStore, config: {}, lifecycle: 'accepting', heartbeatAgeMs: 10 });
+    assert.ok(leaseHealth.degradedReasons.includes('LEASE_STALE'));
+    const unknownHealth = readOperationsHealth({ store: leaseStore, config: {}, lifecycle: 'accepting', heartbeatAgeMs: 10 });
+    assert.ok(unknownHealth.degradedReasons.includes('RECONCILIATION_PENDING'));
+    assert.equal(unknownHealth.reconciliation.count, 1);
+    assert.equal(unknownHealth.externalDispatchEnabled, false);
+    assert.equal(leaseStore.getWorkflow(accepted.workflowId).state, 'awaiting_response');
+  });
+
+  await t.test('OPS08.C02 saturated event reservations match admission and stop before any accepted row', () => {
+    const eventDir = tempDirectory('ah11-event-headroom-');
+    t.after(() => eventDir.cleanup());
+    const config = readOperationsConfig({
+      maxQueueRecords: 2, maxPerTenantRecords: 1, maxPerProjectRecords: 1,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768,
+      maxPerProjectBytes: 16_384, maxEventBacklog: 1_024
+    });
+    const seed = DurableWorkflowStore.open({ databasePath: eventDir.databasePath, busyTimeoutMs: 20 });
+    for (let index = 0; index < 1_024; index += 1) {
+      seed.createWorkflow({ workflowId: `event-headroom-${index}`, checkpoint: { index }, eventId: `event-headroom-${index}` });
+    }
+    seed.close();
+    const eventWorker = createOperationsWorker({ databasePath: eventDir.databasePath, ownerId: 'review-worker-event-cap', config });
+    t.after(async () => { if (eventWorker.lifecycle !== 'stopped') await eventWorker.stop('test'); });
+    void eventWorker.start();
+    const health = eventWorker.health();
+    assert.equal(health.localReady, false);
+    assert.ok(health.degradedReasons.includes('TELEMETRY_BACKLOG_HIGH'));
+    const rejected = eventWorker.submitSyntheticWork({
+      trustedSyntheticScope: { tenantId: 'event-cap-tenant', projectId: 'event-cap-project' },
+      idempotencyKey: 'event-cap-reject', planJson: PLAN
+    });
+    assert.equal(rejected.accepted, false);
+    assert.equal(rejected.reasonCode, 'TELEMETRY_BACKLOG_HIGH');
+    assert.equal(eventWorker.readScopedWorkPage({ trustedSyntheticScope: { tenantId: 'event-cap-tenant', projectId: 'event-cap-project' } }).items.length, 0);
+    const raw = new DatabaseSync(eventDir.databasePath, { readOnly: true });
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM operations_work').get().count), 0);
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM workflow_events').get().count), 1_024);
+    raw.close();
+    const stopped = eventWorker.stop('test');
+    return stopped.then(result => assert.equal(result.stopped, true));
+  });
+
+  await t.test('OPS08.C03 actual concurrency saturation is reported separately from minimum-admission readiness', async t => {
+    const saturatedDir = tempDirectory('ah11-health-saturated-worker-');
+    t.after(() => saturatedDir.cleanup());
+    const saturatedWorker = createOperationsWorker({
+      databasePath: saturatedDir.databasePath, ownerId: 'review-worker-saturated-health',
+      config: { workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1,
+        maxInFlightProject: 1, pollIntervalMs: 10 }
+    });
+    t.after(async () => { if (saturatedWorker.lifecycle !== 'stopped') await saturatedWorker.stop('test'); });
+    void saturatedWorker.start();
+    const scope = { tenantId: 'saturated-health-tenant', projectId: 'saturated-health-project' };
+    const planJson = JSON.stringify({
+      kind: 'agent-harness.private-synthetic-plan', version: 1,
+      steps: Array.from({ length: 32 }, (_, index) => ({
+        id: `z${String(index).padStart(2, '0')}`, operation: 'text.concat',
+        dependsOn: index % 12 === 0 ? [] : [`z${String(index - 1).padStart(2, '0')}`],
+        args: { parts: index % 12 === 0 ? ['x'.repeat(512)] : [{ $result: `z${String(index - 1).padStart(2, '0')}` }, ''] }
+      }))
+    });
+    const accepted = saturatedWorker.submitSyntheticWork({ trustedSyntheticScope: scope, idempotencyKey: 'health-saturated', planJson });
+    assert.equal(accepted.accepted, true);
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline && saturatedWorker.activeChildCount === 0) await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+    assert.equal(saturatedWorker.activeChildCount, 1);
+    const children = spawnSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' });
+    assert.equal(children.status, 0, children.stderr);
+    const runnerPid = Number(children.stdout.trim().split(/\s+/u).at(-1));
+    assert.ok(Number.isSafeInteger(runnerPid) && runnerPid > 1);
+    assert.equal(process.kill(runnerPid, 'SIGSTOP'), true);
+    const saturatedHealthDeadline = Date.now() + 1_000;
+    let health = saturatedWorker.health();
+    while (Date.now() < saturatedHealthDeadline && health.state !== 'saturated') {
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 2));
+      health = saturatedWorker.health();
+    }
+    assert.equal(health.state, 'saturated');
+    assert.equal(health.localReady, true, 'The local queue can still admit a minimum bounded job while all child slots are occupied.');
+    assert.equal(health.externalDispatchEnabled, false);
+    const stopped = await saturatedWorker.stop('test');
+    assert.equal(stopped.stopped, true);
+    assert.equal(stopped.childrenReaped, true);
+  });
   const stopped = await worker.stop('test');
   assert.equal(stopped.stopped, true);
   assert.equal(canaryTenant.includes('tenant-secret'), true);
 });
 
-test('OPS09_MIGRATION_COMPATIBILITY migrates schema 5 atomically, preserves older migration cases, and refuses future bytes', t => {
+test('OPS09_MIGRATION_COMPATIBILITY migrates schema 5 atomically, preserves older migration cases, and refuses future bytes', async t => {
   assert.equal(INTERNAL_SCHEMA_VERSION, 6);
   const temporary = tempDirectory('ah11-migration-');
   t.after(() => temporary.cleanup());
@@ -707,6 +2498,163 @@ test('OPS09_MIGRATION_COMPATIBILITY migrates schema 5 atomically, preserves olde
   assert.equal(readStoreCompatibility(futurePath).status, 'schema_unsupported');
   assert.throws(() => openStore(futurePath), error => error.code === 'UNSUPPORTED_SCHEMA_VERSION');
   assert.deepEqual(readFileSync(futurePath), bytes);
+  await t.test('OPS09.C01 maps the supported schema upgrade, rollback, future refusal, and retained envelope controls', () => {
+    assert.equal(readStoreCompatibility(temporary.databasePath).status, 'supported');
+    assert.equal(readStoreCompatibility(rollbackPath).status, 'migration_required');
+    assert.equal(readStoreCompatibility(futurePath).status, 'schema_unsupported');
+    const unchanged = new DatabaseSync(temporary.databasePath, { readOnly: true });
+    assert.equal(unchanged.prepare('PRAGMA user_version').get().user_version, 6);
+    unchanged.close();
+    assert.match(readFileSync(join(ROOT, 'tests/runtime/durability.test.js'), 'utf8'), /v1 checkpoint migration/u);
+    assert.equal(INTERNAL_SCHEMA_VERSION, 6);
+  });
+
+  await t.test('OPS09.C02 migrates populated schema 6 without changing queued, running, unknown, or terminal custody', async t => {
+    const retained = tempDirectory('ah11-v6-policy-binding-migration-');
+    t.after(() => retained.cleanup());
+    let now = 90_000;
+    const source = DurableWorkflowStore.open({
+      databasePath: retained.databasePath, busyTimeoutMs: 20, clock: () => now
+    });
+    source._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+      maxStoreBytes: readOperationsConfig().maxStoreBytes,
+      maxWalBytes: readOperationsConfig().maxWalBytes,
+      minFreeDiskBytes: readOperationsConfig().minFreeDiskBytes
+    });
+    const defaultPolicy = operationsStoragePolicy(readOperationsConfig());
+
+    const running = admit(source, 'migration-running-tenant', 'migration-running-project', 'migration-running');
+    const runningClaim = source._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'migration-running-owner', policy: defaultPolicy
+    }).claim;
+    source._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: running.jobId, ownerId: runningClaim.ownerId, generation: runningClaim.generation,
+      fence: runningClaim.fence, runnerPid: unusedProcessId()
+    });
+
+    const unknown = admit(source, 'migration-unknown-tenant', 'migration-unknown-project', 'migration-unknown');
+    const unknownClaim = source._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'migration-unknown-owner', policy: defaultPolicy
+    }).claim;
+    source._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: unknown.jobId, ownerId: unknownClaim.ownerId, generation: unknownClaim.generation,
+      fence: unknownClaim.fence, runnerPid: unusedProcessId()
+    });
+    source.recordDispatchIntent({
+      workflowId: unknown.workflowId, ownerId: unknownClaim.ownerId, fence: unknownClaim.fence,
+      expectedRevision: unknownClaim.revision, attemptId: 'migration-unknown-attempt',
+      logicalOperationRef: 'migration-unknown-logical',
+      authorityHoldRef: 'synthetic-local-bookkeeping:migration-unknown-hold',
+      transportAttemptId: 'migration-unknown-transport', eventId: 'migration-unknown-intent'
+    });
+    now = unknownClaim.leaseExpiresAtMs + 1;
+    const expired = source._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy: defaultPolicy });
+    assert.ok(expired.items.some(item => item.jobId === unknown.jobId));
+    assert.equal(source._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'migration-unknown-recovery', policy: defaultPolicy, recoverableJobIds: [unknown.jobId]
+    }), null);
+
+    const terminal = admit(source, 'migration-terminal-tenant', 'migration-terminal-project', 'migration-terminal');
+    const terminalClaim = source._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'migration-terminal-owner', policy: defaultPolicy
+    }).claim;
+    const terminalWork = source._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: terminal.jobId, ownerId: terminalClaim.ownerId,
+      generation: terminalClaim.generation, fence: terminalClaim.fence
+    });
+    const localResult = await runBoundedLocalPlan({
+      store: source, workflowId: terminal.workflowId, ownerId: terminalClaim.ownerId,
+      fence: terminalClaim.fence, planJson: terminalWork.work.planJson,
+      limitsJson: terminalWork.work.limitsJson
+    });
+    assert.equal(localResult.status, 'completed');
+    source._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: terminal.jobId, ownerId: terminalClaim.ownerId,
+      generation: terminalClaim.generation, fence: terminalClaim.fence,
+      outcome: 'completed', childExited: true
+    });
+
+    const queued = admit(source, 'migration-queued-tenant', 'migration-queued-project', 'migration-queued');
+    source.close();
+
+    const snapshot = databasePath => {
+      const db = new DatabaseSync(databasePath, { readOnly: true });
+      const rows = (sql, ...params) => db.prepare(sql).all(...params).map(row => ({ ...row }));
+      const value = {
+        meta: rows(`SELECT pending_records, pending_bytes, in_flight, reserved_event_slots,
+          reserved_disk_bytes, last_tenant_id FROM operations_meta WHERE singleton=1`),
+        tenants: rows('SELECT * FROM operations_tenants ORDER BY tenant_id'),
+        projects: rows('SELECT * FROM operations_projects ORDER BY tenant_id, project_id'),
+        work: rows(`SELECT job_id, workflow_id, tenant_id, project_id, idempotency_key, work_json,
+          work_bytes, work_sha256, limits_version, state, generation, worker_id, runner_pid,
+          fence_token, lease_expires_ms, created_at_ms, updated_at_ms, reserved_event_slots,
+          reserved_disk_bytes, reason_code FROM operations_work ORDER BY job_id`),
+        workflows: rows('SELECT * FROM workflows ORDER BY workflow_id'),
+        checkpoints: rows('SELECT * FROM workflow_checkpoints ORDER BY workflow_id, sequence'),
+        events: rows('SELECT * FROM workflow_events ORDER BY sequence'),
+        outbox: rows('SELECT * FROM outbox ORDER BY event_sequence'),
+        attempts: rows('SELECT * FROM operation_attempts ORDER BY attempt_id'),
+        cursors: rows('SELECT * FROM telemetry_cursors ORDER BY consumer_id')
+      };
+      db.close();
+      return JSON.parse(JSON.stringify(value));
+    };
+    const beforeMigration = snapshot(retained.databasePath);
+    const legacy = new DatabaseSync(retained.databasePath);
+    legacy.exec('ALTER TABLE operations_meta DROP COLUMN policy_json; PRAGMA user_version=6;');
+    legacy.close();
+    assert.equal(readStoreCompatibility(retained.databasePath).status, 'migration_required');
+
+    const incompatible = DurableWorkflowStore.open({ databasePath: retained.databasePath, busyTimeoutMs: 20 });
+    const narrowConfig = readOperationsConfig({
+      maxQueueRecords: 2, maxPerTenantRecords: 1, maxPerProjectRecords: 1,
+      maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
+      maxTenants: 2, maxProjects: 2, maxInFlightGlobal: 1,
+      maxInFlightTenant: 1, maxInFlightProject: 1
+    });
+    assert.throws(() => incompatible._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+      maxStoreBytes: narrowConfig.maxStoreBytes, maxWalBytes: narrowConfig.maxWalBytes,
+      minFreeDiskBytes: narrowConfig.minFreeDiskBytes,
+      policy: operationsStoragePolicy(narrowConfig)
+    }), error => error.code === 'INVALID_INPUT');
+    incompatible.close();
+    const unbound = new DatabaseSync(retained.databasePath, { readOnly: true });
+    assert.equal(unbound.prepare('SELECT policy_json FROM operations_meta WHERE singleton=1').get().policy_json, null);
+    unbound.close();
+
+    const resumed = createOperationsWorker({
+      databasePath: retained.databasePath, ownerId: 'migration-resumed-worker'
+    });
+    assert.equal(readStoreCompatibility(retained.databasePath).status, 'supported');
+    assert.deepEqual(snapshot(retained.databasePath), beforeMigration);
+    const check = new DatabaseSync(retained.databasePath, { readOnly: true });
+    assert.deepEqual(check.prepare('SELECT job_id, state, runner_pid FROM operations_work ORDER BY job_id').all().map(row => ({ ...row })), [
+      { job_id: queued.jobId, state: 'queued', runner_pid: null },
+      { job_id: running.jobId, state: 'running', runner_pid: check.prepare('SELECT runner_pid FROM operations_work WHERE job_id=?').get(running.jobId).runner_pid },
+      { job_id: terminal.jobId, state: 'completed', runner_pid: null },
+      { job_id: unknown.jobId, state: 'unknown', runner_pid: null }
+    ].sort((left, right) => left.job_id.localeCompare(right.job_id)));
+    assert.equal(check.prepare('SELECT state FROM operation_attempts WHERE attempt_id=?').get('migration-unknown-attempt').state, 'intent');
+    assert.equal(check.prepare('SELECT authority_hold_ref FROM operation_attempts WHERE attempt_id=?').get('migration-unknown-attempt').authority_hold_ref,
+      'synthetic-local-bookkeeping:migration-unknown-hold');
+    check.close();
+    const stopped = await resumed.stop('test');
+    assert.equal(stopped.stopped, true);
+
+    const rollbackPath = join(retained.directory, 'v6-rollback.sqlite');
+    const rollbackSource = DurableWorkflowStore.open({ databasePath: rollbackPath, busyTimeoutMs: 20 });
+    rollbackSource.close();
+    const damaged = new DatabaseSync(rollbackPath);
+    damaged.exec('PRAGMA foreign_keys=OFF; ALTER TABLE operations_meta DROP COLUMN policy_json; DROP TABLE operations_work;');
+    const beforeRollback = damaged.prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name').all().map(row => ({ ...row }));
+    damaged.close();
+    assert.throws(() => DurableWorkflowStore.open({ databasePath: rollbackPath, busyTimeoutMs: 20 }));
+    const afterRollback = new DatabaseSync(rollbackPath, { readOnly: true });
+    assert.equal(afterRollback.prepare('PRAGMA user_version').get().user_version, 6);
+    assert.deepEqual(afterRollback.prepare('SELECT type, name, sql FROM sqlite_master ORDER BY type, name').all().map(row => ({ ...row })), beforeRollback);
+    assert.equal(Number(afterRollback.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('operations_meta') WHERE name='policy_json'").get().count), 0);
+    afterRollback.close();
+  });
 });
 
 test('OPS10_TELEMETRY_JEV_CUSTODY projects real worker events and retains cursor during a hung sink', async t => {
@@ -759,12 +2707,20 @@ test('OPS10_TELEMETRY_JEV_CUSTODY projects real worker events and retains cursor
   assert.ok(closed.pendingRecords > 0);
   assert.equal(closed.lastErrorCode, 'TELEMETRY_SINK_TIMEOUT');
   assert.equal(store.getTelemetryCursor('internal-telemetry-v1'), 0);
+  await t.test('OPS10.C01 a hung sink leaves its cursor and pending outbox unchanged', () => {
+    const diagnostics = exporter.diagnostics();
+    assert.equal(diagnostics.cursor, 0);
+    assert.ok(diagnostics.pendingRecords > 0);
+    assert.equal(diagnostics.lastErrorCode, 'TELEMETRY_SINK_TIMEOUT');
+    assert.equal(store.getTelemetryCursor('internal-telemetry-v1'), 0);
+    assert.equal(sinkWorker.health().externalDispatchEnabled, false);
+  });
   tokenizer.destroy();
   store.close();
   await worker.stop('test');
 });
 
-test('OPS11_RETENTION_OWNER_HOOKS refuses deletion or settlement without accepted external owner policy', t => {
+test('OPS11_RETENTION_OWNER_HOOKS refuses deletion or settlement without accepted external owner policy', async t => {
   const temporary = tempDirectory('ah11-retention-');
   t.after(() => temporary.cleanup());
   const store = openStore(temporary.databasePath);
@@ -779,6 +2735,62 @@ test('OPS11_RETENTION_OWNER_HOOKS refuses deletion or settlement without accepte
   assert.equal(response.deletionPerformed, false);
   assert.equal(response.settlementPerformed, false);
   assert.deepEqual(store.getCheckpoint('retention-immutable'), before);
+  await t.test('OPS11.C01 absent owner policy preserves immutable data and does not settle a hold', () => {
+    assert.equal(response.status, 'retention_not_configured');
+    assert.equal(response.deletionPerformed, false);
+    assert.equal(response.settlementPerformed, false);
+    assert.deepEqual(store.getCheckpoint('retention-immutable'), before);
+    assert.equal(store.getWorkflow('retention-immutable').state, 'queued');
+  });
+
+  await t.test('OPS11.C02 cursor gaps, undelivered evidence, backups, and unknown holds remain owner-controlled', () => {
+    const custodyDir = tempDirectory('ah11-retention-custody-');
+    t.after(() => custodyDir.cleanup());
+    let now = 80_000;
+    const custodyStore = openStore(custodyDir.databasePath, { clock: () => now });
+    t.after(() => custodyStore.close());
+    const accepted = admit(custodyStore, 'retention-tenant', 'retention-project', 'retention-unknown');
+    const policy = operationsStoragePolicy(readOperationsConfig());
+    const claim = custodyStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'review-worker-retention-unknown', policy
+    }).claim;
+    custodyStore._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
+      jobId: claim.jobId, ownerId: claim.ownerId, generation: claim.generation,
+      fence: claim.fence, runnerPid: unusedProcessId()
+    });
+    custodyStore.recordDispatchIntent({
+      workflowId: accepted.workflowId, ownerId: claim.ownerId, fence: claim.fence,
+      expectedRevision: claim.revision, attemptId: 'retention-unknown-attempt',
+      logicalOperationRef: 'retention-unknown-logical', authorityHoldRef: 'synthetic-local-bookkeeping:retention-hold',
+      transportAttemptId: 'retention-unknown-transport', eventId: 'retention-unknown-intent'
+    });
+    now = claim.leaseExpiresAtMs + 1;
+    custodyStore._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy });
+    const cursorBefore = custodyStore.getTelemetryCursor('internal-telemetry-v1');
+    const pendingBefore = custodyStore.countEventRowsAfter(cursorBefore, 1_000);
+    const checkpointBefore = custodyStore.getCheckpoint(accepted.workflowId);
+    const request = requestOwnerRetention(custodyStore, {
+      ownerRole: 'Finance and reliability', policyVersion: 'unaccepted-v1',
+      recordClass: 'unknown-attempts-and-events', maximumItems: 100
+    });
+    assert.equal(request.accepted, false);
+    assert.equal(request.status, 'retention_not_configured');
+    assert.equal(request.deletionPerformed, false);
+    assert.equal(request.settlementPerformed, false);
+    custodyStore.close();
+    const reopened = openStore(custodyDir.databasePath);
+    assert.equal(reopened.getTelemetryCursor('internal-telemetry-v1'), cursorBefore);
+    assert.deepEqual(reopened.countEventRowsAfter(cursorBefore, 1_000), pendingBefore);
+    assert.deepEqual(reopened.getCheckpoint(accepted.workflowId), checkpointBefore);
+    assert.equal(reopened.getAttempt('retention-unknown-attempt').state, 'intent');
+    assert.equal(reopened.getAttempt('retention-unknown-attempt').authorityHoldRef,
+      'synthetic-local-bookkeeping:retention-hold');
+    assert.equal(reopened.getWorkflow(accepted.workflowId).state, 'awaiting_response');
+    const raw = new DatabaseSync(custodyDir.databasePath, { readOnly: true });
+    assert.equal(Number(raw.prepare('SELECT COUNT(*) AS count FROM workflow_events WHERE workflow_id=?').get(accepted.workflowId).count), pendingBefore.count);
+    raw.close();
+    reopened.close();
+  });
 });
 
 test('OPS12_RUNBOOK_CLEAN_START starts, health-checks, SIGTERMs, reopens, and restarts the documented worker', async t => {
@@ -802,9 +2814,19 @@ test('OPS12_RUNBOOK_CLEAN_START starts, health-checks, SIGTERMs, reopens, and re
       check();
     });
     await started;
+    const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+    let processClosed = false;
+    t.after(async () => {
+      if (!processClosed) await killOwnedChildAndReap(child, closed);
+    });
+    const closeStartedAt = performance.now();
     assert.equal(child.kill('SIGTERM'), true);
     METRICS.processSigtermSignalsSent += 1;
-    const exit = await new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+    const exit = await closed;
+    processClosed = true;
+    const processCloseElapsedMs = performance.now() - closeStartedAt;
+    METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, processCloseElapsedMs);
+    METRICS.processCloseSamples += 1;
     METRICS.processRuns += 1;
     assert.equal(exit.code, 0);
     assert.match(output, /"event":"operations_worker_stopped"/u);
@@ -817,9 +2839,24 @@ test('OPS12_RUNBOOK_CLEAN_START starts, health-checks, SIGTERMs, reopens, and re
   assert.equal(health.authority.status, 'authority_unavailable');
   assert.equal(health.provider.status, 'provider_unavailable');
   store.close();
+  await t.test('OPS12.C01 executes busy, unavailable, future-schema, stuck-review, and unknown-hold recovery in a child process', async t => {
+    const transcriptPath = join(temporary.directory, 'recovery-cases.jsonl');
+    const result = await runChild(join(ROOT, 'tests/operations/runbook-recovery-cases.mjs'), [transcriptPath], { timeoutMs: 20_000 });
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), { cases: 5, passed: 5, providerCalls: 0 });
+    const records = readFileSync(transcriptPath, 'utf8').trim().split(/\r?\n/u).map(line => JSON.parse(line));
+    assert.deepEqual(records.map(record => record.case), [
+      'busy_store_spans_stop', 'store_unavailable', 'future_schema',
+      'stuck_runner_review_escalation', 'unknown_hold_restart_escalation'
+    ]);
+    assert.ok(records.every(record => record.outcome === 'pass' && record.providerCalls === 0));
+    assert.equal(records.find(record => record.case === 'future_schema').originalBytesPreserved, true);
+    assert.equal(records.find(record => record.case === 'stuck_runner_review_escalation').childReaped, true);
+    assert.equal(records.find(record => record.case === 'unknown_hold_restart_escalation').holdRetained, true);
+  });
 });
 
-test('OPS13_EVIDENCE_GATES binds all required groups to the current source and reports no unrun provider success', () => {
+test('OPS13_EVIDENCE_GATES binds all required groups to the current source and reports no unrun provider success', async t => {
   const source = readFileSync(join(ROOT, 'src/worker/private/worker.js'), 'utf8');
   const fixture = readFileSync(join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'), 'utf8');
   const evidenceVerifier = readFileSync(join(ROOT, 'tests/operations/verify-fixture.js'), 'utf8');
@@ -833,14 +2870,30 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
   assert.match(evidenceVerifier, /executedHead:\s*startHead/u);
   assert.doesNotMatch(evidenceVerifier, /baseHead:\s*['"]f02f38a6/u);
   assert.deepEqual(Object.keys(METRICS).sort(), [
-    'blockedExternalNetworkAttempts', 'controlledDnsResolve4', 'controlledDnsResolve6',
+      'blockedExternalNetworkAttempts', 'controlledDnsResolve4', 'controlledDnsResolve6',
     'controlledHttpsRequests', 'controlledHttpsWrites', 'processRuns', 'processSigkillSignalsSent',
     'processSigtermSignalsSent', 'providerCalls', 'ownedRunnerStarts', 'ownedRunnerTermSignals',
     'ownedRunnerKillSignals', 'ownedRunnerShutdownElapsedMsMax', 'ownedRunnerShutdownSamples',
-    'processSigtermDrainElapsedMsMax', 'processSigtermDrainSamples', 'maxSupervisorRssBytes', 'maxRunnerRssBytes'
+      'processSigtermDrainElapsedMsMax', 'processSigtermDrainSamples', 'processCloseElapsedMsMax',
+      'processCloseSamples', 'runnerDeadlineCloseElapsedMsMax', 'runnerDeadlineCloseSamples',
+      'storeHighWaterBytes', 'storeReservedHighWaterBytes', 'databaseHighWaterBytes', 'walHighWaterBytes',
+      'shmHighWaterBytes', 'freeSpaceLowWaterBytes', 'pendingEventHighWaterRecords',
+      'reservedEventHighWaterSlots', 'resourceHighWaterSamples',
+      'ownedRunnerCountHighWater', 'supervisorOpenFileDescriptors', 'runnerOpenFileDescriptors',
+      'processSigintSignalsSent', 'maxSupervisorRssBytes', 'maxRunnerRssBytes'
   ].sort());
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
+  await t.test('OPS13.C01 verifier binds explicit local case IDs, clean pins, process/resource metrics, and upload members', () => {
+    assert.match(evidenceVerifier, /REQUIRED_LOCAL_CASES/u);
+    assert.match(evidenceVerifier, /missingLocalCases/u);
+    assert.match(evidenceVerifier, /processCloseElapsedMs/u);
+    assert.match(evidenceVerifier, /runnerDeadlineCloseElapsedMsMax/u);
+    assert.match(evidenceVerifier, /resourceHighWaterSamples/u);
+    assert.match(readFileSync(join(ROOT, '.github/workflows/runtime-foundation.yml'), 'utf8'),
+      /\.runtime-artifacts\/AH-11-OPS-\*\.jsonl/u);
+    assert.equal(METRICS.providerCalls, 0);
+  });
 });
 
 after(() => {

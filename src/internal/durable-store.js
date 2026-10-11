@@ -14,10 +14,12 @@ import {
 } from './checkpoint-bounds.js';
 import {
   createLimitSet,
+  getLimitValues,
   validateBudgetSnapshot
 } from '../orchestrator/internal/limits.js';
 import {
   compilePlan,
+  getMaximumCompletedResultsJsonBytes,
   getNextReadyStep,
   getPlanStepIds,
   validatePrivateCheckpointResults
@@ -35,6 +37,12 @@ const SAFE_PROVIDER_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const LOCAL_CHECKPOINT_KIND = 'agent-harness.private-bounded-local-checkpoint';
 const LOCAL_STEP_ID = /^[a-z][a-z0-9_-]{0,47}$/u;
 const OPS_EVENT_RESERVATION = 96;
+const OPS_MAX_WORKER_GENERATIONS = 16;
+const OPS_GENERATION_WRITE_RESERVE_BYTES = 16_384;
+const OPS_CHECKPOINT_WRITE_BASE_BYTES = 32_768;
+const OPS_ADMISSION_WRITE_RESERVE_BYTES = 65_536;
+const OPS_MIN_WORK_BYTES = 256;
+const OPS_MIN_PLAN_JSON = '{"kind":"agent-harness.private-synthetic-plan","version":1,"steps":[{"id":"sum","operation":"number.add","dependsOn":[],"args":{"left":20,"right":22}}]}';
 const OPS_TERMINAL_STATES = new Set(['completed', 'failed', 'cancelled']);
 const OPS_SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const JEV_UNKNOWN_REASONS = new Set([
@@ -938,9 +946,13 @@ function createOperationsSchema(db) {
       in_flight INTEGER NOT NULL CHECK (in_flight >= 0),
       reserved_event_slots INTEGER NOT NULL CHECK (reserved_event_slots >= 0),
       reserved_disk_bytes INTEGER NOT NULL CHECK (reserved_disk_bytes >= 0),
-      last_tenant_id TEXT
+      last_tenant_id TEXT,
+      policy_json TEXT
     ) STRICT;
-    INSERT INTO operations_meta VALUES (1, 0, 0, 0, 0, 0, NULL);
+    INSERT INTO operations_meta (
+      singleton, pending_records, pending_bytes, in_flight,
+      reserved_event_slots, reserved_disk_bytes, last_tenant_id, policy_json
+    ) VALUES (1, 0, 0, 0, 0, 0, NULL, NULL);
 
     CREATE TABLE operations_tenants (
       tenant_id TEXT PRIMARY KEY,
@@ -1108,6 +1120,91 @@ function readOperationsPolicy(value, operation) {
   return fields;
 }
 
+function operationsPolicyIdentity(value, operation) {
+  const policy = readOperationsPolicy(value, operation);
+  return JSON.stringify(OPS_POLICY_KEYS.map(key => [key, policy[key]]));
+}
+
+function validateUnboundOperationsStore(db, policy, operation, databasePath, resourceCeilings) {
+  const meta = db.prepare('SELECT * FROM operations_meta WHERE singleton = 1').get();
+  if (!meta) fail(operation, 'CHECKPOINT_CORRUPT', 'The worker operations store is incomplete.');
+  const rows = db.prepare(`
+    SELECT state, work_bytes FROM operations_work INDEXED BY operations_work_state_idx
+    WHERE state IN ('queued','running','parked','unknown') LIMIT ?
+  `).all(policy.maxQueueRecords + 1);
+  const pendingBytes = rows.reduce((sum, item) => sum + Number(item.work_bytes), 0);
+  const inFlight = rows.reduce((sum, item) => sum + (item.state === 'running' ? 1 : 0), 0);
+  if (rows.length > policy.maxQueueRecords
+      || rows.length !== Number(meta.pending_records)
+      || pendingBytes !== Number(meta.pending_bytes)
+      || inFlight !== Number(meta.in_flight)
+      || Number(meta.pending_records) > policy.maxQueueRecords
+      || Number(meta.pending_bytes) > policy.maxQueueBytes
+      || Number(meta.in_flight) > policy.maxInFlightGlobal) {
+    fail(operation, 'INVALID_INPUT', 'The retained operations queue is not compatible with this worker policy.');
+  }
+
+  const tenants = db.prepare(`
+    SELECT pending_records, pending_bytes, in_flight FROM operations_tenants LIMIT ?
+  `).all(policy.maxTenants + 1);
+  const projects = db.prepare(`
+    SELECT pending_records, pending_bytes, in_flight FROM operations_projects LIMIT ?
+  `).all(policy.maxProjects + 1);
+  if (tenants.length > policy.maxTenants || projects.length > policy.maxProjects
+      || tenants.some(item => Number(item.pending_records) > policy.maxPerTenantRecords
+        || Number(item.pending_bytes) > policy.maxPerTenantBytes
+        || Number(item.in_flight) > policy.maxInFlightTenant)
+      || projects.some(item => Number(item.pending_records) > policy.maxPerProjectRecords
+        || Number(item.pending_bytes) > policy.maxPerProjectBytes
+        || Number(item.in_flight) > policy.maxInFlightProject)) {
+    fail(operation, 'INVALID_INPUT', 'The retained operations scopes exceed this worker policy.');
+  }
+
+  const cursorRow = db.prepare(
+    'SELECT last_sequence FROM telemetry_cursors WHERE consumer_id = ?'
+  ).get('internal-telemetry-v1');
+  const cursor = cursorRow ? Number(cursorRow.last_sequence) : 0;
+  const pendingEvents = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT sequence FROM workflow_events WHERE sequence > ? LIMIT ?
+    )
+  `).get(cursor, policy.maxEventBacklog + 1).count);
+  if (pendingEvents + Number(meta.reserved_event_slots) > policy.maxEventBacklog) {
+    fail(operation, 'INVALID_INPUT', 'The retained event reservations exceed this worker policy.');
+  }
+
+  if (databasePath && resourceCeilings) {
+    const resources = operationsResourceSnapshot(databasePath);
+    const capacity = operationsResourceCapacity(resources, meta, policy, {
+      pendingEvents,
+      additionalDiskBytes: 0,
+      additionalWalBytes: 0,
+      additionalEventSlots: 0
+    });
+    if (!capacity.ok || policy.maxStoreBytes !== resourceCeilings.maxStoreBytes
+        || policy.maxWalBytes !== resourceCeilings.maxWalBytes
+        || policy.minFreeDiskBytes !== resourceCeilings.minFreeDiskBytes) {
+      fail(operation, 'INVALID_INPUT', 'The retained operations reservations exceed this worker resource policy.');
+    }
+  }
+}
+
+function ensureOperationsPolicy(db, policy, operation, bindIfUnconfigured = true,
+  databasePath = null, resourceCeilings = null) {
+  const identity = operationsPolicyIdentity(policy, operation);
+  const row = db.prepare('SELECT policy_json FROM operations_meta WHERE singleton = 1').get();
+  if (!row) fail(operation, 'CHECKPOINT_CORRUPT', 'The worker operations store is incomplete.');
+  if (row.policy_json === null && bindIfUnconfigured) {
+    validateUnboundOperationsStore(db, policy, operation, databasePath, resourceCeilings);
+    db.prepare('UPDATE operations_meta SET policy_json = ? WHERE singleton = 1 AND policy_json IS NULL').run(identity);
+  }
+  const current = db.prepare('SELECT policy_json FROM operations_meta WHERE singleton = 1').get().policy_json;
+  if (current !== null && current !== identity) {
+    fail(operation, 'INVALID_INPUT', 'The worker policy does not match the policy bound to this operations store.');
+  }
+  return current === identity;
+}
+
 function opsBackpressure(reasonCode, retryAfterMs = 250) {
   return Object.freeze({
     accepted: false,
@@ -1115,6 +1212,102 @@ function opsBackpressure(reasonCode, retryAfterMs = 250) {
     reasonCode,
     retryAfterMs: Math.min(5_000, Math.max(25, retryAfterMs))
   });
+}
+
+function operationsResourceCapacity(resources, meta, policy, {
+  pendingEvents,
+  additionalDiskBytes,
+  additionalWalBytes = additionalDiskBytes,
+  additionalEventSlots
+}) {
+  const reasons = [];
+  const reservedDiskBytes = Number(meta.reserved_disk_bytes);
+  const reservedEventSlots = Number(meta.reserved_event_slots);
+  if (!resources) {
+    reasons.push('RESOURCE_PROBE_UNAVAILABLE');
+  } else {
+    const storeBytes = resources.databaseBytes + resources.walBytes + resources.shmBytes;
+    if (resources.walBytes + additionalWalBytes > policy.maxWalBytes) {
+      reasons.push('WAL_HEADROOM_LOW');
+    }
+    if (storeBytes + reservedDiskBytes + additionalDiskBytes > policy.maxStoreBytes) {
+      reasons.push('STORE_CAPACITY');
+    }
+    if (resources.availableBytes < policy.minFreeDiskBytes + reservedDiskBytes + additionalDiskBytes) {
+      reasons.push('DISK_HEADROOM_LOW');
+    }
+  }
+  if (pendingEvents + reservedEventSlots + additionalEventSlots > policy.maxEventBacklog) {
+    reasons.push('TELEMETRY_BACKLOG_HIGH');
+  }
+  return Object.freeze({ ok: reasons.length === 0, reasons: Object.freeze(reasons) });
+}
+
+function operationsLifecycleBudget(planJson, limitsJson, policy, operation) {
+  let limitSet;
+  let plan;
+  let limits;
+  let stepCount;
+  let resultBytes;
+  try {
+    limitSet = createLimitSet(limitsJson);
+    plan = compilePlan(planJson, limitSet, createDefaultRegistry(), 'ops-storage-budget');
+    limits = getLimitValues(limitSet);
+    stepCount = getPlanStepIds(plan).length;
+    resultBytes = getMaximumCompletedResultsJsonBytes(plan, '{}');
+  } catch {
+    fail(operation, 'INVALID_INPUT', 'The local work resource budget could not be derived safely.');
+  }
+  const checkpointBytes = 12_288
+    + Buffer.byteLength(planJson, 'utf8')
+    + Buffer.byteLength(limitsJson, 'utf8')
+    + resultBytes;
+  const controllerTransactions = limits.maxIterations + Math.min(stepCount, limits.maxIterations);
+  const checkpointTransactionReserve = checkpointBytes * 3 + OPS_CHECKPOINT_WRITE_BASE_BYTES;
+  const controllerReserve = controllerTransactions * checkpointTransactionReserve;
+  const lifecycleManagementTransactions = OPS_MAX_WORKER_GENERATIONS * 3 + 2;
+  const lifecycleManagementReserve = lifecycleManagementTransactions * OPS_GENERATION_WRITE_RESERVE_BYTES;
+  const diskBytes = Math.max(policy.completionHeadroomBytes, OPS_ADMISSION_WRITE_RESERVE_BYTES)
+    + OPS_ADMISSION_WRITE_RESERVE_BYTES + controllerReserve + lifecycleManagementReserve;
+  const eventSlots = 2 + OPS_MAX_WORKER_GENERATIONS * 2 + 1 + controllerTransactions + 1;
+  if (!Number.isSafeInteger(diskBytes) || !Number.isSafeInteger(eventSlots)) {
+    fail(operation, 'INVALID_INPUT', 'The local work resource budget exceeds the supported range.');
+  }
+  return Object.freeze({ diskBytes, eventSlots, controllerTransactions, checkpointBytes });
+}
+
+function operationsWriteCharge(checkpointBytes = 0) {
+  return Math.max(OPS_GENERATION_WRITE_RESERVE_BYTES,
+    checkpointBytes * 3 + OPS_CHECKPOINT_WRITE_BASE_BYTES);
+}
+
+function consumeOperationsStorageReservation(db, databasePath, ceilings, workflowId, charge, operation, remainingFloor = 0) {
+  const row = db.prepare(`
+    SELECT job_id, state, reserved_disk_bytes FROM operations_work WHERE workflow_id = ?
+  `).get(workflowId);
+  if (!row) return false;
+  if (!ceilings) fail(operation, 'STORE_HEADROOM', 'The local operation has no active storage ceiling.');
+  const reserved = Number(row.reserved_disk_bytes);
+  if (reserved < charge + remainingFloor) {
+    fail(operation, 'STORE_HEADROOM', 'The accepted local operation exhausted its reserved durable capacity.');
+  }
+  const meta = db.prepare('SELECT reserved_disk_bytes FROM operations_meta WHERE singleton = 1').get();
+  const resources = operationsResourceSnapshot(databasePath);
+  if (!meta || !resources) fail(operation, 'STORE_HEADROOM', 'The local operation storage status is unavailable.');
+  const reservedTotal = Number(meta.reserved_disk_bytes);
+  const storeBytes = resources.databaseBytes + resources.walBytes + resources.shmBytes;
+  if (storeBytes + reservedTotal > ceilings.maxStoreBytes
+      || resources.walBytes + charge > ceilings.maxWalBytes
+      || resources.availableBytes < ceilings.minFreeDiskBytes + reservedTotal) {
+    fail(operation, 'STORE_HEADROOM', 'The durable store no longer has the capacity reserved for this operation.');
+  }
+  db.prepare(`
+    UPDATE operations_work SET reserved_disk_bytes = reserved_disk_bytes - ? WHERE job_id = ?
+  `).run(charge, row.job_id);
+  db.prepare(`
+    UPDATE operations_meta SET reserved_disk_bytes = reserved_disk_bytes - ? WHERE singleton = 1
+  `).run(charge);
+  return true;
 }
 
 function opsSafeIdentifier(value, maximum = 128) {
@@ -1280,6 +1473,34 @@ function migrateV5ToV6(db) {
   db.exec('PRAGMA user_version = 6');
 }
 
+function hasTable(db, tableName) {
+  return Number(db.prepare(
+    "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name=?"
+  ).get(tableName).count) === 1;
+}
+
+function hasColumn(db, tableName, columnName) {
+  return Number(db.prepare(
+    'SELECT COUNT(*) AS count FROM pragma_table_info(?) WHERE name=?'
+  ).get(tableName, columnName).count) === 1;
+}
+
+function migrateV6OperationsPolicyBinding(db) {
+  if (!hasTable(db, 'operations_meta')) {
+    fail('migrateV6OperationsPolicyBinding', 'CHECKPOINT_CORRUPT', 'The version 6 operations metadata is missing.');
+  }
+  if (!hasColumn(db, 'operations_meta', 'policy_json')) {
+    db.exec('ALTER TABLE operations_meta ADD COLUMN policy_json TEXT');
+  }
+  const requiredTables = [
+    'operations_meta', 'operations_tenants', 'operations_projects', 'operations_work',
+    'workflow_events', 'workflows', 'workflow_checkpoints', 'operation_attempts'
+  ];
+  if (requiredTables.some(table => !hasTable(db, table))) {
+    fail('migrateV6OperationsPolicyBinding', 'CHECKPOINT_CORRUPT', 'The version 6 operations schema is incomplete.');
+  }
+}
+
 function initializeDatabase(db) {
   const version = readUserVersion(db);
   if (version > INTERNAL_SCHEMA_VERSION) {
@@ -1304,13 +1525,14 @@ function initializeDatabase(db) {
     ).get();
     if (!table) fail('initializeDatabase', 'CHECKPOINT_CORRUPT', 'The legacy workflow table is missing.');
   }
-  if (version >= 1 && version <= 5) {
+  if (version >= 1 && version <= 6) {
     inTransaction(db, 'initializeDatabase', () => {
       if (version === 1) migrateV1ToV4(db);
       else if (version === 2) migrateV2ToV4(db);
       else if (version === 3) migrateV3ToV4(db);
       if (readUserVersion(db) === 4) migrateV4ToV5(db);
       if (readUserVersion(db) === 5) migrateV5ToV6(db);
+      if (readUserVersion(db) === 6) migrateV6OperationsPolicyBinding(db);
       if (readUserVersion(db) !== INTERNAL_SCHEMA_VERSION) {
         fail('initializeDatabase', 'UNSUPPORTED_SCHEMA_VERSION', 'The durable store schema could not be upgraded safely.');
       }
@@ -1337,6 +1559,7 @@ export class DurableWorkflowStore {
   #clock;
   #idFactory;
   #databasePath;
+  #operationsResourceCeilings = null;
 
   static open({ databasePath, clock = Date.now, idFactory = randomUUID, busyTimeoutMs = 5000 } = {}) {
     const DatabaseSync = openSqliteConstructor();
@@ -1412,8 +1635,13 @@ export class DurableWorkflowStore {
           'workflow_events','workflows','workflow_checkpoints','operation_attempts'
         )
       `).get();
+      const policyColumn = db.prepare(`
+        SELECT COUNT(*) AS count FROM pragma_table_info('operations_meta')
+        WHERE name = 'policy_json'
+      `).get();
       return Object.freeze({
-        status: Number(required.count) === 8 ? 'supported' : 'schema_unsupported',
+        status: Number(required.count) !== 8 ? 'schema_unsupported'
+          : Number(policyColumn.count) === 1 ? 'supported' : 'migration_required',
         schemaVersion: version,
         readOnly: true
       });
@@ -1433,6 +1661,40 @@ export class DurableWorkflowStore {
     this.#clock = clock;
     this.#idFactory = idFactory;
     this.#databasePath = databasePath;
+  }
+
+  /** @internal Pins the owning operations policy into an isolated local child store. */
+  _operationsSetResourceCeilings(capability, input) {
+    const operation = '_operationsSetResourceCeilings';
+    if (capability !== OPERATIONS_STORAGE_CAPABILITY) {
+      fail(operation, 'INVALID_INPUT', 'The private worker operations capability is required.');
+    }
+    const fields = readOwnDataRecord(input,
+      ['maxStoreBytes', 'maxWalBytes', 'minFreeDiskBytes', 'policy'], operation,
+      ['maxStoreBytes', 'maxWalBytes', 'minFreeDiskBytes']);
+    for (const [key, minimum, maximum] of [
+      ['maxStoreBytes', 16_777_216, 1_073_741_824],
+      ['maxWalBytes', 1_048_576, 134_217_728],
+      ['minFreeDiskBytes', 1_048_576, 1_073_741_824]
+    ]) {
+      if (!Number.isSafeInteger(fields[key]) || fields[key] < minimum || fields[key] > maximum) {
+        fail(operation, 'INVALID_INPUT', 'The local store resource ceiling is invalid.');
+      }
+    }
+    if (fields.policy !== undefined) readOperationsPolicy(fields.policy, operation);
+    this.#assertOpen(operation);
+    const resourceCeilings = Object.freeze({
+      maxStoreBytes: fields.maxStoreBytes,
+      maxWalBytes: fields.maxWalBytes,
+      minFreeDiskBytes: fields.minFreeDiskBytes
+    });
+    if (fields.policy !== undefined) {
+      inTransaction(this.#db, operation, () => ensureOperationsPolicy(
+        this.#db, fields.policy, operation, true, this.#databasePath, resourceCeilings
+      ));
+    }
+    this.#operationsResourceCeilings = resourceCeilings;
+    return Object.freeze({ configured: true });
   }
 
   /** @internal Atomically binds trusted synthetic scope, workflow, queue row, counters, and events. */
@@ -1470,6 +1732,12 @@ export class DurableWorkflowStore {
         || Buffer.byteLength(workFields.limitsJson, 'utf8') > 2_048) {
       fail(operation, 'INVALID_INPUT', 'Only the pinned bounded local-plan work type is supported.');
     }
+    const lifecycleBudget = operationsLifecycleBudget(
+      workFields.planJson,
+      workFields.limitsJson,
+      policy,
+      operation
+    );
     this.#assertOpen(operation);
     const workBytes = Buffer.byteLength(fields.workJson, 'utf8');
     const workHash = digest(JSON.stringify([
@@ -1481,6 +1749,9 @@ export class DurableWorkflowStore {
     ]));
 
     return inTransaction(this.#db, operation, () => {
+      ensureOperationsPolicy(
+        this.#db, policy, operation, true, this.#databasePath, this.#operationsResourceCeilings
+      );
       const duplicate = this.#db.prepare(`
         SELECT job_id, workflow_id, state, work_json, work_sha256
         FROM operations_work
@@ -1528,18 +1799,14 @@ export class DurableWorkflowStore {
           || Number(meta.pending_bytes) + workBytes > policy.maxQueueBytes) {
         return opsBackpressure('GLOBAL_QUEUE_FULL');
       }
-      if (tenant && (Number(tenant.pending_records) >= policy.maxPerTenantRecords
-          || Number(tenant.pending_bytes) + workBytes > policy.maxPerTenantBytes)) {
+      if (Number(tenant?.pending_records ?? 0) >= policy.maxPerTenantRecords
+          || Number(tenant?.pending_bytes ?? 0) + workBytes > policy.maxPerTenantBytes) {
         return opsBackpressure('TENANT_QUEUE_FULL');
       }
-      if (project && (Number(project.pending_records) >= policy.maxPerProjectRecords
-          || Number(project.pending_bytes) + workBytes > policy.maxPerProjectBytes)) {
+      if (Number(project?.pending_records ?? 0) >= policy.maxPerProjectRecords
+          || Number(project?.pending_bytes ?? 0) + workBytes > policy.maxPerProjectBytes) {
         return opsBackpressure('PROJECT_QUEUE_FULL');
       }
-      if (Number(meta.reserved_event_slots) + OPS_EVENT_RESERVATION > policy.maxEventBacklog) {
-        return opsBackpressure('EVENT_HEADROOM');
-      }
-
       const cursorRow = this.#db.prepare(
         'SELECT last_sequence FROM telemetry_cursors WHERE consumer_id = ?'
       ).get('internal-telemetry-v1');
@@ -1549,21 +1816,16 @@ export class DurableWorkflowStore {
           SELECT sequence FROM workflow_events WHERE sequence > ? LIMIT ?
         )
       `).get(telemetryCursor, policy.maxEventBacklog + 1).count);
-      if (pendingEvents + Number(meta.reserved_event_slots) + OPS_EVENT_RESERVATION
-          > policy.maxEventBacklog) {
-        return opsBackpressure('TELEMETRY_HEADROOM');
-      }
-
       const resources = operationsResourceSnapshot(this.#databasePath);
-      if (!resources || resources.walBytes + policy.completionHeadroomBytes > policy.maxWalBytes) {
-        return opsBackpressure('STORE_HEADROOM', 500);
-      }
-      if (resources.databaseBytes + resources.walBytes + resources.shmBytes
-            + Number(meta.reserved_disk_bytes) + workBytes + policy.completionHeadroomBytes
-            > policy.maxStoreBytes
-          || resources.availableBytes
-            < policy.minFreeDiskBytes + Number(meta.reserved_disk_bytes) + policy.completionHeadroomBytes) {
-        return opsBackpressure('DISK_HEADROOM', 1_000);
+      const resourceStatus = operationsResourceCapacity(resources, meta, policy, {
+        pendingEvents,
+        additionalDiskBytes: lifecycleBudget.diskBytes + workBytes,
+        additionalWalBytes: policy.completionHeadroomBytes,
+        additionalEventSlots: lifecycleBudget.eventSlots
+      });
+      if (!resourceStatus.ok) {
+        const reasonCode = resourceStatus.reasons[0];
+        return opsBackpressure(reasonCode, reasonCode === 'RESOURCE_PROBE_UNAVAILABLE' ? 1_000 : 500);
       }
 
       if (!tenant) {
@@ -1608,15 +1870,15 @@ export class DurableWorkflowStore {
       `).run(
         jobId, workflowId, fields.tenantId, fields.projectId, fields.idempotencyKey,
         fields.workJson, workBytes, workHash, policy.limitsVersion, now, now,
-        OPS_EVENT_RESERVATION, policy.completionHeadroomBytes
+        lifecycleBudget.eventSlots, lifecycleBudget.diskBytes
       );
       adjustOperationsCounters(this.#db, {
         tenantId: fields.tenantId,
         projectId: fields.projectId,
         pendingRecords: 1,
         pendingBytes: workBytes,
-        reservedEvents: OPS_EVENT_RESERVATION,
-        reservedDiskBytes: policy.completionHeadroomBytes
+        reservedEvents: lifecycleBudget.eventSlots,
+        reservedDiskBytes: lifecycleBudget.diskBytes
       });
       this.#appendEvent({
         eventId: 'ops-created:' + jobId,
@@ -1658,6 +1920,9 @@ export class DurableWorkflowStore {
     const fields = readOwnDataRecord(input, ['policy'], operation);
     const policy = readOperationsPolicy(fields.policy, operation);
     this.#assertOpen(operation);
+    if (!ensureOperationsPolicy(this.#db, policy, operation, false)) {
+      fail(operation, 'OPS_POLICY_UNCONFIGURED', 'The worker policy has not been bound to this operations store.');
+    }
     const now = this.#now(operation);
     const rows = this.#db.prepare(`
       SELECT job_id, runner_pid, lease_expires_ms
@@ -1705,6 +1970,11 @@ export class DurableWorkflowStore {
           || Number(workflow.lease_expires_ms) <= now) {
         fail(operation, 'STALE_FENCE', 'The worker claim is no longer eligible to execute.');
       }
+      consumeOperationsStorageReservation(
+        this.#db, this.#databasePath, this.#operationsResourceCeilings,
+        workflow.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
+        OPS_GENERATION_WRITE_RESERVE_BYTES
+      );
       this.#db.prepare(`
         UPDATE operations_work SET runner_pid = ?, updated_at_ms = ?
         WHERE job_id = ? AND generation = ? AND fence_token = ?
@@ -1727,6 +1997,9 @@ export class DurableWorkflowStore {
     }
     this.#assertOpen(operation);
     return inTransaction(this.#db, operation, () => {
+      ensureOperationsPolicy(
+        this.#db, policy, operation, true, this.#databasePath, this.#operationsResourceCeilings
+      );
       const now = this.#now(operation);
       const meta = this.#db.prepare('SELECT * FROM operations_meta WHERE singleton = 1').get();
       if (!meta) return null;
@@ -1857,12 +2130,52 @@ export class DurableWorkflowStore {
             continue;
           }
           if (!['queued', 'running'].includes(workflow.state)) continue;
+          if (Number(workRow.generation) >= OPS_MAX_WORKER_GENERATIONS) {
+            consumeOperationsStorageReservation(
+              this.#db, this.#databasePath, this.#operationsResourceCeilings,
+              workflow.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation
+            );
+            const revision = Number(workflow.revision) + 1;
+            this.#db.prepare(`
+              UPDATE workflows SET state = 'review_required', revision = ?, lease_owner = NULL,
+                lease_expires_ms = NULL, updated_at_ms = ?
+              WHERE workflow_id = ? AND revision = ?
+            `).run(revision, now, workflow.workflow_id, Number(workflow.revision));
+            this.#appendEvent({
+              eventId: 'ops-generation-limit:' + workRow.job_id + ':' + Number(workRow.generation),
+              workflowId: workflow.workflow_id,
+              revision,
+              type: 'operations_work_parked',
+              fromState: workflow.state,
+              toState: 'review_required',
+              fence: Number(workflow.fence_token),
+              atMs: now
+            });
+            this.#db.prepare(`
+              UPDATE operations_work SET state = 'parked', worker_id = NULL, runner_pid = NULL,
+                lease_expires_ms = NULL, updated_at_ms = ?, reason_code = 'WORKER_GENERATION_LIMIT'
+              WHERE job_id = ? AND generation = ?
+            `).run(now, workRow.job_id, Number(workRow.generation));
+            if (workRow.state === 'running') {
+              adjustOperationsCounters(this.#db, {
+                tenantId: workRow.tenant_id,
+                projectId: workRow.project_id,
+                inFlight: -1
+              });
+            }
+            continue;
+          }
           if (workflow.lease_owner !== null && Number(workflow.lease_expires_ms) > now) continue;
           const expiresAtMs = now + policy.leaseTtlMs;
           const fence = Number(workflow.fence_token) + 1;
           if (!Number.isSafeInteger(expiresAtMs) || !Number.isSafeInteger(fence)) {
             fail(operation, 'INVALID_INPUT', 'The worker lease is outside its supported range.');
           }
+          consumeOperationsStorageReservation(
+            this.#db, this.#databasePath, this.#operationsResourceCeilings,
+            workflow.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
+            OPS_GENERATION_WRITE_RESERVE_BYTES
+          );
           const wasRunning = workRow.state === 'running';
           let revision = Number(workflow.revision);
           if (workflow.state === 'queued') {
@@ -1994,10 +2307,11 @@ export class DurableWorkflowStore {
       fail(operation, 'INVALID_INPUT', 'The private worker operations capability is required.');
     }
     const fields = readOwnDataRecord(input, [
-      'jobId', 'ownerId', 'generation', 'fence', 'outcome'
-    ], operation);
+      'jobId', 'ownerId', 'generation', 'fence', 'outcome', 'childExited'
+    ], operation, ['jobId', 'ownerId', 'generation', 'fence', 'outcome']);
     if (!opsSafeIdentifier(fields.jobId, 256) || !opsSafeIdentifier(fields.ownerId, 128)
-        || !['completed', 'shutdown', 'stopped', 'cancelled'].includes(fields.outcome)) {
+        || !['completed', 'shutdown', 'stopped', 'cancelled'].includes(fields.outcome)
+        || (fields.childExited !== undefined && typeof fields.childExited !== 'boolean')) {
       fail(operation, 'INVALID_INPUT', 'The worker completion record is invalid.');
     }
     expectInteger(fields.generation, 'generation', operation, 1);
@@ -2018,7 +2332,12 @@ export class DurableWorkflowStore {
         fail(operation, 'STALE_FENCE', 'The worker result no longer owns the workflow fence.');
       }
       if (currentOwner && !TERMINAL.has(workflow.state)) {
-        this.#assertLease(workflow, { ownerId: fields.ownerId, fence: fields.fence }, operation);
+        const leaseExpired = workflow.lease_expires_ms === null
+          || Number(workflow.lease_expires_ms) <= now;
+        if (leaseExpired && fields.childExited !== true) {
+          fail(operation, 'LEASE_EXPIRED', 'The worker lease expired before the child exit was durably settled.');
+        }
+        if (!leaseExpired) this.#assertLease(workflow, { ownerId: fields.ownerId, fence: fields.fence }, operation);
       }
       const unresolved = this.#db.prepare(`
         SELECT 1 FROM operation_attempts
@@ -2039,7 +2358,7 @@ export class DurableWorkflowStore {
         isComplete = false;
       }
 
-      const requestedCancel = workflow.cancellationRequested || fields.outcome === 'cancelled';
+      const requestedCancel = workflow.cancellation_requested === 1 || fields.outcome === 'cancelled';
       let nextState;
       let nextWorkflowState = workflow.state;
       if (unresolved) {
@@ -2062,6 +2381,12 @@ export class DurableWorkflowStore {
         nextState = 'parked';
         nextWorkflowState = 'review_required';
       }
+
+      consumeOperationsStorageReservation(
+        this.#db, this.#databasePath, this.#operationsResourceCeilings,
+        queue.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
+        OPS_GENERATION_WRITE_RESERVE_BYTES
+      );
 
       const changesWorkflow = nextWorkflowState !== workflow.state;
       const nextRevision = changesWorkflow ? Number(workflow.revision) + 1 : Number(workflow.revision);
@@ -2179,6 +2504,11 @@ export class DurableWorkflowStore {
         if (workflow.lease_expires_ms === null || Number(workflow.lease_expires_ms) <= now) {
           fail(operation, 'LEASE_EXPIRED', 'The worker lease expired before cancellation.');
         }
+        consumeOperationsStorageReservation(
+          this.#db, this.#databasePath, this.#operationsResourceCeilings,
+          queue.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
+          OPS_GENERATION_WRITE_RESERVE_BYTES
+        );
         const revision = Number(workflow.revision) + 1;
         this.#db.prepare(`
           UPDATE workflows SET cancellation_requested = 1, revision = ?, updated_at_ms = ?
@@ -2211,14 +2541,17 @@ export class DurableWorkflowStore {
         LIMIT 1
       `).get(queue.workflow_id);
       if (unresolved) {
+        consumeOperationsStorageReservation(
+          this.#db, this.#databasePath, this.#operationsResourceCeilings,
+          queue.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
+          OPS_GENERATION_WRITE_RESERVE_BYTES
+        );
         const nextRevision = workflow.state === 'reconciliation_pending'
           ? Number(workflow.revision) : Number(workflow.revision) + 1;
-        if (nextRevision !== Number(workflow.revision)) {
-          this.#db.prepare(`
-            UPDATE workflows SET cancellation_requested = 1, state = 'reconciliation_pending',
-              revision = ?, updated_at_ms = ? WHERE workflow_id = ? AND revision = ?
-          `).run(nextRevision, now, queue.workflow_id, Number(workflow.revision));
-        }
+        this.#db.prepare(`
+          UPDATE workflows SET cancellation_requested = 1, state = 'reconciliation_pending',
+            revision = ?, updated_at_ms = ? WHERE workflow_id = ? AND revision = ?
+        `).run(nextRevision, now, queue.workflow_id, Number(workflow.revision));
         this.#appendEvent({
           eventId: 'ops-cancel-unknown:' + queue.job_id + ':' + queue.generation,
           workflowId: queue.workflow_id,
@@ -2242,6 +2575,10 @@ export class DurableWorkflowStore {
         });
         return Object.freeze({ accepted: true, state: 'unknown', generation: Number(queue.generation) });
       }
+      consumeOperationsStorageReservation(
+        this.#db, this.#databasePath, this.#operationsResourceCeilings,
+        queue.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation
+      );
       const revision = Number(workflow.revision) + 1;
       this.#db.prepare(`
         UPDATE workflows SET state = 'cancelled', cancellation_requested = 1, revision = ?,
@@ -2271,7 +2608,7 @@ export class DurableWorkflowStore {
         pendingBytes: -Number(queue.work_bytes),
         inFlight: 0,
         reservedEvents: -Number(afterEvent.reserved_event_slots),
-        reservedDiskBytes: -Number(queue.reserved_disk_bytes)
+        reservedDiskBytes: -Number(afterEvent.reserved_disk_bytes)
       });
       this.#db.prepare(`
         UPDATE operations_work SET reserved_event_slots = 0, reserved_disk_bytes = 0 WHERE job_id = ?
@@ -2414,19 +2751,22 @@ export class DurableWorkflowStore {
     `).get(now).count);
     const resources = operationsResourceSnapshot(this.#databasePath);
     const readiness = [];
+    const policyIdentity = operationsPolicyIdentity(policy, operation);
+    if (meta.policy_json === null) readiness.push('POLICY_UNCONFIGURED');
+    else if (meta.policy_json !== policyIdentity) readiness.push('POLICY_MISMATCH');
     if (!fields.accepting) readiness.push('SHUTTING_DOWN');
-    if (!resources) readiness.push('RESOURCE_PROBE_UNAVAILABLE');
-    if (resources && resources.walBytes + policy.completionHeadroomBytes > policy.maxWalBytes) readiness.push('WAL_HEADROOM_LOW');
-    if (resources && resources.availableBytes < policy.minFreeDiskBytes + Number(meta.reserved_disk_bytes)) {
-      readiness.push('DISK_HEADROOM_LOW');
-    }
+    const minimumBudget = operationsLifecycleBudget(OPS_MIN_PLAN_JSON, '{}', policy, operation);
+    const resourceStatus = operationsResourceCapacity(resources, meta, policy, {
+      pendingEvents: pending,
+      additionalDiskBytes: minimumBudget.diskBytes + OPS_MIN_WORK_BYTES,
+      additionalWalBytes: policy.completionHeadroomBytes,
+      additionalEventSlots: minimumBudget.eventSlots
+    });
+    readiness.push(...resourceStatus.reasons);
     if (Number(meta.pending_records) >= policy.maxQueueRecords
-        || Number(meta.pending_bytes) >= policy.maxQueueBytes) readiness.push('QUEUE_SATURATED');
+        || Number(meta.pending_bytes) + OPS_MIN_WORK_BYTES > policy.maxQueueBytes) readiness.push('QUEUE_SATURATED');
     if (unknownCount > 0) readiness.push('RECONCILIATION_PENDING');
     if (staleLeaseCount > 0) readiness.push('LEASE_STALE');
-    if (pending > policy.maxEventBacklog || Number(meta.reserved_event_slots) > policy.maxEventBacklog) {
-      readiness.push('TELEMETRY_BACKLOG_HIGH');
-    }
     const schemaVersion = readUserVersion(this.#db);
     if (schemaVersion > INTERNAL_SCHEMA_VERSION) readiness.push('SCHEMA_UNSUPPORTED');
     if (schemaVersion < INTERNAL_SCHEMA_VERSION) readiness.push('MIGRATION_REQUIRED');
@@ -2461,13 +2801,15 @@ export class DurableWorkflowStore {
         pendingCapped: pending > policy.maxEventBacklog,
         reservedEventSlots: Number(meta.reserved_event_slots),
         maxPendingEvents: policy.maxEventBacklog,
-        status: pending + Number(meta.reserved_event_slots) > policy.maxEventBacklog
+        status: pending + Number(meta.reserved_event_slots) + minimumBudget.eventSlots > policy.maxEventBacklog
           ? 'telemetry_degraded' : 'local_outbox_pending'
       }),
       staleLeases: Object.freeze({ count: Math.min(staleLeaseCount, 1000), capped: staleLeaseCount > 1000 }),
       resources: resources ? Object.freeze({
         databaseBytes: resources.databaseBytes,
         walBytes: resources.walBytes,
+        shmBytes: resources.shmBytes,
+        storeBytes: resources.databaseBytes + resources.walBytes + resources.shmBytes,
         walLimitBytes: policy.maxWalBytes,
         freeBytes: resources.availableBytes,
         minimumFreeBytes: policy.minFreeDiskBytes,
@@ -2861,6 +3203,11 @@ export class DurableWorkflowStore {
         ? 'private_local_step_replayed'
         : 'private_local_step_admitted';
       this.#assertEventAvailable(fields.eventId, operation);
+      consumeOperationsStorageReservation(
+        this.#db, this.#databasePath, this.#operationsResourceCeilings,
+        fields.workflowId, operationsWriteCharge(Buffer.byteLength(payload, 'utf8')), operation,
+        OPS_GENERATION_WRITE_RESERVE_BYTES
+      );
       const revision = Number(row.revision) + 1;
       const sequence = Number(row.checkpoint_sequence) + 1;
       const update = this.#db.prepare(`
@@ -2958,6 +3305,11 @@ export class DurableWorkflowStore {
       assertCompletionBudget(previous, next, fields.stepId, operation);
 
       this.#assertEventAvailable(fields.eventId, operation);
+      consumeOperationsStorageReservation(
+        this.#db, this.#databasePath, this.#operationsResourceCeilings,
+        fields.workflowId, operationsWriteCharge(Buffer.byteLength(payload, 'utf8')), operation,
+        OPS_GENERATION_WRITE_RESERVE_BYTES
+      );
       const revision = Number(row.revision) + 1;
       const sequence = Number(row.checkpoint_sequence) + 1;
       const update = this.#db.prepare(`

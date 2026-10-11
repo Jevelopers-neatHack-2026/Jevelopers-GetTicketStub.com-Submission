@@ -43,6 +43,7 @@ try {
   if (!healthBeforeStop.live || healthBeforeStop.externalReady || healthBeforeStop.externalDispatchEnabled) {
     throw new Error('The health snapshot did not preserve the offline authority boundary.');
   }
+  process.stderr.write(`AH11_SHUTDOWN_SIGNAL ${process.hrtime.bigint()}\n`);
   process.kill(process.pid, 'SIGTERM');
   await firstLoop;
   const firstStop = await first.stop('signal');
@@ -65,6 +66,7 @@ try {
     throw new Error('Restart did not recover the durable idempotency result.');
   }
   const healthAfterRestart = second.health();
+  process.stderr.write(`AH11_SHUTDOWN_SIGNAL ${process.hrtime.bigint()}\n`);
   process.kill(process.pid, 'SIGTERM');
   await secondLoop;
   const secondStop = await second.stop('signal');

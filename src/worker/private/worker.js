@@ -1,5 +1,6 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -64,15 +65,43 @@ function remaining(deadline) {
   return Math.max(0, Math.floor(deadline - nowMono()));
 }
 
+function raceWithDelay(promise, timeoutMs, timeoutValue) {
+  let timer;
+  const timeout = new Promise(resolvePromise => {
+    timer = setTimeout(() => resolvePromise(timeoutValue), Math.max(0, timeoutMs));
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function processIsAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid < 2) return false;
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
     if (error?.code === 'ESRCH') return false;
     return true;
   }
+  if (process.platform === 'linux') {
+    try {
+      const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+      const state = stat.slice(stat.lastIndexOf(')') + 2).split(/\s+/u, 1)[0];
+      return state !== 'Z' && state !== 'X';
+    } catch (error) {
+      return error?.code !== 'ENOENT';
+    }
+  }
+  if (process.platform === 'darwin') {
+    const result = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], {
+      encoding: 'utf8', maxBuffer: 4_096, timeout: 250,
+      env: { PATH: '/usr/bin:/bin' }
+    });
+    if (result.status === 0) {
+      const state = result.stdout.trim().charAt(0);
+      return state !== 'Z' && state !== 'X';
+    }
+    if (result.status === 1) return false;
+  }
+  return true;
 }
 
 async function waitForEvent(child, event, timeoutMs) {
@@ -131,6 +160,17 @@ export function createOperationsWorker(input) {
   const databasePath = resolve(fields.databasePath);
   const store = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: config.busyTimeoutMs });
   const policy = operationsStoragePolicy(config);
+  try {
+    store._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+      maxStoreBytes: config.maxStoreBytes,
+      maxWalBytes: config.maxWalBytes,
+      minFreeDiskBytes: config.minFreeDiskBytes,
+      policy
+    });
+  } catch (error) {
+    try { store.close(); } catch {}
+    throw error;
+  }
   const children = new Map();
   const waiters = new Set();
   let lifecycle = 'starting';
@@ -139,14 +179,69 @@ export function createOperationsWorker(input) {
   let heartbeatAt = nowMono();
   let lastSafeErrorCode = null;
   let acquiredLoop = false;
+  const signalHandlerRemovers = new Set();
+
+  function removeSignalHandlers() {
+    for (const remove of [...signalHandlerRemovers]) remove();
+  }
 
   function wakeWaiters() {
-    if (children.size > 0 && lifecycle !== 'stopped') return;
+    if (ownedChildCount() > 0 && lifecycle !== 'stopped') return;
     for (const waiter of waiters) {
       clearTimeout(waiter.timer);
       waiter.resolve(lifecycle === 'accepting' || lifecycle === 'saturated');
     }
     waiters.clear();
+  }
+
+  function ownedChildCount() {
+    let count = 0;
+    for (const active of children.values()) if (!active.reaped) count += 1;
+    return count;
+  }
+
+  function pendingDurableCleanupCount() {
+    let count = 0;
+    for (const active of children.values()) if (active.reaped && !active.settled) count += 1;
+    return count;
+  }
+
+  function finishOwnedOutcome(active) {
+    if (!active.reaped || active.settled) return active.settled;
+    try {
+      store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
+        jobId: active.claim.jobId,
+        ownerId,
+        generation: active.claim.generation,
+        fence: active.claim.fence,
+        outcome: active.outcome,
+        childExited: true
+      });
+    } catch (error) {
+      if (error?.code === 'STALE_FENCE') {
+        // A newer generation already owns the durable row. Dropping this reaped local
+        // process cannot mutate or release the newer claim.
+        lastSafeErrorCode = 'OPS_STALE_RUNNER_RESULT_DISCARDED';
+        active.settled = true;
+      } else {
+        active.finishPending = true;
+        active.finishRetryable = error?.code === 'STORE_BUSY';
+        active.finishErrorCode = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
+          ? error.code : 'OPS_RESULT_PERSIST_FAILED';
+        lastSafeErrorCode = active.finishErrorCode;
+        return false;
+      }
+    }
+    active.finishPending = false;
+    active.finishRetryable = false;
+    if (lastSafeErrorCode === active.finishErrorCode) lastSafeErrorCode = null;
+    active.finishErrorCode = null;
+    clearTimeout(active.deadlineTimer);
+    clearTimeout(active.killTimer);
+    children.delete(active.claim.jobId);
+    heartbeatAt = nowMono();
+    wakeWaiters();
+    return true;
   }
 
   function spawnClaim(claim) {
@@ -157,7 +252,10 @@ export function createOperationsWorker(input) {
       ownerId,
       String(claim.generation),
       String(claim.fence),
-      String(config.busyTimeoutMs)
+      String(config.busyTimeoutMs),
+      String(config.maxStoreBytes),
+      String(config.maxWalBytes),
+      String(config.minFreeDiskBytes)
     ];
     if (argv.reduce((total, item) => total + Buffer.byteLength(item, 'utf8'), 0) > 4096) {
       lastSafeErrorCode = 'OPS_CHILD_ARGUMENTS_TOO_LARGE';
@@ -183,8 +281,22 @@ export function createOperationsWorker(input) {
       });
       return;
     }
-    const active = { child, claim, startedAt: nowMono(), settled: false };
+    const active = {
+      child, claim, startedAt: nowMono(), reaped: false, settled: false,
+      finishPending: false, finishRetryable: false, finishErrorCode: null, outcome: null,
+      deadlineExceeded: false, deadlineTimer: null, killTimer: null
+    };
     children.set(claim.jobId, active);
+    active.deadlineTimer = setTimeout(() => {
+      if (active.settled || lifecycle === 'stopping') return;
+      active.deadlineExceeded = true;
+      lastSafeErrorCode = 'OPS_RUNNER_DEADLINE';
+      try { child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
+      active.killTimer = setTimeout(() => {
+        if (active.settled) return;
+        try { child.kill('SIGKILL'); } catch { lastSafeErrorCode = 'OPS_CHILD_KILL_FAILED'; }
+      }, config.childKillGraceMs);
+    }, config.maxJobRuntimeMs);
     try {
       if (!Number.isSafeInteger(child.pid) || child.pid < 2) throw new Error('child pid unavailable');
       store._operationsSetRunnerPid(OPERATIONS_STORAGE_CAPABILITY, {
@@ -202,25 +314,15 @@ export function createOperationsWorker(input) {
       lastSafeErrorCode = 'OPS_CHILD_PROCESS_ERROR';
     });
     child.once('close', (code, signal) => {
-      if (active.settled) return;
-      active.settled = true;
-      children.delete(claim.jobId);
-      const outcome = code === 0 ? 'completed'
-        : (lifecycle === 'stopping' || signal === 'SIGTERM' || signal === 'SIGKILL') ? 'shutdown'
+      if (active.reaped) return;
+      active.reaped = true;
+      clearTimeout(active.deadlineTimer);
+      clearTimeout(active.killTimer);
+      active.outcome = active.deadlineExceeded ? 'stopped'
+        : code === 0 ? 'completed'
+          : (lifecycle === 'stopping' || signal === 'SIGTERM' || signal === 'SIGKILL') ? 'shutdown'
           : 'stopped';
-      try {
-        store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
-          jobId: claim.jobId,
-          ownerId,
-          generation: claim.generation,
-          fence: claim.fence,
-          outcome
-        });
-      } catch (error) {
-        lastSafeErrorCode = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
-          ? error.code : 'OPS_RESULT_PERSIST_FAILED';
-      }
-      heartbeatAt = nowMono();
+      finishOwnedOutcome(active);
       wakeWaiters();
     });
   }
@@ -228,6 +330,9 @@ export function createOperationsWorker(input) {
   async function acquisitionLoop() {
     while (lifecycle === 'accepting' || lifecycle === 'saturated') {
       heartbeatAt = nowMono();
+      for (const active of [...children.values()]) {
+        if (active.reaped && active.finishPending && active.finishRetryable) finishOwnedOutcome(active);
+      }
       if (children.size >= config.workerCount) {
         lifecycle = 'saturated';
         await delay(config.pollIntervalMs);
@@ -360,11 +465,15 @@ export function createOperationsWorker(input) {
     const age = Math.max(0, Math.floor(nowMono() - heartbeatAt));
     let base;
     try {
+      const telemetryDiagnostics = telemetry ? telemetry.diagnostics() : null;
       base = readOperationsHealth({
         store,
         config,
         lifecycle,
-        heartbeatAgeMs: age
+        heartbeatAgeMs: age,
+        telemetrySinkState: telemetryDiagnostics?.state ?? 'not_configured',
+        telemetrySinkPendingRecords: telemetryDiagnostics?.pendingRecords ?? 0,
+        telemetrySinkFailed: Boolean(telemetryDiagnostics?.lastErrorCode)
       });
     } catch (error) {
       const code = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
@@ -374,20 +483,23 @@ export function createOperationsWorker(input) {
         state: 'degraded', live: lifecycle !== 'stopped', ready: false, localReady: false,
         externalReady: false, externalDispatchEnabled: false,
         degradedReasons: Object.freeze([code]),
-        process: Object.freeze({ childCount: children.size, workerCount: config.workerCount, waiterCount: waiters.size, rssBytes: process.memoryUsage().rss }),
+        process: Object.freeze({
+          childCount: ownedChildCount(), pendingDurableCleanupCount: pendingDurableCleanupCount(),
+          workerCount: config.workerCount, waiterCount: waiters.size, rssBytes: process.memoryUsage().rss
+        }),
         lastSafeErrorCode: code
       });
     }
     return Object.freeze({
       ...base,
       process: Object.freeze({
-        childCount: children.size,
+        childCount: ownedChildCount(),
+        pendingDurableCleanupCount: pendingDurableCleanupCount(),
         workerCount: config.workerCount,
         waiterCount: waiters.size,
         rssBytes: process.memoryUsage().rss,
         lastSafeErrorCode
-      }),
-      telemetrySink: telemetry ? telemetry.diagnostics().state : 'not_configured'
+      })
     });
   }
 
@@ -395,11 +507,11 @@ export function createOperationsWorker(input) {
     return requestOwnerRetention(store, inputRetention);
   }
 
-  function waitForIdle(timeoutMs = 5_000) {
+  function waitForOwnedChildrenIdle(timeoutMs = 5_000) {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
       throw new TypeError('The idle wait must be a finite bounded duration.');
     }
-    if (children.size === 0) return Promise.resolve(true);
+    if (ownedChildCount() === 0) return Promise.resolve(true);
     if (waiters.size >= Math.min(config.maxWaiters, MAX_WAITERS)) {
       return Promise.resolve(false);
     }
@@ -418,7 +530,7 @@ export function createOperationsWorker(input) {
     if (!['requested', 'signal', 'test'].includes(reason)) throw new TypeError('The stop reason is invalid.');
     // This synchronous state change is the acquisition barrier for repeated or reentrant stop.
     lifecycle = 'stopping';
-    stopPromise = (async () => {
+    const pendingStop = (async () => {
       const shutdownStartedAt = nowMono();
       const deadline = shutdownStartedAt + config.shutdownTimeoutMs;
       let escalatedChildren = 0;
@@ -429,40 +541,65 @@ export function createOperationsWorker(input) {
       waiters.clear();
       let remainingChildren = [...children.values()];
       for (const active of remainingChildren) {
-        try { active.child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
+        clearTimeout(active.deadlineTimer);
+        clearTimeout(active.killTimer);
+        if (!active.reaped) {
+          try { active.child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
+        }
       }
-      const gracefulBudget = Math.max(0, remaining(deadline) - config.childKillGraceMs - config.childReapReserveMs);
+      remainingChildren = remainingChildren.filter(active => !active.reaped);
+      const gracefulBudget = Math.min(
+        config.childKillGraceMs,
+        Math.max(0, remaining(deadline) - config.childReapReserveMs)
+      );
       if (remainingChildren.length > 0 && gracefulBudget > 0) {
-        await Promise.race([
+        await raceWithDelay(
           Promise.all(remainingChildren.map(active => waitForEvent(active.child, 'close', gracefulBudget))),
-          delay(gracefulBudget)
-        ]);
+          gracefulBudget,
+          null
+        );
       }
       remainingChildren = [...children.values()];
       for (const active of remainingChildren) {
+        if (active.reaped) continue;
         active.escalated = true;
         escalatedChildren += 1;
         try { active.child.kill('SIGKILL'); } catch { lastSafeErrorCode = 'OPS_CHILD_KILL_FAILED'; }
       }
       const reapBudget = Math.max(0, remaining(deadline) - config.childReapReserveMs);
+      remainingChildren = remainingChildren.filter(active => !active.reaped);
       if (remainingChildren.length > 0 && reapBudget > 0) {
-        await Promise.race([
+        await raceWithDelay(
           Promise.all(remainingChildren.map(active => waitForEvent(active.child, 'close', reapBudget))),
-          delay(reapBudget)
-        ]);
+          reapBudget,
+          null
+        );
       }
-      const childrenReaped = children.size === 0;
+      const childrenReaped = ownedChildCount() === 0;
       if (!childrenReaped) lastSafeErrorCode = 'OPS_CHILD_REAP_INCOMPLETE';
 
+      while (childrenReaped && pendingDurableCleanupCount() > 0 && remaining(deadline) > 0) {
+        for (const active of [...children.values()]) {
+          if (active.reaped && !active.settled) finishOwnedOutcome(active);
+        }
+        if (pendingDurableCleanupCount() > 0 && remaining(deadline) > 0) {
+          await delay(Math.min(config.pollIntervalMs, remaining(deadline)));
+        }
+      }
+      const durableCleanupComplete = children.size === 0;
+      if (!durableCleanupComplete && lastSafeErrorCode === null) {
+        lastSafeErrorCode = 'OPS_DURABLE_CLEANUP_INCOMPLETE';
+      }
+
       let telemetryClosed = telemetry === undefined;
-      if (telemetry && childrenReaped && remaining(deadline) > 0) {
+      if (telemetry && childrenReaped && durableCleanupComplete && remaining(deadline) > 0) {
         const close = Promise.resolve().then(() => telemetry.close()).then(() => true, () => false);
-        telemetryClosed = await Promise.race([close, delay(remaining(deadline)).then(() => false)]);
+        telemetryClosed = await raceWithDelay(close, remaining(deadline), false);
         if (!telemetryClosed) lastSafeErrorCode = 'OPS_TELEMETRY_CLOSE_INCOMPLETE';
       }
 
       let storeClosed = false;
-      if (childrenReaped && telemetryClosed) {
+      if (childrenReaped && durableCleanupComplete && telemetryClosed) {
         try {
           store.close();
           storeClosed = true;
@@ -473,10 +610,12 @@ export function createOperationsWorker(input) {
       lifecycle = storeClosed ? 'stopped' : 'degraded';
       wakeWaiters();
       return Object.freeze({
-        stopped: storeClosed && childrenReaped && telemetryClosed,
+        stopped: storeClosed && childrenReaped && durableCleanupComplete && telemetryClosed,
         state: lifecycle,
         childrenReaped,
-        childCount: children.size,
+        durableCleanupComplete,
+        pendingDurableCleanupCount: pendingDurableCleanupCount(),
+        childCount: ownedChildCount(),
         telemetryClosed,
         storeClosed,
         elapsedMs: Math.max(0, Math.ceil(nowMono() - shutdownStartedAt)),
@@ -485,21 +624,34 @@ export function createOperationsWorker(input) {
         lastSafeErrorCode
       });
     })();
+    stopPromise = pendingStop;
+    pendingStop.then(result => {
+      if (result.stopped) removeSignalHandlers();
+      else if (stopPromise === pendingStop) stopPromise = null;
+    }, () => {
+      if (stopPromise === pendingStop) stopPromise = null;
+    });
     return stopPromise;
   }
 
   function installSignalHandlers(target = process) {
-    if (utilTypes.isProxy(target) || !target || typeof target.once !== 'function' || typeof target.off !== 'function') {
+    if (utilTypes.isProxy(target) || !target || typeof target.on !== 'function' || typeof target.off !== 'function') {
       throw new TypeError('A native process-like signal target is required.');
     }
     const onTerm = () => { void stop('signal'); };
     const onInt = () => { void stop('signal'); };
-    target.once('SIGTERM', onTerm);
-    target.once('SIGINT', onInt);
-    return () => {
+    target.on('SIGTERM', onTerm);
+    target.on('SIGINT', onInt);
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
       target.off('SIGTERM', onTerm);
       target.off('SIGINT', onInt);
+      signalHandlerRemovers.delete(remove);
     };
+    signalHandlerRemovers.add(remove);
+    return remove;
   }
 
   return Object.freeze({
@@ -510,10 +662,11 @@ export function createOperationsWorker(input) {
     readScopedWorkPage,
     requestRetention,
     health,
-    waitForIdle,
+    // This measures only children owned by this supervisor; queued durable work can remain.
+    waitForOwnedChildrenIdle,
     installSignalHandlers,
     get lifecycle() { return lifecycle; },
-    get activeChildCount() { return children.size; },
+    get activeChildCount() { return ownedChildCount(); },
     get databasePath() { return databasePath; }
   });
 }
