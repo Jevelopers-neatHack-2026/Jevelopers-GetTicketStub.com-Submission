@@ -1,11 +1,13 @@
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal, assert_never
 
+import pytest
 from pydantic import ConfigDict
 from typer.testing import CliRunner
 
@@ -58,7 +60,10 @@ def pin_owned_producer(producer: Path) -> Path:
     return pin_path
 
 
-def test_canonical_cli_retains_failure_when_golden_expectation_disagrees(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fault", ["verdict", "canonical-hash", "retained-category"])
+def test_canonical_cli_retains_failure_when_golden_expectation_disagrees(
+    tmp_path: Path, fault: Literal["verdict", "canonical-hash", "retained-category"]
+) -> None:
     # Given an owned copy of the actual canonical SDK with one contradictory golden expectation.
     source = Path(os.environ["IE_CONTRACT_SOURCE"])
     runtime = Path(os.environ["IE_CONTRACT_RUNTIME"])
@@ -68,8 +73,22 @@ def test_canonical_cli_retains_failure_when_golden_expectation_disagrees(tmp_pat
     target = producer / "fixtures/CommonEnvelope.json"
     first_id = load_record(target, FixtureIndex).cases[0].id
     original = target.read_text(encoding="utf-8")
-    assert '"ok": true' in original
-    _ = target.write_text(original.replace('"ok": true', '"ok": false', 1), encoding="utf-8")
+    match fault:
+        case "verdict":
+            altered = original.replace('"ok": true', '"ok": false', 1)
+        case "canonical-hash":
+            altered = re.sub(
+                r'"canonical_sha256": "sha256:[a-f0-9]{64}"',
+                '"canonical_sha256": "sha256:' + "0" * 64 + '"',
+                original,
+                count=1,
+            )
+        case "retained-category":
+            altered = original.replace('"category": "retained_encoding"', '"category": "minimal"')
+        case _:
+            assert_never(fault)
+    assert altered != original
+    _ = target.write_text(altered, encoding="utf-8")
     fixture_path = producer / "generated/fixture-manifest.json"
     manifest = load_record(fixture_path, FixtureManifest)
     files = {
@@ -104,8 +123,18 @@ def test_canonical_cli_retains_failure_when_golden_expectation_disagrees(tmp_pat
     # Then it exits failed and retains the precise disagreement with acceptance still blocked.
     assert result.exit_code == 1, result.output
     receipt = load_record(next(output.glob("contracts-*/contracts.json")), ContractReceipt)
-    assert receipt.execution == "failed", receipt.reason
-    assert receipt.observation is not None
-    envelope = next(row for row in receipt.observation.results if row.contract == "CommonEnvelope")
-    assert envelope.failures == (first_id,)
+    match fault:
+        case "verdict" | "canonical-hash":
+            assert receipt.execution == "failed", receipt.reason
+            assert receipt.observation is not None
+            envelope = next(
+                row for row in receipt.observation.results if row.contract == "CommonEnvelope"
+            )
+            assert envelope.failures == (first_id,)
+        case "retained-category":
+            assert receipt.execution == "error", receipt.reason
+            assert receipt.observation is None
+        case _:
+            assert_never(fault)
     assert receipt.product_acceptance == "blocked"
+    assert receipt.owner_acknowledgement is None

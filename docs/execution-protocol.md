@@ -174,7 +174,7 @@ in both JSON and Markdown. Neither issue closure nor model review updates accept
 The contracts command consumes the actual pinned shared-contracts ESM SDK and its
 golden fixtures. contracts/producer-pin.json fixes the reviewed producer commit/tree,
 lockfile, schema/fixture manifest and machine-catalog bytes. It currently selects the
-unreleased 0.4.0 candidate with all 45 catalog exports. No copied product validator or
+unreleased 0.5.0 candidate with all 45 catalog exports. No copied product validator or
 provider adapter is introduced.
 
 Stage a platform-specific executable identity with:
@@ -191,11 +191,14 @@ integration-evals contracts --pin contracts/producer-pin.json --producer /pinned
 ```
 
 The runner verifies clean actual checkouts and binary bytes, denies network access,
-contains subprocess lifetime, and invokes public canonical APIs for each declared
-fixture mode. Research/creative and commerce/evidence byte-array contexts follow the
-producer's documented fixture encoding. Returned schema hashes, case IDs and categories must match the full
-frozen source metadata. Failures and complete missing export names are retained in an
-immutable contracts.json receipt with a byte hash. Raw payloads are withheld.
+contains subprocess lifetime, and invokes the producer's public `runCanonicalFixtures`
+helper from the source target of its `./fixture-harness` export. The producer owns
+fixture dispatch, byte-array contexts, expected canonical hashes and serialization
+roundtrips. The consumer independently verifies schema hashes, every frozen case ID
+and category, and complete harness accounting for successful and failed cases.
+Malformed manifests or missing canonical categories fail closed. Failures and complete
+missing export names are retained in an immutable contracts.json receipt with a byte
+hash. Raw payloads are withheld.
 
 An explicit candidate-scope pass establishes only the implemented synthetic fixture
 slice. Both scopes exit 0 for the complete pinned catalog; omitting candidate-scope
@@ -208,9 +211,11 @@ producer and Node pins; no provider credential or API budget is used.
 The separate integration_tests scenarios require
 IE_CONTRACT_SOURCE and IE_CONTRACT_RUNTIME pointing to that actual checkout and
 runtime record. They verify complete candidate/full scope and make owned temporary copies
-to contradict one golden expectation or remove one schema-manifest export, repinning each
-controlled test revision. The unchanged SDK must retain the precise golden failure or
-missing export with CLI exits 1 and 2 respectively. They change no producer-owned source.
+to contradict a golden verdict or canonical hash, invalidate a retained-encoding
+category, or remove one schema-manifest export, repinning each controlled test revision.
+The unchanged SDK must retain the precise golden failure or missing export with CLI
+exits 1 and 2 respectively; invalid category coverage produces an error receipt.
+They change no producer-owned source.
 CI runs these tests under Linux isolation in addition to the default dependency-free
 tooling suite.
 

@@ -1,9 +1,9 @@
 {
-  "revision": "2af72ecb86437ee7b4271ff6c2ef08b89c4296a2",
-  "tree": "38f7951d9b0432f252dace30ac011a763274266f",
-  "lockfile_digest": "85bd0e7d986cfd73de4110e12ffd69eaa3953fd9af78610f3aabcc5525edb756",
-  "schema_manifest_digest": "da69cfaf15cf798b2f5abf0ebdce985cc78164b2bc59816a3f3f3b4ca97ea5d6",
-  "fixture_manifest_digest": "1999667a243358d4e27eca77914f2a4e2a1a1f840e9899acf249ae31ffd723f5",
+  "revision": "60136d61edce96ae9f1be493796af87de1e7afbc",
+  "tree": "f164c41d477bacd40c529f8c76ed75fcfaa974b4",
+  "lockfile_digest": "35b944a5e2563d3b7f11bbe30faf392d0330a0ddba2e8f03585c0a7b47f618a6",
+  "schema_manifest_digest": "bb3f551c380d6de68c09985fe745b000ed053937e5b71377421b2ad802978bf3",
+  "fixture_manifest_digest": "12dacbe8e4b4b458642def98a5d3634ce1bb4115cb25f2c5f41103df895648ad",
   "catalog_digest": "d97af7da0a56fde9ced2b23db1519bfcc70488a4cc0d8c00544e9fe5411f0e2b",
   "node_version": "22.23.3"
 }

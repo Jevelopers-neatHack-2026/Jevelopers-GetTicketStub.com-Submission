@@ -53,6 +53,7 @@ def test_canonical_cli_passes_when_catalog_is_complete(
         fixtures = load_record(producer / f"fixtures/{schema.contract}.json", FixtureIndex)
         assert (row.contract, row.schema_digest) == (schema.contract, schema.sha256)
         assert row.cases == tuple(case.id for case in fixtures.cases)
+        assert row.categories == tuple(sorted({case.category for case in fixtures.cases}))
         assert row.failures == ()
     assert (receipt.mode, receipt.origin) == ("mock-only", "synthetic")
     assert receipt.product_acceptance == "blocked"
