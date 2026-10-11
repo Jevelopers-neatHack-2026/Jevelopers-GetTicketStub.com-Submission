@@ -29,6 +29,23 @@
 .down {
   min-height: 100dvh;
 }
+/* /make: the section is the whole page, and its content is centred in the height that is there */
+.fill {
+  --pad-t: 28px;
+  --pad-b: 40px;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+/* the frame is the query container: its width changes with the sidebar (open, rail, none) */
+.frame {
+  container: start / inline-size;
+  width: 100%;
+}
+.fill .frame {
+  display: grid;
+  align-content: center;
+  min-height: calc(100dvh - var(--pad-t) - var(--pad-b));
+}
 
 .desk {
   display: grid;
@@ -57,13 +74,18 @@
 
 /* ---------- The finished stub, under the light ---------- */
 .shelf {
-  --stub-max: 208px;
   display: grid;
   place-items: center;
   padding: 8px 0 4px;
   transition:
     opacity 420ms var(--ts-ease-standard),
     transform 420ms var(--ts-ease-standard);
+}
+
+/* the stub fills its half: set by the width of the section and, on /make, the height of the screen.
+   (StubView caps itself at --w, so the width is set here, one class deeper.) */
+.shelf .bigStub {
+  width: clamp(190px, min(60cqw, 34dvh), 260px);
 }
 
 /* ---------- Entry ---------- */
@@ -264,6 +286,8 @@
   /* the stage runs edge to edge: take back the padding the desk needs */
   margin: calc(var(--pad-t) * -1) calc(var(--gutter) * -1) calc(var(--pad-b) * -1);
   min-height: 100dvh;
+  display: grid;
+  align-content: center;
   animation: lightsDown 600ms var(--ts-ease-standard) both;
   transition: opacity 360ms var(--ts-ease-standard);
 }
@@ -291,25 +315,49 @@
   }
 }
 
-@media (min-width: 960px) {
-  .section {
-    --gutter: 32px;
-    --pad-t: 88px;
-    --pad-b: 104px;
-  }
+/* two equal halves, each centred in its half; the sections are sized from the container, not the screen */
+@container start (min-width: 620px) {
   .desk {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 72px;
+    gap: 0;
     align-items: center;
-    justify-items: start;
+    justify-items: center;
   }
   .shelf {
-    --stub-max: 300px;
-    justify-self: end;
-    padding: 24px 0;
+    padding: 24px;
+  }
+  .shelf {
+    padding: 16px;
+  }
+  .shelf .bigStub {
+    width: min(calc(50cqw - 48px), 360px);
+  }
+  .fill .shelf .bigStub {
+    width: clamp(220px, min(calc(50cqw - 48px), 40dvh), 560px);
   }
   .entry {
-    width: min(100%, 460px);
+    width: min(calc(100% - 32px), 460px);
+    padding: 24px 0;
+  }
+  .lede {
+    margin-bottom: 24px;
+  }
+  .ticket {
+    --tear: 96px;
+  }
+}
+@container start (min-width: 800px) {
+  .shelf {
+    padding: 24px;
+  }
+  .shelf .bigStub {
+    width: min(calc(50cqw - 72px), 360px);
+  }
+  .fill .shelf .bigStub {
+    width: clamp(220px, min(calc(50cqw - 72px), 40dvh), 560px);
+  }
+  .entry {
+    width: min(calc(100% - 48px), 460px);
   }
   .title {
     font: var(--type-h1);
@@ -321,6 +369,18 @@
   }
   .ticket {
     --tear: 132px;
+  }
+}
+
+@media (min-width: 960px) {
+  .section {
+    --gutter: 32px;
+    --pad-t: 88px;
+    --pad-b: 104px;
+  }
+  .fill {
+    --pad-t: 32px;
+    --pad-b: 32px;
   }
 }
 

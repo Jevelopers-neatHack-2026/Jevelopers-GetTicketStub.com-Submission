@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Make a stub · TicketStub" };
 export default function MakePage() {
   return (
     <main className="desk-surface" style={{ minHeight: "100dvh" }}>
-      <StudioStart />
+      <StudioStart fill />
     </main>
   );
 }
