@@ -683,12 +683,19 @@ class PackagePolicyTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(root), "commit", "-qm", "pending claim"], check=True)
             commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
             support = package._support_file(root, relative)
-            manifest = {"assets": [], "captionSidecars": [], "supportFiles": [], "policyInputHashes": {relative: support}, "requiredSubmissionArtifact": {"exists": False}}
+            manifest = {
+                "assets": [],
+                "captionSidecars": [],
+                "supportFiles": [],
+                "policyInputHashes": {relative: support},
+                "requiredSubmissionArtifact": {"exists": False},
+                "candidateSourceCommitAtGeneration": commit,
+            }
             self.assertEqual([], package.validate_manifest_files(root, manifest))
             claim_path.write_text(package.json.dumps({"claims": [{"id": "CLAIM-TEST", "reviewStatus": "approved"}]}), encoding="utf-8")
             errors = package.validate_manifest_files(root, manifest)
             self.assertTrue(any("policy input messaging/claims.json: source SHA-256 differs from manifest" in error for error in errors))
-            self.assertTrue(any("source commit is missing, stale, or does not contain the exact bytes" in error for error in errors))
+            self.assertTrue(any("policy input messaging/claims.json: current source bytes differ from the recorded checksum" in error for error in errors))
 
     def test_controlled_approved_fixture_can_pass_both_gates(self) -> None:
         # Synthetic policy fixture only: this proves the gate logic, not actual
@@ -1080,6 +1087,7 @@ class PackagePolicyTests(unittest.TestCase):
                 ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
             ).stdout.strip()
             manifest = {
+                "candidateSourceCommitAtGeneration": source_commit,
                 "assets": [
                     {
                         "file": {"path": "source.md", "exists": True, "sha256": digest, "sourceCommitId": source_commit},
@@ -1161,6 +1169,7 @@ class PackagePolicyTests(unittest.TestCase):
             html_hash = package.sha256_file(root / html_source)
             manifest = {
                 "packageVersion": "v0.1.0-rehearsal",
+                "candidateSourceCommitAtGeneration": commit,
                 "assets": [
                     {
                         "recordId": "fixture-html",
