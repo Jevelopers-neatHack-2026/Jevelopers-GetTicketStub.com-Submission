@@ -20,11 +20,16 @@ npm run verify -- --suite restart-recovery --mode offline --evidence-dir out/evi
 npm run verify -- --suite metering-traces --mode offline --evidence-dir out/evidence
 ```
 
-Each named verification suite runs actual private checks, saves local receipts
+Each named verification suite run from a normal CLI saves private receipts
 and crash/process artifacts, then exits **1** with status=failed and an explicit
 externalState=external-blocked field, preserving the runtime receipt contract.
 Release also exits 1. Passing local mechanisms cannot satisfy unavailable
 canonical, supplier, app or finance semantics. CSV remains unsupported.
+The independently reproduced DUR-R4 nested-dispatch defect is fixed in this
+private candidate after explicit dispatcher ownership handoff; see
+[the dispatcher handoff](dispatcher-handoff.md). Private success requires exact
+test counts, an executed canary and fresh process artifacts. Fresh independent
+candidate review remains required.
 
 ## Storage consistency and trust
 
@@ -62,8 +67,11 @@ never a path; duplicate names, missing files, wrong lengths/hashes and writes
 that change an existing name fail. Publication verifies the entire supplied set
 and atomically commits one immutable publication per operation plus an outbox
 observation. Repeated publication must match the set digest. Retrieval rehashes
-every blob and the complete output inventory. `abandon` removes unfinished
-stage links and unreachable blobs without changing committed history.
+every blob and the complete output inventory. `abandon` idempotently removes
+unfinished or already abandoned stage links and collects at most maxFiles
+unreachable blobs per call, preserving every staged or published reference.
+Job failure, cancellation checkpoints and recovery use the same transactional
+cleanup. Repeated cleanup also collects legacy abandoned orphan bytes.
 
 Completion grants no approval. Retrieval always reports handoffEligible=false.
 `deny` provides irreversible local access denial without modifying output bytes;
@@ -86,6 +94,9 @@ row stage/lease ownership, preventing direct stale publication. Callers use
 success. `runOne` is a single-step scheduler port, not a background service.
 It accepts AbortSignal and a renderer port; tests supply synthetic bytes only.
 Unknown renderer errors become a safe permanent failure code.
+General storage calls cannot stage or publish a job-owned batch operation.
+Batch finalization requires a transaction-local capability, persisted job/policy
+preconditions, terminal rows and verified successful attempt/output joins.
 
 Lease expiration records an interrupted attempt with unknown duration. Recovery
 looks for a committed publication before retrying; uncertain committed output
@@ -94,6 +105,12 @@ the row is queued after exponential backoff, and a new claim creates a new local
 execution attempt. Retryable failures stop at maxAttempts. Permanent failures
 never retry. Terminal row counts and total attempts provide monotonic progress;
 inventory and results are paged under fixed limits.
+Failure classification first verifies any committed publication. Actual success
+then wins over permanent, retryable or exhausted failure, retaining the original
+attempt and immutable source observations. Internal reconciliation verifies
+publication metadata without returning bytes. Denied jobs or rows are fenced
+and retain inventory, while healthy jobs in the same scope can progress; byte
+access remains denied, including row bytes under a denied parent job.
 
 Completion commits output bytes, publication, successful row state and attempt
 observations together. A batch publishes an internal local-inventory.json only
@@ -102,9 +119,14 @@ receipt/results. allow_partial exposes all row outcomes, successful publication
 refs and durable failures. This receipt is not a ProductionBundle manifest.
 Successful row evidence remains stored even for failed/cancelled batches.
 
-Cancellation atomically fences queued/running rows and records explicit outcomes,
-preserves already completed/uncertain committed output and prevents further
-claims. It cannot forcibly stop arbitrary renderer code; fenced storage prevents
+Cancellation first commits the cancelled job state, invalidates active leases
+and row fences, and persists a durable checkpoint without needing outbox space.
+It then records row outcomes in batches bounded by available event capacity and
+finally records the job event. Call `cancel` again or `claim` after outbox drain
+to resume a checkpoint, including after restart. Pending inventory may retain
+queued/running row labels during checkpointing, but those workers are already
+fenced. Completed/uncertain committed output is retained. It cannot forcibly
+stop arbitrary renderer code; fenced storage prevents
 late writes and AbortSignal lets a cooperative renderer stop. Cancellation of a
 terminal job is a re-observation. Completed reads/submissions create no attempts.
 
@@ -112,7 +134,9 @@ Bounds cover rows, input bytes, output set bytes/files, queued jobs, concurrent
 claims, execution retries, pages, pending delivery events and delivery retries.
 Bounds are persisted and identical in every process. Immutable completed history
 has no automatic retention deletion; operators need capacity monitoring/backups.
-Outbox backpressure rolls back transitions rather than dropping observations.
+Outbox backpressure rolls back execution/publication transitions rather than
+dropping observations. Cancellation fencing persists independently and its
+observation checkpoints wait for capacity.
 
 ## Staged observation semantics
 

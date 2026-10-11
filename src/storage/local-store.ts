@@ -15,6 +15,10 @@ import {
 	type Scope,
 } from "../internal/durability.js";
 import { observe } from "../telemetry/observations.js";
+import {
+	checkBatchFinalization,
+	type BatchFinalizationPermit,
+} from "../internal/batch-finalization.js";
 
 const operationSchema = z.object({
 	id: idSchema,
@@ -106,6 +110,17 @@ export class LocalArtifactStore {
 		check(record !== undefined, "NOT_FOUND");
 		return parse(operationSchema, record);
 	}
+	private checkAccess(scope: Scope, id: Id): Operation {
+		const operation = this.operation(scope, id);
+		check(operation.denied === 0, "NOT_FOUND");
+		const parent = this.db.sql
+			.prepare(
+				"SELECT o.denied FROM rows r JOIN jobs j ON j.id=r.job JOIN operations o ON o.id=j.operation WHERE r.operation=?",
+			)
+			.get(id);
+		check(parent === undefined || parent["denied"] === 0, "NOT_FOUND");
+		return operation;
+	}
 	stage(scope: Scope, operation: Id): Id {
 		return this.db.transaction(() => {
 			const record = this.operation(scope, operation);
@@ -113,8 +128,10 @@ export class LocalArtifactStore {
 			check(record.status === "pending", "WRITE_ONCE");
 			check(
 				this.db.sql
-					.prepare("SELECT 1 FROM rows WHERE operation=?")
-					.get(operation) === undefined,
+					.prepare(
+						"SELECT 1 FROM rows WHERE operation=? UNION ALL SELECT 1 FROM jobs WHERE operation=?",
+					)
+					.get(operation, operation) === undefined,
 				"STALE_CLAIM",
 			);
 			const n = this.db.sql
@@ -136,19 +153,34 @@ export class LocalArtifactStore {
 	write(scope: Scope, stage: Id, file: OutputFile): void {
 		this.db.transaction(() => this.writeInTransaction(scope, stage, file));
 	}
-	writeInTransaction(scope: Scope, stage: Id, file: OutputFile): void {
+	writeInTransaction(
+		scope: Scope,
+		stage: Id,
+		file: OutputFile,
+		permit?: BatchFinalizationPermit,
+	): void {
 		this.db.requireTransaction();
 		const name = parse(filenameSchema, file.name);
 		const row = this.db.sql
 			.prepare("SELECT operation FROM stages WHERE id=? AND state='open'")
 			.get(stage);
 		check(row !== undefined, "WRITE_ONCE");
-		const operation = this.operation(scope, parse(idSchema, row["operation"]));
+		const operation = this.checkAccess(
+			scope,
+			parse(idSchema, row["operation"]),
+		);
 		check(
 			operation.status === "pending" && operation.denied === 0,
 			"WRITE_ONCE",
 		);
-		this.checkStageFence(stage, operation.id);
+		this.checkStageFence(stage, operation.id, permit);
+		if (permit)
+			check(
+				file.name === permit.file.name &&
+					file.digest === permit.file.digest &&
+					file.length === permit.file.length,
+				"INTEGRITY",
+			);
 		const bytes = checkedBytes(
 			file.bytes,
 			file.digest,
@@ -225,14 +257,33 @@ export class LocalArtifactStore {
 			readonly length: number;
 		}[],
 		attempt: Id | null = null,
+		permit?: BatchFinalizationPermit,
 	): Publication {
 		this.db.requireTransaction();
 		const row = this.db.sql
 			.prepare("SELECT operation,state FROM stages WHERE id=?")
 			.get(stage);
 		check(row !== undefined, "NOT_FOUND");
-		const operation = this.operation(scope, parse(idSchema, row["operation"]));
+		const operation = this.checkAccess(
+			scope,
+			parse(idSchema, row["operation"]),
+		);
 		check(operation.denied === 0, "NOT_FOUND");
+		if (
+			this.db.sql
+				.prepare("SELECT 1 FROM jobs WHERE operation=?")
+				.get(operation.id)
+		) {
+			this.checkStageFence(stage, operation.id, permit);
+			check(
+				permit !== undefined &&
+					expected.length === 1 &&
+					expected[0]?.name === permit.file.name &&
+					expected[0]?.digest === permit.file.digest &&
+					expected[0]?.length === permit.file.length,
+				"INTEGRITY",
+			);
+		}
 		check(
 			expected.length > 0 && expected.length <= this.db.limits.maxFiles,
 			"LIMIT",
@@ -252,7 +303,7 @@ export class LocalArtifactStore {
 			operation.status === "pending" && row["state"] === "open",
 			"WRITE_ONCE",
 		);
-		this.checkStageFence(stage, operation.id);
+		this.checkStageFence(stage, operation.id, permit);
 		const files = this.db.sql
 			.prepare(
 				"SELECT f.name,f.digest,b.length,b.bytes FROM staged_files f JOIN blobs b ON b.digest=f.digest WHERE f.stage=? ORDER BY f.name",
@@ -293,8 +344,15 @@ export class LocalArtifactStore {
 		return { id, operation: operation.id, set_digest: setDigest };
 	}
 	publicationInTransaction(scope: Scope, operation: Id): Publication | null {
-		const op = this.operation(scope, operation);
-		check(op.denied === 0, "NOT_FOUND");
+		this.checkAccess(scope, operation);
+		return this.reconcilePublicationInTransaction(scope, operation);
+	}
+	reconcilePublicationInTransaction(
+		scope: Scope,
+		operation: Id,
+	): Publication | null {
+		this.db.requireTransaction();
+		this.operation(scope, operation);
 		const row = this.db.sql
 			.prepare("SELECT * FROM publications WHERE operation=?")
 			.get(operation);
@@ -321,7 +379,17 @@ export class LocalArtifactStore {
 		check(digest === publication.set_digest, "INTEGRITY");
 		return files;
 	}
-	private checkStageFence(stage: Id, operation: Id): void {
+	private checkStageFence(
+		stage: Id,
+		operation: Id,
+		permit?: BatchFinalizationPermit,
+	): void {
+		if (
+			this.db.sql.prepare("SELECT 1 FROM jobs WHERE operation=?").get(operation)
+		) {
+			checkBatchFinalization(this.db, { stage, operation }, permit);
+			return;
+		}
 		const row = this.db.sql
 			.prepare(
 				"SELECT r.stage,r.status,r.lease,o.denied FROM rows r JOIN jobs j ON j.id=r.job JOIN operations o ON o.id=j.operation WHERE r.operation=?",
@@ -358,6 +426,7 @@ export class LocalArtifactStore {
 				.get(id, scopeKey(scope));
 			check(row !== undefined, "NOT_FOUND");
 			const publication = parse(publicationSchema, row);
+			this.checkAccess(scope, publication.operation);
 			const files = this.verifiedFiles(publication);
 			return { publication, files, handoffEligible: false };
 		});
@@ -371,19 +440,27 @@ export class LocalArtifactStore {
 		});
 	}
 	abandon(scope: Scope, stage: Id): void {
-		this.db.transaction(() => {
-			const row = this.db.sql
-				.prepare("SELECT operation FROM stages WHERE id=? AND state='open'")
-				.get(stage);
-			check(row !== undefined, "WRITE_ONCE");
-			this.operation(scope, parse(idSchema, row["operation"]));
-			this.db.sql.prepare("DELETE FROM staged_files WHERE stage=?").run(stage);
-			this.db.sql
-				.prepare("UPDATE stages SET state='abandoned' WHERE id=?")
-				.run(stage);
-			this.db.sql.exec(
-				"DELETE FROM blobs WHERE digest NOT IN(SELECT digest FROM staged_files) AND digest NOT IN(SELECT digest FROM files)",
-			);
-		});
+		this.db.transaction(() => this.abandonInTransaction(scope, stage));
+	}
+	abandonInTransaction(scope: Scope, stage: Id): void {
+		this.db.requireTransaction();
+		const row = this.db.sql
+			.prepare("SELECT operation,state FROM stages WHERE id=?")
+			.get(stage);
+		check(
+			row !== undefined &&
+				(row["state"] === "open" || row["state"] === "abandoned"),
+			"WRITE_ONCE",
+		);
+		this.operation(scope, parse(idSchema, row["operation"]));
+		this.db.sql.prepare("DELETE FROM staged_files WHERE stage=?").run(stage);
+		this.db.sql
+			.prepare("UPDATE stages SET state='abandoned' WHERE id=?")
+			.run(stage);
+		this.db.sql
+			.prepare(
+				"DELETE FROM blobs WHERE digest IN (SELECT b.digest FROM blobs b WHERE NOT EXISTS(SELECT 1 FROM staged_files s WHERE s.digest=b.digest) AND NOT EXISTS(SELECT 1 FROM files f WHERE f.digest=b.digest) LIMIT ?)",
+			)
+			.run(this.db.limits.maxFiles);
 	}
 }

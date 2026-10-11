@@ -17,6 +17,7 @@ import {
 } from "../internal/durability.js";
 import { LocalArtifactStore, type OutputFile } from "../storage/local-store.js";
 import { observe } from "../telemetry/observations.js";
+import { publishBatchInventory } from "../internal/batch-finalization.js";
 
 const policySchema = z.enum(["atomic", "allow_partial"]);
 export type BatchPolicy = z.infer<typeof policySchema>;
@@ -297,7 +298,7 @@ export class DurableBatchEngine {
 			.all(scopeKey(scope), this.db.now())
 			.map((row) => parse(rowSchema, row));
 		for (const row of expired) {
-			const publication = this.store.publicationInTransaction(
+			const publication = this.store.reconcilePublicationInTransaction(
 				scope,
 				row.operation,
 			);
@@ -316,14 +317,7 @@ export class DurableBatchEngine {
 			} else {
 				this.endAttempt(row, "interrupted", "INTERRUPTED", false);
 				if (row.stage) {
-					this.db.sql
-						.prepare("DELETE FROM staged_files WHERE stage=?")
-						.run(row.stage);
-					this.db.sql
-						.prepare(
-							"UPDATE stages SET state='abandoned' WHERE id=? AND state='open'",
-						)
-						.run(row.stage);
+					this.store.abandonInTransaction(scope, row.stage);
 				}
 				const exhausted = row.attempts >= this.db.limits.maxAttempts;
 				this.db.sql
@@ -345,6 +339,24 @@ export class DurableBatchEngine {
 		}
 	}
 	claim(scope: Scope): RowClaim | null {
+		this.db.transaction(() => {
+			const denied = this.db.sql
+				.prepare(
+					"SELECT j.id FROM jobs j JOIN operations o ON o.id=j.operation WHERE o.scope=? AND j.status IN('queued','running') AND (o.denied=1 OR EXISTS(SELECT 1 FROM rows r JOIN operations ro ON ro.id=r.operation WHERE r.job=j.id AND ro.denied=1))",
+				)
+				.all(scopeKey(scope));
+			for (const job of denied)
+				this.requestCancellation(scope, parse(idSchema, job["id"]));
+		});
+		this.db.transaction(() => {
+			const pending = this.db.sql
+				.prepare(
+					"SELECT c.job FROM cancellations c JOIN jobs j ON j.id=c.job JOIN operations o ON o.id=j.operation WHERE o.scope=? ORDER BY c.rowid",
+				)
+				.all(scopeKey(scope));
+			for (const job of pending)
+				this.cancelInTransaction(scope, parse(idSchema, job["job"]));
+		});
 		return this.db.transaction(() => {
 			this.recover(scope);
 			const active = this.db.sql
@@ -445,7 +457,9 @@ export class DurableBatchEngine {
 				this.db.now(),
 			);
 		check(raw !== undefined, "STALE_CLAIM");
-		return parse(rowSchema, raw);
+		const row = parse(rowSchema, raw);
+		check(this.store.operation(scope, row.operation).denied === 0, "NOT_FOUND");
+		return row;
 	}
 	renew(scope: Scope, claim: RowClaim): void {
 		this.db.transaction(() => {
@@ -483,6 +497,25 @@ export class DurableBatchEngine {
 	fail(scope: Scope, claim: RowClaim, retryable: boolean): void {
 		this.db.transaction(() => {
 			const row = this.fenced(scope, claim);
+			const publication = this.store.publicationInTransaction(
+				scope,
+				row.operation,
+			);
+			if (publication) {
+				this.db.sql
+					.prepare(
+						"UPDATE rows SET status='succeeded',publication=?,code=NULL,lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
+					)
+					.run(publication.id, row.job, row.ordinal);
+				this.endAttempt(
+					{ ...row, publication: publication.id },
+					"succeeded",
+					null,
+					false,
+				);
+				this.finish(scope, row.job);
+				return;
+			}
 			const code = retryable ? "RENDER_RETRYABLE" : "RENDER_PERMANENT";
 			const retry = retryable && row.attempts < this.db.limits.maxAttempts;
 			this.endAttempt(row, retry ? "retryable" : "failed", code, true);
@@ -497,12 +530,7 @@ export class DurableBatchEngine {
 					row.job,
 					row.ordinal,
 				);
-			this.db.sql
-				.prepare("DELETE FROM staged_files WHERE stage=?")
-				.run(claim.stage);
-			this.db.sql
-				.prepare("UPDATE stages SET state='abandoned' WHERE id=?")
-				.run(claim.stage);
+			this.store.abandonInTransaction(scope, claim.stage);
 			if (!retry)
 				this.db.sql
 					.prepare("UPDATE operations SET status='failed' WHERE id=?")
@@ -511,65 +539,84 @@ export class DurableBatchEngine {
 		});
 	}
 	cancel(scope: Scope, id: Id): void {
-		this.db.transaction(() => {
-			const job = this.job(scope, id);
-			if (job.status !== "queued" && job.status !== "running") return;
-			const rows = this.db.sql
-				.prepare(
-					"SELECT * FROM rows WHERE job=? AND status IN('queued','running')",
-				)
-				.all(id)
-				.map((row) => parse(rowSchema, row));
-			for (const row of rows) {
-				const publication = this.store.publicationInTransaction(
-					scope,
-					row.operation,
-				);
-				if (publication) {
-					if (row.status === "running")
-						this.endAttempt(
-							{ ...row, publication: publication.id },
-							"succeeded",
-							null,
-							false,
-						);
-					this.db.sql
-						.prepare(
-							"UPDATE rows SET status='succeeded',publication=?,lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
-						)
-						.run(publication.id, id, row.ordinal);
-					continue;
-				}
+		this.db.transaction(() => this.requestCancellation(scope, id));
+		this.db.transaction(() => this.cancelInTransaction(scope, id));
+	}
+	private requestCancellation(scope: Scope, id: Id): void {
+		const job = this.job(scope, id);
+		if (job.status !== "queued" && job.status !== "running") return;
+		this.db.sql
+			.prepare("UPDATE jobs SET status='cancelled' WHERE id=?")
+			.run(id);
+		this.db.sql
+			.prepare("UPDATE operations SET status='cancelled' WHERE id=?")
+			.run(job.operation);
+		this.db.sql
+			.prepare(
+				"UPDATE rows SET lease=NULL,fence=fence+1 WHERE job=? AND status IN('queued','running')",
+			)
+			.run(id);
+		this.db.sql.prepare("INSERT INTO cancellations(job) VALUES(?)").run(id);
+	}
+	private cancelInTransaction(scope: Scope, id: Id): void {
+		const job = this.job(scope, id);
+		if (!this.db.sql.prepare("SELECT 1 FROM cancellations WHERE job=?").get(id))
+			return;
+		const count = this.db.sql
+			.prepare("SELECT COUNT(*) AS n FROM outbox WHERE status!='delivered'")
+			.get();
+		check(typeof count?.["n"] === "number", "INTEGRITY");
+		const capacity = this.db.limits.maxPendingEvents - count["n"];
+		if (capacity <= 0) return;
+		const rows = this.db.sql
+			.prepare(
+				"SELECT * FROM rows WHERE job=? AND status IN('queued','running') ORDER BY ordinal LIMIT ?",
+			)
+			.all(id, capacity)
+			.map((row) => parse(rowSchema, row));
+		for (const row of rows) {
+			const publication = this.store.reconcilePublicationInTransaction(
+				scope,
+				row.operation,
+			);
+			if (publication) {
 				if (row.status === "running")
-					this.endAttempt(row, "cancelled", "CANCELLED", false);
-				else observe(this.db, row.operation, "cancelled", null, "CANCELLED");
+					this.endAttempt(
+						{ ...row, publication: publication.id },
+						"succeeded",
+						null,
+						false,
+					);
 				this.db.sql
 					.prepare(
-						"UPDATE rows SET status='cancelled',code='CANCELLED',lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
+						"UPDATE rows SET status='succeeded',publication=?,lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
 					)
-					.run(id, row.ordinal);
-				this.db.sql
-					.prepare("UPDATE operations SET status='cancelled' WHERE id=?")
-					.run(row.operation);
-				if (row.stage) {
-					this.db.sql
-						.prepare("DELETE FROM staged_files WHERE stage=?")
-						.run(row.stage);
-					this.db.sql
-						.prepare(
-							"UPDATE stages SET state='abandoned' WHERE id=? AND state='open'",
-						)
-						.run(row.stage);
-				}
+					.run(publication.id, id, row.ordinal);
+				continue;
 			}
+			if (row.status === "running")
+				this.endAttempt(row, "cancelled", "CANCELLED", false);
+			else observe(this.db, row.operation, "cancelled", null, "CANCELLED");
 			this.db.sql
-				.prepare("UPDATE jobs SET status='cancelled' WHERE id=?")
-				.run(id);
+				.prepare(
+					"UPDATE rows SET status='cancelled',code='CANCELLED',lease=NULL,fence=fence+1 WHERE job=? AND ordinal=?",
+				)
+				.run(id, row.ordinal);
 			this.db.sql
 				.prepare("UPDATE operations SET status='cancelled' WHERE id=?")
-				.run(job.operation);
-			observe(this.db, job.operation, "cancelled", null, "CANCELLED");
-		});
+				.run(row.operation);
+			if (row.stage) {
+				this.store.abandonInTransaction(scope, row.stage);
+			}
+		}
+		const remaining = this.db.sql
+			.prepare(
+				"SELECT 1 FROM rows WHERE job=? AND status IN('queued','running') LIMIT 1",
+			)
+			.get(id);
+		if (remaining || rows.length === capacity) return;
+		observe(this.db, job.operation, "cancelled", null, "CANCELLED");
+		this.db.sql.prepare("DELETE FROM cancellations WHERE job=?").run(id);
 	}
 	private finish(scope: Scope, id: Id): void {
 		const job = this.job(scope, id);
@@ -592,29 +639,7 @@ export class DurableBatchEngine {
 					: "failed";
 		let publication: Id | null = null;
 		if (status !== "failed") {
-			const bytes = Buffer.from(
-				JSON.stringify(
-					rows.map((row) => ({
-						ordinal: row.ordinal,
-						row: row.row_key,
-						status: row.status,
-						publication: row.publication,
-						code: row.code,
-					})),
-				),
-			);
-			const file = {
-				name: "local-inventory.json",
-				bytes,
-				digest: hash(bytes),
-				length: bytes.length,
-			};
-			const stage = newId();
-			this.db.sql
-				.prepare("INSERT INTO stages(id,operation) VALUES(?,?)")
-				.run(stage, job.operation);
-			this.store.writeInTransaction(scope, stage, file);
-			publication = this.store.publishInTransaction(scope, stage, [file]).id;
+			publication = publishBatchInventory(this.store, scope, job).id;
 		} else
 			this.db.sql
 				.prepare("UPDATE operations SET status='failed' WHERE id=?")

@@ -9,6 +9,7 @@ import {
 	parse,
 	idSchema,
 	hash,
+	type Limits,
 } from "../../src/internal/durability.js";
 import { LocalArtifactStore } from "../../src/storage/local-store.js";
 import { DurableBatchEngine } from "../../src/jobs/durable-batch.js";
@@ -19,7 +20,13 @@ import { evidence } from "../fixtures/durability/evidence.js";
 const worker = fileURLToPath(
 	new URL("../fixtures/durability/worker.js", import.meta.url),
 );
-function child(path: string, mode: string, time = 1000, argument?: string) {
+function child(
+	path: string,
+	mode: string,
+	time = 1000,
+	argument?: string,
+	limits: Limits = defaultLimits,
+) {
 	const process = fork(
 		worker,
 		[path, mode, String(time), ...(argument ? [argument] : [])],
@@ -28,6 +35,10 @@ function child(path: string, mode: string, time = 1000, argument?: string) {
 			stdio: ["ignore", "ignore", "pipe", "ipc"],
 			timeout: 15000,
 			killSignal: "SIGKILL",
+			env: {
+				...globalThis.process.env,
+				PP_DURABILITY_TEST_LIMITS: JSON.stringify(limits),
+			},
 		},
 	);
 	const exited = new Promise<{
@@ -338,6 +349,222 @@ for (const mode of [
 			initialTransport: message.value.transport,
 			redelivery,
 			observations: outbox.list(scope),
+		});
+	});
+}
+
+for (const retryable of [false, true]) {
+	test(`reconciles committed publication after SIGKILL and restart before fail(${retryable})`, async () => {
+		using f = fixture();
+		const running = child(f.path, "job-uncertain");
+		const checkpoint = parse(
+			z.object({
+				value: z.object({
+					job: idSchema,
+					publication: idSchema,
+					claim: z.object({
+						job: idSchema,
+						ordinal: z.number(),
+						operation: idSchema,
+						attempt: idSchema,
+						stage: idSchema,
+						fence: z.number(),
+					}),
+				}),
+			}),
+			await running.message,
+		).value;
+		await kill(running.process, running.exited);
+		using restart = new DurabilityDatabase(f.path, undefined, () => 1001);
+		const jobs = new DurableBatchEngine(restart);
+		const before = new ObservationOutbox(restart).list(scope);
+		jobs.fail(
+			scope,
+			{ ...checkpoint.claim, input: Buffer.alloc(0), pins: Buffer.alloc(0) },
+			retryable,
+		);
+		const row = jobs.inventory(scope, checkpoint.job)[0];
+		assert.equal(jobs.job(scope, checkpoint.job).status, "succeeded");
+		assert.equal(row?.publication, checkpoint.publication);
+		assert.equal(row?.attempts, 1);
+		assert.equal(jobs.claim(scope), null);
+		const events = new ObservationOutbox(restart).list(scope);
+		assert.deepEqual(events.slice(0, before.length), before);
+		assert.ok(
+			events.some(
+				(e) =>
+					e.kind === "succeeded" &&
+					e.attempt === checkpoint.claim.attempt &&
+					e.publication === checkpoint.publication,
+			),
+		);
+		assert.equal(
+			restart.sql
+				.prepare("SELECT outcome FROM attempts WHERE id=?")
+				.get(checkpoint.claim.attempt)?.["outcome"],
+			"succeeded",
+		);
+		evidence(`uncertain-fail-${retryable}`, {
+			killedSignal: "SIGKILL",
+			checkpoint,
+			row,
+			observations: events,
+		});
+	});
+}
+
+test("retains the cancellation fence after killing a worker with a full outbox", async () => {
+	const limits = { ...defaultLimits, maxPendingEvents: 10 };
+	using f = fixture(limits);
+	const running = child(f.path, "job-cancel-budget", 1000, undefined, limits);
+	const checkpoint = parse(
+		z.object({
+			value: z.object({
+				job: idSchema,
+				claim: z.object({ stage: idSchema, operation: idSchema }),
+			}),
+		}),
+		await running.message,
+	).value;
+	await kill(running.process, running.exited);
+	using restart = new DurabilityDatabase(f.path, limits, () => 1001);
+	const jobs = new DurableBatchEngine(restart);
+	const store = new LocalArtifactStore(restart);
+	const outbox = new ObservationOutbox(restart);
+	assert.equal(jobs.job(scope, checkpoint.job).status, "cancelled");
+	assert.throws(() => store.publish(scope, checkpoint.claim.stage, [file()]));
+	for (let round = 0; round < 3; round++) {
+		for (;;) {
+			const event = outbox.claim();
+			if (!event) break;
+			outbox.settle(event, true);
+		}
+		jobs.cancel(scope, checkpoint.job);
+	}
+	assert.ok(
+		jobs
+			.inventory(scope, checkpoint.job)
+			.every((row) => row.status === "cancelled"),
+	);
+	assert.equal(
+		outbox
+			.list(scope)
+			.filter((e) => e.job === checkpoint.job && e.kind === "cancelled").length,
+		11,
+	);
+	evidence("cancel-budget-kill", {
+		killedSignal: "SIGKILL",
+		checkpoint,
+		rows: jobs.inventory(scope, checkpoint.job),
+		observations: outbox.list(scope),
+	});
+});
+
+test("recovers healthy same-scope work after killing a denied worker", async () => {
+	using f = fixture();
+	const running = child(f.path, "job-denied");
+	const checkpoint = parse(
+		z.object({
+			value: z.object({
+				job: idSchema,
+				claim: z.object({ stage: idSchema, operation: idSchema }),
+			}),
+		}),
+		await running.message,
+	).value;
+	await kill(running.process, running.exited);
+	using restart = new DurabilityDatabase(
+		f.path,
+		undefined,
+		() => 1000 + defaultLimits.leaseMs,
+	);
+	const jobs = new DurableBatchEngine(restart);
+	const healthy = jobs.create(scope, plan("healthy-after-denied-kill", 1));
+	const claim = jobs.claim(scope);
+	assert.equal(claim?.job, healthy.id);
+	assert.ok(claim);
+	jobs.complete(scope, claim, [file()]);
+	jobs.cancel(scope, checkpoint.job);
+	assert.equal(jobs.inventory(scope, checkpoint.job)[0]?.status, "cancelled");
+	assert.throws(() =>
+		new LocalArtifactStore(restart).publish(scope, checkpoint.claim.stage, [
+			file(),
+		]),
+	);
+	evidence("denied-worker-kill", {
+		killedSignal: "SIGKILL",
+		checkpoint,
+		denied: jobs.inventory(scope, checkpoint.job),
+		healthy: jobs.job(scope, healthy.id),
+	});
+});
+
+for (const mode of ["job-gc-stage", "job-gc-fail", "job-gc-cancel"] as const) {
+	test(`preserves shared bytes and collects abandoned output after SIGKILL at ${mode}`, async () => {
+		using f = fixture();
+		const input = Buffer.from("opaque");
+		const published = f.store.bind(
+			scope,
+			"export",
+			"gc-published",
+			input,
+			hash(input),
+		);
+		const pubStage = f.store.stage(scope, published.id);
+		f.store.write(scope, pubStage, file());
+		const publication = f.store.publish(scope, pubStage, [file()]);
+		const pending = f.store.bind(
+			scope,
+			"export",
+			"gc-pending",
+			input,
+			hash(input),
+		);
+		const liveStage = f.store.stage(scope, pending.id);
+		const live = file("live.bin", "shared-live");
+		f.store.write(scope, liveStage, live);
+		const running = child(f.path, mode);
+		const checkpoint = parse(
+			z.object({
+				value: z.object({
+					job: idSchema,
+					claim: z.object({ stage: idSchema }),
+				}),
+			}),
+			await running.message,
+		).value;
+		await kill(running.process, running.exited);
+		using restart = new DurabilityDatabase(
+			f.path,
+			undefined,
+			() => 1000 + defaultLimits.leaseMs,
+		);
+		const jobs = new DurableBatchEngine(restart);
+		jobs.claim(scope);
+		const store = new LocalArtifactStore(restart);
+		store.abandon(scope, checkpoint.claim.stage);
+		store.abandon(scope, checkpoint.claim.stage);
+		assert.equal(
+			restart.sql
+				.prepare("SELECT 1 FROM blobs WHERE digest=?")
+				.get(hash("unique-process-gc")),
+			undefined,
+		);
+		assert.equal(store.retrieve(scope, publication.id).files.length, 1);
+		assert.equal(
+			store.retrieve(scope, store.publish(scope, liveStage, [live]).id).files
+				.length,
+			1,
+		);
+		assert.equal(
+			restart.sql.prepare("SELECT COUNT(*) AS n FROM blobs").get()?.["n"],
+			2,
+		);
+		evidence(mode, {
+			killedSignal: "SIGKILL",
+			checkpoint,
+			rows: jobs.inventory(scope, checkpoint.job),
+			retainedBlobs: 2,
 		});
 	});
 }
