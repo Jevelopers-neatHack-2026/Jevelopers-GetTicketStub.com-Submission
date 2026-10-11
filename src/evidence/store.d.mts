@@ -222,7 +222,7 @@ export interface StoredAssetSourceCandidate {
   readonly locator: TextRangeLocator;
   /** SHA-256 of the exact private source excerpt, not of fetched asset bytes. */
   readonly excerptHash: string;
-  /** Present on selector-3 and selector-4 records; distinguishes URL value bytes from an empty/missing HTML attribute token. */
+  /** Present on selector-3, selector-4, and selector-5 records; distinguishes URL value bytes from an empty/missing HTML attribute token. */
   readonly excerptKind?: 'url-value' | 'html-empty-attribute-token';
   readonly normalizedSuggestion: string | null;
   readonly fetchSuggestion: string | null;
@@ -234,7 +234,7 @@ export interface StoredAssetSourceCandidate {
 
 export interface AssetSourceProvenance {
   readonly bindingVersion: 1;
-  readonly selectorVersion: 'ei-asset-source-selector/1' | 'ei-asset-source-selector/2' | 'ei-asset-source-selector/3' | 'ei-asset-source-selector/4';
+  readonly selectorVersion: 'ei-asset-source-selector/1' | 'ei-asset-source-selector/2' | 'ei-asset-source-selector/3' | 'ei-asset-source-selector/4' | 'ei-asset-source-selector/5';
   readonly extractorVersion: string;
   readonly sourceUrl: string;
   readonly sourceKind: 'external';

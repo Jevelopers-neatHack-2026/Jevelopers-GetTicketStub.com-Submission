@@ -154,6 +154,87 @@ test("parses XHTML with XML self-closing, CDATA, entity, and UTF-8 source semant
   assertExactRanges(result, input.bytes);
 });
 
+test("preserves full XHTML canonical and metadata attribute names with XML syntax whitespace", async () => {
+  const forms = [
+    {
+      name: "canonical href",
+      render: (attribute, shadow) => `<link rel="canonical" ${attribute}="/canonical-real" ${shadow}="/canonical-noise" />`,
+      renderReversed: (attribute, shadow) => `<link rel="canonical" ${shadow}="/canonical-noise" ${attribute}="/canonical-real" />`,
+      renderLookalikeOnly: (shadow) => `<link rel="canonical" ${shadow}="/canonical-noise" />`,
+      value: "/canonical-real",
+      select: (result) => result.canonicalSuggestions,
+    },
+    {
+      name: "Open Graph description content",
+      render: (attribute, shadow) => `<meta property="og:description" ${attribute}="real description" ${shadow}="noise description" />`,
+      renderReversed: (attribute, shadow) => `<meta property="og:description" ${shadow}="noise description" ${attribute}="real description" />`,
+      renderLookalikeOnly: (shadow) => `<meta property="og:description" ${shadow}="noise description" />`,
+      value: "real description",
+      select: (result) => result.pageMetadata.filter((candidate) => candidate.field === "openGraph.description"),
+    },
+  ];
+  const codePoints = [
+    { name: "U+1680", value: "\u1680" },
+    { name: "U+FEFF", value: "\uFEFF" },
+  ];
+
+  for (const form of forms) {
+    for (const codePoint of codePoints) {
+      const attribute = form.name.startsWith("canonical") ? "href" : "content";
+      const shadow = `${attribute}${codePoint.value}`;
+      const cases = [
+        { name: "genuine then lookalike", markup: form.render(attribute, shadow), expected: form.value },
+        { name: "lookalike then genuine", markup: form.renderReversed(attribute, shadow), expected: form.value },
+        { name: "lookalike only", markup: form.renderLookalikeOnly(shadow), expected: null },
+      ];
+
+      for (const item of cases) {
+        const source = `<html xmlns="http://www.w3.org/1999/xhtml"><head>🧭${item.markup}</head><body></body></html>`;
+        const bytes = Buffer.from(source, "utf8");
+        const input = document(bytes, "application/xhtml+xml; charset=utf-8");
+        const result = await extractDeterministically(input);
+        const label = `${form.name} ${codePoint.name} ${item.name}`;
+        assert.equal(result.diagnostics.some((diagnostic) => diagnostic.code === "MALFORMED_XHTML"), false, label);
+        const selected = form.select(result);
+        if (item.expected === null) {
+          assert.equal(selected.length, 0, `${label}: Unicode-suffixed attribute is not treated as the exact name`);
+          assert.equal(JSON.stringify(result).includes("noise"), false, `${label}: lookalike value is not promoted`);
+        } else {
+          assert.equal(selected.length, 1, `${label}: genuine ${form.name} remains available`);
+          const candidate = selected[0];
+          assert.equal(candidate.rawValue, item.expected, label);
+          const valueIndex = source.indexOf(item.expected);
+          const startByte = Buffer.byteLength(source.slice(0, valueIndex), "utf8");
+          const endByte = startByte + Buffer.byteLength(item.expected, "utf8");
+          assert.deepEqual(candidate.source.locator, { kind: "text-range", startByte, endByte }, label);
+          assert.equal(bytes.subarray(startByte, endByte).toString("utf8"), item.expected, label);
+          assert.equal(JSON.stringify(result).includes("noise"), false, `${label}: lookalike value is not promoted`);
+        }
+        assertExactRanges(result, bytes);
+      }
+    }
+  }
+});
+
+test("keeps each legal XML syntax whitespace character between XHTML attribute names and values", async () => {
+  for (const whitespace of ["\t", "\n", "\r", " "]) {
+    const source = `<html xmlns="http://www.w3.org/1999/xhtml"><head>🧭`
+      + `<link${whitespace}rel="canonical"${whitespace}href${whitespace}=${whitespace}"/calendar.xml" />`
+      + `<meta${whitespace}property="og:description"${whitespace}content${whitespace}=${whitespace}"venue details" />`
+      + `<link${whitespace}rel="icon"${whitespace}href${whitespace}=${whitespace}"/icon.png" />`
+      + `</head><body></body></html>`;
+    const bytes = Buffer.from(source, "utf8");
+    const result = await extractDeterministically(document(bytes, "application/xhtml+xml; charset=utf-8"));
+    assert.equal(result.diagnostics.some((diagnostic) => diagnostic.code === "MALFORMED_XHTML"), false,
+      `XML whitespace ${JSON.stringify(whitespace)} is accepted`);
+    assert.equal(result.canonicalSuggestions[0]?.rawValue, "/calendar.xml");
+    assert.equal(result.pageMetadata.find((candidate) => candidate.field === "openGraph.description")?.rawValue, "venue details");
+    assert.ok(result.assetSources.some((asset) => asset.sourceForm === "html-icon-link"
+      && asset.candidate.rawValue === "/icon.png"));
+    assertExactRanges(result, bytes);
+  }
+});
+
 test("tracks empty, adjacent, chunked, and flushed XHTML CDATA content with source semantics", async () => {
   const emptyAtStart = document(Buffer.from(
     '<html xmlns="http://www.w3.org/1999/xhtml"><body><p><![CDATA[]]>Cancelled event</p></body></html>',

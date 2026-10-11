@@ -73,7 +73,7 @@ const PDF_DERIVED_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const ASSET_SOURCE_EXCERPT_REPRESENTATION = 'asset-source-excerpt';
 const ASSET_SOURCE_BUNDLE_VERSION = 3;
 const ASSET_SOURCE_BINDING_VERSION = 1;
-const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/4';
+const ASSET_SOURCE_SELECTOR_VERSION = 'ei-asset-source-selector/5';
 const ASSET_SOURCE_MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const ASSET_SOURCE_MAX_POSITIONS = 64;
 const ASSET_SOURCE_MAX_EXCERPT_BYTES = 8 * 1024;
@@ -115,6 +115,12 @@ const ASSET_SOURCE_READ_PROFILES = new Map([
   ['ei-asset-source-selector/4\u0000ei-deterministic-extraction/1.4.0', Object.freeze({
     selectorVersion: 'ei-asset-source-selector/4',
     extractorVersion: 'ei-deterministic-extraction/1.4.0',
+    completeness: 'static-selected-forms-only',
+    limitations: ASSET_SOURCE_LIMITATIONS,
+  })],
+  ['ei-asset-source-selector/5\u0000ei-deterministic-extraction/1.5.0', Object.freeze({
+    selectorVersion: 'ei-asset-source-selector/5',
+    extractorVersion: 'ei-deterministic-extraction/1.5.0',
     completeness: 'static-selected-forms-only',
     limitations: ASSET_SOURCE_LIMITATIONS,
   })],
@@ -945,7 +951,8 @@ function validateAssetSourceProvenance(value, record, sourceUrl, positionsById, 
       fail('EVIDENCE_INTEGRITY');
     }
     const hasExcerptKind = profile.selectorVersion === 'ei-asset-source-selector/3'
-      || profile.selectorVersion === 'ei-asset-source-selector/4';
+      || profile.selectorVersion === 'ei-asset-source-selector/4'
+      || profile.selectorVersion === 'ei-asset-source-selector/5';
     if (hasExcerptKind) {
       if (!Object.hasOwn(candidate, 'excerptKind')
         || !['url-value', 'html-empty-attribute-token'].includes(candidate.excerptKind)) fail('EVIDENCE_INTEGRITY');

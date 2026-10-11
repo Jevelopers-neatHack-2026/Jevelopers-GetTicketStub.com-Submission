@@ -13,7 +13,7 @@ import {
   textCandidate,
 } from "./source.mjs";
 
-export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.4.0";
+export const DETERMINISTIC_EXTRACTION_VERSION = "ei-deterministic-extraction/1.5.0";
 
 export const EXTRACTION_LIMITS = Object.freeze({
   maxDocumentBytes: 2 * 1024 * 1024,

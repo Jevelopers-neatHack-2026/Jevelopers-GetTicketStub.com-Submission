@@ -3,6 +3,7 @@ import { performance } from "node:perf_hooks";
 
 const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
 const SAX_TOKEN_BUFFER_LIMIT = sax.MAX_BUFFER_LENGTH;
+const XML_SYNTAX_WHITESPACE = /[\t\n\r ]/;
 
 export function xhtmlXmlDeclarationEncodingFromBytes(bytes) {
   let start = 0;
@@ -13,7 +14,7 @@ export function xhtmlXmlDeclarationEncodingFromBytes(bytes) {
   let encoding = null;
   parser.onprocessinginstruction = (instruction) => {
     if (instruction?.name === "xml") {
-      encoding = /\bencoding\s*=\s*(['"])(.*?)\1/i.exec(instruction.body)?.[2]?.toLowerCase() ?? null;
+      encoding = /\bencoding[\t\n\r ]*=[\t\n\r ]*(['"])(.*?)\1/i.exec(instruction.body)?.[2]?.toLowerCase() ?? null;
     }
   };
   parser.onerror = () => {};
@@ -196,7 +197,7 @@ export async function parseXhtmlDocument(text, { signal, limits }) {
   };
   parser.onprocessinginstruction = function onProcessingInstruction(instruction) {
     if (instruction?.name === "xml") {
-      xmlEncoding = /\bencoding\s*=\s*(['"])(.*?)\1/i.exec(instruction.body)?.[2]?.toLowerCase() ?? null;
+      xmlEncoding = /\bencoding[\t\n\r ]*=[\t\n\r ]*(['"])(.*?)\1/i.exec(instruction.body)?.[2]?.toLowerCase() ?? null;
     }
     sourceCursor = Math.min(text.length, this.position);
   };
@@ -400,21 +401,21 @@ function appendMappingSegment(segments, next) {
 function xmlAttributeRanges(text, startOffset, endOffset) {
   const ranges = Object.create(null);
   let cursor = startOffset + 1;
-  while (cursor < endOffset && !/[\s/>]/.test(text[cursor])) cursor += 1;
+  while (cursor < endOffset && !/[\t\n\r />]/.test(text[cursor])) cursor += 1;
   while (cursor < endOffset) {
-    while (/\s/.test(text[cursor] ?? "")) cursor += 1;
+    while (XML_SYNTAX_WHITESPACE.test(text[cursor] ?? "")) cursor += 1;
     if (text[cursor] === "/" || text[cursor] === ">") break;
     const nameStart = cursor;
-    while (cursor < endOffset && !/[\s=/>]/.test(text[cursor])) cursor += 1;
+    while (cursor < endOffset && !/[\t\n\r =/>]/.test(text[cursor])) cursor += 1;
     if (cursor === nameStart) break;
     const name = text.slice(nameStart, cursor).toLowerCase();
-    while (/\s/.test(text[cursor] ?? "")) cursor += 1;
+    while (XML_SYNTAX_WHITESPACE.test(text[cursor] ?? "")) cursor += 1;
     if (text[cursor] !== "=") {
       ranges[name] = { startOffset: nameStart, endOffset: cursor };
       continue;
     }
     cursor += 1;
-    while (/\s/.test(text[cursor] ?? "")) cursor += 1;
+    while (XML_SYNTAX_WHITESPACE.test(text[cursor] ?? "")) cursor += 1;
     const quote = text[cursor] === '"' || text[cursor] === "'" ? text[cursor] : null;
     if (quote === null) continue;
     cursor += 1;
