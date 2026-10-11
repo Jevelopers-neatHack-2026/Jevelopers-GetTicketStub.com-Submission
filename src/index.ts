@@ -24,6 +24,15 @@ export type {
   StoredAttemptSummary
 } from "./metering.js";
 export {
+  AttemptStoreError,
+  LocalAttemptPersistence,
+  createLocalAttemptPersistence
+} from "./attempt-store.js";
+export type {
+  AttemptHistory,
+  LocalAttemptPersistenceOptions
+} from "./attempt-store.js";
+export {
   evaluateProviderPolicy,
   PRODIGI_SANDBOX_BASE_URL,
   PRODIGI_SANDBOX_OPERATION_ENDPOINTS,
@@ -68,3 +77,13 @@ export type {
   QuotedAmount
 } from "./quotes.js";
 export type { ExactMoney as PrivateQuoteExactMoney } from "./quotes.js";
+export { comparePrivateQuotes, PRIVATE_COMPARISON_FORMAT } from "./comparison.js";
+export type {
+  ComparisonCapabilityFit,
+  ComparisonQuoteEntry,
+  ComparisonQuoteReferences,
+  ComparisonReason,
+  PrivateQuoteComparison,
+  PrivateQuoteComparisonDependencies,
+  PrivateQuoteComparisonRequest
+} from "./comparison.js";
