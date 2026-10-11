@@ -263,8 +263,9 @@ export declare function evaluateOpenAIImageRetry(input: {
 
 export type OpenRouterImageOutputFormat = OpenAIImageOutputFormat;
 
-/** Typed discovery-style descriptors. An absent key means the model does not support the parameter. */
+/** Typed discovery descriptors. Optional n/reference ranges bound adapter-owned wire counts when present. */
 export type OpenRouterImageEnumDescriptor<T extends string = string> = Readonly<{ type: "enum"; values: readonly T[] }>;
+/** Inclusive range; runtime accepts only ordered bounded safe-integer endpoints. */
 export type OpenRouterImageRangeDescriptor = Readonly<{ type: "range"; min: number; max: number }>;
 
 export interface OpenRouterImageSupportedParameters {
@@ -275,8 +276,9 @@ export interface OpenRouterImageSupportedParameters {
   readonly output_format?: OpenRouterImageEnumDescriptor<OpenRouterImageOutputFormat>;
   readonly resolution?: OpenRouterImageEnumDescriptor<"512" | "768" | "1K" | "1.5K" | "2K" | "4K">;
   readonly output_compression?: OpenRouterImageRangeDescriptor;
-  /** Catalog-only ranges (n 0..32, input_references 0..32). They are bound into the profile but never pinnable. */
+  /** Optional catalog bound for the fixed wire n:1; when present, it must contain 1. */
   readonly n?: OpenRouterImageRangeDescriptor;
+  /** Optional actual wire reference-count bound; generation uses 0 and edits count the parent plus approved references. */
   readonly input_references?: OpenRouterImageRangeDescriptor;
 }
 

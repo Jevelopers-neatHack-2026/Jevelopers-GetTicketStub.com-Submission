@@ -144,6 +144,49 @@ function validateSupportedParameters(value) {
   return deepFreeze(result);
 }
 
+function rangeContains(range, value) {
+  return range === undefined || (value >= range.min && value <= range.max);
+}
+
+function validateCatalogCountCompatibility(capabilities, supported) {
+  if (supported.n && !rangeContains(supported.n, 1)) {
+    fail("unsupported_model_profile", "The declared n range excludes the adapter's fixed single-image request.", {
+      outcome: "failed", field: "supported_parameters.n",
+    });
+  }
+  const references = supported.input_references;
+  if (!references) return;
+  if (capabilities.generation && !rangeContains(references, 0)) {
+    fail("unsupported_model_profile", "The declared input-reference range excludes generation's zero-reference request.", {
+      outcome: "failed", field: "supported_parameters.input_references",
+    });
+  }
+  if (capabilities.edit !== false) {
+    const maximum = capabilities.edit.max_input_references;
+    if (maximum > references.max || maximum < references.min) {
+      fail("unsupported_model_profile", "Edit capability and the declared input-reference range are incompatible.", {
+        outcome: "failed", field: "supported_parameters.input_references",
+      });
+    }
+  }
+}
+
+function assertReferenceCount(count, maximum, descriptor) {
+  if (count > maximum || !rangeContains(descriptor, count)) {
+    fail("unsupported_operation", "The actual OpenRouter request reference count is outside the explicit model profile.", {
+      outcome: "failed", field: "input_references",
+    });
+  }
+}
+
+function assertFixedImageCount(supported) {
+  if (!rangeContains(supported.n, 1)) {
+    fail("unsupported_operation", "The actual OpenRouter request image count is outside the explicit model profile.", {
+      outcome: "failed", field: "n",
+    });
+  }
+}
+
 function validateConfiguration(configuration, supported) {
   const reject = () => fail("unsupported_image_configuration",
     "Requested image configuration is outside the explicit OpenRouter model profile.", { outcome: "failed", field: "configuration" });
@@ -387,6 +430,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
     }
     const profileCapabilities = validateCapabilities(capabilities);
     const supported = validateSupportedParameters(supported_parameters);
+    validateCatalogCountCompatibility(profileCapabilities, supported);
     const pinnedConfiguration = validateConfiguration(configuration, supported);
     if (!capabilityPort || typeof capabilityPort.verify !== "function" || typeof capabilityPort.revalidate !== "function" ||
         !authorizationPort || typeof authorizationPort.revalidate !== "function" ||
@@ -415,7 +459,11 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       endpointFor: () => ENDPOINT,
       preflight(input, operation, conceptMode) {
         requireOperation(operation);
-        if (operation === "generate") return;
+        assertFixedImageCount(supported);
+        if (operation === "generate") {
+          assertReferenceCount(0, 0, supported.input_references);
+          return;
+        }
         if (input.plan.steps.some((step) => isRecord(step?.parameters) && step.parameters.mask_source_ref !== undefined)) {
           fail("unsupported_operation", "OpenRouter has no documented mask or inpainting parameter.", {
             outcome: "failed", field: "plan.steps.parameters.mask_source_ref",
@@ -423,11 +471,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
         }
         const referenceCount = conceptMode ? input.concept_reference_manifest.references.length
           : 1 + (input.image_reference_manifest?.references.length ?? 0);
-        if (referenceCount > maxReferences) {
-          fail("unsupported_operation", "The reference count exceeds the explicit OpenRouter profile maximum.", {
-            outcome: "failed", field: "input_references",
-          });
-        }
+        assertReferenceCount(referenceCount, maxReferences, supported.input_references);
       },
       validateConfiguration: () => pinnedConfiguration,
       bindingExtras: (operation, attempt) => ({
@@ -493,11 +537,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       inspectConceptReferences(args) {
         return guardedAsync(async () => {
           requireOperation("edit");
-          if (Array.isArray(args?.references) && args.references.length > maxReferences) {
-            fail("unsupported_operation", "The reference count exceeds the explicit OpenRouter profile maximum.", {
-              outcome: "failed", field: "input_references",
-            });
-          }
+          if (Array.isArray(args?.references)) assertReferenceCount(args.references.length, maxReferences, supported.input_references);
           return inspectConceptReferenceBytes(assetPort, args);
         });
       },

@@ -57,6 +57,43 @@ function editAssets(parent, referenceBytes, reads = []) {
   };
 }
 
+function parentlessConcept(referenceCount, counters = { assetReads: 0, staged: 0 }) {
+  const referenceBytes = Array.from({ length: referenceCount }, (_, index) => makePng({ transparent: index % 2 === 1 }));
+  const references = referenceBytes.map((bytes, index) => ({ source_ref: `range-concept-source-${index + 1}`,
+    asset_id: `range-concept-asset-${index + 1}`, content_hash: HASH(bytes), media_type: "image/png",
+    role_ref: `range-concept-role-${index + 1}`, width: 16, height: 16 }));
+  const ctx = orInput("edit", {
+    base_design: null,
+    brief: { brief_id: "brief-test", research_package_ref: { package_id: "research-package-01" } },
+    plan: { operation: "concept.generate", plan_id: "plan-range-concept",
+      source_refs: references.map((item) => item.source_ref),
+      steps: [{ step_id: "range-concept-step", action: "concept.generate",
+        source_refs: references.map((item) => item.source_ref), parameters: { variant_count: 1 } }] },
+    concept_reference_manifest: { contract: "CreativeConceptReferenceManifest", schema_version: "1.0",
+      tenant_id: "tenant-test", project_id: "creative-project-test", brief_id: "brief-test", brief_hash: TEST_HASH,
+      research_package_id: "research-package-01", research_package_hash: TEST_HASH,
+      mapping_ref: "openrouter-reference-concepts", mapping_version: "1",
+      prompt_template_ref: "prompt-template-concepts-v1", prompt_template_version: "1",
+      prompt_template_sha256: TEST_HASH, references },
+    concept_batch_id: "range-concept-batch", concept_id: "range-concept-slot",
+    async recordConceptDispatchBinding(binding) {
+      return { status: "recorded", transport_attempt_id: "transport-image-001",
+        target_binding_sha256: binding.target_binding_sha256 };
+    },
+    async stageConceptResponse(stage) {
+      counters.staged += 1;
+      return { status: "staged", stage_ref: "range-concept-stage", content_hash: stage.content_hash };
+    },
+    assertDispatchCurrent: () => "dispatch-image-001",
+  });
+  return { ctx, references, referenceBytes, counters, assetPort: {
+    async readReference(args) {
+      counters.assetReads += 1;
+      return referenceBytes[references.findIndex((item) => item.asset_id === args.asset_id)];
+    },
+  } };
+}
+
 test("the profile is explicit: no default model, tag, or capability is invented", () => {
   const base = () => ({ ...orProfile(), ...orAuthorityPorts(), credentialPort: orCredentialPort(), promptPort: { render: () => PROMPT } });
   assert.doesNotThrow(() => createOpenRouterImagesProvider(base()));
@@ -139,15 +176,191 @@ test("catalog-shaped descriptors that list auto are accepted verbatim, but auto 
     ["auto in resolution", { resolution: { type: "enum", values: ["auto"] } }],
     ["n above bound", { n: { type: "range", min: 1, max: 33 } }],
     ["n inverted", { n: { type: "range", min: 5, max: 1 } }],
+    ["n fractional", { n: { type: "range", min: 0.5, max: 1 } }],
+    ["n nonfinite", { n: { type: "range", min: 0, max: Number.NaN } }],
+    ["n has unsupported default", { n: { type: "range", min: 0, max: 1, default: 1 } }],
+    ["n has an unknown key", { n: { type: "range", min: 0, max: 1, extra: true } }],
+    ["n unsafe integer", { n: { type: "range", min: 1, max: Number.MAX_SAFE_INTEGER + 1 } }],
     ["n as enum", { n: { type: "enum", values: ["1"] } }],
     ["input_references negative", { input_references: { type: "range", min: -1, max: 4 } }],
     ["input_references above ceiling", { input_references: { type: "range", min: 0, max: 33 } }],
+    ["input_references inverted", { input_references: { type: "range", min: 4, max: 3 } }],
+    ["input_references fractional", { input_references: { type: "range", min: 0, max: 1.5 } }],
+    ["input_references nonfinite", { input_references: { type: "range", min: Number.NaN, max: 2 } }],
+    ["input_references unsafe integer", { input_references: { type: "range", min: 0, max: Number.MAX_SAFE_INTEGER + 1 } }],
+    ["input_references has unsupported default", { input_references: { type: "range", min: 0, max: 2, default: 1 } }],
+    ["input_references has an unknown key", { input_references: { type: "range", min: 0, max: 2, extra: true } }],
     ["compression above 100", { output_compression: { type: "range", min: 0, max: 101 } }],
   ]) reject({ supported_parameters, configuration: {} }, "unsupported_model_profile", name);
   // Descriptor-only ranges can never be pinned.
   reject({ supported_parameters: LIVE_DESCRIPTORS, configuration: { n: 2 } }, "unsupported_image_configuration", "n is not pinnable");
   reject({ supported_parameters: LIVE_DESCRIPTORS, configuration: { input_references: 1 } }, "unsupported_image_configuration",
     "input_references is not pinnable");
+});
+
+test("provided catalog counts must agree with the fixed n and declared capabilities", async (t) => {
+  const baseSupported = orProfile().supported_parameters;
+  const contradictoryProfiles = [
+    ["n excludes the adapter's fixed one image", {
+      supported_parameters: { ...baseSupported, n: { type: "range", min: 2, max: 3 } },
+    }, "generate"],
+    ["generation requires zero references but the catalog requires at least one", {
+      supported_parameters: { ...baseSupported, input_references: { type: "range", min: 1, max: 3 } },
+    }, "generate"],
+    ["edit capability cannot fit the catalog's zero-reference ceiling", {
+      supported_parameters: { ...baseSupported, input_references: { type: "range", min: 0, max: 0 } },
+      capabilities: { generation: true, edit: { max_input_references: 1 } },
+    }, "edit"],
+    ["edit capability cannot exceed the catalog ceiling used by parentless concepts", {
+      supported_parameters: { ...baseSupported, input_references: { type: "range", min: 0, max: 1 } },
+      capabilities: { generation: true, edit: { max_input_references: 3 } },
+    }, "concept"],
+    ["edit capability cannot reach the catalog minimum", {
+      supported_parameters: { ...baseSupported, input_references: { type: "range", min: 3, max: 5 } },
+      capabilities: { generation: false, edit: { max_input_references: 2 } },
+    }, "edit"],
+  ];
+
+  for (const [name, profile, operation] of contradictoryProfiles) await t.test(name, async () => {
+    const events = [];
+    const counters = { fetches: 0, assetReads: 0, staged: 0 };
+    const concept = operation === "concept" ? parentlessConcept(2, counters) : null;
+    const reads = [];
+    let harness;
+    let denial;
+    try {
+      harness = orHarness({ operation: operation === "concept" ? "edit" : operation, profile, ports: { events },
+        inputOverride: concept?.ctx ?? { async stageConceptResponse() { counters.staged += 1; } },
+        assetPort: concept?.assetPort ?? editAssets(makePng(), [], reads),
+        promptPort: concept ? { async render({ prompt_template }) { return { prompt: PROMPT,
+          template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
+          template_sha256: prompt_template.template_sha256 }; } } : undefined,
+        fetchImpl: async () => { counters.fetches += 1; return orResponse(); },
+      });
+    } catch (error) { denial = error; }
+    if (harness) {
+      try { await harness.provider[operation === "concept" ? "edit" : operation](harness.ctx); }
+      catch (error) { denial = error; }
+    }
+    assert.equal(denial?.code, "unsupported_model_profile",
+      `${name}: contradictory catalog profile was accepted; side effects=${JSON.stringify({ events,
+        fetches: counters.fetches, assetReads: counters.assetReads + reads.length, staged: counters.staged })}`);
+    assert.equal(harness, undefined, `${name}: catalog contradiction must fail before a provider can dispatch`);
+    assert.deepEqual(events, [], `${name}: no authority or credential port should run`);
+    assert.equal(counters.fetches, 0, `${name}: no intercepted fetch should run`);
+    assert.equal(harness?.fetchCount ?? 0, 0, `${name}: no adapter transport should run`);
+    assert.equal(counters.assetReads + reads.length, 0, `${name}: no asset bytes should be read`);
+    assert.equal(counters.staged, 0, `${name}: no concept response should be staged`);
+  });
+
+  await t.test("a normal edit below the declared minimum is refused before asset, credential, fetch, or stage work", async () => {
+    const events = [];
+    const reads = [];
+    const counters = { fetches: 0, staged: 0 };
+    const profile = {
+      capabilities: { generation: false, edit: { max_input_references: 3 } },
+      supported_parameters: { ...baseSupported, input_references: { type: "range", min: 2, max: 3 } },
+    };
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: editAssets(makePng(), [], reads),
+      fetchImpl: async () => { counters.fetches += 1; return orResponse(); },
+      inputOverride: { async stageConceptResponse() { counters.staged += 1; } },
+    });
+    await assert.rejects(harness.provider.edit(harness.ctx), (error) => error instanceof OpenRouterImagesProviderError &&
+      error.code === "unsupported_operation" && error.field === "input_references");
+    assert.deepEqual(events, []);
+    assert.deepEqual(reads, []);
+    assert.deepEqual(counters, { fetches: 0, staged: 0 });
+  });
+
+  for (const [name, inputRange, capabilityMaximum] of [
+    ["concept references below the declared minimum", { min: 3, max: 3 }, 3],
+  ]) await t.test(name, async () => {
+    const events = [];
+    const concept = parentlessConcept(2);
+    const counters = { fetches: 0 };
+    const profile = {
+      capabilities: { generation: inputRange.min === 0, edit: { max_input_references: capabilityMaximum } },
+      supported_parameters: { ...baseSupported, input_references: { type: "range", ...inputRange } },
+    };
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, inputOverride: concept.ctx,
+      assetPort: concept.assetPort, fetchImpl: async () => { counters.fetches += 1; return orResponse(); },
+      promptPort: { async render({ prompt_template }) { return { prompt: PROMPT, template_ref: prompt_template.template_ref,
+        template_version: prompt_template.template_version, template_sha256: prompt_template.template_sha256 }; } },
+    });
+    await assert.rejects(harness.provider.inspectConceptReferences({ scope: concept.ctx.scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 }),
+    (error) => error instanceof OpenRouterImagesProviderError && error.code === "unsupported_operation" &&
+      error.field === "input_references");
+    await assert.rejects(harness.provider.edit(harness.ctx), (error) => error instanceof OpenRouterImagesProviderError &&
+      error.code === "unsupported_operation" && error.field === "input_references");
+    assert.deepEqual(events, [], "the parentless count is checked before authority or credential resolution");
+    assert.equal(harness.fetchCount, 0);
+    assert.equal(counters.fetches, 0);
+    assert.equal(concept.counters.assetReads, 0, "inspection does not fetch unauthorized reference bytes");
+    assert.equal(concept.counters.staged, 0, "an unsupported concept is never staged");
+  });
+});
+
+test("actual wire counts at declared lower and upper boundaries remain functional", async (t) => {
+  const baseSupported = orProfile().supported_parameters;
+  await t.test("generation keeps n:1 and zero references at exact descriptors", async () => {
+    const harness = orHarness({ profile: { capabilities: { generation: true, edit: false },
+      supported_parameters: { ...baseSupported, n: { type: "range", min: 1, max: 1 },
+        input_references: { type: "range", min: 0, max: 0 } } } });
+    await harness.provider.generate(harness.ctx);
+    const body = JSON.parse(harness.requests[0].init.body);
+    assert.equal(body.n, 1);
+    assert.equal(Object.hasOwn(body, "input_references"), false);
+  });
+
+  await t.test("parent-first edit accepts its exact one-reference boundary", async () => {
+    const harness = orHarness({ operation: "edit", profile: { capabilities: { generation: false, edit: { max_input_references: 1 } },
+      supported_parameters: { ...baseSupported, n: { type: "range", min: 1, max: 1 },
+        input_references: { type: "range", min: 1, max: 1 } } }, assetPort: editAssets(makePng(), []) });
+    await harness.provider.edit(harness.ctx);
+    assert.equal(JSON.parse(harness.requests[0].init.body).input_references.length, 1);
+  });
+
+  await t.test("parentless concept accepts the lower endpoint of two authorized references", async () => {
+    const events = [];
+    const concept = parentlessConcept(2);
+    const profile = { capabilities: { generation: false, edit: { max_input_references: 3 } },
+      supported_parameters: { ...baseSupported, n: { type: "range", min: 1, max: 1 },
+        input_references: { type: "range", min: 2, max: 3 } } };
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, inputOverride: concept.ctx, assetPort: concept.assetPort,
+      promptPort: { async render({ prompt_template }) { return { prompt: PROMPT, template_ref: prompt_template.template_ref,
+        template_version: prompt_template.template_version, template_sha256: prompt_template.template_sha256 }; } } });
+    const inspected = await harness.provider.inspectConceptReferences({ scope: concept.ctx.scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 3 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    await harness.provider.edit(harness.ctx);
+    const body = JSON.parse(harness.requests[0].init.body);
+    assert.equal(body.input_references.length, 2);
+    assert.ok(!body.input_references.some((item) => item.image_url.url.includes("undefined")));
+    assert.equal(concept.counters.staged, 1);
+    assert.equal(harness.fetchCount, 1);
+    assert.ok(events.includes("credential.resolve"));
+  });
+
+  await t.test("parent plus two authorized references accepts the upper endpoint", async () => {
+    const referenceBytes = [makePng(), makePng({ transparent: true })];
+    const { ctx, references } = manifestEdit(referenceBytes);
+    const profile = { capabilities: { generation: false, edit: { max_input_references: 3 } },
+      supported_parameters: { ...baseSupported, n: { type: "range", min: 1, max: 1 },
+        input_references: { type: "range", min: 2, max: 3 } } };
+    const harness = orHarness({ operation: "edit", profile, inputOverride: ctx,
+      assetPort: editAssets(makePng(), referenceBytes) });
+    await harness.provider.edit(harness.ctx);
+    const body = JSON.parse(harness.requests[0].init.body);
+    assert.equal(body.input_references.length, 3);
+    assert.equal(references.length, 2);
+  });
+
+  await t.test("an absent optional range descriptor preserves legacy profile behavior", async () => {
+    const harness = orHarness({ profile: { supported_parameters: baseSupported, configuration: {} } });
+    await harness.provider.generate(harness.ctx);
+    assert.equal(JSON.parse(harness.requests[0].init.body).n, 1);
+  });
 });
 
 test("route is the exact OpenRouter endpoint and never a direct OpenAI one", () => {
