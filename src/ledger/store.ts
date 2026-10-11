@@ -1330,16 +1330,7 @@ async function computeUnresolvedIntakeProjection(
   client: LedgerTransactionPort,
   scope: LedgerProjectionRequest['scope'],
   asOf: string,
-  intakeSchemaPresent: boolean,
 ): Promise<Static<typeof ProjectionUnresolvedIntakeSchema>> {
-  if (!intakeSchemaPresent) {
-    return {
-      unknownEconomicExposureCount: 0,
-      quarantinedObservationCount: 0,
-      awaitingEvidenceAttemptCount: 0,
-      unpostedAttemptCount: 0,
-    };
-  }
   const values = [scope.tenantId, scope.projectId, scope.environment, scope.billingMode, asOf];
   const quarantined = await client.query(
     `SELECT count(*)::integer AS count
@@ -1386,6 +1377,102 @@ async function computeUnresolvedIntakeProjection(
   };
 }
 
+const CURRENT_INTAKE_REQUIRED_COLUMNS = [
+  ['usage_intake_inbox', 'tenant_id'], ['usage_intake_inbox', 'project_id'],
+  ['usage_intake_inbox', 'environment'], ['usage_intake_inbox', 'billing_mode'],
+  ['usage_intake_inbox', 'source_observation_id'], ['usage_intake_inbox', 'idempotency_key'],
+  ['usage_intake_inbox', 'request_id'], ['usage_intake_inbox', 'event_id'],
+  ['usage_intake_inbox', 'logical_operation_id'], ['usage_intake_inbox', 'provider_attempt_id'],
+  ['usage_intake_inbox', 'billable_attempt_id'], ['usage_intake_inbox', 'transport_attempt_id'],
+  ['usage_intake_inbox', 'provider_request_id'], ['usage_intake_inbox', 'source_name'],
+  ['usage_intake_inbox', 'occurred_at'], ['usage_intake_inbox', 'observed_at'],
+  ['usage_intake_inbox', 'completeness'], ['usage_intake_inbox', 'valuation_basis'],
+  ['usage_intake_inbox', 'payload_sha256'], ['usage_intake_inbox', 'idempotency_sha256'],
+  ['usage_intake_inbox', 'provenance_sha256'], ['usage_intake_inbox', 'event_facts'],
+  ['usage_intake_inbox', 'attempt_revision_accepted'], ['usage_intake_inbox', 'created_at'],
+  ['usage_intake_attempts', 'tenant_id'], ['usage_intake_attempts', 'project_id'],
+  ['usage_intake_attempts', 'environment'], ['usage_intake_attempts', 'billing_mode'],
+  ['usage_intake_attempts', 'billable_attempt_id'], ['usage_intake_attempts', 'logical_operation_id'],
+  ['usage_intake_attempts', 'provider_attempt_id'], ['usage_intake_attempts', 'first_observation_id'],
+  ['usage_intake_attempts', 'current_observation_id'], ['usage_intake_attempts', 'current_ledger_event_id'],
+  ['usage_intake_attempts', 'revision_sequence'], ['usage_intake_attempts', 'status'],
+  ['usage_intake_attempts', 'completeness'], ['usage_intake_attempts', 'valuation_basis'],
+  ['usage_intake_attempts', 'created_at'], ['usage_intake_attempts', 'updated_at'],
+  ['usage_intake_outbox', 'tenant_id'], ['usage_intake_outbox', 'project_id'],
+  ['usage_intake_outbox', 'environment'], ['usage_intake_outbox', 'billing_mode'],
+  ['usage_intake_outbox', 'source_observation_id'], ['usage_intake_outbox', 'billable_attempt_id'],
+  ['usage_intake_outbox', 'posting_payload'], ['usage_intake_outbox', 'status'],
+  ['usage_intake_outbox', 'retry_count'], ['usage_intake_outbox', 'available_at'],
+  ['usage_intake_outbox', 'last_error_code'], ['usage_intake_outbox', 'ledger_event_id'],
+  ['usage_intake_outbox', 'completed_at'], ['usage_intake_outbox', 'created_at'],
+  ['usage_intake_quarantine', 'diagnostic_ref'], ['usage_intake_quarantine', 'tenant_id'],
+  ['usage_intake_quarantine', 'project_id'], ['usage_intake_quarantine', 'environment'],
+  ['usage_intake_quarantine', 'billing_mode'], ['usage_intake_quarantine', 'reason_code'],
+  ['usage_intake_quarantine', 'payload_sha256'], ['usage_intake_quarantine', 'created_at'],
+  ['financial_projection_quantities', 'included_in'],
+  ['financial_projection_snapshots', 'unknown_economic_exposure_count'],
+  ['financial_projection_snapshots', 'quarantined_observation_count'],
+  ['financial_projection_snapshots', 'awaiting_evidence_attempt_count'],
+  ['financial_projection_snapshots', 'unposted_attempt_count'],
+] as const;
+
+type IntakeProjectionCapability = 'legacy' | 'available';
+
+async function inspectIntakeProjectionCapability(client: LedgerTransactionPort): Promise<IntakeProjectionCapability> {
+  const healthResult = await client.query(
+    'SELECT migrations_ready, required_migrations_present FROM cost_intelligence.foundation_health',
+  );
+  const health = healthResult.rows[0];
+  if (!health || health.migrations_ready !== true) throw new Error('Finance migration health is incomplete.');
+
+  const schemaResult = await client.query(
+    `SELECT
+       to_regclass('cost_intelligence.usage_intake_inbox') IS NOT NULL AS has_inbox,
+       to_regclass('cost_intelligence.usage_intake_attempts') IS NOT NULL AS has_attempts,
+       to_regclass('cost_intelligence.usage_intake_outbox') IS NOT NULL AS has_outbox,
+       to_regclass('cost_intelligence.usage_intake_quarantine') IS NOT NULL AS has_quarantine,
+       EXISTS (SELECT 1 FROM information_schema.columns
+         WHERE table_schema='cost_intelligence' AND table_name='financial_projection_quantities'
+           AND column_name='included_in') AS has_included_in,
+       (SELECT count(*) FROM information_schema.columns
+         WHERE table_schema='cost_intelligence' AND table_name='financial_projection_snapshots'
+           AND column_name IN ('unknown_economic_exposure_count', 'quarantined_observation_count',
+             'awaiting_evidence_attempt_count', 'unposted_attempt_count'))::integer AS unresolved_count_columns`,
+  );
+  const schema = schemaResult.rows[0];
+  if (!schema) throw new Error('Finance projection capability metadata is unavailable.');
+  const hasAnyIntakeTable = schema.has_inbox === true || schema.has_attempts === true
+    || schema.has_outbox === true || schema.has_quarantine === true;
+  const hasAllIntakeTables = schema.has_inbox === true && schema.has_attempts === true
+    && schema.has_outbox === true && schema.has_quarantine === true;
+  const hasIncludedIn = schema.has_included_in === true;
+  const unresolvedCountColumnCount = Number(schema.unresolved_count_columns);
+  const hasAnyProjectionExtension = hasIncludedIn || unresolvedCountColumnCount > 0;
+  const migrationCount = Number(health.required_migrations_present);
+  const currentCapabilityDetected = migrationCount >= 7 || hasAnyIntakeTable || hasAnyProjectionExtension;
+
+  if (!currentCapabilityDetected && migrationCount >= 3 && migrationCount <= 6) return 'legacy';
+  if (migrationCount !== 7 || !hasAllIntakeTables || !hasIncludedIn || unresolvedCountColumnCount !== 4) {
+    throw new Error('Usage intake projection capability is incomplete.');
+  }
+
+  const columnNames = CURRENT_INTAKE_REQUIRED_COLUMNS.map(([, column]) => column);
+  const tableNames = CURRENT_INTAKE_REQUIRED_COLUMNS.map(([table]) => table);
+  const missingColumns = await client.query(
+    `SELECT required.table_name, required.column_name
+     FROM unnest($1::text[], $2::text[]) AS required(table_name, column_name)
+     WHERE NOT EXISTS (
+       SELECT 1 FROM information_schema.columns column_info
+       WHERE column_info.table_schema='cost_intelligence'
+         AND column_info.table_name=required.table_name
+         AND column_info.column_name=required.column_name
+     )`,
+    [tableNames, columnNames],
+  );
+  if (missingColumns.rows.length !== 0) throw new Error('Usage intake projection columns are incomplete.');
+  return 'available';
+}
+
 /** Rebuild and persist an immutable as-of snapshot using exact integer decimal arithmetic. */
 export async function rebuildLedgerProjection(
   value: unknown,
@@ -1419,22 +1506,8 @@ export async function rebuildLedgerProjection(
       inTransaction = false;
       return failure(legacyHistoryError);
     }
-    const schemaCapabilities = await client.query(
-      `SELECT
-         to_regclass('cost_intelligence.usage_intake_inbox') IS NOT NULL
-           AND to_regclass('cost_intelligence.usage_intake_quarantine') IS NOT NULL AS intake_schema_present,
-         EXISTS (SELECT 1 FROM information_schema.columns
-           WHERE table_schema='cost_intelligence' AND table_name='financial_projection_quantities'
-             AND column_name='included_in') AS has_included_in,
-         (SELECT count(*) = 4 FROM information_schema.columns
-           WHERE table_schema='cost_intelligence' AND table_name='financial_projection_snapshots'
-             AND column_name IN ('unknown_economic_exposure_count', 'quarantined_observation_count',
-               'awaiting_evidence_attempt_count', 'unposted_attempt_count')) AS has_unresolved_counts`,
-    );
-    const capabilities = schemaCapabilities.rows[0];
-    const intakeSchemaPresent = capabilities?.intake_schema_present === true;
-    const hasIncludedIn = capabilities?.has_included_in === true;
-    const hasUnresolvedCounts = capabilities?.has_unresolved_counts === true;
+    const intakeCapability = await inspectIntakeProjectionCapability(client);
+    const hasIncludedIn = intakeCapability === 'available';
     const events = await client.query(
       `SELECT e.event_id, e.event_hash, e.event_type, e.classification, e.currency, e.amount::text AS amount,
               e.quantity_completeness, e.quantity_units
@@ -1449,19 +1522,23 @@ export async function rebuildLedgerProjection(
       [request.scope.tenantId, request.scope.projectId, request.scope.environment, request.scope.billingMode, request.asOf],
     );
     const computed = computeProjectionRows(events.rows, hasIncludedIn);
-    const unresolvedIntake = await computeUnresolvedIntakeProjection(client, request.scope, request.asOf, intakeSchemaPresent);
+    const unresolvedIntake = intakeCapability === 'available'
+      ? await computeUnresolvedIntakeProjection(client, request.scope, request.asOf)
+      : undefined;
     const eventEvidence = events.rows.map(row => ({ eventId: asString(row.event_id), eventHash: asString(row.event_hash) }));
     const content = {
       schemaVersion: '1.0.0', scope: request.scope, asOf: request.asOf,
-      eventEvidence, eventCount: events.rows.length, amounts: computed.amounts, quantities: computed.quantities, unresolvedIntake,
+      eventEvidence, eventCount: events.rows.length, amounts: computed.amounts, quantities: computed.quantities,
+      ...(unresolvedIntake ? { unresolvedIntake } : {}),
     };
     const projectionHash = await hashValue(content);
     const snapshot: LedgerProjection = {
       schemaVersion: '1.0.0', snapshotId: projectionHash, projectionHash,
       scope: request.scope, asOf: request.asOf, eventCount: events.rows.length,
-      amounts: computed.amounts, quantities: computed.quantities, unresolvedIntake,
+      amounts: computed.amounts, quantities: computed.quantities,
+      ...(unresolvedIntake ? { unresolvedIntake } : {}),
     };
-    const inserted = hasUnresolvedCounts
+    const inserted = unresolvedIntake
       ? await client.query(
         `INSERT INTO cost_intelligence.financial_projection_snapshots
           (snapshot_id, tenant_id, project_id, environment, billing_mode, as_of, event_count,
@@ -1519,11 +1596,11 @@ export async function rebuildLedgerProjection(
         }
       }
     }
-    const unresolvedHeaderColumns = hasUnresolvedCounts
+    const unresolvedHeaderColumns = unresolvedIntake
       ? `unknown_economic_exposure_count, quarantined_observation_count,
          awaiting_evidence_attempt_count, unposted_attempt_count`
-      : `0::integer AS unknown_economic_exposure_count, 0::integer AS quarantined_observation_count,
-         0::integer AS awaiting_evidence_attempt_count, 0::integer AS unposted_attempt_count`;
+      : `NULL::integer AS unknown_economic_exposure_count, NULL::integer AS quarantined_observation_count,
+         NULL::integer AS awaiting_evidence_attempt_count, NULL::integer AS unposted_attempt_count`;
     const persistedHeader = await client.query(
       `SELECT tenant_id, project_id, environment, billing_mode,
               to_char(as_of AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS as_of_utc,
@@ -1532,16 +1609,20 @@ export async function rebuildLedgerProjection(
       [projectionHash],
     );
     const header = persistedHeader.rows[0];
+    const unresolvedHeaderMatches = unresolvedIntake
+      ? Number(header?.unknown_economic_exposure_count) === unresolvedIntake.unknownEconomicExposureCount
+        && Number(header?.quarantined_observation_count) === unresolvedIntake.quarantinedObservationCount
+        && Number(header?.awaiting_evidence_attempt_count) === unresolvedIntake.awaitingEvidenceAttemptCount
+        && Number(header?.unposted_attempt_count) === unresolvedIntake.unpostedAttemptCount
+      : header?.unknown_economic_exposure_count === null && header?.quarantined_observation_count === null
+        && header?.awaiting_evidence_attempt_count === null && header?.unposted_attempt_count === null;
     if (!header || fromRow(header, 'tenant_id') !== request.scope.tenantId
       || fromRow(header, 'project_id') !== request.scope.projectId
       || fromRow(header, 'environment') !== request.scope.environment
       || fromRow(header, 'billing_mode') !== request.scope.billingMode
       || canonicalProjectionInstant(asString(header.as_of_utc)) !== request.asOf
       || Number(header.event_count) !== events.rows.length
-      || Number(header.unknown_economic_exposure_count) !== unresolvedIntake.unknownEconomicExposureCount
-      || Number(header.quarantined_observation_count) !== unresolvedIntake.quarantinedObservationCount
-      || Number(header.awaiting_evidence_attempt_count) !== unresolvedIntake.awaitingEvidenceAttemptCount
-      || Number(header.unposted_attempt_count) !== unresolvedIntake.unpostedAttemptCount
+      || !unresolvedHeaderMatches
       || fromRow(header, 'projection_hash') !== projectionHash) {
       throw new Error('Persisted snapshot header does not match its content address.');
     }
