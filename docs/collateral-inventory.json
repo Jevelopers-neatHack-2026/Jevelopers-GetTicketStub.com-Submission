@@ -40,7 +40,19 @@
       "docs/collateral-inventory.json",
       "docs/collateral-organization.md"
     ],
-    "candidateAddsAreDrafts": true
+    "candidateAddsAreDrafts": true,
+    "policyCandidateBaseRevision": "05ed6ca6db94b6384fa9ef7ee965271be071264b",
+    "policyCandidateAdds": [
+      "messaging/README.md",
+      "messaging/claims.json",
+      "review/messaging-checklist.md",
+      "review/provenance.json",
+      "review/publication-safety.md",
+      "review/fixtures/synthetic-canaries.json",
+      "tools/validate_collateral.py",
+      "tests/test_collateral_validation.py"
+    ],
+    "policyCandidateAddsAreDrafts": true
   },
   "execution": {
     "issue": {
@@ -50,9 +62,23 @@
     },
     "executionOwner": "Assigned MM-01 general-worker session, tracked in the supervisor execution record",
     "accountableMarketingContentAndReviewOwner": "User-assigned marketing-material supervisor, confirmed 2026-10-11",
-    "independentCandidateReview": "Fresh Astra High review to be assigned by the supervisor after candidate freeze; pending.",
-    "contentApprovalState": "The user-assigned supervisor is the accountable marketing content/review owner; this candidate is not yet approved. Upstream brand, product, evidence, privacy, and rights approvals remain with their source owners.",
-    "status": "Draft candidate; issue acceptance is not complete until the frozen candidate is independently reviewed and required evidence is recorded."
+    "independentCandidateReview": "Astra High review and post-merge evidence were recorded by the supervisor for PR #12; this inventory preserves the merged state.",
+    "contentApprovalState": "The user-assigned supervisor is accountable marketing content/review owner. MM-01 closure evidence is recorded; brand, product, evidence, privacy, and rights approvals remain producer-owned.",
+    "status": "Merged in PR #12 at 05ed6ca6db94b6384fa9ef7ee965271be071264b; MM-01 #4 closed with evidence.",
+    "historicalCandidateStatus": "Draft candidate; issue acceptance is not complete until the frozen candidate is independently reviewed and required evidence is recorded.",
+    "mergedRevision": "05ed6ca6db94b6384fa9ef7ee965271be071264b",
+    "pullRequest": "https://github.com/Jevelopers-neatHack-2026/marketing-material/pull/12",
+    "issueState": "closed with evidence",
+    "followOnPolicyExecution": {
+      "issues": [
+        "MM-02 #5",
+        "MM-05 #6"
+      ],
+      "executionOwner": "Assigned general-worker session for this policy task; execution identity tracked by supervisor.",
+      "accountableMarketingContentAndReviewOwner": "User-assigned marketing-material supervisor, confirmed 2026-10-11.",
+      "independentCandidateReview": "Pending fresh Astra High review of the frozen combined candidate.",
+      "status": "Draft policy candidate; MM-02 evidence approvals and MM-05 rendered-media/rights acceptance remain incomplete."
+    }
   },
   "statusDefinitions": {
     "disposition": {
@@ -79,8 +105,8 @@
   "moduleMap": [
     {
       "path": "messaging/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Positioning, audience/value proposition, approved claims and message source references."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Positioning guidance and exact-copy claim ledger; current product, sponsor, financial and transaction claims remain pending or blocked."
     },
     {
       "path": "demo/",
@@ -99,8 +125,8 @@
     },
     {
       "path": "review/",
-      "pathAvailability": "proposed_not_created",
-      "purpose": "Claim, provenance, brand-consumption, accessibility and review records; not a substitute for upstream evidence."
+      "pathAvailability": "created_in_candidate",
+      "purpose": "Messaging review, provenance, publication safety, and a synthetic text/JSON canary; visual, accessibility, brand and release records remain proposed."
     }
   ],
   "accountabilityByIssue": {
@@ -304,6 +330,203 @@
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/4",
       "dependencies": [
         "MM-01 inventory and navigation acceptance; later revisions require linked review evidence."
+      ]
+    },
+    {
+      "assetId": "DOC-MSG-README-001",
+      "type": "messaging guidance",
+      "disposition": "existing",
+      "path": "messaging/README.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "messaging/README.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "CLAIM-POSITIONING-001",
+        "CLAIM-PRODUCT-CAPABILITY-001"
+      ],
+      "provenanceReferences": [],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-MSG-CLAIMS-001",
+      "type": "machine-readable exact-copy ledger",
+      "disposition": "existing",
+      "path": "messaging/claims.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "messaging/claims.json"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-MSG-CHECKLIST-001",
+      "type": "messaging review checklist",
+      "disposition": "existing",
+      "path": "review/messaging-checklist.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/messaging-checklist.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-PROVENANCE-001",
+      "type": "asset provenance register",
+      "disposition": "existing",
+      "path": "review/provenance.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/provenance.json"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-03",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-PUBLICATION-SAFETY-001",
+      "type": "publication safety and reuse guide",
+      "disposition": "existing",
+      "path": "review/publication-safety.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/publication-safety.md"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
+      ]
+    },
+    {
+      "assetId": "DOC-SYNTHETIC-CANARY-001",
+      "type": "synthetic text/JSON policy fixture",
+      "disposition": "existing",
+      "path": "review/fixtures/synthetic-canaries.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "baselineRevision": null,
+      "intendedUse": "Draft policy artifact for MM-02/MM-05; no external claim, rights approval, or media release is implied.",
+      "destination": "Repository contributors and reviewers",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence/privacy reviewer",
+      "editableSourceLocations": [
+        "review/fixtures/synthetic-canaries.json"
+      ],
+      "exportLocations": [],
+      "claimReferences": [
+        "CLAIM-SIMULATION-001",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "dependencies": [
+        "Independent candidate review; source-owner evidence/rights; actual format-specific checks remain pending."
       ]
     }
   ],
@@ -522,29 +745,35 @@
   "plannedDeliverables": [
     {
       "assetId": "MSG-POSITIONING-001",
-      "type": "positioning and approved-message guide",
-      "disposition": "planned",
+      "type": "messaging source precedence and positioning guidance",
+      "disposition": "existing",
       "path": "messaging/README.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Approved positioning and message source for collateral.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Explain source precedence, positioning-only slogan treatment, claim boundaries, labels and CTA route separation.",
       "destination": "Marketing collateral and landing-page-repo copy handoff",
       "requiredForV1": true,
       "implementationIssue": "MM-02",
       "ownerRole": "Product and frontend — messaging owner",
       "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "CLAIM-POSITIONING-001",
+        "CLAIM-PRODUCT-CAPABILITY-001",
+        "CLAIM-SIMULATION-001",
+        "CLAIM-EVAL02-COMPARISON-001",
+        "CLAIM-SPN-01-NEATLOGS-001",
+        "CLAIM-SPN-02-ENTIRE-001",
+        "CLAIM-SPN-03-CFO-001"
       ],
       "provenanceReferences": [
-        "brand-kit vocabulary; product/evaluation sources pinned by MM-02"
+        "PROV-SYNTHETIC-CANARY-001"
       ],
       "v1": true,
       "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
       "familyIds": [],
       "dependencies": [
-        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+        "Pinned upstream evidence and source-owner approvals; supervisor exact-copy review; product/landing route owner confirmation for any transaction CTA."
       ],
       "editableSourceLocations": [
         "messaging/README.md"
@@ -553,33 +782,35 @@
     },
     {
       "assetId": "MSG-CLAIMS-001",
-      "type": "machine-readable approved-claim ledger",
-      "disposition": "planned",
+      "type": "machine-readable exact-copy claims and CTA ledger",
+      "disposition": "existing",
       "path": "messaging/claims.json",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Record exact allowed wording, claim state, audience, source revision, evidence, mode, limitations and review trigger.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Map exact allowed/prohibited wording to evidence classes, immutable source references, provider modes, limitations, owner review, and re-review triggers.",
       "destination": "Collateral authors and reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-02",
       "ownerRole": "Product and frontend — messaging owner",
       "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
       "claimReferences": [
-        "EVAL-03",
         "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
         "SPN-01",
         "SPN-02",
         "SPN-03"
       ],
       "provenanceReferences": [
-        "Pinned product, integration-evals, sponsor and cost-intelligence source records; currently pending"
+        "PROV-SYNTHETIC-CANARY-001",
+        "MM-05 publication rights and redaction review, pending"
       ],
       "v1": true,
       "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
       "familyIds": [],
       "dependencies": [
-        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+        "Source-owner evidence and exact wording review; sponsor classes remain separate; transaction CTA route remains product/landing-owned."
       ],
       "editableSourceLocations": [
         "messaging/claims.json"
@@ -588,29 +819,34 @@
     },
     {
       "assetId": "MSG-REVIEW-001",
-      "type": "claim review checklist",
-      "disposition": "planned",
+      "type": "messaging claim and CTA review checklist",
+      "disposition": "existing",
       "path": "review/messaging-checklist.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Reject unsupported automation, live-integration and savings claims; keep simulations labeled.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Exercise exact-copy mapping, canonical evidence labels, sponsor separation, unsafe wording rejection, and CTA target/availability checks.",
       "destination": "Collateral reviewers",
       "requiredForV1": true,
       "implementationIssue": "MM-02",
       "ownerRole": "Product and frontend — messaging owner",
       "reviewerRole": "Finance and reliability for measurements/Neatlogs/CFO.ai; Agent and research for Entire",
       "claimReferences": [
-        "MM-02 claims ledger, pending"
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
       ],
       "provenanceReferences": [
-        "MM-05 provenance register, pending"
+        "PROV-SYNTHETIC-CANARY-001"
       ],
       "v1": true,
       "intendedAudience": "Collateral authors, landing-page copy consumers and factual-claim reviewers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
       "familyIds": [],
       "dependencies": [
-        "Pinned brand-kit guidance and product, evaluation, sponsor and financial source-owner evidence as applicable."
+        "Independent candidate review and upstream evidence owner approvals."
       ],
       "editableSourceLocations": [
         "review/messaging-checklist.md"
@@ -1110,29 +1346,30 @@
     {
       "assetId": "PROVENANCE-REGISTER-001",
       "type": "asset provenance and permission register",
-      "disposition": "planned",
+      "disposition": "existing",
       "path": "review/provenance.json",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Record source revision/URL, creator, date, evidence class, consent, permission, destination, attribution, redaction, reviewer and expiry.",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Record source/revision or content digest, creator/tool/model, evidence class, consent, permission, destination, attribution, expiry, redaction, lineage, checksum, reviewer and publishability.",
       "destination": "Collateral reviewers and release gate",
       "requiredForV1": true,
       "implementationIssue": "MM-05",
       "ownerRole": "Product and frontend — asset steward",
       "reviewerRole": "Finance and reliability — privacy/evidence reviewer",
       "claimReferences": [
-        "EVAL-04",
-        "EVAL-03"
+        "EVAL-03",
+        "EVAL-04"
       ],
       "provenanceReferences": [
-        "Sanitized integration-evals evidence references; no restricted original belongs in this repository"
+        "PROV-SYNTHETIC-CANARY-001",
+        "Visual/media provenance records and destination rights, pending."
       ],
       "v1": true,
       "intendedAudience": "Collateral producers, privacy/evidence reviewers and approved downstream consumers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
       "familyIds": [],
       "dependencies": [
-        "Source-owner rights, consent and sanitized source references for each selected asset."
+        "Source-owner rights, consent, and sanitized source references for each selected asset; rendered export review."
       ],
       "editableSourceLocations": [
         "review/provenance.json"
@@ -1141,12 +1378,12 @@
     },
     {
       "assetId": "PROVENANCE-REDACTION-001",
-      "type": "redaction safety guide and synthetic fixture",
-      "disposition": "planned",
-      "path": "review/redaction-safety.md",
-      "pathAvailability": "proposed_not_created",
-      "lifecycleState": null,
-      "intendedUse": "Define format-aware redaction checks and a synthetic test fixture without real personal or secret data.",
+      "type": "publication safety, reuse, redaction policy",
+      "disposition": "existing",
+      "path": "review/publication-safety.md",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Define destination-specific reuse, attribution, expiry, revocation, lineage and format-aware redaction review without overstating text-only tests.",
       "destination": "Asset producers and privacy reviewer",
       "requiredForV1": true,
       "implementationIssue": "MM-05",
@@ -1156,17 +1393,18 @@
         "EVAL-04"
       ],
       "provenanceReferences": [
-        "Asset lineage and destination-specific permission records, pending"
+        "PROV-SYNTHETIC-CANARY-001",
+        "Actual visual/media review evidence remains pending."
       ],
       "v1": true,
       "intendedAudience": "Collateral producers, privacy/evidence reviewers and approved downstream consumers.",
       "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
       "familyIds": [],
       "dependencies": [
-        "Source-owner rights, consent and sanitized source references for each selected asset."
+        "Source-owner rights, consent, sanitized sources, exact derivative checksums and rendered media inspection."
       ],
       "editableSourceLocations": [
-        "review/redaction-safety.md"
+        "review/publication-safety.md"
       ],
       "exportLocations": []
     },
@@ -1399,13 +1637,126 @@
         "review/releases/VERSION.md"
       ],
       "exportLocations": []
+    },
+    {
+      "assetId": "PROV-SYNTHETIC-CANARY-001",
+      "type": "synthetic text/JSON redaction canary",
+      "disposition": "existing",
+      "path": "review/fixtures/synthetic-canaries.json",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Exercise text/JSON canary removal expectations and explicit unknown/revoked-rights rejection without real data.",
+      "destination": "Repository policy review and validation",
+      "requiredForV1": true,
+      "implementationIssue": "MM-05",
+      "ownerRole": "Product and frontend — asset steward",
+      "reviewerRole": "Finance and reliability — privacy/evidence reviewer",
+      "claimReferences": [
+        "CLAIM-SIMULATION-001",
+        "EVAL-04"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+      "familyIds": [],
+      "dependencies": [
+        "Synthetic only; actual pixels, flattened media metadata and notes are not checked by this fixture."
+      ],
+      "editableSourceLocations": [
+        "review/fixtures/synthetic-canaries.json"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "VALIDATOR-COLLATERAL-001",
+      "type": "claim/provenance policy validator",
+      "disposition": "existing",
+      "path": "tools/validate_collateral.py",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Check ledger shape, unsafe positive copy, EVAL labels, sponsor separation, CTA availability, permission state, and synthetic copy mapping.",
+      "destination": "Repository policy review and validation",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02 and MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence reviewer",
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "familyIds": [],
+      "dependencies": [
+        "Text/JSON validation only; no rendering, media scanning, pixel inspection, or rights grants."
+      ],
+      "editableSourceLocations": [
+        "tools/validate_collateral.py"
+      ],
+      "exportLocations": []
+    },
+    {
+      "assetId": "TEST-COLLATERAL-POLICY-001",
+      "type": "semantic acceptance tests for collateral validation",
+      "disposition": "existing",
+      "path": "tests/test_collateral_validation.py",
+      "pathAvailability": "created_in_candidate",
+      "lifecycleState": "draft",
+      "intendedUse": "Exercise positive labeled-simulation acceptance and rejection of unsupported claims, sponsor collapse, unavailable CTA, missing pins, and unknown/revoked rights.",
+      "destination": "Repository policy review and validation",
+      "requiredForV1": true,
+      "implementationIssue": "MM-02 and MM-05",
+      "ownerRole": "Product and frontend — messaging owner/asset steward",
+      "reviewerRole": "Finance and reliability — evidence reviewer",
+      "claimReferences": [
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "SPN-01",
+        "SPN-02",
+        "SPN-03"
+      ],
+      "provenanceReferences": [
+        "PROV-SYNTHETIC-CANARY-001"
+      ],
+      "v1": true,
+      "intendedAudience": "Collateral contributors, source owners and release reviewers.",
+      "plannedDeliveryIssueUrl": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+      "familyIds": [],
+      "dependencies": [
+        "Tests use only synthetic text/JSON and do not establish pixel/media acceptance."
+      ],
+      "editableSourceLocations": [
+        "tests/test_collateral_validation.py"
+      ],
+      "exportLocations": []
     }
   ],
   "acceptance": {
     "MM-01-A": "All tracked candidate documentation files have a record above; each of the six required families has a disposition, usage need or defer reason, and planned asset IDs.",
     "MM-01-B": "Baseline paths, candidate-created paths and proposed uncreated paths are distinguished. Existing documentation is draft until reviewed; every v1/future record links to its implementation issue and accountable roles.",
     "MM-01-C": "The linked organization guide documents all five proposed modules, canonical-source boundaries, dated visibility evidence and migration/retention policy.",
-    "masterCriteria": "EVAL-03/EVAL-04 remain owned by integration-evals; this inventory supports classification and safe asset handling but does not verify either criterion."
+    "masterCriteria": "EVAL-03/EVAL-04 remain owned by integration-evals; this inventory supports classification and safe asset handling but does not verify either criterion.",
+    "MM-02-A": "Draft claim ledger records exact safe wording, prohibited variants, audience/destination, state, source repository/path/revision or explicit pending source pin, evidence class, provider mode, review state, limitations and re-review triggers. No product, live sponsor, savings or transaction claim is approved.",
+    "MM-02-B": "Source precedence and source-change invalidation are documented. Repository documentation CTA is separated from product/landing route confirmation; app/landing transaction route remains unconfirmed.",
+    "MM-02-C": "Semantic tests reject unsupported fully automated/live integration/verified savings statements, accept qualified synthetic copy, preserve EVAL-03 canonical labels, and keep Neatlogs, Entire and CFO.ai evidence distinct and pending.",
+    "MM-02-D": "CTA records contain exact wording, action, destination class/owner, target/availability, review status and triggers. Only pinned README docs are confirmed as a destination; product route and availability remain pending.",
+    "MM-02-status": "Policy draft implemented; source evidence, exact copy review and independent candidate review remain outstanding.",
+    "MM-05-A": "Provenance schema records source/revision or digest, creator/tool/model, consent, rights, destination, attribution, expiry, redaction, lineage/checksum, reviewer and publishability. No visual/media destination-specific right is approved.",
+    "MM-05-B": "Synthetic text/JSON fixture lists dummy canaries across text, metadata, notes, alt, transcript, QR and links; tests assert the expected sanitized representation and unknown/revoked rights rejection. Actual rendered pixels, metadata and notes were not inspected by this policy worker; criterion remains blocked until format-specific evidence is joined.",
+    "MM-05-C": "Reuse, attribution, expiry, revocation, derivative lineage and restricted-original rules are documented. No real customer, secret or financial data was introduced.",
+    "MM-05-status": "Nonvisual policy slice delivered as draft; actual media rights, pixel/redaction/metadata review and destination approval remain required."
   },
   "links": {
     "officialEventRequirements": {
@@ -1424,6 +1775,14 @@
     "brandKit": "https://github.com/Jevelopers-neatHack-2026/brand-kit",
     "productBehavior": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com",
     "landingCopyConsumer": "https://github.com/Jevelopers-neatHack-2026/landing-page-repo",
-    "financialDefinitions": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence"
+    "financialDefinitions": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence",
+    "MM-02": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/5",
+    "MM-05": "https://github.com/Jevelopers-neatHack-2026/marketing-material/issues/6",
+    "productScopedAdapterEvidence": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/19",
+    "productWholeAppReleaseEvidence": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/issues/6",
+    "comparisonEvidenceIssue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/16",
+    "financeQueryIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/2",
+    "cfoBusinessPlanIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3",
+    "entireCheckpointIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10"
   }
 }

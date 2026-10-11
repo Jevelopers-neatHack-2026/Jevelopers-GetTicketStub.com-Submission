@@ -1,0 +1,589 @@
+{
+  "schemaVersion": "1.0",
+  "inventoryKey": "MM-02",
+  "status": "draft",
+  "asOf": "2026-10-11",
+  "sourcePrecedence": [
+    {
+      "rank": 1,
+      "subject": "Visual identity, vocabulary, and brand voice",
+      "canonicalSource": "Jevelopers-neatHack-2026/brand-kit",
+      "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+      "path": "README.md and docs/voice.md",
+      "rule": "Consume approved vocabulary and identity; this positioning source is not product behavior evidence."
+    },
+    {
+      "rank": 2,
+      "subject": "Landing-page primary messaging and route composition",
+      "canonicalSource": "Jevelopers-neatHack-2026/landing-page-repo",
+      "revision": "3f28c8ac691374614354a8e53c1a2520e8c7854c",
+      "path": "docs/architecture/OWNERSHIP.md",
+      "rule": "Landing owns page composition/runtime and consumes approved copy; the pinned source is docs-only, not a live route."
+    },
+    {
+      "rank": 3,
+      "subject": "Demonstrated product behavior",
+      "canonicalSource": "Jevelopers-neatHack-2026/getticketstub.com",
+      "revision": "5a2986454297dd6df97088a8fbde69adc771f7a0",
+      "path": "docs/architecture/OWNERSHIP.md",
+      "rule": "This pinned revision is documentation-only. Use product release evidence for complete-app behavior; GT-10B evidence is limited to its scoped adapter."
+    },
+    {
+      "rank": 4,
+      "subject": "Comparisons, evidence classification, and sponsor-use evidence",
+      "canonicalSource": "Jevelopers-neatHack-2026/integration-evals",
+      "revision": "ff1f6d2df816ebbff34742f51be728fcb5c28cb5",
+      "path": "evidence/README.md",
+      "rule": "This evidence index is planned; it does not establish a completed comparison or sponsor result."
+    },
+    {
+      "rank": 5,
+      "subject": "Financial definitions and actuals",
+      "canonicalSource": "Jevelopers-neatHack-2026/cost-intelligence",
+      "revision": "a7b7484d60058708a5c32f8b3637d21f8b94a210",
+      "path": "README.md",
+      "rule": "Use source-owner evidence for actuals; definitions or a hypothetical export do not establish savings or forecasts."
+    }
+  ],
+  "canonicalEvidenceLabels": [
+    "simulated",
+    "sandbox",
+    "live",
+    "estimated",
+    "pending"
+  ],
+  "additionalCopyStates": [
+    "mock",
+    "planned"
+  ],
+  "evidenceClasses": [
+    {
+      "id": "EVAL-02",
+      "name": "Comparable improvement",
+      "status": "pending",
+      "evidenceRef": "IE-COMPARISON-001",
+      "requiredEvidence": "Reproducible comparable baseline and candidate runs, owner-reviewed method, and pinned outputs.",
+      "claimUse": "No improvement, time saved, cost saved, or efficiency result is approved while pending."
+    },
+    {
+      "id": "EVAL-03",
+      "name": "Evidence classification",
+      "status": "pending",
+      "evidenceRef": "IE-EVIDENCE-INDEX-001",
+      "requiredEvidence": "Per-claim source, mode, limitations, and source-owner-reviewed evidence classification.",
+      "claimUse": "Retain canonical labels simulated, sandbox, live, estimated, pending; mock and planned are additional copy states, not replacements."
+    },
+    {
+      "id": "EVAL-04",
+      "name": "Secrets and customer data",
+      "status": "pending",
+      "evidenceRef": "IE-REDACTION-001",
+      "requiredEvidence": "Sanitized review and source-owner scan evidence; no restricted original in this repository.",
+      "claimUse": "No privacy, redaction, or security assurance claim is approved from policy text alone."
+    },
+    {
+      "id": "SPN-01",
+      "name": "Neatlogs use",
+      "sponsor": "Neatlogs",
+      "status": "pending",
+      "evidenceRef": "SPN-NEATLOGS-001",
+      "requiredEvidence": "Neatlogs-specific integration/run evidence, sanitized output, mode, and owner review.",
+      "requiredIssue": "https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20"
+    },
+    {
+      "id": "SPN-02",
+      "name": "Entire use",
+      "sponsor": "Entire",
+      "status": "pending",
+      "evidenceRef": "SPN-ENTIRE-001",
+      "requiredEvidence": "Entire-specific checkpoint/graph evidence and owner review; do not substitute another sponsor's run.",
+      "requiredIssue": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10"
+    },
+    {
+      "id": "SPN-03",
+      "name": "CFO.ai use",
+      "sponsor": "CFO.ai",
+      "status": "pending",
+      "evidenceRef": "SPN-CFOAI-001",
+      "requiredEvidence": "Actual CFO.ai business-plan evidence and finance owner review; do not substitute a placeholder or estimate.",
+      "requiredIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3"
+    }
+  ],
+  "claims": [
+    {
+      "id": "CLAIM-POSITIONING-001",
+      "kind": "positioning",
+      "allowedWording": "“No forms: drop your ticket and it's done.” Brand positioning only; this is not evidence of autonomous completion or zero-input fulfillment.",
+      "prohibitedVariants": [
+        "The ticket is fully automated from submission to resolution.",
+        "Drop any ticket and it is autonomously completed with no human input."
+      ],
+      "audience": "Internal collateral authors; external use only after brand and marketing review.",
+      "destination": "Collateral copy, with the positioning-only qualifier attached.",
+      "state": "demonstrated",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/brand-kit",
+        "path": "README.md",
+        "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/README.md"
+      },
+      "evidenceReference": "BRAND-POSITIONING-001",
+      "evidenceClassification": "brand_source_text_only",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; candidate review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "The pinned brand-kit baseline is a draft and establishes only that this is positioning language.",
+        "It does not demonstrate product completion, automation, absence of forms, or a zero-input workflow."
+      ],
+      "reReviewTrigger": [
+        "Brand-kit wording or revision changes.",
+        "Copy placement or context removes the positioning-only qualifier.",
+        "Product behavior or intended audience changes."
+      ]
+    },
+    {
+      "id": "CLAIM-PRODUCT-CAPABILITY-001",
+      "kind": "product_capability",
+      "allowedWording": "Product capability, automation, and transaction copy is pending pinned product-release evidence.",
+      "prohibitedVariants": [
+        "Fully automated",
+        "Fully autonomous",
+        "Live integration",
+        "Works end to end today",
+        "Guaranteed completion"
+      ],
+      "audience": "Internal planning only.",
+      "destination": "Internal collateral planning; no public product capability statement.",
+      "state": "blocked",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/getticketstub.com",
+        "path": "docs/architecture/OWNERSHIP.md",
+        "revision": "5a2986454297dd6df97088a8fbde69adc771f7a0",
+        "url": "https://github.com/Jevelopers-neatHack-2026/getticketstub.com/blob/5a2986454297dd6df97088a8fbde69adc771f7a0/docs/architecture/OWNERSHIP.md"
+      },
+      "evidenceReference": "PRODUCT-RELEASE-EVIDENCE-PENDING",
+      "evidenceClassification": "documentation_only",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "Product release owner; evidence and review pending.",
+      "reviewStatus": "blocked",
+      "limitations": [
+        "The pinned source is documentation-only.",
+        "Product PR #5 is proposed and unmerged, so it is not shipped behavior evidence.",
+        "GT-10B #19 may support only its scoped adapter behavior; GT-12 #6 is required for complete customer-application v1/release claims."
+      ],
+      "reReviewTrigger": [
+        "A pinned product implementation and scoped test/evidence reference becomes available.",
+        "For whole-app wording, GT-12 release evidence changes or completes.",
+        "Any capability, provider mode, route, or limitation changes."
+      ]
+    },
+    {
+      "id": "CLAIM-SIMULATION-001",
+      "kind": "synthetic_simulation_label",
+      "allowedWording": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+      "prohibitedVariants": [
+        "This simulation proves the live product works.",
+        "A mock integration confirms production sponsor use."
+      ],
+      "audience": "Collateral reviewers and recipients of clearly labeled conceptual examples.",
+      "destination": "Synthetic or conceptual examples only; label must remain visible in every derivative.",
+      "state": "simulated",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/fixtures/synthetic-canaries.json",
+        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
+        "revisionKind": "sha256_content_digest",
+        "url": null
+      },
+      "evidenceReference": "PROV-SYNTHETIC-CANARY-001",
+      "evidenceClassification": "synthetic_text_fixture",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "Finance/reliability privacy-evidence reviewer; synthetic policy canary review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "The fixture is text/JSON policy-test data; no rendered pixels, media, product run, or sponsor system is represented.",
+        "This wording is safe labeling, not evidence of product or sponsor behavior."
+      ],
+      "reReviewTrigger": [
+        "Fixture content, derivative, or destination changes.",
+        "A visual or media export is created; that export needs separate rights and format-specific review."
+      ]
+    },
+    {
+      "id": "CLAIM-EVAL02-COMPARISON-001",
+      "kind": "measured_comparison",
+      "allowedWording": "No measured improvement or savings claim is approved; comparable baseline evidence is pending.",
+      "prohibitedVariants": [
+        "Verified savings",
+        "Saves 30%",
+        "Reduces cost",
+        "Cuts processing time"
+      ],
+      "audience": "Internal planning only.",
+      "destination": "Internal collateral planning; no public measurement statement.",
+      "state": "blocked",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/integration-evals",
+        "path": "evidence/README.md",
+        "revision": "ff1f6d2df816ebbff34742f51be728fcb5c28cb5",
+        "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/ff1f6d2df816ebbff34742f51be728fcb5c28cb5/evidence/README.md"
+      },
+      "evidenceReference": "IE-COMPARISON-001",
+      "evidenceClassification": "planned_evidence_index",
+      "providerMode": "not_run",
+      "reviewDate": null,
+      "reviewer": "Finance and reliability comparison reviewer; comparable evidence pending.",
+      "reviewStatus": "blocked",
+      "limitations": [
+        "The pinned revision is a planned evidence index, not a completed comparable run.",
+        "Do not infer savings, forecast, throughput, or cost reduction from hypothetical exports."
+      ],
+      "reReviewTrigger": [
+        "Baseline, candidate run, measurement method, or financial source changes."
+      ]
+    },
+    {
+      "id": "CLAIM-SPN-01-NEATLOGS-001",
+      "kind": "sponsor_use",
+      "sponsorEvidenceClass": "SPN-01",
+      "allowedWording": "Neatlogs use evidence is pending; no Neatlogs usage claim is approved.",
+      "prohibitedVariants": [
+        "Neatlogs integration is live.",
+        "Powered by Neatlogs in production."
+      ],
+      "audience": "Internal planning only.",
+      "destination": "Internal collateral planning.",
+      "state": "blocked",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/integration-evals",
+        "path": "evidence/README.md",
+        "revision": "ff1f6d2df816ebbff34742f51be728fcb5c28cb5",
+        "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/ff1f6d2df816ebbff34742f51be728fcb5c28cb5/evidence/README.md"
+      },
+      "evidenceReference": "SPN-NEATLOGS-001",
+      "evidenceClassification": "pending",
+      "providerMode": "not_run",
+      "reviewDate": null,
+      "reviewer": "Finance and reliability; Neatlogs-specific evidence review pending.",
+      "reviewStatus": "blocked",
+      "limitations": [
+        "Must be supported by a separate Neatlogs-specific integration/run record and sanitized evidence.",
+        "No sponsor use or live provider call was performed for this task."
+      ],
+      "reReviewTrigger": [
+        "Neatlogs run, mode, evidence, sponsor permission, or source revision changes."
+      ]
+    },
+    {
+      "id": "CLAIM-SPN-02-ENTIRE-001",
+      "kind": "sponsor_use",
+      "sponsorEvidenceClass": "SPN-02",
+      "allowedWording": "Entire checkpoint and graph evidence is pending; no Entire usage claim is approved.",
+      "prohibitedVariants": [
+        "Entire checkpoint is verified.",
+        "Entire confirms this production workflow."
+      ],
+      "audience": "Internal planning only.",
+      "destination": "Internal collateral planning.",
+      "state": "blocked",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/agent-harness",
+        "path": "issues/10",
+        "revision": null,
+        "revisionKind": "upstream_issue_not_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/agent-harness/issues/10"
+      },
+      "evidenceReference": "SPN-ENTIRE-001",
+      "evidenceClassification": "pending",
+      "providerMode": "not_run",
+      "reviewDate": null,
+      "reviewer": "Agent and research; Entire-specific evidence review pending.",
+      "reviewStatus": "blocked",
+      "limitations": [
+        "Requires separate Entire checkpoint/graph evidence and source-owner review.",
+        "No sponsor use or live provider call was performed for this task."
+      ],
+      "reReviewTrigger": [
+        "Entire checkpoint, graph, mode, evidence, or source revision changes."
+      ]
+    },
+    {
+      "id": "CLAIM-SPN-03-CFO-001",
+      "kind": "sponsor_use",
+      "sponsorEvidenceClass": "SPN-03",
+      "allowedWording": "CFO.ai business-plan evidence is pending; no CFO.ai use or financial claim is approved.",
+      "prohibitedVariants": [
+        "CFO.ai verified our savings.",
+        "CFO.ai business plan proves ROI."
+      ],
+      "audience": "Internal planning only.",
+      "destination": "Internal collateral planning.",
+      "state": "blocked",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/cost-intelligence",
+        "path": "issues/3",
+        "revision": null,
+        "revisionKind": "upstream_issue_not_commit",
+        "url": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3"
+      },
+      "evidenceReference": "SPN-CFOAI-001",
+      "evidenceClassification": "pending",
+      "providerMode": "not_run",
+      "reviewDate": null,
+      "reviewer": "Finance and reliability; actual CFO.ai business-plan evidence review pending.",
+      "reviewStatus": "blocked",
+      "limitations": [
+        "Requires the actual CFO.ai business plan and finance owner review.",
+        "An estimate or placeholder does not satisfy this requirement."
+      ],
+      "reReviewTrigger": [
+        "Business-plan inputs, actuals, financial definitions, or source revision changes."
+      ]
+    },
+    {
+      "id": "CLAIM-PRODUCT-NAME-001",
+      "kind": "project_identifier",
+      "allowedWording": "TicketStub",
+      "requiredQualifier": "Project name only; product availability is unverified.",
+      "prohibitedVariants": [
+        "TicketStub is live and available.",
+        "Use TicketStub now."
+      ],
+      "audience": "Collateral reviewers and recipients of the synthetic concept artwork.",
+      "destination": "Concept artwork only, with the project-name-only qualification available in accompanying text.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/brand-kit",
+        "path": "README.md",
+        "revision": "3822635aff507cd5918a08a0c636bb0e41705261",
+        "url": "https://github.com/Jevelopers-neatHack-2026/brand-kit/blob/3822635aff507cd5918a08a0c636bb0e41705261/README.md"
+      },
+      "evidenceReference": "PRODUCT-IDENTIFIER-ONLY",
+      "evidenceClassification": "documentation_only",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; visual and brand review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "The name does not imply an available or released application.",
+        "The pinned brand-kit revision contains aspirational positioning only; product availability is not established."
+      ],
+      "reReviewTrigger": [
+        "Product name, release status, or source revision changes."
+      ]
+    },
+    {
+      "id": "CLAIM-KEEPSAKE-CONCEPT-001",
+      "kind": "visual_concept",
+      "allowedWording": "A keepsake concept",
+      "requiredQualifier": "Synthetic concept only. No product behavior, live sponsor integration, or measured savings are demonstrated.",
+      "prohibitedVariants": [
+        "A finished ticket product",
+        "Your completed ticket"
+      ],
+      "audience": "Collateral reviewers and recipients of labeled concept art.",
+      "destination": "Concept artwork only; the surrounding asset must retain a visible synthetic/concept label.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/fixtures/synthetic-canaries.json",
+        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
+        "revisionKind": "sha256_content_digest",
+        "url": null
+      },
+      "evidenceReference": "SYNTHETIC-VISUAL-DERIVATIVE-PENDING",
+      "evidenceClassification": "synthetic_concept",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; visual/rights review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This is a visual concept label, not proof of a product output or user benefit.",
+        "The source is the text canary only; no visual artifact is asserted to exist in this policy worktree."
+      ],
+      "reReviewTrigger": [
+        "Artwork, source, rights, qualifier, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-PROCESS-CONCEPT-001",
+      "kind": "visual_concept",
+      "allowedWording": "Context → design → human review",
+      "requiredQualifier": "Conceptual only; implementation is unverified.",
+      "prohibitedVariants": [
+        "Context to design to human review is a shipped workflow.",
+        "The application automatically routes tickets through this live process."
+      ],
+      "audience": "Collateral reviewers and recipients of labeled concept art.",
+      "destination": "Concept artwork only; the conceptual/unverified qualifier must remain adjacent and legible.",
+      "state": "mock",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/fixtures/synthetic-canaries.json",
+        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
+        "revisionKind": "sha256_content_digest",
+        "url": null
+      },
+      "evidenceReference": "SYNTHETIC-VISUAL-DERIVATIVE-PENDING",
+      "evidenceClassification": "synthetic_concept",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; product/visual review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "No such application workflow or implementation is verified by this concept.",
+        "Remove or update the copy if the qualifier is cropped, obscured, or separated.",
+        "The source is the text canary only; no visual artifact is asserted to exist in this policy worktree."
+      ],
+      "reReviewTrigger": [
+        "Artwork, process, implementation evidence, qualifier, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-HUMAN-APPROVAL-CONCEPT-001",
+      "kind": "proposed_policy",
+      "allowedWording": "Approval before production",
+      "requiredQualifier": "This is a proposed review rule, not a verified product feature.",
+      "prohibitedVariants": [
+        "The product enforces approval before production.",
+        "Human approval is built into the live workflow."
+      ],
+      "audience": "Collateral reviewers and recipients of labeled concept art.",
+      "destination": "Concept artwork only; proposed-policy qualifier must remain adjacent.",
+      "state": "planned",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/fixtures/synthetic-canaries.json",
+        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
+        "revisionKind": "sha256_content_digest",
+        "url": null
+      },
+      "evidenceReference": "COLLATERAL-REVIEW-POLICY",
+      "evidenceClassification": "proposed_collateral_policy",
+      "providerMode": "none",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; product review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "This statement proposes a collateral review rule only.",
+        "It does not establish product behavior or a product-enforced gate.",
+        "The source is the text canary only; no visual artifact is asserted to exist in this policy worktree."
+      ],
+      "reReviewTrigger": [
+        "Policy, artwork, implementation, or destination changes."
+      ]
+    },
+    {
+      "id": "CLAIM-NO-RESULTS-VERIFIED-001",
+      "kind": "evidence_status",
+      "allowedWording": "No product or sponsor results verified.",
+      "prohibitedVariants": [
+        "Product and sponsor results are verified.",
+        "Verified sponsor results show improved performance."
+      ],
+      "audience": "Collateral reviewers and recipients of current draft concept artwork.",
+      "destination": "Current draft artwork and its accessible alternative.",
+      "state": "blocked",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/integration-evals",
+        "path": "evidence/README.md",
+        "revision": "ff1f6d2df816ebbff34742f51be728fcb5c28cb5",
+        "url": "https://github.com/Jevelopers-neatHack-2026/integration-evals/blob/ff1f6d2df816ebbff34742f51be728fcb5c28cb5/evidence/README.md"
+      },
+      "evidenceReference": "EVAL-02,EVAL-03,SPN-01,SPN-02,SPN-03",
+      "evidenceClassification": "pending",
+      "providerMode": "not_run",
+      "reviewDate": null,
+      "reviewer": "Finance/reliability and Agent/research reviewers; source evidence review pending.",
+      "reviewStatus": "pending",
+      "limitations": [
+        "The pinned evidence index is planned; the statement is a current status warning, not a verified-results claim.",
+        "Neatlogs, Entire, and CFO.ai evidence remain separate and pending."
+      ],
+      "reReviewTrigger": [
+        "Any EVAL or sponsor evidence class changes state, source, or classification."
+      ]
+    }
+  ],
+  "ctas": [
+    {
+      "id": "CTA-REPOSITORY-DOCS-001",
+      "exactText": "Explore the repository docs.",
+      "intendedAction": "Open and read public repository documentation.",
+      "destinationClass": "public_repository_documentation",
+      "destinationOwner": "User-assigned marketing-material supervisor",
+      "target": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md",
+      "availability": {
+        "status": "confirmed_for_pinned_documentation_only",
+        "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
+      },
+      "wordingReview": "pending",
+      "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; exact CTA wording review pending.",
+      "reReviewTrigger": [
+        "README target revision or repository visibility changes.",
+        "Copy becomes attached to an application or landing-page transaction.",
+        "The destination/action or availability changes."
+      ]
+    },
+    {
+      "id": "CTA-REPOSITORY-DOCS-002",
+      "exactText": "Read the project documentation.",
+      "intendedAction": "Open and read public repository documentation.",
+      "destinationClass": "public_repository_documentation",
+      "destinationOwner": "User-assigned marketing-material supervisor",
+      "target": "https://github.com/Jevelopers-neatHack-2026/marketing-material/blob/05ed6ca6db94b6384fa9ef7ee965271be071264b/README.md",
+      "availability": {
+        "status": "confirmed_for_pinned_documentation_only",
+        "conditions": "Public repository README exists at the pinned target revision; this does not imply an application or landing-page transaction route."
+      },
+      "wordingReview": "pending",
+      "routeReview": "confirmed_by_assigned_supervisor_for_repository_docs_only",
+      "reviewDate": null,
+      "reviewer": "User-assigned marketing-material supervisor; exact CTA wording review pending.",
+      "reReviewTrigger": [
+        "README target revision or repository visibility changes.",
+        "Copy becomes attached to an application or landing-page transaction.",
+        "The destination/action or availability changes."
+      ]
+    },
+    {
+      "id": "CTA-PRODUCT-TRANSACTION-001",
+      "exactText": "No product action is approved for promotion while route and availability are pending.",
+      "intendedAction": "No product transaction; internal status wording only.",
+      "destinationClass": "none",
+      "destinationOwner": "Product/landing route owner confirmation pending",
+      "target": null,
+      "availability": {
+        "status": "unavailable_unconfirmed",
+        "conditions": "Product/landing owner has not confirmed an implemented target or current availability."
+      },
+      "wordingReview": "internal_only",
+      "routeReview": "pending",
+      "reviewDate": null,
+      "reviewer": "Product/landing route owner; confirmation pending.",
+      "reReviewTrigger": [
+        "Product/landing route owner confirms exact target, implementation, and availability."
+      ]
+    }
+  ],
+  "releasePolicy": {
+    "default": "blocked",
+    "publicCopyRequires": [
+      "Exact allowed wording and destination-specific audience review.",
+      "Pinned immutable source and evidence reference reviewed by the relevant source owner.",
+      "State/mode/limitations remain visible where needed.",
+      "No unsupported capability, integration, savings, purchase, or transaction claim.",
+      "Exact CTA wording reviewed and route owner confirms target and current availability."
+    ],
+    "sourceChangeInvalidatesApproval": true,
+    "marketingApprovesWording": true,
+    "sourceOwnersApproveEvidenceAndRights": true,
+    "repositoryDocsCtaDoesNotApproveProductRoute": true
+  }
+}

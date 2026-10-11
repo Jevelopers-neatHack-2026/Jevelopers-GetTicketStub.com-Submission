@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "1.0",
+  "inventoryKey": "MM-05",
+  "status": "draft",
+  "asOf": "2026-10-11",
+  "publicationDefault": "blocked",
+  "permissionStates": [
+    "approved",
+    "pending",
+    "unknown",
+    "revoked",
+    "expired",
+    "rejected",
+    "authorized_internal_policy_test_only"
+  ],
+  "requiredRecordFields": [
+    "assetId",
+    "source",
+    "createdAt",
+    "creator",
+    "toolModel",
+    "evidenceClassification",
+    "consent",
+    "permission",
+    "attribution",
+    "allowedDestinations",
+    "allowedModifications",
+    "expiry",
+    "reviewTrigger",
+    "redaction",
+    "lineage",
+    "checksum",
+    "reviewer",
+    "reviewDate",
+    "publishability"
+  ],
+  "records": [
+    {
+      "assetId": "PROV-SYNTHETIC-CANARY-001",
+      "kind": "text-json-policy-test-fixture",
+      "source": {
+        "repo": "Jevelopers-neatHack-2026/marketing-material",
+        "path": "review/fixtures/synthetic-canaries.json",
+        "revision": "sha256:b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
+        "revisionKind": "sha256_content_digest",
+        "url": null,
+        "restrictedOriginalReference": null
+      },
+      "createdAt": "2026-10-11",
+      "creator": "Assigned general-worker session; execution owner tracked by supervisor.",
+      "toolModel": "Codex session; OpenAI gpt-6-luna/max per supervisor-verified runtime. No image-generation tool or external provider was used.",
+      "evidenceClassification": "synthetic_text_fixture",
+      "consent": {
+        "status": "not_applicable_synthetic",
+        "subjects": [],
+        "details": "Fixture contains invented canary labels only; no real person or customer data."
+      },
+      "permission": {
+        "status": "authorized_internal_policy_test_only",
+        "reference": "Explicit assigned repository task authorizes creation/use of synthetic policy-test text in this worktree.",
+        "owner": "User-assigned marketing-material supervisor for task scope",
+        "approvedDestinations": [
+          "Repository policy tests and internal review"
+        ],
+        "externalPublication": "not granted"
+      },
+      "attribution": {
+        "required": false,
+        "reference": null,
+        "reason": "Original synthetic test text created for this task."
+      },
+      "allowedDestinations": [
+        "Repository policy tests",
+        "Internal policy review"
+      ],
+      "allowedModifications": [
+        "Modify synthetic marker strings while retaining their clearly fake classification and all-surface test coverage."
+      ],
+      "expiry": "2026-11-10",
+      "reviewTrigger": [
+        "Before any external reuse.",
+        "If fixture fields, destination, test scope, or permission changes.",
+        "At expiry or on rights/consent revocation."
+      ],
+      "redaction": {
+        "required": true,
+        "method": "Remove every synthetic marker from the sanitized text representation, including visible text, metadata, notes, alt text, transcript, QR target, linked resource, and extracted export text.",
+        "sourceFixtureExpectedResult": "review/fixtures/synthetic-canaries.json expectedRedactedSurfaces",
+        "visualPixelReview": "not_performed",
+        "renderedMetadataAndNotesReview": "not_performed",
+        "releaseExportExists": false
+      },
+      "lineage": {
+        "derivedFrom": [],
+        "derivatives": [],
+        "transformations": [
+          "synthetic text fixture authored for policy validation"
+        ]
+      },
+      "checksum": {
+        "algorithm": "SHA-256",
+        "value": "b30f77ab1976d9fd09406f51e4176af845e5f1a813b3e73f4273128c79d9f4c3",
+        "status": "content digest computed for this exact text fixture"
+      },
+      "reviewer": "Finance and reliability — privacy/evidence reviewer",
+      "reviewDate": null,
+      "reviewStatus": "pending",
+      "publishability": "blocked",
+      "blockers": [
+        "Internal policy test permission is not external-use permission.",
+        "No actual rendered export was inspected.",
+        "The content digest and independent review are pending."
+      ]
+    }
+  ],
+  "releaseGate": {
+    "required": [
+      "Exact source and derivative lineage plus checksum.",
+      "Permission and consent for the exact destination, including modifications and attribution.",
+      "Current rights status with expiry/review trigger.",
+      "Format-aware flattened-export redaction review covering pixels, metadata, notes, alt text, audio/video, QR targets, and linked resources as applicable.",
+      "Named reviewer, date, and destination-specific decision."
+    ],
+    "unknownRights": "Reject or replace with clearly labeled synthetic content.",
+    "revokedRights": "Reject/deprecate; stop reuse and retain only non-disclosing decision metadata.",
+    "currentStatus": "BLOCKED: this register covers a synthetic text/JSON canary only; no final visual/media artifact has passed rights and pixel/metadata/notes review."
+  }
+}
