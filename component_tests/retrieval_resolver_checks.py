@@ -6,8 +6,11 @@ from integration_evals.models import Digest, Record
 type ResolverMutation = Literal[
     "cached-resolution", "first-answer-only", "unchecked-alias", "unchecked-ip-alias"
 ]
+type BudgetMutation = Literal["unchecked-gzip-wire", "unchecked-aggregate"]
 type Mutation = (
-    Literal["baseline", "always-reject", "unchecked-private", "unchecked-wire"] | ResolverMutation
+    Literal["baseline", "always-reject", "unchecked-private", "unchecked-wire"]
+    | ResolverMutation
+    | BudgetMutation
 )
 type Scenario = Literal[
     "safe-alias", "private-transition", "mixed-answers", "metadata-alias", "ip-alias"
@@ -121,7 +124,13 @@ def assert_resolver_inputs(capture: ResolverCapture, mutation: Mutation) -> None
             affected = ("metadata-alias",)
         case "unchecked-ip-alias":
             affected = ("ip-alias",)
-        case "baseline" | "unchecked-private" | "unchecked-wire":
+        case (
+            "baseline"
+            | "unchecked-private"
+            | "unchecked-wire"
+            | "unchecked-gzip-wire"
+            | "unchecked-aggregate"
+        ):
             affected = ()
         case _:
             assert_never(mutation)

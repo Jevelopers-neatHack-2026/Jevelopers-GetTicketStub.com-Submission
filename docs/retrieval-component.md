@@ -66,7 +66,8 @@ negative calls, no protected fixture connection, a received redirect response th
 is rejected before the protected endpoint, the actual redirect-limit error, and
 all injected resolver-input redirect checks described below.
 `resource_limits_enforced` is limited to declared wire length, chunked identity
-body bytes, actual gzip decoded bytes, and per-instance request count, each with
+and gzip encoded-body bytes, actual gzip decoded bytes, cumulative decoded bytes,
+and per-instance request count, each with
 the required typed error and fixture counters. It is not a claim about all resource
 limits.
 
@@ -78,6 +79,23 @@ aggregate caps. Incoming connections, requests, response closure and socket clos
 are observed before forced fixture cleanup. These counts cover only those fixture
 servers. The wire cap counts encoded body bytes, excluding HTTP framing; it does
 not establish packet-level byte counts, wire DNS/TLS behavior or external egress.
+
+`resource_budgets` adds two gzip controls and a cumulative decoded-byte sequence.
+All responses use gzip and chunked transfer without Content-Length. A small gzip
+positive must return known bytes/hash. A valid stored-block gzip fixture (level 0)
+exceeds the 10 MiB encoded-body cap while its decoded text remains below 20 MiB and
+its fresh fetcher remains below 100 MiB; it must produce `RESOURCE_LIMIT`.
+The artifact records actual encoded/decoded lengths and hashes, including gzip level.
+
+A single separate fetcher then receives five compressible 20 MiB text bodies,
+each independently within its encoded/decoded request limits. All five must return
+exact bytes/hash, totaling precisely 100 MiB decoded. Its next one-byte response
+must produce `RESOURCE_LIMIT`; a fresh fetcher must accept that identical one-byte
+fixture. Six requests stay below the 30-request limit. Accepted decoded totals are
+sums of returned bodies, not access to private owner state. Each attempt records
+actual incoming HTTP/TCP and natural response/socket closure before forced cleanup.
+Bodies are measured and released sequentially; the existing 30-second case timeout
+is unchanged. Linux CI must establish runtime fit as well as the typed verdicts.
 
 `resolver_inputs` exercises same-host relative redirects through the owner's
 `localTestSeam` resolver hook. The safe-alias control requires two resolver calls,
@@ -92,8 +110,7 @@ hostnames/addresses are not retained. A safe alias is validated as metadata; it 
 not followed by another DNS query. No public address is remapped onto local transport.
 
 Uncovered obligations remain explicit in every artifact: wire DNS, TTL rebinding,
-actual CNAME following and mixed wire-DNS answers; deadlines, concurrency,
-gzip encoded-body and aggregate byte caps;
+actual CNAME following and mixed wire-DNS answers; deadlines and concurrency;
 TLS/production networking; image/PDF and downstream parser limits; real rejection
 handoff into research, JEV or creative; and authoritative external egress capture.
 IE-11A.AC3 content-authority containment is a separate unchanged case. A passing
@@ -104,7 +121,7 @@ blocked. All unselected original cases remain planned, not implicitly passed.
 
 The separately invoked `component_tests` suite uses actual `execute` and `save_run`
 with clean owned snapshots and all 42 original cases. It compares a real baseline
-with seven deliberately weakened owned copies: an always-reject fetcher, unchecked
+with nine deliberately weakened owned copies: an always-reject fetcher, unchecked
 loopback fetching, and removal of only the identity-body streaming wire counter.
 The positive control detects always-reject behavior; incoming protected server
 counters detect unchecked loopback fetching. The wire-counter mutation must accept
@@ -116,6 +133,10 @@ IP-alias guard. The first reuses the safe fixture answer; the others expose fail
 by reaching the local final-hop fixture. Injected private/alias addresses are never
 used as replacement transport destinations. Each mutation must fail its resolver
 observation and the component while retaining the other controls.
+Two further copies disable only the gzip encoded-body guard or only the cumulative
+decoded-byte check. The corresponding overflow must then return its exact body and
+make the new resource observation/component fail. The per-request decoded limit,
+other byte guard, request budget and existing controls remain in place.
 Original producer checkouts stay unchanged.
 
 ```sh

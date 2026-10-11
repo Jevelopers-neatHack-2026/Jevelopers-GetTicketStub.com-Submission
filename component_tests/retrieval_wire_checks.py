@@ -2,6 +2,7 @@ from typing import ClassVar, Literal, assert_never
 
 from pydantic import ConfigDict
 
+from component_tests.retrieval_budget_checks import BudgetCapture
 from component_tests.retrieval_resolver_checks import Mutation, ResolverCapture
 from integration_evals.artifacts import digest
 from integration_evals.models import CaseResult, Digest, Outcome, Record
@@ -51,6 +52,7 @@ class Capture(Record):
     uncovered: tuple[str, ...]
     chunked_wire: WireCapture
     resolver_inputs: ResolverCapture
+    resource_budgets: BudgetCapture
 
 
 def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mutation) -> None:
@@ -87,6 +89,8 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
             | "first-answer-only"
             | "unchecked-alias"
             | "unchecked-ip-alias"
+            | "unchecked-gzip-wire"
+            | "unchecked-aggregate"
         ):
             assert selected.outcome is Outcome.FAILED
         case _:
@@ -117,6 +121,8 @@ def assert_observed_outcome(selected: CaseResult, capture: Capture, mutation: Mu
             | "first-answer-only"
             | "unchecked-alias"
             | "unchecked-ip-alias"
+            | "unchecked-gzip-wire"
+            | "unchecked-aggregate"
         ):
             assert wire.passed is True
             assert over_limit.code == "RESOURCE_LIMIT"
