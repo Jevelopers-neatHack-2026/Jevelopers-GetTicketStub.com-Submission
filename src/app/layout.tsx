@@ -15,6 +15,10 @@ const interTight = Inter_Tight({
   display: "swap",
 });
 
+// TICKETSTUB_RUNTIME_MODE is a runtime secret on the host, so render per request instead of
+// baking the demo banner into the build.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "TicketStub",
   description: "Turn your ticket into a stub worth keeping.",
