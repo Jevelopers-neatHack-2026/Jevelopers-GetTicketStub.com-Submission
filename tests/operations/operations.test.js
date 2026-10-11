@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -16,6 +16,17 @@ import {
   projectTelemetryEvent
 } from '@jevelopers/agent-harness-runtime';
 import { OPERATIONS_STORAGE_CAPABILITY } from '../../src/internal/private-ops-store-capability.js';
+import {
+  createOperationsDiagnosticSession,
+  disposeOperationsDiagnosticSession,
+  prepareOperationsChildCapture,
+  closeOperationsChildCapture,
+  OPS07_CAPTURE_LINE_PREFIX,
+  OPS07_CAPTURE_LIMITS,
+  parseOperationsCaptureFromTap,
+  readOperationsDiagnosticSession,
+  recordOperationsSupervisor
+} from '../../src/internal/private-ops-diagnostics.js';
 import { runtimeError } from '../../src/internal/errors.js';
 import { operationsStoragePolicy, readOperationsConfig, validateLocalPlanWork } from '../../src/worker/private/config.js';
 import { createOperationsWorker } from '../../src/worker/private/worker.js';
@@ -90,6 +101,69 @@ function openStore(databasePath, options = {}) {
     minFreeDiskBytes: config.minFreeDiskBytes
   });
   return store;
+}
+
+function captureOperationsFinalState(databasePath, jobIds) {
+  let raw;
+  try {
+    if (!Array.isArray(jobIds) || jobIds.length !== 2 || jobIds.some(id => typeof id !== 'string')) {
+      return { available: false };
+    }
+    raw = new DatabaseSync(databasePath, { readOnly: true });
+    const jobs = [];
+    for (const jobId of jobIds) {
+      const work = raw.prepare(`SELECT job_id, workflow_id, state, generation, fence_token
+        FROM operations_work WHERE job_id=?`).get(jobId);
+      if (!work) return { available: false };
+      const workflow = raw.prepare(`SELECT state, revision, checkpoint_sequence, fence_token,
+        lease_owner, lease_expires_ms, cancellation_requested
+        FROM workflows WHERE workflow_id=?`).get(work.workflow_id);
+      const checkpoint = raw.prepare(`SELECT payload_json FROM workflow_checkpoints
+        WHERE workflow_id=? ORDER BY sequence DESC LIMIT 1`).get(work.workflow_id);
+      if (!workflow || !checkpoint || typeof checkpoint.payload_json !== 'string') return { available: false };
+      const payload = JSON.parse(checkpoint.payload_json);
+      const resultsJson = payload?.data?.completedResultsJson;
+      if (typeof resultsJson !== 'string') return { available: false };
+      const results = JSON.parse(resultsJson);
+      if (!results || typeof results !== 'object' || Array.isArray(results)) return { available: false };
+      const eventCounts = raw.prepare(`SELECT event_type AS type, COUNT(*) AS count
+        FROM workflow_events WHERE workflow_id=? GROUP BY event_type ORDER BY event_type`)
+        .all(work.workflow_id).map(row => ({ type: row.type, count: Number(row.count) }));
+      jobs.push({
+        workState: work.state,
+        workflowState: workflow.state,
+        generation: Number(work.generation),
+        operationFence: work.fence_token === null ? null : Number(work.fence_token),
+        workflowFence: Number(workflow.fence_token),
+        revision: Number(workflow.revision),
+        checkpointSequence: Number(workflow.checkpoint_sequence),
+        resultCount: Object.keys(results).length,
+        resultHash: createHash('sha256').update(resultsJson, 'utf8').digest('hex'),
+        cancellationRequested: Number(workflow.cancellation_requested) === 1,
+        leaseOwnerPresent: workflow.lease_owner !== null,
+        leaseFenceMatches: work.fence_token !== null && Number(work.fence_token) === Number(workflow.fence_token),
+        leaseExpired: workflow.lease_expires_ms === null || Number(workflow.lease_expires_ms) <= Date.now(),
+        eventCounts
+      });
+    }
+    const meta = raw.prepare(`SELECT reserved_disk_bytes AS reservedDiskBytes,
+      reserved_event_slots AS reservedEventSlots, pending_records AS pendingRecords
+      FROM operations_meta WHERE singleton=1`).get();
+    if (!meta) return { available: false };
+    return {
+      available: true,
+      jobs,
+      reservations: {
+        reservedDiskBytes: Number(meta.reservedDiskBytes),
+        reservedEventSlots: Number(meta.reservedEventSlots),
+        pendingRecords: Number(meta.pendingRecords)
+      }
+    };
+  } catch {
+    return { available: false };
+  } finally {
+    try { raw?.close(); } catch {}
+  }
 }
 
 function admit(store, tenantId, projectId, idempotencyKey, work = PLAN, configInput = undefined) {
@@ -3468,15 +3542,56 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
 
   await t.test('OPS07.C01 reserves a concurrent valid 32-step lifecycle before admission and bounds DB, WAL, SHM, events, and reopen state', async t => {
     const nearCap = tempDirectory('ah11-lifecycle-reservation-');
-    t.after(() => nearCap.cleanup());
+    const diagnosticSession = createOperationsDiagnosticSession({ directory: nearCap.directory });
+    let capacityWorker = null;
+    let first = null;
+    let second = null;
+    t.after(async () => {
+      let cleanupComplete = true;
+      try {
+        if (capacityWorker && capacityWorker.lifecycle !== 'stopped') {
+          const stoppedForCapture = await capacityWorker.stop('test');
+          cleanupComplete = stoppedForCapture.stopped === true && stoppedForCapture.childrenReaped === true;
+        }
+      } catch {
+        cleanupComplete = false;
+      }
+      try {
+        let capture;
+        try {
+          const finalState = captureOperationsFinalState(nearCap.databasePath, [first?.jobId, second?.jobId]);
+          capture = readOperationsDiagnosticSession(diagnosticSession, {
+            finalState,
+            cleanupIncomplete: !cleanupComplete
+          });
+        } catch {}
+        if (!capture) capture = {
+          schema: 'agent-harness.ops07-session.v1',
+          slots: [], supervisor: [], finalState: { available: false },
+          flags: { enabled: true, complete: false, missingChildCapture: true, malformed: true,
+            overflow: false, writeFailed: false, abruptExit: true, cleanupIncomplete: true }
+        };
+        t.diagnostic(`OPS07_CAPTURE_V1 ${JSON.stringify(capture)}`);
+        assert.equal(capture.flags.complete, true, `The bounded OPS07 diagnostic capture is incomplete: ${JSON.stringify(capture.flags)}`);
+        assert.equal(capture.slots.length, 2);
+        for (const slot of capture.slots) {
+          assert.equal(slot.records.filter(record => record.stage === 'admission_committed').length, 32);
+          assert.equal(slot.records.filter(record => record.stage === 'completion_committed').length, 32);
+          assert.equal(slot.records.filter(record => record.stage === 'controller_result' && record.status === 'completed').length, 1);
+        }
+      } finally {
+        disposeOperationsDiagnosticSession(diagnosticSession);
+        nearCap.cleanup();
+      }
+    });
     const nearCapConfig = readOperationsConfig({
       workerCount: 2, maxInFlightGlobal: 2, maxInFlightTenant: 1,
       maxStoreBytes: 67_108_864, maxWalBytes: 16_777_216, busyTimeoutMs: 100
     });
-    const capacityWorker = createOperationsWorker({
-      databasePath: nearCap.databasePath, ownerId: 'review-worker', config: nearCapConfig
+    capacityWorker = createOperationsWorker({
+      databasePath: nearCap.databasePath, ownerId: 'review-worker', config: nearCapConfig,
+      diagnosticSession
     });
-    t.after(async () => { if (capacityWorker.lifecycle !== 'stopped') await capacityWorker.stop('test'); });
     void capacityWorker.start();
     const planJson = JSON.stringify({
       kind: 'agent-harness.private-synthetic-plan', version: 1,
@@ -3488,8 +3603,8 @@ test('OPS07_STORE_RESOURCE_FAILURE maps real SQLite BUSY to typed bounded backpr
     });
     const scopeA = { tenantId: 'highwater-tenant-a', projectId: 'highwater-project-a' };
     const scopeB = { tenantId: 'highwater-tenant-b', projectId: 'highwater-project-b' };
-    const first = capacityWorker.submitSyntheticWork({ trustedSyntheticScope: scopeA, idempotencyKey: 'highwater-a', planJson });
-    const second = capacityWorker.submitSyntheticWork({ trustedSyntheticScope: scopeB, idempotencyKey: 'highwater-b', planJson });
+    first = capacityWorker.submitSyntheticWork({ trustedSyntheticScope: scopeA, idempotencyKey: 'highwater-a', planJson });
+    second = capacityWorker.submitSyntheticWork({ trustedSyntheticScope: scopeB, idempotencyKey: 'highwater-b', planJson });
     assert.equal(first.accepted, true);
     assert.equal(second.accepted, true);
     const thirdScope = { tenantId: 'highwater-tenant-c', projectId: 'highwater-project-c' };
@@ -4898,6 +5013,14 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       errorCode: 'STORE_BUSY', sqlitePrimaryCode: null
     });
     assert.equal(diagnosticsByMode.get('wrapped-runtime-busy').failureCode, 'ASSERTION_FAILURE');
+    const overlengthLocation = `file:///synthetic/private/${'x'.repeat(220)}.mjs:4400:9`;
+    const overlengthLocationDiagnostics = buildSafeFailureDiagnostics({
+      scenario: 'OPS13.C01', phase: 'diagnostic-control', stage: 'node-test-runner', status: 1,
+      stdout: `not ok 1 - OPS13.C01 overlength location control\n  ---\n  failureType: 'testCodeFailure'\n  location: '${overlengthLocation}'\n  name: 'AssertionError'\n  code: 'ERR_ASSERTION'\n  ...\n`
+    });
+    assert.equal(overlengthLocationDiagnostics.records.length, 1);
+    assert.equal(overlengthLocationDiagnostics.records[0].sourceLocation, 'redacted');
+    assert.doesNotMatch(JSON.stringify(overlengthLocationDiagnostics), /synthetic|private|file:\/\//u);
 
     const ordinaryChild = spawnSync(process.execPath, [
       '--test', '--test-reporter=tap',
@@ -4916,6 +5039,271 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     assert.ok(ordinaryDiagnostics.records.every(record => record.errorCode === 'ERR_ASSERTION'));
     assert.ok(ordinaryDiagnostics.records.every(record => record.nestedStorageCause === null));
     assert.ok(Buffer.byteLength(JSON.stringify(ordinaryDiagnostics), 'utf8') <= 2_048);
+
+    const makeCaptureSlot = slot => ({
+      slot,
+      records: [
+        { sequence: 1, stage: 'header', elapsedMs: 0 },
+        { sequence: 2, stage: 'footer', elapsedMs: 0,
+          writerComplete: true, overflow: false, writeFailed: false, malformed: false }
+      ],
+      malformed: false, overflow: false, footer: true, writerComplete: true,
+      footerFlags: { overflow: false, writeFailed: false, malformed: false }
+    });
+    const makeCapture = () => ({
+      schema: 'agent-harness.ops07-session.v1',
+      slots: [makeCaptureSlot(0), makeCaptureSlot(1)], supervisor: [],
+      finalState: { available: false },
+      flags: { enabled: true, complete: false, missingChildCapture: false, malformed: false,
+        overflow: false, writeFailed: false, abruptExit: false, cleanupIncomplete: true }
+    });
+    const captureLine = capture => `${OPS07_CAPTURE_LINE_PREFIX}${JSON.stringify(capture)}`;
+    const validCaptureLine = captureLine(makeCapture());
+    const parsedIndentedCapture = parseOperationsCaptureFromTap(`    ${validCaptureLine}\n`);
+    assert.equal(parsedIndentedCapture.valid, true, 'nested TAP diagnostics retain their indentation');
+    assert.equal(parsedIndentedCapture.capture.flags.complete, false, 'capture validity is distinct from completeness');
+    assert.equal(parseOperationsCaptureFromTap(`${' '.repeat(17)}${validCaptureLine}\n`).reason, 'missing',
+      'capture indentation remains bounded');
+    assert.equal(parseOperationsCaptureFromTap('TAP version 13\n').reason, 'missing');
+    assert.equal(parseOperationsCaptureFromTap(`${validCaptureLine}\n${validCaptureLine}\n`).reason, 'duplicate');
+    assert.equal(parseOperationsCaptureFromTap(`${OPS07_CAPTURE_LINE_PREFIX}{\n`).reason, 'malformed');
+    const maxWireBytes = OPS07_CAPTURE_LIMITS.totalBytes;
+    const prefixBytes = Buffer.byteLength(OPS07_CAPTURE_LINE_PREFIX, 'utf8');
+    const basePayload = JSON.stringify(makeCapture());
+    const exactPadding = maxWireBytes - prefixBytes - 1 - Buffer.byteLength(basePayload, 'utf8');
+    const exactBoundaryPayload = `${basePayload.slice(0, -1)}${' '.repeat(exactPadding)}}`;
+    assert.equal(Buffer.byteLength(`${OPS07_CAPTURE_LINE_PREFIX}${exactBoundaryPayload}\n`, 'utf8'), maxWireBytes);
+    assert.equal(parseOperationsCaptureFromTap(`${OPS07_CAPTURE_LINE_PREFIX}${exactBoundaryPayload}\n`).valid, true);
+    assert.equal(parseOperationsCaptureFromTap(`${OPS07_CAPTURE_LINE_PREFIX}${exactBoundaryPayload} \n`).reason, 'oversize');
+    const overflowSummary = {
+      schema: 'agent-harness.ops07-session.v1',
+      overflowSummary: true,
+      flags: { enabled: true, complete: false, missingChildCapture: false, malformed: false,
+        overflow: true, writeFailed: false, abruptExit: false, cleanupIncomplete: false }
+    };
+    const overflowSummaryLine = captureLine(overflowSummary);
+    const parsedOverflowSummary = parseOperationsCaptureFromTap(`${overflowSummaryLine}\n`);
+    assert.equal(parsedOverflowSummary.valid, true);
+    assert.equal(parsedOverflowSummary.capture.overflowSummary, true);
+    assert.equal(parsedOverflowSummary.capture.flags.complete, false);
+    assert.ok(Buffer.byteLength(`${overflowSummaryLine}\n`, 'utf8') <= maxWireBytes);
+    const falseOverflowSummary = structuredClone(overflowSummary);
+    falseOverflowSummary.flags.overflow = false;
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(falseOverflowSummary)}\n`).reason, 'invalid_shape');
+    const outputBoundDir = tempDirectory('ah11-ops-output-bound-');
+    const outputBoundSession = createOperationsDiagnosticSession({ directory: outputBoundDir.directory });
+    t.after(() => {
+      disposeOperationsDiagnosticSession(outputBoundSession);
+      outputBoundDir.cleanup();
+    });
+    for (let slot = 0; slot < 2; slot += 1) {
+      const child = prepareOperationsChildCapture(outputBoundSession);
+      assert.equal(child.slot, slot);
+      const childRecords = [{
+        schema: 'agent-harness.ops07-child-record.v1', sequence: 1, stage: 'header', elapsedMs: 0
+      }];
+      for (let sequence = 2; sequence < OPS07_CAPTURE_LIMITS.childRecords; sequence += 1) {
+        childRecords.push({
+          schema: 'agent-harness.ops07-child-record.v1', sequence, stage: 'runner_phase', elapsedMs: sequence,
+          phase: 'loop_snapshot'
+        });
+      }
+      childRecords.push({
+        schema: 'agent-harness.ops07-child-record.v1', sequence: OPS07_CAPTURE_LIMITS.childRecords,
+        stage: 'footer', elapsedMs: OPS07_CAPTURE_LIMITS.childRecords,
+        writerComplete: true, overflow: false, writeFailed: false, malformed: false
+      });
+      const childBytes = Buffer.from(`${childRecords.map(record => JSON.stringify(record)).join('\n')}\n`, 'utf8');
+      assert.ok(childBytes.byteLength <= OPS07_CAPTURE_LIMITS.childBytes);
+      assert.equal(writeSync(child.fd, childBytes), childBytes.byteLength);
+      assert.equal(closeOperationsChildCapture(outputBoundSession, slot), true);
+    }
+    for (let index = 0; index < OPS07_CAPTURE_LIMITS.supervisorRecords; index += 1) {
+      assert.equal(recordOperationsSupervisor(outputBoundSession, index % 2, 'child_exit', {
+        exitCode: 255, signal: 'SIGKILL', childRuntimeMs: 600_000,
+        generation: Number.MAX_SAFE_INTEGER, fence: Number.MAX_SAFE_INTEGER
+      }), true);
+    }
+    const maximumScalar = Number.MAX_SAFE_INTEGER;
+    const maximumFinalState = {
+      available: true,
+      jobs: Array.from({ length: 2 }, () => ({
+        workState: 'completed', workflowState: 'succeeded', generation: maximumScalar,
+        operationFence: maximumScalar, workflowFence: maximumScalar, revision: maximumScalar,
+        checkpointSequence: maximumScalar, resultCount: 32, resultHash: 'f'.repeat(64),
+        cancellationRequested: false, leaseOwnerPresent: false, leaseFenceMatches: true,
+        leaseExpired: true,
+        eventCounts: Array.from({ length: 16 }, () => ({ type: 'private_local_step_completed', count: maximumScalar }))
+      })),
+      reservations: { reservedDiskBytes: maximumScalar, reservedEventSlots: maximumScalar, pendingRecords: maximumScalar }
+    };
+    const boundedOutput = readOperationsDiagnosticSession(outputBoundSession, {
+      finalState: maximumFinalState, abruptSlots: []
+    });
+    assert.equal(boundedOutput.overflowSummary, true,
+      'the collector must choose its bounded overflow form for an over-limit full capture');
+    const boundedOutputLine = `${OPS07_CAPTURE_LINE_PREFIX}${JSON.stringify(boundedOutput)}\n`;
+    assert.ok(Buffer.byteLength(boundedOutputLine, 'utf8') <= OPS07_CAPTURE_LIMITS.totalBytes,
+      'the collector must return bounded output even when the full capture exceeds its budget');
+    if (boundedOutput.overflowSummary) {
+      const parsedBoundedOutput = parseOperationsCaptureFromTap(`${boundedOutputLine}`);
+      assert.equal(parsedBoundedOutput.valid, true);
+      assert.equal(parsedBoundedOutput.capture.flags.overflow, true);
+      assert.equal(parsedBoundedOutput.capture.flags.complete, false);
+    }
+    const unorderedCapture = makeCapture();
+    unorderedCapture.slots[0].records[1].sequence = 3;
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(unorderedCapture)}\n`).reason, 'invalid_shape');
+    const maxRecordCapture = makeCapture();
+    for (const slot of maxRecordCapture.slots) {
+      slot.records = [{ sequence: 1, stage: 'header', elapsedMs: 0 }];
+      for (let sequence = 2; sequence < OPS07_CAPTURE_LIMITS.childRecords; sequence += 1) {
+        slot.records.push({ sequence, stage: 'runner_phase', elapsedMs: 0, phase: 'controller' });
+      }
+      slot.records.push({ sequence: OPS07_CAPTURE_LIMITS.childRecords, stage: 'footer', elapsedMs: 0,
+        writerComplete: true, overflow: false, writeFailed: false, malformed: false });
+    }
+    maxRecordCapture.supervisor = Array.from({ length: 99 }, (_, index) => ({
+      schema: 'agent-harness.ops07-session.v1', sequence: index + 1, stage: 'spawn', slot: 0,
+      elapsedMs: 0, pidPresent: true, generation: 1, fence: 1
+    }));
+    const parsedMaximumRecords = parseOperationsCaptureFromTap(`${captureLine(maxRecordCapture)}\n`);
+    assert.equal(parsedMaximumRecords.valid, true, 'the 300-record aggregate boundary is accepted');
+    assert.equal(parsedMaximumRecords.capture.slots.reduce((sum, slot) => sum + slot.records.length, 0)
+      + parsedMaximumRecords.capture.supervisor.length + 1, 300);
+    maxRecordCapture.supervisor.push({
+      schema: 'agent-harness.ops07-session.v1', sequence: 100, stage: 'spawn', slot: 0,
+      elapsedMs: 0, pidPresent: true, generation: 1, fence: 1
+    });
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(maxRecordCapture)}\n`).reason, 'invalid_shape');
+    const makeCompleteCapture = () => ({
+      schema: 'agent-harness.ops07-session.v1',
+      slots: [0, 1].map(slot => ({
+        slot,
+        records: [
+          { sequence: 1, stage: 'header', elapsedMs: 0 },
+          { sequence: 2, stage: 'runner_error', elapsedMs: 1, phase: 'runner_start',
+            errorKind: 'OTHER', code: 'OTHER', primaryCode: null },
+          { sequence: 3, stage: 'footer', elapsedMs: 2,
+            writerComplete: true, overflow: false, writeFailed: false, malformed: false }
+        ],
+        malformed: false, overflow: false, footer: true, writerComplete: true,
+        footerFlags: { overflow: false, writeFailed: false, malformed: false }
+      })),
+      supervisor: [0, 1].flatMap(slot => {
+        const base = slot * 3;
+        return [
+          { schema: 'agent-harness.ops07-session.v1', sequence: base + 1, stage: 'spawn', slot,
+            elapsedMs: base + 1, pidPresent: true, generation: 1, fence: 1 },
+          { schema: 'agent-harness.ops07-session.v1', sequence: base + 2, stage: 'child_exit', slot,
+            elapsedMs: base + 2, exitCode: 2, signal: null, childRuntimeMs: 1, generation: 1, fence: 1 },
+          { schema: 'agent-harness.ops07-session.v1', sequence: base + 3, stage: 'finish_result', slot,
+            elapsedMs: base + 3, outcome: 'stopped', settled: true, code: null, generation: 1, fence: 1 }
+        ];
+      }),
+      finalState: {
+        available: true,
+        jobs: Array.from({ length: 2 }, () => ({
+          workState: 'completed', workflowState: 'succeeded', generation: 1, operationFence: 1,
+          workflowFence: 1, revision: 1, checkpointSequence: 1, resultCount: 0, resultHash: null,
+          cancellationRequested: false, leaseOwnerPresent: false, leaseFenceMatches: true,
+          leaseExpired: true, eventCounts: []
+        })),
+        reservations: { reservedDiskBytes: 0, reservedEventSlots: 0, pendingRecords: 0 }
+      },
+      flags: { enabled: true, complete: true, missingChildCapture: false, malformed: false,
+        overflow: false, writeFailed: false, abruptExit: false, cleanupIncomplete: false }
+    });
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(makeCompleteCapture())}\n`).capture.flags.complete, true);
+    const missingChildRuntimeCapture = makeCompleteCapture();
+    delete missingChildRuntimeCapture.supervisor.find(record => record.stage === 'child_exit').childRuntimeMs;
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(missingChildRuntimeCapture)}\n`).reason, 'invalid_shape');
+    const missingHeaderCapture = makeCompleteCapture();
+    missingHeaderCapture.slots[0].records[0] = {
+      sequence: 1, stage: 'runner_phase', elapsedMs: 0, phase: 'runner_start'
+    };
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(missingHeaderCapture)}\n`).reason, 'invalid_shape');
+    const backwardsElapsedCapture = makeCompleteCapture();
+    backwardsElapsedCapture.slots[0].records[2].elapsedMs = 0;
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(backwardsElapsedCapture)}\n`).reason, 'invalid_shape');
+    const headerFooterOnlyCapture = makeCompleteCapture();
+    headerFooterOnlyCapture.slots[0].records = [
+      headerFooterOnlyCapture.slots[0].records[0],
+      { sequence: 2, stage: 'footer', elapsedMs: 2,
+        writerComplete: true, overflow: false, writeFailed: false, malformed: false }
+    ];
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(headerFooterOnlyCapture)}\n`).reason, 'invalid_shape');
+    const emptySupervisorCapture = makeCompleteCapture();
+    emptySupervisorCapture.supervisor = [];
+    assert.equal(parseOperationsCaptureFromTap(`${captureLine(emptySupervisorCapture)}\n`).reason, 'invalid_shape');
+
+    const diagnosticDir = tempDirectory('ah11-ops-diagnostic-shape-');
+    const diagnosticSession = createOperationsDiagnosticSession({ directory: diagnosticDir.directory });
+    t.after(() => {
+      disposeOperationsDiagnosticSession(diagnosticSession);
+      diagnosticDir.cleanup();
+    });
+    let hashCoercions = 0;
+    const unsafeHash = { toString() { hashCoercions += 1; return 'a'.repeat(64); } };
+    const unsafeHashState = {
+      available: true,
+      jobs: Array.from({ length: 2 }, () => ({
+        workState: 'completed', workflowState: 'succeeded', generation: 1, operationFence: 1,
+        workflowFence: 1, revision: 1, checkpointSequence: 1, resultCount: 0, resultHash: unsafeHash,
+        cancellationRequested: false, leaseOwnerPresent: false, leaseFenceMatches: true,
+        leaseExpired: true, eventCounts: []
+      })),
+      reservations: { reservedDiskBytes: 0, reservedEventSlots: 0, pendingRecords: 0 }
+    };
+    const unsafeArray = [];
+    let arrayGetterCalls = 0;
+    Object.defineProperty(unsafeArray, '0', { enumerable: true, get() { arrayGetterCalls += 1; throw new Error('private'); } });
+    unsafeArray.length = 1;
+    const hostileSnapshot = readOperationsDiagnosticSession(diagnosticSession, {
+      finalState: unsafeHashState, abruptSlots: unsafeArray
+    });
+    assert.equal(hostileSnapshot.finalState.available, false);
+    assert.equal(hostileSnapshot.flags.malformed, true);
+    assert.equal(hashCoercions, 0);
+    assert.equal(arrayGetterCalls, 0);
+    let proxyTrapCalls = 0;
+    const proxySlots = new Proxy([], {
+      get() { proxyTrapCalls += 1; return undefined; },
+      ownKeys() { proxyTrapCalls += 1; return []; },
+      getOwnPropertyDescriptor() { proxyTrapCalls += 1; return undefined; }
+    });
+    const proxySnapshot = readOperationsDiagnosticSession(diagnosticSession, { abruptSlots: proxySlots });
+    assert.equal(proxySnapshot.flags.malformed, true);
+    assert.equal(proxyTrapCalls, 0);
+    const revokedSlots = Proxy.revocable([], {
+      get() { proxyTrapCalls += 1; return undefined; },
+      ownKeys() { proxyTrapCalls += 1; return []; },
+      getOwnPropertyDescriptor() { proxyTrapCalls += 1; return undefined; }
+    });
+    revokedSlots.revoke();
+    const revokedProxySnapshot = readOperationsDiagnosticSession(diagnosticSession, { abruptSlots: revokedSlots.proxy });
+    assert.equal(revokedProxySnapshot.flags.malformed, true);
+    assert.equal(proxyTrapCalls, 0);
+    const clockDir = tempDirectory('ah11-ops-diagnostic-clock-');
+    const clockSession = createOperationsDiagnosticSession({ directory: clockDir.directory });
+    t.after(() => {
+      disposeOperationsDiagnosticSession(clockSession);
+      clockDir.cleanup();
+    });
+    assert.equal(recordOperationsSupervisor(clockSession, 0, 'spawn', {
+      pidPresent: true, generation: 1, fence: 1
+    }), true);
+    assert.equal(recordOperationsSupervisor(clockSession, 0, 'child_exit', {
+      exitCode: 0, signal: null, childRuntimeMs: 600_000, generation: 1, fence: 1
+    }), true);
+    assert.equal(recordOperationsSupervisor(clockSession, 0, 'finish_result', {
+      outcome: 'completed', settled: true, code: null, generation: 1, fence: 1
+    }), true);
+    const clockSnapshot = readOperationsDiagnosticSession(clockSession, { abruptSlots: [] });
+    const childExit = clockSnapshot.supervisor.find(record => record.stage === 'child_exit');
+    assert.equal(childExit.childRuntimeMs, 600_000);
+    assert.ok(childExit.elapsedMs < childExit.childRuntimeMs,
+      'child runtime duration and session-relative event time remain separate fields');
 
     const structuralControls = [
       {

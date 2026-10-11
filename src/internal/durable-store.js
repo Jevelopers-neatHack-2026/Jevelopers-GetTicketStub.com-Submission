@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { RuntimeError, runtimeError } from './errors.js';
 import { LOCAL_CONTROLLER_STORAGE_CAPABILITY } from './private-local-store-capability.js';
 import { OPERATIONS_STORAGE_CAPABILITY } from './private-ops-store-capability.js';
+import { recordOperationsDiagnosticError } from './private-ops-diagnostics.js';
 import {
   MAX_CHECKPOINT_DEPTH,
   MAX_CHECKPOINT_NODES,
@@ -635,6 +636,7 @@ function digest(bytes) {
 }
 
 function mapStorageError(operation, error) {
+  recordOperationsDiagnosticError('storage_origin', error, { operation });
   if (error instanceof RuntimeError) return error;
   const code = typeof error?.code === 'string' ? error.code : '';
   const sqlitePrimaryCode = Number.isInteger(error?.errcode) ? error.errcode & 0xff : 0;
@@ -661,6 +663,22 @@ function mapStorageError(operation, error) {
 function inTransaction(db, operation, callback) {
   try {
     db.exec('BEGIN IMMEDIATE');
+    try {
+      const value = callback();
+      db.exec('COMMIT');
+      return value;
+    } catch (error) {
+      if (db.isTransaction) db.exec('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    throw mapStorageError(operation, error);
+  }
+}
+
+function withConsistentReadSnapshot(db, operation, callback) {
+  try {
+    db.exec('BEGIN DEFERRED');
     try {
       const value = callback();
       db.exec('COMMIT');
@@ -3299,7 +3317,7 @@ export class DurableWorkflowStore {
     }
     expectString(workflowId, 'workflowId', operation);
     this.#assertOpen(operation);
-    return inTransaction(this.#db, operation, () => {
+    return withConsistentReadSnapshot(this.#db, operation, () => {
       const workflow = mapWorkflow(this.#workflow(workflowId, operation));
       const checkpoint = this.getCheckpoint(workflowId);
       const unresolved = this.#db.prepare(`

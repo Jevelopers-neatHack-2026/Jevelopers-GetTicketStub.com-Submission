@@ -1,6 +1,15 @@
 import { DurableWorkflowStore } from '../../internal/durable-store.js';
 import { OPERATIONS_STORAGE_CAPABILITY } from '../../internal/private-ops-store-capability.js';
 import { runBoundedLocalPlan } from '../../orchestrator/internal/controller.js';
+import {
+  enableOperationsRunnerCaptureFromFd3,
+  finishOperationsRunnerCapture,
+  OPS07_CAPTURE_FLAG,
+  recordOperationsDiagnostic,
+  recordOperationsDiagnosticError,
+  recordOperationsDiagnosticResult,
+  setOperationsDiagnosticPhase
+} from '../../internal/private-ops-diagnostics.js';
 
 function safeArgs(args) {
   if (args.length !== 9) return null;
@@ -25,27 +34,49 @@ function safeArgs(args) {
     maxStoreBytes, maxWalBytes, minFreeDiskBytes };
 }
 
-const args = safeArgs(process.argv.slice(2));
+const rawArgs = process.argv.slice(2);
+const captureRequested = rawArgs.length === 10 && rawArgs[9] === OPS07_CAPTURE_FLAG;
+const args = safeArgs(captureRequested ? rawArgs.slice(0, 9) : rawArgs);
+const captureEnabled = captureRequested && enableOperationsRunnerCaptureFromFd3();
 if (!args) {
+  if (captureEnabled) {
+    recordOperationsDiagnostic('runner_error', {
+      phase: 'runner_start', errorKind: 'OTHER', code: 'OTHER', primaryCode: null
+    });
+    finishOperationsRunnerCapture();
+  }
   process.exitCode = 2;
 } else {
   let store;
+  let phase = 'runner_start';
+  if (captureEnabled) recordOperationsDiagnostic('runner_phase', { phase });
   try {
     store = DurableWorkflowStore.open({
       databasePath: args.databasePath,
       busyTimeoutMs: args.busyTimeoutMs
     });
+    phase = 'store_open';
+    setOperationsDiagnosticPhase(phase);
+    recordOperationsDiagnostic('store_open', { ok: true });
+    phase = 'resource_ceilings';
+    setOperationsDiagnosticPhase(phase);
     store._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
       maxStoreBytes: args.maxStoreBytes,
       maxWalBytes: args.maxWalBytes,
       minFreeDiskBytes: args.minFreeDiskBytes
     });
+    recordOperationsDiagnostic('resource_ceilings', { ok: true });
+    phase = 'claim_read';
+    setOperationsDiagnosticPhase(phase);
     const claim = store._operationsReadClaim(OPERATIONS_STORAGE_CAPABILITY, {
       jobId: args.jobId,
       ownerId: args.ownerId,
       generation: args.generation,
       fence: args.fence
     });
+    recordOperationsDiagnostic('claim_read', { ok: true });
+    phase = 'controller';
+    setOperationsDiagnosticPhase(phase);
     const result = await runBoundedLocalPlan({
       store,
       workflowId: claim.workflowId,
@@ -54,14 +85,20 @@ if (!args) {
       planJson: claim.work.planJson,
       limitsJson: claim.work.limitsJson
     });
+    recordOperationsDiagnosticResult(result);
     process.exitCode = result?.status === 'completed' ? 0 : 2;
-  } catch {
+  } catch (error) {
+    recordOperationsDiagnosticError('runner_error', error, { phase });
     process.exitCode = 2;
   } finally {
     try {
       store?.close();
-    } catch {
+      if (store) recordOperationsDiagnostic('store_close', { ok: true });
+    } catch (error) {
+      recordOperationsDiagnosticError('runner_error', error, { phase: 'store_close' });
+      recordOperationsDiagnostic('store_close', { ok: false });
       process.exitCode = 2;
     }
+    if (captureEnabled) finishOperationsRunnerCapture();
   }
 }

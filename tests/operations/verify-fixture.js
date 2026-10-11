@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
 import { buildSafeFailureDiagnostics } from './failure-diagnostics.js';
+import { parseOperationsCaptureFromTap } from '../../src/internal/private-ops-diagnostics.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const EXPECTED_GROUPS = Object.freeze(Array.from({ length: 13 }, (_, index) => `OPS${String(index + 1).padStart(2, '0')}_`));
@@ -180,6 +181,7 @@ const testResult = child(['--test', '--test-concurrency=1', '--test-reporter=tap
 });
 const tapText = `${testResult.stdout ?? ''}${testResult.stderr ?? ''}`;
 const tapSummary = parseTAP(tapText);
+const ops07CaptureResult = parseOperationsCaptureFromTap(tapText);
 const tapArtifact = writeArtifact(join(artifactDirectory, `${stem}.tap`), Buffer.from(safeTap(tapText), 'utf8'));
 const suiteDiagnostics = buildSafeFailureDiagnostics({
   scenario: fixture,
@@ -288,6 +290,9 @@ const diagnosticsValue = {
   suite: suiteDiagnostics,
   runbook: runbookDiagnostics,
   recovery: recoveryDiagnostics,
+  ops07Capture: ops07CaptureResult.valid
+    ? { valid: true, capture: ops07CaptureResult.capture }
+    : { valid: false, reason: ops07CaptureResult.reason },
   records: diagnosticRecords.slice(0, 32)
 };
 const diagnosticsBytes = Buffer.from(`${JSON.stringify(diagnosticsValue, null, 2)}\n`, 'utf8');
@@ -419,6 +424,7 @@ const manifest = {
   },
   artifacts: { tap: tapArtifact, diagnostics: diagnosticsArtifact, diagnosticsSidecar: diagnosticsSidecarArtifact },
   passed: resultCode === 0 && tapSummary.complete && tapSummary.skippedCount === 0
+    && ops07CaptureResult.valid && ops07CaptureResult.capture.flags.complete
     && allNetworkCallCountsZero && resourceMetricsComplete
     && artifactMembersIntegrity && jsonlMembersIncludedInUpload && diagnosticsIncludedInUpload && requiredEvidenceSetComplete
     && (fixture !== 'runbook-clean-start' || (runbookCode === 0 && runbookArtifact !== null

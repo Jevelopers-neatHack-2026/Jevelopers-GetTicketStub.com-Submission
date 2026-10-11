@@ -1,9 +1,7 @@
-import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
 import { runtimeError } from '../../../src/internal/errors.js';
 
 const mode = process.argv[2];
-const sourceLocation = `${pathToFileURL(resolve('tests/operations/operations.test.js')).href}:4400:9`;
+const sourceLocation = 'tests/operations/operations.test.js:4400:9';
 const cases = {
   assertion: { name: 'AssertionError', code: 'ERR_ASSERTION', failureType: 'testCodeFailure', operator: 'strictEqual' },
   busy: { name: 'Error', code: 'SQLITE_BUSY', failureType: 'testCodeFailure', operator: 'throws' },

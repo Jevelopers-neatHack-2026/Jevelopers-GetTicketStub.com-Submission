@@ -10,6 +10,13 @@ import { DurableWorkflowStore } from '../../internal/durable-store.js';
 import { TelemetryExporter } from '../../internal/telemetry.js';
 import { OPERATIONS_STORAGE_CAPABILITY } from '../../internal/private-ops-store-capability.js';
 import {
+  closeOperationsChildCapture,
+  isOperationsDiagnosticSession,
+  OPS07_CAPTURE_FLAG,
+  prepareOperationsChildCapture,
+  recordOperationsSupervisor
+} from '../../internal/private-ops-diagnostics.js';
+import {
   operationsStoragePolicy,
   readOperationsConfig,
   validateLocalPlanWork
@@ -134,7 +141,11 @@ function normalizeScope(value) {
  * not application authorization; this worker never enables external dispatch.
  */
 export function createOperationsWorker(input) {
-  const fields = safeOwn(input, ['databasePath', 'config', 'telemetry', 'ownerId']);
+  const fields = safeOwn(input, ['databasePath', 'config', 'telemetry', 'ownerId', 'diagnosticSession']);
+  const diagnosticSession = fields.diagnosticSession;
+  if (diagnosticSession !== undefined && !isOperationsDiagnosticSession(diagnosticSession)) {
+    throw new TypeError('The operations diagnostic session is invalid.');
+  }
   if (typeof fields.databasePath !== 'string' || fields.databasePath.trim() === ''
       || fields.databasePath === ':memory:' || fields.databasePath.length > 1024) {
     throw new TypeError('A file-backed operations database path is required.');
@@ -208,6 +219,7 @@ export function createOperationsWorker(input) {
 
   function finishOwnedOutcome(active) {
     if (!active.reaped || active.settled) return active.settled;
+    let finishCode = null;
     try {
       store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
         jobId: active.claim.jobId,
@@ -223,12 +235,20 @@ export function createOperationsWorker(input) {
         // process cannot mutate or release the newer claim.
         lastSafeErrorCode = 'OPS_STALE_RUNNER_RESULT_DISCARDED';
         active.settled = true;
+        finishCode = 'STALE_FENCE';
       } else {
         active.finishPending = true;
         active.finishRetryable = error?.code === 'STORE_BUSY';
         active.finishErrorCode = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(error.code)
           ? error.code : 'OPS_RESULT_PERSIST_FAILED';
+        finishCode = active.finishErrorCode;
         lastSafeErrorCode = active.finishErrorCode;
+        if (diagnosticSession !== undefined && active.captureSlot !== null) {
+          recordOperationsSupervisor(diagnosticSession, active.captureSlot, 'finish_result', {
+            outcome: active.outcome, settled: false, code: finishCode,
+            generation: active.claim.generation, fence: active.claim.fence
+          });
+        }
         return false;
       }
     }
@@ -236,6 +256,12 @@ export function createOperationsWorker(input) {
     active.finishRetryable = false;
     if (lastSafeErrorCode === active.finishErrorCode) lastSafeErrorCode = null;
     active.finishErrorCode = null;
+    if (diagnosticSession !== undefined && active.captureSlot !== null) {
+      recordOperationsSupervisor(diagnosticSession, active.captureSlot, 'finish_result', {
+        outcome: active.outcome, settled: true, code: finishCode,
+        generation: active.claim.generation, fence: active.claim.fence
+      });
+    }
     clearTimeout(active.deadlineTimer);
     clearTimeout(active.killTimer);
     children.delete(active.claim.jobId);
@@ -265,15 +291,24 @@ export function createOperationsWorker(input) {
       });
       return;
     }
+    let capture = null;
+    if (diagnosticSession !== undefined) {
+      capture = prepareOperationsChildCapture(diagnosticSession);
+      if (capture) argv.push(OPS07_CAPTURE_FLAG);
+    }
     let child;
     try {
       child = spawn(process.execPath, argv, {
         cwd: dirname(RUNNER_PATH),
         env: { PATH: process.env.PATH ?? '', NODE_NO_WARNINGS: '1' },
-        stdio: 'ignore',
+        stdio: capture ? ['ignore', 'ignore', 'ignore', capture.fd] : 'ignore',
         windowsHide: true
       });
     } catch {
+      if (capture) closeOperationsChildCapture(diagnosticSession, capture.slot);
+      if (capture) recordOperationsSupervisor(diagnosticSession, capture.slot, 'spawn_error', {
+        code: 'OTHER', generation: claim.generation, fence: claim.fence
+      });
       lastSafeErrorCode = 'OPS_CHILD_START_FAILED';
       store._operationsFinish(OPERATIONS_STORAGE_CAPABILITY, {
         jobId: claim.jobId, ownerId, generation: claim.generation, fence: claim.fence,
@@ -281,15 +316,28 @@ export function createOperationsWorker(input) {
       });
       return;
     }
+    if (capture) {
+      closeOperationsChildCapture(diagnosticSession, capture.slot);
+      recordOperationsSupervisor(diagnosticSession, capture.slot, 'spawn', {
+        pidPresent: Number.isSafeInteger(child.pid) && child.pid >= 2,
+        generation: claim.generation, fence: claim.fence
+      });
+    }
     const active = {
       child, claim, startedAt: nowMono(), reaped: false, settled: false,
       finishPending: false, finishRetryable: false, finishErrorCode: null, outcome: null,
-      deadlineExceeded: false, deadlineTimer: null, killTimer: null
+      deadlineExceeded: false, deadlineTimer: null, killTimer: null,
+      captureSlot: capture?.slot ?? null
     };
     children.set(claim.jobId, active);
     active.deadlineTimer = setTimeout(() => {
       if (active.settled || lifecycle === 'stopping') return;
       active.deadlineExceeded = true;
+      if (diagnosticSession !== undefined && active.captureSlot !== null) {
+        recordOperationsSupervisor(diagnosticSession, active.captureSlot, 'deadline', {
+          generation: active.claim.generation, fence: active.claim.fence
+        });
+      }
       lastSafeErrorCode = 'OPS_RUNNER_DEADLINE';
       try { child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
       active.killTimer = setTimeout(() => {
@@ -308,10 +356,20 @@ export function createOperationsWorker(input) {
       });
     } catch {
       lastSafeErrorCode = 'OPS_CHILD_IDENTITY_PERSIST_FAILED';
+      if (diagnosticSession !== undefined && active.captureSlot !== null) {
+        recordOperationsSupervisor(diagnosticSession, active.captureSlot, 'runner_identity_failure', {
+          code: 'OTHER', generation: active.claim.generation, fence: active.claim.fence
+        });
+      }
       try { child.kill('SIGTERM'); } catch { lastSafeErrorCode = 'OPS_CHILD_SIGNAL_FAILED'; }
     }
     child.once('error', () => {
       lastSafeErrorCode = 'OPS_CHILD_PROCESS_ERROR';
+      if (diagnosticSession !== undefined && active.captureSlot !== null) {
+        recordOperationsSupervisor(diagnosticSession, active.captureSlot, 'child_error', {
+          code: 'OTHER', generation: active.claim.generation, fence: active.claim.fence
+        });
+      }
     });
     child.once('close', (code, signal) => {
       if (active.reaped) return;
@@ -322,6 +380,14 @@ export function createOperationsWorker(input) {
         : code === 0 ? 'completed'
           : (lifecycle === 'stopping' || signal === 'SIGTERM' || signal === 'SIGKILL') ? 'shutdown'
           : 'stopped';
+      if (diagnosticSession !== undefined && active.captureSlot !== null) {
+        recordOperationsSupervisor(diagnosticSession, active.captureSlot, 'child_exit', {
+          exitCode: Number.isSafeInteger(code) ? code : null,
+          signal: typeof signal === 'string' ? signal : null,
+        childRuntimeMs: Math.max(0, Math.ceil(nowMono() - active.startedAt)),
+          generation: active.claim.generation, fence: active.claim.fence
+        });
+      }
       finishOwnedOutcome(active);
       wakeWaiters();
     });
