@@ -130,6 +130,7 @@ def execute_owner(case: Case, context: OwnerContext) -> OwnerExecution:
         except subprocess.TimeoutExpired:
             reason = "owner runner timeout; dispatch state remains unknown"
         except (ValidationError, InvalidArtifactError, OSError):
+            outcome = Outcome.ERROR
             reason = "invalid owner response or runtime failure; private payload withheld"
             response = None
         finally:

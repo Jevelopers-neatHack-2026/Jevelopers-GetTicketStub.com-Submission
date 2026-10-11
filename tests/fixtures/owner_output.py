@@ -14,6 +14,9 @@ from __future__ import annotations
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Literal, assert_never
+
+from pydantic import TypeAdapter
 
 from integration_evals.artifacts import digest
 from integration_evals.models import Case, Evidence, Mode, Origin, Provider, Record, Revision
@@ -38,7 +41,18 @@ def main() -> None:
     """Write controlled output and exact metadata to exercise retention and isolation."""
     request = Request.model_validate_json(sys.stdin.buffer.read())
     data = b"controlled output"
-    _ = (request.artifact_directory / "output.txt").write_bytes(data)
+    fault = TypeAdapter(Literal["wrong-digest", "missing-artifact"] | None).validate_python(
+        request.case.fault
+    )
+    match fault:
+        case None:
+            _ = (request.artifact_directory / "output.txt").write_bytes(data)
+        case "wrong-digest":
+            _ = (request.artifact_directory / "output.txt").write_bytes(b"different output")
+        case "missing-artifact":
+            pass
+        case _:
+            assert_never(fault)
     artifact = Evidence(
         id="output",
         requirement=request.case.requirements[0],
