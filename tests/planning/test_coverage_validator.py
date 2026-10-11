@@ -1,0 +1,626 @@
+"""Offline synthetic coverage-validator controls; no external data is copied."""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import importlib.util
+import json
+import os
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = ROOT / "tests" / "planning" / "fixtures" / "coverage"
+SPEC = importlib.util.spec_from_file_location(
+    "coverage_validator", ROOT / "scripts" / "validate-agent-creative-coverage.py"
+)
+assert SPEC is not None and SPEC.loader is not None
+validator = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(validator)
+
+
+def _canonical_bytes(value: Any) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _git_blob_sha1(raw: bytes) -> str:
+    return hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+
+
+class CoverageValidatorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.work = Path(self.temp.name)
+        self.map = json.loads((FIXTURES / "map.json").read_text(encoding="utf-8"))
+        self.canonical = json.loads((FIXTURES / "canonical.json").read_text(encoding="utf-8"))
+        self.readbacks = json.loads((FIXTURES / "readbacks.json").read_text(encoding="utf-8"))
+        self.evidence_dir = self.work / "evidence"
+        self.evidence_dir.mkdir()
+        for name in ("evidence-ah.txt", "evidence-ei.txt", "evidence-ce.txt", "evidence-receipt-ce.txt"):
+            source = FIXTURES / name
+            if source.exists():
+                shutil.copyfile(source, self.evidence_dir / name)
+        self.map_path = self.work / "coverage-map.json"
+        self.canonical_path = self.work / "canonical.json"
+        self.readbacks_path = self.work / "readbacks.json"
+        self.pins_path = self.work / "source-pins.json"
+        self.release_path = self.work / "release.json"
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def dimensions(self, mapping: dict[str, Any], canonical: dict[str, Any]) -> dict[str, int]:
+        criteria = {item["id"] for item in canonical["criteria"]}
+        ownership = mapping["ownership_rows"]
+        ownership_ids = {item["requirement_id"] for item in ownership}
+        rows = mapping["source_contribution_rows"]
+        global_ids = ownership_ids & criteria
+        repo_counts: dict[str, int] = {}
+        for entry in mapping["entries"]:
+            if entry.get("required_for_v1") is True:
+                repo = entry["repository"]
+                repo_counts[repo] = repo_counts.get(repo, 0) + 1
+        rows_global = sum(1 for row in rows if row.get("requirement_id") in criteria)
+        return {
+            "required_leaf_records": sum(1 for row in mapping["entries"] if row.get("required_for_v1") is True),
+            "agent_harness_leaf_records": repo_counts.get("agent-harness", 0),
+            "specialist_leaf_records": sum(value for key, value in repo_counts.items() if key != "agent-harness"),
+            "source_contribution_rows": len(rows),
+            "unique_mapped_requirement_ids": len(ownership_ids),
+            "local_scoped_requirement_ids": len(ownership_ids - criteria),
+            "global_ids_with_scoped_contributions": len(global_ids),
+            "global_criteria_total": len(criteria),
+            "global_ids_outside_scoped_contribution": len(criteria - global_ids),
+            "contribution_rows_to_global_ids": rows_global,
+            "contribution_rows_to_local_ids": len(rows) - rows_global,
+        }
+
+    def write_inputs(
+        self,
+        mapping: dict[str, Any] | None = None,
+        canonical: dict[str, Any] | None = None,
+        readbacks: dict[str, Any] | None = None,
+        *,
+        refresh_pins: bool = True,
+    ) -> dict[str, Any]:
+        mapping = self.map if mapping is None else mapping
+        canonical = self.canonical if canonical is None else canonical
+        readbacks = self.readbacks if readbacks is None else readbacks
+        map_raw = _canonical_bytes(mapping)
+        canonical_raw = _canonical_bytes(canonical)
+        readbacks_raw = _canonical_bytes(readbacks)
+        self.map_path.write_bytes(map_raw)
+        self.canonical_path.write_bytes(canonical_raw)
+        self.readbacks_path.write_bytes(readbacks_raw)
+        pins = {
+            "format": "acv1.coverage-source-reference/v1",
+            "snapshot_id": "synthetic-snapshot-01",
+            "coverage_map": {
+                "adapter": "agent-harness.coverage-map-current/v1",
+                "source_path": "synthetic/coverage-map.json",
+                "bytes": len(map_raw),
+                "sha256": hashlib.sha256(map_raw).hexdigest(),
+                "complete": mapping.get("complete") is True,
+                "observed_dimensions": self.dimensions(mapping, canonical),
+            },
+            "upstream_git_objects": [
+                {
+                    "role": "global-canonical-checklist",
+                    "adapter": "integration-evals.acceptance-checklist/v1",
+                    "repository": "Example-Co/contracts",
+                    "issue_pinned_revision": "1" * 40,
+                    "captured_main_revision": "2" * 40,
+                    "source_path": "planning/synthetic-checklist.json",
+                    "git_blob_sha1": _git_blob_sha1(canonical_raw),
+                    "bytes": len(canonical_raw),
+                }
+            ],
+            "issue_readbacks": {
+                "adapter": "agent-harness.issue-readbacks/v1",
+                "capture_id": readbacks.get("capture_id"),
+                "captured_at": readbacks.get("captured_at"),
+                "observed_revision": readbacks.get("observed_revision"),
+                "pages_complete": readbacks.get("pages_complete") is True,
+                "bytes": len(readbacks_raw),
+                "sha256": hashlib.sha256(readbacks_raw).hexdigest(),
+            },
+        }
+        if not refresh_pins:
+            pins["coverage_map"]["sha256"] = "0" * 64
+        self.pins_path.write_bytes(_canonical_bytes(pins))
+        return pins
+
+    def validate(self, **kwargs: Any) -> dict[str, Any]:
+        return validator.validate(
+            self.map_path,
+            self.pins_path,
+            self.canonical_path,
+            self.readbacks_path,
+            **kwargs,
+        )
+
+    def release_manifest(self) -> dict[str, Any]:
+        tests = {
+            "AH-LEAF": ("test-ah", "evidence-ah.txt", "a" * 40),
+            "EI-LEAF": ("test-ei", "evidence-ei.txt", "b" * 40),
+            "CE-LEAF": ("test-ce", "evidence-ce.txt", "c" * 40),
+        }
+        revisions: list[dict[str, str]] = []
+        evidence: list[dict[str, Any]] = []
+        outcomes: list[dict[str, Any]] = []
+        receipts: list[dict[str, Any]] = []
+        for leaf, (test_id, filename, revision) in tests.items():
+            entry = next(item for item in self.map["entries"] if item["key"] == leaf)
+            revisions.append({"repository": entry["repository"], "revision": revision})
+            path = self.evidence_dir / filename
+            evidence_id = {"AH-LEAF": "ev-ah", "EI-LEAF": "ev-ei", "CE-LEAF": "ev-ce"}[leaf]
+            evidence.append({
+                "id": evidence_id,
+                "path": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "producer": "synthetic-unit-control",
+                "source_revision": revision,
+                "captured_at": "2026-10-11T12:10:00Z",
+                "mode": "mock",
+                "kind": "test",
+                "test_id": test_id,
+                "result": "passed",
+                "model_revision": "model-v1" if leaf == "CE-LEAF" else None,
+                "policy_revision": "policy-v1" if leaf == "CE-LEAF" else None,
+            })
+            outcome = {
+                "leaf_key": leaf,
+                "status": "verified",
+                "revision": revision,
+                "prerequisites_satisfied": True,
+                "required_test_ids": [test_id],
+                "evidence_ids": [evidence_id],
+                "required_mode": "mock",
+                "required_owner_receipts": [],
+                "owner_receipt_ids": [],
+            }
+            if leaf == "CE-LEAF":
+                outcome["required_model_revision"] = "model-v1"
+                outcome["required_policy_revision"] = "policy-v1"
+                outcome["required_owner_receipts"] = ["receipt-ce"]
+                outcome["owner_receipt_ids"] = ["receipt-ce"]
+                receipt_path = self.evidence_dir / "evidence-receipt-ce.txt"
+                evidence.append({
+                    "id": "ev-receipt-ce",
+                    "path": str(receipt_path),
+                    "sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+                    "producer": "synthetic-unit-control",
+                    "source_revision": revision,
+                    "captured_at": "2026-10-11T12:10:00Z",
+                    "mode": "mock",
+                    "kind": "receipt",
+                })
+                outcome["evidence_ids"].append("ev-receipt-ce")
+                receipts.append({
+                    "id": "receipt-ce",
+                    "evidence_id": "ev-receipt-ce",
+                    "owner_role": "Creative and fulfillment",
+                    "action": "accept synthetic fixture only",
+                    "status": "accepted",
+                    "source_revision": revision,
+                })
+            outcomes.append(outcome)
+        return {
+            "format": "acv1.release-manifest/v1",
+            "tested_revisions": revisions,
+            "evidence": evidence,
+            "outcomes": outcomes,
+            "owner_receipts": receipts,
+        }
+
+    def validate_release(self, **kwargs: Any) -> dict[str, Any]:
+        release = self.release_manifest()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        return self.validate(release_path=self.release_path, **kwargs)
+
+    def codes(self, report: dict[str, Any]) -> set[str]:
+        return {issue["code"] for issue in report["issues"]}
+
+    def test_synthetic_baseline_is_planning_only_and_keeps_fanin_separate(self) -> None:
+        self.write_inputs()
+        report = self.validate()
+        self.assertEqual(report["status"], "BACKLOG_READY")
+        self.assertTrue(report["planning_only"])
+        self.assertFalse(report["whole_program_acceptance"])
+        self.assertEqual(report["global_acceptance"], "not_asserted")
+        self.assertEqual(report["counts"]["source_contribution_rows"], 3)
+        self.assertEqual(report["counts"]["unique_mapped_requirement_ids"], 2)
+        self.assertEqual(report["counts"]["global_ids_outside_scoped_contribution"], 0)
+
+    def test_later_pinned_snapshot_with_changed_counts_is_accepted(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        ah = next(item for item in mapping["entries"] if item["key"] == "AH-LEAF")
+        ah["requirement_ids"].append("LOCAL-B")
+        mapping["ownership_rows"].append({
+            "requirement_id": "LOCAL-B",
+            "scope": "local",
+            "accountable_delivery_leaf": "AH-LEAF",
+            "acceptance_owner_leaf": "AH-LEAF",
+            "required_contributors": ["AH-LEAF"],
+            "required_for_v1": True,
+            "state": "planned",
+        })
+        mapping["source_contribution_rows"].append({
+            "row_id": "ROW-4", "requirement_id": "LOCAL-B", "owning_leaf_key": "AH-LEAF", "scope": "local"
+        })
+        self.write_inputs(mapping)
+        report = self.validate()
+        self.assertEqual(report["status"], "BACKLOG_READY")
+        self.assertEqual(report["counts"]["source_contribution_rows"], 4)
+        self.assertEqual(report["counts"]["unique_mapped_requirement_ids"], 3)
+
+    def test_same_count_wrong_contribution_row_fails(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        mapping["source_contribution_rows"][1]["requirement_id"] = "MISSING-ID"
+        self.write_inputs(mapping)
+        self.assertIn("ORPHAN_CONTRIBUTION_REQUIREMENT", self.codes(self.validate()))
+
+    def test_duplicate_owner_or_orphan_ownership_fails(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        mapping["ownership_rows"].append(copy.deepcopy(mapping["ownership_rows"][0]))
+        self.write_inputs(mapping)
+        self.assertIn("OWNERSHIP_ID_DUPLICATE", self.codes(self.validate()))
+
+        mapping = copy.deepcopy(self.map)
+        mapping["source_contribution_rows"].append({
+            "row_id": "ROW-ORPHAN", "requirement_id": "ORPHAN", "owning_leaf_key": "AH-LEAF"
+        })
+        self.write_inputs(mapping)
+        self.assertIn("ORPHAN_CONTRIBUTION_REQUIREMENT", self.codes(self.validate()))
+
+    def test_required_specialist_family_and_null_url_block_without_guessing(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        mapping["entries"] = [row for row in mapping["entries"] if row["key"] != "CE-LEAF"]
+        mapping["ownership_rows"][1]["required_contributors"].remove("CE-LEAF")
+        mapping["source_contribution_rows"] = [row for row in mapping["source_contribution_rows"] if row["row_id"] != "ROW-3"]
+        mapping["dag"]["edges"].pop("CE-LEAF")
+        mapping["dag"]["gate_fan_in"]["RELEASE-GATE"].remove("CE-LEAF")
+        mapping["dag"]["required_gate_fan_in"]["RELEASE-GATE"].remove("CE-LEAF")
+        mapping["staged_edges"] = []
+        self.write_inputs(mapping)
+        self.assertIn("REQUIRED_LEAF_FAMILY_MISSING", self.codes(self.validate()))
+
+        mapping = copy.deepcopy(self.map)
+        ce = next(row for row in mapping["entries"] if row["key"] == "CE-LEAF")
+        ce["issue_url"] = None
+        ce["blockers"] = [{"owner": "Creative and fulfillment", "action": "obtain issue URL"}]
+        self.write_inputs(mapping)
+        report = self.validate()
+        self.assertIn("REQUIRED_ISSUE_URL_UNPROVEN", self.codes(report))
+        self.assertNotIn("github.com", json.dumps(report))
+
+    def test_closed_requires_exact_evidence_deferred_never_counts(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        ah = next(row for row in mapping["entries"] if row["key"] == "AH-LEAF")
+        ah["state"] = "closed"
+        self.write_inputs(mapping)
+        self.assertIn("CLOSED_LEAF_WITHOUT_EXACT_EVIDENCE", self.codes(self.validate()))
+
+        ah["closure_evidence"] = [{"commit": "a" * 40, "tests": ["test-ah"]}]
+        readbacks = copy.deepcopy(self.readbacks)
+        readbacks["issues"][0]["state"] = "closed"
+        self.write_inputs(mapping, readbacks=readbacks)
+        self.assertEqual(self.validate()["status"], "BACKLOG_READY")
+
+        mapping = copy.deepcopy(self.map)
+        next(row for row in mapping["entries"] if row["key"] == "AH-LEAF")["state"] = "deferred"
+        self.write_inputs(mapping)
+        self.assertIn("REQUIRED_LEAF_NOT_DELIVERED", self.codes(self.validate()))
+
+    def test_supersession_requires_both_exact_link_directions(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        replacement = copy.deepcopy(mapping["entries"][0])
+        replacement.update({"key": "AH-REPLACEMENT", "issue_url": "https://github.com/Example-Co/agent-harness/issues/404", "issue_title": "Replacement", "body_sha256": "d" * 64, "supersedes": "AH-LEAF"})
+        mapping["entries"].append(replacement)
+        mapping["entries"][0]["required_for_v1"] = False
+        mapping["entries"][0]["record_type"] = "implementation_leaf"
+        readbacks = copy.deepcopy(self.readbacks)
+        readbacks["issues"].append({"repository": "agent-harness", "number": 404, "url": replacement["issue_url"], "title": "Replacement", "state": "open", "body_sha256": "d" * 64})
+        self.write_inputs(mapping, readbacks=readbacks)
+        self.assertIn("SUPERSESSION_RELATION_UNVERIFIED", self.codes(self.validate()))
+
+    def test_global_metadata_and_scope_cannot_be_rewritten_by_local_projection(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        mapping["source_contribution_rows"][1]["authoritative_acceptance"]["priority"] = "P0"
+        self.write_inputs(mapping)
+        self.assertIn("GLOBAL_ACCEPTANCE_METADATA_MISMATCH", self.codes(self.validate()))
+
+        mapping = copy.deepcopy(self.map)
+        global_row = next(row for row in mapping["ownership_rows"] if row["requirement_id"] == "GLOBAL-A")
+        global_row["global_status"] = "complete"
+        self.write_inputs(mapping)
+        self.assertIn("GLOBAL_SCOPE_OVERCLAIM", self.codes(self.validate()))
+
+    def test_issue_readback_mismatch_and_incomplete_pages_fail(self) -> None:
+        readbacks = copy.deepcopy(self.readbacks)
+        readbacks["issues"][1]["title"] = "Wrong title"
+        self.write_inputs(readbacks=readbacks)
+        self.assertIn("ISSUE_READBACK_TITLE_MISMATCH", self.codes(self.validate()))
+
+        readbacks = copy.deepcopy(self.readbacks)
+        readbacks["pages_complete"] = False
+        self.write_inputs(readbacks=readbacks)
+        self.assertIn("ISSUE_READBACK_PAGES_INCOMPLETE", self.codes(self.validate()))
+
+    def test_duplicate_json_keys_are_rejected_and_pin_mismatch_fails(self) -> None:
+        self.write_inputs()
+        self.pins_path.write_text('{"format":"acv1.coverage-source-reference/v1","format":"bad"}', encoding="utf-8")
+        report = self.validate()
+        self.assertIn("DUPLICATE_JSON_KEY", self.codes(report))
+
+        self.write_inputs(refresh_pins=False)
+        self.assertIn("COVERAGE_MAP_PIN_MISMATCH", self.codes(self.validate()))
+
+    def test_missing_classifier_family_and_invalid_metadata_fail_closed(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        del next(row for row in mapping["entries"] if row["key"] == "AH-LEAF")["record_type"]
+        self.write_inputs(mapping)
+        self.assertIn("ENTRY_RECORD_TYPE_REQUIRED", self.codes(self.validate()))
+
+        mapping = copy.deepcopy(self.map)
+        mapping["coordination_status"] = ["pending"]
+        self.write_inputs(mapping)
+        self.assertIn("COORDINATION_STATUS_INVALID", self.codes(self.validate()))
+
+        self.write_inputs()
+        skipped = self.validate(check_dag=False)
+        self.assertIn("REQUIRED_CHECK_NOT_RUN", self.codes(skipped))
+        self.assertEqual(skipped["checks"]["typed_graph"], False)
+
+    def test_readback_capture_pin_drift_is_explicit(self) -> None:
+        self.write_inputs()
+        pins = json.loads(self.pins_path.read_text(encoding="utf-8"))
+        pins["issue_readbacks"]["capture_id"] = "stale-capture-02"
+        self.pins_path.write_bytes(_canonical_bytes(pins))
+        self.assertIn("ISSUE_READBACK_CAPTURE_MISMATCH", self.codes(self.validate()))
+
+    def test_execution_graph_cycles_self_edges_unknown_and_epic_edges_fail(self) -> None:
+        for mutation, code in (
+            (lambda dag: dag["edges"].update({"AH-LEAF": ["EI-LEAF"], "EI-LEAF": ["AH-LEAF"]}), "EXECUTION_DAG_CYCLE"),
+            (lambda dag: dag["edges"].update({"AH-LEAF": ["AH-LEAF"]}), "EXECUTION_EDGE_SELF"),
+            (lambda dag: dag["edges"].update({"CE-LEAF": ["MISSING"]}), "EXECUTION_EDGE_UNKNOWN_NODE"),
+            (lambda dag: dag["edges"].update({"EI-LEAF": ["RELEASE-GATE"]}), "EXECUTION_EDGE_PREREQUISITE_NOT_LEAF"),
+        ):
+            mapping = copy.deepcopy(self.map)
+            mutation(mapping["dag"])
+            self.write_inputs(mapping)
+            self.assertIn(code, self.codes(self.validate()))
+
+    def test_gate_fanin_is_checked_as_its_own_typed_relation(self) -> None:
+        self.write_inputs()
+        self.assertEqual(self.validate()["status"], "BACKLOG_READY")
+        mapping = copy.deepcopy(self.map)
+        mapping["dag"]["gate_fan_in"]["RELEASE-GATE"].remove("CE-LEAF")
+        self.write_inputs(mapping)
+        self.assertIn("GATE_FAN_IN_MISMATCH", self.codes(self.validate()))
+
+    def test_readback_identity_rejects_wrong_repository_or_body(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        mapping["entries"][0]["issue_url"] = "https://github.com/Example-Co/other-repo/issues/101"
+        self.write_inputs(mapping)
+        self.assertIn("ENTRY_REPOSITORY_URL_MISMATCH", self.codes(self.validate()))
+
+        readbacks = copy.deepcopy(self.readbacks)
+        readbacks["issues"][0]["body_sha256"] = "f" * 64
+        self.write_inputs(readbacks=readbacks)
+        self.assertIn("ISSUE_READBACK_BODY_MISMATCH", self.codes(self.validate()))
+
+    def test_positive_release_branch_is_scoped_and_never_acceptance_claim(self) -> None:
+        self.write_inputs()
+        report = self.validate_release()
+        self.assertEqual(report["status"], "SCOPED_RELEASE_EVIDENCE_READY", report)
+        self.assertEqual(report["coordination_status"], "pending")
+        self.assertEqual(report["release_status"], "SCOPED_RELEASE_EVIDENCE_READY")
+        self.assertFalse(report["whole_program_acceptance"])
+        self.assertEqual(report["global_acceptance"], "not_asserted")
+        self.assertEqual(report["release_counts"]["outcomes"], 3)
+
+    def test_release_requires_exact_revisions_modes_tests_and_receipts(self) -> None:
+        release = self.release_manifest()
+        release["outcomes"][0]["revision"] = "stale-revision"
+        release["evidence"][1]["mode"] = "shadow"
+        release["evidence"][2]["result"] = "skipped"
+        release["outcomes"][2]["required_mode"] = "live"
+        release["owner_receipts"] = []
+        self.write_inputs()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        codes = self.codes(self.validate(release_path=self.release_path))
+        self.assertIn("OUTCOME_REVISION_UNTESTED", codes)
+        self.assertIn("EVIDENCE_MODE_MISMATCH", codes)
+        self.assertIn("REQUIRED_TEST_NOT_PASSED", codes)
+        self.assertIn("REQUIRED_OWNER_RECEIPT_MISSING", codes)
+
+        release = self.release_manifest()
+        ce = next(item for item in release["outcomes"] if item["leaf_key"] == "CE-LEAF")
+        ce["required_owner_receipts"] = []
+        ce["owner_receipt_ids"] = []
+        self.write_inputs()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        self.assertIn("REQUIRED_OWNER_RECEIPTS_MISMATCH", self.codes(self.validate(release_path=self.release_path)))
+
+    def test_release_digest_model_policy_and_prerequisite_fail_closed(self) -> None:
+        release = self.release_manifest()
+        release["evidence"][0]["sha256"] = "0" * 64
+        release["evidence"][2]["model_revision"] = "wrong-model"
+        release["evidence"][2]["policy_revision"] = "wrong-policy"
+        release["outcomes"][1]["prerequisites_satisfied"] = False
+        self.write_inputs()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        codes = self.codes(self.validate(release_path=self.release_path))
+        self.assertIn("EVIDENCE_DIGEST_MISMATCH", codes)
+        self.assertIn("EVIDENCE_CONFIGURATION_PIN_MISMATCH", codes)
+        self.assertIn("OUTCOME_PREREQUISITE_UNSATISFIED", codes)
+
+    def test_release_missing_artifact_is_named_without_path_echo(self) -> None:
+        release = self.release_manifest()
+        release["evidence"][0]["path"] = str(self.work / "absent-secret-path.txt")
+        self.write_inputs()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
+        self.assertIn("EVIDENCE_UNREADABLE", self.codes(report))
+        self.assertNotIn("absent-secret-path", json.dumps(report))
+
+    def test_unreadable_release_manifest_does_not_rewrite_planning_status(self) -> None:
+        self.write_inputs()
+        report = self.validate(release_path=self.work / "missing-release.json")
+        self.assertEqual(report["planning_status"], "BACKLOG_READY")
+        self.assertEqual(report["release_status"], "BLOCKED")
+        self.assertIn("INPUT_UNREADABLE", self.codes(report))
+
+    def test_nonregular_inputs_and_evidence_are_rejected_without_blocking_open(self) -> None:
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("named pipes are unavailable on this platform")
+        input_pipe = self.work / "input.pipe"
+        os.mkfifo(input_pipe)
+        with self.assertRaises(validator.InputError) as raised:
+            validator._read_bytes(input_pipe, 1024, "coverage-map")
+        self.assertEqual(raised.exception.code, "INPUT_TYPE_OR_SIZE")
+
+        evidence_pipe = self.evidence_dir / "evidence.pipe"
+        os.mkfifo(evidence_pipe)
+        release = self.release_manifest()
+        release["evidence"][0]["path"] = str(evidence_pipe)
+        self.write_inputs()
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path)
+        self.assertIn("EVIDENCE_TYPE_OR_SIZE", self.codes(report))
+
+    def test_release_requires_outcomes_for_exact_execution_prerequisite_closure(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        next(row for row in mapping["entries"] if row["key"] == "EI-LEAF")["required_for_v1"] = False
+        release = self.release_manifest()
+        release["outcomes"] = [row for row in release["outcomes"] if row["leaf_key"] != "EI-LEAF"]
+        self.write_inputs(mapping)
+        self.release_path.write_bytes(_canonical_bytes(release))
+        report = self.validate(release_path=self.release_path, require_specialists=False)
+        self.assertIn("REQUIRED_PREREQUISITE_OUTCOME_MISSING", self.codes(report))
+
+    def test_input_byte_limit_is_checked_before_parse(self) -> None:
+        json_roles = (
+            "coverage-map", "canonical-checklist", "issue-readbacks", "source-pins", "release-manifest"
+        )
+        for role in json_roles:
+            limit = validator.LIMITS[role]
+            maximum = self.work / (role + "-at-limit.json")
+            with maximum.open("wb") as stream:
+                stream.truncate(limit)
+            self.assertEqual(len(validator._read_bytes(maximum, limit, role)), limit)
+
+            oversized = self.work / (role + "-over-limit.json")
+            with oversized.open("wb") as stream:
+                stream.truncate(limit + 1)
+            with self.assertRaises(validator.InputError) as raised:
+                validator._read_bytes(oversized, limit, role)
+            self.assertEqual(raised.exception.code, "INPUT_TYPE_OR_SIZE")
+
+    def test_nested_duplicate_json_keys_and_unknown_source_alias_fail(self) -> None:
+        self.write_inputs()
+        self.map_path.write_text('{"x":{"same":1,"same":2}}', encoding="utf-8")
+        self.assertIn("DUPLICATE_JSON_KEY", self.codes(self.validate()))
+
+        self.write_inputs()
+        pins = json.loads(self.pins_path.read_text(encoding="utf-8"))
+        pins["upstream_git_objects"].append({"role": "invented-canonical-alias"})
+        self.pins_path.write_bytes(_canonical_bytes(pins))
+        self.assertIn("UPSTREAM_ROLE_UNSUPPORTED", self.codes(self.validate()))
+
+    def test_malformed_json_returns_fixed_diagnostic(self) -> None:
+        self.write_inputs()
+        self.map_path.write_text("{", encoding="utf-8")
+        report = self.validate()
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIn("INVALID_JSON", self.codes(report))
+        self.assertNotIn("JSONDecodeError", json.dumps(report))
+
+        self.map_path.write_text('{"format":"agent-harness.coverage-map-current/v1","ignored":1e999}', encoding="utf-8")
+        self.assertIn("INVALID_JSON_NUMBER", self.codes(self.validate()))
+
+    def test_dated_source_reference_retains_snapshot_counts_without_using_them_as_limits(self) -> None:
+        pins = json.loads((ROOT / "planning/agent-creative-v1/coverage-input-pins.json").read_text(encoding="utf-8"))
+        dimensions = pins["coverage_map"]["observed_dimensions"]
+        self.assertEqual(dimensions["required_leaf_records"], 59)
+        self.assertEqual(dimensions["source_contribution_rows"], 555)
+        self.assertEqual(dimensions["unique_mapped_requirement_ids"], 91)
+        self.assertEqual(dimensions["local_scoped_requirement_ids"], 60)
+        self.assertEqual(dimensions["global_ids_with_scoped_contributions"], 31)
+        self.assertEqual(dimensions["global_criteria_total"], 47)
+        self.assertEqual(dimensions["global_ids_outside_scoped_contribution"], 16)
+        self.assertTrue(pins["interpretation"]["counts_are_snapshot_observations_not_limits"])
+
+    def test_missing_readback_pin_is_blocked_and_report_does_not_guess(self) -> None:
+        self.write_inputs()
+        pins = json.loads(self.pins_path.read_text(encoding="utf-8"))
+        del pins["issue_readbacks"]
+        self.pins_path.write_bytes(_canonical_bytes(pins))
+        report = self.validate()
+        self.assertIn("ISSUE_READBACK_PIN_REQUIRED", self.codes(report))
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIsNone(report["source_pins"]["issue_readback_capture_id"])
+
+    def test_pending_external_blocker_keeps_planning_visible_and_fails_release(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        ce = next(row for row in mapping["entries"] if row["key"] == "CE-LEAF")
+        ce["blockers"] = [{"owner": "External finance owner", "action": "confirm scoped reporting boundary"}]
+        self.write_inputs(mapping)
+        plan = self.validate()
+        self.assertEqual(plan["status"], "BACKLOG_READY")
+        self.assertEqual(plan["coordination_status"], "pending")
+        self.assertEqual(plan["publication_status"], "unreported")
+        self.assertEqual(plan["release_status"], "not_run")
+        self.assertEqual(plan["pending_blockers"], [{
+            "record": "CE-LEAF",
+            "owner": "External finance owner",
+            "action": "confirm scoped reporting boundary",
+        }])
+        release = self.validate_release()
+        self.assertEqual(release["status"], "BLOCKED")
+        self.assertEqual(release["planning_status"], "BACKLOG_READY")
+        self.assertEqual(release["release_status"], "BLOCKED")
+        self.assertIn("REQUIRED_OUTCOME_BLOCKED", self.codes(release))
+
+    def test_valid_supersession_requires_exact_bidirectional_relation(self) -> None:
+        mapping = copy.deepcopy(self.map)
+        prior = mapping["entries"][0]
+        prior["required_for_v1"] = False
+        replacement = copy.deepcopy(prior)
+        replacement.update({
+            "key": "AH-REPLACEMENT",
+            "issue_url": "https://github.com/Example-Co/agent-harness/issues/404",
+            "issue_title": "Synthetic replacement",
+            "body_sha256": "d" * 64,
+            "required_for_v1": True,
+            "supersedes": "AH-LEAF",
+        })
+        prior["superseded_by"] = "AH-REPLACEMENT"
+        prior["requirement_ids"] = []
+        mapping["entries"].append(replacement)
+        ownership = next(row for row in mapping["ownership_rows"] if row["requirement_id"] == "LOCAL-A")
+        ownership["accountable_delivery_leaf"] = "AH-REPLACEMENT"
+        ownership["acceptance_owner_leaf"] = "AH-REPLACEMENT"
+        ownership["required_contributors"] = ["AH-REPLACEMENT"]
+        next(row for row in mapping["source_contribution_rows"] if row["row_id"] == "ROW-1")["owning_leaf_key"] = "AH-REPLACEMENT"
+        readbacks = copy.deepcopy(self.readbacks)
+        readbacks["issues"].append({
+            "repository": "agent-harness",
+            "number": 404,
+            "url": replacement["issue_url"],
+            "title": replacement["issue_title"],
+            "state": "open",
+            "body_sha256": "d" * 64,
+        })
+        self.write_inputs(mapping, readbacks=readbacks)
+        self.assertEqual(self.validate()["status"], "BACKLOG_READY")
+
+
+if __name__ == "__main__":
+    unittest.main()
