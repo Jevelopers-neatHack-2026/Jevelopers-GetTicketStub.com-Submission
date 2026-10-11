@@ -2810,7 +2810,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "2aa1bc97716a17106d8ddc40efbbd3ae718c364c480afc29bb4150b02fceb1c0",
+      "sha256": "7c20d01fe7cef04ba6590fb236c803c5e191aee3e46fc4d4d8b78b7f125761b3",
       "provenanceRecordId": "TEST-COLLATERAL-POLICY-001"
     },
     {
@@ -2858,7 +2858,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "90b0865bd6bc4e6198f36b760b2691ff45e12064",
-      "sha256": "a2aa1b68f4d6dac4708fb201feb3c3e70d8512f799b56f1d88f28aa7c3c68bc1",
+      "sha256": "6239f2e5789afb2904d47a687c076b6135d5d684b18799fe56597366d5dd6cf7",
       "provenanceRecordId": "VALIDATOR-COLLATERAL-001"
     },
     {
@@ -3302,7 +3302,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
-      "sha256": "65d514f87c806a5e78c29e9999f724bd38380ccc0341409ae6572ce6c1c5376f",
+      "sha256": "80a7c542ba6ccc230b130b60d377cf7bcc0f1910b7bcafa07a64fefbf070bc60",
       "provenanceRecordId": "DEMO-EXPLAINER-001"
     },
     {
@@ -3314,7 +3314,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
-      "sha256": "c7267dbb0c417766c0b65f3af2e52a2787bd1d93007112cdaf756f63dc34ecf4",
+      "sha256": "b1ec1323b648cb371c9e80fd9d52d6fbdf2321ab7d160fa077c512ddaa79afba",
       "provenanceRecordId": "DEMO-RECORDING-CHECKLIST-001"
     },
     {
@@ -3350,7 +3350,7 @@
       "exists": true,
       "releaseEligible": false,
       "trackedAtRevision": "3acafe9638d8e75a0685c82ffe3bbd8e8b3186c6",
-      "sha256": "90d237fe798274dcdbe024755654f88e629976b32c413b57cabc7998062a0ba3",
+      "sha256": "b8dfd4d468fdf8f61ac6463d2bb99a54190c7254588159add6b1f12a19d17467",
       "provenanceRecordId": "DEMO-STORYBOARD-001"
     },
     {
@@ -4696,6 +4696,6 @@
         "reReviewTrigger": "Official post, event format, demo requirements, X destination or confirmed cutoff changes."
       }
     ],
-    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals. Internal DEMO-REHEARSAL-VIDEO-001 (150-second silent synthetic concept) is a distinct record and never satisfies missing DEMO-SUBMISSION-VIDEO-001."
+    "note": "Submission readiness evaluates only the caller-selected collateral plus these named deliverables, claims, evidence classes and owner gates. Arrays may add requirements but must retain the immutable release asset, claim and evidence ID subsets enforced by the validator. Each required deliverable needs one canonical provenanceRecordIds entry whose record assetId and source path match the exact output; an empty list means no joined output and remains blocked. Declared source lineage and composition dependencies are checked transitively for destination rights. Unused internal guardrail claims/CTAs and the internal canary are not required submission approvals. Every selected or submission root's intended destinations must also be explicitly approved on each consumed source, export and composition dependency; destination requirements stay scoped to each root's own provenance closure. Internal DEMO-REHEARSAL-VIDEO-001 (150-second silent synthetic concept) is a distinct record and never satisfies missing DEMO-SUBMISSION-VIDEO-001."
   }
 }

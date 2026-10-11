@@ -247,6 +247,11 @@ class CollateralPolicyValidationTests(unittest.TestCase):
     def _approved_synthetic_selection(self, asset_id):
         return self._approved_synthetic_assets([asset_id])
 
+    @staticmethod
+    def _set_controlled_destinations(record, destinations):
+        record["allowedDestinations"] = list(destinations)
+        record["permission"]["approvedDestinations"] = list(destinations)
+
     def _approved_synthetic_assets(self, asset_ids):
         claims = copy.deepcopy(self.claims)
         provenance = copy.deepcopy(self.provenance)
@@ -444,6 +449,34 @@ class CollateralPolicyValidationTests(unittest.TestCase):
         blockers = submission_blockers(claims, provenance, DEFAULT_SUBMISSION_SELECTION, inventory)
         self.assertTrue(any("DEMO-SUBMISSION-VIDEO-001: required output/source provenance path or checksum is not exact" in item for item in blockers), blockers)
 
+    def test_submission_output_scope_requires_full_destination_approval(self):
+        claims, provenance, inventory = self._completed_controlled_submission_fixture()
+        record = next(row for row in provenance["records"] if row["assetId"] == "DEMO-SUBMISSION-VIDEO-001")
+        record["allowedDestinations"] = ["public event submission", "internal rehearsal"]
+        record["permission"]["approvedDestinations"] = ["internal rehearsal"]
+        errors = validate_all(
+            claims, provenance, copy.deepcopy(self.fixture), copy.deepcopy(self.handoff), inventory,
+        )
+        self.assertTrue(any("DEMO-SUBMISSION-VIDEO-001: public approval must cover every allowed destination" in item for item in errors), errors)
+        blockers = submission_blockers(claims, provenance, DEFAULT_SUBMISSION_SELECTION, inventory)
+        self.assertTrue(any("DEMO-SUBMISSION-VIDEO-001: required output/source permission does not cover every allowed destination" in item for item in blockers), blockers)
+
+    def test_submission_output_destination_must_be_approved_by_source_record(self):
+        claims, provenance, inventory = self._completed_controlled_submission_fixture()
+        records = {row["assetId"]: row for row in provenance["records"]}
+        self._set_controlled_destinations(records["LAUNCH-X-ALT-TEXT-001"], ["public X announcement"])
+        self._set_controlled_destinations(records["LAUNCH-X-KEY-VISUAL-001"], ["internal rehearsal only"])
+
+        self.assertEqual(
+            validate_all(claims, provenance, copy.deepcopy(self.fixture), copy.deepcopy(self.handoff), inventory),
+            [],
+        )
+        blockers = submission_blockers(claims, provenance, DEFAULT_SUBMISSION_SELECTION, inventory)
+        self.assertTrue(any(
+            "LAUNCH-X-KEY-VISUAL-001: required output/source permission does not approve intended destination(s): public X announcement" in item
+            for item in blockers
+        ), blockers)
+
     def test_required_submission_output_provenance_must_match_canonical_asset_and_path(self):
         mutated = copy.deepcopy(self.inventory)
         row = next(item for item in mutated["plannedDeliverables"] if item["assetId"] == "LAUNCH-X-KEY-VISUAL-001")
@@ -458,6 +491,126 @@ class CollateralPolicyValidationTests(unittest.TestCase):
         # The pending product transaction CTA and other unselected claims remain untouched.
         self.assertEqual(claims["status"], self.claims["status"])
         self.assertNotEqual(next(row for row in claims["ctas"] if row["id"] == "CTA-PRODUCT-TRANSACTION-001")["wordingReview"], "approved")
+
+    def test_approved_provenance_requires_all_allowed_destinations_to_be_covered(self):
+        claims, provenance = self._approved_synthetic_selection("DEMO-SCREENSHOT-SET-001")
+        self.assertEqual(
+            validate_all(claims, provenance, copy.deepcopy(self.fixture), copy.deepcopy(self.handoff), copy.deepcopy(self.inventory)),
+            [],
+        )
+        self.assertEqual(selected_collateral_blockers(claims, provenance, ["DEMO-SCREENSHOT-SET-001"]), [])
+
+        for allowed, approved in (
+            (["public X announcement"], ["internal rehearsal only"]),
+            (["public X announcement", "internal rehearsal only"], ["public X announcement"]),
+        ):
+            with self.subTest(allowed=allowed, approved=approved):
+                mismatched = copy.deepcopy(provenance)
+                source = next(row for row in mismatched["records"] if row["assetId"] == "DEMO-SCREENSHOT-SET-001")
+                source["allowedDestinations"] = allowed
+                source["permission"]["approvedDestinations"] = approved
+                errors = validate_all(
+                    copy.deepcopy(claims), mismatched, copy.deepcopy(self.fixture),
+                    copy.deepcopy(self.handoff), copy.deepcopy(self.inventory),
+                )
+                self.assertTrue(any("public approval must cover every allowed destination" in item for item in errors), errors)
+                blockers = selected_collateral_blockers(claims, mismatched, ["DEMO-SCREENSHOT-SET-001"])
+                self.assertTrue(any("permission does not cover every allowed destination" in item for item in blockers), blockers)
+
+    def test_selected_composition_dependency_must_approve_its_allowed_destinations(self):
+        claims, provenance = self._approved_synthetic_selection("DEMO-DECK-SUPPORT-001")
+        self.assertEqual(selected_collateral_blockers(claims, provenance, ["DEMO-DECK-SUPPORT-001"]), [])
+
+        mismatched = copy.deepcopy(provenance)
+        diagram = next(row for row in mismatched["records"] if row["assetId"] == "DEMO-WORKFLOW-DIAGRAM-001")
+        diagram["allowedDestinations"] = ["public X announcement"]
+        diagram["permission"]["approvedDestinations"] = ["internal rehearsal only"]
+        errors = validate_all(
+            copy.deepcopy(claims), mismatched, copy.deepcopy(self.fixture),
+            copy.deepcopy(self.handoff), copy.deepcopy(self.inventory),
+        )
+        self.assertTrue(any("DEMO-WORKFLOW-DIAGRAM-001: public approval must cover every allowed destination" in item for item in errors), errors)
+        blockers = selected_collateral_blockers(claims, mismatched, ["DEMO-DECK-SUPPORT-001"])
+        self.assertTrue(any("DEMO-WORKFLOW-DIAGRAM-001: permission does not cover every allowed destination" in item for item in blockers), blockers)
+
+    def test_selected_output_destination_must_be_approved_by_composition_inputs(self):
+        claims, provenance = self._approved_synthetic_selection("DEMO-DECK-SUPPORT-001")
+        records = {row["assetId"]: row for row in provenance["records"]}
+        self._set_controlled_destinations(records["DEMO-DECK-SUPPORT-001"], ["public event presentation"])
+        for record_id in ("DEMO-WORKFLOW-DIAGRAM-001", "PROV-DEMO-WORKFLOW-ALT-001"):
+            self._set_controlled_destinations(records[record_id], ["internal rehearsal only"])
+
+        self.assertEqual(
+            validate_all(claims, provenance, copy.deepcopy(self.fixture), copy.deepcopy(self.handoff), copy.deepcopy(self.inventory)),
+            [],
+        )
+        blockers = selected_collateral_blockers(claims, provenance, ["DEMO-DECK-SUPPORT-001"])
+        for record_id in ("DEMO-WORKFLOW-DIAGRAM-001", "PROV-DEMO-WORKFLOW-ALT-001"):
+            self.assertTrue(any(
+                f"{record_id}: selected source/export permission does not approve intended destination(s): public event presentation" in item
+                for item in blockers
+            ), blockers)
+
+    def test_selected_source_chain_must_approve_derived_output_destination(self):
+        claims, provenance = self._approved_synthetic_selection("LAUNCH-X-ALT-TEXT-001")
+        records = {row["assetId"]: row for row in provenance["records"]}
+        self._set_controlled_destinations(records["LAUNCH-X-ALT-TEXT-001"], ["public X announcement"])
+        self._set_controlled_destinations(records["LAUNCH-X-KEY-VISUAL-001"], ["internal rehearsal only"])
+
+        self.assertEqual(
+            validate_all(claims, provenance, copy.deepcopy(self.fixture), copy.deepcopy(self.handoff), copy.deepcopy(self.inventory)),
+            [],
+        )
+        blockers = selected_collateral_blockers(claims, provenance, ["LAUNCH-X-ALT-TEXT-001"])
+        self.assertTrue(any(
+            "LAUNCH-X-KEY-VISUAL-001: selected source/export permission does not approve intended destination(s): public X announcement" in item
+            for item in blockers
+        ), blockers)
+
+    def test_selected_input_must_approve_every_root_destination(self):
+        claims, provenance = self._approved_synthetic_selection("DEMO-DECK-SUPPORT-001")
+        records = {row["assetId"]: row for row in provenance["records"]}
+        self._set_controlled_destinations(
+            records["DEMO-DECK-SUPPORT-001"],
+            ["public event presentation", "internal rehearsal only"],
+        )
+        for record_id in ("DEMO-WORKFLOW-DIAGRAM-001", "PROV-DEMO-WORKFLOW-ALT-001"):
+            self._set_controlled_destinations(records[record_id], ["public event presentation"])
+
+        self.assertEqual(
+            validate_all(claims, provenance, copy.deepcopy(self.fixture), copy.deepcopy(self.handoff), copy.deepcopy(self.inventory)),
+            [],
+        )
+        blockers = selected_collateral_blockers(claims, provenance, ["DEMO-DECK-SUPPORT-001"])
+        self.assertTrue(any(
+            "DEMO-WORKFLOW-DIAGRAM-001: selected source/export permission does not approve intended destination(s): internal rehearsal only" in item
+            for item in blockers
+        ), blockers)
+
+    def test_unrelated_selected_roots_keep_separate_destination_scopes(self):
+        claims, provenance = self._approved_synthetic_assets([
+            "DEMO-SCREENSHOT-SET-001", "LAUNCH-X-ALT-TEXT-001",
+        ])
+        records = {row["assetId"]: row for row in provenance["records"]}
+        for record_id in (
+            "DEMO-SCREENSHOT-SET-001", "PROV-DEMO-SCREENSHOT-PNG-001", "PROV-DEMO-SCREENSHOT-ALT-001",
+        ):
+            self._set_controlled_destinations(records[record_id], ["public X announcement"])
+        for record_id in (
+            "LAUNCH-X-ALT-TEXT-001", "LAUNCH-X-KEY-VISUAL-001", "PROV-LAUNCH-X-KEY-PNG-001",
+        ):
+            self._set_controlled_destinations(records[record_id], ["internal rehearsal only"])
+
+        self.assertEqual(
+            validate_all(claims, provenance, copy.deepcopy(self.fixture), copy.deepcopy(self.handoff), copy.deepcopy(self.inventory)),
+            [],
+        )
+        self.assertEqual(
+            selected_collateral_blockers(claims, provenance, [
+                "DEMO-SCREENSHOT-SET-001", "LAUNCH-X-ALT-TEXT-001",
+            ]),
+            [],
+        )
 
     def test_selected_scope_accepts_reviewed_local_text_alternative_cta(self):
         claims, provenance = self._approved_synthetic_selection("DEMO-DECK-SUPPORT-001")

@@ -18,7 +18,7 @@ The official organizer source checked 2026-10-11 UTC is [neatlogs.com/hackathon]
 
 Do not turn the rehearsal into a final demo until each item below has a pinned, reviewable source and owner decision:
 
-- **Product behavior:** the product owner supplies an actual released or candidate runtime, validated journey, relevant implementation and failure/recovery evidence, plus the limitations that must appear on screen. The consumed `getticketstub.com` ownership source is documentation-only and is not runtime proof.
+- **Product behavior:** the source used by the earlier documentation-only rehearsal baseline is historical (`getticketstub.com` ownership at `5a298645`). Current PR #22 merged at `7f59d339` documents a runnable Next.js App Router preview; the default demo is simulated. That preview description is not proof of the complete product journey, live sponsor/provider behavior, production readiness, or release acceptance; GT-12 issue #6 remains open. The product owner must supply the validated journey and relevant implementation/failure evidence before it can support a final demo.
 - **Neatlogs / SPN-01:** source-owned, sanitized evidence for architecture, implementation, runtime, reasoning, and result; each field remains distinct and the usage claim receives source-owner review.
 - **Entire / SPN-02:** source-owned, sanitized evidence for architecture, implementation, runtime, reasoning, and result, including the required checkpoint/graph material; no Neatlogs evidence can fill this class.
 - **CFO.ai / SPN-03:** the actual business plan and owner-reviewed evidence for architecture, implementation, runtime, reasoning, and result; no placeholder or estimate can stand in for the plan.
