@@ -20,9 +20,19 @@ export function independentTestEnvironment(
 export const durabilityProcessEvidence = [
 	"storage-process-race.json",
 	"job-process-race.json",
+	"storage-before.json",
 	"storage-byte-transaction.json",
+	"storage-stage.json",
+	"storage-transaction.json",
+	"storage-commit.json",
+	"job-claim.json",
 	"job-stage.json",
+	"job-transaction.json",
+	"job-complete.json",
 	"job-uncertain.json",
+	"outbox-claim.json",
+	"outbox-settle.json",
+	"outbox-accepted.json",
 	"uncertain-fail-false.json",
 	"uncertain-fail-true.json",
 	"cancel-budget-kill.json",
@@ -56,10 +66,25 @@ export const durabilityTestFiles = {
 	],
 } as const;
 
+export const durabilityExpectedTests = {
+	"artifact-storage": 45,
+	"restart-recovery": 68,
+	"metering-traces": 36,
+} as const;
+
+type EvidenceRequirement =
+	| string
+	| { readonly path: string; readonly schema: z.ZodType };
+
 export async function runIndependentTests(options: {
 	readonly paths: readonly string[];
 	readonly evidenceDir: string;
-	readonly requiredEvidence: readonly string[];
+	readonly requiredEvidence: readonly EvidenceRequirement[];
+	readonly expectedTests?: number;
+	readonly evidenceEnvironment?: {
+		readonly directoryVariable: string;
+		readonly nonceVariable?: string;
+	};
 	readonly environment?: NodeJS.ProcessEnv;
 }) {
 	if (options.paths.length === 0)
@@ -68,6 +93,12 @@ export async function runIndependentTests(options: {
 			"Independent private test paths are required.",
 		);
 	const executionNonce = randomUUID();
+	const directoryVariable =
+		options.evidenceEnvironment?.directoryVariable ??
+		"PP_DURABILITY_EVIDENCE_DIR";
+	const nonceVariable =
+		options.evidenceEnvironment?.nonceVariable ??
+		"PP_DURABILITY_EXECUTION_NONCE";
 	await mkdir(options.evidenceDir, { recursive: true });
 	const evidenceDir = await mkdtemp(join(options.evidenceDir, "execution-"));
 	const command = [
@@ -83,8 +114,8 @@ export async function runIndependentTests(options: {
 			{
 				env: {
 					...independentTestEnvironment(options.environment),
-					PP_DURABILITY_EVIDENCE_DIR: evidenceDir,
-					PP_DURABILITY_EXECUTION_NONCE: executionNonce,
+					[directoryVariable]: evidenceDir,
+					[nonceVariable]: executionNonce,
 				},
 				timeout: 60000,
 				maxBuffer: 4 * 1024 * 1024,
@@ -99,6 +130,8 @@ export async function runIndependentTests(options: {
 		if (
 			!(
 				tests > 0 &&
+				(options.expectedTests === undefined ||
+					tests === options.expectedTests) &&
 				passed === tests &&
 				["fail", "cancelled", "skipped", "todo"].every(
 					(name) => count(name) === 0,
@@ -109,25 +142,29 @@ export async function runIndependentTests(options: {
 				"RUNTIME_FAILURE",
 				"Independent private tests did not execute a complete passing run.",
 			);
-		for (const name of options.requiredEvidence) {
-			const evidence: unknown = JSON.parse(
-				await readFile(join(evidenceDir, name), "utf8"),
-			);
-			if (
-				!z
-					.object({ executionNonce: z.literal(executionNonce) })
-					.safeParse(evidence).success
-			)
+		const artifacts = [];
+		for (const required of options.requiredEvidence) {
+			const name = typeof required === "string" ? required : required.path;
+			const raw = await readFile(join(evidenceDir, name), "utf8");
+			const evidence: unknown = JSON.parse(raw);
+			const schema =
+				typeof required === "string"
+					? z.object({ executionNonce: z.literal(executionNonce) })
+					: required.schema;
+			if (!schema.safeParse(evidence).success)
 				throw new VerificationFailure(
 					"RUNTIME_FAILURE",
 					"Independent private test execution evidence is absent or stale.",
 				);
+			artifacts.push({ path: name, digest: hash(raw) });
 		}
 		return {
 			command,
 			exitCode: 0,
 			tests,
 			passed,
+			expectedTests: options.expectedTests ?? null,
+			artifacts,
 			executionNonce,
 			evidenceDir,
 			stdoutDigest: hash(result.stdout),

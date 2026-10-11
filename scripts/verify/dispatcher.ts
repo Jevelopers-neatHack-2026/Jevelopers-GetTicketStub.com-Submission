@@ -1,10 +1,13 @@
 import { z } from "zod";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { hash } from "../../src/internal/durability.js";
+import {
+	runIndependentTests,
+	durabilityTestFiles,
+	durabilityProcessEvidence,
+	durabilityExpectedTests,
+} from "../../src/internal/independent-tests.js";
 import { verifyRuntime } from "../../src/runtime/calibration.js";
 import {
 	failureReceipt,
@@ -161,36 +164,35 @@ async function runLeaf(
 	evidenceDir: string,
 ) {
 	if (suiteRegistry[suite].state === "external-blocked") {
-		const files =
-			suite === "artifact-storage"
-				? ["unit/durability-storage.test.js"]
-				: suite === "restart-recovery"
-					? ["unit/durability-jobs.test.js"]
-					: ["unit/durability-telemetry.test.js"];
+		const localSuite = z
+			.enum(["artifact-storage", "restart-recovery", "metering-traces"])
+			.parse(suite);
 		const evidence = join(evidenceDir, suite, "local");
 		await mkdir(evidence, { recursive: true });
-		const paths = [...files, "integration/durability-process.test.js"].map(
-			(file) => fileURLToPath(new URL(`../../tests/${file}`, import.meta.url)),
+		const localReceipt = join(evidenceDir, `${suite}-local.json`);
+		await rm(localReceipt, { force: true });
+		const paths = [
+			...durabilityTestFiles[localSuite],
+			"fixtures/durability/canary.js",
+		].map((file) =>
+			fileURLToPath(new URL(`../../tests/${file}`, import.meta.url)),
 		);
 		try {
-			const result = await promisify(execFile)(
-				process.execPath,
-				["--test", ...paths],
-				{
-					env: { ...process.env, PP_DURABILITY_EVIDENCE_DIR: evidence },
-					timeout: 60000,
-					maxBuffer: 1024 * 1024,
-				},
-			);
+			const result = await runIndependentTests({
+				paths,
+				evidenceDir: evidence,
+				expectedTests: durabilityExpectedTests[localSuite] + 1,
+				requiredEvidence: [
+					...durabilityProcessEvidence,
+					"canary-executed.json",
+				],
+			});
 			await writeFile(
-				join(evidenceDir, `${suite}-local.json`),
+				localReceipt,
 				JSON.stringify(
 					{
 						state: "passed-private-mechanisms",
-						command: [process.execPath, "--test", ...paths],
-						exitCode: 0,
-						stdoutDigest: hash(result.stdout),
-						stderrDigest: hash(result.stderr),
+						...result,
 						externalState: "external-blocked",
 					},
 					null,
@@ -198,11 +200,24 @@ async function runLeaf(
 				),
 			);
 		} catch (error) {
-			if (error instanceof Error)
+			if (error instanceof Error) {
+				await writeFile(
+					localReceipt,
+					JSON.stringify(
+						{
+							state: "failed-private-mechanisms",
+							externalState: "external-blocked",
+							code: "RUNTIME_FAILURE",
+						},
+						null,
+						2,
+					),
+				);
 				throw new VerificationFailure(
 					"RUNTIME_FAILURE",
 					"Private durability checks failed; external integration remains blocked.",
 				);
+			}
 			throw error;
 		}
 		throw new VerificationFailure(

@@ -25,10 +25,11 @@ and crash/process artifacts, then exits **1** with status=failed and an explicit
 externalState=external-blocked field, preserving the runtime receipt contract.
 Release also exits 1. Passing local mechanisms cannot satisfy unavailable
 canonical, supplier, app or finance semantics. CSV remains unsupported.
-The independently reproduced DUR-R4 nested-dispatch defect remains open until
-the dispatcher owner wires the tested independent runner; see
-[the ownership checkpoint](dispatcher-handoff.md). A nested receipt alone is
-not execution evidence.
+The independently reproduced DUR-R4 nested-dispatch defect is fixed in this
+private candidate after explicit dispatcher ownership handoff; see
+[the dispatcher handoff](dispatcher-handoff.md). Private success requires exact
+test counts, an executed canary and fresh process artifacts. Fresh independent
+candidate review remains required.
 
 ## Storage consistency and trust
 

@@ -1,14 +1,17 @@
-# DUR-R4 dispatcher ownership checkpoint
+# DUR-R4 dispatcher handoff
 
-The original finding remains open at the dispatcher boundary until its owner
-wires the private helper. The original dispatcher inherits Node test worker
-context and can record a private success without running tests. This change does
-not grant canonical, application, finance, consumer, Linux or release acceptance.
+The supervisor handed dispatcher ownership to the durability writer after the
+composition writer stopped cleanly at `cce8b116`. The checkpoint at `0471baf`
+left this boundary open. Dispatcher wiring is now implemented and regression
+verified in the durability branch. The original finding and checkpoint report
+remain historical evidence; fresh independent review is still required. This
+does not grant canonical, application, finance, consumer, Linux or release
+acceptance.
 
 The helper in `src/internal/independent-tests.ts` exposes:
 
 - `runIndependentTests`: explicitly selects TAP output, removes inherited
-  `NODE_TEST_*` environment variables, requires nonzero executed and passing test
+  `NODE_TEST_*` environment variables, requires expected executed and passing test
   counts with zero failures, skips, cancellation or todo cases, and checks fresh
   artifacts against a random execution nonce.
 - `durabilityTestFiles`: each private named suite's unit regressions and real
@@ -16,25 +19,35 @@ The helper in `src/internal/independent-tests.ts` exposes:
 - `durabilityProcessEvidence`: required process artifacts, including concurrent
   claims/publication, killed transactions, uncertain publication, denial,
   cancellation with a full outbox and abandoned-byte cleanup.
+- `durabilityExpectedTests`: exact current manifest counts (45/68/36). The
+  dispatcher adds the independent canary to each manifest and requires 46/69/37.
+  An intentional test addition must update the corresponding expected count.
 
-The dispatcher owner should replace the external-blocked leaf's direct
-`execFile` runner with `runIndependentTests`. Resolve `durabilityTestFiles[suite]`
-relative to the existing compiled tests directory. Pass the suite's `local`
-evidence directory and `durabilityProcessEvidence`. The helper returns the
-command, actual test/pass counts, fresh execution directory/nonce and stdout/
-stderr digests only after all checks succeed. Record those fields in the private
-receipt. Propagate helper failure as `RUNTIME_FAILURE`, remove or invalidate a
-pre-existing local success receipt before starting, and retain the nonzero
-`external-blocked` result after private success.
+The durability dispatcher now uses those manifests, exact counts and the
+required canary/process artifacts. The helper returns actual test/pass counts,
+artifact digests, a fresh execution directory/nonce and stdout/stderr digests
+only after all checks succeed. The dispatcher removes a previous local receipt
+before execution, writes a failed private receipt on error, propagates
+`RUNTIME_FAILURE`, and retains a nonzero `external-blocked` outer result even
+after private success.
 
-Strengthen `tests/unit/durability-dispatcher.test.ts` at handoff to verify fresh
-SIGKILL artifacts and positive execution counts for all three suites from nested
-`node --test`. Exercise a deliberately failing child canary at the dispatcher
-boundary and require `RUNTIME_FAILURE` without a fresh private success receipt.
-The helper already has passing/failing canary coverage from normal CLI and nested
-test execution, and runs each named suite from nested tests. Dispatcher source
-and its existing receipt-only tests have not been changed under this ownership
-checkpoint.
+Dispatcher regression tests now verify real counts and artifacts from both
+normal CLI and nested `node --test`, plus deliberately failing canaries in both
+contexts. The failure fixtures require actual canary execution and reject a
+fresh passing receipt. Helper tests also reject a passing child with an
+unexpected test count or missing artifacts.
+
+For the later composition integration, `runIndependentTests` accepts an explicit
+`evidenceEnvironment` with `directoryVariable` and optional `nonceVariable`.
+`requiredEvidence` may contain paths with Zod schemas for composition's existing
+artifact format, which has no durability nonce. Those files must exist and
+validate in the freshly created execution directory; their digests are returned
+with the run's nonce. Strings retain mandatory nonce checking for durability.
+Supply measured exact `expectedTests` for each of the six composition manifests,
+set the directory variable to `PP_COMPOSITION_EVIDENCE_DIR`, and validate required
+render/content artifacts. A composition-shaped fixture tests this reusable
+configuration. The composition branch and its core modules have not been edited
+or integrated here; the parent owns that later dispatcher merge and its checks.
 
 Independent report history is retained in `durability-review-result.json`:
 DUR-R1 through DUR-R6 were independently reproduced against `39951f6`. Fresh

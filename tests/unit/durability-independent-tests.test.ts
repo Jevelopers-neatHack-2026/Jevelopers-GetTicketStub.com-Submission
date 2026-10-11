@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import { z } from "zod";
 import {
 	runIndependentTests,
 	independentTestEnvironment,
@@ -159,4 +160,51 @@ test("rejects an empty test selection before spawning another runner", async () 
 		(error: unknown) =>
 			error instanceof VerificationFailure && error.code === "RUNTIME_FAILURE",
 	);
+});
+
+test("rejects a passing child when fewer tests than expected actually execute", async () => {
+	using f = fixture();
+	await assert.rejects(
+		runIndependentTests({
+			paths: [canary],
+			evidenceDir: f.root,
+			expectedTests: 2,
+			requiredEvidence: ["canary-executed.json"],
+		}),
+		(error: unknown) =>
+			error instanceof VerificationFailure && error.code === "RUNTIME_FAILURE",
+	);
+});
+
+test("supports explicit evidence environment and schemas for later composition suite integration", async () => {
+	using f = fixture();
+	const result = await runIndependentTests({
+		paths: [
+			fileURLToPath(
+				new URL(
+					"../fixtures/durability/composition-shaped-canary.js",
+					import.meta.url,
+				),
+			),
+		],
+		evidenceDir: f.root,
+		expectedTests: 1,
+		evidenceEnvironment: {
+			directoryVariable: "PP_COMPOSITION_EVIDENCE_DIR",
+			nonceVariable: "PP_COMPOSITION_EXECUTION_NONCE",
+		},
+		requiredEvidence: [
+			{
+				path: "content-integrity.json",
+				schema: z.object({
+					mode: z.literal("synthetic-draft-only"),
+					executed: z.literal(true),
+				}),
+			},
+		],
+	});
+	assert.equal(result.tests, 1);
+	assert.equal(result.expectedTests, 1);
+	assert.equal(result.artifacts[0]?.path, "content-integrity.json");
+	assert.match(result.artifacts[0]?.digest ?? "", /^[a-f0-9]{64}$/);
 });
