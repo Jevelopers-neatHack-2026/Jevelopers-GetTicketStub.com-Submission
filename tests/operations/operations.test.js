@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, writeSync } from 'node:fs';
+import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -19,12 +19,15 @@ import { OPERATIONS_STORAGE_CAPABILITY } from '../../src/internal/private-ops-st
 import {
   createOperationsDiagnosticSession,
   disposeOperationsDiagnosticSession,
+  enableOperationsRunnerCaptureFromFd3,
+  finishOperationsRunnerCapture,
   prepareOperationsChildCapture,
   closeOperationsChildCapture,
   OPS07_CAPTURE_LINE_PREFIX,
   OPS07_CAPTURE_LIMITS,
   parseOperationsCaptureFromTap,
   readOperationsDiagnosticSession,
+  recordOperationsDiagnostic,
   recordOperationsSupervisor
 } from '../../src/internal/private-ops-diagnostics.js';
 import { runtimeError } from '../../src/internal/errors.js';
@@ -80,8 +83,112 @@ const METRICS = {
   supervisorOpenFileDescriptors: 0,
   runnerOpenFileDescriptors: 0,
   maxSupervisorRssBytes: 0,
-  maxRunnerRssBytes: 0
+  maxRunnerRssBytes: 0,
+  ci1PhaseCaptures: [],
+  ci1PhaseCaptureBytes: 0,
+  ci1PhaseCaptureOverflow: false,
+  ci1PhaseCaptureIncomplete: false
 };
+
+const CI1_PHASES = new Set([
+  'before-marker', 'after-marker-before-bytes', 'after-write',
+  'response-before-observation', 'observation-before-checkpoint'
+]);
+const CI1_CHILD_PHASE_STAGES = new Set([
+  'fixture_started', 'store_opened', 'workflow_opened', 'worker_started', 'runner_claimed', 'marker_written',
+  'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled', 'shutdown_verified',
+  'restart_worker_started', 'restart_work_completed', 'restart_stop_settled',
+  'restart_loop_settled', 'restart_store_closed',
+  'store_close_started', 'store_closed', 'runner_escalation_sent',
+  'fixture_finally_started', 'fixture_finally_complete'
+]);
+const CI1_PARENT_PHASE_STAGES = new Set([
+  'shutdown_spawned', 'shutdown_marker_observed', 'sigterm_sent', 'shutdown_child_closed',
+  'restart_spawned', 'restart_escalation_sent', 'restart_child_closed',
+  'shutdown_escalation_sent', 'cleanup_escalation_sent'
+]);
+const CI1_MAX_PHASE_RECORDS = 256;
+const CI1_MAX_PHASE_BYTES = 24_576;
+
+function ci1CaptureCanAppend(recordCount, currentBytes, nextBytes) {
+  return recordCount < CI1_MAX_PHASE_RECORDS && currentBytes + nextBytes <= CI1_MAX_PHASE_BYTES;
+}
+
+function appendBoundedCi1PhaseCapture(state, record) {
+  const encoded = JSON.stringify(record);
+  const bytes = Buffer.byteLength(encoded);
+  if (!ci1CaptureCanAppend(state.ci1PhaseCaptures.length, state.ci1PhaseCaptureBytes, bytes)) {
+    state.ci1PhaseCaptureOverflow = true;
+    return false;
+  }
+  state.ci1PhaseCaptures.push(record);
+  state.ci1PhaseCaptureBytes += bytes;
+  return true;
+}
+
+function appendCi1PhaseCapture(record) {
+  return appendBoundedCi1PhaseCapture(METRICS, record);
+}
+
+function readCi1ChildPhaseCapture(path, phase, role, requireComplete = true) {
+  const bytes = readFileSync(path);
+  assert.ok(bytes.length > 0 && bytes.length <= 4_096, `${phase}/${role} phase capture is outside its byte bound`);
+  const text = bytes.toString('utf8');
+  assert.ok(text.endsWith('\n'));
+  const lines = text.slice(0, -1).split('\n');
+  assert.ok(lines.length > 0 && lines.length <= 16);
+  let priorElapsedMs = -1;
+  const stages = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const item = JSON.parse(lines[index]);
+    assert.ok(item && typeof item === 'object' && !Array.isArray(item));
+    const hasStopResult = item.stage === 'stop_settled' || item.stage === 'restart_stop_settled';
+    assert.deepEqual(Object.keys(item).sort(), hasStopResult
+      ? ['childrenReaped', 'elapsedMs', 'schema', 'sequence', 'stage', 'stopped', 'storeClosed']
+      : ['elapsedMs', 'schema', 'sequence', 'stage']);
+    assert.equal(item.schema, 1);
+    assert.equal(item.sequence, index + 1);
+    assert.equal(typeof item.stage, 'string');
+    assert.ok(CI1_CHILD_PHASE_STAGES.has(item.stage));
+    assert.ok(Number.isSafeInteger(item.elapsedMs) && item.elapsedMs >= priorElapsedMs);
+    if (hasStopResult) {
+      assert.equal(item.stopped, true);
+      assert.equal(item.childrenReaped, true);
+      assert.equal(item.storeClosed, true);
+    }
+    priorElapsedMs = item.elapsedMs;
+    stages.push(item.stage);
+    assert.equal(appendCi1PhaseCapture({
+      schema: 1, source: 'child', phase, role,
+      sequence: item.sequence, stage: item.stage, elapsedMs: item.elapsedMs
+    }), true, `${phase}/${role} phase capture exceeded the aggregate evidence bound`);
+  }
+  const required = role === 'shutdown'
+    ? ['fixture_started', 'store_opened', 'workflow_opened', 'worker_started', 'runner_claimed', 'marker_written',
+      'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled', 'shutdown_verified',
+      'store_close_started', 'store_closed', 'fixture_finally_started', 'fixture_finally_complete']
+    : ['fixture_started', 'restart_worker_started', 'restart_work_completed', 'restart_stop_settled',
+      'restart_store_closed', 'restart_loop_settled', 'fixture_finally_started', 'fixture_finally_complete'];
+  const complete = required.every(stage => stages.includes(stage));
+  if (requireComplete) assert.equal(complete, true, `${phase}/${role} phase capture lacks required stages`);
+  if (requireComplete && role === 'shutdown') {
+    const ordered = [
+      'fixture_started', 'store_opened', 'worker_started', 'runner_claimed', 'workflow_opened',
+      'marker_written', 'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled',
+      'shutdown_verified', 'store_close_started', 'store_closed', 'fixture_finally_started', 'fixture_finally_complete'
+    ];
+    assert.ok(ordered.every((stage, index) => index === 0 || stages.indexOf(ordered[index - 1]) < stages.indexOf(stage)),
+      `${phase}/${role} phase order is incomplete`);
+  }
+  if (requireComplete && role === 'restart') {
+    const ordered = ['fixture_started', 'restart_worker_started', 'restart_work_completed',
+      'restart_stop_settled', 'restart_store_closed', 'restart_loop_settled',
+      'fixture_finally_started', 'fixture_finally_complete'];
+    assert.ok(ordered.every((stage, index) => index === 0 || stages.indexOf(ordered[index - 1]) < stages.indexOf(stage)),
+      `${phase}/${role} phase order is incomplete`);
+  }
+  return { stages, complete };
+}
 
 function tempDirectory(prefix = 'ah11-ops-') {
   const directory = mkdtempSync(join(tmpdir(), prefix));
@@ -1906,13 +2013,49 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     'response-before-observation', 'observation-before-checkpoint'
   ];
   const results = [];
-  for (const phase of phases) {
+  const exactByteRecordBytes = Buffer.byteLength(JSON.stringify({ value: '' }));
+  const exactBytePayload = { value: 'x'.repeat(CI1_MAX_PHASE_BYTES - exactByteRecordBytes) };
+  assert.equal(Buffer.byteLength(JSON.stringify(exactBytePayload)), CI1_MAX_PHASE_BYTES);
+  assert.equal(ci1CaptureCanAppend(0, 0, CI1_MAX_PHASE_BYTES), true);
+  assert.equal(ci1CaptureCanAppend(0, 0, CI1_MAX_PHASE_BYTES + 1), false);
+  assert.equal(ci1CaptureCanAppend(CI1_MAX_PHASE_RECORDS - 1, 0, 1), true);
+  assert.equal(ci1CaptureCanAppend(CI1_MAX_PHASE_RECORDS, 0, 1), false);
+  const exactByteControl = { ci1PhaseCaptures: [], ci1PhaseCaptureBytes: 0, ci1PhaseCaptureOverflow: false };
+  assert.equal(appendBoundedCi1PhaseCapture(exactByteControl, exactBytePayload), true);
+  assert.equal(exactByteControl.ci1PhaseCaptureBytes, CI1_MAX_PHASE_BYTES);
+  assert.equal(appendBoundedCi1PhaseCapture(exactByteControl, {}), false);
+  assert.equal(exactByteControl.ci1PhaseCaptureOverflow, true, 'one-byte overflow is retained as explicit failure custody');
+  const exactRecordControl = { ci1PhaseCaptures: [], ci1PhaseCaptureBytes: 0, ci1PhaseCaptureOverflow: false };
+  for (let index = 0; index < CI1_MAX_PHASE_RECORDS; index += 1) {
+    assert.equal(appendBoundedCi1PhaseCapture(exactRecordControl, { sequence: index + 1 }), true);
+  }
+  assert.equal(exactRecordControl.ci1PhaseCaptures.length, CI1_MAX_PHASE_RECORDS);
+  assert.equal(appendBoundedCi1PhaseCapture(exactRecordControl, { sequence: CI1_MAX_PHASE_RECORDS + 1 }), false);
+  assert.equal(exactRecordControl.ci1PhaseCaptureOverflow, true, 'record overflow is retained as explicit failure custody');
+  const parentStartedAt = performance.now();
+  const parentSequences = new Map();
+  const captureParentPhase = (phase, role, stage) => {
+    assert.ok(CI1_PHASES.has(phase));
+    assert.ok(role === 'shutdown' || role === 'restart');
+    assert.ok(CI1_PARENT_PHASE_STAGES.has(stage));
+    const key = `${phase}:${role}`;
+    const sequence = (parentSequences.get(key) ?? 0) + 1;
+    parentSequences.set(key, sequence);
+    assert.equal(appendCi1PhaseCapture({
+      schema: 1, source: 'parent', phase, role, sequence, stage,
+      elapsedMs: Math.max(0, Math.round(performance.now() - parentStartedAt))
+    }), true, 'parent phase capture exceeded the aggregate evidence bound');
+  };
+
+  const runChild = async (phase, role, expectedWorkflowId) => {
+    const invocationStartedAt = performance.now();
     const marker = join(temporary.directory, `${phase}.marker`);
-    const resultPath = join(temporary.directory, `${phase}.json`);
-    const metricsPath = join(temporary.directory, `${phase}.metrics.jsonl`);
+    const resultPath = join(temporary.directory, `${phase}.${role}.json`);
+    const metricsPath = join(temporary.directory, `${phase}.${role}.metrics.jsonl`);
     const child = spawn(process.execPath, [
       join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
-      temporary.databasePath, phase, marker, resultPath, metricsPath
+      temporary.databasePath, phase, marker, resultPath, metricsPath, role,
+      ...(role === 'restart' ? [expectedWorkflowId] : [])
     ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'] });
     let childStderr = '';
     child.stderr.setEncoding('utf8');
@@ -1922,65 +2065,109 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       closeResult = { code, signal };
       resolvePromise(closeResult);
     }));
+    captureParentPhase(phase, role, `${role}_spawned`);
+    let durationMs = null;
     try {
+      if (role === 'shutdown') {
         await waitForPath(marker, child);
         const barrier = JSON.parse(readFileSync(marker, 'utf8'));
         assert.equal(barrier.phase, phase);
+        captureParentPhase(phase, role, 'shutdown_marker_observed');
         const sigtermSentAt = performance.now();
         const sent = child.kill('SIGTERM');
         assert.equal(sent, true, `${phase}; exit=${child.exitCode}; signal=${child.signalCode}; result=${existsSync(resultPath)}`);
         if (sent) METRICS.processSigtermSignalsSent += 1;
+        captureParentPhase(phase, role, 'sigterm_sent');
         closeResult = await waitForCloseBounded(closed, 3_000);
         if (!closeResult) {
+          captureParentPhase(phase, role, 'shutdown_escalation_sent');
           closeResult = await killOwnedChildAndReap(child, closed);
-          assert.ok(closeResult, `The owned ${phase} child did not close within its signal budget.`);
-          throw new Error(`The controlled JEV child did not drain after SIGTERM at ${phase}.`);
+          assert.ok(closeResult, `The owned ${phase} shutdown child did not close within its signal budget.`);
+          throw new Error(`The controlled JEV shutdown child did not close after SIGTERM at ${phase}.`);
         }
-        const drainElapsedMs = Math.max(0, performance.now() - sigtermSentAt);
-        METRICS.processSigtermDrainElapsedMsMax = Math.max(METRICS.processSigtermDrainElapsedMsMax, drainElapsedMs);
-        METRICS.processSigtermDrainSamples += 1;
-        METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, drainElapsedMs);
-        METRICS.processCloseSamples += 1;
-        assert.ok(drainElapsedMs <= 3_000, `${phase} SIGTERM drain exceeded its aggregate deadline.`);
-        METRICS.processRuns += 1;
-        assert.equal(closeResult.code, 0, `${phase}: child stderr=${childStderr.slice(0, 2048)}`);
-        const result = JSON.parse(readFileSync(resultPath, 'utf8'));
-        assert.equal(result.termSeen, true);
-        assert.equal(result.blockedExternalNetworkAttempts, 0);
-        assert.equal(result.opaqueHoldRetained, phase !== 'before-marker');
-        if (phase === 'before-marker') {
-          assert.equal(result.attemptCount, 0);
-          assert.equal(result.markerCount, 0);
-          assert.equal(result.controlledHttpsWrites, 0);
-        } else {
-          assert.equal(result.attemptCount, 1);
-          assert.equal(result.markerCount, 1);
-          assert.equal(result.observationCount, 1);
+        durationMs = Math.max(0, performance.now() - sigtermSentAt);
+        assert.ok(durationMs <= 3_000, `${phase} shutdown child exceeded its unchanged close deadline.`);
+      } else {
+        closeResult = await waitForCloseBounded(closed, 8_000);
+        if (!closeResult) {
+          captureParentPhase(phase, role, 'restart_escalation_sent');
+          closeResult = await killOwnedChildAndReap(child, closed);
+          assert.ok(closeResult, `The owned ${phase} restart child did not close within its existing bound.`);
+          throw new Error(`The controlled JEV restart child exceeded its existing 8,000 ms invocation bound at ${phase}.`);
         }
-        if (phase === 'after-write') {
-          assert.equal(result.dispatchCertainty, 'possible');
-          assert.equal(result.controlledHttpsWrites, 1);
-        }
-        if (phase === 'after-marker-before-bytes') assert.equal(result.controlledHttpsWrites, 0);
-        if (phase === 'response-before-observation' || phase === 'observation-before-checkpoint') {
-          assert.equal(result.dispatchCertainty, 'response_received');
-        }
-        for (const [key, value] of Object.entries(JSON.parse(readFileSync(metricsPath, 'utf8').split('\n').filter(Boolean).join('\n')))) {
-          if (key === 'controlled_dns_resolve4') METRICS.controlledDnsResolve4 += value;
-          if (key === 'controlled_dns_resolve6') METRICS.controlledDnsResolve6 += value;
-          if (key === 'controlled_https_request') METRICS.controlledHttpsRequests += value;
-          if (key === 'controlled_https_write') METRICS.controlledHttpsWrites += value;
-          if (key === 'blocked_external_network_attempt') METRICS.blockedExternalNetworkAttempts += value;
-        }
-        results.push(result);
+        durationMs = Math.max(0, performance.now() - invocationStartedAt);
+      }
+      captureParentPhase(phase, role, `${role}_child_closed`);
+      const phaseCapturePath = `${metricsPath}.${role}.phases.jsonl`;
+      let captureResult;
+      try {
+        captureResult = readCi1ChildPhaseCapture(phaseCapturePath, phase, role, closeResult.code === 0);
+      } catch (error) {
+        METRICS.ci1PhaseCaptureIncomplete = true;
+        if (closeResult.code === 0) throw error;
+      }
+      assert.equal(closeResult.code, 0, `${phase}/${role}: child stderr=${childStderr.slice(0, 2048)}`);
+      const childResult = JSON.parse(readFileSync(resultPath, 'utf8'));
+      assert.equal(childResult.phaseCaptureComplete, true, `${phase}/${role} fixture reported incomplete phase capture`);
+      assert.equal(captureResult?.complete, true, `${phase}/${role} phase capture incomplete`);
+      return { childResult, metricsPath, durationMs, childStderr };
     } finally {
       if (!closeResult) {
+        captureParentPhase(phase, role, 'cleanup_escalation_sent');
         closeResult = await killOwnedChildAndReap(child, closed);
-        assert.ok(closeResult, `The owned ${phase} child could not be reaped during test cleanup.`);
+        assert.ok(closeResult, `The owned ${phase}/${role} child could not be reaped during test cleanup.`);
       }
     }
+  };
+
+  for (const phase of phases) {
+    const shutdown = await runChild(phase, 'shutdown');
+    const result = shutdown.childResult;
+    METRICS.processSigtermDrainElapsedMsMax = Math.max(METRICS.processSigtermDrainElapsedMsMax, shutdown.durationMs);
+    METRICS.processSigtermDrainSamples += 1;
+    METRICS.processCloseElapsedMsMax = Math.max(METRICS.processCloseElapsedMsMax, shutdown.durationMs);
+    METRICS.processCloseSamples += 1;
+    METRICS.processRuns += 1;
+    assert.equal(result.termSeen, true);
+    assert.equal(result.blockedExternalNetworkAttempts, 0);
+    assert.equal(result.opaqueHoldRetained, phase !== 'before-marker');
+    if (phase === 'before-marker') {
+      assert.equal(result.attemptCount, 0);
+      assert.equal(result.markerCount, 0);
+      assert.equal(result.controlledHttpsWrites, 0);
+    } else {
+      assert.equal(result.attemptCount, 1);
+      assert.equal(result.markerCount, 1);
+      assert.equal(result.observationCount, 1);
+    }
+    if (phase === 'after-write') {
+      assert.equal(result.dispatchCertainty, 'possible');
+      assert.equal(result.controlledHttpsWrites, 1);
+    }
+    if (phase === 'after-marker-before-bytes') assert.equal(result.controlledHttpsWrites, 0);
+    if (phase === 'response-before-observation' || phase === 'observation-before-checkpoint') {
+      assert.equal(result.dispatchCertainty, 'response_received');
+    }
+    for (const [key, value] of Object.entries(JSON.parse(readFileSync(shutdown.metricsPath, 'utf8')))) {
+      if (key === 'controlled_dns_resolve4') METRICS.controlledDnsResolve4 += value;
+      if (key === 'controlled_dns_resolve6') METRICS.controlledDnsResolve6 += value;
+      if (key === 'controlled_https_request') METRICS.controlledHttpsRequests += value;
+      if (key === 'controlled_https_write') METRICS.controlledHttpsWrites += value;
+      if (key === 'blocked_external_network_attempt') METRICS.blockedExternalNetworkAttempts += value;
+    }
+    const restart = await runChild(phase, 'restart', result.workflowId);
+    assert.equal(restart.childResult.phase, phase);
+    assert.equal(restart.childResult.providerAttemptCountAfterRestart, result.attemptCount);
+    assert.equal(restart.childResult.authorityHoldsAfterRestart, result.authorityHoldCountAfterStop);
+    assert.equal(restart.childResult.operationsInFlightAfterRestart, 0);
+    assert.equal(restart.childResult.restartLoopSettled, true);
+    assert.ok(restart.durationMs <= 8_000, `${phase} restart invocation exceeded its existing 8,000 ms bound`);
+    results.push({ ...result, ...restart.childResult });
   }
   assert.equal(results.length, 5);
+  assert.equal(METRICS.ci1PhaseCaptureOverflow, false);
+  assert.equal(METRICS.ci1PhaseCaptureIncomplete, false);
+  assert.ok(METRICS.ci1PhaseCaptures.length > 0 && METRICS.ci1PhaseCaptureBytes <= 24_576);
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.controlledHttpsRequests, 3);
   assert.equal(METRICS.controlledHttpsWrites, 3);
@@ -4940,7 +5127,8 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       'shmHighWaterBytes', 'freeSpaceLowWaterBytes', 'pendingEventHighWaterRecords',
       'reservedEventHighWaterSlots', 'resourceHighWaterSamples',
       'ownedRunnerCountHighWater', 'supervisorOpenFileDescriptors', 'runnerOpenFileDescriptors',
-      'processSigintSignalsSent', 'maxSupervisorRssBytes', 'maxRunnerRssBytes'
+      'processSigintSignalsSent', 'maxSupervisorRssBytes', 'maxRunnerRssBytes',
+      'ci1PhaseCaptures', 'ci1PhaseCaptureBytes', 'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete'
   ].sort());
   assert.equal(METRICS.providerCalls, 0);
   assert.equal(METRICS.blockedExternalNetworkAttempts, 0);
@@ -4959,6 +5147,15 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     assert.match(evidenceVerifier, /requiredEvidenceSetComplete/u);
     assert.match(evidenceVerifier, /diagnosticsIncludedInUpload/u);
     assert.match(evidenceVerifier, /failure-diagnostics\.js/u);
+    const tapArtifactWrite = evidenceVerifier.indexOf("const tapArtifact = writeArtifact(join(artifactDirectory, `${stem}.tap`)");
+    const captureParse = evidenceVerifier.indexOf('const ops07CaptureResult = parseOps07Capture(tapText)');
+    assert.ok(tapArtifactWrite >= 0 && captureParse > tapArtifactWrite,
+      'the sanitized TAP artifact is retained before capture validation can fail');
+    assert.match(evidenceVerifier, /function parseOps07Capture\(text\)[\s\S]*?catch \{\s*return \{ valid: false, reason: 'invalid_shape', capture: null \};\s*\}/u,
+      'unexpected parser failure becomes a structured invalid capture, not fixture success');
+    assert.match(evidenceVerifier, /ops07Capture: ops07CaptureResult\.valid\s*\?\s*\{ valid: true, capture: ops07CaptureResult\.capture \}\s*:\s*\{ valid: false, reason: ops07CaptureResult\.reason \}/u);
+    assert.match(evidenceVerifier, /&& ops07CaptureResult\.valid && ops07CaptureResult\.capture\.flags\.complete/u,
+      'invalid or incomplete capture prevents fixture acceptance');
     const controls = [
       ['assertion', 'ASSERTION_FAILURE'],
       ['busy', 'SQLITE_BUSY'],
@@ -5215,6 +5412,79 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
         overflow: false, writeFailed: false, abruptExit: false, cleanupIncomplete: false }
     });
     assert.equal(parseOperationsCaptureFromTap(`${captureLine(makeCompleteCapture())}\n`).capture.flags.complete, true);
+    const invalidStages = [
+      ['unknown string', 'unknown_stage'], ['prototype key', '__proto__'], ['constructor key', 'constructor'],
+      ['toString key', 'toString'], ['null', null], ['number', 17], ['boolean', false], ['array', []],
+      ['object with null toString', { toString: null }]
+    ];
+    for (const [label, stage] of invalidStages) {
+      for (const target of ['child', 'supervisor']) {
+        const malformedStageCapture = makeCompleteCapture();
+        if (target === 'child') malformedStageCapture.slots[0].records[1].stage = stage;
+        else malformedStageCapture.supervisor[0].stage = stage;
+        let parsedMalformedStage;
+        assert.doesNotThrow(() => {
+          parsedMalformedStage = parseOperationsCaptureFromTap(`${captureLine(malformedStageCapture)}\n`);
+        }, `${target} ${label} stage must not throw`);
+        assert.deepEqual(parsedMalformedStage, { valid: false, reason: 'invalid_shape', capture: null },
+          `${target} ${label} stage must remain structured and invalid`);
+      }
+    }
+    const malformedWriterDirectory = tempDirectory('ah11-ops-malformed-stage-');
+    const malformedWriterSession = createOperationsDiagnosticSession({ directory: malformedWriterDirectory.directory });
+    let parentStageTrapCalls = 0;
+    const hostileParentStage = new Proxy(Object.create(null), {
+      get() { parentStageTrapCalls += 1; return undefined; },
+      ownKeys() { parentStageTrapCalls += 1; return []; },
+      getOwnPropertyDescriptor() { parentStageTrapCalls += 1; return undefined; },
+      getPrototypeOf() { parentStageTrapCalls += 1; return null; }
+    });
+    try {
+      assert.equal(recordOperationsSupervisor(malformedWriterSession, 0, hostileParentStage, {
+        pidPresent: true, generation: 1, fence: 1
+      }), false);
+      assert.equal(parentStageTrapCalls, 0, 'supervisor writer rejects an object stage before coercion or reflection');
+      const malformedWriterSnapshot = readOperationsDiagnosticSession(malformedWriterSession, { abruptSlots: [] });
+      assert.equal(malformedWriterSnapshot.flags.malformed, true);
+      assert.equal(malformedWriterSnapshot.flags.complete, false);
+    } finally {
+      disposeOperationsDiagnosticSession(malformedWriterSession);
+      malformedWriterDirectory.cleanup();
+    }
+    const malformedChildDirectory = tempDirectory('ah11-ops-malformed-child-stage-');
+    const malformedChildPath = join(malformedChildDirectory.directory, 'child.jsonl');
+    let malformedChildFd = -1;
+    try {
+      malformedChildFd = openSync(malformedChildPath, 'wx', 0o600);
+      const diagnosticsModuleUrl = new URL('../../src/internal/private-ops-diagnostics.js', import.meta.url).href;
+      const writerProbe = `
+        const diagnostics = await import(${JSON.stringify(diagnosticsModuleUrl)});
+        let trapCalls = 0;
+        const hostileStage = new Proxy(Object.create(null), {
+          get() { trapCalls += 1; return undefined; },
+          ownKeys() { trapCalls += 1; return []; },
+          getOwnPropertyDescriptor() { trapCalls += 1; return undefined; },
+          getPrototypeOf() { trapCalls += 1; return null; }
+        });
+        if (!diagnostics.enableOperationsRunnerCaptureFromFd3()) process.exit(2);
+        if (diagnostics.recordOperationsDiagnostic(hostileStage, Object.create(null)) !== false) process.exit(3);
+        if (!diagnostics.finishOperationsRunnerCapture() || trapCalls !== 0) process.exit(4);
+      `;
+      const writerProbeResult = spawnSync(process.execPath, ['--input-type=module', '--eval', writerProbe], {
+        cwd: ROOT, env: baseEnvironment(), encoding: 'utf8', timeout: 5_000, maxBuffer: 8_192,
+        stdio: ['ignore', 'pipe', 'pipe', malformedChildFd]
+      });
+      closeSync(malformedChildFd);
+      malformedChildFd = -1;
+      assert.equal(writerProbeResult.status, 0, writerProbeResult.stderr);
+      const childRows = readFileSync(malformedChildPath, 'utf8').trim().split(/\r?\n/u).map(line => JSON.parse(line));
+      assert.deepEqual(childRows.map(row => row.stage), ['header', 'footer']);
+      assert.equal(childRows[1].writerComplete, false);
+      assert.equal(childRows[1].malformed, true, 'child writer retains structured incomplete custody for invalid stage');
+    } finally {
+      if (malformedChildFd >= 0) closeSync(malformedChildFd);
+      malformedChildDirectory.cleanup();
+    }
     const missingChildRuntimeCapture = makeCompleteCapture();
     delete missingChildRuntimeCapture.supervisor.find(record => record.stage === 'child_exit').childRuntimeMs;
     assert.equal(parseOperationsCaptureFromTap(`${captureLine(missingChildRuntimeCapture)}\n`).reason, 'invalid_shape');

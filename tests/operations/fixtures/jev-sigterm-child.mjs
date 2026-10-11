@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import https from 'node:https';
 import { Resolver } from 'node:dns/promises';
 import { EventEmitter } from 'node:events';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import '../../decisions/jev-adapter.contract/network-guard.js';
 import { createHmacTokenizer, createTelemetryExporter, DurableWorkflowStore } from '../../../src/internal/index.js';
 import { sendJevOnce } from '../../../src/adapters/jev/http-transport.js';
@@ -12,9 +14,74 @@ import { runPrivateJevTestAttempt } from '../../decisions/jev-adapter.contract/p
 import { recordSyntheticMetric } from '../../decisions/jev-adapter.contract/synthetic-metrics.js';
 import { createOperationsWorker } from '../../../src/worker/private/worker.js';
 
-const [databasePath, phase, markerPath, resultPath, metricsPath] = process.argv.slice(2);
+const [databasePath, phase, markerPath, resultPath, metricsPath, mode = 'combined', expectedWorkflowId] = process.argv.slice(2);
 if (!['before-marker', 'after-marker-before-bytes', 'after-write', 'response-before-observation', 'observation-before-checkpoint', 'failure-after-runner-pause', 'failure-runner-marker-missing', 'failure-runner-marker-partial'].includes(phase)
+    || !['combined', 'shutdown', 'restart'].includes(mode)
+    || (mode === 'restart' && (typeof expectedWorkflowId !== 'string' || expectedWorkflowId.length === 0))
     || ![databasePath, markerPath, resultPath, metricsPath].every(value => typeof value === 'string')) process.exit(2);
+
+const phaseCaptureEnabled = mode === 'shutdown' || mode === 'restart';
+const phaseCapturePath = `${metricsPath}.${mode}.phases.jsonl`;
+const phaseCaptureStartedAt = performance.now();
+const phaseCaptureStages = new Set([
+  'fixture_started', 'store_opened', 'workflow_opened', 'worker_started', 'runner_claimed', 'marker_written',
+  'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled', 'shutdown_verified',
+  'restart_worker_started', 'restart_work_completed', 'restart_stop_settled',
+  'restart_loop_settled', 'restart_store_closed',
+  'store_close_started', 'store_closed', 'runner_escalation_sent',
+  'fixture_finally_started', 'fixture_finally_complete'
+]);
+let phaseCaptureCount = 0;
+let phaseCaptureBytes = 0;
+let phaseCaptureComplete = true;
+function capturePhase(stage, details) {
+  if (!phaseCaptureEnabled) return true;
+  if (!phaseCaptureStages.has(stage) || phaseCaptureCount >= 16) {
+    phaseCaptureComplete = false;
+    return false;
+  }
+  let phaseDetails = {};
+  if (details !== undefined) {
+    if (!['stop_settled', 'restart_stop_settled'].includes(stage)
+        || !details || typeof details !== 'object' || Array.isArray(details)
+        || Object.keys(details).sort().join(',') !== 'childrenReaped,stopped,storeClosed'
+        || !['childrenReaped', 'storeClosed', 'stopped'].every(key => typeof details[key] === 'boolean')) {
+      phaseCaptureComplete = false;
+      return false;
+    }
+    phaseDetails = {
+      stopped: details.stopped,
+      childrenReaped: details.childrenReaped,
+      storeClosed: details.storeClosed
+    };
+  } else if (['stop_settled', 'restart_stop_settled'].includes(stage)) {
+    phaseCaptureComplete = false;
+    return false;
+  }
+  const record = {
+    schema: 1,
+    sequence: phaseCaptureCount + 1,
+    stage,
+    elapsedMs: Math.max(0, Math.round(performance.now() - phaseCaptureStartedAt)),
+    ...phaseDetails
+  };
+  const line = `${JSON.stringify(record)}\n`;
+  if (phaseCaptureBytes + Buffer.byteLength(line) > 4096) {
+    phaseCaptureComplete = false;
+    return false;
+  }
+  try {
+    if (phaseCaptureCount === 0) writeFileSync(phaseCapturePath, '', { flag: 'wx', mode: 0o600 });
+    appendFileSync(phaseCapturePath, line, { mode: 0o600 });
+    phaseCaptureCount += 1;
+    phaseCaptureBytes += Buffer.byteLength(line);
+    return true;
+  } catch {
+    phaseCaptureComplete = false;
+    return false;
+  }
+}
+capturePhase('fixture_started');
 
 const API_KEY_FIXTURE = 'synthetic-offline-key';
 const REQUEST = JSON.parse(await readFile(new URL('../../fixtures/jev/positive-request.json', import.meta.url), 'utf8'));
@@ -42,6 +109,7 @@ async function publishMarker(value) {
   await writeFile(temporaryPath, JSON.stringify(value), { flag: 'wx' });
   try {
     await rename(temporaryPath, markerPath);
+    capturePhase('marker_written');
   } catch (error) {
     try { await unlink(temporaryPath); } catch {}
     throw error;
@@ -75,6 +143,7 @@ async function stopOwnedWorker(worker) {
   try { stopping = worker.stop('test'); } catch { return; }
   if (await waitWithin(stopping, 2_000)) return;
   if (runnerPid) {
+    capturePhase('runner_escalation_sent');
     try { process.kill(runnerPid, 'SIGCONT'); } catch {}
     try { process.kill(runnerPid, 'SIGKILL'); } catch {}
   }
@@ -87,16 +156,111 @@ const record = name => {
 
 const onSigterm = () => {
   termSeen = true;
+  capturePhase('signal_seen');
   abortController.abort();
   releasePhase();
-  if (operationsWorker && !operationsStopPromise) operationsStopPromise = operationsWorker.stop('signal');
+  if (operationsWorker && !operationsStopPromise) {
+    capturePhase('stop_requested');
+    operationsStopPromise = operationsWorker.stop('signal');
+  }
 };
 process.on('SIGTERM', onSigterm);
 
 try {
+if (mode === 'restart') {
+  const localScope = { tenantId: 'composition-tenant', projectId: 'composition-project' };
+  const identity = new DatabaseSync(databasePath, { readOnly: true });
+  let original;
+  let attemptsBeforeRestart;
+  let holdsBeforeRestart;
+  try {
+    original = identity.prepare(`SELECT job_id, workflow_id, state, generation, fence_token
+      FROM operations_work WHERE idempotency_key=?`).get(`jev-composition-${phase}`);
+    if (!original) throw new Error('Restart did not find the retained local plan.');
+    attemptsBeforeRestart = Number(identity.prepare(
+      'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?'
+    ).get(expectedWorkflowId).count);
+    holdsBeforeRestart = Number(identity.prepare(
+      'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=? AND authority_hold_ref IS NOT NULL'
+    ).get(expectedWorkflowId).count);
+  } finally { identity.close(); }
+  if (original.state !== 'queued') throw new Error('Restart did not find the retained plan queued for recovery.');
+  restartedWorker = createOperationsWorker({ databasePath, ownerId: 'review-worker-jev-composition-restart' });
+  const restartLoop = restartedWorker.start();
+  capturePhase('restart_worker_started');
+  const restartDeadline = Date.now() + 8_000;
+  let resumed;
+  while (Date.now() < restartDeadline) {
+    resumed = restartedWorker.readScopedWorkPage({ trustedSyntheticScope: localScope, limit: 10 }).items
+      .find(item => item.jobId === original.job_id);
+    if (resumed?.state === 'completed') break;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  if (resumed?.state !== 'completed') throw new Error('Restart did not resume the same bounded local plan.');
+  capturePhase('restart_work_completed');
+  const restartStop = await restartedWorker.stop('test');
+  capturePhase('restart_stop_settled', {
+    stopped: restartStop.stopped,
+    childrenReaped: restartStop.childrenReaped,
+    storeClosed: restartStop.storeClosed
+  });
+  if (!restartStop.stopped || !restartStop.childrenReaped || !restartStop.storeClosed) {
+    throw new Error('Restart worker cleanup did not close its store and reap owned children.');
+  }
+  capturePhase('restart_store_closed');
+  let restartLoopOutcome;
+  let restartLoopTimer;
+  try {
+    restartLoopOutcome = await Promise.race([
+      Promise.resolve(restartLoop).then(() => 'resolved', () => 'rejected'),
+      new Promise(resolve => { restartLoopTimer = setTimeout(() => resolve('timeout'), 500); })
+    ]);
+  } finally { clearTimeout(restartLoopTimer); }
+  if (restartLoopOutcome !== 'resolved') throw new Error('Restart worker loop did not settle after its bounded stop.');
+  capturePhase('restart_loop_settled');
+  const finalOps = new DatabaseSync(databasePath, { readOnly: true });
+  let finalWork;
+  let finalWorkflow;
+  let attemptsAfterRestart;
+  let holdsAfterRestart;
+  let inFlightAfterRestart;
+  try {
+    finalWork = finalOps.prepare('SELECT state, generation, fence_token FROM operations_work WHERE job_id=?').get(original.job_id);
+    finalWorkflow = finalOps.prepare('SELECT state, fence_token FROM workflows WHERE workflow_id=?').get(original.workflow_id);
+    attemptsAfterRestart = Number(finalOps.prepare(
+      'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?'
+    ).get(expectedWorkflowId).count);
+    holdsAfterRestart = Number(finalOps.prepare(
+      'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=? AND authority_hold_ref IS NOT NULL'
+    ).get(expectedWorkflowId).count);
+    inFlightAfterRestart = Number(finalOps.prepare('SELECT in_flight FROM operations_meta WHERE singleton=1').get().in_flight);
+  } finally { finalOps.close(); }
+  const restartSummary = {
+    phase,
+    operationsRestarted: restartStop.stopped && restartStop.childrenReaped && restartStop.storeClosed && finalWork?.state === 'completed',
+    operationsWorkflowStateAfterRestart: finalWorkflow?.state ?? null,
+    operationsFenceAfterRestart: Number(finalWork?.fence_token ?? 0),
+    operationsGenerationAfterRestart: Number(finalWork?.generation ?? 0),
+    providerAttemptCountAfterRestart: attemptsAfterRestart,
+    authorityHoldsAfterRestart: holdsAfterRestart,
+    operationsInFlightAfterRestart: inFlightAfterRestart,
+    restartLoopSettled: restartLoopOutcome === 'resolved',
+    phaseCaptureComplete: phaseCaptureComplete
+  };
+  if (!restartSummary.operationsRestarted || !restartSummary.restartLoopSettled || finalWorkflow?.state !== 'succeeded'
+      || restartSummary.operationsFenceAfterRestart <= Number(original.fence_token)
+      || restartSummary.operationsGenerationAfterRestart <= Number(original.generation)
+      || attemptsAfterRestart !== attemptsBeforeRestart || holdsAfterRestart !== holdsBeforeRestart
+      || inFlightAfterRestart !== 0) {
+    throw new Error('Restart or higher-fence composition violated retained JEV/local-work invariants.');
+  }
+  await writeFile(metricsPath, JSON.stringify(metrics));
+  await writeFile(resultPath, JSON.stringify(restartSummary));
+} else {
 t:
 {
   store = DurableWorkflowStore.open({ databasePath, clock: () => 1000, busyTimeoutMs: 20 });
+  capturePhase('store_opened');
   tokenizer = createHmacTokenizer(Buffer.alloc(32, 29));
   exporter = createTelemetryExporter({
     store,
@@ -117,6 +281,7 @@ t:
   });
   removeOperationsSignals = operationsWorker.installSignalHandlers();
   operationsLoop = operationsWorker.start();
+  capturePhase('worker_started');
   const localPlan = JSON.stringify({
     kind: 'agent-harness.private-synthetic-plan', version: 1,
     steps: Array.from({ length: 32 }, (_, index) => ({
@@ -139,6 +304,7 @@ t:
   if (!Number.isSafeInteger(runnerPid) || runnerPid < 2 || !process.kill(runnerPid, 'SIGSTOP')) {
     throw new Error('The JEV composition fixture could not pause its actual owned runner.');
   }
+  capturePhase('runner_claimed');
   if (phase === 'failure-runner-marker-partial') {
     await writeFile(`${metricsPath}.runner`, '{"runnerPid":');
     await publishMarker({ phase, stage: 'runner-marker-ready' });
@@ -155,6 +321,7 @@ t:
     await publishMarker({ phase, stage: 'force-rename-failure-after-runner-pause' });
   }
   store.createWorkflow({ workflowId, checkpoint: { local: 'synthetic-before-send' }, eventId: `${workflowId}:created` });
+  capturePhase('workflow_opened');
   const lease = store.acquireLease({ workflowId, ownerId, ttlMs: 60_000, eventId: `${workflowId}:lease` });
   const running = store.transitionWorkflow({
     ...lease,
@@ -284,7 +451,13 @@ t:
 
   if (!operationsStopPromise) throw new Error('SIGTERM did not request operations-worker shutdown.');
   const stopped = await operationsStopPromise;
+  capturePhase('stop_settled', {
+    stopped: stopped.stopped,
+    childrenReaped: stopped.childrenReaped,
+    storeClosed: stopped.storeClosed
+  });
   await operationsLoop;
+  capturePhase('loop_settled');
   if (!stopped.stopped || !stopped.childrenReaped || !stopped.storeClosed || sinkCalls !== 1) {
     throw new Error('Combined worker, child, and telemetry shutdown did not finish within its owner bounds.');
   }
@@ -302,6 +475,9 @@ t:
   const attemptsAfterStop = Number(stoppedOps.prepare(
     'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=?'
   ).get(workflowId).count);
+  const holdsAfterStop = Number(stoppedOps.prepare(
+    'SELECT COUNT(*) AS count FROM operation_attempts WHERE workflow_id=? AND authority_hold_ref IS NOT NULL'
+  ).get(workflowId).count);
   stoppedOps.close();
   summary.telemetryCursor = telemetry.cursor;
   summary.telemetryPendingRecords = telemetry.pendingRecords;
@@ -313,11 +489,20 @@ t:
   summary.operationsGenerationBeforeRestart = Number(stoppedWork?.generation ?? 0);
   summary.operationsInFlightAfterStop = Number(stoppedCounters.in_flight);
   summary.providerAttemptCountAfterStop = attemptsAfterStop;
+  summary.authorityHoldCountAfterStop = holdsAfterStop;
   if (stoppedWork?.state !== 'queued' || Number(stoppedCounters.in_flight) !== 0
       || attemptsAfterStop !== summary.attemptCount) {
     throw new Error('Worker cleanup changed queue accounting or provider-attempt history.');
   }
-
+  capturePhase('shutdown_verified');
+  if (mode === 'shutdown') {
+    summary.phaseCaptureComplete = phaseCaptureComplete;
+    await writeFile(metricsPath, JSON.stringify(metrics));
+    await writeFile(resultPath, JSON.stringify(summary));
+    capturePhase('store_close_started');
+    store.close();
+    capturePhase('store_closed');
+  } else {
   restartedWorker = createOperationsWorker({ databasePath, ownerId: 'review-worker-jev-composition-restart' });
   restartedWorker.start();
   const restartDeadline = Date.now() + 8_000;
@@ -351,8 +536,11 @@ t:
   await writeFile(metricsPath, JSON.stringify(metrics));
   await writeFile(resultPath, JSON.stringify(summary));
   store.close();
+  }
+}
 }
 } finally {
+  capturePhase('fixture_finally_started');
   releasePhase();
   abortController.abort();
   clearInterval(keepalive);
@@ -364,5 +552,6 @@ t:
   if (operationsStopPromise) await waitWithin(operationsStopPromise, 500);
   try { store?.close(); } catch {}
   try { tokenizer?.destroy(); } catch {}
+  capturePhase('fixture_finally_complete');
 }
 process.exitCode = 0;

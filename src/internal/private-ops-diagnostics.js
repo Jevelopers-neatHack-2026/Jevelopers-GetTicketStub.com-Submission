@@ -112,6 +112,11 @@ const SUPERVISOR_FIELDS = Object.freeze({
   runner_identity_failure: ['code', 'generation', 'fence']
 });
 
+function ownStageFields(dictionary, stage) {
+  if (typeof stage !== 'string' || !Object.hasOwn(dictionary, stage)) return null;
+  return dictionary[stage];
+}
+
 function isPlainRecord(value) {
   if (value === null || typeof value !== 'object' || utilTypes.isProxy(value) || Array.isArray(value)) return false;
   try {
@@ -216,9 +221,10 @@ function safeErrorProjection(error) {
 }
 
 function normalizeChildFields(stage, input) {
-  const allowed = CHILD_FIELDS[stage];
-  if (!allowed) return null;
-  const values = ownRecord(input ?? Object.create(null), allowed, CHILD_REQUIRED[stage]);
+  const allowed = ownStageFields(CHILD_FIELDS, stage);
+  const required = ownStageFields(CHILD_REQUIRED, stage);
+  if (allowed === null || required === null) return null;
+  const values = ownRecord(input ?? Object.create(null), allowed, required);
   if (!values) return null;
   const result = Object.create(null);
   for (const [key, value] of Object.entries(values)) {
@@ -383,8 +389,9 @@ export function recordOperationsSupervisor(token, slotNumber, stage, input = Obj
   const state = sessions.get(token);
   if (!state || state.disposed) return false;
   try {
-    const allowed = SUPERVISOR_FIELDS[stage];
-    if (!allowed || !finiteInt(slotNumber, 0, 1)) return false;
+    const allowed = ownStageFields(SUPERVISOR_FIELDS, stage);
+    if (allowed === null) { state.flags.malformed = true; return false; }
+    if (!finiteInt(slotNumber, 0, 1)) return false;
     const values = ownRecord(input, allowed, allowed);
     if (!values) { state.flags.malformed = true; return false; }
     const clean = Object.create(null);
@@ -542,13 +549,15 @@ function parseChildRecords(bytes, slotState) {
     let value;
     try { value = JSON.parse(line); } catch { malformed = true; break; }
     if (!isPlainRecord(value)) { malformed = true; break; }
-    const common = ownRecord(value, ['schema', 'sequence', 'stage', 'elapsedMs', ...(CHILD_FIELDS[value.stage] ?? [])]);
+    const fieldsForStage = ownStageFields(CHILD_FIELDS, value.stage);
+    if (fieldsForStage === null) { malformed = true; break; }
+    const common = ownRecord(value, ['schema', 'sequence', 'stage', 'elapsedMs', ...fieldsForStage]);
     if (!common || common.schema !== CHILD_SCHEMA || common.sequence !== index + 1
         || !finiteInt(common.elapsedMs, 0, 600_000) || typeof common.stage !== 'string') {
       malformed = true; break;
     }
-    const stageFields = CHILD_FIELDS[common.stage];
-    if (!stageFields || (index === 0 && common.stage !== 'header')
+    const stageFields = fieldsForStage;
+    if ((index === 0 && common.stage !== 'header')
         || (common.stage === 'header' && index !== 0)
         || common.stage === 'footer' && index !== lines.length - 1) { malformed = true; break; }
     if (common.elapsedMs < previousElapsedMs) { malformed = true; break; }
@@ -801,8 +810,8 @@ export function parseOperationsCaptureFromTap(text) {
       try { recordKeys = Reflect.ownKeys(candidate); } catch { return { valid: false, reason: 'invalid_shape', capture: null }; }
       const stageDescriptor = Object.getOwnPropertyDescriptor(candidate, 'stage');
       const stage = stageDescriptor && Object.hasOwn(stageDescriptor, 'value') ? stageDescriptor.value : null;
-      const fieldsForStage = CHILD_FIELDS[stage];
-      if (!fieldsForStage) return { valid: false, reason: 'invalid_shape', capture: null };
+      const fieldsForStage = ownStageFields(CHILD_FIELDS, stage);
+      if (fieldsForStage === null) return { valid: false, reason: 'invalid_shape', capture: null };
       const row = ownRecord(candidate, ['sequence', 'stage', 'elapsedMs', ...fieldsForStage], ['sequence', 'stage', 'elapsedMs']);
       if (!row || row.sequence !== sequence + 1 || row.stage !== stage || !finiteInt(row.elapsedMs, 0, 600_000)
           || (sequence === 0 && stage !== 'header') || (stage === 'header' && sequence !== 0)
@@ -843,8 +852,8 @@ export function parseOperationsCaptureFromTap(text) {
     if (!isPlainRecord(candidate)) return { valid: false, reason: 'invalid_shape', capture: null };
     const stageDescriptor = Object.getOwnPropertyDescriptor(candidate, 'stage');
     const stage = stageDescriptor && Object.hasOwn(stageDescriptor, 'value') ? stageDescriptor.value : null;
-    const allowedFields = SUPERVISOR_FIELDS[stage];
-    if (!allowedFields) return { valid: false, reason: 'invalid_shape', capture: null };
+    const allowedFields = ownStageFields(SUPERVISOR_FIELDS, stage);
+    if (allowedFields === null) return { valid: false, reason: 'invalid_shape', capture: null };
     const row = ownRecord(candidate, ['schema', 'sequence', 'stage', 'slot', 'elapsedMs', ...allowedFields],
       ['schema', 'sequence', 'stage', 'slot', 'elapsedMs', ...allowedFields]);
     if (!row || row.schema !== SESSION_SCHEMA || row.sequence !== index + 1 || !finiteInt(row.slot, 0, 1)

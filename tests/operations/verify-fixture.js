@@ -48,6 +48,7 @@ const EXPECTED_UPLOAD_MEMBERS = Object.freeze([
   '.runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl',
   '.runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl'
 ]);
+const OPS07_INVALID_REASONS = new Set(['invalid_input', 'missing', 'duplicate', 'malformed', 'oversize', 'invalid_shape']);
 
 function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -138,6 +139,18 @@ function writeArtifact(path, bytes) {
   return { path, bytes: bytes.byteLength, sha256: digest(bytes) };
 }
 
+function parseOps07Capture(text) {
+  try {
+    const result = parseOperationsCaptureFromTap(text);
+    if (result?.valid === true && result.capture !== null && typeof result.capture === 'object') return result;
+    const reason = typeof result?.reason === 'string' && OPS07_INVALID_REASONS.has(result.reason)
+      ? result.reason : 'invalid_shape';
+    return { valid: false, reason, capture: null };
+  } catch {
+    return { valid: false, reason: 'invalid_shape', capture: null };
+  }
+}
+
 function safeTap(text) {
   return `${text.split(/\r?\n/u).filter(line => line.startsWith('TAP version ')
     || line.startsWith('1..') || /^[ \t]*# Subtest: OPS/u.test(line)
@@ -181,8 +194,8 @@ const testResult = child(['--test', '--test-concurrency=1', '--test-reporter=tap
 });
 const tapText = `${testResult.stdout ?? ''}${testResult.stderr ?? ''}`;
 const tapSummary = parseTAP(tapText);
-const ops07CaptureResult = parseOperationsCaptureFromTap(tapText);
 const tapArtifact = writeArtifact(join(artifactDirectory, `${stem}.tap`), Buffer.from(safeTap(tapText), 'utf8'));
+const ops07CaptureResult = parseOps07Capture(tapText);
 const suiteDiagnostics = buildSafeFailureDiagnostics({
   scenario: fixture,
   phase: 'operation-suite',
