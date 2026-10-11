@@ -5,10 +5,10 @@ import {
   inspectOpenAIImageBytes, isRecord, readPrivateOpenAIImageRequestId, readPrivateOpenAIImageRetryDisposition,
   readPrivateOpenAIImageTargetBindingSha256, responseHeader, runImageDispatch, safeProviderRequestRef,
   snapshotJson, snapshotUsageData, usageWithMissingField,
-} from "./image-provider-core.mjs";
-import { IMAGE_PROVIDER_ROUTES } from "./image-provider-routes.mjs";
+} from "./image-adapter-core.mjs";
+import { IMAGE_PROVIDER_ROUTES } from "./image-routes.mjs";
 
-// The shared validation, decoding, fence, and dispatch logic lives in image-provider-core.mjs
+// The shared validation, decoding, fence, and dispatch logic lives in image-adapter-core.mjs
 // and is reused by the OpenRouter adapter. This module keeps only the direct OpenAI Images
 // wire contract, candidate profiles, configuration, usage shape, and error mapping.
 export {

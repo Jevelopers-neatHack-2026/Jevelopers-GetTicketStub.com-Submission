@@ -18,6 +18,18 @@ function safeReference(value, field, max = 256) {
   return value;
 }
 
+/** A routed model id such as "author/slug" additionally allows "/"; all other identifier rules still apply. */
+function safeModelReference(value, field) {
+  if (typeof value === "string" && value.includes("/")) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*(?:\/[A-Za-z0-9][A-Za-z0-9_.:-]*)+$/.test(value)) {
+      throw new VersionStoreError("invalid_request", field);
+    }
+    safeReference(value.replaceAll("/", "."), field);
+    return value;
+  }
+  return safeReference(value, field);
+}
+
 function safeHash(value, field) {
   if (typeof value !== "string" || !HASH.test(value)) throw new VersionStoreError("invalid_request", field);
   return value;
@@ -694,7 +706,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           const reservation_ref = input.reservation_ref === undefined ? null
             : safeReference(input.reservation_ref, "reservation_ref");
           const provider_name = input.provider_name === undefined ? null : safeReference(input.provider_name, "provider_name");
-          const provider_model = input.provider_model === undefined ? null : safeReference(input.provider_model, "provider_model");
+          const provider_model = input.provider_model === undefined ? null : safeModelReference(input.provider_model, "provider_model");
           if ((provider_name === null) !== (provider_model === null)) throw new VersionStoreError("invalid_request", "provider_route");
           const existing = store.db.prepare(`SELECT dispatch_intent_ref,context_fence_json,billable_attempt_id,
             reservation_ref,provider_name,provider_model FROM creative_dispatch_intents
@@ -767,7 +779,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
         const provider_name = input.provider_name === undefined ? null
           : safeReference(input.provider_name, "provider_name");
         const provider_model = input.provider_model === undefined ? null
-          : safeReference(input.provider_model, "provider_model");
+          : safeModelReference(input.provider_model, "provider_model");
         if ((provider_name === null) !== (provider_model === null)) {
           return Object.freeze({ status: "lease_lost" });
         }

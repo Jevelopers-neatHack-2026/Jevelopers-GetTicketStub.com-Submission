@@ -3,12 +3,12 @@ import {
   MAX_PIXELS, OpenAIImagesProviderError, PRIVATE_PROVIDER_REQUEST_IDS, PRIVATE_RETRY_DISPOSITIONS,
   PRIVATE_TARGET_BINDING_SHA256, attachUsageObservation, checkRef, exactUsage, fail, freezeUsageObservation, hashJson,
   inspectConceptReferenceBytes, isRecord, runImageDispatch, snapshotUsageData, usageWithMissingField,
-} from "./image-provider-core.mjs";
-import { IMAGE_PROVIDER_ROUTES } from "./image-provider-routes.mjs";
+} from "./image-adapter-core.mjs";
+import { IMAGE_PROVIDER_ROUTES } from "./image-routes.mjs";
 
 // OpenRouter Images adapter. It sends one non-streaming POST to the documented
 // Images endpoint and reuses the shared authority, credential, fence, byte-inspection
-// and attribution machinery from image-provider-core.mjs. Nothing here selects a model,
+// and attribution machinery from image-adapter-core.mjs. Nothing here selects a model,
 // proves entitlement, or reads the environment: the host supplies an explicit profile
 // and a credential port. See docs/providers/openrouter-images.md for the sourced facts.
 
