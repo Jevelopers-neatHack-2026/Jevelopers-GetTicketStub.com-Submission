@@ -17,6 +17,7 @@ import {
 } from "../storage/content-addressed.mjs";
 import { createCreativeBriefStore } from "../planning/index.mjs";
 import { initializeCreativeBriefDatabase } from "../planning/store.mjs";
+import { inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 
 const STORAGE_VERSION = 7;
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
@@ -272,9 +273,42 @@ function getDesignHashAt(db, scope, designVersionId) {
     .get(scope.tenant_id, scope.project_id, scope.brief_id, designVersionId)?.design_hash ?? null;
 }
 
-function publicationFenceCurrent(store, scope, fence) {
+export function creativeAssetRightsFenceCurrent(database, now, scope, rights) {
+  try {
+    if (!isRecord(rights) || Object.keys(rights).some((key) => key !== "proofs") ||
+      !Array.isArray(rights.proofs) || rights.proofs.length > 64) return false;
+    const checkedAt = now();
+    if (!Number.isSafeInteger(checkedAt) || checkedAt < 0) return false;
+    const seen = new Set();
+    for (const proof of rights.proofs) {
+      if (!isRecord(proof) || Object.keys(proof).some((key) => ![
+        "asset_id", "action", "source_ref", "content_hash", "package_id", "package_hash", "checked_at", "expires_at",
+      ].includes(key))) return false;
+      const assetId = reference(proof.asset_id, "inspection_rights.asset_id");
+      if (!["reproduce", "modify", "publish", "display"].includes(proof.action)) return false;
+      reference(proof.source_ref, "inspection_rights.source_ref");
+      hash(proof.content_hash, "inspection_rights.content_hash");
+      reference(proof.package_id, "inspection_rights.package_id");
+      hash(proof.package_hash, "inspection_rights.package_hash");
+      if (proof.checked_at !== undefined && (!Number.isSafeInteger(proof.checked_at) || proof.checked_at < 0 ||
+        proof.checked_at > checkedAt)) return false;
+      if (!Number.isSafeInteger(proof.expires_at) || proof.expires_at <= checkedAt) return false;
+      const identity = `${assetId}\u0000${proof.action}\u0000${proof.content_hash}`;
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      if (database.prepare(`SELECT 1 AS found FROM creative_invalidation_fences
+        WHERE tenant_id=? AND project_id=? AND kind='asset' AND target_id=? AND target_hash=? LIMIT 1`)
+        .get(scope.tenant_id, scope.project_id, assetId, proof.content_hash)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function publicationFenceCurrent(store, scope, fence, { requireRecordedRepair = false } = {}) {
   const allowed = ["brief_id", "brief_hash", "design_version_id", "design_hash",
-    "expected_current_design_version_id", "expected_current_design_hash"];
+    "expected_current_design_version_id", "expected_current_design_hash", "inspection_repair", "inspection_rights"];
   if (!isRecord(fence) || Object.keys(fence).some((key) => !allowed.includes(key)) ||
     fence.brief_id !== scope.brief_id || typeof fence.brief_hash !== "string") return false;
   try {
@@ -291,6 +325,17 @@ function publicationFenceCurrent(store, scope, fence) {
       if ((selection?.design_version_id ?? null) !== fence.expected_current_design_version_id ||
         (selection?.design_hash ?? null) !== fence.expected_current_design_hash) return false;
     }
+    if (Object.hasOwn(fence, "inspection_repair")) {
+      const proof = fence.inspection_repair;
+      if (!isRecord(proof) || Object.keys(proof).some((key) => ![
+        "inspection_id", "action_id", "request_hash", "claim_ref", "root_brief_hash", "root_design_hash",
+        "root_design_version_id", "started_at_ms", "deadline_at_ms", "simulated_units_milli", "result_hash",
+      ].includes(key)) || proof.root_design_version_id !== undefined && typeof proof.root_design_version_id !== "string" ||
+        !inspectionRepairFenceCurrent(store.db, store.now, { ...scope,
+          design_version_id: proof.root_design_version_id }, proof, { requireRecorded: requireRecordedRepair })) return false;
+    }
+    if (Object.hasOwn(fence, "inspection_rights") &&
+      !creativeAssetRightsFenceCurrent(store.db, store.now, scope, fence.inspection_rights)) return false;
     return true;
   } catch {
     return false;

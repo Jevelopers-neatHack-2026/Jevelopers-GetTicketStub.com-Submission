@@ -899,8 +899,16 @@ test("repair limits and action identity persist across restart, duplicate, cance
   assert.equal(first.status, "recorded");
   assert.equal(first.local_limit_status, "within_limits");
   assert.equal(Object.hasOwn(first, "dispatch_allowed"), false);
-  assert.deepEqual(controller.recordRepairClaim(actionA), { status: "replayed",
-    claim_ref: first.claim_ref, action_id: "repair-1", simulated_units: 2 });
+  const replayedClaim = controller.recordRepairClaim(actionA);
+  assert.deepEqual({ status: replayedClaim.status, claim_ref: replayedClaim.claim_ref,
+    action_id: replayedClaim.action_id, simulated_units: replayedClaim.simulated_units }, {
+    status: "replayed", claim_ref: first.claim_ref, action_id: "repair-1", simulated_units: 2 });
+  assert.deepEqual({ started_at_ms: replayedClaim.started_at_ms, root_brief_hash: replayedClaim.root_brief_hash,
+    root_design_hash: replayedClaim.root_design_hash }, {
+    started_at_ms: first.started_at_ms, root_brief_hash: stateIdentity.brief_hash, root_design_hash: stateIdentity.design_hash });
+  assert.deepEqual(replayedClaim, { status: "replayed", claim_ref: first.claim_ref, action_id: "repair-1",
+    simulated_units: 2, started_at_ms: first.started_at_ms,
+    root_brief_hash: stateIdentity.brief_hash, root_design_hash: stateIdentity.design_hash });
   assert.equal(controller.recordRepairClaim({ ...actionA, action_id: "repair-unknown-cost", simulated_units: undefined }).status, "unknown_cost");
   assert.equal(controller.recordRepairClaim({ ...actionA, action_id: "repair-conflict", request_hash: digest("conflict"), simulated_units: 1 }).status, "recorded");
   assert.equal(controller.recordRepairClaim({ ...actionA, action_id: "repair-third", request_hash: digest("third"), simulated_units: 0.1 }).status, "limit_reached");

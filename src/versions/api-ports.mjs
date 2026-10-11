@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalHash, canonicalSerialize } from "../contracts/index.mjs";
-import { CreativeVersionStore, VersionStoreError } from "./store.mjs";
+import { CreativeVersionStore, VersionStoreError, creativeAssetRightsFenceCurrent } from "./store.mjs";
 import { applyResearchInvalidation } from "../planning/index.mjs";
-import { createSqliteInspectionRepairController } from "../inspection/repair-controller.mjs";
+import { createSqliteInspectionRepairController, inspectionRepairFenceCurrent } from "../inspection/repair-controller.mjs";
 
 const OPERATIONS = new Set(["generate", "edit", "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status"]);
 const HASH = /^sha256:[a-f0-9]{64}$/;
@@ -90,10 +90,10 @@ function briefScope(scope, briefId) {
   return Object.freeze({ tenant_id, project_id, brief_id: checkedBriefId });
 }
 
-function contextFenceMatches(store, scope, fence) {
+function contextFenceMatches(store, scope, fence, { requireRecordedRepair = false, afterPublication = false } = {}) {
   if (!record(fence) || Object.keys(fence).some((key) => ![
     "brief_id", "brief_hash", "design_version_id", "design_hash",
-    "expected_current_design_version_id", "expected_current_design_hash",
+    "expected_current_design_version_id", "expected_current_design_hash", "inspection_repair", "inspection_rights",
   ].includes(key))) return false;
   try {
     const checkedScope = briefScope(scope, fence.brief_id);
@@ -107,16 +107,47 @@ function contextFenceMatches(store, scope, fence) {
         design_version_id: fence.design_version_id });
       if (!design || design.design_hash !== fence.design_hash) return false;
     }
-    if (Object.hasOwn(fence, "expected_current_design_version_id")) {
+    if (!afterPublication && Object.hasOwn(fence, "expected_current_design_version_id")) {
       const selection = store.getSelection({ scope: checkedScope, brief_id: checkedScope.brief_id });
       const selectedId = selection?.design_version_id ?? null;
       const selectedHash = selection?.design_hash ?? null;
       if (selectedId !== fence.expected_current_design_version_id || selectedHash !== fence.expected_current_design_hash) return false;
     }
+    if (Object.hasOwn(fence, "inspection_repair")) {
+      const proof = fence.inspection_repair;
+      if (!record(proof) || Object.keys(proof).some((key) => ![
+        "inspection_id", "action_id", "request_hash", "claim_ref", "root_brief_hash", "root_design_hash",
+        "root_design_version_id", "started_at_ms", "deadline_at_ms", "simulated_units_milli", "result_hash",
+      ].includes(key)) || typeof proof.root_design_version_id !== "string" ||
+        !inspectionRepairFenceCurrent(store.db, store.now,
+          { ...checkedScope, design_version_id: proof.root_design_version_id }, proof,
+          { requireRecorded: requireRecordedRepair })) return false;
+    }
+    if (Object.hasOwn(fence, "inspection_rights") &&
+      !creativeAssetRightsFenceCurrent(store.db, store.now, checkedScope, fence.inspection_rights)) return false;
     return true;
   } catch {
     return false;
   }
+}
+
+function sameDispatchFence(existingJson, currentFence) {
+  let existing;
+  try { existing = JSON.parse(existingJson); } catch { return false; }
+  const comparable = (value) => {
+    if (!record(value)) return value;
+    const result = { ...value };
+    if (record(result.inspection_rights) && Array.isArray(result.inspection_rights.proofs)) {
+      result.inspection_rights = { ...result.inspection_rights,
+        proofs: result.inspection_rights.proofs.map((proof) => {
+          if (!record(proof)) return proof;
+          const { expires_at: _expiresAt, checked_at: _checkedAt, ...identity } = proof;
+          return identity;
+        }) };
+    }
+    return result;
+  };
+  return canonicalSerialize(comparable(existing)) === canonicalSerialize(comparable(currentFence));
 }
 
 function transactionStatusFor(row, scope, actorId, leaseToken, now) {
@@ -655,7 +686,7 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
             WHERE tenant_id=? AND project_id=? AND job_id=? AND transport_attempt_id=?`)
             .get(input.scope.tenant_id, input.scope.project_id, input.job_id, transport_attempt_id);
           if (existing) {
-            const sameFence = existing.context_fence_json === canonicalSerialize(input.context_fence);
+            const sameFence = sameDispatchFence(existing.context_fence_json, input.context_fence);
             const sameAttempt = (existing.billable_attempt_id ?? null) === billable_attempt_id &&
               (existing.reservation_ref ?? null) === reservation_ref &&
               (existing.provider_name ?? null) === provider_name && (existing.provider_model ?? null) === provider_model;
@@ -740,6 +771,10 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           if (transactionStatusFor(fresh, scope, input.actor_id, input.lease_token, store.now()) !== "active") {
             throw new VersionStoreError("cancelled", "job.lease_token");
           }
+          if (!contextFenceMatches(store, scope, input.publication_fence,
+            { requireRecordedRepair: true, afterPublication: true })) {
+            throw new VersionStoreError("stale_version", "publication_fence");
+          }
           const committedBrief = store.getBrief({ scope, brief_id: scope.brief_id });
           if (!committedBrief || canonicalHash(committedBrief) !== input.publication_fence.brief_hash) {
             throw new VersionStoreError("stale_version", "brief_hash");
@@ -752,7 +787,9 @@ export function createCreativeVersionApiPorts({ store, otherPorts = {}, idFactor
           if (!Number.isFinite(completedAt) ||
             transactionStatusFor(finalRow, scope, input.actor_id, input.lease_token, completedAt) !== "active" ||
             finalRow.action_id !== input.action_id || finalRow.operation !== input.operation ||
-            finalRow.request_hash !== row.request_hash) {
+            finalRow.request_hash !== row.request_hash ||
+            !contextFenceMatches(store, scope, input.publication_fence,
+              { requireRecordedRepair: true, afterPublication: true })) {
             throw new VersionStoreError("cancelled", "job.lease_token");
           }
           const completedChanges = store.db.prepare(`UPDATE creative_jobs SET status='completed',result_json=?,error_json=NULL,updated_at=?

@@ -220,24 +220,25 @@ function attachInspectionPorts(ports, counters, { recommendRepair = false, estim
 
 async function setupInspectionSystem(t, { artifactBytes = Buffer.from(makePng(16, 16)),
   artifactMediaType = "image/png", recommendRepair = false, decisionDefectProbability = 0.8,
-  decisionQualityScore = 2 } = {}) {
+  decisionQualityScore = 2, now = () => NOW, leaseDurationMs = 60_000 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "creative-inspection-api-case-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
   const store = new CreativeVersionStore({ databasePath: join(root, "versions.sqlite"),
-    objectRoot: join(root, "objects"), now: () => NOW });
+    objectRoot: join(root, "objects"), now });
   t.after(() => store.close());
   const brief = await fixture("brief");
   store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief });
   const counters = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
   let id = 0;
   const ports = attachInspectionPorts(portsFor(store, counters, () => `case-port-${++id}`,
-    { artifactBytes, artifactMediaType }), counters, { recommendRepair, decisionDefectProbability, decisionQualityScore });
-  const api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `case-api-${++id}` });
-  return { root, store, brief, counters, ports, api, nextId: () => ++id };
+    { artifactBytes, artifactMediaType, leaseDurationMs }), counters,
+  { recommendRepair, decisionDefectProbability, decisionQualityScore });
+  const api = createCreativeApi({ ports, now, idFactory: () => `case-api-${++id}` });
+  return { root, store, brief, counters, ports, api, nextId: () => ++id, now };
 }
 
-async function setupAssetBackedInspectionSystem(t) {
-  const system = await setupInspectionSystem(t, { recommendRepair: true });
+async function setupAssetBackedInspectionSystem(t, { now = () => NOW, permissionStatusAfterGenerate = "denied" } = {}) {
+  const system = await setupInspectionSystem(t, { recommendRepair: true, now });
   const research = { ...completeResearchPackage(), tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id };
   system.ports.planning.getCurrentResearchPackage = async () => research;
   let permissionStatus = "granted";
@@ -246,7 +247,7 @@ async function setupAssetBackedInspectionSystem(t) {
       tenant_id: input.tenant_id, project_id: input.project_id, asset_id: input.asset_id,
       content_hash: input.content_hash, action: input.action, package_id: input.package_id,
       package_hash: input.package_hash, evidence_ref: "fixture:inspection-asset-permission",
-      checked_at: new Date(NOW).toISOString(), expires_at: new Date(NOW + 60_000).toISOString() };
+      checked_at: new Date(now()).toISOString(), expires_at: new Date(now() + 60_000).toISOString() };
   } };
   const createBriefBody = request("inspection-asset-brief", null);
   createBriefBody.operation = "brief.create";
@@ -270,8 +271,9 @@ async function setupAssetBackedInspectionSystem(t) {
   const generated = await system.api.invoke(actor(), generateBody);
   assert.equal(generated.ok, true, JSON.stringify(generated));
   assert.equal(generated.result.design_version.creative_asset_use.entries.length, 1);
-  permissionStatus = "denied";
-  return { ...system, brief, design: generated.result.design_version };
+  permissionStatus = permissionStatusAfterGenerate;
+  return { ...system, brief, design: generated.result.design_version,
+    setPermissionStatus(status) { permissionStatus = status; } };
 }
 
 test("real API invocation commits job, exact artifact bytes, version and selection through one durable adapter", async (t) => {
@@ -553,6 +555,102 @@ test("CE09 acceptance case 4 persists cumulative root limits across restart and 
     "the durable two-repair limit stops a third edit before new route, reservation, or transport");
 });
 
+test("terminal inspection graphs reopen with exact reports and zero redispatch", async (t) => {
+  const cases = [
+    { name: "deterministic decode failure", mode: "decode_failure", expectedStages: 0 },
+    { name: "observer refusal", mode: "observer_refusal", expectedStages: 1 },
+    { name: "observer unavailable", mode: "observer_unavailable", expectedStages: 1 },
+    { name: "observer timeout", mode: "observer_timeout", expectedStages: 1 },
+    { name: "observer only", mode: "observer_only", expectedStages: 1 },
+    { name: "first stage abstention", mode: "first_review", expectedStages: 2 },
+    { name: "first stage timeout", mode: "first_timeout", expectedStages: 2 },
+    { name: "dependent route timeout", mode: "route_timeout", expectedStages: 3 },
+    { name: "complete dependent decisions", mode: "complete", expectedStages: 3 },
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.name, async (subtest) => {
+      const root = await mkdtemp(join(tmpdir(), "creative-inspection-terminal-replay-"));
+      subtest.after(async () => rm(root, { recursive: true, force: true }));
+      const databasePath = join(root, "versions.sqlite");
+      const objectRoot = join(root, "objects");
+      const artifactBytes = scenario.mode === "decode_failure"
+        ? corruptPngCrc(Buffer.from(makePng(16, 16))) : Buffer.from(makePng(16, 16));
+      const storeOptions = { databasePath, objectRoot, now: () => NOW };
+      let store = new CreativeVersionStore(storeOptions);
+      subtest.after(() => store.close());
+      store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: await fixture("brief") });
+      const counters = { provider: 0, reserved: 0, inspection: 0, decision: 0 };
+      let id = 0;
+      const makePorts = () => attachInspectionPorts(portsFor(store, counters,
+        () => `terminal-replay-port-${++id}`, { artifactBytes }), counters, { recommendRepair: true });
+      let ports = makePorts();
+      if (["observer_refusal", "observer_unavailable", "observer_timeout"].includes(scenario.mode)) {
+        ports.inspection.inspect = async (input) => {
+          counters.inspection += 1;
+          await input.recordTransportAttempt(input.transport_attempt_id);
+          return { status: scenario.mode === "observer_refusal" ? "refused"
+            : scenario.mode === "observer_unavailable" ? "unavailable" : "timeout",
+          usage: { completeness: "complete", input_tokens: 1, output_tokens: 0 } };
+        };
+      }
+      if (scenario.mode === "observer_only") delete ports.decisionPort;
+      if (["first_review", "first_timeout", "route_timeout"].includes(scenario.mode)) {
+        const execute = ports.decisionPort.execute;
+        ports.decisionPort.execute = async (input) => {
+          const result = await execute(input);
+          if (scenario.mode === "first_review" && counters.decision === 1) {
+            const [key, question] = Object.entries(input.request.questions)[0];
+            return { ...result, status: "review", answers: { ...result.answers, [key]: {
+              status: "abstain", question_schema_version: question.question_schema_version,
+              policy_version: question.policy_version, reason: "fixture review required",
+            } } };
+          }
+          const firstStageTimeout = scenario.mode === "first_timeout" && counters.decision === 1;
+          const routeTimeout = scenario.mode === "route_timeout" && counters.decision === 2;
+          if (firstStageTimeout || routeTimeout) {
+            return { ...result, status: "timeout", answers: Object.fromEntries(
+              Object.entries(input.request.questions).map(([key, question]) => [key, {
+                status: "unavailable", question_schema_version: question.question_schema_version,
+                policy_version: question.policy_version, reason: "fixture timeout",
+              }])), error: { code: "timeout", retryable: true, fallback: "review",
+                user_message: "The fixture decision timed out." } };
+          }
+          return result;
+        };
+      }
+      let api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `terminal-replay-api-${++id}` });
+      const generated = await api.invoke(actor(), request(`terminal-seed-${scenario.mode}`, await fixture("generate-plan")));
+      assert.equal(generated.ok, true, JSON.stringify(generated));
+      const inspectBody = inspectionRequest(`terminal-inspect-${scenario.mode}`, generated.result.design_version.design_version_id);
+      const inspected = await api.invoke(actor(), inspectBody);
+      assert.equal(inspected.ok, true, JSON.stringify(inspected));
+      assert.equal(inspected.result.attempt_ids.length, scenario.expectedStages);
+      const beforeRestart = { provider: counters.provider, reserved: counters.reserved,
+        inspection: counters.inspection, decision: counters.decision };
+      assert.equal(store.db.prepare("SELECT status FROM creative_inspection_sessions_v1 WHERE action_id=?")
+        .get(inspectBody.action_id).status, "completed");
+      store.close();
+      store = new CreativeVersionStore(storeOptions);
+      ports = makePorts();
+      if (scenario.mode === "observer_only") delete ports.decisionPort;
+      if (["observer_refusal", "observer_unavailable", "observer_timeout"].includes(scenario.mode)) {
+        ports.inspection.inspect = async () => { counters.inspection += 1; throw new Error("replay redispatched observer"); };
+      }
+      if (["first_review", "first_timeout", "route_timeout"].includes(scenario.mode)) {
+        ports.decisionPort.execute = async () => { counters.decision += 1; throw new Error("replay redispatched DecisionPort"); };
+      }
+      api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `terminal-replay-api-reopen-${++id}` });
+      const replay = await api.invoke(actor(), { ...inspectBody,
+        event_id: `${inspectBody.event_id}-reopen`, request_id: `${inspectBody.request_id}-reopen` });
+      assert.equal(replay.ok, true, JSON.stringify(replay));
+      assert.equal(replay.replayed, true);
+      assert.deepEqual(replay.result, inspected.result);
+      assert.deepEqual({ provider: counters.provider, reserved: counters.reserved,
+        inspection: counters.inspection, decision: counters.decision }, beforeRestart);
+    });
+  }
+});
+
 test("inspection repair remains review-gated when trusted owner usage evidence is unavailable", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-inspection-unknown-owner-usage-"));
   t.after(async () => rm(root, { recursive: true, force: true }));
@@ -591,6 +689,648 @@ test("inspection repair remains review-gated when trusted owner usage evidence i
   assert.equal(repair.error.code, "unavailable", "repair validation fails closed at the missing owner usage evidence gate");
   assert.deepEqual({ provider: counters.provider, reserved: counters.reserved, estimates: counters.estimates }, before,
     "unknown usage cannot authorize an edit, reserve a repair attempt, or request a cost estimate");
+});
+
+test("mixed observer and DecisionPort owner usage remains incomplete across completion, reopen, replay, and repair validation", async (t) => {
+  const cases = [
+    { name: "unknown observer with known decisions", unknownStage: "observer",
+      expected: ["unknown", "complete", "complete"] },
+    { name: "known observer and route with unknown first decision", unknownStage: "first_decision",
+      expected: ["complete", "unknown", "complete"] },
+    { name: "all executed observer and decision stages unknown", unknownStage: "all",
+      expected: ["unknown", "unknown", "unknown"] },
+  ];
+  for (const scenario of cases) await t.test(scenario.name, async (subtest) => {
+    const root = await mkdtemp(join(tmpdir(), "creative-inspection-mixed-owner-usage-"));
+    subtest.after(async () => rm(root, { recursive: true, force: true }));
+    const databasePath = join(root, "versions.sqlite");
+    const objectRoot = join(root, "objects");
+    const storeOptions = { databasePath, objectRoot, now: () => NOW };
+    let store = new CreativeVersionStore(storeOptions);
+    subtest.after(() => store.close());
+    const brief = await fixture("brief");
+    store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief });
+    const counters = { provider: 0, reserved: 0, inspection: 0, decision: 0, estimates: 0 };
+    let id = 0;
+    const makePorts = () => {
+      const ports = attachInspectionPorts(portsFor(store, counters, () => `mixed-owner-port-${++id}`,
+        { artifactBytes: Buffer.from(makePng(16, 16)) }),
+        counters, { recommendRepair: true });
+      const ownerMapper = ports.telemetry.usage_profile_authority.mapProviderUsage;
+      let decisionCount = 0;
+      ports.telemetry.usage_profile_authority = Object.freeze({ mapProviderUsage(input) {
+        if (scenario.unknownStage === "all" ||
+          scenario.unknownStage === "observer" && input.attempt.operation_kind === "vision_observation") {
+          return { status: "unmapped" };
+        }
+        if (input.attempt.operation_kind === "jev_decision") {
+          decisionCount += 1;
+          if (scenario.unknownStage === "first_decision" && decisionCount === 1) return { status: "unmapped" };
+        }
+        return ownerMapper(input);
+      } });
+      const estimate = ports.inspection.estimateFixtureRepairCost;
+      ports.inspection.estimateFixtureRepairCost = (...args) => {
+        counters.estimates += 1;
+        return estimate(...args);
+      };
+      return ports;
+    };
+    let ports = makePorts();
+    let api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `mixed-owner-api-${++id}` });
+    const generated = await api.invoke(actor(), request(`mixed-owner-seed-${scenario.unknownStage}`,
+      await fixture("generate-plan")));
+    assert.equal(generated.ok, true, JSON.stringify(generated));
+    const design = generated.result.design_version;
+    const inspectBody = inspectionRequest(`mixed-owner-inspect-${scenario.unknownStage}`, design.design_version_id);
+    const inspected = await api.invoke(actor(), inspectBody);
+    assert.equal(inspected.ok, true, JSON.stringify(inspected));
+    assert.equal(inspected.result.report.limits.usage_completeness, "unknown");
+    assert.ok(inspected.result.report.uncertainty.includes("unknown_cost"));
+    const storedStages = store.db.prepare(`SELECT stage,result_json FROM creative_inspection_stages_v1
+      WHERE action_id=? ORDER BY CASE stage WHEN 'observer' THEN 0 WHEN 'decision_evidence' THEN 1 ELSE 2 END`)
+      .all(inspectBody.action_id).map((row) => JSON.parse(row.result_json).usage_completeness);
+    assert.deepEqual(storedStages, scenario.expected);
+    const beforeReplay = { provider: counters.provider, reserved: counters.reserved,
+      inspection: counters.inspection, decision: counters.decision };
+
+    store.close();
+    store = new CreativeVersionStore(storeOptions);
+    ports = makePorts();
+    api = createCreativeApi({ ports, now: () => NOW, idFactory: () => `mixed-owner-reopen-api-${++id}` });
+    const replay = await api.invoke(actor(), { ...inspectBody, event_id: `${inspectBody.event_id}-reopen`,
+      request_id: `${inspectBody.request_id}-reopen`, correlation_id: `${inspectBody.correlation_id}-reopen` });
+    assert.equal(replay.ok, true, JSON.stringify(replay));
+    assert.equal(replay.replayed, true);
+    assert.deepEqual(replay.result, inspected.result,
+      "reopen reconstructs the same stage-wise unknown-cost report without upgrading owner completeness");
+    assert.deepEqual({ provider: counters.provider, reserved: counters.reserved,
+      inspection: counters.inspection, decision: counters.decision }, beforeReplay);
+
+    const beforeRepair = { provider: counters.provider, reserved: counters.reserved, estimates: counters.estimates };
+    const repair = await api.invoke(actor(), await repairEditRequest(`mixed-owner-repair-${scenario.unknownStage}`,
+      design, canonicalHash(inspected.result.report), inspectBody.action_id));
+    assert.equal(repair.ok, false);
+    assert.equal(repair.error.code, "unavailable",
+      "one unknown executed owner stage blocks favorable repair authorization");
+    assert.deepEqual({ provider: counters.provider, reserved: counters.reserved, estimates: counters.estimates }, beforeRepair,
+      "repair validation does not reserve, dispatch, or request a fixture-cost estimate for mixed unknown usage");
+  });
+});
+
+test("a repair claim's root deadline prevents a reservation after an awaited route lookup", async (t) => {
+  let currentNow = NOW;
+  const system = await setupInspectionSystem(t, { now: () => currentNow, recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("repair-route-deadline-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("repair-route-deadline-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  const before = { reserved: counters.reserved, provider: counters.provider };
+  const resolveRoute = ports.provider.resolveRoute;
+  currentNow = NOW + 59_000;
+  ports.provider.resolveRoute = async (input) => {
+    const route = await resolveRoute(input);
+    currentNow = NOW + 61_000;
+    return route;
+  };
+  const body = await repairEditRequest("repair-route-deadline-edit", design,
+    canonicalHash(inspected.result.report), inspectBody.action_id);
+  const result = await api.invoke(actor(), body);
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.equal(result.error.code, "review_required");
+  assert.deepEqual({ reserved: counters.reserved, provider: counters.provider }, before,
+    "a route lookup that reaches the cumulative root deadline cannot reserve or dispatch the edit");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count, 1);
+  const state = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+    design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
+  assert.equal(state.repairs_used, 1, "the serialized root claim remains counted after the stopped attempt");
+});
+
+test("repair outcome, immutable child, selection, and job result roll back when publication crosses the root deadline", async (t) => {
+  let currentNow = NOW;
+  const system = await setupInspectionSystem(t, { now: () => currentNow, recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("repair-publication-deadline-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("repair-publication-deadline-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  currentNow = NOW + 59_000;
+  const commit = ports.storage.commitPreparedDesignVersion;
+  ports.storage.commitPreparedDesignVersion = async (...args) => {
+    const result = await commit(...args);
+    currentNow = NOW + 61_000;
+    return result;
+  };
+  const body = await repairEditRequest("repair-publication-deadline-edit", design,
+    canonicalHash(inspected.result.report), inspectBody.action_id);
+  const result = await api.invoke(actor(), body);
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.equal(result.error.code, "stale_version");
+  assert.equal(counters.provider, 2, "the already completed edit remains attributable");
+  assert.equal(counters.reserved, 5);
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions").get().count, 1,
+    "prepared child metadata is rolled back with the late repair outcome");
+  assert.equal(store.getCurrentDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id }).design_version_id,
+    design.design_version_id, "selection remains on the source design");
+  const job = store.db.prepare("SELECT status,result_json FROM creative_jobs WHERE action_id=?")
+    .get(body.action_id);
+  assert.notEqual(job.status, "completed");
+  assert.equal(job.result_json, null);
+  const action = store.db.prepare(`SELECT status,result_hash FROM creative_inspection_action_v2
+    WHERE action_id=?`).get(body.action_id);
+  assert.equal(action.status, "claimed", "the attempted outcome update rolls back in the same transaction");
+  assert.equal(action.result_hash, null);
+});
+
+test("inspection stops after observer transport ACK when its owner permission proof expires before provider invocation", async (t) => {
+  let currentNow = NOW;
+  const system = await setupAssetBackedInspectionSystem(t, { now: () => currentNow,
+    permissionStatusAfterGenerate: "granted" });
+  const { store, ports, counters, api, design } = system;
+  const verifier = ports.planning.assetPermissionVerifier.verifyAssetUse;
+  ports.planning.assetPermissionVerifier.verifyAssetUse = async (input) => {
+    const proof = await verifier(input);
+    return { ...proof, checked_at: new Date(currentNow).toISOString(),
+      expires_at: new Date(NOW + 1_000).toISOString() };
+  };
+  const recordTransportAttempt = ports.metering.recordTransportAttempt.bind(ports.metering);
+  let inspectionAck = false;
+  ports.metering.recordTransportAttempt = async (input) => {
+    const result = await recordTransportAttempt(input);
+    if (!inspectionAck) {
+      inspectionAck = true;
+      currentNow = NOW + 1_001;
+    }
+    return result;
+  };
+  let unknownHolds = 0;
+  const markOutcomeUnknown = ports.metering.markOutcomeUnknown.bind(ports.metering);
+  ports.metering.markOutcomeUnknown = async (...args) => {
+    unknownHolds += 1;
+    return markOutcomeUnknown(...args);
+  };
+  const before = { reserved: counters.reserved, provider: counters.provider };
+  const acknowledgmentsBefore = counters.financeTransportIds.length;
+  const body = inspectionRequest("inspection-owner-proof-expiry", design.design_version_id);
+  body.payload.brief_id = system.brief.brief_id;
+  const result = await api.invoke(actor(), body);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "permission_denied");
+  assert.equal(counters.inspection, 0, "the expired proof blocks the observer call after transport acknowledgment");
+  assert.equal(counters.decision ?? 0, 0, "expired owner rights block both dependent decision stages");
+  assert.equal(counters.reserved, before.reserved + 1, "no dependent-stage reservation follows the expired proof");
+  assert.equal(counters.provider, before.provider);
+  assert.equal(counters.financeTransportIds.length, acknowledgmentsBefore + 1,
+    "the authorized observer attempt has one C03 transport ACK that remains attributable");
+  assert.ok(unknownHolds >= 1, "the already-acknowledged observer remains held for reconciliation");
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM creative_inspection_stages_v1 WHERE action_id=?")
+    .get(body.action_id).count, 0, "an ACK without provider invocation cannot forge a completed stage");
+  const session = store.db.prepare("SELECT status,result_json FROM creative_inspection_sessions_v1 WHERE action_id=?")
+    .get(body.action_id);
+  assert.equal(session.status, "active");
+  assert.equal(session.result_json, null);
+});
+
+test("inspection carries expiring owner proofs through the final send fence for observer and both DecisionPort stages", async (t) => {
+  const cases = [
+    { stage: "observer", permittedBefore: [], expectedDecisionCalls: 0, expectedReserved: 1 },
+    { stage: "decision_evidence", permittedBefore: ["observer"], expectedDecisionCalls: 0, expectedReserved: 2 },
+    { stage: "decision_route", permittedBefore: ["observer", "decision_evidence"], expectedDecisionCalls: 1, expectedReserved: 3 },
+  ];
+  for (const scenario of cases) await t.test(scenario.stage, async (subtest) => {
+    let currentNow = NOW;
+    const system = await setupAssetBackedInspectionSystem(subtest, { now: () => currentNow,
+      permissionStatusAfterGenerate: "granted" });
+    const { store, ports, counters, api, design } = system;
+    const verifier = ports.planning.assetPermissionVerifier.verifyAssetUse;
+    ports.planning.assetPermissionVerifier.verifyAssetUse = async (input) => {
+      const proof = await verifier(input);
+      return { ...proof, checked_at: new Date(currentNow).toISOString(), expires_at: new Date(NOW + 1_000).toISOString() };
+    };
+    const authorize = ports.jobs.authorizeDispatch.bind(ports.jobs);
+    const dispatchProofs = [];
+    const permittedStages = [];
+    let activeStage = null;
+    let stageAuthorizations = 0;
+    let expiredAfterFinalAuthorization = false;
+    ports.jobs.authorizeDispatch = async (input) => {
+      const result = await authorize(input);
+      if (activeStage) {
+        const proofs = input.context_fence?.inspection_rights?.proofs;
+        dispatchProofs.push({ stage: activeStage, proofs: Array.isArray(proofs) ? proofs.map((proof) => ({
+          asset_id: proof.asset_id, action: proof.action, content_hash: proof.content_hash,
+          package_id: proof.package_id, package_hash: proof.package_hash, expires_at: proof.expires_at,
+        })) : null });
+        if (activeStage === scenario.stage) {
+          stageAuthorizations += 1;
+          if (stageAuthorizations === 2) {
+            currentNow = NOW + 1_001;
+            expiredAfterFinalAuthorization = true;
+          }
+        }
+      }
+      return result;
+    };
+    const observer = ports.inspection.inspect;
+    ports.inspection.inspect = async (input) => {
+      activeStage = "observer";
+      try {
+        await input.recordTransportAttempt(input.transport_attempt_id);
+        permittedStages.push("observer");
+        return await observer({ ...input, recordTransportAttempt: async () => {} });
+      } finally { activeStage = null; }
+    };
+    const execute = ports.decisionPort.execute;
+    ports.decisionPort.execute = async (input) => {
+      const stage = Object.hasOwn(input.request.questions, "next_step") ? "decision_route" : "decision_evidence";
+      activeStage = stage;
+      try {
+        await input.recordTransportAttempt(input.transport_attempt_id);
+        permittedStages.push(stage);
+        return await execute({ ...input, recordTransportAttempt: async () => {} });
+      } finally { activeStage = null; }
+    };
+    const markUnknown = ports.metering.markOutcomeUnknown.bind(ports.metering);
+    let unknownHolds = 0;
+    ports.metering.markOutcomeUnknown = async (...args) => {
+      unknownHolds += 1;
+      return markUnknown(...args);
+    };
+
+    const beforeReserved = counters.reserved;
+    const body = inspectionRequest(`inspection-final-proof-ttl-${scenario.stage}`, design.design_version_id);
+    body.payload.brief_id = system.brief.brief_id;
+    const result = await api.invoke(actor(), body);
+    assert.equal(expiredAfterFinalAuthorization, true, "the TTL expires only after the final awaited job authorization returns");
+    assert.equal(stageAuthorizations, 2, "both post-ACK job checks retain the proof before the final synchronous TTL fence");
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, "permission_denied", JSON.stringify(result));
+    assert.deepEqual(permittedStages, scenario.permittedBefore,
+      "no stage receives its send permit once the retained owner proof has expired");
+    assert.equal(counters.reserved, beforeReserved + scenario.expectedReserved,
+      "only the observer and stages reached before the expired proof receive reservations");
+    assert.equal(counters.decision, scenario.expectedDecisionCalls,
+      "the expired stage is rejected before its DecisionPort provider executes");
+    assert.ok(unknownHolds >= 1, "a transport ACK already issued for the blocked stage remains held for reconciliation");
+    assert.ok(dispatchProofs.length >= 2);
+    assert.ok(dispatchProofs.filter((item) => item.stage === scenario.stage).every((item) =>
+      item.proofs?.length === 1 && item.proofs[0].expires_at === NOW + 1_000),
+    "each final job authorization carries the verifier's exact proof expiry");
+    const rows = store.db.prepare(`SELECT stage,status FROM creative_inspection_stages_v1 WHERE action_id=?
+      ORDER BY CASE stage WHEN 'observer' THEN 0 WHEN 'decision_evidence' THEN 1 ELSE 2 END`)
+      .all(body.action_id).map((row) => ({ ...row }));
+    assert.deepEqual(rows.map((row) => row.status), [
+      ...scenario.permittedBefore.map(() => "completed"), "dispatching",
+    ], "the ACKed stage remains unresolved and is never completed with an expired permission proof");
+    assert.equal(store.db.prepare("SELECT status FROM creative_inspection_sessions_v1 WHERE action_id=?")
+      .get(body.action_id).status, "active");
+  });
+});
+
+test("inspection rechecks current owner rights after the last dependent stage and before publishing a report", async (t) => {
+  const system = await setupAssetBackedInspectionSystem(t, { permissionStatusAfterGenerate: "granted" });
+  const { store, ports, counters, api, design, setPermissionStatus } = system;
+  const completeStage = ports.storage.completeInspectionStage;
+  ports.storage.completeInspectionStage = async (input, ...args) => {
+    const result = await completeStage(input, ...args);
+    if (input.stage === "decision_route") setPermissionStatus("denied");
+    return result;
+  };
+  const body = inspectionRequest("inspection-owner-revocation-after-route", design.design_version_id);
+  body.payload.brief_id = system.brief.brief_id;
+  const result = await api.invoke(actor(), body);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "permission_denied");
+  assert.equal(counters.inspection, 1);
+  assert.equal(counters.decision, 2);
+  assert.equal(counters.reserved, 4, "the current-rights recheck does not create a fourth inspection attempt");
+  assert.deepEqual(store.db.prepare(`SELECT stage,status FROM creative_inspection_stages_v1
+    WHERE action_id=? ORDER BY stage`).all(body.action_id).map((row) => ({ ...row })), [
+    { stage: "decision_evidence", status: "completed" },
+    { stage: "decision_route", status: "completed" },
+    { stage: "observer", status: "completed" },
+  ]);
+  const session = store.db.prepare("SELECT status,result_json FROM creative_inspection_sessions_v1 WHERE action_id=?")
+    .get(body.action_id);
+  assert.equal(session.status, "active");
+  assert.equal(session.result_json, null, "revoked rights cannot publish the otherwise completed report");
+  assert.notEqual(store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?").get(body.action_id).status,
+    "completed");
+});
+
+test("the send-permit TTL fence runs after the last awaited owner job authorization for every inspection stage", async (t) => {
+  const cases = [
+    { stage: "observer", permittedBefore: [], expectedDecisionCalls: 0, expectedReserved: 1 },
+    { stage: "decision_evidence", permittedBefore: ["observer"], expectedDecisionCalls: 0, expectedReserved: 2 },
+    { stage: "decision_route", permittedBefore: ["observer", "decision_evidence"], expectedDecisionCalls: 1, expectedReserved: 3 },
+  ];
+  for (const scenario of cases) await t.test(scenario.stage, async (subtest) => {
+    let currentNow = NOW;
+    const system = await setupAssetBackedInspectionSystem(subtest, { now: () => currentNow,
+      permissionStatusAfterGenerate: "granted" });
+    const { store, ports, counters, api, design } = system;
+    const verifier = ports.planning.assetPermissionVerifier.verifyAssetUse;
+    ports.planning.assetPermissionVerifier.verifyAssetUse = async (input) => {
+      const proof = await verifier(input);
+      return { ...proof, checked_at: new Date(currentNow).toISOString(), expires_at: new Date(NOW + 1_000).toISOString() };
+    };
+    const authorize = ports.jobs.authorizeDispatch.bind(ports.jobs);
+    const dispatchProofs = [];
+    const permittedStages = [];
+    let activeStage = null;
+    let stageAuthorizations = 0;
+    let expiredAfterFinalAuthorization = false;
+    ports.jobs.authorizeDispatch = async (input) => {
+      const result = await authorize(input);
+      if (activeStage) {
+        const proofs = input.context_fence?.inspection_rights?.proofs;
+        dispatchProofs.push({ stage: activeStage, proofs: Array.isArray(proofs) ? proofs.map((proof) => ({
+          asset_id: proof.asset_id, action: proof.action, content_hash: proof.content_hash,
+          package_id: proof.package_id, package_hash: proof.package_hash, expires_at: proof.expires_at,
+        })) : null });
+        if (activeStage === scenario.stage) {
+          stageAuthorizations += 1;
+          if (stageAuthorizations === 2) {
+            currentNow = NOW + 1_001;
+            expiredAfterFinalAuthorization = true;
+          }
+        }
+      }
+      return result;
+    };
+    const observer = ports.inspection.inspect;
+    ports.inspection.inspect = async (input) => {
+      activeStage = "observer";
+      try {
+        await input.recordTransportAttempt(input.transport_attempt_id);
+        permittedStages.push("observer");
+        return await observer({ ...input, recordTransportAttempt: async () => {} });
+      } finally { activeStage = null; }
+    };
+    const execute = ports.decisionPort.execute;
+    ports.decisionPort.execute = async (input) => {
+      const stage = Object.hasOwn(input.request.questions, "next_step") ? "decision_route" : "decision_evidence";
+      activeStage = stage;
+      try {
+        await input.recordTransportAttempt(input.transport_attempt_id);
+        permittedStages.push(stage);
+        return await execute({ ...input, recordTransportAttempt: async () => {} });
+      } finally { activeStage = null; }
+    };
+    const markUnknown = ports.metering.markOutcomeUnknown.bind(ports.metering);
+    let unknownHolds = 0;
+    ports.metering.markOutcomeUnknown = async (...args) => {
+      unknownHolds += 1;
+      return markUnknown(...args);
+    };
+
+    const beforeReserved = counters.reserved;
+    const body = inspectionRequest(`inspection-final-proof-ttl-${scenario.stage}`, design.design_version_id);
+    body.payload.brief_id = system.brief.brief_id;
+    const result = await api.invoke(actor(), body);
+    assert.equal(expiredAfterFinalAuthorization, true, "the TTL expires only after the final awaited job authorization returns");
+    assert.equal(stageAuthorizations, 2, "both post-ACK job checks retain the proof before the final synchronous TTL fence");
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, "permission_denied", JSON.stringify(result));
+    assert.deepEqual(permittedStages, scenario.permittedBefore,
+      "no stage receives its send permit once the retained owner proof has expired");
+    assert.equal(counters.reserved, beforeReserved + scenario.expectedReserved,
+      "only the observer and stages reached before the expired proof receive reservations");
+    assert.equal(counters.decision, scenario.expectedDecisionCalls,
+      "the expired stage is rejected before its DecisionPort provider executes");
+    assert.ok(unknownHolds >= 1, "an already-ACKed attempt remains held for reconciliation");
+    assert.ok(dispatchProofs.length >= 2);
+    assert.ok(dispatchProofs.filter((item) => item.stage === scenario.stage).every((item) =>
+      item.proofs?.length === 1 && item.proofs[0].expires_at === NOW + 1_000),
+    `the final job authorizations carry the verifier's exact numeric expiry rather than a boolean grant: ${JSON.stringify(dispatchProofs)}`);
+    const rows = store.db.prepare(`SELECT stage,status FROM creative_inspection_stages_v1 WHERE action_id=?
+      ORDER BY CASE stage WHEN 'observer' THEN 0 WHEN 'decision_evidence' THEN 1 ELSE 2 END`)
+      .all(body.action_id).map((row) => ({ ...row }));
+    assert.deepEqual(rows.map((row) => row.status), [
+      ...scenario.permittedBefore.map(() => "completed"), "dispatching",
+    ], "the ACKed stage remains unresolved and cannot become trusted completed evidence");
+    assert.equal(store.db.prepare("SELECT status FROM creative_inspection_sessions_v1 WHERE action_id=?")
+      .get(body.action_id).status, "active");
+  });
+});
+
+test("the same-connection publication CAS rejects an asset invalidation present after the final owner proof", async (t) => {
+  const system = await setupAssetBackedInspectionSystem(t, { permissionStatusAfterGenerate: "granted" });
+  const { store, ports, counters, api, design } = system;
+  const research = await ports.planning.getCurrentResearchPackage({ scope: SCOPE });
+  const asset = research.assets.items[0];
+  const packageHash = canonicalHash(research);
+  const completeIfActive = ports.jobs.completeIfActive;
+  let insertedFence = false;
+  ports.jobs.completeIfActive = async (input, publish) => {
+    if (!insertedFence && input.operation === "inspect") {
+      insertedFence = true;
+      const eventId = "fixture-rights-revoked-at-publication";
+      const eventHash = canonicalHash({ eventId, packageHash, assetId: asset.asset_id, contentHash: asset.content_hash });
+      const idempotencyKey = canonicalHash({ eventId, eventHash });
+      store.db.prepare(`INSERT INTO creative_invalidation_events
+        (tenant_id,project_id,event_id,event_hash,idempotency_key,source_package_id,source_revision,evidence_json,receipt_id,receipt_json)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`).run(SCOPE.tenant_id, SCOPE.project_id, eventId, eventHash, idempotencyKey,
+          research.package_id, 1, canonicalSerialize({ fixture: "owner revocation at publication CAS" }),
+          "fixture-owner-revocation-receipt", canonicalSerialize({ status: "accepted_fixture_event" }));
+      store.db.prepare(`INSERT INTO creative_invalidation_fences
+        (tenant_id,project_id,event_id,source_package_id,source_package_hash,kind,target_id,target_hash)
+        VALUES (?,?,?,?,?,'asset',?,?)`).run(SCOPE.tenant_id, SCOPE.project_id, eventId, research.package_id,
+          packageHash, asset.asset_id, asset.content_hash);
+    }
+    return completeIfActive(input, publish);
+  };
+  const body = inspectionRequest("inspection-owner-invalidation-publication-cas", design.design_version_id);
+  body.payload.brief_id = system.brief.brief_id;
+  const result = await api.invoke(actor(), body);
+  assert.equal(insertedFence, true);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "stale_version");
+  assert.equal(counters.inspection, 1);
+  assert.equal(counters.decision, 2);
+  assert.equal(counters.reserved, 4);
+  const session = store.db.prepare("SELECT status,result_json FROM creative_inspection_sessions_v1 WHERE action_id=?")
+    .get(body.action_id);
+  assert.equal(session.status, "active");
+  assert.equal(session.result_json, null, "the final CAS rolls back report completion after an asset fence appears");
+  assert.equal(store.isAssetFenced({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id,
+    brief_id: system.brief.brief_id }, asset_id: asset.asset_id, content_hash: asset.content_hash }), true,
+    "the independent invalidation fence remains durable while report publication is rejected");
+});
+
+test("the final report publication CAS rejects owner proofs that expire after the last authority read", async (t) => {
+  let currentNow = NOW;
+  const system = await setupAssetBackedInspectionSystem(t, { now: () => currentNow, permissionStatusAfterGenerate: "granted" });
+  const { store, ports, counters, api, design } = system;
+  const verify = ports.planning.assetPermissionVerifier.verifyAssetUse;
+  ports.planning.assetPermissionVerifier.verifyAssetUse = async (input) => {
+    const proof = await verify(input);
+    return { ...proof, checked_at: new Date(currentNow).toISOString(), expires_at: new Date(NOW + 1_000).toISOString() };
+  };
+  const completeIfActive = ports.jobs.completeIfActive;
+  let expiredAtPublication = false;
+  ports.jobs.completeIfActive = async (input, publish) => {
+    if (input.operation === "inspect") {
+      currentNow = NOW + 1_001;
+      expiredAtPublication = true;
+    }
+    return completeIfActive(input, publish);
+  };
+  const body = inspectionRequest("inspection-owner-proof-expiry-publication", design.design_version_id);
+  body.payload.brief_id = system.brief.brief_id;
+  const result = await api.invoke(actor(), body);
+  assert.equal(expiredAtPublication, true);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "stale_version", JSON.stringify(result));
+  assert.equal(counters.inspection, 1);
+  assert.equal(counters.decision, 2);
+  assert.equal(counters.reserved, 4);
+  assert.deepEqual(store.db.prepare(`SELECT stage,status FROM creative_inspection_stages_v1 WHERE action_id=?
+    ORDER BY stage`).all(body.action_id).map((row) => ({ ...row })).map((row) => row.status),
+  ["completed", "completed", "completed"]);
+  const session = store.db.prepare("SELECT status,result_json FROM creative_inspection_sessions_v1 WHERE action_id=?")
+    .get(body.action_id);
+  assert.equal(session.status, "active");
+  assert.equal(session.result_json, null, "an expired final proof cannot complete the durable report graph");
+  assert.notEqual(store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?").get(body.action_id).status,
+    "completed");
+});
+
+test("cancelled repair dispatch keeps its root claim and usage evidence but cannot publish a child", async (t) => {
+  const system = await setupInspectionSystem(t, { recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("inspection-cancel-repair-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("inspection-cancel-repair-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  const edit = ports.provider.edit;
+  let signalEntered;
+  const entered = new Promise((resolve) => { signalEntered = resolve; });
+  let releaseProvider;
+  const providerGate = new Promise((resolve) => { releaseProvider = resolve; });
+  ports.provider.edit = async (input) => {
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    signalEntered();
+    await providerGate;
+    return edit({ ...input, recordTransportAttempt: async () => {} });
+  };
+  const repairBody = await repairEditRequest("inspection-cancel-repair-edit", design,
+    canonicalHash(inspected.result.report), inspectBody.action_id);
+  const pending = api.invoke(actor(), repairBody);
+  await entered;
+  const job = store.db.prepare("SELECT job_id FROM creative_jobs WHERE action_id=?").get(repairBody.action_id);
+  assert.ok(job?.job_id);
+  const cancelBody = { ...request("inspection-cancel-repair-cancel", await fixture("generate-plan")),
+    operation: "cancel", payload: { job_id: job.job_id } };
+  const cancelled = await api.invoke(actor(), cancelBody);
+  assert.equal(cancelled.ok, true, JSON.stringify(cancelled));
+  assert.equal(cancelled.job.status, "cancelled");
+  releaseProvider();
+  const result = await pending;
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "cancelled");
+  const jobRow = store.db.prepare(`SELECT status,result_json,attempt_evidence_json FROM creative_jobs WHERE action_id=?`)
+    .get(repairBody.action_id);
+  assert.equal(jobRow.status, "cancelled");
+  assert.equal(jobRow.result_json, null);
+  const usageRows = store.db.prepare(`SELECT billable_attempt_id,status,payload_json FROM
+    creative_telemetry_observations_v1 WHERE logical_operation_id=?`).all(repairBody.action_id);
+  assert.equal(usageRows.length, 1, "the completed provider response remains attributable after cancellation");
+  assert.equal(usageRows[0].status, "delivered");
+  const observedUsage = JSON.parse(usageRows[0].payload_json).observation;
+  assert.equal(observedUsage.completeness, "partial",
+    "cancellation prevents unconfirmed owner mapping from being treated as settled complete usage");
+  assert.ok(observedUsage.missing_fields.includes("usage.dispatch_authorization_not_current"));
+  assert.equal(observedUsage.transport_attempt_id, counters.providerTransportIds.at(-1));
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions WHERE creation_job_id=?")
+    .get(job.job_id).count, 0);
+  assert.equal(store.getCurrentDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id }).design_version_id,
+    design.design_version_id);
+  const repairAction = store.db.prepare(`SELECT status,result_hash FROM creative_inspection_action_v2 WHERE action_id=?`)
+    .get(repairBody.action_id);
+  assert.deepEqual({ ...repairAction }, { status: "claimed", result_hash: null },
+    "cancellation leaves the cumulative root claim consumed without recording a publishable outcome");
+  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+    design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
+  assert.equal(rootState.repairs_used, 1);
+  assert.equal(counters.reserved, 5, "cancellation does not retry or add a repair reservation");
+});
+
+test("repair output is held when its job lease expires after transport ACK but before the final publication", async (t) => {
+  let currentNow = NOW;
+  const system = await setupInspectionSystem(t, { now: () => currentNow, leaseDurationMs: 1_000,
+    recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("inspection-lease-drift-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("inspection-lease-drift-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  const edit = ports.provider.edit;
+  ports.provider.edit = async (input) => {
+    await input.recordTransportAttempt(input.transport_attempt_id);
+    currentNow = NOW + 1_001;
+    return edit({ ...input, recordTransportAttempt: async () => {} });
+  };
+  const body = await repairEditRequest("inspection-lease-drift-edit", design,
+    canonicalHash(inspected.result.report), inspectBody.action_id);
+  const before = { provider: counters.provider, reserved: counters.reserved };
+  const result = await api.invoke(actor(), body);
+  assert.equal(result.ok, false);
+  assert.ok(["cancelled", "unavailable"].includes(result.error.code), JSON.stringify(result));
+  assert.equal(counters.provider, before.provider + 1, "the authorized edit response is retained as usage evidence");
+  assert.equal(counters.reserved, before.reserved + 1, "lease drift cannot trigger a retry reservation");
+  const job = store.db.prepare("SELECT status,result_json FROM creative_jobs WHERE action_id=?").get(body.action_id);
+  assert.notEqual(job.status, "completed");
+  assert.equal(job.result_json, null);
+  assert.equal(store.db.prepare("SELECT count(*) AS count FROM design_versions WHERE creation_job_id=(SELECT job_id FROM creative_jobs WHERE action_id=?)")
+    .get(body.action_id).count, 0, "expired lease blocks immutable child publication");
+  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+    design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
+  assert.equal(rootState.repairs_used, 1, "the claim stays counted while the lease-lost result is not published");
+  const usage = store.db.prepare(`SELECT status,payload_json FROM creative_telemetry_observations_v1
+    WHERE logical_operation_id=?`).get(body.action_id);
+  assert.ok(usage, "post-ACK usage remains durable for reconciliation");
+  assert.equal(JSON.parse(usage.payload_json).observation.completeness, "partial");
+});
+
+test("concurrent actual API repair requests serialize against the shared two-repair root limit", async (t) => {
+  const system = await setupInspectionSystem(t, { recommendRepair: true });
+  const { store, ports, counters, api } = system;
+  const generated = await api.invoke(actor(), request("inspection-concurrent-repair-seed", await fixture("generate-plan")));
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const design = generated.result.design_version;
+  const inspectBody = inspectionRequest("inspection-concurrent-repair-inspect", design.design_version_id);
+  const inspected = await api.invoke(actor(), inspectBody);
+  assert.equal(inspected.ok, true, JSON.stringify(inspected));
+  const requests = await Promise.all([
+    repairEditRequest("inspection-concurrent-repair-a", design, canonicalHash(inspected.result.report), inspectBody.action_id),
+    repairEditRequest("inspection-concurrent-repair-b", design, canonicalHash(inspected.result.report), inspectBody.action_id),
+  ]);
+  const before = { provider: counters.provider, reserved: counters.reserved };
+  const responses = await Promise.all(requests.map((body) => api.invoke(actor(), body)));
+  assert.ok(responses.every((response) => response.ok || ["stale_version", "review_required", "unavailable"]
+    .includes(response.error?.code)), JSON.stringify(responses));
+  const rootState = ports.storage.inspectionRepair.getState({ scope: { ...SCOPE,
+    design_version_id: design.design_version_id }, inspection_id: inspected.result.inspection_id });
+  assert.ok(rootState.repairs_used <= 2);
+  assert.ok(rootState.simulated_units_used <= 3);
+  assert.ok(counters.provider - before.provider <= 2, "concurrent repair execution cannot exceed the cumulative root attempt cap");
+  assert.ok(counters.reserved - before.reserved <= 2, "each claimed repair has at most one separately metered edit reservation");
+  const claims = store.db.prepare(`SELECT action_id,status,simulated_units_milli FROM creative_inspection_action_v2
+    WHERE inspection_id=? AND repair_action='image.edit' ORDER BY action_id`).all(inspected.result.inspection_id);
+  assert.equal(claims.length, rootState.repairs_used);
+  assert.ok(claims.length <= 2);
+  assert.ok(claims.every((claim) => ["claimed", "recorded"].includes(claim.status)));
+  assert.ok(claims.reduce((total, claim) => total + claim.simulated_units_milli, 0) <= 3_000);
 });
 
 test("CE09 acceptance case 1 blocks corrupt artifacts, revoked rights, and observer refusal before any favorable bypass", async (t) => {
@@ -722,6 +1462,83 @@ test("CE09 acceptance case 3 rejects malformed DecisionPort confidence without a
   assert.equal(system.counters.reserved, before.reserved + 2, "only observer and malformed first decision are reserved");
   assert.equal(system.store.db.prepare("SELECT count(*) AS count FROM creative_inspection_stages_v1 WHERE status='completed'")
     .get().count, 1, "the malformed stage is not completed or reused as trusted provenance");
+});
+
+test("the public inspection API fails closed on malformed, unsupported, or foreign DecisionPort results and reviews valid abstentions/timeouts", async (t) => {
+  const cases = [
+    { name: "malformed missing answer", mode: "missing_answer", expectedDecisionCalls: 1, expectedReservations: 2, validTerminal: false },
+    { name: "unsupported model policy version", mode: "wrong_version", expectedDecisionCalls: 1, expectedReservations: 2, validTerminal: false },
+    { name: "foreign tenant result", mode: "foreign_tenant", expectedDecisionCalls: 1, expectedReservations: 2, validTerminal: false },
+    { name: "first stage abstention", mode: "first_review", expectedDecisionCalls: 1, expectedReservations: 2, validTerminal: true },
+    { name: "first stage timeout", mode: "first_timeout", expectedDecisionCalls: 1, expectedReservations: 2, validTerminal: true },
+    { name: "dependent route timeout", mode: "route_timeout", expectedDecisionCalls: 2, expectedReservations: 3, validTerminal: true },
+  ];
+  for (const scenario of cases) await t.test(scenario.name, async (subtest) => {
+    const system = await setupInspectionSystem(subtest, { recommendRepair: true });
+    const generated = await system.api.invoke(actor(), request(`decision-matrix-seed-${scenario.mode}`,
+      await fixture("generate-plan")));
+    assert.equal(generated.ok, true, JSON.stringify(generated));
+    const execute = system.ports.decisionPort.execute;
+    system.ports.decisionPort.execute = async (input) => {
+      const result = structuredClone(await execute(input));
+      const call = system.counters.decision;
+      if (scenario.mode === "missing_answer" && call === 1) {
+        delete result.answers.defect_present;
+      } else if (scenario.mode === "wrong_version" && call === 1) {
+        result.model_policy_version = "unsupported/decision-policy";
+      } else if (scenario.mode === "foreign_tenant" && call === 1) {
+        result.tenant_id = "tenant-foreign-result";
+      } else if (scenario.mode === "first_review" && call === 1) {
+        const [key, question] = Object.entries(input.request.questions)[0];
+        result.status = "review";
+        result.answers[key] = { status: "abstain", question_schema_version: question.question_schema_version,
+          policy_version: question.policy_version, reason: "fixture human review required" };
+      } else if ((scenario.mode === "first_timeout" && call === 1) ||
+        (scenario.mode === "route_timeout" && call === 2)) {
+        result.status = "timeout";
+        result.answers = Object.fromEntries(Object.entries(input.request.questions).map(([key, question]) => [key, {
+          status: "unavailable", question_schema_version: question.question_schema_version,
+          policy_version: question.policy_version, reason: "fixture timeout",
+        }]));
+        result.error = { code: "timeout", retryable: true, fallback: "review",
+          user_message: "The fixture DecisionPort timed out." };
+      }
+      return result;
+    };
+    const before = { provider: system.counters.provider, reserved: system.counters.reserved };
+    const body = inspectionRequest(`decision-matrix-inspect-${scenario.mode}`,
+      generated.result.design_version.design_version_id);
+    const inspected = await system.api.invoke(actor(), body);
+    assert.equal(system.counters.inspection, 1);
+    assert.equal(system.counters.decision, scenario.expectedDecisionCalls);
+    assert.equal(system.counters.reserved, before.reserved + scenario.expectedReservations,
+      "only the observer and actually executed decision stages receive separate C03 reservations");
+    assert.equal(system.counters.provider, before.provider,
+      "DecisionPort findings, abstentions, and failures never invoke image repair automatically");
+    const stageRows = system.store.db.prepare(`SELECT stage,status FROM creative_inspection_stages_v1
+      WHERE action_id=? ORDER BY CASE stage WHEN 'observer' THEN 0 WHEN 'decision_evidence' THEN 1 ELSE 2 END`)
+      .all(body.action_id).map((row) => ({ ...row }));
+    if (scenario.validTerminal) {
+      assert.equal(inspected.ok, true, JSON.stringify(inspected));
+      assert.equal(inspected.result.report.outcome, "needs_human_review");
+      assert.equal(inspected.result.report.recommendation, "human_review");
+      assert.equal(Object.hasOwn(inspected.result.report, "approved"), false);
+      assert.equal(system.store.db.prepare("SELECT status FROM creative_inspection_sessions_v1 WHERE action_id=?")
+        .get(body.action_id).status, "completed");
+      assert.deepEqual(stageRows.map((row) => row.status), Array(scenario.expectedDecisionCalls + 1).fill("completed"));
+    } else {
+      assert.equal(inspected.ok, false);
+      assert.ok(["failed", "unavailable", "review_required", "unsupported_version", "scope_denied"]
+        .includes(inspected.error.code), JSON.stringify(inspected));
+      assert.deepEqual(stageRows, [{ stage: "observer", status: "completed" },
+        { stage: "decision_evidence", status: "dispatching" }],
+        "an invalid or foreign DecisionPort result remains unresolved and cannot become trusted provenance");
+      assert.equal(system.store.db.prepare("SELECT status FROM creative_inspection_sessions_v1 WHERE action_id=?")
+        .get(body.action_id).status, "active");
+      assert.notEqual(system.store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?")
+        .get(body.action_id).status, "completed");
+    }
+  });
 });
 
 test("CE09 acceptance case 5 keeps favorable API reports review-only without approval or certification", async (t) => {
@@ -1611,7 +2428,8 @@ test("normal paired publication rolls back when the lease expires during final r
     now: () => NOW, idFactory: () => `publication-expiry-api-${++id}` });
   const response = await api.invoke(actor(), request("publication-expired-lease", await fixture("generate-plan")));
 
-  assert.equal(publicationClockReads, 2, "the final persisted completion timestamp is after lease expiry");
+  assert.equal(publicationClockReads, 3,
+    "the post-callback context fence is sampled before the final persisted completion timestamp expires the lease");
   assert.equal(response.ok, false, JSON.stringify(response));
   assert.equal(counters.provider, 1, "the already-dispatched attempt remains attributable");
   assert.equal(counters.reserved, 1, "publication fencing cannot erase or recreate the reservation");

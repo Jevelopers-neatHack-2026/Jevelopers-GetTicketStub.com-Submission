@@ -164,6 +164,33 @@ export type DispatchAuthorizationResult =
   | { status: "authorized"; dispatch_intent_ref: string }
   | { status: "cancelled" | "lease_lost" | "stale_context" };
 
+export interface CreativeInspectionRepairFence {
+  inspection_id: string;
+  action_id: string;
+  request_hash: `sha256:${string}`;
+  claim_ref: `sha256:${string}`;
+  root_brief_hash: `sha256:${string}`;
+  root_design_hash: `sha256:${string}`;
+  root_design_version_id: string;
+  started_at_ms: number;
+  deadline_at_ms: number;
+  simulated_units_milli: number;
+  result_hash?: `sha256:${string}`;
+}
+
+export interface CreativeAssetPermissionFence {
+  proofs: readonly Readonly<{
+    asset_id: string;
+    action: "reproduce" | "modify" | "publish" | "display";
+    source_ref: string;
+    content_hash: `sha256:${string}`;
+    package_id: string;
+    package_hash: `sha256:${string}`;
+    checked_at?: number;
+    expires_at: number;
+  }>[];
+}
+
 export interface CreativeContextFence {
   brief_id: string;
   brief_hash: string;
@@ -171,6 +198,10 @@ export interface CreativeContextFence {
   design_hash?: string;
   expected_current_design_version_id?: string | null;
   expected_current_design_hash?: string | null;
+  /** Current asset proofs rechecked under dispatch/publication SQLite fences. */
+  inspection_rights?: CreativeAssetPermissionFence;
+  /** Root inspection repair claim and its cumulative deadline. */
+  inspection_repair?: CreativeInspectionRepairFence;
 }
 
 /** A transaction capability owned by a durable jobs/storage adapter. Runtime
@@ -605,6 +636,8 @@ export interface DecisionDispatchInput extends Omit<MeteredDispatchContext, "rec
   deadline_at: string;
   dispatch_intent_ref: string;
   recordTransportAttempt(transport_attempt_id: string): Promise<string>;
+  revalidateDispatch(input: Readonly<{ reservation_ref: string; billable_attempt_id: string; transport_attempt_id: string;
+    dispatch_intent_ref: string; target_binding_sha256: `sha256:${string}`; signal: AbortSignal }>): Promise<string>;
 }
 
 export interface ProviderOutput {
@@ -665,6 +698,11 @@ export interface InspectionRepairPort {
     Readonly<Record<string, unknown>>;
   recordRepairOutcome(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
     inspection_id: string; action_id: string; result_hash: string }): Readonly<Record<string, unknown>>;
+  recordRepairOutcomeInPublication(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    inspection_id: string; action_id: string; result_hash: string; proof: CreativeInspectionRepairFence }):
+    Readonly<{ status: "recorded" | "cancelled"; result_hash?: string }>;
+  isClaimCurrent(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    proof: CreativeInspectionRepairFence }): boolean;
   cancelInspection(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
     inspection_id: string }): Readonly<Record<string, unknown>>;
   getState(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string }):
@@ -688,6 +726,8 @@ export interface InspectionInput {
   transport_attempt_id: string;
   dispatch_intent_ref: string;
   recordTransportAttempt(transport_attempt_id: string): Promise<string>;
+  revalidateDispatch(input: Readonly<{ reservation_ref: string; billable_attempt_id: string; transport_attempt_id: string;
+    dispatch_intent_ref: string; target_binding_sha256: `sha256:${string}`; signal: AbortSignal }>): Promise<string>;
   signal: AbortSignal;
   deadline_at: string;
 }
@@ -711,13 +751,13 @@ export interface CreativeTelemetryEvidenceStatus {
 
 /** Raw result returned by the injected inspection capability before the API
  * attaches its own durable telemetry delivery status. */
-export interface InspectionPortOutput {
+export type InspectionPortOutput = Readonly<{
   status: "complete";
   observer: CreativeVisualObservation["observer"];
   uncertainty: CreativeVisualObservation["uncertainty"];
   findings: CreativeVisualObservation["findings"];
   usage: ProviderUsageRecord;
-}
+}> | Readonly<{ status: "refused" | "unavailable" | "timeout" | "cancelled"; usage?: ProviderUsageRecord }>;
 
 export interface InspectionOutput {
   readonly report: CreativeInspectionReport;

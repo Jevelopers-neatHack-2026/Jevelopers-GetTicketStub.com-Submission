@@ -307,10 +307,16 @@ export interface InspectionRepairController {
   recordRepairClaim(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string;
     action_id: string; request_hash: string; repair_action: InspectionRepairAction; simulated_units?: number | null }):
     Readonly<{ status: "recorded" | "replayed" | "cancelled" | "conflict" | "not_found" | "expired" | "limit_reached" | "unknown_cost";
-      local_limit_status?: "within_limits"; claim_ref?: string; reason?: string; action_id?: string; repair_action?: InspectionRepairAction; simulated_units?: number }>;
+      local_limit_status?: "within_limits"; claim_ref?: string; reason?: string; action_id?: string; repair_action?: InspectionRepairAction;
+      simulated_units?: number; started_at_ms?: number; root_brief_hash?: string; root_design_hash?: string }>;
   recordRepairOutcome(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string;
     action_id: string; result_hash: string }):
     Readonly<{ status: "recorded" | "replayed" | "cancelled" | "conflict" | "not_found"; result_hash?: string }>;
+  recordRepairOutcomeInPublication(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string;
+    action_id: string; result_hash: string; proof: import("../api/v1.mjs").CreativeInspectionRepairFence }):
+    Readonly<{ status: "recorded" | "cancelled"; result_hash?: string }>;
+  isClaimCurrent(input: { scope: TrustedScope & { brief_id: string; design_version_id: string };
+    proof: import("../api/v1.mjs").CreativeInspectionRepairFence }): boolean;
   cancelInspection(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string }):
     Readonly<{ status: "cancelled" | "replayed" | "not_found" }>;
   getState(input: { scope: TrustedScope & { brief_id: string; design_version_id: string }; inspection_id: string }): Readonly<{

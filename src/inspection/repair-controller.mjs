@@ -114,6 +114,58 @@ function stateRow(database, scope, inspectionId) {
     .get(...scopedKey(scope, inspectionId));
 }
 
+function actionRow(database, scope, inspectionId, actionId) {
+  return database.prepare(`SELECT * FROM creative_inspection_action_v2
+    WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=? AND inspection_id=? AND action_id=?`)
+    .get(...scopedKey(scope, inspectionId), actionId);
+}
+
+/**
+ * Read a previously claimed repair while the caller owns the shared SQLite
+ * connection. This deliberately opens no transaction: dispatch authorization
+ * and publication call it under their own BEGIN IMMEDIATE fence.
+ */
+export function inspectionRepairFenceCurrent(database, now, rawScope, proof, { requireRecorded = false } = {}) {
+  try {
+    const scope = validateScope(rawScope);
+    if (!proof || typeof proof !== "object" || Array.isArray(proof) ||
+      !isSafePublicInspectionReference(proof.inspection_id) ||
+      !isSafePublicInspectionReference(proof.action_id) || !isHash(proof.request_hash) ||
+      !isHash(proof.claim_ref) || !isHash(proof.root_brief_hash) || !isHash(proof.root_design_hash) ||
+      !Number.isSafeInteger(proof.started_at_ms) || !Number.isSafeInteger(proof.deadline_at_ms) ||
+      proof.deadline_at_ms !== proof.started_at_ms + REPAIR_LIMITS.maxElapsedMs ||
+      !Number.isInteger(proof.simulated_units_milli) || proof.simulated_units_milli < 1 ||
+      proof.simulated_units_milli > REPAIR_LIMITS.maxSimulatedUnits * 1000 ||
+      (proof.result_hash !== undefined && !isHash(proof.result_hash))) return false;
+    const state = stateRow(database, scope, proof.inspection_id);
+    const action = actionRow(database, scope, proof.inspection_id, proof.action_id);
+    if (!isSafeStoredState(state) || !isSafeStoredAction(action) ||
+      state.tenant_id !== scope.tenant_id || state.project_id !== scope.project_id ||
+      state.brief_id !== scope.brief_id || state.design_version_id !== scope.design_version_id ||
+      state.brief_hash !== proof.root_brief_hash || state.design_hash !== proof.root_design_hash ||
+      state.started_at_ms !== proof.started_at_ms || state.status !== "active" ||
+      action.action_id !== proof.action_id || action.inspection_id !== proof.inspection_id ||
+      action.request_hash !== proof.request_hash || action.claim_ref !== proof.claim_ref ||
+      action.repair_action !== "image.edit" || action.simulated_units_milli !== proof.simulated_units_milli ||
+      action.created_at_ms < state.started_at_ms || action.created_at_ms >= proof.deadline_at_ms ||
+      (proof.result_hash === undefined ? action.result_hash !== null :
+        action.result_hash !== null && action.result_hash !== proof.result_hash)) return false;
+    if (proof.result_hash === undefined ? action.status !== "claimed" :
+      (requireRecorded ? action.status !== "recorded" || action.result_hash !== proof.result_hash :
+        !((action.status === "claimed" && action.result_hash === null) ||
+          (action.status === "recorded" && action.result_hash === proof.result_hash)))) {
+      return false;
+    }
+    const current = clockValue(now);
+    const currentOk = current >= state.started_at_ms && current < proof.deadline_at_ms &&
+      state.repairs_used <= REPAIR_LIMITS.maxRepairs &&
+      state.simulated_units_milli <= REPAIR_LIMITS.maxSimulatedUnits * 1000;
+    return currentOk;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Durable local repair counters only. This controller is not Finance, a budget
  * authority, a provider executor, or permission to dispatch an edit.
@@ -222,13 +274,19 @@ export function createSqliteInspectionRepairController(options) {
         if (existing.request_hash !== requestHash || existing.repair_action !== action || existing.simulated_units_milli !== unitsMilli) {
           return Object.freeze({ status: "conflict" });
         }
+        const current = clockValue(now);
+        if (row.status !== "active" || existing.status === "cancelled") return Object.freeze({ status: "cancelled" });
+        if (current < row.started_at_ms || current >= row.started_at_ms + REPAIR_LIMITS.maxElapsedMs) {
+          return Object.freeze({ status: "expired" });
+        }
         return Object.freeze({ status: existing.status === "cancelled" || row.status === "cancelled" ? "cancelled" : "replayed",
           claim_ref: existing.claim_ref, action_id: existing.action_id,
-          simulated_units: existing.simulated_units_milli / 1000 });
+          simulated_units: existing.simulated_units_milli / 1000, started_at_ms: row.started_at_ms,
+          root_brief_hash: row.brief_hash, root_design_hash: row.design_hash });
       }
       if (row.status !== "active") return Object.freeze({ status: "cancelled" });
       const current = clockValue(now);
-      if (current < row.started_at_ms || current - row.started_at_ms > REPAIR_LIMITS.maxElapsedMs) {
+      if (current < row.started_at_ms || current >= row.started_at_ms + REPAIR_LIMITS.maxElapsedMs) {
         return Object.freeze({ status: "expired" });
       }
       if (row.repairs_used >= REPAIR_LIMITS.maxRepairs || row.simulated_units_milli + unitsMilli > REPAIR_LIMITS.maxSimulatedUnits * 1000) {
@@ -243,7 +301,8 @@ export function createSqliteInspectionRepairController(options) {
         simulated_units_milli=simulated_units_milli+? WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=? AND inspection_id=? AND status='active'`)
         .run(unitsMilli, ...scopedKey(scope, inspectionId));
       return Object.freeze({ status: "recorded", local_limit_status: "within_limits", claim_ref: claimRef,
-        action_id: actionId, repair_action: action, simulated_units: units });
+        action_id: actionId, repair_action: action, simulated_units: units, started_at_ms: row.started_at_ms,
+        root_brief_hash: row.brief_hash, root_design_hash: row.design_hash });
     });
   }
 
@@ -284,6 +343,32 @@ export function createSqliteInspectionRepairController(options) {
     });
   }
 
+  function recordRepairOutcomeInPublication(input) {
+    if (database.isTransaction !== true) fail("transaction_unavailable", "database",
+      "Repair completion must share the version publication transaction.");
+    const scope = validateScope(input?.scope);
+    const inspectionId = input?.inspection_id;
+    const actionId = input?.action_id;
+    const resultHash = input?.result_hash;
+    const proof = input?.proof;
+    if (!isSafePublicInspectionReference(inspectionId) || !isSafePublicInspectionReference(actionId) ||
+      !isHash(resultHash) || !proof || proof.inspection_id !== inspectionId || proof.action_id !== actionId ||
+      proof.result_hash !== undefined) {
+      fail("invalid_request", "repair_completion", "Repair publication requires the exact unrecorded claim and result.");
+    }
+    const current = clockValue(now);
+    if (!inspectionRepairFenceCurrent(database, now, scope, proof)) return Object.freeze({ status: "cancelled" });
+    const key = [...scopedKey(scope, inspectionId), actionId];
+    const action = actionRow(database, scope, inspectionId, actionId);
+    if (action.status !== "claimed" || action.result_hash !== null) return Object.freeze({ status: "cancelled" });
+    const changes = database.prepare(`UPDATE creative_inspection_action_v2 SET status='recorded', result_hash=?, updated_at_ms=?
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND design_version_id=? AND inspection_id=? AND action_id=?
+        AND status='claimed' AND result_hash IS NULL`)
+      .run(resultHash, current, ...key).changes;
+    return changes === 1 ? Object.freeze({ status: "recorded", result_hash: resultHash })
+      : Object.freeze({ status: "cancelled" });
+  }
+
   function cancelInspection({ scope: rawScope, inspection_id }) {
     const scope = validateScope(rawScope);
     if (!isSafePublicInspectionReference(inspection_id)) fail("invalid_request", "inspection_id", "Inspection identity is invalid.");
@@ -301,6 +386,11 @@ export function createSqliteInspectionRepairController(options) {
     });
   }
 
-  return Object.freeze({ startInspection, recordRepairClaim, recordRepairOutcome, cancelInspection, getState,
+  function isClaimCurrent(input) {
+    return inspectionRepairFenceCurrent(database, now, input?.scope, input?.proof);
+  }
+
+  return Object.freeze({ startInspection, recordRepairClaim, recordRepairOutcome, recordRepairOutcomeInPublication,
+    isClaimCurrent, cancelInspection, getState,
     limits: REPAIR_LIMITS });
 }

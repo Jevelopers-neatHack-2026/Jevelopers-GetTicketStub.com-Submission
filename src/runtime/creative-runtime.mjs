@@ -47,6 +47,7 @@ import {
   deterministicDecisionObservation,
   evaluateInspectionDecision,
   inspectCreativeArtifact,
+  REPAIR_LIMITS,
   validateVisualObservation,
 } from "../inspection/index.mjs";
 import { isSafePublicInspectionReference, snapshotPlainRecord } from "../inspection/deterministic.mjs";
@@ -669,7 +670,7 @@ function safeFieldPath(value) {
 }
 
 function creativeContextFence(brief, design = null, expectedCurrentDesignVersionId = undefined,
-  expectedCurrentDesignHash = design?.design_hash ?? null) {
+  expectedCurrentDesignHash = design?.design_hash ?? null, extra = undefined) {
   return Object.freeze({
     brief_id: brief.brief_id,
     brief_hash: canonicalHash(brief),
@@ -678,7 +679,24 @@ function creativeContextFence(brief, design = null, expectedCurrentDesignVersion
       expected_current_design_version_id: expectedCurrentDesignVersionId,
       expected_current_design_hash: expectedCurrentDesignHash,
     } : {}),
+    ...(isRecord(extra) ? extra : {}),
   });
+}
+
+function aggregateUsageCompleteness(stages) {
+  if (!Array.isArray(stages) || stages.length === 0) return "unknown";
+  const values = stages.map((stage) => isRecord(stage) ? stage.usage_completeness : stage);
+  if (values.some((value) => !["complete", "partial", "unknown"].includes(value))) return "unknown";
+  if (values.includes("unknown")) return "unknown";
+  if (values.includes("partial")) return "partial";
+  return "complete";
+}
+
+function usageUncertainty(completeness, extra = []) {
+  return Object.freeze([...new Set([
+    ...(completeness === "unknown" ? ["unknown_cost"] : completeness === "partial" ? ["usage_incomplete"] : []),
+    ...extra,
+  ])]);
 }
 
 function safeStoredJobError(error, operation) {
@@ -1357,7 +1375,7 @@ export function createCreativeApi(options = {}) {
   }
 
   async function verifyInspectionAssetRights(scope, brief, assetUse, operation) {
-    if (assetUse.status !== "verified" || assetUse.entries.length === 0) return assetUse.status === "verified";
+    if (assetUse.status !== "verified" || assetUse.entries.length === 0) return Object.freeze([]);
     const getPackage = requiredPort(ports, "planning.getCurrentResearchPackage", operation);
     const verifier = ports.planning?.assetPermissionVerifier;
     if (!isRecord(verifier) || typeof verifier.verifyAssetUse !== "function" ||
@@ -1413,6 +1431,20 @@ export function createCreativeApi(options = {}) {
     const completedAt = new Date(now()).getTime();
     if (checked.some((item) => item.expires_at <= completedAt)) {
       throw new CreativeApiError("permission_denied", operation, "asset_permission_evidence");
+    }
+    return Object.freeze(checked.map(({ entry, expires_at }) => Object.freeze({
+      asset_id: entry.asset_id, action: entry.action, source_ref: entry.source_ref,
+      content_hash: entry.content_hash, package_id: entry.package_id, package_hash: entry.package_hash,
+      expires_at,
+    })));
+  }
+
+  function assertRepairAuthorizationCurrent(repairAuthorization, operation = "edit") {
+    if (!repairAuthorization) return true;
+    const repairPort = ports.storage?.inspectionRepair;
+    if (!isRecord(repairPort) || typeof repairPort.isClaimCurrent !== "function" ||
+      !repairPort.isClaimCurrent({ scope: repairAuthorization.repairScope, proof: repairAuthorization.proof })) {
+      throw new CreativeApiError("review_required", operation, "inspection_repair.limit");
     }
     return true;
   }
@@ -1683,7 +1715,7 @@ export function createCreativeApi(options = {}) {
   }
 
   async function runMetered(principal, request, started, operationKind, route, portPath, invokePort, preDispatchGuard,
-    contextFence) {
+    contextFence, { allowTerminalFailure = false } = {}) {
     if (preDispatchGuard) await preDispatchGuard();
     requiredPort(ports, "metering.reserveAttempt", request.operation);
     const telemetry = ports.telemetry;
@@ -1708,12 +1740,22 @@ export function createCreativeApi(options = {}) {
     let validatedDecisionRequest;
     let preDispatchError;
     let currentPermissionProofs = Object.freeze([]);
+    let hasCurrentPermissionProofs = false;
     const dispatchIntentRefs = new Map();
+    const currentContextFence = () => {
+      const base = typeof contextFence === "function" ? contextFence(currentPermissionProofs) : contextFence;
+      return hasCurrentPermissionProofs && isRecord(base)
+        ? Object.freeze({ ...base, inspection_rights: Object.freeze({ proofs: currentPermissionProofs }) })
+        : base;
+    };
     const checkDispatchFence = async () => {
       if (!preDispatchGuard) return;
       try {
         const current = await preDispatchGuard();
-        if (Array.isArray(current)) currentPermissionProofs = current;
+        if (Array.isArray(current)) {
+          currentPermissionProofs = Object.freeze([...current]);
+          hasCurrentPermissionProofs = true;
+        }
       }
       catch (error) { preDispatchError = error; throw error; }
     };
@@ -1728,7 +1770,7 @@ export function createCreativeApi(options = {}) {
       let intentRef;
       try {
         intentRef = await authorizeJobDispatch(principal, request, started, transportAttemptId,
-          attempt.billable_attempt_id, reservationRef, contextFence, checkedRoute);
+          attempt.billable_attempt_id, reservationRef, currentContextFence(), checkedRoute);
       } catch (error) {
         preDispatchError = error;
         throw error;
@@ -1774,7 +1816,7 @@ export function createCreativeApi(options = {}) {
       let currentIntentRef;
       try {
         currentIntentRef = await authorizeJobDispatch(principal, request, started, transportAttemptId,
-          attempt.billable_attempt_id, dispatchContext.reservation_ref, contextFence, checkedRoute);
+          attempt.billable_attempt_id, dispatchContext.reservation_ref, currentContextFence(), checkedRoute);
       } catch (error) {
         preDispatchError = error;
         throw error;
@@ -1823,7 +1865,7 @@ export function createCreativeApi(options = {}) {
         // This atomic, idempotent authorization is intentionally the final
         // awaited fence after the external Finance ACK and before dispatch.
         freshIntentRef = await authorizeJobDispatch(principal, request, started, transport_attempt_id,
-          billable_attempt_id, reservation_ref, contextFence, checkedRoute);
+          billable_attempt_id, reservation_ref, currentContextFence(), checkedRoute);
       } catch (error) {
         preDispatchError = error;
         throw error;
@@ -1895,7 +1937,7 @@ export function createCreativeApi(options = {}) {
             let finalIntentRef;
             try {
               finalIntentRef = await authorizeJobDispatch(principal, request, started, transportId,
-                dispatchContext.attempt.billable_attempt_id, dispatchContext.reservation_ref, contextFence, checkedRoute);
+              dispatchContext.attempt.billable_attempt_id, dispatchContext.reservation_ref, currentContextFence(), checkedRoute);
             } catch (error) {
               preDispatchError = error;
               throw error;
@@ -1963,7 +2005,8 @@ export function createCreativeApi(options = {}) {
     } finally {
       deadline.dispose();
     }
-    if (outcome.status !== "settled" || outcome.provider_outcome !== "succeeded") {
+    if (outcome.status !== "settled" ||
+      outcome.provider_outcome !== "succeeded" && !(allowTerminalFailure && outcome.provider_outcome === "failed")) {
       if (preDispatchError) throw preDispatchError;
       throw meteringFailure(outcome, request.operation);
     }
@@ -1977,6 +2020,7 @@ export function createCreativeApi(options = {}) {
         observation_ref: observationRef ?? mapping.source_observation_id }) : undefined;
     return { value: providerValue, attempt_id: attemptId, decision_request: validatedDecisionRequest,
       metering: outcome, transport_attempt_ids: Object.freeze([...dispatchIntentRefs.keys()]),
+      provider_outcome: outcome.provider_outcome,
       usage_ref: observationRef ?? outcome.observation_ack?.source_observation_id,
       ...(usageEvidence ? { usage_evidence: usageEvidence } : {}),
       evidence_refs: Object.freeze([...(evidenceRefs ?? [])]), telemetry_evidence: telemetryEvidence };
@@ -1997,7 +2041,7 @@ export function createCreativeApi(options = {}) {
   }
 
   async function decision(principal, request, started, brief, decisionRequest, baseDesign = null,
-    selectedDesignVersionId = undefined, selectedDesignHash = undefined) {
+    selectedDesignVersionId = undefined, selectedDesignHash = undefined, repairAuthorization = null) {
     if (decisionRequest === undefined) return undefined;
     const branchMode = request.operation === "edit" && request.payload.selection_mode === "branch";
     const expectedCurrentDesignVersionId = branchMode ? undefined
@@ -2006,12 +2050,20 @@ export function createCreativeApi(options = {}) {
       : (selectedDesignHash === undefined ? (baseDesign?.design_hash ?? null) : selectedDesignHash);
     await assertCurrentCreativeContext(started.scope, brief, baseDesign, request.operation,
       expectedCurrentDesignVersionId, expectedCurrentDesignHash);
+    assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
     const input = decisionInput(decisionRequest, principal, request, brief, started);
     const resolveRoute = requiredPort(ports, "decisionPort.resolveRoute", request.operation);
     const route = routeFor(await resolveRoute(Object.freeze({ scope: started.scope, actor_id: principal.actor_id, decision: input })), request.operation);
     await assertCurrentCreativeContext(started.scope, brief, baseDesign, request.operation,
       expectedCurrentDesignVersionId, expectedCurrentDesignHash);
+    assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
     if (route.provider.model !== PINNED_JEV_MODEL_ID) throw new CreativeApiError("unsupported_version", request.operation, "decision_route.model");
+    const assertDecisionContext = async () => {
+      await assertCurrentCreativeContext(started.scope, brief, baseDesign, request.operation,
+        expectedCurrentDesignVersionId, expectedCurrentDesignHash);
+      assertRepairAuthorizationCurrent(repairAuthorization, request.operation);
+      return Object.freeze([]);
+    };
     const result = await runMetered(principal, request, started, "jev_decision", route, "decisionPort.execute",
       async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest }) => {
         const timestamp = new Date(now()).toISOString();
@@ -2057,9 +2109,9 @@ export function createCreativeApi(options = {}) {
           request: validated, attempt, reservation_ref, transport_attempt_id: transportAttemptId,
           dispatch_intent_ref, recordTransportAttempt, signal, deadline_at }));
         return { value: raw, usage: raw?.usage, provider_outcome: raw?.status === "complete" || raw?.status === "review" ? "succeeded" : "failed" };
-      }, () => assertCurrentCreativeContext(started.scope, brief, baseDesign,
-        request.operation, expectedCurrentDesignVersionId, expectedCurrentDesignHash),
-      creativeContextFence(brief, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash));
+      }, assertDecisionContext,
+      creativeContextFence(brief, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash,
+        repairAuthorization ? { inspection_repair: repairAuthorization.proof } : undefined));
     if (!result.decision_request) throw new CreativeApiError("unavailable", request.operation, "decision_request");
     let validated;
     try { validated = validateDecisionResult(result.decision_request, result.value, {
@@ -2072,7 +2124,8 @@ export function createCreativeApi(options = {}) {
     return validated;
   }
 
-  async function runImageOperation(principal, request, started, brief, baseDesign, expectedSelection = null) {
+  async function runImageOperation(principal, request, started, brief, baseDesign, expectedSelection = null,
+    repairAuthorization = null) {
     const operation = request.operation;
     const plan = request.payload.plan;
     if (!isRecord(plan)) throw new CreativeApiError("invalid_request", operation, "plan");
@@ -2145,6 +2198,7 @@ export function createCreativeApi(options = {}) {
       if (proofs.some((proof) => proof.expires_at <= checkedAt)) {
         throw new CreativeApiError("permission_denied", operation, "asset_permission_evidence");
       }
+      assertRepairAuthorizationCurrent(repairAuthorization, operation);
       return proofs;
     };
     const branchMode = operation === "edit" && request.payload.selection_mode === "branch";
@@ -2154,7 +2208,9 @@ export function createCreativeApi(options = {}) {
       : (operation === "generate" ? (expectedSelection?.design_hash ?? null) : (baseDesign?.design_hash ?? null));
     await assertImageContext();
     const decisionResult = await decision(principal, request, started, brief,
-      request.payload.decision_request, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash);
+      request.payload.decision_request, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash,
+      repairAuthorization);
+    await assertImageContext();
     const method = operation === "generate" ? "provider.generate" : "provider.edit";
     const resolveRoute = requiredPort(ports, "provider.resolveRoute", operation);
     const route = routeFor(await resolveRoute(Object.freeze({ scope: started.scope, actor_id: principal.actor_id, operation, plan })), operation);
@@ -2302,7 +2358,9 @@ export function createCreativeApi(options = {}) {
           signal, deadline_at }));
         return { value, usage: value?.usage, provider_outcome: "succeeded" };
       }, assertImageContext,
-      creativeContextFence(brief, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash));
+      creativeContextFence(brief, baseDesign, expectedCurrentDesignVersionId, expectedCurrentDesignHash,
+        repairAuthorization ? { inspection_repair: repairAuthorization.proof } : undefined));
+    const finalRightsProofs = await assertImageContext();
     const generated = metered.value;
     const usage = normalizeUsage(generated?.usage);
     const usageEvidence = metered.usage_evidence;
@@ -2373,7 +2431,8 @@ export function createCreativeApi(options = {}) {
     }
     const usageRefs = typeof metered.usage_ref === "string"
       ? [publicIdentifier(metered.usage_ref, "usage_ref", operation, 256)] : [];
-    return { design, artifact_bytes: artifactBytes,
+    return { design, artifact_bytes: artifactBytes, permission_fence: Object.freeze([...finalRightsProofs]),
+      refresh_permission_fence: assertImageContext,
       telemetry_evidence: metered.telemetry_evidence,
       ...(usageEvidence ? { usage_evidence: usageEvidence } : {}),
       creation_evidence: { transport_attempt_ids: [...metered.transport_attempt_ids], provider_request_ids: providerRequestIds,
@@ -2568,15 +2627,23 @@ export function createCreativeApi(options = {}) {
       simulated_units: estimate.simulated_units }); }
     catch { throw new CreativeApiError("unavailable", "edit", "inspection_repair.claim"); }
     if (!isRecord(claim) || claim.status !== "recorded" || claim.local_limit_status !== "within_limits" ||
-      typeof claim.claim_ref !== "string") {
+      typeof claim.claim_ref !== "string" || !Number.isSafeInteger(claim.started_at_ms) ||
+      claim.root_brief_hash !== canonicalHash(brief) || claim.root_design_hash !== session.root_design_hash) {
       const field = claim?.status === "expired" || claim?.status === "limit_reached" || claim?.status === "cancelled"
         ? "inspection_repair.limit" : "inspection_repair.claim";
       throw new CreativeApiError("unavailable", "edit", field);
     }
+    const proof = Object.freeze({ inspection_id: session.result.inspection_id, action_id: request.action_id,
+      request_hash: started.request_hash, claim_ref: claim.claim_ref, root_brief_hash: claim.root_brief_hash,
+      root_design_hash: claim.root_design_hash, root_design_version_id: session.root_design_version_id,
+      started_at_ms: claim.started_at_ms, deadline_at_ms: claim.started_at_ms + REPAIR_LIMITS.maxElapsedMs,
+      simulated_units_milli: Math.round(estimate.simulated_units * 1000) });
+    const authorization = Object.freeze({ repairScope, proof });
+    assertRepairAuthorizationCurrent(authorization, "edit");
     return Object.freeze({ repairScope, inspection_id: session.result.inspection_id,
       inspection_action_id: source.inspection_action_id, source_report_hash: source.report_hash,
       root_design_version_id: session.root_design_version_id, root_design_hash: session.root_design_hash,
-      claim_ref: claim.claim_ref, simulated_units: estimate.simulated_units });
+      claim_ref: claim.claim_ref, simulated_units: estimate.simulated_units, proof });
   }
 
   async function executeNew(principal, request, started) {
@@ -2662,19 +2729,28 @@ export function createCreativeApi(options = {}) {
       let observation;
       let providerStatus = "not_requested";
       let decision;
-      let decisionUsageCompleteness = "unknown";
+      const ownerUsageStages = [];
+      let decisionAbstained = false;
       const observerPrior = priorStage("observer");
       if (deterministic.gate === "eligible" && observerPrior?.status === "completed") {
         const stored = observerPrior.result;
-        if (!isRecord(stored) || stored.subject_hash !== subjectHash || !isRecord(stored.observation) ||
-          typeof stored.attempt_id !== "string" || !isRecord(stored.telemetry_evidence)) {
+        if (!isRecord(stored) || stored.subject_hash !== subjectHash || typeof stored.attempt_id !== "string" ||
+          !isRecord(stored.telemetry_evidence) || !["complete", "partial", "unknown"].includes(stored.usage_completeness)) {
           throw new CreativeApiError("unavailable", operation, "inspection.observer_stage");
         }
-        observation = validateVisualObservation(stored.observation, deterministic);
+        if (stored.provider_status === undefined) {
+          if (!isRecord(stored.observation)) throw new CreativeApiError("unavailable", operation, "inspection.observer_stage");
+          observation = validateVisualObservation(stored.observation, deterministic);
+          providerStatus = "complete";
+        } else if (["refused", "unavailable", "timeout"].includes(stored.provider_status) &&
+          stored.observation === undefined) {
+          providerStatus = stored.provider_status;
+        } else {
+          throw new CreativeApiError("unavailable", operation, "inspection.observer_stage");
+        }
         attempts.push(stored.attempt_id);
         telemetryEvidence.push(stored.telemetry_evidence);
-        providerStatus = "complete";
-        decisionUsageCompleteness = stored.usage_completeness === "complete" ? "complete" : "unknown";
+        ownerUsageStages.push(stored.usage_completeness);
       } else if (deterministic.gate === "eligible") {
         const resolveRoute = requiredPort(ports, "inspection.resolveRoute", operation);
         const inspect = requiredPort(ports, "inspection.inspect", operation);
@@ -2689,16 +2765,23 @@ export function createCreativeApi(options = {}) {
           await assertCurrentCreativeContext(scope, brief, design, operation);
           const metered = await runMetered(principal, request, started, "vision_observation", route, "inspection.inspect",
             async ({ method, attempt, reservation_ref, signal, deadline_at, transportAttemptId, dispatch_intent_ref,
-              recordTransportAttempt }) => {
+              recordTransportAttempt, revalidateDispatch }) => {
               const intent = Object.freeze({ subject_hash: subjectHash, artifact_hash: design.artifact.content_hash,
                 design_hash: design.design_hash, route_hash: canonicalHash(route), transport_attempt_id: transportAttemptId,
                 dispatch_intent_ref, reservation_ref });
               await stagePort.begin("observer", attempt.billable_attempt_id, intent);
+              await revalidateDispatch({ transport_attempt_id: transportAttemptId,
+                billable_attempt_id: attempt.billable_attempt_id, reservation_ref, dispatch_intent_ref,
+                target_binding_sha256: subjectHash, signal });
               const raw = await inspect(Object.freeze({ scope, actor_id: principal.actor_id, job_id: started.job_id,
                 attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
                 recordTransportAttempt, signal, deadline_at, route, brief, design_version: design, parent_design: parent,
                 deterministic, artifact_bytes: copyInspectionArtifactBytes(deterministic), used_assets: Object.freeze(usedAssets) }));
-              if (!isRecord(raw) || raw.status !== "complete") {
+              if (!isRecord(raw) || !["complete", "refused", "unavailable", "timeout", "cancelled"].includes(raw.status)) {
+                throw new CreativeApiError("failed", operation, "inspection.observer_result");
+              }
+              if (raw.status !== "complete") {
+                assertOnlyKeys(raw, ["status", "usage"], "inspection.observer_result");
                 return { value: raw, usage: raw?.usage, provider_outcome: "failed" };
               }
               assertOnlyKeys(raw, ["status", "observer", "uncertainty", "findings", "usage"], "inspection.observer_result");
@@ -2733,20 +2816,33 @@ export function createCreativeApi(options = {}) {
                 target_binding_sha256: subjectHash }, usage: raw.usage, provider_outcome: "succeeded" };
             }, async () => {
               await assertCurrentCreativeContext(scope, brief, design, operation);
-              await verifyInspectionAssetRights(scope, brief, assetUse, operation);
-            }, creativeContextFence(brief, design));
-          if (!isRecord(metered.value) || !isRecord(metered.value.observation)) {
-            throw new CreativeApiError("failed", operation, "inspection.observer_result");
+              return verifyInspectionAssetRights(scope, brief, assetUse, operation);
+            }, creativeContextFence(brief, design), { allowTerminalFailure: true });
+          if (metered.value?.status === "cancelled") throw new CreativeApiError("cancelled", operation, "inspection.observer_result");
+          if (isRecord(metered.value) && ["refused", "unavailable", "timeout"].includes(metered.value.status)) {
+            const stageResult = Object.freeze({ subject_hash: subjectHash, provider_status: metered.value.status,
+              attempt_id: metered.attempt_id,
+              usage_completeness: metered.usage_evidence?.status === "settled_owner_mapping" ? "complete" : "unknown",
+              telemetry_evidence: metered.telemetry_evidence });
+            await stagePort.complete("observer", metered.attempt_id, stageResult);
+            attempts.push(metered.attempt_id);
+            telemetryEvidence.push(metered.telemetry_evidence);
+            providerStatus = metered.value.status;
+            ownerUsageStages.push(stageResult.usage_completeness);
+          } else {
+            if (!isRecord(metered.value) || !isRecord(metered.value.observation)) {
+              throw new CreativeApiError("failed", operation, "inspection.observer_result");
+            }
+            observation = validateVisualObservation(metered.value.observation, deterministic);
+            const stageResult = Object.freeze({ subject_hash: subjectHash, observation, attempt_id: metered.attempt_id,
+              usage_completeness: metered.usage_evidence?.status === "settled_owner_mapping" ? "complete" : "unknown",
+              telemetry_evidence: metered.telemetry_evidence });
+            await stagePort.complete("observer", metered.attempt_id, stageResult);
+            attempts.push(metered.attempt_id);
+            telemetryEvidence.push(metered.telemetry_evidence);
+            providerStatus = "complete";
+            ownerUsageStages.push(stageResult.usage_completeness);
           }
-          observation = validateVisualObservation(metered.value.observation, deterministic);
-          const stageResult = Object.freeze({ subject_hash: subjectHash, observation, attempt_id: metered.attempt_id,
-            usage_completeness: metered.usage_evidence?.status === "settled_owner_mapping" ? "complete" : "unknown",
-            telemetry_evidence: metered.telemetry_evidence });
-          await stagePort.complete("observer", metered.attempt_id, stageResult);
-          attempts.push(metered.attempt_id);
-          telemetryEvidence.push(metered.telemetry_evidence);
-          providerStatus = "complete";
-          decisionUsageCompleteness = stageResult.usage_completeness;
         }
       }
       if (observation && deterministic.gate === "eligible" && providerStatus === "complete") {
@@ -2789,7 +2885,7 @@ export function createCreativeApi(options = {}) {
           let firstRequest;
           let firstResult;
           let firstTelemetry;
-          let firstUsageComplete = false;
+          let firstUsageCompleteness = "unknown";
           if (firstStage) {
             const stored = firstStage.result;
             firstRequest = stored.request;
@@ -2797,7 +2893,8 @@ export function createCreativeApi(options = {}) {
             firstTelemetry = stored.telemetry_evidence;
             if (!isRecord(firstRequest) || !isRecord(firstResult) ||
               canonicalHash(firstRequest) !== firstStage.intent.request_hash ||
-              firstRequest.billable_attempt_id !== firstStage.attempt_id) {
+              firstRequest.billable_attempt_id !== firstStage.attempt_id ||
+              !["complete", "partial", "unknown"].includes(stored.usage_completeness)) {
               throw new CreativeApiError("unavailable", operation, "inspection.decision_evidence");
             }
             const context = Object.fromEntries(Object.entries(firstRequest).filter(([key]) => [
@@ -2815,14 +2912,15 @@ export function createCreativeApi(options = {}) {
             }
             firstResult = validateDecisionResult(firstRequest, firstResult, { trustedScope: { ...trustedInspectionScope,
               job_id: started.job_id } });
-            firstUsageComplete = stored.usage_completeness === "complete";
+            firstUsageCompleteness = stored.usage_completeness;
+            ownerUsageStages.push(firstUsageCompleteness);
             attempts.push(firstStage.attempt_id);
             telemetryEvidence.push(firstTelemetry);
           } else {
             let capturedPlan;
             const firstMetered = await runMetered(principal, request, started, "jev_decision", decisionRoute,
               "decisionPort.execute", async ({ method, attempt, reservation_ref, signal, deadline_at,
-                transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest }) => {
+                transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest, revalidateDispatch }) => {
                 const context = makeDecisionContext({ attempt, reservation_ref, deadline_at, transportAttemptId });
                 const planned = createInspectionDecisionPlan({ deterministic, observation, decision_context: context });
                 if (planned.status !== "ready") throw new CreativeApiError("unavailable", operation, "inspection.question_plan");
@@ -2831,6 +2929,9 @@ export function createCreativeApi(options = {}) {
                 await stagePort.begin("decision_evidence", attempt.billable_attempt_id,
                   Object.freeze({ request: decisionRequest, request_hash: canonicalHash(decisionRequest), plan_ref: planned.plan_ref,
                     subject_hash: subjectHash, stage: "independent_batch" }));
+                await revalidateDispatch({ transport_attempt_id: transportAttemptId,
+                  billable_attempt_id: attempt.billable_attempt_id, reservation_ref, dispatch_intent_ref,
+                  target_binding_sha256: canonicalHash(decisionRequest), signal });
                 const raw = await method(Object.freeze({ scope, actor_id: principal.actor_id, request: decisionRequest,
                   attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
                   recordTransportAttempt, signal, deadline_at }));
@@ -2841,11 +2942,11 @@ export function createCreativeApi(options = {}) {
                 capturedPlan = planned;
                 return { value: { request: decisionRequest, decision_result: checked,
                   target_binding_sha256: canonicalHash(decisionRequest) }, usage: raw?.usage,
-                  provider_outcome: checked.status === "complete" || checked.status === "review" ? "succeeded" : "failed" };
+              provider_outcome: checked.status === "complete" || checked.status === "review" ? "succeeded" : "failed" };
               }, async () => {
                 await assertCurrentCreativeContext(scope, brief, design, operation);
-                await verifyInspectionAssetRights(scope, brief, assetUse, operation);
-              }, creativeContextFence(brief, design));
+                return verifyInspectionAssetRights(scope, brief, assetUse, operation);
+              }, creativeContextFence(brief, design), { allowTerminalFailure: true });
             plan = capturedPlan;
             if (!plan && isRecord(firstMetered.value?.request)) {
               const context = Object.fromEntries(Object.entries(firstMetered.value.request).filter(([key]) => [
@@ -2859,20 +2960,25 @@ export function createCreativeApi(options = {}) {
             if (!plan || plan.status !== "ready") throw new CreativeApiError("unavailable", operation, "inspection.question_plan");
             firstRequest = firstMetered.value.request;
             firstResult = firstMetered.value.decision_result;
+            if (firstResult?.status === "cancelled") throw new CreativeApiError("cancelled", operation, "inspection.decision_result");
             firstTelemetry = firstMetered.telemetry_evidence;
-            firstUsageComplete = firstMetered.usage_evidence?.status === "settled_owner_mapping";
+            firstUsageCompleteness = firstMetered.usage_evidence?.status === "settled_owner_mapping"
+              ? (firstMetered.usage_evidence.completeness ?? "complete") : "unknown";
             await stagePort.complete("decision_evidence", firstMetered.attempt_id, Object.freeze({ request: firstRequest,
               decision_result: firstResult, telemetry_evidence: firstTelemetry,
-              usage_completeness: firstUsageComplete ? "complete" : "unknown" }));
+              usage_completeness: firstUsageCompleteness }));
             attempts.push(firstMetered.attempt_id);
             telemetryEvidence.push(firstTelemetry);
+            ownerUsageStages.push(firstUsageCompleteness);
+            if (firstResult.status !== "complete") decisionAbstained = true;
           }
+          if (firstResult.status !== "complete") decisionAbstained = true;
           if (firstResult.status === "complete") {
             let routeStage = loadDecisionStage("decision_route");
             let routeRequest;
             let routeResult;
             let routeTelemetry;
-            let routeUsageComplete = false;
+            let routeUsageCompleteness = "unknown";
             if (routeStage) {
               routeRequest = routeStage.result.request;
               routeResult = routeStage.result.decision_result;
@@ -2895,7 +3001,11 @@ export function createCreativeApi(options = {}) {
               }
               routeResult = validateDecisionResult(routeRequest, routeResult, { trustedScope: { ...trustedInspectionScope,
                 job_id: started.job_id } });
-              routeUsageComplete = routeStage.result.usage_completeness === "complete";
+              if (!["complete", "partial", "unknown"].includes(routeStage.result.usage_completeness)) {
+                throw new CreativeApiError("unavailable", operation, "inspection.decision_route");
+              }
+              routeUsageCompleteness = routeStage.result.usage_completeness;
+              ownerUsageStages.push(routeUsageCompleteness);
               attempts.push(routeStage.attempt_id);
               telemetryEvidence.push(routeTelemetry);
             } else {
@@ -2911,7 +3021,7 @@ export function createCreativeApi(options = {}) {
               let builtRouteRequest;
               const routeMetered = await runMetered(principal, request, started, "jev_decision", routeConfig,
                 "decisionPort.execute", async ({ method, attempt, reservation_ref, signal, deadline_at,
-                  transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest }) => {
+                  transportAttemptId, dispatch_intent_ref, recordTransportAttempt, setDecisionRequest, revalidateDispatch }) => {
                   const context = makeDecisionContext({ attempt, reservation_ref, deadline_at, transportAttemptId });
                   const requestContext = { ...context, linked_request_id: firstRequest.request_id,
                     linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
@@ -2925,6 +3035,9 @@ export function createCreativeApi(options = {}) {
                     Object.freeze({ request: builtRouteRequest, request_hash: canonicalHash(builtRouteRequest),
                       plan_ref: plan.plan_ref, subject_hash: subjectHash, first_request_ref: canonicalHash(firstRequest),
                       first_result_ref: canonicalHash(firstResult), stage: "dependent_route" }));
+                  await revalidateDispatch({ transport_attempt_id: transportAttemptId,
+                    billable_attempt_id: attempt.billable_attempt_id, reservation_ref, dispatch_intent_ref,
+                    target_binding_sha256: canonicalHash(builtRouteRequest), signal });
                   const raw = await method(Object.freeze({ scope, actor_id: principal.actor_id, request: builtRouteRequest,
                     attempt, reservation_ref, transport_attempt_id: transportAttemptId, dispatch_intent_ref,
                     recordTransportAttempt, signal, deadline_at }));
@@ -2934,37 +3047,40 @@ export function createCreativeApi(options = {}) {
                   catch (error) { throw safeError(error, operation); }
                   return { value: { request: builtRouteRequest, decision_result: checked,
                     target_binding_sha256: canonicalHash(builtRouteRequest) }, usage: raw?.usage,
-                    provider_outcome: checked.status === "complete" || checked.status === "review" ? "succeeded" : "failed" };
+                  provider_outcome: checked.status === "complete" || checked.status === "review" ? "succeeded" : "failed" };
                 }, async () => {
                   await assertCurrentCreativeContext(scope, brief, design, operation);
-                  await verifyInspectionAssetRights(scope, brief, assetUse, operation);
-                }, creativeContextFence(brief, design));
+                  return verifyInspectionAssetRights(scope, brief, assetUse, operation);
+                }, creativeContextFence(brief, design), { allowTerminalFailure: true });
               routeRequest = routeMetered.value.request;
               routeResult = routeMetered.value.decision_result;
+              if (routeResult?.status === "cancelled") throw new CreativeApiError("cancelled", operation, "inspection.decision_result");
               routeTelemetry = routeMetered.telemetry_evidence;
-              routeUsageComplete = routeMetered.usage_evidence?.status === "settled_owner_mapping";
+              routeUsageCompleteness = routeMetered.usage_evidence?.status === "settled_owner_mapping"
+                ? (routeMetered.usage_evidence.completeness ?? "complete") : "unknown";
               await stagePort.complete("decision_route", routeMetered.attempt_id, Object.freeze({ request: routeRequest,
                 decision_result: routeResult, telemetry_evidence: routeTelemetry,
-                usage_completeness: routeUsageComplete ? "complete" : "unknown" }));
+                usage_completeness: routeUsageCompleteness }));
               attempts.push(routeMetered.attempt_id);
               telemetryEvidence.push(routeTelemetry);
+              ownerUsageStages.push(routeUsageCompleteness);
             }
             decision = evaluateInspectionDecision(plan, firstRequest, firstResult, routeRequest, routeResult, trustedInspectionScope);
-            decisionUsageCompleteness = firstUsageComplete && routeUsageComplete ? "complete" : "unknown";
+            if (routeResult.status !== "complete") decisionAbstained = true;
           }
         }
       }
       await assertCurrentCreativeContext(scope, brief, design, operation);
+      const finalRightsProofs = await verifyInspectionAssetRights(scope, brief, assetUse, operation);
       const state = repairPort.getState({ scope: repairScope, inspection_id: inspectionId }) ?? repairState;
-      const usageCompleteness = decisionUsageCompleteness === "complete" && telemetryEvidence.length > 0
-        ? "complete" : "unknown";
+      const usageCompleteness = aggregateUsageCompleteness(ownerUsageStages);
       const report = createInspectionReport({ deterministic, provider_status: providerStatus, decision,
         observations: observation ? [observation] : [], policy_version: INSPECTION_POLICY_VERSION,
         evidence_mode: "fixture", subject_hash: subjectHash,
         question_schema_version: decision ? INSPECTION_QUESTION_SCHEMA_VERSION : null,
         model_id: decision ? PINNED_JEV_MODEL_ID : null,
         decision_policy_version: decision ? INSPECTION_POLICY_VERSION : null,
-        uncertainty: usageCompleteness === "unknown" ? ["unknown_cost"] : [],
+        uncertainty: usageUncertainty(usageCompleteness, decisionAbstained ? ["question_abstained"] : []),
         limits: { remaining_repairs: state?.remaining_repairs ?? 2, remaining_elapsed_ms: state?.remaining_elapsed_ms ?? 60_000,
           remaining_simulated_units: state?.remaining_simulated_units ?? 3, usage_completeness: usageCompleteness } });
       const output = Object.freeze({ report, inspection_id: inspectionId, attempt_ids: Object.freeze(attempts),
@@ -2973,7 +3089,8 @@ export function createCreativeApi(options = {}) {
         await requiredPort(ports, "storage.completeInspectionSession", operation)({ ...identity, result: output }, transaction);
       }, { brief_id: brief.brief_id, brief_hash: canonicalHash(brief),
         design_version_id: design.design_version_id, design_hash: design.design_hash,
-        expected_current_design_version_id: design.design_version_id, expected_current_design_hash: design.design_hash });
+        expected_current_design_version_id: design.design_version_id, expected_current_design_hash: design.design_hash,
+        inspection_rights: Object.freeze({ proofs: Object.freeze([...finalRightsProofs]) }) });
       return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: CREATIVE_API_VERSION,
         operation_id: job.job_id, job: publicJob(job, job.job_id), result: output }), operation);
     }
@@ -3014,18 +3131,15 @@ export function createCreativeApi(options = {}) {
       if (operation === "edit" && payload.inspection_repair !== undefined) {
         repairAuthorization = await validateInspectionRepairSource(principal, request, started, brief, baseDesign);
       }
-      const output = await runImageOperation(principal, request, started, brief, baseDesign, expectedSelection);
+      if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
+      const output = await runImageOperation(principal, request, started, brief, baseDesign, expectedSelection,
+        repairAuthorization);
+      let publicationPermissionProofs = output.permission_fence;
       let repairEvidence;
+      let repairResultHash;
       if (repairAuthorization) {
-        const resultHash = canonicalHash({ design_hash: output.design.design_hash,
+        repairResultHash = canonicalHash({ design_hash: output.design.design_hash,
           billable_attempt_id: output.design.billable_attempt_id, telemetry_evidence: output.telemetry_evidence });
-        let outcome;
-        try { outcome = ports.storage.inspectionRepair.recordRepairOutcome({ scope: repairAuthorization.repairScope,
-          inspection_id: repairAuthorization.inspection_id, action_id: request.action_id, result_hash: resultHash }); }
-        catch { throw new CreativeApiError("unavailable", operation, "inspection_repair.outcome"); }
-        if (!isRecord(outcome) || outcome.status !== "recorded" || outcome.result_hash !== resultHash) {
-          throw new CreativeApiError("unavailable", operation, "inspection_repair.outcome");
-        }
         repairEvidence = Object.freeze({ contract: "CreativeInspectionRepairExecution", schema_version: "1.0",
           inspection_id: repairAuthorization.inspection_id, inspection_action_id: repairAuthorization.inspection_action_id,
           source_report_hash: repairAuthorization.source_report_hash, repair_action: "image.edit",
@@ -3033,7 +3147,8 @@ export function createCreativeApi(options = {}) {
           root_design_hash: repairAuthorization.root_design_hash, output_design_version_id: output.design.design_version_id,
           output_design_hash: output.design.design_hash, billable_attempt_id: output.design.billable_attempt_id });
       }
-      const { artifact_bytes: _artifactBytes, creation_evidence: creationEvidence, ...outputRecord } = output;
+      const { artifact_bytes: _artifactBytes, creation_evidence: creationEvidence,
+        permission_fence: _permissionFence, refresh_permission_fence: refreshPermissionFence, ...outputRecord } = output;
       const publishedOutput = Object.freeze({ ...outputRecord, ...(repairEvidence ? { inspection_repair: repairEvidence } : {}) });
       const selectionMode = operation === "edit" && payload.selection_mode === "branch" ? "branch" : "advance";
       const creation = Object.freeze({
@@ -3082,22 +3197,43 @@ export function createCreativeApi(options = {}) {
         if (!isRecord(evidenceRecord) || !["recorded", "replayed"].includes(evidenceRecord.status)) {
           throw new CreativeApiError("unavailable", operation, "attempt_evidence");
         }
+        publicationPermissionProofs = await refreshPermissionFence();
+        if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
       }
       const prepared = typeof prepare === "function" ? await prepare(saveInput) : null;
       if (prepared !== null && (!isRecord(prepared) || prepared.status !== "prepared" ||
         prepared.action_id !== request.action_id || prepared.job_id !== started.job_id || typeof prepared.payload_hash !== "string")) {
         throw new CreativeApiError("unavailable", operation, "storage.version_intent");
       }
+      if (typeof prepare === "function") {
+        publicationPermissionProofs = await refreshPermissionFence();
+        if (repairAuthorization) assertRepairAuthorizationCurrent(repairAuthorization, operation);
+      }
+      const publicationFence = creativeContextFence(brief, baseDesign, branchMode ? undefined
+        : (operation === "generate" ? expectedSelection.design_version_id : (baseDesign?.design_version_id ?? null)),
+      branchMode ? undefined
+        : (operation === "generate" ? expectedSelection.design_hash : (baseDesign?.design_hash ?? null)), {
+        inspection_rights: Object.freeze({ proofs: Object.freeze([...publicationPermissionProofs]) }),
+        ...(repairAuthorization ? { inspection_repair: Object.freeze({ ...repairAuthorization.proof,
+          result_hash: repairResultHash }) } : {}),
+      });
       const job = await publish(principal, request, started, publishedOutput, async (transaction) => {
+        if (repairAuthorization) {
+          let outcome;
+          try { outcome = ports.storage.inspectionRepair.recordRepairOutcomeInPublication({
+            scope: repairAuthorization.repairScope, inspection_id: repairAuthorization.inspection_id,
+            action_id: request.action_id, result_hash: repairResultHash, proof: repairAuthorization.proof }); }
+          catch { throw new CreativeApiError("unavailable", operation, "inspection_repair.outcome"); }
+          if (!isRecord(outcome) || outcome.status !== "recorded" || outcome.result_hash !== repairResultHash) {
+            throw new CreativeApiError("stale_version", operation, "inspection_repair.outcome");
+          }
+        }
         const saved = prepared
           ? await commitPrepared(Object.freeze({ scope, brief_id: brief.brief_id, action_id: prepared.action_id,
             job_id: prepared.job_id, payload_hash: prepared.payload_hash }), transaction)
           : await requiredPort(ports, "storage.saveDesignVersion", operation)(saveInput, transaction);
         if (!isRecord(saved) || saved.status !== "saved") throw new CreativeApiError("stale_version", operation);
-      }, creativeContextFence(brief, baseDesign, branchMode ? undefined
-        : (operation === "generate" ? expectedSelection.design_version_id : (baseDesign?.design_version_id ?? null)),
-      branchMode ? undefined
-        : (operation === "generate" ? expectedSelection.design_hash : (baseDesign?.design_hash ?? null))));
+      }, publicationFence);
       return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: CREATIVE_API_VERSION,
         operation_id: job.job_id, job: publicJob(job, job.job_id), result: Object.freeze({
           design_version: output.design, usage: output.usage, telemetry_evidence: output.telemetry_evidence,
@@ -3406,7 +3542,12 @@ export function createCreativeApi(options = {}) {
           decoderResult = Object.freeze({ contract: "OpenAIBoundedImageDecode", schema_version: "1.0", status: "pass",
             artifact_hash: hashArtifactBytes(artifactBytes), format: decoded.format, width: decoded.width, height: decoded.height,
             has_alpha: decoded.has_alpha, has_transparency: decoded.has_transparency });
-        } catch { throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decode"); }
+        } catch {
+          decoderResult = Object.freeze({ contract: "OpenAIBoundedImageDecode", schema_version: "1.0", status: "fail",
+            artifact_hash: hashArtifactBytes(artifactBytes),
+            format: ({ "image/png": "png", "image/jpeg": "jpeg", "image/webp": "webp" })[design.artifact.media_type] ?? "png",
+            width: 1, height: 1, has_alpha: false, has_transparency: false });
+        }
         const usedAssets = assetUse.status === "verified"
           ? assetUse.entries.map(({ asset_id, action }) => ({ asset_id, action })) : [];
         const deterministic = inspectCreativeArtifact({ trusted_scope: { ...started.scope,
@@ -3433,22 +3574,43 @@ export function createCreativeApi(options = {}) {
         const observerStage = stageByName.get("observer");
         let observation;
         let providerStatus = "not_requested";
-        let usageComplete = true;
+        if (deterministic.gate === "eligible" &&
+          (!deterministic.dimensions || !["png", "jpeg", "webp"].includes(deterministic.dimensions.format))) {
+          providerStatus = "unavailable";
+        }
+        const ownerUsageStages = [];
+        let decisionAbstained = false;
         if (observerStage) {
           const staged = observerStage.result;
           if (observerStage.intent.subject_hash !== subjectHash || observerStage.intent.design_hash !== design.design_hash ||
             observerStage.intent.artifact_hash !== design.artifact.content_hash || staged.subject_hash !== subjectHash ||
-            staged.attempt_id !== observerStage.attempt_id || !isRecord(staged.telemetry_evidence)) {
+            staged.attempt_id !== observerStage.attempt_id || !isRecord(staged.telemetry_evidence) ||
+            !["complete", "partial", "unknown"].includes(staged.usage_completeness)) {
             throw new CreativeApiError("unavailable", request.operation, "stored_inspection.observer");
           }
-          observation = validateVisualObservation(staged.observation, deterministic);
-          providerStatus = "complete";
-          usageComplete = staged.usage_completeness === "complete";
+          ownerUsageStages.push(staged.usage_completeness);
+          if (staged.provider_status === undefined) {
+            assertStoredOnlyKeys(staged, ["subject_hash", "observation", "attempt_id", "usage_completeness", "telemetry_evidence"],
+              request.operation, "stored_inspection.observer");
+            observation = validateVisualObservation(staged.observation, deterministic);
+            providerStatus = "complete";
+          } else if (["refused", "unavailable", "timeout"].includes(staged.provider_status) &&
+            staged.observation === undefined) {
+            assertStoredOnlyKeys(staged, ["subject_hash", "provider_status", "attempt_id", "usage_completeness", "telemetry_evidence"],
+              request.operation, "stored_inspection.observer");
+            providerStatus = staged.provider_status;
+          } else {
+            throw new CreativeApiError("unavailable", request.operation, "stored_inspection.observer");
+          }
+        }
+        if (providerStatus === "complete" && !observation || providerStatus !== "complete" && observation ||
+          observerStage && deterministic.gate !== "eligible") {
+          throw new CreativeApiError("unavailable", request.operation, "stored_inspection.observer");
         }
         let decision;
         const firstStage = stageByName.get("decision_evidence");
         const routeStage = stageByName.get("decision_route");
-        if (Boolean(firstStage) !== Boolean(routeStage) || Boolean(firstStage) !== Boolean(observation)) {
+        if (firstStage && !observation || routeStage && !firstStage) {
           throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_stages");
         }
         if (firstStage) {
@@ -3456,9 +3618,13 @@ export function createCreativeApi(options = {}) {
           const firstResult = firstStage.result.decision_result;
           if (!isRecord(firstRequest) || !isRecord(firstResult) || !isRecord(firstStage.result.telemetry_evidence) ||
             firstStage.intent.subject_hash !== subjectHash || firstStage.intent.request_hash !== canonicalHash(firstRequest) ||
-            firstRequest.billable_attempt_id !== firstStage.attempt_id) {
+            firstRequest.billable_attempt_id !== firstStage.attempt_id ||
+            !["complete", "partial", "unknown"].includes(firstStage.result.usage_completeness)) {
             throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_first");
           }
+          assertStoredOnlyKeys(firstStage.result, ["request", "decision_result", "telemetry_evidence", "usage_completeness"],
+            request.operation, "stored_inspection.decision_first");
+          ownerUsageStages.push(firstStage.result.usage_completeness);
           const decisionContextKeys = ["event_id", "correlation_id", "producer", "occurred_at", "ingested_at", "environment",
             "billing_mode", "request_id", "logical_operation_id", "billable_attempt_id", "attempt_number", "attempt_limit",
             "budget_ref", "deadline_at", "cancellation_ref", "model_policy", "workflow_id", "run_id", "order_id",
@@ -3472,42 +3638,59 @@ export function createCreativeApi(options = {}) {
           const trustedInspectionScope = Object.freeze({ ...started.scope, brief_id: brief.brief_id,
             design_version_id: design.design_version_id, artifact_id: design.artifact.artifact_id, job_id: job.job_id });
           const checkedFirstResult = validateDecisionResult(firstRequest, firstResult, { trustedScope: trustedInspectionScope });
-          const routeRequest = routeStage.result.request;
-          const routeResult = routeStage.result.decision_result;
-          if (!isRecord(routeRequest) || !isRecord(routeResult) || !isRecord(routeStage.result.telemetry_evidence) ||
-            routeStage.intent.subject_hash !== subjectHash || routeStage.intent.request_hash !== canonicalHash(routeRequest) ||
-            routeStage.intent.first_request_ref !== canonicalHash(firstRequest) ||
-            routeStage.intent.first_result_ref !== canonicalHash(checkedFirstResult) ||
-            routeStage.intent.plan_ref !== plan.plan_ref) {
-            throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_route");
+          if (checkedFirstResult.status === "cancelled") {
+            throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_first");
           }
-          const routeContext = { ...Object.fromEntries(Object.entries(routeRequest)
-            .filter(([key]) => decisionContextKeys.includes(key))), linked_request_id: firstRequest.request_id,
-            linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
-            inspection_subject_hash: subjectHash };
-          const expectedRouteRequest = createInspectionRouteBatch(plan, firstRequest, checkedFirstResult,
-            trustedInspectionScope, routeContext);
-          if (!isRecord(expectedRouteRequest) || canonicalHash(expectedRouteRequest) !== canonicalHash(routeRequest)) {
-            throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_provenance");
+          if (checkedFirstResult.status !== "complete") {
+            if (routeStage) throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_stages");
+            decisionAbstained = true;
+          } else {
+            if (!routeStage) throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_stages");
+            const routeRequest = routeStage.result.request;
+            const routeResult = routeStage.result.decision_result;
+            if (!isRecord(routeRequest) || !isRecord(routeResult) || !isRecord(routeStage.result.telemetry_evidence) ||
+              routeStage.intent.subject_hash !== subjectHash || routeStage.intent.request_hash !== canonicalHash(routeRequest) ||
+              routeStage.intent.first_request_ref !== canonicalHash(firstRequest) ||
+              routeStage.intent.first_result_ref !== canonicalHash(checkedFirstResult) ||
+              routeStage.intent.plan_ref !== plan.plan_ref ||
+              !["complete", "partial", "unknown"].includes(routeStage.result.usage_completeness)) {
+              throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_route");
+            }
+            assertStoredOnlyKeys(routeStage.result, ["request", "decision_result", "telemetry_evidence", "usage_completeness"],
+              request.operation, "stored_inspection.decision_route");
+            ownerUsageStages.push(routeStage.result.usage_completeness);
+            const routeContext = { ...Object.fromEntries(Object.entries(routeRequest)
+              .filter(([key]) => decisionContextKeys.includes(key))), linked_request_id: firstRequest.request_id,
+              linked_billable_attempt_id: firstRequest.billable_attempt_id, plan_ref: plan.plan_ref,
+              inspection_subject_hash: subjectHash };
+            const expectedRouteRequest = createInspectionRouteBatch(plan, firstRequest, checkedFirstResult,
+              trustedInspectionScope, routeContext);
+            if (!isRecord(expectedRouteRequest) || canonicalHash(expectedRouteRequest) !== canonicalHash(routeRequest)) {
+              throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_provenance");
+            }
+            const checkedRouteResult = validateDecisionResult(routeRequest, routeResult, { trustedScope: trustedInspectionScope });
+            if (checkedRouteResult.status === "cancelled") {
+              throw new CreativeApiError("unavailable", request.operation, "stored_inspection.decision_route");
+            }
+            decision = evaluateInspectionDecision(plan, firstRequest, checkedFirstResult, routeRequest, checkedRouteResult,
+              trustedInspectionScope);
+            if (checkedRouteResult.status !== "complete") decisionAbstained = true;
           }
-          const checkedRouteResult = validateDecisionResult(routeRequest, routeResult, { trustedScope: trustedInspectionScope });
-          decision = evaluateInspectionDecision(plan, firstRequest, checkedFirstResult, routeRequest, checkedRouteResult,
-            trustedInspectionScope);
-          usageComplete = usageComplete && firstStage.result.usage_completeness === "complete" &&
-            routeStage.result.usage_completeness === "complete";
         }
         const reportInput = job.result.report;
         if (!isRecord(reportInput) || reportInput.contract !== "CreativeInspectionReport" || reportInput.schema_version !== "1.0" ||
           !isRecord(reportInput.limits) || reportInput.subject_hash !== subjectHash) {
           throw new CreativeApiError("unavailable", request.operation, "stored_inspection.report");
         }
+        const usageCompleteness = aggregateUsageCompleteness(ownerUsageStages);
         const expectedReport = createInspectionReport({ deterministic, provider_status: providerStatus, decision,
           observations: observation ? [observation] : [], policy_version: INSPECTION_POLICY_VERSION, evidence_mode: "fixture",
           subject_hash: subjectHash,
           question_schema_version: decision ? INSPECTION_QUESTION_SCHEMA_VERSION : null,
           model_id: decision ? PINNED_JEV_MODEL_ID : null,
           decision_policy_version: decision ? INSPECTION_POLICY_VERSION : null,
-          uncertainty: usageComplete ? [] : ["unknown_cost"], limits: reportInput.limits });
+          uncertainty: usageUncertainty(usageCompleteness, decisionAbstained ? ["question_abstained"] : []),
+          limits: { ...reportInput.limits, usage_completeness: usageCompleteness } });
         if (canonicalSerialize(expectedReport) !== canonicalSerialize(reportInput)) {
           throw new CreativeApiError("unavailable", request.operation, "stored_inspection.report");
         }
