@@ -6,6 +6,8 @@ The `CatalogSource` port exposes only `readCatalogSnapshot()`. `discoverCatalogS
 
 ## Private field semantics
 
+The local TypeScript API is `normalizeCatalogSnapshot(input: unknown): Promise<CatalogSnapshot>`, `discoverCatalogSnapshot(source: CatalogSource): Promise<CatalogSnapshot>`, `evaluateCatalogSelection(snapshot: CatalogSnapshot, input: unknown, now: string): CatalogSelectionResult`, and `validateCatalogSnapshotBoundary(snapshot: CatalogSnapshot, validator: ContractValidator, trustedScope: TrustedScope): Promise<BoundaryResult<unknown>>`. `CatalogSource` exposes only `readCatalogSnapshot(): Promise<unknown>`. These signatures describe this package's private development interface; shared-contracts #4 owns the canonical fields and boundary signatures.
+
 Every constraint is explicitly `known`, `unknown`, or `unsupported`. Unknown mandatory constraints block eligibility. Unsupported means the source explicitly declares that capability unavailable; a request using it is rejected. A missing field, invalid value, or contradictory known value rejects the snapshot instead of becoming an empty/default capability.
 
 | Private field | Meaning used by the local evaluator |
@@ -54,10 +56,14 @@ The local fixture mapping for a future owner review is:
 
 This is a semantic mapping from the accepted FC-03 field requirements to the future capability/print-spec boundary, not an assertion that print-production #6 has accepted these exact field names. The consumer's declared field/signature requirements and shared-contracts #4 canonical mapping remain review inputs; the fixture test does not claim producer/consumer conformance.
 
-`tests/catalog-fixtures.mjs` contains two incompatible synthetic catalogs. `tests/catalog-suite.mjs` checks deterministic set handling, retrieval/content/spec identity separation, drift, freshness and clock failures including expiry equality, removed SKUs, unknown mandatory constraints, unsupported personalization, required allowlisted destination regions, region-specific shipping precedence, impossible safe-area equality/overflow and valid positive content area, format/color/option/material checks, exact units, strict untrusted catalog and boundary inputs, immutable ownership, malformed boundary result unions, projected receipt/failure fields, and delegated boundary behavior. Run it after the existing TypeScript build:
+`tests/catalog-fixtures.mjs` contains two incompatible synthetic catalogs. `tests/catalog-suite.mjs` checks deterministic set handling, retrieval/content/spec identity separation, drift, freshness and clock failures including expiry equality, removed SKUs, unknown mandatory constraints, unsupported personalization, required allowlisted destination regions, region-specific shipping precedence, impossible safe-area equality/overflow and valid positive content area, format/color/option/material checks, exact units, strict untrusted catalog and boundary inputs, immutable ownership, malformed boundary result unions, projected receipt/failure fields, and delegated boundary behavior. The package root exports the private module and its TypeScript types; the package includes this document. Run the dedicated suite after building, or use the default test command:
 
 ```sh
 node tests/catalog-suite.mjs
+npm run test:catalog
+npm test
 ```
+
+The stable simulated evidence wrapper is `npm run verify:catalog` (or `./scripts/verify-fulfillment --suite catalog --mode simulated --evidence-dir evidence/FC-03`). A passing result means only that the private offline fixture checks passed. Its `catalogAssessment` is a local verification report, not a capability or print-spec schema; it records exact local check counts, keeps FC-03 completion partial, and reports the canonical shared-contracts pin and print-production #6 review as pending. Sandbox readiness remains false and separate from local producer checks; no provider, account, order, or artifact boundary is invoked. Invalid modes fail closed, and sandbox/live suites retain their existing prerequisite failures.
 
 This is local simulated evidence only. It makes zero provider calls, has no live or sandbox account evidence, does not consume a ProductionBundle, does not mutate or construct approved artifacts, and does not close FC-03.1–3 or the dependent sandbox/release gates. Exact canonical fields, schema pin, accepted fixtures, and print-production #6 review remain upstream handoffs.

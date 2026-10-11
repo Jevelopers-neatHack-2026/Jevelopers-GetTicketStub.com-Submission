@@ -38,6 +38,9 @@ jobs:
       - name: Verify the simulated contract wrapper
         run: npm run verify:contract
 
+      - name: Verify the simulated catalog wrapper
+        run: npm run verify:catalog
+
       - name: Verify the offline provider matrix policy
         run: npm run verify:provider-matrix
 
