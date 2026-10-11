@@ -155,7 +155,10 @@ Frozen prerequisite merges are `4f11723f59b44da574738e3e45a14043aad23fe9` and
 `0282c2d4ad31691b2bf4e8cb91e87619983a7204`. The continuation also integrates frozen
 durability `b5b96e04951561d44d1b8360d1a5f59d7ed63ce8` and runtime
 `f413ef020629cb264eaf71a5a1df1e150fdc4b12` normally, preserving authorship.
-DUR-R6/DUR-R7 fixes are integrated and await independent disposition. ROOT-R1
+DUR-R1..R7 were independently verified for frozen durability head `b5b96e0`
+in the supervisor's third review, whose overall verdict remains BLOCKED. That
+review does not approve this combined output/runtime head; its final candidate
+still needs fresh independent disposition. ROOT-R1
 remains open: the supervisor reports a passed PR Linux run and a failed push
 trace binding; the active runtime owner handles that nondeterminism. Local
 macOS evidence cannot certify the final Linux candidate. No later active writer

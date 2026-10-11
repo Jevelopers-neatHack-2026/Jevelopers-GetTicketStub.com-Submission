@@ -79,7 +79,10 @@ diagnostic evidence. Counts are never inferred from an exit-zero child alone.
 The supervisor reports passed runtime PR Linux evidence and a failed push run
 from nondeterministic page-renderer trace binding. ROOT-R1 remains open and its
 active runtime writer owns that fix. This macOS worker adds no alternate launch,
-sandbox exception or Linux certification. DUR-R6/R7 and composition findings
-retain their full history and await final independent disposition. Canonical
+sandbox exception or Linux certification. The third durability review received
+during this continuation independently verifies DUR-R1..R7 on frozen `b5b96e0`,
+with private code APPROVE and overall BLOCKED. It reviewed a stale merge candidate
+and does not approve this combined head. Durability and composition findings
+retain their full history; the final integrated candidate needs fresh review. Canonical
 contracts, approved real roster/spec/permissions and unchanged-hash app/finance/
 fulfillment consumer evidence remain absent; the named offline release must fail.
