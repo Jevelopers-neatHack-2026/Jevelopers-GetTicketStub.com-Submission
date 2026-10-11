@@ -715,6 +715,42 @@ test('an expired encrypted receipt withholds replayed facts and does not authori
   evidenceNow += 181_000;
   const reopenedFrontier = h.openFrontier();
   const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const reopenedScope = await reopenedStore.scopeForAuthenticatedRequest(request());
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const databasePath = path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite');
+  const beforePurge = new DatabaseSync(databasePath);
+  try {
+    const row = beforePurge.prepare(`SELECT state, key_id, payload_hash, payload_bytes, sealed
+      FROM private_retrieval_receipts WHERE tenant_hash = ? LIMIT 1`).get(tenantHash);
+    assert.equal(row.state, 'complete', 'the completed runner persisted its replay receipt');
+    assert.equal(row.key_id, 'payload-test-v1');
+    assert.match(row.payload_hash, /^[a-f0-9]{64}$/);
+    assert.ok(row.payload_bytes > 0 && row.sealed.byteLength > 0);
+  } finally {
+    beforePurge.close();
+  }
+  assert.equal(await reopenedStore.purgeExpired(reopenedScope), first.facts.length + 1,
+    'tenant-wide purge expires the source and all extracted facts before exact receipt lookup');
+  const afterPurge = new DatabaseSync(databasePath);
+  try {
+    const row = afterPurge.prepare(`SELECT state, key_id, payload_hash, payload_bytes, sealed
+      FROM private_retrieval_receipts WHERE tenant_hash = ? LIMIT 1`).get(tenantHash);
+    assert.equal(row.state, 'expired', 'purge clears the complete receipt before exact receipt lookup');
+    assert.equal(row.key_id, null);
+    assert.equal(row.payload_hash, null);
+    assert.equal(row.payload_bytes, null);
+    assert.equal(row.sealed, null);
+  } finally {
+    afterPurge.close();
+  }
+  assert.deepEqual(await reopenedStore.integritySnapshot(reopenedScope), {
+    availableEvidence: 0,
+    expiredEvidence: 1,
+    availableFacts: 0,
+    expiredFacts: first.facts.length,
+    encryptedPayloadRecords: 0,
+    encryptedPrivateReceiptRecords: 0,
+  }, 'ordinary expiry purge removes the expired receipt envelope as well as evidence payloads');
   const expired = await runPrivateRetrieval(h.makeInput({
     runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
   }));
@@ -723,20 +759,6 @@ test('an expired encrypted receipt withholds replayed facts and does not authori
   assert.ok(expired.limitations.includes('private_receipt_expired'), JSON.stringify(expired));
   assert.ok(expired.limitations.includes('private_receipt_unavailable'));
   assert.equal(requestCount, 1, 'expired records and receipts never trigger a replacement fetch');
-
-  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
-  const database = new DatabaseSync(path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite'));
-  try {
-    const row = database.prepare(`SELECT state, key_id, payload_hash, payload_bytes, sealed
-      FROM private_retrieval_receipts WHERE tenant_hash = ? LIMIT 1`).get(tenantHash);
-    assert.equal(row.state, 'expired');
-    assert.equal(row.key_id, null);
-    assert.equal(row.payload_hash, null);
-    assert.equal(row.payload_bytes, null);
-    assert.equal(row.sealed, null);
-  } finally {
-    database.close();
-  }
 });
 
 test('a durable pending receipt after the pre-dispatch crash boundary remains incomplete and is never redispatched', async (t) => {

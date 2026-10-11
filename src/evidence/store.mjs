@@ -1777,6 +1777,8 @@ export function createEvidenceStore(options) {
 
   async function privateReceiptRowSnapshot(info, directory, receiptKey, signal) {
     return withExpiryAwareTenantLock(info, directory, async (database) => {
+      const nowMs = currentTime();
+      expirePrivateReceipts(database, info.tenantHash, nowMs, receiptKey);
       const row = database.prepare(`SELECT schema_version, state, key_id, payload_hash, payload_bytes,
         expires_at_ms, sealed, updated_at_ms FROM private_retrieval_receipts
         WHERE tenant_hash = ? AND receipt_key = ?`).get(info.tenantHash, receiptKey);
@@ -1784,13 +1786,6 @@ export function createEvidenceStore(options) {
       if (row.schema_version !== PRIVATE_RECEIPT_SCHEMA_VERSION || !['pending', 'complete', 'expired'].includes(row.state)
         || !Number.isSafeInteger(row.expires_at_ms) || !Number.isSafeInteger(row.updated_at_ms)) fail('EVIDENCE_INTEGRITY');
       if (row.state === 'expired') return { state: 'expired', expiresAtMs: row.expires_at_ms };
-      if (row.expires_at_ms <= currentTime()) {
-        database.prepare(`UPDATE private_retrieval_receipts SET state = 'expired', key_id = NULL,
-          payload_hash = NULL, payload_bytes = NULL, sealed = NULL, updated_at_ms = ?
-          WHERE tenant_hash = ? AND receipt_key = ? AND state IN ('pending', 'complete')`)
-          .run(currentTime(), info.tenantHash, receiptKey);
-        return { state: 'expired', expiresAtMs: row.expires_at_ms };
-      }
       if (row.state === 'pending' || row.state === 'complete') {
         if (typeof row.key_id !== 'string' || !isDigest(row.payload_hash)
           || !Number.isSafeInteger(row.payload_bytes) || row.payload_bytes <= 0
@@ -1954,6 +1949,40 @@ export function createEvidenceStore(options) {
     return validateRetentionResult(result, nowMs, limits.maxRetentionMs, upperBoundMs);
   }
 
+  function expirePrivateReceipts(database, tenantHash, nowMs, receiptKey = undefined) {
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0) fail('EVIDENCE_STORAGE');
+    const totals = database.prepare(`SELECT COUNT(*) AS row_count,
+      COALESCE(SUM(length(sealed)), 0) AS sealed_bytes
+      FROM private_retrieval_receipts WHERE tenant_hash = ?`).get(tenantHash);
+    if (!totals || !Number.isSafeInteger(totals.row_count) || totals.row_count < 0
+      || totals.row_count > PRIVATE_RECEIPT_MAX_ROWS_PER_TENANT
+      || !Number.isSafeInteger(totals.sealed_bytes) || totals.sealed_bytes < 0
+      || totals.sealed_bytes > PRIVATE_RECEIPT_MAX_SEALED_BYTES_PER_TENANT) fail('EVIDENCE_STORAGE');
+    const unsupported = database.prepare(`SELECT COUNT(*) AS count FROM private_retrieval_receipts
+      WHERE tenant_hash = ? AND schema_version <> ?`).get(tenantHash, PRIVATE_RECEIPT_SCHEMA_VERSION);
+    if (!unsupported || !Number.isSafeInteger(unsupported.count) || unsupported.count !== 0) fail('EVIDENCE_INTEGRITY');
+    const keyFilter = receiptKey === undefined ? '' : ' AND receipt_key = ?';
+    const expiredPredicate = `(((state IN ('pending', 'complete') AND expires_at_ms <= ?)
+      OR (state = 'expired' AND (key_id IS NOT NULL OR payload_hash IS NOT NULL
+        OR payload_bytes IS NOT NULL OR sealed IS NOT NULL)))${keyFilter})`;
+    const countParameters = receiptKey === undefined
+      ? [tenantHash, nowMs]
+      : [tenantHash, nowMs, receiptKey];
+    const expired = database.prepare(`SELECT COUNT(*) AS count FROM private_retrieval_receipts
+      WHERE tenant_hash = ? AND ${expiredPredicate}`).get(...countParameters);
+    if (!expired || !Number.isSafeInteger(expired.count) || expired.count < 0
+      || expired.count > totals.row_count) fail('EVIDENCE_INTEGRITY');
+    if (expired.count === 0) return 0;
+    const updateParameters = receiptKey === undefined
+      ? [nowMs, tenantHash, nowMs]
+      : [nowMs, tenantHash, nowMs, receiptKey];
+    const updated = database.prepare(`UPDATE private_retrieval_receipts SET state = 'expired', key_id = NULL,
+      payload_hash = NULL, payload_bytes = NULL, sealed = NULL, updated_at_ms = ?
+      WHERE tenant_hash = ? AND ${expiredPredicate}`).run(...updateParameters);
+    if (updated.changes !== expired.count) fail('EVIDENCE_STORAGE');
+    return expired.count;
+  }
+
   function expireRecords(database, manifest, nowMs) {
     let changed = false;
     for (const record of Object.values(manifest.records)) {
@@ -1989,6 +2018,7 @@ export function createEvidenceStore(options) {
         }
       }
     }
+    expirePrivateReceipts(database, manifest.tenantHash, nowMs);
     if (changed) writeManifest(database, manifest);
     return changed;
   }
@@ -4197,17 +4227,26 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function purgeExpired(scope) {
+  async function purgeExpired(scope, signal) {
+    checkCancellation(signal);
     const info = scopeInfo(scope);
     const directory = await tenantDirectory(info);
+    checkCancellation(signal);
     try {
-      return await withExpiryAwareTenantLock(info, directory, async (database) => {
-        const manifest = await readManifest(database, info.tenantHash);
-        const beforeEvidence = Object.values(manifest.records).filter((record) => record.state === 'available' && record.expiresAtMs <= currentTime()).length;
-        const beforeFacts = Object.values(manifest.facts).filter((fact) => fact.state === 'available' && fact.expiresAtMs <= currentTime()).length;
-        await expireRecords(database, manifest, currentTime());
+      return await withExpiryAwareTenantLock(info, directory, (database, lockSignal) => {
+        checkCancellation(lockSignal);
+        const manifest = readManifest(database, info.tenantHash);
+        const nowMs = currentTime();
+        const beforeEvidence = Object.values(manifest.records)
+          .filter((record) => record.state === 'available' && record.expiresAtMs <= nowMs).length;
+        const beforeFacts = Object.values(manifest.facts)
+          .filter((fact) => fact.state === 'available' && fact.expiresAtMs <= nowMs).length;
+        expireRecords(database, manifest, nowMs);
+        checkCancellation(lockSignal);
+        // Preserve the historical return value: this count covers source evidence and facts.
+        // Private receipt ciphertext is reported separately by integritySnapshot.
         return beforeEvidence + beforeFacts;
-      });
+      }, signal);
     } catch (error) {
       throw safePublicError(error);
     }
@@ -4221,12 +4260,16 @@ export function createEvidenceStore(options) {
         const manifest = await readManifest(database, info.tenantHash);
         await expireRecords(database, manifest, currentTime());
         const row = database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles').get();
+        const receiptRow = database.prepare(`SELECT COUNT(*) AS count FROM private_retrieval_receipts
+          WHERE tenant_hash = ? AND sealed IS NOT NULL`).get(info.tenantHash);
+        if (!Number.isSafeInteger(row.count) || !Number.isSafeInteger(receiptRow.count)) fail('EVIDENCE_INTEGRITY');
         return Object.freeze({
           availableEvidence: Object.values(manifest.records).filter((record) => record.state === 'available').length,
           expiredEvidence: Object.values(manifest.records).filter((record) => record.state === 'expired').length,
           availableFacts: Object.values(manifest.facts).filter((fact) => fact.state === 'available').length,
           expiredFacts: Object.values(manifest.facts).filter((fact) => fact.state === 'expired').length,
           encryptedPayloadRecords: row.count,
+          encryptedPrivateReceiptRecords: receiptRow.count,
         });
       });
     } catch (error) {

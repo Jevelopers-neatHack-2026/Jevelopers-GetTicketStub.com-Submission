@@ -487,6 +487,7 @@ export interface EvidenceIntegritySnapshot {
   readonly availableFacts: number;
   readonly expiredFacts: number;
   readonly encryptedPayloadRecords: number;
+  readonly encryptedPrivateReceiptRecords: number;
 }
 
 export interface PrivateRetrievalReceiptCandidate {
@@ -584,7 +585,7 @@ export interface EvidenceStore<Request = unknown> {
   lookupFact(scope: EvidenceTenantScope, factId: string, signal?: AbortSignal): Promise<EvidenceFactHandle>;
   readFact(scope: EvidenceTenantScope, fact: EvidenceFactHandle, request: Request): Promise<StoredEvidenceFactRecord>;
   listFacts(scope: EvidenceTenantScope, request: Request): Promise<readonly StoredEvidenceFactRecord[]>;
-  purgeExpired(scope: EvidenceTenantScope): Promise<number>;
+  purgeExpired(scope: EvidenceTenantScope, signal?: AbortSignal): Promise<number>;
   integritySnapshot(scope: EvidenceTenantScope): Promise<EvidenceIntegritySnapshot>;
   /** Internal durable marker written before private retrieval can dispatch. */
   beginPrivateRunReceipt(

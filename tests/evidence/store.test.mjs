@@ -604,6 +604,168 @@ test('private receipt open wipes its JSON hash buffer when the stored digest is 
     'receipt integrity failure wipes the temporary JSON hash bytes');
 });
 
+test('receipt expiry purge tombstones pending rows after reopen and preserves live tenant rows', async (t) => {
+  const clock = { value: EPOCH };
+  const harness = await createHarness(t, { maxRetentionMs: 1_000 }, clock);
+  const scopeA = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const scopeB = await harness.store.scopeForAuthenticatedRequest(request('tenant-b'));
+  const expiredBinding = privateReceiptBinding('receipt-pending-purge-expired');
+  const liveBinding = privateReceiptBinding('receipt-pending-purge-live');
+  const otherTenantBinding = privateReceiptBinding('receipt-pending-purge-other-tenant');
+
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scopeA, expiredBinding, request('tenant-a')),
+    { state: 'pending', created: true });
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scopeB, otherTenantBinding, request('tenant-b')),
+    { state: 'pending', created: true });
+  clock.value = EPOCH + 500;
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scopeA, liveBinding, request('tenant-a')),
+    { state: 'pending', created: true });
+
+  clock.value = EPOCH + 1_001;
+  const reopened = harness.openStore();
+  const reopenedScopeA = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  assert.equal(await reopened.purgeExpired(reopenedScopeA), 0,
+    'purgeExpired preserves its evidence-and-fact return count when only receipts expire');
+
+  const tenantHashA = createHash('sha256').update('event-intelligence:tenant:v1:tenant-a').digest('hex');
+  const databaseA = new DatabaseSync(path.join(harness.directory, tenantHashA, 'evidence.sqlite'));
+  let expiredRow;
+  let liveRow;
+  try {
+    expiredRow = databaseA.prepare('SELECT tenant_hash, receipt_key, schema_version, state, key_id, payload_hash, payload_bytes, expires_at_ms, sealed, updated_at_ms FROM private_retrieval_receipts WHERE tenant_hash = ? AND receipt_key = ?')
+      .get(tenantHashA, privateReceiptRowKey('tenant-a', expiredBinding));
+    liveRow = databaseA.prepare('SELECT state, key_id, payload_hash, payload_bytes, expires_at_ms, sealed FROM private_retrieval_receipts WHERE tenant_hash = ? AND receipt_key = ?')
+      .get(tenantHashA, privateReceiptRowKey('tenant-a', liveBinding));
+  } finally {
+    databaseA.close();
+  }
+  assert.equal(expiredRow.tenant_hash, tenantHashA);
+  assert.equal(expiredRow.receipt_key, privateReceiptRowKey('tenant-a', expiredBinding));
+  assert.equal(expiredRow.schema_version, 1);
+  assert.equal(expiredRow.state, 'expired');
+  assert.equal(expiredRow.key_id, null);
+  assert.equal(expiredRow.payload_hash, null);
+  assert.equal(expiredRow.payload_bytes, null);
+  assert.equal(expiredRow.sealed, null);
+  assert.equal(expiredRow.expires_at_ms, EPOCH + 1_000);
+  assert.equal(expiredRow.updated_at_ms, EPOCH + 1_001,
+    'the sanitized deduplication tombstone retains its original expiry and records the sweep time');
+  assert.equal(liveRow.state, 'pending');
+  assert.equal(liveRow.key_id, 'payload-v1');
+  assert.match(liveRow.payload_hash, /^[a-f0-9]{64}$/);
+  assert.ok(liveRow.payload_bytes > 0);
+  assert.ok(liveRow.sealed.byteLength > 0);
+  assert.equal(liveRow.expires_at_ms, EPOCH + 1_500);
+
+  const tenantHashB = createHash('sha256').update('event-intelligence:tenant:v1:tenant-b').digest('hex');
+  const databaseB = new DatabaseSync(path.join(harness.directory, tenantHashB, 'evidence.sqlite'));
+  try {
+    const otherTenantRow = databaseB.prepare('SELECT state, key_id, payload_hash, payload_bytes, expires_at_ms, sealed FROM private_retrieval_receipts WHERE tenant_hash = ? AND receipt_key = ?')
+      .get(tenantHashB, privateReceiptRowKey('tenant-b', otherTenantBinding));
+    assert.equal(otherTenantRow.state, 'pending', 'sweeping tenant A does not expire tenant B tombstone state');
+    assert.equal(otherTenantRow.key_id, 'payload-v1');
+    assert.match(otherTenantRow.payload_hash, /^[a-f0-9]{64}$/);
+    assert.ok(otherTenantRow.payload_bytes > 0 && otherTenantRow.sealed.byteLength > 0,
+      'expired ciphertext remains untouched until tenant B runs its own expiry sweep');
+    assert.equal(otherTenantRow.expires_at_ms, EPOCH + 1_000);
+  } finally {
+    databaseB.close();
+  }
+
+  const reopenedScopeB = await reopened.scopeForAuthenticatedRequest(request('tenant-b'));
+  assert.deepEqual(await reopened.integritySnapshot(reopenedScopeA), {
+    availableEvidence: 0, expiredEvidence: 0, availableFacts: 0, expiredFacts: 0,
+    encryptedPayloadRecords: 0, encryptedPrivateReceiptRecords: 1,
+  });
+  assert.deepEqual(await reopened.integritySnapshot(reopenedScopeB), {
+    availableEvidence: 0, expiredEvidence: 0, availableFacts: 0, expiredFacts: 0,
+    encryptedPayloadRecords: 0, encryptedPrivateReceiptRecords: 0,
+  });
+  const databaseBAfterSweep = new DatabaseSync(path.join(harness.directory, tenantHashB, 'evidence.sqlite'));
+  try {
+    const otherTenantTombstone = databaseBAfterSweep.prepare('SELECT state, key_id, payload_hash, payload_bytes, sealed FROM private_retrieval_receipts WHERE tenant_hash = ? AND receipt_key = ?')
+      .get(tenantHashB, privateReceiptRowKey('tenant-b', otherTenantBinding));
+    assert.equal(otherTenantTombstone.state, 'expired');
+    assert.equal(otherTenantTombstone.key_id, null);
+    assert.equal(otherTenantTombstone.payload_hash, null);
+    assert.equal(otherTenantTombstone.payload_bytes, null);
+    assert.equal(otherTenantTombstone.sealed, null);
+  } finally {
+    databaseBAfterSweep.close();
+  }
+  assert.equal((await reopened.readPrivateRunReceipt(reopenedScopeA, {
+    runId: expiredBinding.runId,
+    configHash: expiredBinding.configHash,
+    candidate: expiredBinding.candidate,
+  }, request('tenant-a'))).state, 'expired');
+  assert.deepEqual(await reopened.beginPrivateRunReceipt(reopenedScopeA, expiredBinding, request('tenant-a')),
+    { state: 'expired', created: false }, 'the expired row remains a sanitized deduplication tombstone');
+  assert.equal(await reopened.purgeExpired(reopenedScopeA), 0, 'repeated purge is idempotent');
+});
+
+test('receipt expiry cancellation behind a real writer cannot clean late; ordinary sweep cleans on the next live call', { timeout: 5_000 }, async (t) => {
+  const clock = { value: EPOCH };
+  const harness = await createHarness(t, { lockTimeoutMs: 3_000, maxRetentionMs: 1_000 }, clock);
+  const scope = await harness.store.scopeForAuthenticatedRequest(request('tenant-a'));
+  const expiredBinding = privateReceiptBinding('receipt-expiry-cancelled-purge');
+  const laterBinding = privateReceiptBinding('receipt-expiry-ordinary-sweep');
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scope, expiredBinding, request('tenant-a')),
+    { state: 'pending', created: true });
+  clock.value = EPOCH + 500;
+  assert.deepEqual(await harness.store.beginPrivateRunReceipt(scope, laterBinding, request('tenant-a')),
+    { state: 'pending', created: true });
+  clock.value = EPOCH + 1_001;
+
+  const marker = path.join(harness.directory, 'receipt-expiry-held-writer');
+  const held = runWorker(harness.directory, 'hold-lock', marker, path.join(harness.directory, 'unused-barrier'));
+  t.after(() => terminateWorker(held));
+  await waitForPath(marker);
+
+  const controller = new AbortController();
+  let settled = false;
+  const pending = harness.store.purgeExpired(scope, controller.signal);
+  pending.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  assert.equal(settled, false, 'expiry waits behind the actual separate-process SQLite writer');
+  const startedAt = performance.now();
+  controller.abort();
+  await assert.rejects(pending,
+    (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED');
+  assert.ok(performance.now() - startedAt < 1_000, 'cancel interrupts the real writer-lock wait promptly');
+  await terminateWorker(held);
+
+  const tenantHash = createHash('sha256').update('event-intelligence:tenant:v1:tenant-a').digest('hex');
+  const database = new DatabaseSync(path.join(harness.directory, tenantHash, 'evidence.sqlite'));
+  try {
+    const rows = database.prepare('SELECT receipt_key, state, key_id, payload_hash, payload_bytes, sealed FROM private_retrieval_receipts WHERE tenant_hash = ? ORDER BY receipt_key')
+      .all(tenantHash);
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((row) => row.state === 'pending' && row.key_id === 'payload-v1'
+      && typeof row.payload_hash === 'string' && /^[a-f0-9]{64}$/.test(row.payload_hash)
+      && row.payload_bytes > 0 && row.sealed.byteLength > 0),
+    'a cancelled sweep cannot clear expired data after the writer is released');
+  } finally {
+    database.close();
+  }
+
+  clock.value = EPOCH + 1_501;
+  const reopened = harness.openStore();
+  const reopenedScope = await reopened.scopeForAuthenticatedRequest(request('tenant-a'));
+  const ordinary = await reopened.integritySnapshot(reopenedScope);
+  assert.equal(ordinary.encryptedPrivateReceiptRecords, 0,
+    'an ordinary successful integrity expiry sweep also clears every expired receipt envelope');
+  const verify = new DatabaseSync(path.join(harness.directory, tenantHash, 'evidence.sqlite'));
+  try {
+    const tombstones = verify.prepare('SELECT state, key_id, payload_hash, payload_bytes, sealed FROM private_retrieval_receipts WHERE tenant_hash = ?')
+      .all(tenantHash);
+    assert.equal(tombstones.length, 2);
+    assert.ok(tombstones.every((row) => row.state === 'expired' && row.key_id === null
+      && row.payload_hash === null && row.payload_bytes === null && row.sealed === null));
+  } finally {
+    verify.close();
+  }
+});
+
 test('SQLite busy transactions never reap a live writer and a killed staged commit leaves no partial evidence', async (t) => {
   const { directory, store, createPermit, sourceText } = await createHarness(t, { lockTimeoutMs: 100 });
   const scope = await store.scopeForAuthenticatedRequest(request('tenant-a'));
@@ -2544,7 +2706,8 @@ test('raw evidence and fact commits stop on cancellation while retention is pend
   ]);
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(await harness.store.integritySnapshot(scope), {
-    availableEvidence: 0, expiredEvidence: 0, availableFacts: 0, expiredFacts: 0, encryptedPayloadRecords: 0,
+    availableEvidence: 0, expiredEvidence: 0, availableFacts: 0, expiredFacts: 0,
+    encryptedPayloadRecords: 0, encryptedPrivateReceiptRecords: 0,
   }, 'late retention completion cannot commit evidence or fact rows');
 
   const supportEvidence = await ingest(harness.store, scope, harness.sourceText, harness.createPermit, {
