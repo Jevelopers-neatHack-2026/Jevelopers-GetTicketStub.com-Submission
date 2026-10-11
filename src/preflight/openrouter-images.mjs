@@ -7,6 +7,25 @@ import { canonicalHash } from '../contracts/validation.mjs';
 // endpoint catalog. Neither read is entitlement: operation permission and quota are always reported UNKNOWN and
 // must come from the separately injected capability verifier. Nothing here reads the environment, selects a
 // model, follows redirects, or retries. Billable dispatch is supplied by the trusted host composition.
+//
+// `model_listing: 'listed'` means only that the catalog lists the pinned provider tag for the pinned model. It is not a
+// profile match: prices, supported parameters and capabilities may differ from what the owner approved. A host that
+// wants that comparison pins `catalog_entry_sha256` in the target configuration (the hash this module computes over
+// the live entry's provider_tag, supported_parameters and pricing); a differing live entry then reports 'unknown'.
+//
+// Billable path obligations. With a `dispatchPort`, this module resolves the credential itself (purpose
+// authorized_billable_operation, bound to the grant and the exact target, valid through the operation deadline)
+// before the port runs, and passes it as `credential`. The host port must still: send exactly one request using only
+// that credential, enforce the pinned provider tag / no fallbacks / the pinned profile, honor the abort `signal`
+// derived from the deadline, run the metering fence calls (recordTransportAttempt, authorizeTransport,
+// assertTransportReady) in order, and never log or return the token. The credential is never placed in the
+// prepared value the runner sees.
+//
+// Host verification obligations (this adapter delegates them; the direct OpenAI adapter does them itself through its
+// prompt and asset ports). Before it sends the request the host port must verify that the rendered prompt hashes to
+// `configuration.prompt_template_sha256` and, for an edit, that the asset bytes hash to `configuration.asset_sha256`
+// with media type `configuration.asset_mime`; this module has no prompt or asset port and does not see those bytes.
+// It also treats the clock as untrusted-after-construction: every read must be finite or the operation is refused.
 
 export const OPENROUTER_PREFLIGHT_SERVICE = 'openrouter';
 export const OPENROUTER_PREFLIGHT_IMAGES_ENDPOINT = 'https://openrouter.ai/api/v1/images';
@@ -16,12 +35,26 @@ const MODEL_ID = /^([A-Za-z0-9][A-Za-z0-9._-]{0,127})\/([A-Za-z0-9][A-Za-z0-9._:
 const PROVIDER_TAG = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}$/;
 const HASH = /^sha256:[a-f0-9]{64}$/;
+const hashString = (value) => typeof value === 'string' && HASH.test(value);
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}$/;
 const MAX_METADATA_BYTES = 2 * 1024 * 1024;
 const METADATA_TIMEOUT_MS = 15_000;
 
 function error(code, message) {
   return new AccessPreflightError(code, message);
+}
+
+/**
+ * Every clock read goes through this helper. A clock that stops returning a finite number after construction fails
+ * closed (no credential, no fetch, no host port) instead of letting NaN comparisons evaluate false and pass.
+ */
+function readClock(now) {
+  let value;
+  try { value = now(); } catch { value = undefined; }
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw error('adapter_unavailable', 'The clock option must return a finite number of milliseconds.');
+  }
+  return value;
 }
 
 function digest(bytes) {
@@ -68,15 +101,19 @@ export function validateOpenRouterImageTarget(cellId, target) {
   const config = target.configuration;
   const required = ['prompt_template_ref', 'prompt_template_sha256', 'provider_tag', 'profile_sha256',
     ...(cellId === 'image_edit' ? ['asset_ref', 'asset_sha256', 'asset_mime'] : [])];
+  // Optional pin of the expected live catalog entry (see the header). It is part of the configuration, so the
+  // target's canonical configuration hash binds it.
+  const allowed = [...required, 'catalog_entry_sha256'];
   if (!config || typeof config !== 'object' || Array.isArray(config)
-    || Object.keys(config).some((key) => !required.includes(key)) || required.some((key) => !Object.hasOwn(config, key))
+    || Object.keys(config).some((key) => !allowed.includes(key)) || required.some((key) => !Object.hasOwn(config, key))
     || typeof config.prompt_template_ref !== 'string' || !ID.test(config.prompt_template_ref)
-    || !HASH.test(config.prompt_template_sha256) || !HASH.test(config.profile_sha256)
+    || !hashString(config.prompt_template_sha256) || !hashString(config.profile_sha256)
+    || (Object.hasOwn(config, 'catalog_entry_sha256') && !hashString(config.catalog_entry_sha256))
     || typeof config.provider_tag !== 'string' || !PROVIDER_TAG.test(config.provider_tag)) {
     throw error('unsupported_image_configuration', 'OpenRouter configuration must pin the prompt, provider tag, and profile hash for exactly this cell.');
   }
   if (cellId === 'image_edit' && (typeof config.asset_ref !== 'string' || !ID.test(config.asset_ref)
-    || !HASH.test(config.asset_sha256) || !['image/png', 'image/jpeg', 'image/webp'].includes(config.asset_mime))) {
+    || !hashString(config.asset_sha256) || !['image/png', 'image/jpeg', 'image/webp'].includes(config.asset_mime))) {
     throw error('unsupported_image_configuration', 'Edit requires a pinned reference asset reference, digest, and image media type.');
   }
 }
@@ -93,7 +130,7 @@ function safeCredentialEvidence(value) {
   }
 }
 
-async function resolveCredential(credentialPort, { scope, target }) {
+async function resolveCredential(credentialPort, { purpose = 'read_only_account_check', scope, target, grantRef, deadlineAt, now }) {
   try {
     if (!SAFE_REF.test(scope.account_ref) || !SAFE_REF.test(scope.project_ref)) {
       throw error('credential_unavailable', 'Provider account and project references must be safe opaque IDs.');
@@ -101,20 +138,23 @@ async function resolveCredential(credentialPort, { scope, target }) {
     const binding = targetBinding(target, scope);
     const resolved = await credentialPort.resolveCredential({
       service: OPENROUTER_PREFLIGHT_SERVICE,
-      purpose: 'read_only_account_check',
+      purpose,
       account_ref: scope.account_ref,
       project_ref: scope.project_ref,
       target_binding: binding,
+      ...(grantRef ? { grant_ref: grantRef } : {}),
     });
     const expectedBindingHash = digest(Buffer.from(JSON.stringify(binding), 'utf8'));
     if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)
       || resolved.decision !== 'resolved' || resolved.evidence_mode !== 'live') {
       throw error('credential_unavailable', 'Trusted credential resolver did not confirm this provider scope.');
     }
-    if (!resolved.binding || Object.keys(resolved.binding).some((key) => !['service', 'account_ref', 'project_ref', 'target_binding_sha256'].includes(key))
+    const allowedBindingFields = ['service', 'account_ref', 'project_ref', 'target_binding_sha256', ...(grantRef ? ['grant_ref'] : [])];
+    if (!resolved.binding || Object.keys(resolved.binding).some((key) => !allowedBindingFields.includes(key))
       || resolved.binding.service !== OPENROUTER_PREFLIGHT_SERVICE
       || resolved.binding.account_ref !== scope.account_ref || resolved.binding.project_ref !== scope.project_ref
-      || resolved.binding.target_binding_sha256 !== expectedBindingHash) {
+      || resolved.binding.target_binding_sha256 !== expectedBindingHash
+      || (grantRef && resolved.binding.grant_ref !== grantRef)) {
       throw error('credential_unavailable', 'Credential identity does not match the requested provider account and project.');
     }
     if (typeof resolved.token !== 'string' || resolved.token.trim().length === 0 || /[\r\n]/.test(resolved.token)) {
@@ -122,8 +162,9 @@ async function resolveCredential(credentialPort, { scope, target }) {
     }
     safeCredentialEvidence(resolved.evidence);
     if (typeof resolved.expires_at !== 'string' || !Number.isFinite(Date.parse(resolved.expires_at))
-      || Date.parse(resolved.expires_at) <= Date.now()) {
-      throw error('credential_unavailable', 'Scoped credential is expired.');
+      || Date.parse(resolved.expires_at) <= readClock(now)
+      || (deadlineAt && Date.parse(resolved.expires_at) < Date.parse(deadlineAt))) {
+      throw error('credential_unavailable', 'Scoped credential is expired or will not remain valid through the operation deadline.');
     }
     return resolved.token;
   } catch {
@@ -194,7 +235,9 @@ async function metadataFetch(fetchImpl, url, headers) {
  * exist only if the host passes a trusted `dispatchPort` that performs the one authorized billable request, so
  * this module never sends a paid request by itself. The built-in catalog check is not entitlement.
  */
-export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispatchPort }) {
+export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispatchPort, now = Date.now }) {
+  if (typeof now !== 'function') throw error('adapter_unavailable', 'The clock option must be a function returning a finite number of milliseconds.');
+  readClock(now);
   if (!credentialPort || credentialPort.evidence_mode !== 'live' || typeof credentialPort.resolveCredential !== 'function') {
     throw error('credential_unavailable', 'A trusted account/project-bound credential resolver is required.');
   }
@@ -210,7 +253,8 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
 
     async inspect({ run_id, cell_id, target, scope }) {
       validateOpenRouterImageTarget(cell_id, target);
-      const token = await resolveCredential(credentialPort, { scope, target }).catch(() => {
+      readClock(now);
+      const token = await resolveCredential(credentialPort, { scope, target, now }).catch(() => {
         throw error('credential_unavailable', 'Read-only account authentication could not be checked.');
       });
       const catalogUrl = openRouterCatalogEndpoint(target.model);
@@ -239,6 +283,7 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       const authentication = mapKeyStatus(keyStatus);
       let modelListing = 'unknown';
       let catalogEntryDigest = null;
+      let listingReason;
       if (catalogStatus === 200) {
         const entries = catalogEntries(catalogPayload);
         if (entries) {
@@ -249,6 +294,13 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
               catalogEntryDigest = canonicalHash({ provider_tag: entry.provider_tag,
                 supported_parameters: entry.supported_parameters ?? null, pricing: entry.pricing ?? null });
             } catch { catalogEntryDigest = null; }
+            // A pinned entry hash upgrades 'listed' from tag presence to an exact comparison; any difference (or an
+            // entry that cannot be hashed) fails closed as 'unknown', never as 'listed'.
+            const expectedEntry = target.configuration.catalog_entry_sha256;
+            if (expectedEntry !== undefined && catalogEntryDigest !== expectedEntry) {
+              modelListing = 'unknown';
+              listingReason = 'catalog_entry_mismatch';
+            }
           }
         }
       } else if (catalogStatus === 404) {
@@ -263,26 +315,63 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         // Catalog presence and a valid key are not entitlement: only the capability verifier can establish these.
         operation_permission: 'unknown',
         quota: 'unknown',
-        checked_at: new Date().toISOString(),
+        checked_at: new Date(readClock(now)).toISOString(),
         evidence: {
           ref: `${run_id}:${cell_id}:openrouter-key-and-catalog`,
           sha256: digest(Buffer.from(JSON.stringify({ key_status: keyStatus, catalog_status: catalogStatus,
-            model_listing: modelListing, catalog_entry_sha256: catalogEntryDigest, cell_id, target: binding }), 'utf8')),
+            model_listing: modelListing, catalog_entry_sha256: catalogEntryDigest, cell_id, target: binding,
+            ...(listingReason ? { listing_reason: listingReason } : {}) }), 'utf8')),
         },
       };
     },
   };
   if (dispatchPort) {
+    // The runner passes `prepared` from prepare to dispatch. Only values this adapter minted are accepted, so a
+    // dispatch cannot reach the host port without a credential that was resolved for this grant and deadline.
+    const preparedState = new WeakMap();
+    adapter.prepare = async (input) => {
+      validateOpenRouterImageTarget(input.cell_id, input.target);
+      if (typeof input.grant_ref !== 'string' || !SAFE_REF.test(input.grant_ref)
+        || typeof input.deadline_at !== 'string' || !Number.isFinite(Date.parse(input.deadline_at))
+        || Date.parse(input.deadline_at) <= readClock(now)) {
+        throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
+      }
+      const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
+        target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at, now });
+      const credential = Object.freeze({ token });
+      // The credential await may outlast the deadline (or the clock may fault), so re-check before the host prepare.
+      if (Date.parse(input.deadline_at) <= readClock(now)) {
+        throw error('preflight_deadline_passed', 'The approved operation deadline passed while the credential was resolved.');
+      }
+      const hostPrepared = dispatchPort.prepare ? await dispatchPort.prepare({ ...input, credential }) : undefined;
+      const prepared = Object.freeze({ prepared: true });
+      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target, grant_ref: input.grant_ref,
+        scope: Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref }), deadline_at: input.deadline_at, credential, hostPrepared });
+      return prepared;
+    };
     adapter.dispatch = async (input) => {
       validateOpenRouterImageTarget(input.cell_id, input.target);
-      return dispatchPort.dispatch(input);
+      const state = isRecord(input.prepared) ? preparedState.get(input.prepared) : undefined;
+      if (!state || state.cell_id !== input.cell_id || state.target !== input.target
+        || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at
+        || !isRecord(input.scope) || input.scope.account_ref !== state.scope?.account_ref
+        || input.scope.project_ref !== state.scope?.project_ref) {
+        throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, scope, and target.');
+      }
+      // A prepared value is single use: it is consumed before the host port can run, so a replay is refused.
+      preparedState.delete(input.prepared);
+      const remaining = Date.parse(state.deadline_at) - readClock(now);
+      if (!Number.isFinite(remaining) || remaining <= 0) throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
+      // The runner passes its cancellation signal (operator abort combined with the operation deadline) as
+      // `metering.signal`. The host port gets that signal combined with this adapter's own deadline timeout.
+      const callerSignal = input.metering?.signal;
+      if (callerSignal !== undefined && !(callerSignal instanceof AbortSignal)) {
+        throw error('adapter_unavailable', 'The runner cancellation signal must be a native AbortSignal.');
+      }
+      const timeout = AbortSignal.timeout(Math.min(remaining, 120_000));
+      return dispatchPort.dispatch({ ...input, prepared: state.hostPrepared, credential: state.credential,
+        signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout });
     };
-    if (dispatchPort.prepare) {
-      adapter.prepare = async (input) => {
-        validateOpenRouterImageTarget(input.cell_id, input.target);
-        return dispatchPort.prepare(input);
-      };
-    }
   } else {
     adapter.dispatch = async () => {
       throw error('adapter_unavailable', 'No trusted OpenRouter billable dispatch port was composed.');

@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { canonicalHash } from "../../src/contracts/index.mjs";
-import { CreativeVersionStore, readPrivateStoreMigrationDiagnostic } from "../../src/versions/store.mjs";
+import { CreativeVersionStore, isSqliteBusy, mapStoreMigrationFailure, readPrivateStoreMigrationDiagnostic,
+  widenPrivateAttributionProviderChecks } from "../../src/versions/store.mjs";
 import { createCreativeVersionApiPorts } from "../../src/versions/api-ports.mjs";
 import { createStore, DEFAULT_SCOPE } from "../versions/helpers.mjs";
 
@@ -198,6 +199,44 @@ test("a failed widening migration reports a generic storage_version error and ke
     "failure in the second independent table rebuild restores both prior schemas, triggers, rows, and version");
   assert.deepEqual(after.prepare("PRAGMA foreign_key_check").all(), []);
   after.close();
+});
+
+test("only SQLITE_BUSY is retryable contention during migration; SQLITE_LOCKED and unknown errors are non-retryable", () => {
+  const withCode = (errcode) => Object.assign(new Error("sqlite"), { errcode });
+  // 5 BUSY, 261 BUSY_RECOVERY (5|1<<8), 517 BUSY_SNAPSHOT (5|2<<8), 773 BUSY_TIMEOUT (5|3<<8).
+  for (const code of [5, 261, 517, 773]) {
+    const error = mapStoreMigrationFailure(withCode(code));
+    assert.equal(error.code, "unavailable", String(code));
+    assert.equal(error.retryable, true);
+    assert.equal(error.field, "storage_version");
+  }
+  // 6 LOCKED, 262 LOCKED_SHAREDCACHE (6|1<<8), 518 LOCKED_VTAB (6|2<<8), 1 generic, 13 FULL.
+  for (const cause of [withCode(6), withCode(262), withCode(518), withCode(1), withCode(13), new Error("no code"),
+    Object.assign(new Error("x"), { errcode: "5" }), null, undefined]) {
+    const error = mapStoreMigrationFailure(cause);
+    // "migration_failed" is the internal label; the public vocabulary has no such code, so it surfaces as the
+    // generic non-retryable "unavailable" on field storage_version. The retryable flag is the distinction.
+    assert.equal(error.code, "unavailable", String(cause?.errcode));
+    assert.equal(error.retryable, false, String(cause?.errcode));
+    assert.equal(error.field, "storage_version");
+  }
+  assert.ok(isSqliteBusy(withCode(517)) && !isSqliteBusy(withCode(6)) && !isSqliteBusy({}));
+});
+
+test("the widening step maps a LOCKED failure to a non-retryable error with a sanitized private cause", () => {
+  const locked = Object.assign(new Error("database table is locked: private_provider_attributions"), { errcode: 6, errstr: "database table is locked" });
+  const fake = (cause) => ({ isTransaction: true, prepare() { throw cause; }, exec() { throw cause; } });
+  let caught;
+  try { widenPrivateAttributionProviderChecks(fake(locked)); } catch (error) { caught = error; }
+  assert.equal(caught?.code, "unavailable");
+  assert.equal(caught.retryable, false, "LOCKED is not retried");
+  assert.ok(!String(caught.message).includes("private_provider_attributions"));
+  assert.deepEqual(readPrivateStoreMigrationDiagnostic(caught), { sqlite_errcode: 6, sqlite_errstr: "database table is locked", error_name: "Error" });
+  const busy = Object.assign(new Error("busy"), { errcode: 5 });
+  try { widenPrivateAttributionProviderChecks(fake(busy)); } catch (error) { caught = error; }
+  assert.equal(caught.code, "unavailable");
+  assert.equal(caught.retryable, true);
+  assert.throws(() => widenPrivateAttributionProviderChecks({ isTransaction: false }), /inside the schema transaction/);
 });
 
 const OR_DETAILS = { input_tokens_details: { audio_tokens: 0, cache_write_tokens: 1, cached_tokens: 2, file_tokens: 3, video_tokens: 4 },

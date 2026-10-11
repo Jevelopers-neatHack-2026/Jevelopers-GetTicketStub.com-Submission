@@ -27,18 +27,22 @@ export interface OpenAIImageTokenDetails {
   readonly image_tokens?: number;
 }
 
-/** Raw allowlisted provider counters. The owner-reviewed operation profile maps these to C03. */
-export interface OpenAIImageUsage extends UsageRecord {
+/** Fields shared by every raw image usage observation; each provider declares its own token-detail shapes. */
+interface ImageUsageBase extends UsageRecord {
   readonly [providerField: string]: unknown;
   readonly completeness: "unknown";
   readonly input_tokens?: number;
   readonly output_tokens?: number;
   readonly total_tokens?: number;
-  readonly input_tokens_details?: OpenAIImageTokenDetails;
-  readonly output_tokens_details?: OpenAIImageTokenDetails;
   readonly provider_request_id?: string;
   readonly transport_attempt_id?: string;
   readonly missing_fields: readonly string[];
+}
+
+/** Raw allowlisted provider counters. The owner-reviewed operation profile maps these to C03. */
+export interface OpenAIImageUsage extends ImageUsageBase {
+  readonly input_tokens_details?: OpenAIImageTokenDetails;
+  readonly output_tokens_details?: OpenAIImageTokenDetails;
 }
 
 export type OpenAIImagesInput = ProviderInput & { readonly reservation_ref: string };
@@ -263,8 +267,9 @@ export declare function evaluateOpenAIImageRetry(input: {
 
 export type OpenRouterImageOutputFormat = OpenAIImageOutputFormat;
 
-/** Typed discovery-style descriptors. An absent key means the model does not support the parameter. */
+/** Typed discovery descriptors. Optional n/reference ranges bound adapter-owned wire counts when present. */
 export type OpenRouterImageEnumDescriptor<T extends string = string> = Readonly<{ type: "enum"; values: readonly T[] }>;
+/** Inclusive range; runtime accepts only ordered bounded safe-integer endpoints. */
 export type OpenRouterImageRangeDescriptor = Readonly<{ type: "range"; min: number; max: number }>;
 
 export interface OpenRouterImageSupportedParameters {
@@ -275,8 +280,9 @@ export interface OpenRouterImageSupportedParameters {
   readonly output_format?: OpenRouterImageEnumDescriptor<OpenRouterImageOutputFormat>;
   readonly resolution?: OpenRouterImageEnumDescriptor<"512" | "768" | "1K" | "1.5K" | "2K" | "4K">;
   readonly output_compression?: OpenRouterImageRangeDescriptor;
-  /** Catalog-only ranges (n 0..32, input_references 0..32). They are bound into the profile but never pinnable. */
+  /** Optional catalog bound for the fixed wire n:1; when present, it must contain 1. */
   readonly n?: OpenRouterImageRangeDescriptor;
+  /** Optional actual wire reference-count bound; generation uses 0 and edits count the parent plus approved references. */
   readonly input_references?: OpenRouterImageRangeDescriptor;
 }
 
@@ -303,24 +309,27 @@ export interface OpenRouterImageCostObservation {
   readonly provenance: "provider_reported_unsettled";
 }
 
-/** Documented OpenRouter prompt token details, normalized as `input_tokens_details`. */
-export interface OpenRouterImageInputTokenDetails extends OpenAIImageTokenDetails {
+/**
+ * Documented OpenRouter prompt token details, normalized as `input_tokens_details`. Exactly the documented keys: no
+ * `text_tokens` and no index signature (a type alias, so it stays assignable to the generic `ProviderOutput` usage record).
+ */
+export type OpenRouterImageInputTokenDetails = Readonly<{
   readonly audio_tokens?: number;
   readonly cache_write_tokens?: number;
   readonly cached_tokens?: number;
   readonly file_tokens?: number;
   readonly video_tokens?: number;
-}
+}>;
 
 /** Documented OpenRouter completion token details, normalized as `output_tokens_details`. */
-export interface OpenRouterImageOutputTokenDetails extends OpenAIImageTokenDetails {
+export type OpenRouterImageOutputTokenDetails = Readonly<{
   readonly audio_tokens?: number;
   readonly image_tokens?: number;
   readonly reasoning_tokens?: number;
-}
+}>;
 
 /** Raw allowlisted counters. A missing usage or cost is listed in `missing_fields`, never zero. */
-export interface OpenRouterImageUsage extends OpenAIImageUsage {
+export interface OpenRouterImageUsage extends ImageUsageBase {
   readonly input_tokens_details?: OpenRouterImageInputTokenDetails;
   readonly output_tokens_details?: OpenRouterImageOutputTokenDetails;
   readonly cost?: OpenRouterImageCostObservation;

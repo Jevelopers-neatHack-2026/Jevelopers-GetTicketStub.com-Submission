@@ -744,56 +744,62 @@ export function readPrivateStoreMigrationDiagnostic(error) {
   return error !== null && typeof error === "object" ? PRIVATE_MIGRATION_DIAGNOSTICS.get(error) : undefined;
 }
 
-/** SQLITE_BUSY (5) and SQLITE_LOCKED (6), including extended result codes: another writer holds the database. */
-function isSqliteContention(cause) {
-  return Number.isInteger(cause?.errcode) && [5, 6].includes(cause.errcode & 0xff);
+/**
+ * Only SQLITE_BUSY (base code 5, including extended codes such as BUSY_RECOVERY or BUSY_SNAPSHOT) is retryable
+ * contention: another connection holds the write lock and the busy timeout elapsed. SQLITE_LOCKED (6) is a conflict
+ * inside one connection or shared cache, which a retry of the same open cannot fix, so it stays a migration failure.
+ * Detection: node:sqlite's SQLite errors carry the numeric extended result code as `errcode` (and `errstr`); the base
+ * code is `errcode & 0xff`. An error without an integer `errcode` is never treated as contention.
+ */
+export function isSqliteBusy(cause) {
+  return Number.isInteger(cause?.errcode) && (cause.errcode & 0xff) === 5;
 }
 
-function widenPrivateAttributionProviderChecks(db) {
+/** Map a raw failure during schema migration to the public store error (returned, not thrown). */
+export function mapStoreMigrationFailure(cause) {
+  try {
+    if (isSqliteBusy(cause)) reject("unavailable", "storage_version", true);
+    reject("migration_failed", "storage_version");
+  } catch (error) {
+    return error;
+  }
+}
+
+/** Runs only inside makeSchema's single BEGIN IMMEDIATE transaction, which also owns rollback and close. */
+export function widenPrivateAttributionProviderChecks(db) {
+  if (!db.isTransaction) throw new Error("The provider CHECK widening must run inside the schema transaction.");
   const legacy = "CHECK(provider_name='openai')";
   const widened = "CHECK(provider_name IN ('openai','openrouter'))";
   const staleTables = () => db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='table' AND name IN
     ('private_provider_attributions','private_provider_usage_attributions') ORDER BY name`).all()
     .filter((table) => typeof table.sql === "string" && table.sql.includes(legacy));
-  const ownsTransaction = !db.isTransaction;
   try {
-    if (staleTables().length === 0) return;
-    if (ownsTransaction) db.exec("BEGIN IMMEDIATE");
-    // Re-read inside the write transaction: a concurrent opener may already have rebuilt the tables.
-    const stale = staleTables();
-    for (const { name, sql } of stale) {
+    for (const { name, sql } of staleTables()) {
       db.exec(`ALTER TABLE ${name} RENAME TO ${name}_widen_old`);
       db.exec(sql.replace(legacy, widened));
       db.exec(`INSERT INTO ${name} SELECT * FROM ${name}_widen_old`);
       db.exec(`DROP TABLE ${name}_widen_old`);
       db.exec(PRIVATE_ATTRIBUTION_TRIGGERS[name]);
     }
-    if (ownsTransaction) db.exec("COMMIT");
   } catch (cause) {
-    const diagnostic = Object.freeze({
+    // The caller's transaction rolls back and closes the connection. Keep a sanitized private cause for operators.
+    const error = mapStoreMigrationFailure(cause);
+    PRIVATE_MIGRATION_DIAGNOSTICS.set(error, Object.freeze({
       sqlite_errcode: Number.isInteger(cause?.errcode) ? cause.errcode : undefined,
       sqlite_errstr: typeof cause?.errstr === "string" ? cause.errstr.slice(0, 120) : undefined,
       error_name: typeof cause?.name === "string" ? cause.name.slice(0, 64) : undefined,
-    });
-    if (ownsTransaction) {
-      if (db.isTransaction) db.exec("ROLLBACK");
-      db.close();
-    }
-    // A busy timeout is contention, not a failed migration: the connection is closed above and the caller may retry.
-    try { isSqliteContention(cause) ? reject("unavailable", "storage_version", true) : reject("migration_failed", "storage_version"); } catch (error) {
-      PRIVATE_MIGRATION_DIAGNOSTICS.set(error, diagnostic);
-      throw error;
-    }
+    }));
+    throw error;
   }
 }
 
 function makeSchema(db) {
-  const version = db.prepare("PRAGMA user_version").get().user_version;
-  if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, STORAGE_VERSION].includes(version)) {
-    db.close();
-    reject("unsupported_version", "storage_version");
-  }
   try {
+    // The busy timeout applies to every statement after it, including this first read; the catch below closes the
+    // connection whichever step fails.
+    db.exec("PRAGMA busy_timeout=5000;");
+    const version = db.prepare("PRAGMA user_version").get().user_version;
+    if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, STORAGE_VERSION].includes(version)) reject("unsupported_version", "storage_version");
     // All supported upgrades share one write transaction. A failed final schema
     // check must leave even the oldest supported producer at its original DDL,
     // rows, objects, and user_version.
@@ -1566,8 +1572,7 @@ function makeSchema(db) {
     db.close();
     if (error instanceof VersionStoreError) throw error;
     // The first BEGIN IMMEDIATE sits inside this try, so a busy timeout closes the connection and is retryable.
-    if (isSqliteContention(error)) reject("unavailable", "storage_version", true);
-    reject("migration_failed", "storage_version");
+    throw mapStoreMigrationFailure(error);
   }
 }
 

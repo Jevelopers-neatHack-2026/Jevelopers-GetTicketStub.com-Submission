@@ -6,20 +6,29 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   ACCESS_CELL_DEFINITIONS,
   createAccessPreflightReport,
+  createOpenRouterImagesAdapter,
   runAccessPreflight,
 } from "creative-engine/preflight";
 import { createMockAccessFixture } from "../fixtures/preflight/access-ports.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Each image cell is satisfied by EITHER the direct OpenAI target or the OpenRouter target, never both and never a
+// mix across cells. The alternatives are grouped into one `one_of:a|b` requirement so the gate does not read as
+// demanding both providers; each alternative still needs independently verified permission and quota evidence.
+const evidenceAlternatives = Object.freeze({
+  "one_of:openai_generation_account_permission_and_quota|openrouter_generation_account_permission_and_quota": Object.freeze([
+    "openai_generation_account_permission_and_quota", "openrouter_generation_account_permission_and_quota"]),
+  "one_of:openai_edit_account_permission_and_quota|openrouter_edit_account_permission_and_quota": Object.freeze([
+    "openai_edit_account_permission_and_quota", "openrouter_edit_account_permission_and_quota"]),
+});
+const [generationAlternatives, editAlternatives] = Object.keys(evidenceAlternatives);
 const missingEvidence = Object.freeze({
   image_generation: [
-    "openai_generation_account_permission_and_quota",
-    "openrouter_generation_account_permission_and_quota",
+    generationAlternatives,
     "external_grant_and_finance_reservation",
   ],
   image_edit: [
-    "openai_edit_account_permission_and_quota",
-    "openrouter_edit_account_permission_and_quota",
+    editAlternatives,
     "external_grant_and_finance_reservation",
   ],
   harness_jev: [
@@ -104,8 +113,50 @@ export function createAccessPreflightGateReport() {
     external_owner_evidence: "pending",
     cells,
     missing_owner_evidence: required,
+    evidence_alternatives: Object.fromEntries(Object.entries(evidenceAlternatives).map(([group, members]) => [group, [...members]])),
+    evidence_alternatives_rule: "any_one_member_satisfies_the_group",
     gate_boundary: "No trusted live host composition is installed. User-supplied JSON cannot authenticate provider access, capability, authorization, or Finance reservation.",
   };
+}
+
+const SYNTHETIC_TOKEN = "synthetic-token-not-a-credential";
+const KEY_URL = "https://openrouter.ai/api/v1/key";
+
+/**
+ * Drive the real OpenRouter metadata adapter against an intercepted fetch and a synthetic credential port. Nothing
+ * leaves the process: the fetch implementation answers from memory, so `requests` records what would have been sent.
+ * The adapter's observation is relabeled `mock` (a live-labeled observation is refused in a mock run), and the runner
+ * still discards its permission and quota.
+ */
+function realOpenRouterMockAdapter(fixture, fixtureNow) {
+  const requests = [];
+  const catalogUrl = `https://openrouter.ai/api/v1/images/models/${fixture.target.model}/endpoints`;
+  const fetchImpl = async (url, init) => {
+    requests.push({ url: String(url), method: init?.method, credentialed: init?.headers?.authorization !== undefined });
+    if (url === KEY_URL) return Response.json({ data: { label: "synthetic" } });
+    if (url === catalogUrl) {
+      return Response.json({ data: { endpoints: [{ provider_tag: fixture.target.configuration.provider_tag, supported_parameters: {}, pricing: {} }] } });
+    }
+    return new Response("{}", { status: 404 });
+  };
+  const credentialPort = {
+    evidence_mode: "live",
+    async resolveCredential(input) {
+      return {
+        decision: "resolved", evidence_mode: "live",
+        binding: { service: "openrouter", account_ref: input.account_ref, project_ref: input.project_ref,
+          target_binding_sha256: digest(Buffer.from(JSON.stringify(input.target_binding), "utf8")) },
+        token: SYNTHETIC_TOKEN,
+        expires_at: new Date(Date.parse(fixtureNow) + 60_000).toISOString(),
+        evidence: { ref: "test:evidence:credential", sha256: digest(Buffer.from("credential")), pinned_revision: "test:revision:credential",
+          independent_review: { ref: "test:review:credential", sha256: digest(Buffer.from("review:credential")) } },
+      };
+    },
+  };
+  const real = createOpenRouterImagesAdapter({ credentialPort, fetchImpl, now: () => Date.parse(fixtureNow) });
+  const adapter = { ...fixture.adapter, evidence_mode: "mock",
+    async inspect(input) { return { ...(await real.inspect(input)), evidence_mode: "mock" }; } };
+  return { adapter, requests };
 }
 
 async function createMockEvidence() {
@@ -114,8 +165,13 @@ async function createMockEvidence() {
   // Generation and edit are separate cells for each provider target; each scenario selects exactly one cell.
   for (const [provider, cellId] of [["openai", "image_generation"], ["openai", "image_edit"],
     ["openrouter", "image_generation"], ["openrouter", "image_edit"]]) {
-    const fixture = createMockAccessFixture({ cellId, runId, provider });
-    const report = await runAccessPreflight(fixture.args);
+    // The real adapter gets a fixed clock equal to the fixture clock, so its observation time and the credential
+    // expiry never depend on the real clock advancing within a window.
+    const fixtureNow = new Date(Date.now() + 5000).toISOString();
+    const fixture = createMockAccessFixture({ cellId, runId, provider,
+      ...(provider === "openrouter" ? { now: fixtureNow } : {}) });
+    const real = provider === "openrouter" ? realOpenRouterMockAdapter(fixture, fixtureNow) : undefined;
+    const report = await runAccessPreflight(real ? { ...fixture.args, adapter: real.adapter } : fixture.args);
     if (report.acceptance_allowed !== false || report.mode !== "mock" || report.required_cell_count !== ACCESS_CELL_DEFINITIONS.length) {
       throw new Error("mock access report failed its fixed-denominator assertions");
     }
@@ -123,13 +179,25 @@ async function createMockEvidence() {
     if (result?.status !== "simulated" || result.verified !== false || fixture.calls.dispatch !== 1) {
       throw new Error("the synthetic Images fixture did not produce its expected simulated result");
     }
-    scenarios.push({ report, fixture, provider, cellId });
+    if (real && (real.requests.length !== 2 || real.requests.some((request) => request.method !== "GET"))) {
+      throw new Error("the real OpenRouter adapter did not make exactly its two intercepted reads");
+    }
+    scenarios.push({ report, fixture, provider, cellId, intercepted_requests: real?.requests.length ?? 0 });
   }
 
   const results = ACCESS_CELL_DEFINITIONS.map((definition) => {
     const candidates = scenarios.map(({ report }) => report.cells.find((cell) => cell.cell_id === definition.cell_id)).filter(Boolean);
     return candidates.find((cell) => cell.status === "simulated") ?? candidates[0];
   });
+  // The aggregate report keeps one row per cell (fixed eight-cell denominator); the per-target simulated result of
+  // each image cell, for both providers, is listed separately so neither provider's evidence is hidden.
+  const imageCellTargets = {};
+  for (const { provider, cellId, report: scenarioReport } of scenarios) {
+    const row = scenarioReport.cells.find((cell) => cell.cell_id === cellId);
+    imageCellTargets[cellId] ??= {};
+    imageCellTargets[cellId][provider] = { status: row.status, verified: row.verified, reason_code: row.reason_code,
+      configuration_sha256: row.configuration_sha256 };
+  }
   const report = createAccessPreflightReport({
     run_id: runId,
     generated_at: new Date().toISOString(),
@@ -160,9 +228,12 @@ async function createMockEvidence() {
       synthetic_authorities: true,
       mock_adapter_dispatches: scenarios.reduce((total, { fixture }) => total + fixture.calls.dispatch, 0),
       actual_network_requests: 0,
+      intercepted_openrouter_adapter_requests: scenarios.reduce((total, { intercepted_requests }) => total + intercepted_requests, 0),
+      openrouter_inspection: "real createOpenRouterImagesAdapter with an in-memory fetchImpl and a synthetic credential port",
       scenarios: scenarios.map(({ provider, cellId, report: scenarioReport }) => ({
         provider, cell_id: cellId, status: scenarioReport.cells.find((cell) => cell.cell_id === cellId).status,
       })),
+      image_cell_targets: imageCellTargets,
     },
     runtime: {
       node: process.versions.node,

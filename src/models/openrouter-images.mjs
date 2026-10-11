@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { types as utilTypes } from "node:util";
 import {
   MAX_PIXELS, OpenAIImagesProviderError, PRIVATE_PROVIDER_REQUEST_IDS, PRIVATE_RETRY_DISPOSITIONS,
   PRIVATE_TARGET_BINDING_SHA256, attachUsageObservation, checkRef, exactUsage, fail, freezeUsageObservation, hashJson,
@@ -42,6 +43,12 @@ const USAGE_DETAIL_FIELDS = Object.freeze({
     keys: Object.freeze(["audio_tokens", "cache_write_tokens", "cached_tokens", "file_tokens", "video_tokens"]) }),
   completion_tokens_details: Object.freeze({ target: "output_tokens_details",
     keys: Object.freeze(["audio_tokens", "image_tokens", "reasoning_tokens"]) }),
+});
+// Disjoint groups of detail counters whose sum must not exceed the parent (see the sum check in the normalizer).
+const SUMMED_DETAIL_GROUPS = Object.freeze({
+  input_tokens_details: Object.freeze([Object.freeze(["cached_tokens", "cache_write_tokens"]),
+    Object.freeze(["audio_tokens", "file_tokens", "video_tokens"])]),
+  output_tokens_details: Object.freeze([Object.freeze(["audio_tokens", "image_tokens"])]),
 });
 const USAGE_ROOT_KEYS = Object.freeze(["prompt_tokens", "completion_tokens", "total_tokens", "cost", "cost_details", "is_byok",
   ...Object.keys(USAGE_DETAIL_FIELDS)]);
@@ -100,6 +107,180 @@ function deepFreeze(value) {
   return value;
 }
 
+const INSPECTION_ARGUMENT_KEYS = Object.freeze(["scope", "references", "maximum_single_reference_bytes",
+  "maximum_aggregate_reference_bytes"]);
+const MAX_INSPECTION_SNAPSHOT_DEPTH = 128;
+const MAX_INSPECTION_SNAPSHOT_NODES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_VALUES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_PROPERTIES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_BYTES = 1024 * 1024;
+
+function rejectInspectionInput(field) {
+  fail("invalid_provider_input", "Concept reference inspection accepts bounded plain data without accessors, proxies, or serialization hooks.", {
+    outcome: "failed", field,
+  });
+}
+
+function accountInspectionValue(state, field) {
+  state.values += 1;
+  if (state.values > MAX_INSPECTION_SNAPSHOT_VALUES) rejectInspectionInput(field);
+}
+
+function accountInspectionProperties(state, count, field) {
+  if (count > MAX_INSPECTION_SNAPSHOT_PROPERTIES - state.properties) rejectInspectionInput(field);
+  state.properties += count;
+}
+
+function accountInspectionBytes(state, count, field) {
+  if (!Number.isSafeInteger(count) || count < 0 || count > MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes) {
+    rejectInspectionInput(field);
+  }
+  state.bytes += count;
+}
+
+function encodedJsonStringBytes(value, maximum) {
+  let bytes = 2; // JSON string delimiters.
+  if (bytes > maximum) return undefined;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0x22 || code === 0x5c) bytes += 2;
+    else if (code <= 0x1f) bytes += code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d ? 2 : 6;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else bytes += 6;
+    } else if (code >= 0xdc00 && code <= 0xdfff) bytes += 6;
+    else if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else bytes += 3;
+    if (bytes > maximum) return undefined;
+  }
+  return bytes;
+}
+
+function accountInspectionString(state, value, field) {
+  const bytes = encodedJsonStringBytes(value, MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes);
+  if (bytes === undefined) rejectInspectionInput(field);
+  accountInspectionBytes(state, bytes, field);
+}
+
+function snapshotInspectionValue(value, field, state, depth = 0) {
+  accountInspectionValue(state, field);
+  if (value === null) {
+    accountInspectionBytes(state, 4, field);
+    return value;
+  }
+  if (typeof value === "boolean") {
+    accountInspectionBytes(state, value ? 4 : 5, field);
+    return value;
+  }
+  if (typeof value === "string") {
+    accountInspectionString(state, value, field);
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      accountInspectionBytes(state, 4, field);
+      return null;
+    }
+    accountInspectionBytes(state, String(value === 0 ? 0 : value).length, field);
+    return value;
+  }
+  if (value === undefined) return undefined;
+  if (typeof value === "bigint" || typeof value === "function" || typeof value === "symbol") rejectInspectionInput(field);
+  if (utilTypes.isProxy(value)) rejectInspectionInput(field);
+  state.nodes += 1;
+  if (state.nodes > MAX_INSPECTION_SNAPSHOT_NODES || depth > MAX_INSPECTION_SNAPSHOT_DEPTH || state.active.has(value)) {
+    rejectInspectionInput(field);
+  }
+  state.active.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertyDescriptor(value, "toJSON")) rejectInspectionInput(field);
+      const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
+      if (!Number.isSafeInteger(length) || length > MAX_INSPECTION_SNAPSHOT_NODES) rejectInspectionInput(field);
+      // Every array slot is copied, including sparse holes. Check the minimum
+      // expanded value count and exact JSON delimiters before allocating the copy.
+      if (length > MAX_INSPECTION_SNAPSHOT_VALUES - state.values) rejectInspectionInput(field);
+      const keys = Reflect.ownKeys(value);
+      accountInspectionProperties(state, keys.length, field);
+      for (const key of keys) {
+        if (typeof key !== "string") continue;
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!descriptor || !Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      }
+      accountInspectionBytes(state, 2 + Math.max(0, length - 1), field);
+      const copy = new Array(length);
+      Object.setPrototypeOf(copy, null);
+      for (let index = 0; index < length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor) {
+          copy[index] = snapshotInspectionValue(null, field, state, depth + 1);
+          continue;
+        }
+        if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+        const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
+        if (child === undefined) {
+          accountInspectionBytes(state, 4, field);
+          copy[index] = null;
+        } else copy[index] = child;
+      }
+      return Object.freeze(copy);
+    }
+    if (!isRecord(value) || Object.getOwnPropertyDescriptor(value, "toJSON")) rejectInspectionInput(field);
+    const keys = Reflect.ownKeys(value);
+    accountInspectionProperties(state, keys.length, field);
+    let enumerableCount = 0;
+    let outputCount = 0;
+    let structureBytes = 2; // JSON object delimiters.
+    for (const key of keys) {
+      if (typeof key !== "string") continue;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      if (!descriptor.enumerable) continue;
+      enumerableCount += 1;
+      if (descriptor.value === undefined) continue;
+      const keyBytes = encodedJsonStringBytes(key, MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes - structureBytes);
+      if (keyBytes === undefined) rejectInspectionInput(field);
+      structureBytes += keyBytes + 1 + (outputCount === 0 ? 0 : 1); // key, colon, and comma.
+      if (structureBytes > MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes) rejectInspectionInput(field);
+      outputCount += 1;
+    }
+    if (enumerableCount > MAX_INSPECTION_SNAPSHOT_VALUES - state.values) rejectInspectionInput(field);
+    accountInspectionBytes(state, structureBytes, field);
+    const copy = Object.create(null);
+    for (const key of keys) {
+      if (typeof key !== "string") continue;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      if (!descriptor.enumerable) continue;
+      const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
+      if (child !== undefined) copy[key] = child;
+    }
+    return Object.freeze(copy);
+  } finally {
+    state.active.delete(value);
+  }
+}
+
+function snapshotConceptInspectionArguments(args) {
+  if (utilTypes.isProxy(args) || !isRecord(args)) rejectInspectionInput("concept_reference_request");
+  const state = { active: new WeakSet(), nodes: 0, values: 0, properties: 0, bytes: 0 };
+  const copy = Object.create(null);
+  for (const key of INSPECTION_ARGUMENT_KEYS) {
+    const descriptor = Object.getOwnPropertyDescriptor(args, key);
+    if (!descriptor) {
+      copy[key] = undefined;
+      continue;
+    }
+    if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(`concept_reference_request.${key}`);
+    copy[key] = snapshotInspectionValue(descriptor.value, `concept_reference_request.${key}`, state);
+  }
+  return Object.freeze(copy);
+}
+
 function onlyKeys(value, allowed) {
   return Object.keys(value).every((key) => allowed.includes(key));
 }
@@ -142,6 +323,49 @@ function validateSupportedParameters(value) {
     result[key] = { type: "enum", values: [...descriptor.values] };
   }
   return deepFreeze(result);
+}
+
+function rangeContains(range, value) {
+  return range === undefined || (value >= range.min && value <= range.max);
+}
+
+function validateCatalogCountCompatibility(capabilities, supported) {
+  if (supported.n && !rangeContains(supported.n, 1)) {
+    fail("unsupported_model_profile", "The declared n range excludes the adapter's fixed single-image request.", {
+      outcome: "failed", field: "supported_parameters",
+    });
+  }
+  const references = supported.input_references;
+  if (!references) return;
+  if (capabilities.generation && !rangeContains(references, 0)) {
+    fail("unsupported_model_profile", "The declared input-reference range excludes generation's zero-reference request.", {
+      outcome: "failed", field: "supported_parameters",
+    });
+  }
+  if (capabilities.edit !== false) {
+    const maximum = capabilities.edit.max_input_references;
+    if (maximum > references.max || maximum < references.min) {
+      fail("unsupported_model_profile", "Edit capability and the declared input-reference range are incompatible.", {
+        outcome: "failed", field: "supported_parameters",
+      });
+    }
+  }
+}
+
+function assertReferenceCount(count, maximum, descriptor) {
+  if (count > maximum || !rangeContains(descriptor, count)) {
+    fail("unsupported_operation", "The actual OpenRouter request reference count is outside the explicit model profile.", {
+      outcome: "failed", field: "input_references",
+    });
+  }
+}
+
+function assertFixedImageCount(supported) {
+  if (!rangeContains(supported.n, 1)) {
+    fail("unsupported_operation", "The actual OpenRouter request image count is outside the explicit model profile.", {
+      outcome: "failed", field: "n",
+    });
+  }
 }
 
 function validateConfiguration(configuration, supported) {
@@ -249,6 +473,20 @@ export function normalizeOpenRouterImageUsage(raw, identities = {}) {
       }
       if (Object.keys(details).some((key) => !keys.includes(key))) missing.add(`usage.${source}.unmapped_fields`);
       result[target] = Object.freeze(safeDetails);
+      // Details are documented subsets of their parent. Real counters are never clamped or dropped; a contradiction
+      // or a missing parent is only reported, as a fixed finding that carries no provider value.
+      const parent = result[target === "input_tokens_details" ? "input_tokens" : "output_tokens"];
+      const counters = Object.values(safeDetails);
+      if (counters.length > 0 && parent === undefined) missing.add(`usage.${target}.parent_missing`);
+      else if (parent !== undefined && counters.some((counter) => counter > parent)) missing.add(`usage.${target}.exceeds_parent`);
+      // Sum check, mirroring src/telemetry/usage.mjs (its OPENAI_RESPONSES profile sums cached_tokens and
+      // cache_write_tokens against input_tokens). Only counters that are disjoint parts of the parent are summed:
+      // cache read and cache write are mutually exclusive; modality counters partition the tokens by media type.
+      // Cache and modality counters can describe the same tokens (cached audio), and reasoning_tokens is a
+      // purpose split that can overlap any modality, so those are never added together (no false positives).
+      // The sum is only reported (fixed finding, no values); counters are never clamped.
+      if (parent !== undefined && SUMMED_DETAIL_GROUPS[target].some((group) =>
+        group.reduce((sum, key) => sum + (safeDetails[key] ?? 0), 0) > parent)) missing.add(`usage.${target}.sum_exceeds_parent`);
     }
     if (Object.hasOwn(rawData, "is_byok")) {
       if (typeof rawData.is_byok === "boolean") result.is_byok = rawData.is_byok;
@@ -387,6 +625,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
     }
     const profileCapabilities = validateCapabilities(capabilities);
     const supported = validateSupportedParameters(supported_parameters);
+    validateCatalogCountCompatibility(profileCapabilities, supported);
     const pinnedConfiguration = validateConfiguration(configuration, supported);
     if (!capabilityPort || typeof capabilityPort.verify !== "function" || typeof capabilityPort.revalidate !== "function" ||
         !authorizationPort || typeof authorizationPort.revalidate !== "function" ||
@@ -415,7 +654,11 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       endpointFor: () => ENDPOINT,
       preflight(input, operation, conceptMode) {
         requireOperation(operation);
-        if (operation === "generate") return;
+        assertFixedImageCount(supported);
+        if (operation === "generate") {
+          assertReferenceCount(0, 0, supported.input_references);
+          return;
+        }
         if (input.plan.steps.some((step) => isRecord(step?.parameters) && step.parameters.mask_source_ref !== undefined)) {
           fail("unsupported_operation", "OpenRouter has no documented mask or inpainting parameter.", {
             outcome: "failed", field: "plan.steps.parameters.mask_source_ref",
@@ -423,11 +666,7 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
         }
         const referenceCount = conceptMode ? input.concept_reference_manifest.references.length
           : 1 + (input.image_reference_manifest?.references.length ?? 0);
-        if (referenceCount > maxReferences) {
-          fail("unsupported_operation", "The reference count exceeds the explicit OpenRouter profile maximum.", {
-            outcome: "failed", field: "input_references",
-          });
-        }
+        assertReferenceCount(referenceCount, maxReferences, supported.input_references);
       },
       validateConfiguration: () => pinnedConfiguration,
       bindingExtras: (operation, attempt) => ({
@@ -493,12 +732,9 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       inspectConceptReferences(args) {
         return guardedAsync(async () => {
           requireOperation("edit");
-          if (Array.isArray(args?.references) && args.references.length > maxReferences) {
-            fail("unsupported_operation", "The reference count exceeds the explicit OpenRouter profile maximum.", {
-              outcome: "failed", field: "input_references",
-            });
-          }
-          return inspectConceptReferenceBytes(assetPort, args);
+          const inspectionArgs = snapshotConceptInspectionArguments(args);
+          return inspectConceptReferenceBytes(assetPort, inspectionArgs,
+            (referenceCount) => assertReferenceCount(referenceCount, maxReferences, supported.input_references));
         });
       },
       generate(input) { return guardedAsync(() => runImageDispatch(driver, "generate", input)); },
