@@ -7,7 +7,7 @@ composition/output mechanics. The public ESM exports are
 Production contracts and supplier specifications await PP-01B and the external
 owners. No supplier, approval, purchase, identity or ledger authority exists.
 The separate `./candidate` package surface now provides six real local adapters
-against the immutable, unaccepted shared-contracts 0.9.3 candidate. Canonical
+against the immutable, unaccepted shared-contracts 0.9.4 candidate. Canonical
 bundle byte integrity can pass while supplier eligibility and canonical visible
 batch publication remain blocked. See [candidate adapters](../contracts/candidate-adapter.md).
 
@@ -147,6 +147,8 @@ remain insufficient evidence for the revised security configuration. Runtime
 PR20 subsequently merged at `e7e57bbb048c7c2a5529eed658c8d3ecf8b5ceac` with actual
 Linux proof and final source review disposition ROOT-R1 resolved. Pipeline PR23
 merged at `e2c946b0c4f979227c19d0534ac71b5d5a85badb` with an explicit CI waiver.
-Nested test/CLI CI reliability remains unresolved; this adapter work does not
-change workflows, deadlines or reporters. Global acceptance IDs and their
+Separately, main's [PR29](https://github.com/Jevelopers-neatHack-2026/print-production/pull/29)
+merged at `f0afc32d2624a0aec1c74e50e07e70bab3e6c5fa`; its child-deadline change
+followed that waiver and is inherited by this branch. Current CI status was not
+observed or tested during the dependency refresh. Global acceptance IDs and their
 trackers remain under existing owners.

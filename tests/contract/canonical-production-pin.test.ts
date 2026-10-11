@@ -8,16 +8,16 @@ import { resource } from "../../src/runtime/resources.js";
 test("installs the frozen unaccepted candidate archive with the exact source and integrity pins", async () => {
 	const given = z
 		.object({
-			version: z.literal("0.9.3"),
-			source_revision: z.literal("d129ea0a83be926882b194cb88a6cf30c3831685"),
+			version: z.literal("0.9.4"),
+			source_revision: z.literal("d96e6cf3d8f390126407cdbc9f37b750d3256069"),
 			archive_sha256: z.literal(
-				"5a4d345ee2751e731aa44c1bbe33a079109998b6471ce2c7daa0b74aedec9352",
+				"8f388a5b0e03be4be02083c5f2bcf62b614658a3a64498dd16287da6a4fb7616",
 			),
 			integrity: z.string(),
 			accepted: z.literal(false),
 			live_integration: z.literal(false),
 			package_content_digest: z.literal(
-				"sha256:eb0944e13aede0d932257d1d4196e693ebc05a612f6d8f3f466394d16e2086fd",
+				"sha256:2c4cb6e4576519b3c51ea4e076aab40b2922f7c6118729e735f17685b90f6920",
 			),
 			fixture_digest: z.literal(
 				"sha256:efc2ee556c8ba43c29ea36932af8c947048b059ff4f2d7a7bbec15b85a05f07b",
@@ -32,7 +32,7 @@ test("installs the frozen unaccepted candidate archive with the exact source and
 			),
 		);
 	const when = await readFile(
-		resource("vendor/shared-contracts/jevelopers-shared-contracts-0.9.3.tgz"),
+		resource("vendor/shared-contracts/jevelopers-shared-contracts-0.9.4.tgz"),
 	);
 	assert.equal(
 		createHash("sha256").update(when).digest("hex"),

@@ -40,7 +40,7 @@
 		"browser:install": "node scripts/environment.mjs && playwright install chromium"
 	},
 	"dependencies": {
-		"@jevelopers/shared-contracts": "file:vendor/shared-contracts/jevelopers-shared-contracts-0.9.3.tgz",
+		"@jevelopers/shared-contracts": "file:vendor/shared-contracts/jevelopers-shared-contracts-0.9.4.tgz",
 		"@fontsource/noto-sans": "5.3.0",
 		"@fontsource/noto-sans-arabic": "5.3.0",
 		"csv-parse": "6.1.0",

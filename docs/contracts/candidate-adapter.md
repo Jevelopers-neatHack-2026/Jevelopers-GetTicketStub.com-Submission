@@ -7,13 +7,15 @@ exports `createCandidateProductionOperations(authenticatedHost)`. Its six
 context, request and Promise result unions. No canonical schema is copied here.
 
 The immutable owner archive is vendored unchanged at
-`vendor/shared-contracts/jevelopers-shared-contracts-0.9.3.tgz`. Consumer metadata
-records PR31 head `d129ea0a83be926882b194cb88a6cf30c3831685`, package 0.9.3,
-archive SHA-256 `5a4d345ee2751e731aa44c1bbe33a079109998b6471ce2c7daa0b74aedec9352`,
+`vendor/shared-contracts/jevelopers-shared-contracts-0.9.4.tgz`. Consumer metadata
+records stopped PR31 source `d96e6cf3d8f390126407cdbc9f37b750d3256069`, package 0.9.4,
+archive SHA-256 `8f388a5b0e03be4be02083c5f2bcf62b614658a3a64498dd16287da6a4fb7616`,
 SRI, package-content and fixture digests, and `accepted:false`. Installation used
 Node 24.21.0/npm 11.19.0 with `--ignore-scripts --offline --no-audit --no-fund`.
-Archive entries were reviewed before installation: 357 regular `package/` files,
-35,279,296 unpacked bytes, no unsafe paths or links. This pin is not acceptance.
+Archive entries were reviewed before installation: 358 regular `package/` files,
+35,282,030 unpacked bytes, no unsafe paths or links. Content and fixture manifests
+were verified against every listed member; schema and fixture bytes retain their
+0.9.3 identities. This pin is not acceptance.
 
 The host authenticates scope, actor/audience, current access, resolver and approval
 ports independently. Requests use the factory's frozen `context`; replacement
@@ -62,7 +64,7 @@ Read-only status does not create new observations or evidence records.
 
 ## Concrete contract gaps and remaining acceptance
 
-Candidate 0.9.3 `checkRowResult` rejects visible successful rows unless their
+Candidate 0.9.4 `checkRowResult` rejects visible successful rows unless their
 eligibility is `eligible`; `checkBatchResult` requires every successful row to be
 published for a successful batch. Real development row bundles are integrity
 passed but blocked, so exporting their references as canonical visible successes
@@ -70,15 +72,17 @@ would require counterfeit eligibility. The adapter instead returns the durable
 job reference. Job status includes persisted local execution/count evidence and
 `batch:null`; actual per-row canonical bytes and exact input/row/ordinal/job hashes
 remain stored privately. Tests demonstrate the owner helper's
-`INVALID_PUBLICATION` rejection. Full canonical row/batch publication is pending
-an owner-supported representation of blocked development execution.
+`INVALID_PUBLICATION` rejection. The owner supports `JobRef` with truthful
+persisted row evidence while publication eligibility is blocked. No draft-ref
+field exists; PP#13.4 canonical visible row/batch publication remains unfulfilled.
 
-The owner review at this frozen head remains REQUEST_CHANGES for SC-CHK-018
-(invalid-clock TypeError) and SC-CHK-021 (malformed independently expected
-references/bindings escaping pure helpers). Host clock parsing and typed expected
-values prevent those inputs reaching helpers here; owner source remains untouched.
-The owner eligibility helper still returns `LEGACY_UNREPRESENTABLE` for the genuine
-legacy preview/approval mapping. This adapter does not bypass it.
+The historical 0.9.3 owner review requested changes for SC-CHK-018 (invalid-clock
+TypeError) and SC-CHK-021 (noncanonical independently expected references/bindings
+escaping pure helpers). Owner 0.9.4 repairs these paths to typed context failures;
+fresh independent review of this exact candidate remains pending. Host clock
+parsing and typed expected values remain in place; owner source is vendored
+unchanged. V2 supplier eligibility intentionally remains `LEGACY_UNREPRESENTABLE`:
+an `ArtifactFile/2` preview cannot be equated with `Preview/1` approval.
 
 CSV is disabled without an authenticated enabling policy; existing conditional
 private parser mechanics are retained. This candidate factory does not implement
@@ -126,4 +130,7 @@ PP_CANONICAL_EVIDENCE_DIR=out/canonical-evidence node --test --test-concurrency=
 ```
 
 Exact commands, outcomes, commits and output digests are recorded in the ignored
-`out/canonical-adapter-report.json`. Independent parent review is still required.
+`out/canonical-adapter-report.json`. The separate dependency refresh receipt is
+`out/canonical-refresh-report.json`; preceding 44 focused and 602 broad passes are
+historical receipts, not a full-suite claim for the refreshed HEAD. Independent
+parent and fresh owner review are still required.
