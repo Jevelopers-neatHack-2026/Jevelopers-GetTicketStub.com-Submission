@@ -20,9 +20,10 @@ Operational collection is a separate, server-side diagnostics policy. It never r
 browser analytics events, so it cannot be used to get around a visitor's analytics choice, and nothing in it is
 sent to Google. It carries nothing that identifies a person, which is why it does not depend on consent.
 
-Detailed workflow traces stay with their owning system: the agent-harness repo owns Neatlogs and durable tracing
-(#17). This module does **not** call Neatlogs or any trace service. The operation id below is the safe reference to
-hand to that hand-off when it exists (`exportToHarness` in `src/server/events.ts` remains a no-op stub).
+Durable workflow tracing stays with the agent-harness repo (#17), and `exportToHarness` in `src/server/events.ts`
+remains a no-op stub. Separately, these operational events can be exported to **Neatlogs** as content-free traces
+(see [Neatlogs traces](#neatlogs-traces)); that export sends only the allow-listed fields below, never prompts,
+page text, titles, URLs or anything that identifies a person.
 
 ## Configuration
 
@@ -38,7 +39,8 @@ TICKETSTUB_OPS_ENVIRONMENT=
 
 - Unset, empty, `off` or any unrecognised value (including a URL) means **off**: no ids are made, nothing is built
   or written, and route responses are byte-for-byte what they were before this module existed.
-- `log` writes each event as one JSON line to stdout. There is no network exporter and no credential to configure.
+- `log` writes each event as one JSON line to stdout; it needs no credential. `neatlogs` is the only network exporter
+  and needs `NEATLOGS_API_KEY` (see [Neatlogs traces](#neatlogs-traces)).
 - Settings are read per request, so toggling needs only a restart of the process with the new environment.
 - `TICKETSTUB_OPS_ENVIRONMENT` should be `production` only on the production deployment; anything not in the list is
   recorded as `unspecified`. Events also carry `mode` (`demo`/`live`) from `TICKETSTUB_RUNTIME_MODE`; `live` means
@@ -47,6 +49,33 @@ TICKETSTUB_OPS_ENVIRONMENT=
 Rollout: set `TICKETSTUB_OPS_TELEMETRY=log` and `TICKETSTUB_OPS_ENVIRONMENT=preview` on a preview deployment, run
 the queries below against its logs, then enable production. Rollback: set `TICKETSTUB_OPS_TELEMETRY=off` (or remove
 it) and restart. No data migration is involved either way.
+
+## Neatlogs traces
+
+`TICKETSTUB_OPS_TELEMETRY=neatlogs` (or `log,neatlogs`) plus `NEATLOGS_API_KEY` turns each measured AI route request
+into one Neatlogs trace. Without the key the setting is ignored (and `log,neatlogs` keeps only `log`). The code is
+`src/server/observability/neatlogs.ts`.
+
+| Span | Kind | From | Main attributes |
+| --- | --- | --- | --- |
+| `ticketstub.<route>` (root) | `WORKFLOW` | `api_request` | status, outcome, operation, dependency, fallback, attempts, code, environment, mode |
+| `<capability>.<phase>` | `LLM` | `provider_attempt` | `neatlogs.llm.model_name`, `neatlogs.llm.provider`, token counts, `neatlogs.llm.cost_usd` (only when the provider reported it), outcome/code |
+| `source.<name>` | `TOOL` | `source_fetch` | outcome, upstream status, duration |
+| `parse.<parser>` | `TOOL` | `source_parse` | parser, facts, date |
+
+- The Neatlogs session id is the operation id, so the `x-ticketstub-operation` response header finds the trace.
+  Tags are `ticketstub` and, when `TICKETSTUB_COMMIT_SHA` is set, `ticketstub@<sha>`.
+- Failed provider attempts and failed requests are error spans carrying the fixed code (for example
+  `provider_rate_limited`), so a fallback that still answered shows as a failed child under a successful root.
+- Delivery is OTLP/HTTP protobuf to `{NEATLOGS_ENDPOINT or https://ingest.neatlogs.com}/v1/traces` with the key in
+  `x-api-key`, after the response is produced. Only the documented US/EU ingest origins are accepted. Export never
+  delays or changes a response: it is bounded (5 s timeout, 8 in flight, 200 open operations, 64 events each, 256 KiB
+  body) and failures are only counted (`neatlogsStats()`).
+- A 2xx with no rejected spans means the receiver **accepted** the trace, not that it is stored. Confirm in the
+  dashboard or with the Public API (service-account token) before citing a trace as evidence.
+- Neatlogs computes its own cost column from its price list; for models it does not price, that column shows 0
+  while the span keeps the provider-reported `neatlogs.llm.cost_usd`.
+- Rollback: remove `neatlogs` from `TICKETSTUB_OPS_TELEMETRY` (or unset the key) and restart.
 
 ## Event dictionary (`ticketstub.ops/1`)
 

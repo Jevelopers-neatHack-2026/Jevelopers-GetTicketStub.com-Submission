@@ -37,7 +37,8 @@ Hashes remain after an account is deleted until they age out; they cannot be tur
 ## Harness hand-off (not built)
 
 The agent-harness repo owns Neatlogs and durable workflow tracing. `exportToHarness()` in `src/server/events.ts` is a
-no-op stub marked TODO where that hand-off plugs in. The studio does not call Neatlogs.
+no-op stub marked TODO where that hand-off plugs in. Product events are not sent to Neatlogs; only the content-free
+operational events can be, when enabled (see docs/operations/observability.md#neatlogs-traces).
 
 ## Messages
 
