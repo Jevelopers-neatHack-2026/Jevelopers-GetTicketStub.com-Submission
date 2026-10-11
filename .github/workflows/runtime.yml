@@ -3,7 +3,36 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 jobs:
+  workload:
+    name: workload (${{ matrix.group }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [cli, private, standalone]
+    env:
+      PP_RENDERER_IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install exact dependencies and verified Node archive
+        run: docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --security-opt apparmor=docker-default -e HOME=/tmp -v "$PWD:/work" -w /work "$PP_RENDERER_IMAGE" bash scripts/ci-install.sh
+      - name: Verify with operating-system networking disabled
+        env:
+          PP_CI_GROUP: ${{ matrix.group }}
+        run: |
+          out/toolchain/node-v24.21.0-linux-x64/bin/node scripts/ci-workload.mjs prepare "$PP_CI_GROUP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          out/toolchain/node-v24.21.0-linux-x64/bin/node scripts/security/run-offline.mjs
+      - name: Preserve sanitized workload receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-workload-${{ matrix.group }}-${{ github.run_attempt }}
+          path: out/ci-workload/${{ matrix.group }}.json
+          if-no-files-found: error
   runtime:
+    needs: workload
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -12,5 +41,25 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install exact dependencies and verified Node archive
         run: docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --security-opt apparmor=docker-default -e HOME=/tmp -v "$PWD:/work" -w /work "$PP_RENDERER_IMAGE" bash scripts/ci-install.sh
-      - name: Verify with operating-system networking disabled
-        run: out/toolchain/node-v24.21.0-linux-x64/bin/node scripts/security/run-offline.mjs
+      - name: Retrieve this attempt's sanitized receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: ci-workload-*-${{ github.run_attempt }}
+          merge-multiple: true
+          path: out/ci-workload-input
+      - name: Verify full union and final Linux proof with operating-system networking disabled
+        run: |
+          out/toolchain/node-v24.21.0-linux-x64/bin/node scripts/ci-workload.mjs prepare aggregate "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          out/toolchain/node-v24.21.0-linux-x64/bin/node scripts/security/run-offline.mjs
+      - name: Require every workload job to succeed
+        if: always()
+        env:
+          PP_CI_WORKLOAD_RESULT: ${{ needs.workload.result }}
+        run: test "$PP_CI_WORKLOAD_RESULT" = success
+      - name: Preserve sanitized union receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-workload-union-${{ github.run_attempt }}
+          path: out/ci-workload/aggregate.json
+          if-no-files-found: error
