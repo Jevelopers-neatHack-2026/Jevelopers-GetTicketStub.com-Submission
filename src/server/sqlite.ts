@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { Order } from "@/customer/pages/commerce";
 import type { Stub } from "@/customer/studio/types";
 import { migrate } from "./migrations";
-import type { Account, AccountState, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
+import type { Account, AccountState, ArtQuota, ArtQuotaResult, ClaimResult, ClaimView, GiftView, LoginLinkRecord, NewClaim, Storage, WallState } from "./storage";
 
 type Row = Record<string, unknown>;
 
@@ -112,6 +112,7 @@ export class SqliteStorage implements Storage {
         this.run("UPDATE orders SET email = NULL, account_id = NULL, data = ? WHERE id = ?", JSON.stringify(data), o.id as string);
       }
       this.run("DELETE FROM shares WHERE owner_key = ?", accountId);
+      this.run("DELETE FROM gifts WHERE owner_key = ?", accountId);
       this.run("DELETE FROM login_links WHERE email = ? OR account_id = ?", email, accountId);
       // Claims this account made on someone else's event go back to unclaimed.
       this.run("UPDATE claims SET claimed_by = NULL, claimed_stub_id = NULL, claimed_at = NULL WHERE claimed_by = ?", accountId);
@@ -322,11 +323,59 @@ export class SqliteStorage implements Storage {
   }
 
   async revokeShare(ownerKey: string, stubId: string): Promise<boolean> {
-    return Number(this.run("DELETE FROM shares WHERE owner_key = ? AND stub_id = ?", ownerKey, stubId).changes) > 0;
+    return this.tx(() => {
+      // A gift unwraps a share; with the share gone its message goes too.
+      this.run("DELETE FROM gifts WHERE owner_key = ? AND stub_id = ?", ownerKey, stubId);
+      return Number(this.run("DELETE FROM shares WHERE owner_key = ? AND stub_id = ?", ownerKey, stubId).changes) > 0;
+    });
   }
 
   async adoptShares(fromKey: string, toKey: string): Promise<number> {
-    return Number(this.run("UPDATE OR IGNORE shares SET owner_key = ? WHERE owner_key = ?", toKey, fromKey).changes);
+    return this.tx(() => {
+      const moved = Number(this.run("UPDATE OR IGNORE shares SET owner_key = ? WHERE owner_key = ?", toKey, fromKey).changes);
+      // Gifts follow their shares; one whose share stayed behind (the account already had that id) is dropped.
+      this.run("UPDATE gifts SET owner_key = ? WHERE owner_key = ? AND EXISTS (SELECT 1 FROM shares s WHERE s.owner_key = ? AND s.stub_id = gifts.stub_id)", toKey, fromKey, toKey);
+      this.run("DELETE FROM gifts WHERE owner_key = ?", fromKey);
+      return moved;
+    });
+  }
+
+  async createGift(ownerKey: string, stubId: string, tokenHash: string, to: string, message: string, now: number): Promise<string | null> {
+    return this.tx(() => {
+      const share = this.get("SELECT token FROM shares WHERE owner_key = ? AND stub_id = ?", ownerKey, stubId);
+      if (!share) return null;
+      this.run("INSERT INTO gifts (token_hash, owner_key, stub_id, recipient, message, created_at) VALUES (?, ?, ?, ?, ?, ?)", tokenHash, ownerKey, stubId, to, message, now);
+      return share.token as string;
+    });
+  }
+
+  async getGift(tokenHash: string, now: number, markOpened: boolean): Promise<GiftView | null> {
+    return this.tx(() => {
+      const r = this.get(
+        "SELECT g.token_hash, g.owner_key, g.stub_id, g.recipient, g.message, g.opened_at, s.token AS share_token, s.data " +
+          "FROM gifts g JOIN shares s ON s.owner_key = g.owner_key AND s.stub_id = g.stub_id WHERE g.token_hash = ?",
+        tokenHash,
+      );
+      if (!r || !safeEqual(r.token_hash as string, tokenHash)) return null;
+      let openedAt = (r.opened_at as number | null) ?? null;
+      if (markOpened && openedAt === null) {
+        this.run("UPDATE gifts SET opened_at = ? WHERE token_hash = ? AND opened_at IS NULL", now, tokenHash);
+        openedAt = now;
+      }
+      return {
+        shareToken: r.share_token as string,
+        stub: JSON.parse(r.data as string) as Stub,
+        to: r.recipient as string,
+        message: r.message as string,
+        openedAt,
+        ownerKey: r.owner_key as string,
+        stubId: r.stub_id as string,
+      };
+    });
+  }
+
+  async revokeGift(ownerKey: string, tokenHash: string): Promise<boolean> {
+    return Number(this.run("DELETE FROM gifts WHERE token_hash = ? AND owner_key = ?", tokenHash, ownerKey).changes) > 0;
   }
 
   async ownsStub(tenantId: string, stubId: string): Promise<boolean> {

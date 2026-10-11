@@ -64,7 +64,7 @@ One table, in code (`CAPABILITY_MATRIX`), repeated in `fixtures/context/README.m
 | --- | --- |
 | Everyone (anonymous, guest, account) | `stub.draft` `art.generate` `agent.use` `share.create` `share.view` `wall.public.view` `claim.view` `file.read` `order.create` |
 | Account, any role | the row above and `account.read` `account.email.change` `account.delete` `session.revoke` `wall.sync` `wall.publish` `order.read` `event.create` `claim.redeem` |
-| `owner` of a stub | `stub.read` `stub.write` `share.revoke` |
+| `owner` of a stub | `stub.read` `stub.write` `share.revoke` `gift.create` |
 | `captain` of an event | `event.read` `event.publish` `claims.read` |
 | `member`, `viewer` | `stub.read` on a stub, `event.read` on an event (never issued yet) |
 | `staff` (account on `ADMIN_EMAILS`) | `admin.view`, and no project access |
@@ -83,6 +83,9 @@ One table, in code (`CAPABILITY_MATRIX`), repeated in `fixtures/context/README.m
 | `GET /api/u/<token>` | `wall.public.view` | projected wall | projected wall | n/a | n/a |
 | `POST /api/share` | `share.create` | owned by the device | owned by the account | a body id just names the caller's own row | same |
 | `GET /api/share/<token>`, `/api/stub-image/<token>` | `share.view` | projection | projection | n/a | n/a |
+| `POST /api/gift` | `gift.create` on `stub:<id>` | the device's own shared stub, else 404 | 200, `{giftToken, sharePath}` | 404 | 404 |
+| `GET /api/gift/<token>` | none: the token is the capability | message and stub | same | same | same |
+| `DELETE /api/gift/<token>` | `share.revoke` on the gift's stub | the device's own gift, else 404 | 200 | 404 | 404 |
 | `POST /api/share/revoke` | `share.revoke` on `stub:<id>` | the device's own shares, else 404 | 200 | 404 | 404 |
 | `POST`/`GET /api/orders` | `order.create` / `order.read` | create with an email / 401 | own orders | not addressable | own |
 | `POST /api/organizer/events` | `event.create` | 401 | caller becomes captain | n/a | same |
@@ -101,7 +104,7 @@ One table, in code (`CAPABILITY_MATRIX`), repeated in `fixtures/context/README.m
   - a stub: `POST /api/share/revoke {stubId}` deletes the snapshot. The old link is 404, and sharing again mints a new one;
   - the wall: `PUT /api/wall/public {isPublic:false, rotate:true}` makes it private and replaces the token. `{isPublic:true, rotate:true}` keeps it public on a new link.
 - **Minimal projections.** `publicStub` (`src/server/project.ts`) rebuilds a stub from a whitelist on the way **in** (what a share stores) and on the way **out** (so rows stored whole before this change are still safe). Out: guest lists (`friends`), private `note`, `photos`, the claim `setId`, ticket or barcode fields, any field not listed, inline `data:` images, and everything about the account. In: title, venue, city, date, setlist, cast, programme, score, facts, edition, art reference, typography, material, finish, wall position, and the guest name when a stub was issued to a named guest. `seat` is shown if the owner printed it.
-- **Gift notes are not shared.** The gift flow writes its message to `personal.note`, which is withheld. Showing it needs an explicit, separate field the owner opts in to. This is a product decision still to be taken.
+- **Gift messages live with the gift token, nowhere else.** The gift flow no longer writes `personal.note`. `POST /api/gift {stub, to, message}` (capability `gift.create`: the caller owns that stub, or is the guest device that shared it) stores the message (at most 280 characters, control characters stripped) in a `gifts` row keyed by the SHA-256 of a 128-bit gift token. `GET /api/gift/<token>` returns `{stub, to, message, openedAt, shareToken}` to whoever holds the token, with `no-store` and `X-Robots-Tag: noindex`, and records the first open (not when the sender looks). The gift link is `/s/<shareToken>?gift=<giftToken>`; the page asks the gift API, and with no valid token it is an ordinary share page with no message. The share token, `/api/share/*`, `/s/*` HTML, `/u/*` and the stub image never carry it. The sender revokes with `DELETE /api/gift/<token>` (404 for anyone else), which deletes the row and message; stopping the stub's share, deleting the account, or a failed adoption also deletes it. Old `?gift=1&to=` links still unwrap, with no message.
 - **Retention.** A share lives until its owner stops sharing or deletes the account (shares are deleted with it). Orders are kept for the books and anonymised on account deletion. Art files are content-addressed and are deleted when nothing references them.
 - **Art files by hash** (`/api/files/<sha256>.<ext>`) are served to anyone who knows the name, with a one-year immutable cache. The name is 256 bits and cannot be listed, but stopping a share does not delete or un-cache its art. See limitations.
 
@@ -137,6 +140,6 @@ Dashboard and cost-intelligence consume a context; neither is an identity author
 - **One signing key, no rotation.** Rotating `CONTEXT_SECRET` invalidates outstanding tokens. There is no `kid` handling beyond the fixture key.
 - **Art files stay readable by hash** after sharing stops, and may sit in caches.
 - **Old anonymous share rows** (owner `anon`, before device binding) have no owner: nobody can revoke them.
-- **Gift notes** are not shared (see above), and `ClaimClient` still decodes legacy payloads locally.
+- **Gift messages** are readable by anyone holding the gift link (that is the design) and are kept until the sender revokes, stops the share or deletes the account; there is no expiry. `ClaimClient` still decodes legacy payloads locally.
 - **Staff access is by email allowlist** and gives `admin.view` only. There is no audit log of admin reads yet.
 - The mail provider is outside this test. Sandbox links appear on screen in demo mode by design.

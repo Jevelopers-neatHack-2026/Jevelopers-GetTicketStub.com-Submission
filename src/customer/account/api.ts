@@ -58,6 +58,12 @@ export interface ClaimInfo {
   claimed: boolean;
   expired: boolean;
 }
+export interface GiftInfo {
+  stub: Stub;
+  to: string;
+  message: string;
+  openedAt: number | null;
+}
 export interface OrganizerEventReply {
   eventId: string;
   claims: { token: string; name: string; seat?: string }[];
@@ -73,6 +79,11 @@ export const api = {
   stopSharingWall: () => call<{ token: string | null }>("PUT", "/api/wall/public", { isPublic: false, rotate: true }),
   /** "Stop sharing" one stub: its share link answers 404 from now on. */
   stopSharing: (stubId: string) => call<{ ok: true; revoked: boolean }>("POST", "/api/share/revoke", { stubId }),
+  /** A gift: the message is stored under its own token, never in a share. The reply's sharePath is the link to hand over. */
+  createGift: (stubId: string, to: string, message: string) => call<{ giftToken: string; sharePath: string }>("POST", "/api/gift", { stub: stubId, to, message }),
+  gift: (giftToken: string) => call<GiftInfo>("GET", `/api/gift/${encodeURIComponent(giftToken)}`),
+  /** Takes a gift back: the message is deleted and the link answers 404. */
+  revokeGift: (giftToken: string) => call<{ ok: true; revoked: boolean }>("DELETE", `/api/gift/${encodeURIComponent(giftToken)}`),
   publicWall: (token: string) => call<{ stubs: Stub[] }>("GET", `/api/u/${encodeURIComponent(token)}`),
   order: (order: Omit<Order, "id" | "mode" | "createdAt">) => call<{ order: Order }>("POST", "/api/orders", { order }),
   share: (stub: Stub) => call<{ token: string }>("POST", "/api/share", { stub }),

@@ -24,7 +24,7 @@ function printMinor(st: Stub): number {
   return materialPrice(st.material) + (physical ? (FINISHES.find((f) => f.id === st.finish)?.upchargeMinor ?? 0) : 0);
 }
 
-export default function MemoryPage({ token, gift, giftTo }: { token: string; gift: boolean; giftTo?: string }) {
+export default function MemoryPage({ token, gift, giftTo, giftToken, wrap = true }: { token: string; gift: boolean; giftTo?: string; giftToken?: string; wrap?: boolean }) {
   const mounted = useMounted();
   // A short token is a snapshot on the server; anything else (every older link) carries the stub itself.
   const [remote, setRemote] = useState<{ token: string; stub: Stub | null } | null>(null);
@@ -39,6 +39,22 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
       live = false;
     };
   }, [mounted, token]);
+  // A gift's own link: the message comes from the gift API and nowhere on the share. No valid token, no message.
+  const [giftState, setGiftState] = useState<{ token: string; to: string; message: string } | null | undefined>(undefined);
+  const [giftFor, setGiftFor] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!mounted || !giftToken) return;
+    let live = true;
+    api
+      .gift(giftToken)
+      .then((r) => live && (setGiftFor(giftToken), setGiftState({ token: giftToken, to: r.to, message: r.message })))
+      .catch(() => live && (setGiftFor(giftToken), setGiftState(null)));
+    return () => {
+      live = false;
+    };
+  }, [mounted, giftToken]);
+  const giftPending = !!giftToken && giftFor !== giftToken;
+  const giftNote = giftToken && giftFor === giftToken && giftState?.token === giftToken ? giftState : null;
   const decoded = useMemo(() => {
     if (!mounted) return undefined;
     if (remote?.token === token && remote.stub) return remote.stub;
@@ -51,7 +67,8 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
   const owned = ownedState?.stub;
   const setOwned = (next: Stub) => setOwnedState({ id: next.id, stub: next });
   const [flipped, setFlipped] = useState(false);
-  const [wrapped, setWrapped] = useState(gift);
+  const [torn, setTorn] = useState(false);
+  const wrapped = !torn && (gift || (!!giftNote && wrap));
   const [opening, setOpening] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [status, setStatus] = useState<{ text: string; ok?: boolean }>({ text: "" });
@@ -61,7 +78,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
   const [stopped, setStopped] = useState(false);
 
   if (!mounted) return <PageShell>{null}</PageShell>;
-  if (decoded === undefined) return <PageShell>{null}</PageShell>;
+  if (decoded === undefined || giftPending) return <PageShell>{null}</PageShell>;
   if (!decoded) {
     return (
       <PageShell>
@@ -157,7 +174,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
     setTimeout(() => {
       setLeaving(true);
       play("drop");
-      setTimeout(() => setWrapped(false), 600);
+      setTimeout(() => setTorn(true), 600);
     }, 650);
   }
 
@@ -236,6 +253,18 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
                     </li>
                   ))}
                 </ul>
+              </section>
+            ) : null}
+
+            {giftNote ? (
+              <section className={s.section} aria-labelledby="gift-note-h">
+                <header className={s.secHead}>
+                  <h2 id="gift-note-h" className={s.secTitle}>
+                    {giftNote.to ? `A note for ${giftNote.to}` : "A note for you"}
+                  </h2>
+                  <Rule kind="double" />
+                </header>
+                {giftNote.message ? <p className={s.note}>{giftNote.message}</p> : <p className={ui.muted}>No note this time, just the stub.</p>}
               </section>
             ) : null}
 
@@ -374,9 +403,10 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
       {wrapped ? (
         <div className={`desk-surface ${s.giftStage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="A gift for you">
           <div className={`${s.giftBox} ${opening ? s.giftOpening : ""}`}>
-            <p className="desk-label">{giftTo ? `For ${giftTo}` : "A gift for you"}</p>
+            <p className="desk-label">{giftNote?.to || giftTo ? `For ${giftNote?.to || giftTo}` : "A gift for you"}</p>
             <h1 className={s.giftTitle}>Someone made you a stub.</h1>
             <p className={s.giftSub}>{e.title}</p>
+            {giftNote?.message ? <p className={s.giftNote}>{giftNote.message}</p> : null}
             <div className={s.giftWrapArt} aria-hidden="true">
               <span className={s.ribbonV} />
               <span className={s.ribbonH} />

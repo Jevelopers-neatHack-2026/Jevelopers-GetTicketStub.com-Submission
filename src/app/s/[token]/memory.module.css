@@ -550,6 +550,24 @@
   font: var(--type-lede);
   color: var(--desk-ink-soft);
 }
+.giftNote {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 4px;
+  background: var(--desk-paper-raised);
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 14px 22px -16px rgb(60 38 12 / 0.45);
+  font: var(--type-lede);
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  transform: rotate(0.6deg);
+  transition: opacity 650ms var(--ts-ease-exit);
+}
+.giftOpening .giftNote {
+  opacity: 0.55;
+}
 .giftWrapArt {
   position: relative;
   width: min(62vw, 220px);

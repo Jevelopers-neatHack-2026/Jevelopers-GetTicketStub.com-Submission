@@ -103,6 +103,20 @@ const MIGRATIONS: string[] = [
   ALTER TABLE accounts ADD COLUMN is_staff INTEGER NOT NULL DEFAULT 0;
   CREATE INDEX shares_owner ON shares (owner_key);
   `,
+  `
+  -- Gift messages. Only the SHA-256 of the gift token is stored. The message lives here and nowhere else:
+  -- never in a share snapshot, a wall, a stub image or a page. owner_key and stub_id name the share it unwraps.
+  CREATE TABLE gifts (
+    token_hash TEXT PRIMARY KEY,
+    owner_key TEXT NOT NULL,
+    stub_id TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    opened_at INTEGER
+  );
+  CREATE INDEX gifts_owner ON gifts (owner_key, stub_id);
+  `,
 ];
 
 export function migrate(db: DatabaseSync): void {

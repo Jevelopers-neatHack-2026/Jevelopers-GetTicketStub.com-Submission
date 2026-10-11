@@ -41,6 +41,19 @@ export interface ShareRecord {
   stub: Stub;
 }
 
+/** A gift as its link holder sees it: the unwrapped share, who it is for, the message, and when someone first opened it. */
+export interface GiftView {
+  /** The share token of the gift's stub, so the page can be linked. */
+  shareToken: string;
+  stub: Stub;
+  to: string;
+  message: string;
+  openedAt: number | null;
+  /** Who made it. Never sent to the link holder; the route compares it with the caller. */
+  ownerKey: string;
+  stubId: string;
+}
+
 export interface ClaimView {
   eventId: string;
   stub: Stub;
@@ -128,6 +141,13 @@ export interface Storage {
   getShare(token: string): Promise<Stub | null>;
   /** Deletes the share of one stub, so its token stops resolving. The next share mints a new token. True when one existed. */
   revokeShare(ownerKey: string, stubId: string): Promise<boolean>;
+  // gifts: only the token hash is stored. The message is never part of a share.
+  /** Stores a gift for a stub this owner has shared. Returns the share token, or null when that share does not exist. */
+  createGift(ownerKey: string, stubId: string, tokenHash: string, to: string, message: string, now: number): Promise<string | null>;
+  /** The gift behind a token, or null (unknown, revoked, or its share was stopped). `markOpened` records the first open. */
+  getGift(tokenHash: string, now: number, markOpened: boolean): Promise<GiftView | null>;
+  /** Deletes the gift and its message. True when one existed and belonged to this owner. */
+  revokeGift(ownerKey: string, tokenHash: string): Promise<boolean>;
   /** Moves a guest device's shares to the account that just proved an email. Ids the account already shares stay with the guest. */
   adoptShares(fromKey: string, toKey: string): Promise<number>;
   /** Does this tenant (account id, or guest:<id>) own the stub: on its wall, or shared by it? Never answers from a body id alone. */

@@ -1,8 +1,9 @@
 "use client";
 import { useId, useState } from "react";
-import { Field, PunchTabs, Rule, SandboxStrip, Stamp, Stamped, Switch } from "@/customer/desk/Desk";
+import { Field, PunchTabs, Rule, SandboxStrip, Stamp, Stamped, Switch, TearLink } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic } from "@/customer/studio/feedback";
+import { api } from "@/customer/account/api";
 import { sharePath } from "@/customer/account/share";
 import { getStub } from "@/customer/studio/store";
 import { formatMoney, type Stub } from "@/customer/studio/types";
@@ -23,6 +24,8 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
   const [wrap, setWrap] = useState(true);
   const [error, setError] = useState("");
   const [giftPath, setGiftPath] = useState<string | null>(null);
+  const [giftToken, setGiftToken] = useState<string | null>(null);
+  const [revoked, setRevoked] = useState(false);
 
   if (mounted && stub === undefined) setStub(getStub(id) ?? null);
 
@@ -51,13 +54,14 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
       return;
     }
     // The gift is its own copy: a new id, so the recipient sees a visitor page, not the sender's owner tools.
+    // The message is not part of it: it goes to the gift API and rides only on the gift's own link.
     const gift: Stub = {
       ...stub,
       id: `${stub.id}-g${randomId(4)}`,
       setId: stub.setId ?? stub.id,
       photos: [],
-      personal: { ...stub.personal, note: note.trim() || stub.personal.note },
     };
+    const message = note.trim();
     if (delivery === "print") {
       try {
         addOrder({ stubIds: [gift.id], lines: [{ title: `Gift for ${to}: ${stub.event.title}`, material: "print", finish: stub.finish, size: "classic", totalMinor: printPrice }], totalMinor: printPrice, method: "gift-print" });
@@ -72,7 +76,29 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
     }
     if (cartItem && seatIndex !== undefined) updateSeat(cartItem, seatIndex, { decision: "gift", name: to });
     const path = await sharePath(gift);
-    setGiftPath(wrap ? `${path}?gift=1&to=${encodeURIComponent(to)}` : path);
+    let link = path;
+    let token: string | null = null;
+    if (/^\/s\/[\w-]+$/.test(path)) {
+      try {
+        const made = await api.createGift(gift.id, to, message);
+        token = made.giftToken;
+        link = wrap ? made.sharePath : `${made.sharePath}&wrap=0`;
+      } catch {
+        if (message) {
+          setError("We couldn't attach your message just now. Try again in a moment.");
+          return;
+        }
+        link = wrap ? `${path}?gift=1&to=${encodeURIComponent(to)}` : path;
+      }
+    } else if (message) {
+      setError("Your message needs the server, and we couldn't reach it. Try again in a moment.");
+      return;
+    } else if (wrap) {
+      link = `${path}?gift=1&to=${encodeURIComponent(to)}`;
+    }
+    setGiftToken(token);
+    setRevoked(false);
+    setGiftPath(link);
     haptic([18, 40, 28]);
   }
 
@@ -103,9 +129,33 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
               {wrap ? "They tear it open to see the stub." : "They'll see the stub as soon as they open it."}
               {delivery === "print" ? " The print ships in the sandbox; no real order was placed." : ""}
             </p>
-            <CopyField path={giftPath} label="Gift link" />
+            {revoked ? (
+              <p className={ui.status} role="status">
+                Gift link stopped. The message is deleted and the link no longer works.
+              </p>
+            ) : (
+              <>
+                <CopyField path={giftPath} label="Gift link" />
+                {giftToken ? (
+                  <TearLink
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await api.revokeGift(giftToken);
+                        setRevoked(true);
+                      } catch {
+                        setError("We couldn't stop the gift link just now. Try again in a moment.");
+                      }
+                    }}
+                  >
+                    Stop this gift link
+                  </TearLink>
+                ) : null}
+                {error ? <p className={ui.status}>{error}</p> : null}
+              </>
+            )}
             <div className={ui.row}>
-              <PaperLink href={giftPath}>Preview the gift</PaperLink>
+              {revoked ? null : <PaperLink href={giftPath}>Preview the gift</PaperLink>}
               <TearAnchor href={backHref}>{cartItem ? "Back to your cart" : "Back to your wall"}</TearAnchor>
             </div>
           </section>
@@ -141,7 +191,8 @@ export default function GiftClient({ id, forName, cartItem, seatIndex }: { id: s
               <label htmlFor={noteId} className="desk-label">
                 Gift note, if you like
               </label>
-              <textarea id={noteId} className={`${ui.input} ${s.note}`} value={note} maxLength={240} placeholder="Said what, to whom, about which night." onChange={(e) => setNote(e.target.value)} />
+              <textarea id={noteId} className={`${ui.input} ${s.note}`} value={note} maxLength={280} placeholder="Said what, to whom, about which night." onChange={(e) => setNote(e.target.value)} />
+              <p className={ui.status}>Only the person you send this link to sees your message.</p>
             </div>
 
             <Rule kind="perf" />

@@ -744,6 +744,79 @@ async function gt08(anon) {
   const memSrc = readFileSync(join(ROOT, "src", "app", "s", "[token]", "MemoryPage.tsx"), "utf8");
   check("legacy: the memory page never treats a payload link as owned, and says it is old", /const isOwner = !!owned && !legacy/.test(memSrc) && /Old share link/.test(memSrc));
 
+  // --- Gift messages: only the gift's own token shows them, never a share, page, wall or image.
+  const GIFT_NOTE = `GIFT-NOTE-${run}-for-Sam`;
+  const giftStubId = `${ids.x2}-g${run}`;
+  const shGift = (await X.api("POST", "/api/share", { stub: stub(giftStubId, "Gift stub", t, { personal: { ...personal, note: GIFT_NOTE } }) })).json.token;
+  check("gift: a stub's share carries no note even when the gift copy had one", !JSON.stringify((await anon.api("GET", `/api/share/${shGift}`)).json).includes(GIFT_NOTE));
+  const gMade = await X.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: GIFT_NOTE });
+  const gTok = gMade.json?.giftToken;
+  check("gift: the owner makes one and gets { giftToken, sharePath }", gMade.status === 200 && /^[\w-]{20,}$/.test(gTok ?? "") && gMade.json.sharePath === `/s/${shGift}?gift=${gTok}` && gTok !== shGift, gMade.text);
+  const gGet = await anon.api("GET", `/api/gift/${gTok}`);
+  check("gift: anyone holding the gift token reads the message, the recipient and the projected stub", gGet.status === 200 && gGet.json.message === GIFT_NOTE && gGet.json.to === "Sam" && gGet.json.stub.event.title === "Gift stub" && gGet.json.stub.personal.friends.length === 0 && !("note" in gGet.json.stub.personal), gGet.text);
+  check("gift: the first open is recorded for the recipient, and the sender's own preview doesn't change it", gGet.json.openedAt > 0 && (await X.api("GET", `/api/gift/${gTok}`)).json.openedAt === gGet.json.openedAt);
+  check("gift: the response is not cached or indexed", gGet.headers.get("cache-control") === "no-store" && /noindex/.test(gGet.headers.get("x-robots-tag") ?? ""));
+  const gWhere = [
+    ["GET /api/share/<token>", (await anon.api("GET", `/api/share/${shGift}`)).text],
+    ["GET /api/stub-image/<token>", await (await fetch(`${BASE}/api/stub-image/${shGift}`)).text()],
+    ["GET /s/<token>", await (await fetch(`${BASE}/s/${shGift}`)).text()],
+    ["GET /s/<token>?gift=<token>", await (await fetch(`${BASE}/s/${shGift}?gift=${gTok}`)).text()],
+    ["GET /u/<wall>", await (await fetch(`${BASE}/u/${pubX}`)).text()],
+    ["GET /api/u/<wall>", (await anon.api("GET", `/api/u/${pubX}`)).text],
+    ["GET /api/context", (await X.api("GET", `/api/context?project=stub:${giftStubId}`)).text],
+    ["POST /api/wall/sync", (await sync(X, [])).text],
+  ].filter(([, body]) => body.includes(GIFT_NOTE)).map(([name]) => name);
+  check("gift: the message appears in no share, page, stub image, wall or context response", gWhere.length === 0, gWhere.join(", "));
+  const gRow = (() => {
+    try {
+      const db = new DatabaseSync(DB);
+      const row = db.prepare("SELECT token_hash FROM gifts WHERE recipient = 'Sam' AND message = ?").get(GIFT_NOTE);
+      db.close();
+      return row ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  if (gRow) check("gift: the database holds only the SHA-256 of the gift token", gRow.token_hash === createHash("sha256").update(gTok).digest("hex"));
+  else console.log(`skip gift hashed-token check: could not read ${DB}`);
+  check("gift: a wrong or malformed gift token is 404", (await anon.api("GET", "/api/gift/nope-nope-nope-nope")).status === 404 && (await anon.api("GET", `/api/gift/${shGift}`)).status === 404 && (await anon.api("GET", "/api/gift/%20x")).status === 404);
+  check("gift: a gift token is not a share token", (await anon.api("GET", `/api/share/${gTok}`)).status === 404);
+  check("gift: a non-owner can't make a gift for someone else's stub, and it looks like a missing stub", (await Y.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "hijack" })).status === 404 && sameDenial(await Y.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "x" }), await Y.api("POST", "/api/gift", { stub: `ghost-${run}`, to: "Sam", message: "x" })));
+  check("gift: an anonymous caller or a fresh guest device can't make one", (await anon.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "x" })).status === 404 && (await client("gift-stranger").api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "x" })).status === 404);
+  check("gift: an owned stub that was never shared has nothing to unwrap (404)", (await X.api("POST", "/api/gift", { stub: ids.x1, to: "Sam", message: "x" })).status === 404 || (await anon.api("GET", `/api/share/${shX1}`)).status === 404);
+  check("gift: a bad body is 400 (no recipient, long message, non-text message, no stub)", (await X.api("POST", "/api/gift", { stub: giftStubId, to: "", message: "x" })).status === 400 && (await X.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "x".repeat(281) })).status === 400 && (await X.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: { a: 1 } })).status === 400 && (await X.api("POST", "/api/gift", { to: "Sam" })).status === 400);
+  const gMax = await X.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: `${"y".repeat(278)}\u0000\u0007ok` });
+  check("gift: a 280 character message is kept, with control characters stripped", gMax.status === 200 && (await anon.api("GET", `/api/gift/${gMax.json.giftToken}`)).json.message === `${"y".repeat(278)}ok`);
+  check("gift: a non-owner can't revoke it, and gets the same 404 as an unknown gift", (await Y.api("DELETE", `/api/gift/${gTok}`)).status === 404 && sameDenial(await Y.api("DELETE", `/api/gift/${gTok}`), await Y.api("DELETE", "/api/gift/nope-nope-nope-nope")) && (await anon.api("DELETE", `/api/gift/${gTok}`)).status === 404 && (await anon.api("GET", `/api/gift/${gTok}`)).status === 200);
+  const gRev = await X.api("DELETE", `/api/gift/${gTok}`);
+  check("gift: the sender revokes it, the link is 404 from then on and the share still works", gRev.status === 200 && (await anon.api("GET", `/api/gift/${gTok}`)).status === 404 && (await anon.api("GET", `/api/share/${shGift}`)).status === 200 && (await X.api("DELETE", `/api/gift/${gTok}`)).status === 404);
+  if (gRow) {
+    const db = new DatabaseSync(DB);
+    check("gift: revoking deletes the message from the database", db.prepare("SELECT COUNT(*) AS n FROM gifts WHERE token_hash = ?").get(gRow.token_hash).n === 0);
+    db.close();
+  }
+  const gStop = await X.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "stop-with-share" });
+  await X.api("POST", "/api/share/revoke", { stubId: giftStubId });
+  check("gift: stopping the stub's share kills its gifts too", gStop.status === 200 && (await anon.api("GET", `/api/gift/${gStop.json.giftToken}`)).status === 404 && (await anon.api("GET", `/api/gift/${gMax.json.giftToken}`)).status === 404);
+  const gGuest = client("gift-guest");
+  const ggId = `gg-${run}`;
+  const ggShare = await gGuest.api("POST", "/api/share", { stub: stub(ggId, "Guest gift", t) });
+  const ggMade = await gGuest.api("POST", "/api/gift", { stub: ggId, to: "Kim", message: "from a guest" });
+  check("gift: a guest device makes one for the draft it shared", ggMade.status === 200 && ggMade.json.sharePath === `/s/${ggShare.json.token}?gift=${ggMade.json.giftToken}` && (await anon.api("GET", `/api/gift/${ggMade.json.giftToken}`)).json.message === "from a guest");
+  check("gift: another guest device can't revoke it, the owner device can", (await client("gift-other").api("DELETE", `/api/gift/${ggMade.json.giftToken}`)).status === 404 && (await gGuest.api("DELETE", `/api/gift/${ggMade.json.giftToken}`)).status === 200);
+  check("gift: an old ?gift=1&to= link still opens", (await fetch(`${BASE}/s/${ggShare.json.token}?gift=1&to=Sam`)).status === 200);
+  const gLive = await X.api("POST", "/api/share", { stub: stub(giftStubId, "Gift stub again", t) });
+  const gCsrf = await X.api("POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "csrf" });
+  const gCsrfTok = gCsrf.json?.giftToken ?? "nope-nope-nope-nope";
+  const gBad = [];
+  for (const origin of [null, "https://evil.example", "http://localhost.evil.example"]) {
+    for (const [m, path, body] of [["POST", "/api/gift", { stub: giftStubId, to: "Sam", message: "x" }], ["DELETE", `/api/gift/${gCsrfTok}`, undefined]]) {
+      const r = await X.api(m, path, body, { origin });
+      if (r.status !== 403) gBad.push(`${m} ${path} origin=${origin} -> ${r.status}`);
+    }
+  }
+  check("gift: create and revoke refuse a missing or foreign Origin with 403 and change nothing", gLive.status === 200 && gCsrf.status === 200 && gBad.length === 0 && (await anon.api("GET", `/api/gift/${gCsrfTok}`)).status === 200, gBad.join("; "));
+
   // --- CSRF and Origin on every mutating route.
   const csrfRoutes = [
     ["POST", "/api/wall/sync", { stubs: [], deleted: [] }],

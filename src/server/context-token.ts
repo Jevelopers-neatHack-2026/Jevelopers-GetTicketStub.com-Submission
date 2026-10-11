@@ -121,7 +121,7 @@ const ACCOUNT_CAPS = [
 ];
 /** Per project role. The same user holds different roles on different projects. */
 const PROJECT_CAPS: Record<"stub" | "event", Partial<Record<Role, string[]>>> = {
-  stub: { owner: ["stub.read", "stub.write", "share.revoke"], member: ["stub.read"], viewer: ["stub.read"] },
+  stub: { owner: ["stub.read", "stub.write", "share.revoke", "gift.create"], member: ["stub.read"], viewer: ["stub.read"] },
   event: { captain: ["event.read", "event.publish", "claims.read"], member: ["event.read"], viewer: ["event.read"] },
 };
 /** Staff: the admin mount only. Staff get no read access to anyone's projects. */

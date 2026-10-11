@@ -82,3 +82,12 @@ export function parseToken(v: string): string {
   if (!/^[A-Za-z0-9_-]{6,64}$/.test(v)) throw new HttpError(404, "not_found", "We couldn't find that.");
   return v;
 }
+
+export const GIFT_MESSAGE_MAX = 280;
+export const GIFT_TO_MAX = 40;
+
+/** Gift text: a string with control characters removed (newlines kept), trimmed and cut at `max`. Empty when it isn't text. */
+export function cleanGiftText(v: unknown, max: number): string {
+  if (typeof v !== "string") return "";
+  return v.replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "").replace(/\r/g, "").trim().slice(0, max);
+}

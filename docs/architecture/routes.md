@@ -67,6 +67,7 @@ Mutating routes check `Origin` (`checkOrigin`); the access column is what the se
 | `/api/account`, `/api/account/email`, `/api/account/email/confirm` | DELETE, POST, GET | account | |
 | `/api/wall/sync`, `/api/wall/public` | POST, PUT/GET | account | |
 | `/api/share`, `/api/share/[token]`, `/api/share/revoke` | POST, GET, POST | create: public; read: link holder; revoke: owner | share is private by default; revoke rotates the token |
+| `/api/gift`, `/api/gift/[token]` | POST, GET and DELETE | create and revoke: owner of the stub; read: gift-token holder | the message exists only here, never in a share |
 | `/api/u/[token]` | GET | link holder | |
 | `/api/stub-image/[token]` | GET | link holder | image for email, rendered from a stored share |
 | `/api/claim/[token]` | GET, POST | view: public; redeem: account | |
