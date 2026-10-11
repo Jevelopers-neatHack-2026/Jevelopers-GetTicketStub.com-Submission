@@ -1,0 +1,60 @@
+{
+	"node": "24.21.0",
+	"npm": "11.19.0",
+	"icu": "78.3",
+	"unicode": "17.0",
+	"cldr": "48.0",
+	"locale": "en-US",
+	"timezone": "UTC",
+	"tools": {
+		"typescript": "6.0.2",
+		"@biomejs/biome": "2.5.15",
+		"playwright": "1.64.0",
+		"playwright-core": "1.64.0",
+		"@fontsource/noto-sans": "5.3.0",
+		"fontkit": "2.0.4",
+		"pdf-lib": "1.17.1",
+		"pdfjs-dist": "6.4.299",
+		"pngjs": "7.0.0",
+		"zod": "4.6.5",
+		"@types/node": "24.19.2",
+		"@types/fontkit": "2.0.9",
+		"@types/pngjs": "6.0.5"
+	},
+	"browser": {
+		"revision": "1248",
+		"version": "156.0.8078.4",
+		"executableSha256": {
+			"darwin": "c8509aee32abd6977968e9999769980b7a420dea05402d90042d9e5b41db15ef",
+			"linux": "377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025"
+		},
+		"linuxArchiveSha256": "43fd31766c7533a02dda2ded5ad50c2f861cd5400be7509c0abad71129f79d79",
+		"linuxArchiveUrl": "https://cdn.playwright.dev/builds/cft/156.0.8078.4/linux64/chrome-linux64.zip"
+	},
+	"image": {
+		"reference": "mcr.microsoft.com/playwright:v1.64.0-noble@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462",
+		"registry": "https://mcr.microsoft.com/v2/playwright/manifests/v1.64.0-noble",
+		"manifestDigest": "sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462",
+		"configDigest": "sha256:847f71bbb3f17fc1032d50d75bf6fb3fdcf188b16dff81f24667fe9ae9409e01"
+	},
+	"local": {
+		"platform": "darwin",
+		"arch": "arm64",
+		"osRelease": "25.6.0",
+		"osVersion": "26.6.2"
+	},
+	"font": {
+		"file": "src/assets/fonts/noto-sans-latin-400-normal.woff2",
+		"sha256": "09aee8065d25508f23a4c3d92cd777ac869c52d93fd868a88f025d888a7937d6",
+		"license": "src/assets/fonts/OFL.txt",
+		"licenseSha256": "54ec7b5a35310ad66f9f3091426f7028484cbf9ae1ab5da30122ee412a3009e1",
+		"package": "@fontsource/noto-sans",
+		"version": "5.3.0",
+		"source": "https://registry.npmjs.org/@fontsource/noto-sans/-/noto-sans-5.3.0.tgz",
+		"upstream": "https://github.com/notofonts/latin-greek-cyrillic"
+	},
+	"nodeArchives": {
+		"node-v24.21.0-darwin-arm64.tar.gz": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057",
+		"node-v24.21.0-linux-x64.tar.gz": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff"
+	}
+}
