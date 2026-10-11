@@ -58,7 +58,7 @@ Work is tracked under [MM-EPIC #1](https://github.com/Jevelopers-neatHack-2026/m
 
 ## Checks
 
-Run from the repository root. There is no CI workflow; these run locally and make no network or paid-provider calls. The tests need Pillow, and the rehearsal test and package validator need `ffprobe`. The render receipts record Python 3.9.6 and Pillow 11.3.0 ([handoff](docs/collateral-handoff.md#receiver-verification)).
+Run from the repository root. There is no CI workflow; these run locally and make no network or paid-provider calls. The tests need Pillow, and the rehearsal test and package validator need `ffprobe`. The recorded environment, Python 3.9.6 with Pillow 11.3.0, is required for package validation as well as rendering ([handoff](docs/collateral-handoff.md#receiver-verification)); on the maintainer's machine that is `/usr/bin/python3`, and other interpreters may lack Pillow or differ.
 
 ```sh
 python3 tools/validate_collateral.py --mode draft            # claims, provenance pins, copy joins, tracked-file inventory
@@ -66,7 +66,7 @@ python3 -m unittest discover -s tests                        # all suites (sever
 python3 -m unittest discover -s tests -p 'test_visual_*.py'  # visual and accessibility evidence only (fast)
 ```
 
-Package integrity (`package_collateral.py validate`) is checked from the delivery commit the frozen manifest was generated from, in an isolated worktree; on later commits it reports binding errors by design ([receiver verification](docs/collateral-handoff.md#receiver-verification)).
+The reviewed rehearsal is the one delivered at commit `235697a`; the README banners added afterwards are a separate, pending change that the rehearsal review did not cover. Package integrity (`package_collateral.py validate`) must pass on the current delivery commit, so a stale package is a defect to refresh, not an excuse. Only a generic later commit that changes bound inputs without refreshing the package is expected to fail, by design, which is why the frozen manifest records its generation snapshot ([receiver verification](docs/collateral-handoff.md#receiver-verification)).
 
 Readiness modes are expected to exit non-zero and report `BLOCKED` today:
 
