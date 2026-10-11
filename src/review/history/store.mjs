@@ -1084,13 +1084,16 @@ export function createCorrectionHistoryStore(options) {
       let priorStats = null;
       try {
         priorStats = await lstat(databasePath);
+        throwIfAborted(signal);
         if (priorStats.isSymbolicLink() || !priorStats.isFile()) fail('REVIEW_STORAGE');
       } catch (error) {
         if (error?.code !== 'ENOENT') throw error;
       }
+      throwIfAborted(signal);
       database = new DatabaseSync(databasePath, { timeout: transactionOptions.timeoutMs });
       if (transactionOptions.timeoutMs === 0) database.exec('PRAGMA busy_timeout = 0');
       const openedStats = await lstat(databasePath);
+      throwIfAborted(signal);
       if (openedStats.isSymbolicLink() || !openedStats.isFile()
         || (priorStats && (openedStats.dev !== priorStats.dev || openedStats.ino !== priorStats.ino))) fail('REVIEW_STORAGE');
       database.exec(`
@@ -1241,9 +1244,11 @@ export function createCorrectionHistoryStore(options) {
       }
       migrateBindingOperationReceipts(database);
       await chmod(databasePath, 0o600);
+      throwIfAborted(signal);
       if (transactionOptions.beforeBegin) {
         try {
           await transactionOptions.beforeBegin();
+          throwIfAborted(signal);
         } catch (error) {
           preBeginRejected = true;
           throw error;
@@ -3323,7 +3328,8 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
     fail('REVIEW_INVALID');
   }
 
-  async function bindingAddCacheProfile(context, operation, profile) {
+  async function bindingAddCacheProfile(context, operation, profile, signal) {
+    throwIfAborted(signal);
     const input = ownDataRecord(profile, new Set([
       'profileRef', 'cacheVersion', 'scopeKind', 'identity', 'pins', 'cacheBindingHash', 'cacheSourceContentHash',
       'historyProjectionHash', 'cacheExpiresAtMs', 'historyExpiresAtMs',
@@ -3336,8 +3342,10 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
       || typeof input.historyProjectionHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.historyProjectionHash)
       || !Number.isSafeInteger(input.cacheExpiresAtMs) || !Number.isSafeInteger(input.historyExpiresAtMs)) fail();
     await reauthorizeRequest(context.info, context.request, context.eventId, 'record_downstream_reference', context.actorId);
+    throwIfAborted(signal);
     const payloadKey = await payloadKeyFor(context.info);
     try {
+      throwIfAborted(signal);
       const bindingHash = keyed(context.info, context.indexKey, 'binding', operation.bindingId);
       const referenceHash = keyed(context.info, context.indexKey, 'reference', operation.bindingId);
       const expiresAtMs = Math.min(input.cacheExpiresAtMs, input.historyExpiresAtMs);
@@ -3387,6 +3395,7 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
           historyContentHash: operation.baseContentHash,
           expiresAtMs,
         }, expiresAtMs);
+      throwIfAborted(signal);
       await withBindingTransaction(context.info, context.directory, (database, time) => {
         const now = time.now;
         const effectiveNow = time.effectiveNow;
@@ -3428,8 +3437,9 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
           WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
           .run(operation.baseVersionId, operation.baseContentHash, operation.baseVersionId,
             operation.baseContentHash, operation.fence, context.eventKey, state.operation_hash, operation.operationId);
-      }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
+      }, signal, () => reauthorizeRequest(context.info, context.request, context.eventId,
         'record_downstream_reference', context.actorId), boundary);
+      throwIfAborted(signal);
       return Object.freeze({ bindingId: operation.bindingId, profileRef: input.profileRef, replayed: false });
     } finally {
       payloadKey.key.fill(0);
@@ -3562,7 +3572,8 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
     });
   }
 
-  async function markBindingInvalidated(context, operation, binding) {
+  async function markBindingInvalidated(context, operation, binding, signal) {
+    throwIfAborted(signal);
     await withBindingTransaction(context.info, context.directory, (database, time) => {
       const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
       if (!state || state.operation_id !== operation.operationId || state.fence !== operation.fence
@@ -3586,7 +3597,7 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
       database.prepare(`UPDATE correction_cache_operations SET phase = 'cache_invalidating', fence = ?
         WHERE event_key = ? AND operation_hash = ? AND operation_id = ?`)
         .run(operation.fence, context.eventKey, state.operation_hash, operation.operationId);
-    }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
+    }, signal, () => reauthorizeRequest(context.info, context.request, context.eventId,
       context.action, context.actorId, context.field), boundaryFor(context.info, context.actorId, context.eventId,
       'review.history.cache_operation_state', context.field, context.request, {
         operationId: operation.operationId,
@@ -3599,10 +3610,12 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
         targetVersionId: operation.targetVersionId,
         targetContentHash: operation.targetContentHash,
       }));
+    throwIfAborted(signal);
   }
 
-  async function finishBindingOperation(context, operation) {
-    return withBindingTransaction(context.info, context.directory, (database, time) => {
+  async function finishBindingOperation(context, operation, signal) {
+    throwIfAborted(signal);
+    const result = await withBindingTransaction(context.info, context.directory, (database, time) => {
       const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
       if (!state || state.operation_id !== operation.operationId || state.fence !== operation.fence) fail('REVIEW_BUSY');
       if (operation.kind === 'bind') {
@@ -3626,7 +3639,7 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
         .run(operation.targetVersionId, operation.targetContentHash, operation.baseVersionId,
           operation.baseContentHash, operation.fence, context.eventKey, state.operation_hash, operation.operationId);
       return Object.freeze({ completed: true });
-    }, undefined, () => reauthorizeRequest(context.info, context.request, context.eventId,
+    }, signal, () => reauthorizeRequest(context.info, context.request, context.eventId,
       context.action, context.actorId, context.field), boundaryFor(context.info, context.actorId, context.eventId,
       'review.history.cache_operation_state', context.field, context.request, {
         operationId: operation.operationId,
@@ -3638,6 +3651,8 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
         targetVersionId: operation.targetVersionId ?? null,
         targetContentHash: operation.targetContentHash ?? null,
       }));
+    throwIfAborted(signal);
+    return result;
   }
 
   async function prepareBindingFence(context) {

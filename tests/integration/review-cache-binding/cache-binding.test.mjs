@@ -2485,6 +2485,206 @@ test('cancelled correction callback cannot commit after an exact retry takes ove
   assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup())).status, 'miss');
 });
 
+for (const mode of ['abort during participant key preparation', 'abort from final bind guard']) {
+  test(`late bind cancellation preserves the cache receipt and resumes by exact retry (${mode})`, async (t) => {
+    const controller = new AbortController();
+    let reached;
+    let releaseKey;
+    let resolveKeyEntered;
+    let resolveLateContinuation;
+    const keyEntered = new Promise((resolve) => { resolveKeyEntered = resolve; });
+    const keyGate = new Promise((resolve) => { releaseKey = resolve; });
+    const lateContinuation = new Promise((resolve) => { resolveLateContinuation = resolve; });
+    const f = await fixture(t);
+    await createSeed(f);
+    const originalResolveKey = f.historyOptions.resolveKey;
+    const originalBoundary = f.historyOptions.authorizeBoundary;
+    const originalAuthorize = f.historyOptions.authorize;
+    let participantAuthorizationCalls = 0;
+    let authorizationCallsAtKey = null;
+    let lateParticipantAuthorizationReached = false;
+    let lateBindBoundaryReached = false;
+    f.historyOptions.authorize = async (input) => {
+      if (input.action === 'record_downstream_reference') participantAuthorizationCalls += 1;
+      return originalAuthorize(input);
+    };
+    if (mode === 'abort during participant key preparation') {
+      f.historyOptions.resolveKey = async (input) => {
+        const resolved = originalResolveKey(input);
+        if (input.purpose === 'correction_payload' && !input.keyId && !reached) {
+          reached = true;
+          authorizationCallsAtKey = participantAuthorizationCalls;
+          resolveKeyEntered();
+          await keyGate;
+          resolveLateContinuation();
+        }
+        return resolved;
+      };
+      f.historyOptions.authorizeBoundary = (input) => {
+        if (input.action === 'review.history.cache_bind_reference') lateBindBoundaryReached = true;
+        return originalBoundary(input);
+      };
+    } else {
+      f.historyOptions.authorizeBoundary = (input) => {
+        const permit = originalBoundary(input);
+        if (input.action === 'review.history.cache_bind_reference') {
+          reached = true;
+          controller.abort();
+        }
+        return permit;
+      };
+    }
+    t.after(() => releaseKey?.());
+    const store = f.makeStore(5_000);
+    const scope = await store.scopeForAuthenticatedRequest(f.authRequest);
+    const input = { idempotencyKey: `late-bind-recovery-${mode.replaceAll(' ', '-')}`, profile: cacheProfile() };
+    const attempt = store.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest, { signal: controller.signal });
+    if (mode === 'abort during participant key preparation') {
+      await waitForSignal(keyEntered, 'post-cache history payload-key resolution');
+      const beforeAbortHistory = new DatabaseSync(historyDatabasePath(f.root));
+      const beforeAbortCache = new DatabaseSync(cacheDatabasePath(f.root));
+      try {
+        assert.equal(beforeAbortHistory.prepare("SELECT phase FROM correction_cache_state WHERE kind = 'bind'").get().phase,
+          'pending_bind');
+        assert.equal(beforeAbortCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 1);
+        assert.equal(beforeAbortCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count, 1);
+      } finally { beforeAbortHistory.close(); beforeAbortCache.close(); }
+      controller.abort();
+      await assert.rejects(attempt, (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_ABORTED');
+      releaseKey();
+      await waitForSignal(lateContinuation, 'late history-key continuation after abort');
+      await new Promise((resolve) => setImmediate(resolve));
+      lateParticipantAuthorizationReached = participantAuthorizationCalls > authorizationCallsAtKey;
+      assert.equal(lateParticipantAuthorizationReached, false,
+        'the settled key continuation did not enter another participant authorization');
+      assert.equal(lateBindBoundaryReached, false,
+        'the settled key continuation did not enter the bind-reference transaction boundary');
+    } else {
+      await assert.rejects(attempt, (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_ABORTED');
+      assert.equal(reached, true, 'the abort occurred inside the final synchronous history guard');
+    }
+
+    const pendingHistory = new DatabaseSync(historyDatabasePath(f.root));
+    const pendingCache = new DatabaseSync(cacheDatabasePath(f.root));
+    try {
+      assert.equal(pendingHistory.prepare("SELECT phase FROM correction_cache_state WHERE kind = 'bind'").get().phase,
+        'pending_bind');
+      assert.equal(pendingHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+      assert.equal(pendingHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 0);
+      assert.equal(pendingCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 1,
+        'the cache profile committed before cancellation is retained');
+      assert.equal(pendingCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count, 1,
+        'the original cache receipt remains available for exact recovery');
+    } finally { pendingHistory.close(); pendingCache.close(); }
+    await assert.rejects(store.getHistory(scope, EVENT_ID, f.authRequest),
+      (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_BUSY');
+
+    f.historyOptions.resolveKey = originalResolveKey;
+    f.historyOptions.authorizeBoundary = originalBoundary;
+    f.historyOptions.authorize = originalAuthorize;
+    const reopened = f.makeStore(5_000);
+    const reopenedScope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+    const recovered = await reopened.bindPrivateProfile(reopenedScope, EVENT_ID, input, f.authRequest);
+    assert.equal(recovered.status, 'bound');
+    assert.equal(recovered.replayed, true, 'recovery consumes the existing cache receipt');
+    const completeHistory = new DatabaseSync(historyDatabasePath(f.root));
+    const completeCache = new DatabaseSync(cacheDatabasePath(f.root));
+    try {
+      assert.equal(completeHistory.prepare("SELECT phase FROM correction_cache_state WHERE kind = 'bind'").get().phase,
+        'complete');
+      assert.equal(completeHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 1);
+      assert.equal(completeHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+      assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 1);
+      assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_bound_writes').get().count, 1);
+    } finally { completeHistory.close(); completeCache.close(); }
+  });
+}
+
+for (const kind of ['correction', 'source_refresh']) {
+  for (const markerPhase of ['cache_invalidating', 'complete']) {
+    test(`late ${kind} cancellation leaves an exact retry barrier at ${markerPhase}`, async (t) => {
+      const controller = new AbortController();
+      let markerGuardReached = false;
+      let abortAtMarker = true;
+      const f = await fixture(t);
+      const seeded = await createSeed(f);
+      await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+        { idempotencyKey: `bind-before-${kind}-${markerPhase}`, profile: cacheProfile() }, f.authRequest);
+      const originalBoundary = f.historyOptions.authorizeBoundary;
+      f.historyOptions.authorizeBoundary = (input) => {
+        const permit = originalBoundary(input);
+        if (abortAtMarker && input.action === 'review.history.cache_operation_state'
+          && input.details?.phase === markerPhase) {
+          markerGuardReached = true;
+          controller.abort();
+        }
+        return permit;
+      };
+      const store = f.makeStore(5_000);
+      const scope = await store.scopeForAuthenticatedRequest(f.authRequest);
+      const idempotencyKey = `cancel-${kind}-${markerPhase}`;
+      const input = kind === 'correction'
+        ? { eventId: EVENT_ID, baseVersionId: seeded.snapshot.versionId,
+          baseContentHash: seeded.snapshot.contentHash, field: 'event_date',
+          value: { precision: 'date', value: '2027-06-24' }, idempotencyKey,
+          retentionHandle: f.createPermit() }
+        : { eventId: EVENT_ID, baseVersionId: seeded.snapshot.versionId,
+          baseContentHash: seeded.snapshot.contentHash,
+          sourceFacts: Object.freeze({ ...initialFacts(), event_name: Object.freeze({ status: 'sourced',
+            value: 'Updated Lantern Night', sourceEvidence: [sourceEvidence('updated-event-name', 'Updated Lantern Night')] }) }),
+          idempotencyKey,
+          retentionHandle: f.createPermit() };
+      const attempt = kind === 'correction'
+        ? store.applyCorrection(scope, input, f.authRequest, { signal: controller.signal })
+        : store.refreshSources(scope, input, f.authRequest, { signal: controller.signal });
+      await assert.rejects(attempt, (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_ABORTED');
+      assert.equal(markerGuardReached, true, `the ${markerPhase} final guard aborted the real transaction`);
+
+      const pendingHistory = new DatabaseSync(historyDatabasePath(f.root));
+      const pendingCache = new DatabaseSync(cacheDatabasePath(f.root));
+      let committedRevision;
+      try {
+        const state = pendingHistory.prepare('SELECT phase, target_version_id FROM correction_cache_state').get();
+        assert.ok(['history_committed', 'cache_invalidating'].includes(state.phase));
+        assert.ok(state.target_version_id, 'the immutable history revision committed before participant cancellation');
+        committedRevision = pendingHistory.prepare('SELECT revision FROM heads').get().revision;
+        assert.equal(pendingHistory.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 2,
+          'the earlier history commit is preserved, not rolled back');
+        const binding = pendingHistory.prepare('SELECT last_invalidation_operation_id FROM correction_cache_bindings').get();
+        if (markerPhase === 'cache_invalidating') assert.equal(binding.last_invalidation_operation_id, null,
+          'the post-abort history invalidation marker was not written');
+        else assert.ok(binding.last_invalidation_operation_id,
+          'the invalidation marker committed before cancellation reached finishOperation');
+        assert.equal(pendingCache.prepare('SELECT COUNT(*) AS count FROM reuse_history_invalidation_ops').get().count, 1,
+          'the cache invalidation receipt committed before cancellation');
+        assert.equal(pendingCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1,
+          'the existing external-delivery work remains exactly once');
+      } finally { pendingHistory.close(); pendingCache.close(); }
+      await assert.rejects(store.getHistory(scope, EVENT_ID, f.authRequest),
+        (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_BUSY');
+
+      abortAtMarker = false;
+      const reopened = f.makeStore(5_000);
+      const reopenedScope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+      const recovered = kind === 'correction'
+        ? await reopened.applyCorrection(reopenedScope, input, f.authRequest)
+        : await reopened.refreshSources(reopenedScope, input, f.authRequest);
+      assert.equal(recovered.snapshot.revision, committedRevision,
+        'exact retry recovers the same immutable revision');
+      const completeHistory = new DatabaseSync(historyDatabasePath(f.root));
+      const completeCache = new DatabaseSync(cacheDatabasePath(f.root));
+      try {
+        assert.equal(completeHistory.prepare('SELECT phase FROM correction_cache_state').get().phase, 'complete');
+        assert.equal(completeHistory.prepare('SELECT revision FROM heads').get().revision, committedRevision);
+        assert.equal(completeHistory.prepare('SELECT COUNT(*) AS count FROM versions').get().count, 2);
+        assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_history_invalidation_ops').get().count, 1);
+        assert.equal(completeCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1,
+          'recovery does not duplicate the already committed invalidation event');
+      } finally { completeHistory.close(); completeCache.close(); }
+    });
+  }
+}
+
 test('final synchronous boundary permit is current and permission expiry is resampled afterward', async (t) => {
   let authorized = true;
   const f = await fixture(t, {

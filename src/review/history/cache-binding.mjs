@@ -401,8 +401,8 @@ export function createCorrectionCacheBinding(options) {
             historyProjectionHash: projectionHash,
             cacheExpiresAtMs: stored.expiresAtMs,
             historyExpiresAtMs,
-          });
-          await historyPort.finishOperation(historyContext, operation);
+          }, signal);
+          await historyPort.finishOperation(historyContext, operation, signal);
           const finalizedOperation = operation.replayed === true || stored.replayed === true
             ? Object.freeze({ ...operation, replayed: true }) : operation;
           return await finalizeBindResult(historyContext, scopes, finalizedOperation, preflightToken,
@@ -494,9 +494,9 @@ export function createCorrectionCacheBinding(options) {
                 time.boundaryToken), signal, capability);
             if (!localResult.locallyIneligible || localResult.profileRef !== binding.profileRef
               || !Array.isArray(localResult.eventIds) || localResult.eventIds.length < 1) fail('REVIEW_INTEGRITY');
-            await historyPort.markInvalidated(historyContext, targetOperation, binding);
+            await historyPort.markInvalidated(historyContext, targetOperation, binding, signal);
           }
-          await historyPort.finishOperation(historyContext, targetOperation);
+          await historyPort.finishOperation(historyContext, targetOperation, signal);
         } finally { fence.close(); }
         const snapshot = await historyPort.readOperationResult(historyContext, targetOperation, request, action, signal);
         return correctionResult(snapshot, revised.replayed);
