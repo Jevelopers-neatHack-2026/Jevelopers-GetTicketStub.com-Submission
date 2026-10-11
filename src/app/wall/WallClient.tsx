@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { play, haptic } from "@/customer/studio/feedback";
-import { loadWall, removeStub, saveWall } from "@/customer/studio/store";
+import { loadWall, removeStub, saveWall, upsertStub } from "@/customer/studio/store";
 import { api } from "@/customer/account/api";
 import { sharePath } from "@/customer/account/share";
 import { dismissSavePrompt, openSignIn, savePromptDismissed } from "@/customer/account/signin";
@@ -20,6 +20,8 @@ import { PaperButton, SandboxStrip, Stamp, Stamped, Switch, Tag, Tags, TearLink,
 import { FlipIcon } from "@/customer/desk/icons";
 import { EditIcon, OpenIcon, PrintIcon, ShareIcon } from "./liftIcons";
 import { DeskPage, Pin, chrome as c } from "./chrome";
+import { Canvas, type CanvasApi } from "./Canvas";
+import { dealMissing, freshAngle, type PlacedStub } from "./placement";
 import s from "./wall.module.css";
 
 type Filter = "all" | "concert" | "game" | "show" | "generic";
@@ -55,6 +57,19 @@ async function shareStub(st: Stub): Promise<string> {
   return (await copyText(url)) ? "Link copied. Anyone with the link can see this stub." : "Couldn't copy the link. Open the stub and copy it from there.";
 }
 
+interface StubDrag {
+  id: string;
+  pid: number;
+  el: HTMLElement;
+  sx: number;
+  sy: number;
+  ox: number;
+  oy: number;
+  x: number;
+  y: number;
+  moved: boolean;
+}
+
 interface Lift {
   id: string;
   leaving: boolean;
@@ -64,7 +79,7 @@ interface Lift {
 export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent: boolean; pinnedId?: string; liftId?: string }) {
   const router = useRouter();
   const mounted = useMounted();
-  const [stubs, setStubs] = useState<Stub[]>([]);
+  const [stubs, setStubs] = useState<PlacedStub[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [lift, setLift] = useState<Lift | null>(null);
   const [banner, setBanner] = useState(emailSent);
@@ -72,7 +87,9 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
   // the account's public page token, once the server has issued one; until then the encoded link stands in
   const [publicToken, setPublicToken] = useState<string | null>(null);
   const { status: acct } = useAccount();
-  const [dragId, setDragId] = useState<string | null>(null);
+  const canvasApi = useRef<CanvasApi | null>(null);
+  const drag = useRef<StubDrag | null>(null);
+  const suppressClick = useRef(false);
   const publicRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -137,7 +154,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
   const openLift = useCallback((id: string) => {
     const r = publicRef.current?.getBoundingClientRect();
     // keep the public switch in the light: the lamp starts below it when it's on screen
-    const top = r && r.bottom > 0 && r.top < window.innerHeight ? Math.ceil(r.bottom) + 12 : 16;
+    const top = !canvasApi.current?.fullscreen() && r && r.bottom > 0 && r.top < window.innerHeight ? Math.ceil(r.bottom) + 12 : 16;
     setLift({ id, leaving: false, top });
     play("flick");
     haptic([8]);
@@ -181,7 +198,19 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
   // a filter only shows up when it would find something, and only when there is more than one kind
   const shownFilters = FILTERS.filter((f) => f.id !== "all" && counts[f.id] > 0);
   const activeFilter = filter === "all" || counts[filter] > 0 ? filter : "all";
-  const visible = (activeFilter === "all" ? stubs : stubs.filter((x) => (x.event.type ?? "generic") === activeFilter)).filter((x) => x.id !== landingId);
+  // every stub has a spot on the canvas; ones that never had one are dealt into the next free slot (and saved, below)
+  const placed = useMemo(() => dealMissing(stubs), [stubs]);
+  useEffect(() => {
+    if (!placed.placed.length) return;
+    const at = Date.now();
+    saveWall(placed.stubs.map((st) => (placed.placed.includes(st.id) ? { ...st, updatedAt: at } : st)));
+  }, [placed]);
+  const onCanvas = useMemo(() => placed.stubs.filter((x) => x.id !== landingId), [placed, landingId]);
+  // the filter dims what doesn't match, so nothing jumps around the canvas
+  const matches = (st: Stub) => activeFilter === "all" || (st.event.type ?? "generic") === activeFilter;
+  // the most recently moved stub lies on top
+  const stack = useMemo(() => new Map([...onCanvas].sort((a, b) => (a.updatedAt ?? 0) - (b.updatedAt ?? 0)).map((st, i) => [st.id, i + 1])), [onCanvas]);
+  const layoutKey = `${activeFilter}|${onCanvas.map((st) => `${st.id}:${Math.round(st.wallX ?? 0)}:${Math.round(st.wallY ?? 0)}`).join(",")}`;
   const liftedStub = lift ? (stubs.find((x) => x.id === lift.id) ?? null) : null;
 
   function togglePublic(next: boolean) {
@@ -201,16 +230,73 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
     }
   }
 
-  function reorder(fromId: string, toId: string) {
-    if (fromId === toId) return;
-    const next = [...stubs];
-    const from = next.findIndex((x) => x.id === fromId);
-    if (from < 0) return;
-    const [moved] = next.splice(from, 1);
-    const to = next.findIndex((x) => x.id === toId);
-    next.splice(to < 0 ? next.length : to, 0, moved);
-    setStubs(next);
-    saveWall(next);
+  /** Let go of a stub drag in progress (a second finger landed: that is a pinch, not a move). */
+  const cancelDrag = useCallback(() => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    const li = d.el.closest<HTMLElement>("[data-stub-area]");
+    li?.style.setProperty("--x", `${d.ox}px`);
+    li?.style.setProperty("--y", `${d.oy}px`);
+    if (li) delete li.dataset.drag;
+  }, []);
+
+  function stubDown(e: React.PointerEvent<HTMLButtonElement>, st: PlacedStub) {
+    // middle and space drags pan, and so does the second finger of a pinch
+    if (e.button !== 0 || drag.current || canvasApi.current?.panning.current) return;
+    const el = e.currentTarget;
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      /* the pointer is already gone */
+    }
+    const x = st.wallX ?? 0;
+    const y = st.wallY ?? 0;
+    drag.current = { id: st.id, pid: e.pointerId, el, sx: e.clientX, sy: e.clientY, ox: x, oy: y, x, y, moved: false };
+  }
+
+  function stubMove(e: React.PointerEvent<HTMLButtonElement>) {
+    const d = drag.current;
+    if (!d || d.pid !== e.pointerId) return;
+    const dx = e.clientX - d.sx;
+    const dy = e.clientY - d.sy;
+    const li = d.el.closest<HTMLElement>("[data-stub-area]");
+    if (!li) return;
+    if (!d.moved) {
+      if (Math.hypot(dx, dy) < 5) return;
+      d.moved = true;
+      li.dataset.drag = "true";
+      play("tap", { emphasis: "subtle" });
+      haptic([6]);
+    }
+    // the pointer moved dx on screen, which is dx over the zoom on the canvas, so the stub stays under it at any zoom
+    const k = canvasApi.current?.scale() || 1;
+    d.x = d.ox + dx / k;
+    d.y = d.oy + dy / k;
+    li.style.setProperty("--x", `${d.x}px`);
+    li.style.setProperty("--y", `${d.y}px`);
+  }
+
+  function stubUp(e: React.PointerEvent<HTMLButtonElement>, st: PlacedStub) {
+    const d = drag.current;
+    if (!d || d.pid !== e.pointerId) return;
+    drag.current = null;
+    try {
+      d.el.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    if (!d.moved) return; // a tap: the click lifts it
+    suppressClick.current = true;
+    window.setTimeout(() => (suppressClick.current = false), 80);
+    // pinned back down at a fresh small tilt
+    const angle = freshAngle();
+    const li = d.el.closest<HTMLElement>("[data-stub-area]");
+    li?.style.setProperty("--angle", `${angle}deg`);
+    if (li) delete li.dataset.drag;
+    const next: PlacedStub = { ...st, wallX: Math.round(d.x), wallY: Math.round(d.y), wallAngle: angle };
+    setStubs((prev) => prev.map((x) => (x.id === next.id ? { ...next, updatedAt: Date.now() } : x)));
+    upsertStub(next);
     play("pin");
     haptic([20]);
   }
@@ -275,8 +361,18 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
         </Tags>
       ) : null}
 
-      <section ref={boardRef} className={`${c.cork} ${s.board}`} aria-label="Your stubs, pinned to a corkboard">
-        {!mounted ? null : stubs.length === 0 ? (
+      {mounted && landing ? (
+        <div className={`${c.cork} ${s.feature}`}>
+          <div className={s.landing} style={{ ["--angle" as string]: `${landing.wallAngle ?? 0}deg` } as CSSProperties}>
+            <Pin seed={landing.id} press delay={LAND_MS - 160} />
+            <StubView stub={landing} size="md" />
+          </div>
+          <NextSteps stub={landing} />
+        </div>
+      ) : null}
+
+      {mounted && stubs.length === 0 ? (
+        <section ref={boardRef} className={`${c.cork} ${s.board}`} aria-label="Your stubs, pinned to a corkboard">
           <div className={s.empty}>
             <div className={s.emptySlot} aria-hidden="true" />
             <p className={s.emptyText}>Your first stub goes here.</p>
@@ -285,62 +381,58 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
               <LeavesMark />
             </Stamp>
           </div>
-        ) : (
-          <>
-            {landing ? (
-              <div className={s.feature}>
-                <div className={s.landing} style={{ ["--angle" as string]: `${landing.wallAngle ?? 0}deg` } as CSSProperties}>
-                  <Pin seed={landing.id} press delay={LAND_MS - 160} />
-                  <StubView stub={landing} size="md" />
-                </div>
-                <NextSteps stub={landing} />
-              </div>
-            ) : null}
-            {visible.length === 0 && !landing ? (
-              <p className={s.none}>No stubs of this type yet.</p>
-            ) : (
-              <ul className={c.grid}>
-                {visible.map((st, i) => (
-                  <li
-                    key={st.id}
-                    className={`${s.pinned} ${dragId === st.id ? s.dragging : ""} ${lift?.id === st.id ? s.lifted : ""}`}
-                    style={{ ["--angle" as string]: `${st.wallAngle ?? 0}deg`, ["--i" as string]: i } as CSSProperties}
-                    draggable
-                    onDragStart={(e) => {
-                      setDragId(st.id);
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", st.id);
-                    }}
-                    onDragEnd={() => setDragId(null)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const from = e.dataTransfer.getData("text/plain") || dragId;
-                      if (from) reorder(from, st.id);
-                      setDragId(null);
-                    }}
-                  >
-                    <Pin seed={st.id} />
-                    <button
-                      type="button"
-                      data-stub-id={st.id}
-                      className={s.stubBtn}
-                      aria-label={`Lift ${st.event.title}${st.event.dateISO ? `, ${formatDate(st.event.dateISO)}` : ""}`}
-                      aria-expanded={lift?.id === st.id}
-                      onClick={() => openLift(st.id)}
-                    >
-                      <StubView stub={st} size="sm" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </section>
-      {mounted && stubs.length > 1 ? <p className={s.hint}>Drag a stub to move it on your wall.</p> : null}
+        </section>
+      ) : null}
 
-      {lift && liftedStub ? <Lamp key={liftedStub.id} stub={liftedStub} lift={lift} onPutBack={putBack} onDelete={remove} /> : null}
+      {mounted && stubs.length > 0 ? (
+        <section ref={boardRef} className={s.board} aria-label="Your stubs, pinned to a corkboard">
+          <Canvas
+            label="Your wall. Drag the cork to move around, scroll to zoom. Plus and minus zoom, 0 fits, F is fullscreen."
+            layoutKey={layoutKey}
+            fitKey={activeFilter}
+            apiRef={canvasApi}
+            onCancelGesture={cancelDrag}
+            overlay={lift && liftedStub ? <Lamp key={liftedStub.id} stub={liftedStub} lift={lift} onPutBack={putBack} onDelete={remove} /> : null}
+          >
+            {onCanvas.map((st, i) => (
+              <div
+                key={st.id}
+                className={`${s.pinned} ${lift?.id === st.id ? s.lifted : ""}`}
+                data-stub-area
+                data-dim={matches(st) ? undefined : "true"}
+                style={
+                  {
+                    ["--x" as string]: `${st.wallX ?? 0}px`,
+                    ["--y" as string]: `${st.wallY ?? 0}px`,
+                    ["--angle" as string]: `${st.wallAngle ?? 0}deg`,
+                    ["--i" as string]: Math.min(i, 12),
+                    zIndex: stack.get(st.id),
+                  } as CSSProperties
+                }
+              >
+                <Pin seed={st.id} />
+                <button
+                  type="button"
+                  data-stub-id={st.id}
+                  className={s.stubBtn}
+                  aria-label={`Lift ${st.event.title}${st.event.dateISO ? `, ${formatDate(st.event.dateISO)}` : ""}`}
+                  aria-expanded={lift?.id === st.id}
+                  onPointerDown={(e) => stubDown(e, st)}
+                  onPointerMove={stubMove}
+                  onPointerUp={(e) => stubUp(e, st)}
+                  onPointerCancel={cancelDrag}
+                  onClick={() => {
+                    if (!suppressClick.current) openLift(st.id);
+                  }}
+                >
+                  <StubView stub={st} size="sm" />
+                </button>
+              </div>
+            ))}
+          </Canvas>
+        </section>
+      ) : null}
+      {mounted && stubs.length > 1 ? <p className={s.hint}>Drag a stub to move it. Scroll to zoom, drag the cork to pan.</p> : null}
     </DeskPage>
   );
 }

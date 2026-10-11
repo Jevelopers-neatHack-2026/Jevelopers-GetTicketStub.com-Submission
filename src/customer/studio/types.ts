@@ -95,6 +95,9 @@ export interface Stub {
   finish: Finish;
   torn: boolean; // finished and pinned to the wall
   wallAngle: number; // -4..4 degrees
+  /** Where the stub is pinned on the wall canvas, in canvas px. Unset until it is first placed. */
+  wallX?: number;
+  wallY?: number;
   photos: string[]; // data urls (local only)
   setId?: string; // matching set / claim set
   /** Epoch ms of the last change. Set on every upsert; the newer one wins when a device and an account merge. */

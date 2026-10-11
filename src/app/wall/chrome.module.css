@@ -26,8 +26,8 @@
   min-height: 44px;
   min-width: 44px;
 }
-/* The sidebar carries the wordmark on the desktop, so the page header never repeats it there. */
-@media (min-width: 960px) {
+/* The sidebar (or the phone rail) carries the mark, so the page header never repeats it. */
+@media all {
   :global([data-nav="on"]) .home {
     display: none;
   }

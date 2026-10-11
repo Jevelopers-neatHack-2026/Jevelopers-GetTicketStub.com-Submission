@@ -30,8 +30,15 @@
   color: var(--desk-ink-soft);
 }
 
+.board {
+  min-width: 0;
+}
+/* a stub sits at --x/--y on the endless canvas, at the tilt its owner left it */
 .pinned {
-  position: relative;
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: var(--x, 0px) var(--y, 0px);
   display: grid;
   justify-items: center;
   gap: 10px;
@@ -47,6 +54,9 @@
 }
 .stubLink {
   display: block;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
   filter: drop-shadow(0 8px 8px rgb(40 24 8 / 0.4));
   transition: transform 260ms var(--desk-spring);
 }

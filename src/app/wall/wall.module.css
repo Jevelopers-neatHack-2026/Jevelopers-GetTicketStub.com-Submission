@@ -68,18 +68,36 @@
 .board {
   scroll-margin-top: 12px;
 }
+/* a stub's spot on the canvas is --x/--y (canvas px); its tilt is --angle. The drag writes all three straight to the element. */
 .pinned {
-  position: relative;
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: var(--x, 0px) var(--y, 0px);
   transform: rotate(var(--angle));
   animation: settle 520ms var(--ts-ease-enter) both;
   animation-delay: calc(var(--i) * 40ms);
-  transition: transform 260ms var(--desk-spring);
+  transition:
+    transform 260ms var(--desk-spring),
+    opacity 300ms var(--ts-ease-standard);
+  cursor: grab;
 }
 .pinned:hover {
   transform: rotate(0deg) translateY(-4px);
 }
-.dragging {
-  opacity: 0.4;
+/* in the hand: it lifts off the cork, straightens and throws a longer shadow */
+.pinned[data-drag="true"] {
+  z-index: 100000 !important;
+  cursor: grabbing;
+  transform: rotate(0deg) scale(1.05);
+  transition: transform 160ms var(--desk-spring);
+}
+.pinned[data-drag="true"] .stubBtn {
+  filter: drop-shadow(0 22px 16px rgb(40 24 8 / 0.5));
+}
+.pinned[data-dim="true"] {
+  opacity: 0.28;
+  pointer-events: none;
 }
 @keyframes settle {
   from {
@@ -89,6 +107,10 @@
 }
 .stubBtn {
   display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: inherit;
   padding: 0;
   border: 0;
   background: transparent;
@@ -138,7 +160,7 @@
   display: grid;
   gap: 32px;
   justify-items: center;
-  margin-bottom: 40px;
+  margin-bottom: 0;
 }
 .landing {
   position: relative;
@@ -388,7 +410,7 @@
     justify-content: center;
     align-items: center;
     gap: 64px;
-    margin-bottom: 56px;
+    margin-bottom: 0;
   }
   .lampBody {
     --stub-max: min(560px, calc((100dvh - var(--lamp-top, 16px) - 350px) * 0.66));

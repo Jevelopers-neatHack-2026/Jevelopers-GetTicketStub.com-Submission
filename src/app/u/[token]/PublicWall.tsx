@@ -8,6 +8,8 @@ import { decodeWall, formatDate, memoryPath } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
 import { StampLink } from "@/customer/pages/ui";
 import { DeskPage, Pin, chrome as c } from "@/app/wall/chrome";
+import { Canvas } from "@/app/wall/Canvas";
+import { dealMissing } from "@/app/wall/placement";
 import s from "./public.module.css";
 
 export default function PublicWall({ token }: { token: string }) {
@@ -28,7 +30,8 @@ export default function PublicWall({ token }: { token: string }) {
   }, [mounted, token]);
   const asked = !token.includes(".");
   const settled = !asked || remote?.token === token;
-  const stubs = remote?.token === token && remote.stubs ? remote.stubs : legacy;
+  // each stub keeps the spot its owner gave it; a stub without one is dealt into the next free slot
+  const stubs = useMemo(() => dealMissing(remote?.token === token && remote.stubs ? remote.stubs : legacy).stubs, [remote, token, legacy]);
   const cities = new Set(stubs.map((x) => x.event.city).filter(Boolean)).size;
 
   if (!mounted || (stubs.length === 0 && !settled)) return <DeskPage>{null}</DeskPage>;
@@ -53,18 +56,27 @@ export default function PublicWall({ token }: { token: string }) {
           {cities > 0 ? ` · ${cities} ${cities === 1 ? "city" : "cities"}` : ""}
         </p>
       </div>
-      <section className={c.cork} aria-label="Stubs pinned to a corkboard">
-        <ul className={c.grid}>
+      <section className={s.board}>
+        <Canvas
+          label="A TicketStub wall. Drag the cork to move around, scroll to zoom. Plus and minus zoom, 0 fits, F is fullscreen."
+          layoutKey={stubs.map((st) => st.id).join(",")}
+          panOverStubs
+        >
           {stubs.map((st, i) => (
-            <li key={`${st.id}-${i}`} className={s.pinned} style={{ ["--angle" as string]: `${st.wallAngle ?? 0}deg`, ["--i" as string]: i } as CSSProperties}>
+            <div
+              key={`${st.id}-${i}`}
+              className={s.pinned}
+              data-stub-area
+              style={{ ["--x" as string]: `${st.wallX ?? 0}px`, ["--y" as string]: `${st.wallY ?? 0}px`, ["--angle" as string]: `${st.wallAngle ?? 0}deg`, ["--i" as string]: Math.min(i, 12) } as CSSProperties}
+            >
               <Pin seed={`${st.id}-${i}`} />
               <Link href={memoryPath(st)} className={s.stubLink} aria-label={`Open ${st.event.title}${st.event.dateISO ? `, ${formatDate(st.event.dateISO)}` : ""}`}>
                 <StubView stub={st} size="sm" />
               </Link>
               <p className={s.label}>{st.event.title}</p>
-            </li>
+            </div>
           ))}
-        </ul>
+        </Canvas>
       </section>
       <p className={s.note}>Only people with the link can see this.</p>
       <div className={s.cta}>
