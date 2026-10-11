@@ -286,13 +286,21 @@ export function createCorrectionCacheBinding(options) {
     }
   }
 
-  async function findCompletedBind(context, operation) {
+  async function finalizeBindResult(context, scopes, operation, preflightToken, candidateToken, request, signal) {
     const rows = await historyPort.bindings(context);
     const binding = rows.find((row) => row.operationId === operation.operationId);
     if (!binding || binding.bindingId !== operation.bindingId) fail('REVIEW_INTEGRITY');
-    if (binding.expiresAtMs <= historyPort.now()) fail('REVIEW_EXPIRED');
-    return Object.freeze({ status: 'bound', cacheVersion: binding.cacheVersion,
-      historyVersionId: binding.historyVersionId, expiresAt: new Date(binding.expiresAtMs).toISOString(), replayed: true });
+    const finalDisclosure = await cachePort.prepareFinalDisclosure(scopes.cacheScope, request,
+      preflightToken, binding, signal, capability);
+    try {
+      await historyPort.finalizeBindDisclosure(context, operation, binding, candidateToken, request, signal,
+        (effectiveNow) => cachePort.finalDisclosureCheck(finalDisclosure, effectiveNow, capability));
+      return Object.freeze({ status: 'bound', cacheVersion: binding.cacheVersion,
+        historyVersionId: binding.historyVersionId, expiresAt: new Date(binding.expiresAtMs).toISOString(),
+        replayed: operation.replayed === true });
+    } finally {
+      cachePort.disposeFinalDisclosure(finalDisclosure, capability);
+    }
   }
 
   async function bindPrivateProfile(scope, eventId, inputValue, request, callOptions = undefined) {
@@ -345,7 +353,8 @@ export function createCorrectionCacheBinding(options) {
           action: 'record_downstream_reference',
           bindingCandidate: bindHead.candidate,
         }, request, signal);
-        if (operation.replayed) return await findCompletedBind(historyContext, operation);
+        if (operation.replayed) return await finalizeBindResult(historyContext, scopes, operation,
+          preflightToken, bindCandidateToken, request, signal);
         if (signal.aborted) fail('REVIEW_ABORTED');
         const pendingRead = Object.freeze({
           operationId: operation.operationId,
@@ -394,10 +403,10 @@ export function createCorrectionCacheBinding(options) {
             historyExpiresAtMs,
           });
           await historyPort.finishOperation(historyContext, operation);
-          return Object.freeze({ status: 'bound', cacheVersion: stored.version,
-            historyVersionId: baseSnapshot.versionId,
-            expiresAt: new Date(Math.min(stored.expiresAtMs, historyExpiresAtMs)).toISOString(),
-            replayed: stored.replayed === true });
+          const finalizedOperation = operation.replayed === true || stored.replayed === true
+            ? Object.freeze({ ...operation, replayed: true }) : operation;
+          return await finalizeBindResult(historyContext, scopes, finalizedOperation, preflightToken,
+            bindCandidateToken, request, signal);
         } finally { fence.close(); }
       } finally {
         if (preflightToken) cachePort.disposePreflight(preflightToken, capability);

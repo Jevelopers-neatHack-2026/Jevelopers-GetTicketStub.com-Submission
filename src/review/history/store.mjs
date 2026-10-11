@@ -3485,6 +3485,83 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
     return Object.freeze(output);
   }
 
+  async function finalizeBindDisclosure(context, operationValue, bindingValue, candidateToken, request, signal, cacheCheck) {
+    const operation = ownDataRecord(operationValue, new Set([
+      'operationId', 'bindingId', 'fence', 'kind', 'phase', 'baseVersionId', 'baseContentHash',
+      'targetVersionId', 'targetContentHash', 'replayed',
+    ]));
+    const binding = ownDataRecord(bindingValue, new Set([
+      'schemaVersion', 'bindingId', 'operationId', 'eventId', 'historyVersionId', 'historyContentHash', 'historyProjectionHash',
+      'profileRef', 'cacheVersion', 'scopeKind', 'cacheBindingHash', 'identity', 'pins', 'cacheSourceContentHash',
+      'cacheExpiresAtMs', 'historyExpiresAtMs', 'expiresAtMs', 'bindingHash', 'referenceHash',
+      'lastInvalidationOperationId', 'lastInvalidationTargetVersionId', 'lastInvalidationTargetHash', 'sealed',
+    ]));
+    const candidate = candidateToken && HISTORY_BINDING_CANDIDATES.get(candidateToken);
+    if (!context || !operation || operation.kind !== 'bind' || !validSafeString(operation.operationId, 1, 180)
+      || !validSafeString(operation.bindingId, 1, 180) || !Number.isSafeInteger(operation.fence) || operation.fence < 1
+      || !validSafeString(operation.baseVersionId, 1, 180) || !/^[a-f0-9]{64}$/.test(operation.baseContentHash ?? '')
+      || !binding || binding.schemaVersion !== 1 || typeof cacheCheck !== 'function' || binding.operationId !== operation.operationId
+      || binding.bindingId !== operation.bindingId || binding.eventId !== context.eventId
+      || binding.scopeKind !== 'tenant_private' || !(binding.sealed instanceof Uint8Array)
+      || !candidate || candidate.context !== context || candidate.operationId !== operation.operationId
+      || candidate.bindingId !== operation.bindingId || !/^[a-f0-9]{64}$/.test(candidate.operationFingerprint)) fail('REVIEW_DENIED');
+    throwIfAborted(signal);
+    if (binding.historyVersionId !== operation.baseVersionId
+      || binding.historyContentHash !== operation.baseContentHash) fail('REVIEW_VERSION_CONFLICT');
+    const snapshot = Object.freeze({ versionId: binding.historyVersionId, contentHash: binding.historyContentHash });
+    const expectedBinding = Object.freeze({ ...binding, sealed: Buffer.from(binding.sealed) });
+    return guardHistoryDisclosure({
+      info: context.info,
+      directory: context.directory,
+      eventId: context.eventId,
+      eventKey: context.eventKey,
+      actorId: context.actorId,
+      request,
+      action: context.action,
+      field: context.field,
+      snapshot,
+      value: binding,
+      details: {
+        bindingOperationId: operation.operationId,
+        bindingOperationFence: operation.fence,
+        bindingOperationPhase: 'complete',
+        bindingId: operation.bindingId,
+        cacheVersion: binding.cacheVersion,
+      },
+      expiresAtMs: binding.expiresAtMs,
+      signal,
+      verify(database, time) {
+        throwIfAborted(signal);
+        const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(context.eventKey);
+        const receipt = database.prepare(`SELECT * FROM correction_cache_operations
+          WHERE event_key = ? AND operation_id = ?`).get(context.eventKey, operation.operationId);
+        const state = database.prepare(`SELECT phase FROM correction_cache_state WHERE event_key = ?`)
+          .get(context.eventKey);
+        const row = database.prepare(`SELECT * FROM correction_cache_bindings
+          WHERE event_key = ? AND binding_hash = ?`).get(context.eventKey, expectedBinding.bindingHash);
+        const reference = database.prepare(`SELECT * FROM downstream_references
+          WHERE event_key = ? AND reference_hash = ?`).get(context.eventKey, expectedBinding.referenceHash);
+        if (!head || head.state !== 'available' || head.version_id !== binding.historyVersionId
+          || head.content_hash !== binding.historyContentHash || head.expires_at_ms <= time.effectiveNow
+          || !receipt || receipt.operation_id !== operation.operationId || receipt.binding_id !== operation.bindingId
+          || receipt.operation_hash !== candidate.operationHash || receipt.fingerprint !== candidate.operationFingerprint
+          || receipt.kind !== 'bind' || receipt.phase !== 'complete' || receipt.fence !== operation.fence
+          || receipt.base_version_id !== operation.baseVersionId || receipt.base_content_hash !== operation.baseContentHash
+          || receipt.target_version_id !== binding.historyVersionId
+          || receipt.target_content_hash !== binding.historyContentHash
+          || (state && state.phase !== 'complete')
+          || !row || row.bound_version_id !== binding.historyVersionId
+          || row.bound_content_hash !== binding.historyContentHash || row.expires_at_ms !== binding.expiresAtMs
+          || row.last_invalidation_operation_id !== null || row.last_invalidation_target_version_id !== null
+          || row.last_invalidation_target_hash !== null || !Buffer.from(row.sealed).equals(expectedBinding.sealed)
+          || !reference || reference.bound_version_id !== binding.historyVersionId
+          || reference.bound_content_hash !== binding.historyContentHash
+          || time.effectiveNow >= binding.expiresAtMs) fail('REVIEW_VERSION_CONFLICT');
+        if (cacheCheck(time.effectiveNow) !== true) fail('REVIEW_VERSION_CONFLICT');
+      },
+    });
+  }
+
   async function markBindingInvalidated(context, operation, binding) {
     await withBindingTransaction(context.info, context.directory, (database, time) => {
       const state = database.prepare('SELECT * FROM correction_cache_state WHERE event_key = ?').get(context.eventKey);
@@ -3698,6 +3775,7 @@ function bindingHistoryReservationBytes(context, operationId, bindingId, head, n
       bindingApplyHistoryOperation(context, operation, input, request, signal, planToken),
     addCacheProfile: bindingAddCacheProfile,
     bindings: bindingRows,
+    finalizeBindDisclosure,
     markInvalidated: markBindingInvalidated,
     finishOperation: finishBindingOperation,
     prepareFence: prepareBindingFence,

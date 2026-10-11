@@ -209,6 +209,21 @@ function cacheDatabasePath(root) {
   return path.join(root, 'cache', 'scoped-reuse.sqlite');
 }
 
+function boundCacheRows(root) {
+  const database = new DatabaseSync(cacheDatabasePath(root));
+  try {
+    const read = (table, order = 'rowid') => database.prepare(`SELECT * FROM ${table} ORDER BY ${order}`).all();
+    return Object.freeze({
+      entries: read('reuse_entries'),
+      writes: read('reuse_bound_writes'),
+      reservations: read('reuse_correction_reservations'),
+      consumers: read('reuse_consumer_refs', 'entry_id, consumer_hash'),
+      observations: read('reuse_observations', 'entry_id, sequence'),
+      outbox: read('reuse_outbox'),
+    });
+  } finally { database.close(); }
+}
+
 function assertNoPendingBinding(root) {
   const database = new DatabaseSync(historyDatabasePath(root));
   try {
@@ -1838,6 +1853,320 @@ test('completed exact bind replay at exhausted cache capacity awaits history val
       bindings: finalHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count,
     }, beforeCounts);
   } finally { finalCache.close(); finalHistory.close(); }
+});
+
+test('exact bind replay preserves original freshness and hard expiry after elapsed time', async (t) => {
+  for (const phase of ['complete', 'pending']) {
+    await t.test(`${phase} receipt`, async (subtest) => {
+      let f;
+      let denyReference = false;
+      let observationCalls = 0;
+      f = await fixture(subtest, {
+        cache: {
+          verifySourceObservation({ expectedContentHash }) {
+            observationCalls += 1;
+            return { status: 'body_changed', contentHash: expectedContentHash,
+              retrievedAt: new Date(EPOCH - 1_000).toISOString(),
+              validatedAt: new Date(EPOCH).toISOString(), attemptLineage: { status: 'unknown' } };
+          },
+        },
+        history: {
+          authorizeBoundary(input) {
+            if (denyReference && input.action === 'review.history.cache_bind_reference') {
+              denyReference = false;
+              return false;
+            }
+            const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+              && input.request?.principal?.tenantId === input.tenantId
+              && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+            return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+              eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+          },
+        },
+      });
+      const seeded = await createSeed(f);
+      const input = { idempotencyKey: `elapsed-bind-replay-${phase}`, profile: cacheProfile() };
+      if (phase === 'pending') {
+        denyReference = true;
+        await assert.rejects(f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest),
+          (error) => error?.code === 'REVIEW_DENIED');
+      } else {
+        const bound = await f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest);
+        assert.equal(bound.status, 'bound');
+      }
+      assert.equal(observationCalls, 1);
+      const cacheBeforeReplay = boundCacheRows(f.root);
+
+      f.clock.value = EPOCH + 16_000;
+      const reopened = f.makeStore();
+      const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+      const replay = await reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+      assert.equal(replay.status, 'bound');
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.historyVersionId, seeded.snapshot.versionId);
+      assert.equal(replay.expiresAt, new Date(EPOCH + 45_000).toISOString());
+      assert.equal(observationCalls, 1, 'an exact receipt replay does not replace the original source observation');
+      assert.deepEqual(boundCacheRows(f.root), cacheBeforeReplay,
+        'completed replay and pending recovery do not allocate cache rows or change the captured freshness deadline');
+
+      f.clock.value = EPOCH + 31_000;
+      const staleReplay = await reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+      assert.equal(staleReplay.status, 'bound');
+      assert.equal(staleReplay.replayed, true);
+      assert.equal(staleReplay.expiresAt, new Date(EPOCH + 45_000).toISOString(),
+        'metadata replay keeps the original absolute expiry after freshness has elapsed');
+      assert.equal(Object.hasOwn(staleReplay, 'facts'), false);
+      const staleProfile = await reopened.getPrivateProfile(scope, EVENT_ID, f.authRequest, lookup());
+      assert.equal(staleProfile.status, 'stale');
+      assert.equal(staleProfile.reason, 'ttl_expired');
+      assert.equal(Object.hasOwn(staleProfile, 'facts'), false,
+        'ordinary lookup does not disclose stale facts or renew freshness');
+      assert.equal(observationCalls, 1);
+
+      const cacheBeforeHardExpiry = boundCacheRows(f.root);
+      f.clock.value = EPOCH + 45_000;
+      await assert.rejects(reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest),
+        (error) => error?.code === 'REUSE_POLICY_UNAVAILABLE');
+      assert.deepEqual(boundCacheRows(f.root), cacheBeforeHardExpiry,
+        'hard-expired replay fails closed without recreating or rewriting the original cache effect');
+    });
+  }
+});
+
+test('exact bound replay uses retained envelope keys after payload-key rotation', async (t) => {
+  for (const phase of ['complete', 'pending']) {
+    await t.test(`${phase} receipt`, async (subtest) => {
+      const originalKeyId = 'r11-bind-key';
+      const rotatedKeyId = '\u0000'.repeat(128);
+      const originalKey = createHash('sha256').update('r11 retained bound payload key').digest();
+      const rotatedKey = createHash('sha256').update('r11 unrelated current payload key').digest();
+      let f;
+      let denyReference = false;
+      let activeKeyId = originalKeyId;
+      let originalAvailable = true;
+      let consumerResolutionCalls = 0;
+      let observationCalls = 0;
+      f = await fixture(subtest, {
+        cache: {
+          resolveInvalidationConsumers() {
+            consumerResolutionCalls += 1;
+            return ['é'.repeat(300)];
+          },
+          resolveKey({ tenantId, scope, purpose, keyId }) {
+            if (purpose === 'payload') {
+              const resolvedId = keyId ?? activeKeyId;
+              if (resolvedId === originalKeyId && originalAvailable) return { keyId: originalKeyId, key: Buffer.from(originalKey) };
+              if (resolvedId === rotatedKeyId) return { keyId: rotatedKeyId, key: Buffer.from(rotatedKey) };
+              throw new Error('synthetic retained payload key unavailable');
+            }
+            const resolvedId = `${scope}:${purpose}:${tenantId ?? 'global'}:v1`;
+            if (keyId && keyId !== resolvedId) throw new Error('synthetic non-payload key unavailable');
+            return { keyId: resolvedId,
+              key: createHash('sha256').update(`${tenantId}:${scope}:${purpose}:r11-cache-key`).digest() };
+          },
+          verifySourceObservation({ expectedContentHash }) {
+            observationCalls += 1;
+            return { status: 'body_changed', contentHash: expectedContentHash,
+              retrievedAt: new Date(EPOCH - 1_000).toISOString(),
+              validatedAt: new Date(EPOCH).toISOString(), attemptLineage: { status: 'unknown' } };
+          },
+        },
+        history: {
+          authorizeBoundary(input) {
+            if (denyReference && input.action === 'review.history.cache_bind_reference') {
+              denyReference = false;
+              return false;
+            }
+            const allowed = input.request?.serverContextToken === TRUSTED_TOKEN
+              && input.request?.principal?.tenantId === input.tenantId
+              && input.request?.principal?.actorId === input.actorId && input.actorId !== 'outsider';
+            return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+              eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+          },
+        },
+      });
+      await createSeed(f);
+      const input = { idempotencyKey: `rotated-bound-replay-${phase}`, profile: cacheProfile() };
+      if (phase === 'pending') {
+        denyReference = true;
+        await assert.rejects(f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest),
+          (error) => error?.code === 'REVIEW_DENIED');
+      } else {
+        assert.equal((await f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest)).status, 'bound');
+      }
+      assert.equal(consumerResolutionCalls, 1);
+      assert.equal(observationCalls, 1);
+      const rowsBeforeReplay = boundCacheRows(f.root);
+
+      activeKeyId = rotatedKeyId;
+      const reopened = f.makeStore();
+      const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+      const replay = await reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+      assert.equal(replay.status, 'bound');
+      assert.equal(replay.replayed, true);
+      assert.equal(consumerResolutionCalls, 1, 'replay does not resolve or size a new consumer envelope');
+      assert.equal(observationCalls, 1, 'replay does not replace the stored observation');
+      assert.deepEqual(boundCacheRows(f.root), rowsBeforeReplay,
+        'the retained receipt is read under its recorded key without a new cache envelope or allocation');
+
+      originalAvailable = false;
+      const rowsBeforeMissingKey = boundCacheRows(f.root);
+      await assert.rejects(reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest),
+        (error) => error?.code === 'REUSE_KEY_UNAVAILABLE');
+      assert.deepEqual(boundCacheRows(f.root), rowsBeforeMissingKey,
+        'loss of the retained key fails closed without falling back to the new current key');
+      originalAvailable = true;
+      assert.equal((await reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest)).replayed, true);
+    });
+  }
+});
+
+test('exact replay preserves an omitted TTL default and rejects changed replay inputs', async (t) => {
+  let observationCalls = 0;
+  const f = await fixture(t, {
+    cache: {
+      defaultFreshnessTtlMs: 30_000,
+      verifySourceObservation({ expectedContentHash }) {
+        observationCalls += 1;
+        return { status: 'body_changed', contentHash: expectedContentHash,
+          retrievedAt: new Date(EPOCH - 1_000).toISOString(),
+          validatedAt: new Date(EPOCH).toISOString(), attemptLineage: { status: 'unknown' } };
+      },
+    },
+  });
+  await createSeed(f);
+  const profile = { ...cacheProfile() };
+  delete profile.freshnessTtlMs;
+  const input = { idempotencyKey: 'omitted-ttl-default-replay', profile };
+  const original = await f.store.bindPrivateProfile(f.scope, EVENT_ID, input, f.authRequest);
+  assert.equal(original.status, 'bound');
+  assert.equal(observationCalls, 1);
+  const rowsBeforeReplay = boundCacheRows(f.root);
+
+  f.cacheOptions.defaultFreshnessTtlMs = 40_000;
+  f.clock.value = EPOCH + 16_000;
+  const reopened = f.makeStore();
+  const scope = await reopened.scopeForAuthenticatedRequest(f.authRequest);
+  const replay = await reopened.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.expiresAt, new Date(EPOCH + 45_000).toISOString());
+  assert.equal(observationCalls, 1, 'receipt replay does not consult a changed default or re-run validation');
+  assert.deepEqual(boundCacheRows(f.root), rowsBeforeReplay);
+
+  const changedTtl = { ...cacheProfile(), freshnessTtlMs: 29_000 };
+  await assert.rejects(reopened.bindPrivateProfile(scope, EVENT_ID,
+    { idempotencyKey: input.idempotencyKey, profile: changedTtl }, f.authRequest),
+  (error) => error?.code === 'REVIEW_IDEMPOTENCY_CONFLICT');
+  const changedObservation = { ...profile, observation: { source: 'different caller observation' } };
+  await assert.rejects(reopened.bindPrivateProfile(scope, EVENT_ID,
+    { idempotencyKey: input.idempotencyKey, profile: changedObservation }, f.authRequest),
+  (error) => error?.code === 'REVIEW_IDEMPOTENCY_CONFLICT');
+  assert.equal(observationCalls, 1);
+  assert.deepEqual(boundCacheRows(f.root), rowsBeforeReplay,
+    'changed TTL or observation inputs cannot overwrite the original receipt or freshness window');
+
+  f.clock.value = EPOCH + 31_000;
+  const stale = await reopened.getPrivateProfile(scope, EVENT_ID, f.authRequest, lookup());
+  assert.equal(stale.status, 'stale');
+  assert.equal(stale.reason, 'ttl_expired');
+  assert.equal(Object.hasOwn(stale, 'facts'), false);
+});
+
+test('completed exact bind replay rechecks authority, head, abort, and cache proof after awaited key resolution', async (t) => {
+  for (const scenario of ['history authority', 'history head', 'cache proof', 'abort']) {
+    await t.test(scenario, async (subtest) => {
+      let f;
+      let historyAllowed = true;
+      let armed = false;
+      let resolverReached = 0;
+      let mutation;
+      let rowsAfterMutation;
+      let tamperCacheAtFinalGuard = false;
+      const controller = new AbortController();
+      const baseHistory = ({ tenantId, actorId, action, request: value }) => value?.serverContextToken === TRUSTED_TOKEN
+        && value?.principal?.tenantId === tenantId && value?.principal?.actorId === actorId && actorId !== 'outsider';
+      const historyOptions = {
+        authorizeBoundary(input) {
+          if (tamperCacheAtFinalGuard && input.action === 'private_profile.read') {
+            tamperCacheAtFinalGuard = false;
+            const historyDatabase = new DatabaseSync(historyDatabasePath(f.root));
+            const cacheDatabase = new DatabaseSync(cacheDatabasePath(f.root));
+            try {
+              historyDatabase.exec('BEGIN IMMEDIATE');
+              historyDatabase.exec('ROLLBACK');
+              cacheDatabase.prepare('UPDATE reuse_entries SET eligible = 0 WHERE binding_hash IS NOT NULL').run();
+            } finally { historyDatabase.close(); cacheDatabase.close(); }
+            rowsAfterMutation = boundCacheRows(f.root);
+          }
+          if (!historyAllowed) return false;
+          const allowed = baseHistory({ tenantId: input.tenantId, actorId: input.actorId, request: input.request });
+          return allowed ? Object.freeze({ authorized: true, tenantId: input.tenantId, actorId: input.actorId,
+            eventId: input.eventId, action: input.action, field: input.field, nowMs: f.clock.value }) : false;
+        },
+      };
+      f = await fixture(subtest, { history: historyOptions });
+      const originalHistoryResolver = f.historyOptions.resolveKey;
+      f.historyOptions.resolveKey = async (input) => {
+        const value = originalHistoryResolver(input);
+        if (armed && input.purpose === 'correction_payload' && input.keyId) {
+          resolverReached += 1;
+          if (resolverReached === 2) {
+            armed = false;
+            if (scenario === 'cache proof') tamperCacheAtFinalGuard = true;
+            await mutation();
+          }
+        }
+        return value;
+      };
+      const store = f.makeStore();
+      const scope = await store.scopeForAuthenticatedRequest(f.authRequest);
+      const seeded = await store.createHistory(scope, { eventId: EVENT_ID, sourceFacts: initialFacts(),
+        idempotencyKey: 'initialize-late-bound-replay', retentionHandle: f.createPermit() }, f.authRequest);
+      const input = { idempotencyKey: `late-bound-replay-${scenario.replaceAll(' ', '-')}`, profile: cacheProfile() };
+      await store.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+      const rowsBeforeReplay = boundCacheRows(f.root);
+      mutation = async () => {
+        if (scenario === 'history authority') historyAllowed = false;
+        else if (scenario === 'abort') controller.abort();
+        else await store.applyCorrection(scope, {
+          eventId: EVENT_ID,
+          baseVersionId: seeded.snapshot.versionId,
+          baseContentHash: seeded.snapshot.contentHash,
+          field: 'event_date',
+          value: { precision: 'date', value: '2027-06-30' },
+          idempotencyKey: 'late-bound-replay-head-advance',
+          retentionHandle: f.createPermit(),
+        }, f.authRequest);
+        if (scenario === 'history head') rowsAfterMutation = boundCacheRows(f.root);
+      };
+      if (scenario === 'cache proof') mutation = async () => {};
+      armed = true;
+      const callOptions = scenario === 'abort' ? { signal: controller.signal } : undefined;
+      await assert.rejects(store.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest, callOptions),
+        (error) => scenario === 'abort'
+          ? error?.code === 'REVIEW_ABORTED'
+          : scenario === 'history authority'
+            ? error?.code === 'REVIEW_DENIED'
+            : scenario === 'history head'
+              ? ['REUSE_INTEGRITY', 'REVIEW_VERSION_CONFLICT', 'REVIEW_BUSY'].includes(error?.code)
+              : scenario === 'cache proof'
+                ? ['REUSE_BUSY', 'REUSE_INTEGRITY', 'REUSE_POLICY_UNAVAILABLE', 'REVIEW_VERSION_CONFLICT'].includes(error?.code)
+                : false);
+      assert.equal(resolverReached, 2, 'the controlled change occurs during the second recorded binding-key resolution');
+      assert.deepEqual(boundCacheRows(f.root), rowsAfterMutation ?? rowsBeforeReplay,
+        'late denial or abort does not allocate a second cache effect');
+      if (scenario === 'history head') {
+        assert.equal((await store.getHistory(scope, EVENT_ID, f.authRequest)).revision, 2);
+        assert.deepEqual(await store.getPrivateProfile(scope, EVENT_ID, f.authRequest, lookup()), { status: 'miss' });
+      } else if (scenario !== 'cache proof') {
+        if (scenario === 'history authority') historyAllowed = true;
+        const replay = await store.bindPrivateProfile(scope, EVENT_ID, input, f.authRequest);
+        assert.equal(replay.status, 'bound');
+        assert.equal(replay.replayed, true);
+        assert.deepEqual(boundCacheRows(f.root), rowsBeforeReplay);
+      }
+    });
+  }
 });
 
 test('composed correction waits out a real cross-process SQLite writer lock', async (t) => {
