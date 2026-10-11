@@ -2748,6 +2748,171 @@ test('remote cancellation bounds a never-resolving retention callback and ignore
   assert.equal(ingestCalls, 0, 'the late handle is not used to write private evidence after cancellation');
 });
 
+test('a stop before the first admission keeps the lease cancellation reason', { timeout: 8_000 }, async (t) => {
+  let bindingStarted;
+  const candidateBindingStarted = new Promise((resolve) => { bindingStarted = resolve; });
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    getCandidateReceiptBinding: async () => {
+      bindingStarted();
+      return new Promise(() => {});
+    },
+  });
+  const runId = 'private-cancel-before-admission';
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    seeds: [{ url: sourceUrl('/cancel-before-admission') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1 },
+  }));
+  await candidateBindingStarted;
+  await runStopWorker(h.frontierDirectory, runId);
+  const result = await running;
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.draft, null);
+  assert.equal(requestCount, 0);
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].unresolvedReason, 'cancelled_before_dispatch');
+  assert.equal(snapshot.candidates[0].admittedAttemptCount, 0);
+  assert.equal(snapshot.counters.transportAttemptAdmissions, 0);
+  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'cancelled'));
+});
+
+test('a denied first admission keeps the lease cancellation reason without recording admission', async (t) => {
+  let deniedAdmissionCalls = 0;
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    admitTransportHop: async () => {
+      deniedAdmissionCalls += 1;
+      return { state: 'denied', reason: 'decoded_budget' };
+    },
+  });
+  const runId = 'private-budget-denied-before-admission';
+  const result = await runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    seeds: [{ url: sourceUrl('/budget-denied-before-admission') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1 },
+  }));
+  assert.equal(result.draft, null);
+  assert.equal(requestCount, 0);
+  assert.equal(deniedAdmissionCalls, 1);
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].unresolvedReason, 'cancelled_before_dispatch');
+  assert.equal(snapshot.candidates[0].admittedAttemptCount, 0);
+  assert.equal(snapshot.counters.transportAttemptAdmissions, 0);
+  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'budget_denied'));
+});
+
+test('a stop after admission commit but before its result is observed preserves unknown transport state', { timeout: 8_000 }, async (t) => {
+  let admissionCommitted;
+  const admissionWasCommitted = new Promise((resolve) => { admissionCommitted = resolve; });
+  let requestCount = 0;
+  let ingestCalls = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const store = Object.create(null);
+  let beginReceiptCalls = 0;
+  let finalizeReceiptCalls = 0;
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
+    'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+  ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
+  store.beginPrivateRunReceipt = async (...args) => {
+    beginReceiptCalls += 1;
+    return h.evidenceStore.beginPrivateRunReceipt(...args);
+  };
+  store.finalizePrivateRunReceipt = async (...args) => {
+    finalizeReceiptCalls += 1;
+    return h.evidenceStore.finalizePrivateRunReceipt(...args);
+  };
+  store.ingestEvidence = async (...args) => {
+    ingestCalls += 1;
+    return h.evidenceStore.ingestEvidence(...args);
+  };
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    admitTransportHop: async (...args) => {
+      const admission = await h.frontier.admitTransportHop(...args);
+      assert.equal(admission.state, 'admitted');
+      admissionCommitted();
+      const signal = args[3];
+      await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+      return admission;
+    },
+  });
+  const runId = 'private-cancel-after-admission-commit';
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    store,
+    seeds: [{ url: sourceUrl('/cancel-after-admission-commit') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1 },
+  }));
+  await admissionWasCommitted;
+  await runStopWorker(h.frontierDirectory, runId);
+  const result = await running;
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.draft, null);
+  assert.equal(requestCount, 0, 'an admission without an observed result does not reach the network');
+  assert.equal(ingestCalls, 0);
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(snapshot.candidates[0].admittedAttemptCount, 1);
+  assert.equal(snapshot.counters.transportAttemptAdmissions, 1);
+  assert.equal(beginReceiptCalls, 1);
+  assert.equal(finalizeReceiptCalls, 0);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.ok(transport.reservedBytes > 0,
+    'the interrupted admission keeps its conservative reservation rather than inventing a refund');
+  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'cancelled'));
+  const restarted = h.openFrontier();
+  const restartedScope = await restarted.scopeForAuthenticatedRequest(request());
+  const reopened = await restarted.getSnapshot(restartedScope, runId);
+  assert.equal(reopened.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(reopened.candidates[0].admittedAttemptCount, 1);
+  const repeated = await runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier: restarted,
+    store,
+    seeds: [{ url: sourceUrl('/cancel-after-admission-commit') }],
+    limits: { maxDepth: 0, maxTransportAttemptAdmissions: 1 },
+  }));
+  assert.equal(repeated.draft, null);
+  assert.equal(requestCount, 0, 'reopening and retrying cannot redispatch an uncertain admitted request');
+  assert.equal(ingestCalls, 0);
+  assert.equal(beginReceiptCalls, 1, 'the restart does not begin another receipt for the unresolved candidate');
+  assert.equal(finalizeReceiptCalls, 0, 'the interrupted receipt is not finalized by the restart');
+  const afterRestart = await restarted.getSnapshot(restartedScope, runId);
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(afterRestart.candidates[0].admittedAttemptCount, 1);
+  const transportAfterRestart = await restarted.getTransportProgress(restartedScope, runId);
+  assert.equal(transportAfterRestart.reservedBytes, transport.reservedBytes);
+});
+
 test('the whole-run deadline bounds a never-resolving final retention callback after the last admission', { timeout: 10_000 }, async (t) => {
   const runDurationMs = 5_000;
   const settlementReturnLeadMs = 1_250;
@@ -2979,6 +3144,342 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
   assert.equal(reopened.deadlineAtMs, persistedDeadlineAtMs, 'reopening preserves the original absolute deadline');
   assert.equal(reopened.candidates[0].state, 'unresolved');
   assert.ok(reopened.stopReasons.some((entry) => entry.reason === 'deadline'));
+});
+
+test('the whole-run deadline bounds a never-resolving final retention callback under SQLite contention after the last admission', { timeout: 10_000 }, async (t) => {
+  const runDurationMs = 5_000;
+  const settlementReturnLeadMs = 1_250;
+  const maximumMappingWidthMs = 25;
+  let retentionStarted;
+  let resolveRetention;
+  const retentionCallbackStarted = new Promise((resolve) => { retentionStarted = resolve; });
+  const pendingRetention = new Promise((resolve) => { resolveRetention = resolve; });
+  let requestCount = 0;
+  let tcpConnectionCount = 0;
+  let persistedDeadlineAtMs;
+  let persistedDeadlineMapPerfBeforeMs;
+  let persistedDeadlineWallSampleAtMs;
+  let persistedDeadlineMapPerfAfterMs;
+  let persistedDeadlineLowerPerfMs;
+  let persistedDeadlineUpperPerfMs;
+  let runEntryPerfBeforeMs;
+  let runEntryPerfAfterMs;
+  let runEntryDeadlineLowerPerfMs;
+  let runEntryDeadlineUpperPerfMs;
+  let effectiveDeadlineLowerPerfMs;
+  let effectiveDeadlineUpperPerfMs;
+  let requestReceivedAtPerfMs;
+  let settlementReturnTargetPerfMs;
+  let responseStartedAtPerfMs;
+  let responseFinishedAtPerfMs;
+  let bodySettledAtPerfMs;
+  let settlementWrapperReturnAtPerfMs;
+  let retentionCallbackStartedAtPerfMs;
+  let runReturnedAtPerfMs;
+  let retentionCalls = 0;
+  let frontierLock;
+  let lockReleaseTimer;
+  let lockStartedAtPerfMs;
+  let lockReleasedAtPerfMs;
+  let resolveLockReleased;
+  const lockReleased = new Promise((resolve) => { resolveLockReleased = resolve; });
+  const cleanupTrace = [];
+  const server = await startFixture(async (_request, response) => {
+    requestCount += 1;
+    requestReceivedAtPerfMs = performance.now();
+    if (!Number.isFinite(effectiveDeadlineLowerPerfMs)) {
+      response.destroy();
+      return;
+    }
+    responseStartedAtPerfMs = performance.now();
+    response.once('finish', () => { responseFinishedAtPerfMs = performance.now(); });
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  server.server.on('connection', () => { tcpConnectionCount += 1; });
+  t.after(() => server.close());
+  const h = await harness(t);
+  t.after(() => {
+    if (lockReleaseTimer) clearTimeout(lockReleaseTimer);
+    try { frontierLock?.exec('ROLLBACK'); } catch { /* The release timer may already have rolled it back. */ }
+    try { frontierLock?.close(); } catch { /* Keep cleanup idempotent. */ }
+  });
+  let ingestCalls = 0;
+  let beginReceiptCalls = 0;
+  let finalizeReceiptCalls = 0;
+  const store = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
+    'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+  ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
+  store.beginPrivateRunReceipt = async (...args) => {
+    beginReceiptCalls += 1;
+    return h.evidenceStore.beginPrivateRunReceipt(...args);
+  };
+  store.finalizePrivateRunReceipt = async (...args) => {
+    finalizeReceiptCalls += 1;
+    return h.evidenceStore.finalizePrivateRunReceipt(...args);
+  };
+  store.ingestEvidence = async (...args) => {
+    ingestCalls += 1;
+    return h.evidenceStore.ingestEvidence(...args);
+  };
+  const runId = 'private-deadline-retention';
+  // Keep cold tenant schema creation outside the run budget; this case targets
+  // the stalled retention callback after a real response body has settled.
+  await h.evidenceStore.integritySnapshot(h.evidenceScope);
+  await assert.rejects(h.frontier.getSnapshot(h.scope, runId), (error) => error?.code === 'FRONTIER_NOT_FOUND');
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    createRun: async (...args) => {
+      const created = await h.frontier.createRun(...args);
+      persistedDeadlineAtMs = created.deadlineAtMs;
+      persistedDeadlineMapPerfBeforeMs = performance.now();
+      persistedDeadlineWallSampleAtMs = Date.now();
+      persistedDeadlineMapPerfAfterMs = performance.now();
+      // Date.now() is millisecond-granular. Include its full quantization
+      // interval rather than treating either sampled endpoint as exact.
+      persistedDeadlineLowerPerfMs = persistedDeadlineMapPerfBeforeMs
+        + (persistedDeadlineAtMs - persistedDeadlineWallSampleAtMs - 1);
+      persistedDeadlineUpperPerfMs = persistedDeadlineMapPerfAfterMs
+        + (persistedDeadlineAtMs - persistedDeadlineWallSampleAtMs + 1);
+      effectiveDeadlineLowerPerfMs = Math.min(runEntryDeadlineLowerPerfMs, persistedDeadlineLowerPerfMs);
+      effectiveDeadlineUpperPerfMs = Math.min(runEntryDeadlineUpperPerfMs, persistedDeadlineUpperPerfMs);
+      return created;
+    },
+    settleTransportHopBodyComplete: async (...args) => {
+      const settled = await h.frontier.settleTransportHopBodyComplete(...args);
+      bodySettledAtPerfMs = performance.now();
+      settlementReturnTargetPerfMs = effectiveDeadlineLowerPerfMs - settlementReturnLeadMs;
+      settlementWrapperReturnAtPerfMs = await waitUntilPerfAtOrAfter(settlementReturnTargetPerfMs);
+      return settled;
+    },
+    markUnresolved: async (...args) => {
+      const reason = args[2]?.reason;
+      cleanupTrace.push({ method: 'markUnresolved', phase: 'start', reason, atPerfMs: performance.now() });
+      try {
+        const result = await h.frontier.markUnresolved(...args);
+        cleanupTrace.push({ method: 'markUnresolved', phase: 'success', reason, atPerfMs: performance.now() });
+        return result;
+      } catch (error) {
+        cleanupTrace.push({ method: 'markUnresolved', phase: 'error', reason,
+          code: error?.code ?? null, atPerfMs: performance.now() });
+        throw error;
+      }
+    },
+    stopRun: async (...args) => {
+      const reason = args[2];
+      cleanupTrace.push({ method: 'stopRun', phase: 'start', reason, atPerfMs: performance.now() });
+      try {
+        const result = await h.frontier.stopRun(...args);
+        cleanupTrace.push({ method: 'stopRun', phase: 'success', reason, atPerfMs: performance.now() });
+        return result;
+      } catch (error) {
+        cleanupTrace.push({ method: 'stopRun', phase: 'error', reason,
+          code: error?.code ?? null, atPerfMs: performance.now() });
+        throw error;
+      }
+    },
+  });
+  runEntryPerfBeforeMs = performance.now();
+  const running = runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier,
+    seeds: [{ url: sourceUrl('/event') }],
+    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: runDurationMs },
+    store,
+    retentionHandleFor() {
+      retentionCalls += 1;
+      retentionCallbackStartedAtPerfMs = performance.now();
+      if (!frontierLock) {
+        const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+        frontierLock = new DatabaseSync(path.join(h.frontierDirectory, tenantHash, 'frontier.sqlite'), { timeout: 0 });
+        frontierLock.exec('BEGIN IMMEDIATE');
+        lockStartedAtPerfMs = performance.now();
+        const releaseDelayMs = Math.max(0, effectiveDeadlineLowerPerfMs - performance.now() + 350);
+        lockReleaseTimer = setTimeout(() => {
+          try { frontierLock.exec('ROLLBACK'); } catch { /* Test teardown also releases on failure. */ }
+          try { frontierLock.close(); } catch { /* The test teardown remains idempotent. */ }
+          lockReleasedAtPerfMs = performance.now();
+          resolveLockReleased();
+        }, releaseDelayMs);
+      }
+      retentionStarted();
+      return pendingRetention;
+    },
+  }));
+  runEntryPerfAfterMs = performance.now();
+  runEntryDeadlineLowerPerfMs = runEntryPerfBeforeMs + runDurationMs;
+  runEntryDeadlineUpperPerfMs = runEntryPerfAfterMs + runDurationMs;
+  const runOutcome = running.then(
+    (result) => ({ kind: 'returned', result }),
+    (error) => ({ kind: 'rejected', error }),
+  );
+  const phase = await Promise.race([
+    retentionCallbackStarted.then(() => ({ kind: 'retention-callback-started' })),
+    runOutcome,
+  ]);
+  if (phase.kind !== 'retention-callback-started') {
+    const outcome = phase.kind === 'returned'
+      ? JSON.stringify({ status: phase.result.status, limitations: phase.result.limitations })
+      : String(phase.error);
+    assert.fail(`run ended before final retention callback; diagnostics=${JSON.stringify({
+      outcome,
+      ingestCalls,
+      tcpConnectionCount,
+      requestCount,
+      runEntryPerfBeforeMs,
+      runEntryPerfAfterMs,
+      persistedDeadlineAtMs: persistedDeadlineAtMs ?? null,
+      effectiveDeadlineLowerPerfMs: effectiveDeadlineLowerPerfMs ?? null,
+      effectiveDeadlineUpperPerfMs: effectiveDeadlineUpperPerfMs ?? null,
+      requestReceivedAtPerfMs: requestReceivedAtPerfMs ?? null,
+      settlementReturnTargetPerfMs: settlementReturnTargetPerfMs ?? null,
+      responseStartedAtPerfMs: responseStartedAtPerfMs ?? null,
+      bodySettledAtPerfMs: bodySettledAtPerfMs ?? null,
+      settlementWrapperReturnAtPerfMs: settlementWrapperReturnAtPerfMs ?? null,
+    })}`);
+  }
+  const remainingAtRetentionCallbackMs = effectiveDeadlineLowerPerfMs - retentionCallbackStartedAtPerfMs;
+  const remainingAtRequestMs = effectiveDeadlineLowerPerfMs - requestReceivedAtPerfMs;
+  const diagnostics = () => ({
+    runDurationMs,
+    settlementReturnLeadMs,
+    tcpConnectionCount,
+    requestCount,
+    runEntryPerfBeforeMs,
+    runEntryPerfAfterMs,
+    runEntryBracketWidthMs: runEntryPerfAfterMs - runEntryPerfBeforeMs,
+    runEntryDeadlineLowerPerfMs,
+    runEntryDeadlineUpperPerfMs,
+    persistedDeadlineAtMs,
+    persistedDeadlineMapPerfBeforeMs,
+    persistedDeadlineWallSampleAtMs,
+    persistedDeadlineMapPerfAfterMs,
+    persistedDeadlineMapSampleWidthMs: persistedDeadlineMapPerfAfterMs - persistedDeadlineMapPerfBeforeMs,
+    persistedDeadlineLowerPerfMs,
+    persistedDeadlineUpperPerfMs,
+    persistedDeadlineMappedWidthMs: persistedDeadlineUpperPerfMs - persistedDeadlineLowerPerfMs,
+    effectiveDeadlineLowerPerfMs,
+    effectiveDeadlineUpperPerfMs,
+    effectiveDeadlineIntervalWidthMs: effectiveDeadlineUpperPerfMs - effectiveDeadlineLowerPerfMs,
+    requestReceivedAtPerfMs: requestReceivedAtPerfMs ?? null,
+    remainingAtRequestMs,
+    settlementReturnTargetPerfMs: settlementReturnTargetPerfMs ?? null,
+    responseStartedAtPerfMs: responseStartedAtPerfMs ?? null,
+    responseFinishedAtPerfMs: responseFinishedAtPerfMs ?? null,
+    bodySettledAtPerfMs: bodySettledAtPerfMs ?? null,
+    settlementWrapperReturnAtPerfMs: settlementWrapperReturnAtPerfMs ?? null,
+    retentionCallbackStartedAtPerfMs,
+    remainingAtRetentionCallbackMs,
+    retentionCalls,
+    lockStartedAtPerfMs: lockStartedAtPerfMs ?? null,
+    lockReleasedAtPerfMs: lockReleasedAtPerfMs ?? null,
+    cleanupTrace,
+    runReturnedAtPerfMs: runReturnedAtPerfMs ?? null,
+  });
+  t.diagnostic(JSON.stringify(diagnostics()));
+  assert.equal(tcpConnectionCount, 1, 'a real local TCP connection reached the fixture');
+  assert.equal(requestCount, 1, 'a real local HTTP request reached the fixture');
+  assert.ok(Number.isSafeInteger(persistedDeadlineAtMs), 'the frontier persisted its absolute deadline');
+  assert.ok(runEntryPerfAfterMs - runEntryPerfBeforeMs <= maximumMappingWidthMs,
+    'the monotonic run-entry sample interval is narrow and bounded');
+  assert.ok(persistedDeadlineMapPerfAfterMs - persistedDeadlineMapPerfBeforeMs <= maximumMappingWidthMs,
+    'the persisted wall-to-monotonic sample interval is narrow and bounded');
+  assert.ok(persistedDeadlineUpperPerfMs - persistedDeadlineLowerPerfMs <= maximumMappingWidthMs,
+    'the quantization-aware persisted deadline interval is narrow and bounded');
+  assert.ok(effectiveDeadlineLowerPerfMs <= effectiveDeadlineUpperPerfMs);
+  assert.ok(effectiveDeadlineUpperPerfMs - effectiveDeadlineLowerPerfMs <= maximumMappingWidthMs,
+    'the effective deadline interval is narrow and bounded');
+  assert.ok(remainingAtRequestMs > 500,
+    'the admitted real HTTP request reached the fixture with more than 500ms remaining');
+  assert.ok(responseStartedAtPerfMs >= requestReceivedAtPerfMs,
+    'the real HTTP response started after the admitted request reached the fixture');
+  assert.ok(responseFinishedAtPerfMs < settlementReturnTargetPerfMs,
+    'the real HTTP response finished before the test phase gate');
+  assert.ok(bodySettledAtPerfMs < settlementReturnTargetPerfMs,
+    'the real HTTP body settled durably before the test phase gate');
+  assert.ok(settlementWrapperReturnAtPerfMs >= settlementReturnTargetPerfMs,
+    'the test wrapper returned from real body settlement at the original absolute phase target');
+  assert.ok(settlementWrapperReturnAtPerfMs < retentionCallbackStartedAtPerfMs,
+    'the final retention callback begins only after the settlement wrapper returns');
+  assert.ok(bodySettledAtPerfMs < retentionCallbackStartedAtPerfMs,
+    'the admitted response body settled in the frontier before final retention began');
+  assert.ok(remainingAtRetentionCallbackMs >= 250 && remainingAtRetentionCallbackMs <= 1_500,
+    'final retention begins with a bounded, measured amount of the original deadline remaining');
+  assert.equal(retentionCalls, 1, 'the phase was reached by one final retention callback');
+
+  const result = await running;
+  runReturnedAtPerfMs = performance.now();
+  await lockReleased;
+  t.diagnostic(JSON.stringify(diagnostics()));
+  assert.ok(runReturnedAtPerfMs - retentionCallbackStartedAtPerfMs < 2_000,
+    'the whole-run deadline releases the stalled final retention callback promptly');
+  assert.ok(runReturnedAtPerfMs >= effectiveDeadlineLowerPerfMs - 100,
+    'the admitted run did not return before the conservative absolute deadline bound');
+  assert.ok(runReturnedAtPerfMs <= effectiveDeadlineUpperPerfMs + 2_000,
+    'cleanup returns within a bounded interval after the conservative absolute deadline bound');
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('deadline_exceeded'));
+  assert.equal(ingestCalls, 0);
+  assert.ok(lockStartedAtPerfMs >= retentionCallbackStartedAtPerfMs,
+    'the lock begins only after final retention starts');
+  assert.ok(lockReleasedAtPerfMs >= effectiveDeadlineLowerPerfMs + 300,
+    'the writer lock outlasts the first bounded cleanup attempt');
+  assert.ok(cleanupTrace.some((entry) => entry.method === 'markUnresolved'
+    && entry.phase === 'error' && entry.code === 'FRONTIER_STOPPED'),
+  'the first unresolved cleanup attempt reaches its existing abort bound under SQLite contention');
+  const unresolvedAttempts = cleanupTrace.filter((entry) => entry.method === 'markUnresolved');
+  assert.ok(unresolvedAttempts.length >= 2, 'a second cleanup attempt follows the bounded first attempt');
+  assert.ok(unresolvedAttempts.every((entry) => entry.reason === 'dispatch_state_unknown'),
+    'every cleanup attempt preserves the possible admission state');
+  assert.ok(unresolvedAttempts.some((entry) => entry.phase === 'success'),
+    'the repeated uncertainty resolution succeeds after the writer lock releases');
+  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshot.deadlineAtMs, persistedDeadlineAtMs, 'the persisted absolute deadline remains unchanged');
+  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'attempt_limit'));
+  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'deadline'));
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].admittedAttemptCount, 1);
+  assert.equal(snapshot.counters.transportAttemptAdmissions, 1);
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0, 'the complete response was settled before retention paused');
+  assert.ok(transport.spentBytes > 0);
+  resolveRetention(h.createRetention());
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ingestCalls, 0, 'a late retention result cannot write evidence after the deadline');
+  const restarted = h.openFrontier();
+  const restartedScope = await restarted.scopeForAuthenticatedRequest(request());
+  const reopened = await restarted.getSnapshot(restartedScope, runId);
+  assert.equal(reopened.deadlineAtMs, persistedDeadlineAtMs, 'reopening preserves the original absolute deadline');
+  assert.equal(reopened.candidates[0].state, 'unresolved');
+  assert.equal(reopened.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(reopened.candidates[0].admittedAttemptCount, 1);
+  const reopenedTransport = await restarted.getTransportProgress(restartedScope, runId);
+  assert.equal(reopenedTransport.reservedBytes, 0);
+  assert.ok(reopened.stopReasons.some((entry) => entry.reason === 'deadline'));
+  assert.equal(beginReceiptCalls, 1);
+  assert.equal(finalizeReceiptCalls, 0);
+  const repeated = await runPrivateRetrieval(h.makeInput({
+    runId,
+    server,
+    frontier: restarted,
+    store,
+    seeds: [{ url: sourceUrl('/event') }],
+    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: runDurationMs },
+  }));
+  assert.equal(repeated.draft, null);
+  assert.equal(requestCount, 1, 'the restarted run cannot dispatch another HTTP request');
+  assert.equal(tcpConnectionCount, 1);
+  assert.equal(ingestCalls, 0);
+  assert.equal(beginReceiptCalls, 1, 'the restart does not begin another receipt for the unresolved candidate');
+  assert.equal(finalizeReceiptCalls, 0, 'the interrupted receipt is not finalized after restart');
+  const afterRestart = await restarted.getSnapshot(restartedScope, runId);
+  assert.equal(afterRestart.deadlineAtMs, persistedDeadlineAtMs);
+  assert.equal(afterRestart.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal(afterRestart.candidates[0].admittedAttemptCount, 1);
+  assert.equal((await restarted.getTransportProgress(restartedScope, runId)).reservedBytes, 0);
 });
 
 test('a delayed createRun cannot create a durable run after timeout or dispatch late', { timeout: 8_000 }, async (t) => {

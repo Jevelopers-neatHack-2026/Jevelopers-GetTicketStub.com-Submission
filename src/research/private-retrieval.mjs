@@ -1236,7 +1236,7 @@ export async function runPrivateRetrieval(value) {
       }
     }
 
-    const processClaim = async (claim) => {
+    const processClaim = async (claim, claimProgress) => {
       const candidate = claim.candidate;
       const priorLimitations = new Set(limitations);
       const candidateEvidenceIds = new Set();
@@ -1315,13 +1315,32 @@ export async function runPrivateRetrieval(value) {
           if (urlHasSensitiveMaterial(url)) throw new RetrievalError('POLICY_DENIED');
           await checkNoBlockingStop();
           const attemptKey = `hop:${claim.leaseToken}:${hopIndex}:${randomUUID()}`;
-          const admission = await awaitOperation(() => input.frontier.admitTransportHop(scope, input.runId, {
-            leaseToken: claim.leaseToken,
-            attemptKey,
-            kind: hopIndex === 0 ? 'initial' : 'redirect',
-            ...(hopIndex > 0 ? { previousAttemptKey } : {}),
-            url,
-          }, controller.signal));
+          let admissionOperationStarted = false;
+          let admission;
+          try {
+            admission = await awaitOperation(() => {
+              admissionOperationStarted = true;
+              return input.frontier.admitTransportHop(scope, input.runId, {
+                leaseToken: claim.leaseToken,
+                attemptKey,
+                kind: hopIndex === 0 ? 'initial' : 'redirect',
+                ...(hopIndex > 0 ? { previousAttemptKey } : {}),
+                url,
+              }, controller.signal);
+            });
+          } catch (error) {
+            // The abort can win the await race after SQLite committed the
+            // admission. Keep the lease classification conservative when the
+            // operation started but its result could not be observed.
+            if (admissionOperationStarted && controller.signal.aborted) {
+              claimProgress.admissionMayHaveBeenPersisted = true;
+            }
+            throw error;
+          }
+          if (admission.state === 'admitted' || admission.state === 'already_admitted'
+            || admission.state === 'already_admitted_without_transport_state') {
+            claimProgress.admissionMayHaveBeenPersisted = true;
+          }
           if (admission.state === 'denied') {
             if (admission.reason === 'decoded_budget') {
               abortForStop('budget_denied');
@@ -1561,7 +1580,8 @@ export async function runPrivateRetrieval(value) {
       }
 
       if (controller.signal.aborted) {
-        const hasAdmissions = candidate.admittedAttemptCount > 0 || hopRecords.length > 0;
+        const hasAdmissions = claimProgress.admissionMayHaveBeenPersisted
+          || candidate.admittedAttemptCount > 0 || hopRecords.length > 0;
         await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
           leaseToken: claim.leaseToken,
           reason: hasAdmissions ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
@@ -1687,14 +1707,18 @@ export async function runPrivateRetrieval(value) {
           }, controller.signal));
           continue;
         }
-        try { await processClaim(claim); }
+        const claimProgress = {
+          admissionMayHaveBeenPersisted: claim.candidate.admittedAttemptCount > 0,
+        };
+        try { await processClaim(claim, claimProgress); }
         catch (error) {
           const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
           limitations.add(limitationFor(code));
           if (code === 'CANCELED' || code === 'DEADLINE_EXCEEDED' || controller.signal.aborted) {
             await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
               leaseToken: claim.leaseToken,
-              reason: claim.candidate.admittedAttemptCount > 0 ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
+              reason: claimProgress.admissionMayHaveBeenPersisted
+                ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
             }, signal));
             break;
           }
