@@ -148,7 +148,9 @@ for (const [name, change] of [
 test("rejects forbidden Docker overrides when the actual inspection differs from policy", async () => {
 	const policy = JSON.parse(
 		(
-			await readFile(resource("scripts/security/playwright-1.64.0.seccomp"))
+			await readFile(
+				resource("scripts/security/playwright-1.64.0.chromium-chroot.seccomp"),
+			)
 		).toString(),
 	);
 	const inspection = {

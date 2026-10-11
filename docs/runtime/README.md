@@ -61,7 +61,9 @@ complete build/typecheck/format/test/runtime phase after installation.
 Linux rendering enables Chromium sandboxing and fails closed on launch or
 effective-state probe failure. CI uses a non-root identity, private IPC with
 1 GiB shared memory, zero capabilities, no new privileges, and Docker's enforced
-AppArmor policy with a byte-pinned Playwright seccomp profile. Docker inspect,
+AppArmor policy with a byte-pinned policy derived from the original Playwright
+profile by adding only Chromium's required chroot syscall. The original profile
+and exact derived difference are preserved and audited. Docker inspect,
 host/container namespace comparisons, live `/proc` observations and Chromium's
 `chrome://sandbox` report provide separate configuration and effective-state
 evidence. See [the auditable policy and probes](../../scripts/security/README.md).

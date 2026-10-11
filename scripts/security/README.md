@@ -177,3 +177,63 @@ location against its catalogued blob at the pinned commit. A raw category can
 select a specific syscall/map/exec probe; an unknown cause cannot justify a flag,
 policy, capability or host change. Synthetic test locations/categories exercise
 the parser and do not assert that any is the actual Linux failure.
+
+### Chroot policy derivation for ROOT-R1
+
+Runs `38096242798` and `38096245793` on `4953e2b` observed
+`SANDBOX_CHROOT_CHECK_FAILURE`, followed by the zygote-host hello-message fatal
+at line 254. The pinned Chromium `credentials.cc:56` requires
+`chroot("/proc/self/fdinfo/")`; it then changes cwd to `/`, exits the helper and
+leaves the sandbox process rooted in that deleted fdinfo directory. Namespace
+creation and temporary-file success do not establish this filesystem step.
+
+The original Playwright profile permits `chroot` only with `includes.caps =
+["CAP_SYS_CHROOT"]`. [Docker's profile compiler](https://github.com/moby/profiles/blob/2ceae35d351c156cb5a8efc0fdc4a08cf94569d8/seccomp/seccomp_linux.go#L144)
+filters that rule against the container's initial bounding capabilities.
+With drop `ALL`, the rule is absent and the inherited deny-by-default filter
+blocks `chroot`, including after Chromium creates its private user namespace.
+This is a specific missing syscall permission; it is not evidence that all user
+namespace operations or the host's AppArmor policy are unavailable.
+
+`playwright-1.64.0.seccomp` remains byte-identical upstream, SHA-256
+`cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849`.
+`playwright-1.64.0.chromium-chroot.seccomp` is the full original parsed policy plus
+one unconditional `SCMP_ACT_ALLOW` rule for **only `chroot`**, SHA-256
+`6190132a2eccb9bd3b06819a2d80887039f295ad91ef11fb0125c527ca9d3a79`.
+`seccomp-policy.mjs` validates both hashes and rejects every other structural
+change. The original conditioned rule is retained, as are the original default
+action, architecture mappings and all other syscall rules. The upstream license
+and commit provenance above still apply; this derived file is not claimed to be
+the unmodified official profile.
+
+Seccomp cannot validate a pathname through a syscall pointer. The narrow rule
+therefore permits the syscall to reach its native permission checks.
+[Linux still requires CAP_SYS_CHROOT in the caller's current user namespace and
+applies filesystem/LSM checks](https://github.com/torvalds/linux/blob/v6.14/fs/open.c#L604).
+It grants no capabilities, privileges or host namespace access. The non-root
+parent keeps all capabilities dropped, no-new-privileges, enforced AppArmor,
+private IPC/sized shm, network none and read-only rootfs. Chromium's own namespace,
+capability-drop and seccomp layers remain mandatory with no fallback.
+
+Before rendering, the host runner executes two fixed chroot probes under the
+same fully inspected container controls, changing only the original/derived
+profile. It requires the original to report `CHROOT_EPERM` inside a disposable
+user/PID/network namespace and the derived to report `CHROOT_ENTERED_FDINFO`.
+Both must still reject chroot in the parent container user namespace. The GNU
+probe enters the fixed fdinfo root and cannot execute its fixed `/usr/bin/true`
+there; all subprocess output is bounded and converted to finite statuses.
+The probe uses map-root-user only inside a disposable child namespace, never a
+root container or renderer. It is a syscall comparison, not Chrome attestation.
+
+The unchanged mandatory Linux browser suite also creates a live fixed page and
+observes each renderer's `/proc/<pid>/root`. It must identify Chromium's deleted
+proc-fdinfo chroot, in addition to the existing actual namespace/seccomp/UID/
+capability observations. Unknown or unreadable filesystem state fails closed
+with a fixed error; no raw root path is logged. The negative-test browsers and
+all original render/font/network/determinism tests remain mandatory.
+
+Local macOS policy/privacy tests cannot prove this Linux repair. The parent must
+observe the old/new syscall comparison, successful actual sandboxed rendering,
+live renderer chroot/namespace/seccomp evidence and passing required checks,
+then obtain fresh independent review. Any further AppArmor/kernel/filesystem
+failure remains a blocker requiring its own evidence, not broader permissions.

@@ -10,6 +10,7 @@ import {
 	observeLinuxContainerSecurity,
 } from "../../dist/src/runtime/environment.js";
 import { VerificationFailure } from "../../dist/src/runtime/errors.js";
+import { observeRendererChroots } from "./renderer-chroot.mjs";
 
 assert.equal(process.platform, "linux");
 
@@ -17,12 +18,19 @@ test("observes active sandbox and private IPC in the real Linux browser", async 
 	const container = await observeLinuxContainerSecurity();
 	const opened = await openOfflineBrowser(await loadPins());
 	try {
+		const page = await opened.context.newPage();
+		await page.setContent(
+			"<html><body>Fixed renderer chroot probe</body></html>",
+		);
 		assert.equal(opened.sandbox.kind, "linux-namespace-seccomp");
 		assert.ok(opened.sandbox.rendererProcesses.length > 0);
 		assert.notEqual(container.ipcNamespace, container.hostNamespaces.ipc);
 		assert.deepEqual(container.interfaces, ["lo"]);
+		const rendererChroots = await observeRendererChroots(opened.browser);
 		console.log(
-			JSON.stringify({ linuxSecurity: { container, sandbox: opened.sandbox } }),
+			JSON.stringify({
+				linuxSecurity: { container, sandbox: opened.sandbox, rendererChroots },
+			}),
 		);
 	} finally {
 		await opened.browser.close();
