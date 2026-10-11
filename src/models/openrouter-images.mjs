@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { types as utilTypes } from "node:util";
 import {
   MAX_PIXELS, OpenAIImagesProviderError, PRIVATE_PROVIDER_REQUEST_IDS, PRIVATE_RETRY_DISPOSITIONS,
   PRIVATE_TARGET_BINDING_SHA256, attachUsageObservation, checkRef, exactUsage, fail, freezeUsageObservation, hashJson,
@@ -98,6 +99,91 @@ function deepFreeze(value) {
     Object.freeze(value);
   }
   return value;
+}
+
+const INSPECTION_ARGUMENT_KEYS = Object.freeze(["scope", "references", "maximum_single_reference_bytes",
+  "maximum_aggregate_reference_bytes"]);
+const MAX_INSPECTION_SNAPSHOT_DEPTH = 128;
+const MAX_INSPECTION_SNAPSHOT_NODES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_BYTES = 1024 * 1024;
+
+function rejectInspectionInput(field) {
+  fail("invalid_provider_input", "Concept reference inspection accepts bounded plain data without accessors, proxies, or serialization hooks.", {
+    outcome: "failed", field,
+  });
+}
+
+function snapshotInspectionValue(value, field, state, depth = 0) {
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    state.bytes += Buffer.byteLength(value, "utf8");
+    if (state.bytes > MAX_INSPECTION_SNAPSHOT_BYTES) rejectInspectionInput(field);
+    return value;
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value === undefined) return undefined;
+  if (typeof value === "bigint" || typeof value === "function" || typeof value === "symbol") rejectInspectionInput(field);
+  if (utilTypes.isProxy(value)) rejectInspectionInput(field);
+  state.nodes += 1;
+  if (state.nodes > MAX_INSPECTION_SNAPSHOT_NODES || depth > MAX_INSPECTION_SNAPSHOT_DEPTH || state.active.has(value)) {
+    rejectInspectionInput(field);
+  }
+  state.active.add(value);
+  try {
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype || Object.hasOwn(descriptors, "toJSON")) rejectInspectionInput(field);
+      const length = descriptors.length?.value;
+      if (!Number.isSafeInteger(length) || length > MAX_INSPECTION_SNAPSHOT_NODES) rejectInspectionInput(field);
+      for (const key of Object.keys(descriptors)) {
+        if (!Object.hasOwn(descriptors[key], "value")) rejectInspectionInput(field);
+      }
+      const copy = new Array(length);
+      Object.setPrototypeOf(copy, null);
+      for (let index = 0; index < length; index += 1) {
+        const descriptor = descriptors[index];
+        if (!descriptor) {
+          copy[index] = null;
+          continue;
+        }
+        if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+        const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
+        copy[index] = child === undefined ? null : child;
+      }
+      return Object.freeze(copy);
+    }
+    if (!isRecord(value) || Object.hasOwn(descriptors, "toJSON")) rejectInspectionInput(field);
+    const copy = Object.create(null);
+    for (const key of Object.keys(descriptors)) {
+      const descriptor = descriptors[key];
+      if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      if (!descriptor.enumerable) continue;
+      state.bytes += Buffer.byteLength(key, "utf8");
+      if (state.bytes > MAX_INSPECTION_SNAPSHOT_BYTES) rejectInspectionInput(field);
+      const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
+      if (child !== undefined) copy[key] = child;
+    }
+    return Object.freeze(copy);
+  } finally {
+    state.active.delete(value);
+  }
+}
+
+function snapshotConceptInspectionArguments(args) {
+  if (utilTypes.isProxy(args) || !isRecord(args)) rejectInspectionInput("concept_reference_request");
+  const descriptors = Object.getOwnPropertyDescriptors(args);
+  const state = { active: new WeakSet(), nodes: 0, bytes: 0 };
+  const copy = Object.create(null);
+  for (const key of INSPECTION_ARGUMENT_KEYS) {
+    const descriptor = descriptors[key];
+    if (!descriptor) {
+      copy[key] = undefined;
+      continue;
+    }
+    if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(`concept_reference_request.${key}`);
+    copy[key] = snapshotInspectionValue(descriptor.value, `concept_reference_request.${key}`, state);
+  }
+  return Object.freeze(copy);
 }
 
 function onlyKeys(value, allowed) {
@@ -543,8 +629,9 @@ export function createOpenRouterImagesProvider({ model_id, provider_tag, capabil
       inspectConceptReferences(args) {
         return guardedAsync(async () => {
           requireOperation("edit");
-          if (Array.isArray(args?.references)) assertReferenceCount(args.references.length, maxReferences, supported.input_references);
-          return inspectConceptReferenceBytes(assetPort, args);
+          const inspectionArgs = snapshotConceptInspectionArguments(args);
+          return inspectConceptReferenceBytes(assetPort, inspectionArgs,
+            (referenceCount) => assertReferenceCount(referenceCount, maxReferences, supported.input_references));
         });
       },
       generate(input) { return guardedAsync(() => runImageDispatch(driver, "generate", input)); },

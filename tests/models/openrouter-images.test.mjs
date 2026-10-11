@@ -301,6 +301,157 @@ test("provided catalog counts must agree with the fixed n and declared capabilit
   });
 });
 
+test("concept inspection rejects reference accessors before reading them or inspecting bytes", async (t) => {
+  const profile = { capabilities: { generation: false, edit: { max_input_references: 3 } },
+    supported_parameters: { ...orProfile().supported_parameters, input_references: { type: "range", min: 3, max: 3 } } };
+
+  await t.test("a changing references getter cannot switch the checked and inspected arrays", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const args = { scope: concept.ctx.scope, maximum_single_reference_bytes: 1024 * 1024,
+      maximum_aggregate_reference_bytes: 2 * 1024 * 1024 };
+    let getterCalls = 0;
+    Object.defineProperty(args, "references", { enumerable: true, get() {
+      getterCalls += 1;
+      return getterCalls <= 2 ? [...concept.references, concept.references[0]] : concept.references;
+    } });
+
+    await assert.rejects(harness.provider.inspectConceptReferences(args), (error) =>
+      error instanceof OpenRouterImagesProviderError && error.code === "invalid_provider_input");
+    assert.equal(getterCalls, 0, "unsupported accessors are rejected without invocation");
+    assert.equal(concept.counters.assetReads, 0, "the reference array is rejected before byte inspection");
+    assert.equal(concept.counters.staged, 0);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("the stable core snapshot count is range-checked before any byte reads", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    await assert.rejects(harness.provider.inspectConceptReferences({ scope: concept.ctx.scope,
+      references: concept.references, maximum_single_reference_bytes: 1024 * 1024,
+      maximum_aggregate_reference_bytes: 2 * 1024 * 1024 }), (error) =>
+      error instanceof OpenRouterImagesProviderError && error.code === "unsupported_operation" &&
+      error.field === "input_references");
+    assert.equal(concept.counters.assetReads, 0, "the declared minimum is checked against the final snapshot before reads");
+    assert.equal(concept.counters.staged, 0);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("native proxy brand rejection runs before reflective traps", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    let traps = 0;
+    const handler = Object.fromEntries(["get", "ownKeys", "getOwnPropertyDescriptor", "getPrototypeOf", "has"]
+      .map((name) => [name, () => { traps += 1; throw new Error(`unexpected ${name} trap`); }]));
+    const base = { scope: concept.ctx.scope, references: [...concept.references, concept.references[0]],
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 };
+    const argsProxy = new Proxy(base, handler);
+    await assert.rejects(harness.provider.inspectConceptReferences(argsProxy), (error) =>
+      error instanceof OpenRouterImagesProviderError && error.code === "invalid_provider_input");
+    assert.equal(traps, 0, "top-level proxies are rejected by a native brand check");
+
+    const referencesProxy = new Proxy(base.references, handler);
+    await assert.rejects(harness.provider.inspectConceptReferences({ ...base, references: referencesProxy }), (error) =>
+      error instanceof OpenRouterImagesProviderError && error.code === "invalid_provider_input");
+    assert.equal(traps, 0, "nested reference proxies are rejected before reflective operations");
+    assert.equal(concept.counters.assetReads, 0);
+    assert.equal(concept.counters.staged, 0);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("reference-record accessors cannot run during snapshotting", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const validCountProfile = { capabilities: { generation: false, edit: { max_input_references: 2 } },
+      supported_parameters: { ...profile.supported_parameters, input_references: { type: "range", min: 2, max: 2 } } };
+    const harness = orHarness({ operation: "edit", profile: validCountProfile, ports: { events }, assetPort: concept.assetPort });
+    let fieldGetterCalls = 0;
+    const reference = { ...concept.references[0] };
+    Object.defineProperty(reference, "asset_id", { enumerable: true, get() {
+      fieldGetterCalls += 1;
+      return concept.references[0].asset_id;
+    } });
+
+    await assert.rejects(harness.provider.inspectConceptReferences({ scope: concept.ctx.scope,
+      references: [reference, concept.references[1]], maximum_single_reference_bytes: 1024 * 1024,
+      maximum_aggregate_reference_bytes: 2 * 1024 * 1024 }), (error) =>
+      error instanceof OpenRouterImagesProviderError && error.code === "invalid_provider_input");
+    assert.equal(fieldGetterCalls, 0, "unsupported accessors are rejected without invocation");
+    assert.equal(concept.counters.assetReads, 0);
+    assert.equal(concept.counters.staged, 0);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("an array toJSON hook cannot rewrite the inspected reference count", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const references = [...concept.references, concept.references[0]];
+    let hookCalls = 0;
+    Object.defineProperty(references, "toJSON", { value() {
+      hookCalls += 1;
+      return concept.references;
+    } });
+
+    await assert.rejects(harness.provider.inspectConceptReferences({ scope: concept.ctx.scope, references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 }),
+    (error) => error instanceof OpenRouterImagesProviderError && error.code === "invalid_provider_input");
+    assert.equal(hookCalls, 0, "unsupported serialization hooks are rejected without invocation");
+    assert.equal(concept.counters.assetReads, 0);
+    assert.equal(concept.counters.staged, 0);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+});
+
+test("concept inspection snapshots reference identities before its first byte read", async () => {
+  const concept = parentlessConcept(2);
+  const profile = { capabilities: { generation: false, edit: { max_input_references: 2 } },
+    supported_parameters: { ...orProfile().supported_parameters, input_references: { type: "range", min: 2, max: 2 } } };
+  const reads = [];
+  let enteredRead;
+  const firstReadEntered = new Promise((resolve) => { enteredRead = resolve; });
+  let releaseFirstRead;
+  const firstReadGate = new Promise((resolve) => { releaseFirstRead = resolve; });
+  const originalReferences = concept.references.map((reference) => ({ ...reference }));
+  const scope = { ...concept.ctx.scope };
+  const originalTenantId = scope.tenant_id;
+  const harness = orHarness({ operation: "edit", profile, assetPort: { async readReference(args) {
+    reads.push(args);
+    if (reads.length === 1) {
+      enteredRead();
+      await firstReadGate;
+    }
+    const index = originalReferences.findIndex((reference) => reference.asset_id === args.asset_id);
+    return concept.referenceBytes[index];
+  } } });
+  const inspection = harness.provider.inspectConceptReferences({ scope, references: concept.references,
+    maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+  await firstReadEntered;
+  scope.tenant_id = "tenant-mutated";
+  concept.references[0].source_ref = "source-mutated";
+  concept.references[0].asset_id = "asset-mutated";
+  concept.references[1].content_hash = HASH(Buffer.from("changed after snapshot"));
+  concept.references.reverse();
+  releaseFirstRead();
+
+  const inspected = await inspection;
+  assert.equal(reads.length, 2);
+  assert.deepEqual(reads.map(({ source_ref, asset_id, content_hash }) => ({ source_ref, asset_id, content_hash })),
+    originalReferences.map(({ source_ref, asset_id, content_hash }) => ({ source_ref, asset_id, content_hash })));
+  assert.ok(reads.every((read) => read.scope.tenant_id === originalTenantId));
+  assert.deepEqual(inspected.map(({ source_ref, asset_id, content_hash }) => ({ source_ref, asset_id, content_hash })),
+    originalReferences.map(({ source_ref, asset_id, content_hash }) => ({ source_ref, asset_id, content_hash })));
+  assert.equal(harness.fetchCount, 0);
+});
+
 test("actual wire counts at declared lower and upper boundaries remain functional", async (t) => {
   const baseSupported = orProfile().supported_parameters;
   await t.test("generation keeps n:1 and zero references at exact descriptors", async () => {
