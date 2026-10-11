@@ -8,8 +8,8 @@ The plan carries explicit target and configuration pins. It cannot carry or esta
 
 | Cell | Required evidence | Current boundary |
 | --- | --- | --- |
-| `image_generation` | Exact generation endpoint, selected model, Node/runtime pin, prompt template hash, authenticated account/project, exact operation permission, quota, grant, reservation, one result and usage observation | Direct Images API candidate is `gpt-image-2.5-sunburst-2026-09-08`; it remains unevaluated and account access is unverified. |
-| `image_edit` | Independent edit entitlement and the same account, target, spend, and usage checks; source asset has a pinned digest and MIME type | Separate `/v1/images/edits` operation. Generation success does not imply edit access. |
+| `image_generation` | Exact generation endpoint, selected model, Node/runtime pin, prompt template hash, authenticated account/project, exact operation permission, quota, grant, reservation, one result and usage observation | Selectable target: direct Images API (candidate `gpt-image-2.5-sunburst-2026-09-08`, unevaluated, account access unverified) or the OpenRouter Images provider (service `openrouter`, endpoint `https://openrouter.ai/api/v1/images`; see below). |
+| `image_edit` | Independent edit entitlement and the same account, target, spend, and usage checks; source asset has a pinned digest and MIME type | Selectable target: separate `/v1/images/edits` operation, or OpenRouter reference-guided edit (same endpoint, separate cell, separate profile hash and evidence). Generation success does not imply edit access, for either provider. |
 | `harness_jev` | Agent-harness adapter and accepted DecisionPort evidence for the exact JEV operation | JEV transport belongs in agent-harness; no JEV transport is implemented here. The dated `jev-1.13.0` candidate is not account-access evidence. |
 | `vision_observer` | Separately selected observer model, endpoint/configuration, permission, quota, authorization, and usage | Selection and account eligibility are unresolved. |
 | `generative_classifier_baseline` | Separately selected baseline model, endpoint/configuration, permission, quota, authorization, and usage | Selection and account eligibility are unresolved. |
@@ -47,18 +47,35 @@ The documented model candidate is not a selected owner-approved target. The fixt
 
 ## OpenRouter Images adapter
 
-`createOpenRouterImagesProvider` is a second image provider path, selected by the host, not a replacement for the direct adapter. See [OpenRouter Images adapter](../providers/openrouter-images.md) for the sourced API facts, the profile, and the unsupported list. The eight-cell CE-A01 matrix above still names the direct Images endpoints; it has not been extended to OpenRouter, so it neither verifies nor blocks the OpenRouter path.
+`createOpenRouterImagesProvider` is a second image provider path, selected by the host, not a replacement for the direct adapter. See [OpenRouter Images adapter](../providers/openrouter-images.md) for the sourced API facts, the profile, and the unsupported list.
 
 | Capability | Implemented offline | Verified account access |
 | --- | --- | --- |
-| Generation (`POST https://openrouter.ai/api/v1/images`, no references) | Yes: intercepted-transport wire contract, capability and authority fences, output and usage validation, API/C03/CE08/CE11 integration. | **No.** No account, key, credits, model, provider tag, or entitlement exists or has been checked. |
-| Reference-guided edit (parent first, then manifest references as data URLs; separate capability) | Yes, with the same offline coverage. It is image-to-image guided by references: no mask, and no documented parent preservation. | **No.** Edit entitlement and the per-model reference maximum must be verified separately from generation. |
-| Parentless concepts (authorized references only) | Yes, through the edit capability. | **No.** |
+| Generation (`POST https://openrouter.ai/api/v1/images`, no references) | Yes: intercepted-transport wire contract, capability and authority fences, output and usage validation, API/C03/CE08/CE11 integration. | Owner-authorized live smoke on #37 (2026-10-11, one request), recorded with operator-attested ports. This is not trusted-owner-service evidence and the CE-A01 preflight has not verified it. |
+| Reference-guided edit (parent first, then manifest references as data URLs; separate capability) | Yes, with the same offline coverage. It is image-to-image guided by references: no mask, and no documented parent preservation. | Owner-authorized live smoke on #37 (2026-10-11, one request with one reference), same attestation limits. Edit entitlement and the per-model reference maximum stay separate from generation. |
+| Parentless concepts (authorized references only) | Yes, through the edit capability. | **No.** No concept-batch smoke was run. |
 | Masked or inpainting edit | Rejected before credential resolution. Direct OpenAI remains the only masked route (CE-07). | Not applicable. |
 
 The host variable `CREATIVE_ENGINE_OPENROUTER_API_KEY` is a placeholder for the key the trusted host injects through the credential port. The adapter reads no environment, and there is no fallback to `OPENAI_*`, `OPENROUTER_API_KEY` or the customer app's `TICKETSTUB_ART_OPENROUTER_API_KEY`; reusing those requires an explicit owner decision (G1). Model discovery (`GET /api/v1/images/models`) is a catalog only and cannot satisfy the capability verifier. Account-wide provider settings merge with request routing and must be checked outside this repository (G2). OpenRouter's reported `cost` is retained as provider-reported and unsettled (G4); a transport-started attempt whose outcome is not observed keeps its C03 hold.
 
 The live gate is fail closed: `make check TARGET=openrouter-image-adapter MODE=live` exits 2, reports `provider_dispatches: 0` and `provider_credentials_read: false`, and lists the open gates G1-G6.
+
+### OpenRouter targets in the CE-A01 matrix
+
+The fixed eight-cell denominator is unchanged. The `image_generation` and `image_edit` cells can each carry either the direct OpenAI target or an OpenRouter target, and they stay separate cells with independent evidence: an OpenRouter generation pin, observation, capability decision, grant and reservation never count toward the edit cell, and the reverse. An OpenRouter target is validated by `validateOpenRouterImageTarget` and must pin:
+
+- `service: "openrouter"` and `endpoint: "https://openrouter.ai/api/v1/images"` (the same endpoint for both cells);
+- an explicit `author/slug` model id, with no default and no alias;
+- the actual `native-fetch` Node runtime version;
+- configuration keys `prompt_template_ref`, `prompt_template_sha256`, `provider_tag` (the single pinned provider, sent with `allow_fallbacks: false`), and `profile_sha256` (the owner-approved digest of the exact adapter profile). The edit cell adds `asset_ref`, `asset_sha256` and an image `asset_mime`; the generation cell may not carry them.
+
+The metering `operation_kind` of the cells is still `image_generation` and `image_edit`. The runtime adapter's own dispatch binding labels OpenRouter edits `image_reference_edit` because they are reference-guided and unmasked; a host that composes the billable dispatch maps between the two.
+
+`createOpenRouterImagesAdapter` is the OpenRouter equivalent of the direct adapter's non-billable account check. A trusted host composes it with a live `credentialPort` and an explicit `fetchImpl` (there is no global default and no environment read). Its `inspect` makes at most two reads: `GET https://openrouter.ai/api/v1/key` with the resolved bearer token for authentication (balance, limit and usage fields are not retained), and the public `GET https://openrouter.ai/api/v1/images/models/{author}/{slug}/endpoints` without any credential, to see whether the pinned `provider_tag` is offered. As everywhere else, a valid key and a catalog entry are not entitlement: the adapter always reports `operation_permission` and `quota` as `unknown`, and the runner discards those fields in favor of the independent capability verifier. The adapter has no built-in billable request; `prepare` and `dispatch` exist only when the host passes a trusted `dispatchPort`, and each re-validates the OpenRouter pin first.
+
+The offline tests exercise this adapter only with intercepted fetch. The mock run adds four synthetic scenarios (OpenAI and OpenRouter, generation and edit) and remains `simulated` with `acceptance_allowed: false`; the live gate still exits 2 with zero dispatches and no credential read. A successful live image result must still decode to the exact 1024x1024 PNG recorded in the preflight evidence, so an OpenRouter profile must pin dimensions that produce it.
+
+Owner-authorized live smoke evidence exists on issue #37 (2026-10-11: one generation and one reference-guided edit, recorded with operator-attested capability, authorization and Finance ports). That evidence exercised the adapter's wire contract, entitlement and output handling, not this preflight. The preflight itself still requires trusted host adapters (credential, capability, authorization, Finance reservation and, for a paid cell, dispatch) that this repository does not install.
 
 ## Run and verify
 
@@ -69,7 +86,7 @@ make check TARGET=access-preflight MODE=mock
 make check TARGET=access-preflight MODE=live
 ```
 
-The mock command runs both generation and edit through synthetic ports, keeps the other six required cells visible as blocked, and writes sanitized evidence to `build/access-preflight-evidence.json`. Its report remains `simulated_or_pending`, with `acceptance_allowed: false`. The live command writes `build/access-preflight-live-gate.json`, emits the blocked eight-cell gate as JSON, and exits 2 while trusted capability, authorization, Finance reservation, and owner adapters are absent. It performs zero provider dispatches and reads no credentials. It never loads adapter claims or grants from user-editable JSON. The exported `runAccessPreflight` function is executable with real trusted adapters supplied by a host composition; this repository does not contain or install that composition. `make acceptance TARGET=access-preflight` and `make acceptance TARGET=all` keep CE-A01 pending until the external evidence and actual authorized access work are available.
+The mock command runs generation and edit for both provider targets through synthetic ports, keeps the other six required cells visible as blocked, and writes sanitized evidence to `build/access-preflight-evidence.json`. Its report remains `simulated_or_pending`, with `acceptance_allowed: false`. The live command writes `build/access-preflight-live-gate.json`, emits the blocked eight-cell gate as JSON, and exits 2 while trusted capability, authorization, Finance reservation, and owner adapters are absent. It performs zero provider dispatches and reads no credentials. It never loads adapter claims or grants from user-editable JSON. The exported `runAccessPreflight` function is executable with real trusted adapters supplied by a host composition; this repository does not contain or install that composition. `make acceptance TARGET=access-preflight` and `make acceptance TARGET=all` keep CE-A01 pending until the external evidence and actual authorized access work are available.
 
 Standalone checks for these source files are:
 
@@ -77,6 +94,7 @@ Standalone checks for these source files are:
 node --test tests/preflight/*.test.mjs
 node --check src/preflight/access.mjs
 node --check src/preflight/openai-images.mjs
+node --check src/preflight/openrouter-images.mjs
 ```
 
 The strict NodeNext consumer check uses TypeScript 5.9 with `strict` and `skipLibCheck: false`. Tests exercise fixed denominators, individual cell separation, missing/denied/unknown capability, scope/deadline/freshness mismatches, stale grant revalidation, denied and mismatched reservations, uncertain release/usage holds, one-transport limits, privacy-safe diagnostics, account/project-bound credential routing, PNG validation, and the absence of retry or fallback behavior. Live provider, Finance, JEV, and Neatlogs execution remains pending their respective owner agreements and exact authorization.

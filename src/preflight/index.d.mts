@@ -321,3 +321,53 @@ export interface OpenAIImagesAdapterOptions {
 }
 
 export function createOpenAIImagesAdapter(options: OpenAIImagesAdapterOptions): AccessProviderAdapter;
+
+export const OPENROUTER_PREFLIGHT_SERVICE: 'openrouter';
+export const OPENROUTER_PREFLIGHT_IMAGES_ENDPOINT: 'https://openrouter.ai/api/v1/images';
+export const OPENROUTER_PREFLIGHT_KEY_ENDPOINT: 'https://openrouter.ai/api/v1/key';
+
+export interface ResolvedOpenRouterCredential {
+  readonly decision: 'resolved';
+  readonly evidence_mode: 'live';
+  readonly binding: Readonly<{
+    service: 'openrouter';
+    account_ref: string;
+    project_ref: string;
+    target_binding_sha256: string;
+  }>;
+  readonly token: string;
+  readonly expires_at: string;
+  readonly evidence: PinnedAccessEvidence;
+}
+
+export interface OpenRouterCredentialPort {
+  readonly evidence_mode: 'live';
+  resolveCredential(input: Readonly<{
+    service: 'openrouter';
+    purpose: 'read_only_account_check';
+    account_ref: string;
+    project_ref: string;
+    target_binding: AccessTargetBinding;
+  }>): Promise<ResolvedOpenRouterCredential>;
+}
+
+/** Trusted host-composed billable dispatch. The built-in adapter never sends a paid request itself. */
+export interface OpenRouterImagesDispatchPort {
+  prepare?: AccessProviderAdapter['prepare'];
+  dispatch: AccessProviderAdapter['dispatch'];
+}
+
+export interface OpenRouterImagesAdapterOptions {
+  readonly credentialPort: OpenRouterCredentialPort;
+  /** Required; no global fetch is used. Called only for GET /api/v1/key and the public image-model endpoint catalog. */
+  readonly fetchImpl: (input: string, init: Readonly<Record<string, unknown>>) => Promise<Response>;
+  readonly dispatchPort?: OpenRouterImagesDispatchPort;
+}
+
+/**
+ * Non-billable account and catalog inspection for the `image_generation` and `image_edit` cells. Operation
+ * permission and quota are always reported `unknown`: key validity and catalog presence are not entitlement.
+ */
+export function createOpenRouterImagesAdapter(options: OpenRouterImagesAdapterOptions): AccessProviderAdapter;
+export function validateOpenRouterImageTarget(cellId: 'image_generation' | 'image_edit', target: AccessTarget): void;
+export function openRouterCatalogEndpoint(modelId: string): string;

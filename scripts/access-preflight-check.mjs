@@ -14,10 +14,12 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const missingEvidence = Object.freeze({
   image_generation: [
     "openai_generation_account_permission_and_quota",
+    "openrouter_generation_account_permission_and_quota",
     "external_grant_and_finance_reservation",
   ],
   image_edit: [
     "openai_edit_account_permission_and_quota",
+    "openrouter_edit_account_permission_and_quota",
     "external_grant_and_finance_reservation",
   ],
   harness_jev: [
@@ -52,8 +54,8 @@ const reasonForCell = Object.freeze({
 });
 
 const actionForCell = Object.freeze({
-  image_generation: "Creative and fulfillment must provide independently verified account permission, quota, exact target, and an authorized Finance reservation.",
-  image_edit: "Creative and fulfillment must provide independent edit permission, quota, exact target, and an authorized Finance reservation.",
+  image_generation: "Creative and fulfillment must provide independently verified account permission, quota, exact target (direct OpenAI Images or OpenRouter Images), and an authorized Finance reservation.",
+  image_edit: "Creative and fulfillment must provide independent edit permission, quota, exact target (direct OpenAI Images edit or OpenRouter reference-guided edit), and an authorized Finance reservation.",
   harness_jev: "Agent and research must publish the accepted harness DecisionPort adapter and prove authorized trace delivery.",
   vision_observer: "Product and frontend must select the observer target and provide independently verified operation permission, quota, and budget authority.",
   generative_classifier_baseline: "Product and frontend must select the baseline target and provide independently verified operation permission, quota, and budget authority.",
@@ -109,8 +111,10 @@ export function createAccessPreflightGateReport() {
 async function createMockEvidence() {
   const runId = "test:access-preflight-ci";
   const scenarios = [];
-  for (const cellId of ["image_generation", "image_edit"]) {
-    const fixture = createMockAccessFixture({ cellId, runId });
+  // Generation and edit are separate cells for each provider target; each scenario selects exactly one cell.
+  for (const [provider, cellId] of [["openai", "image_generation"], ["openai", "image_edit"],
+    ["openrouter", "image_generation"], ["openrouter", "image_edit"]]) {
+    const fixture = createMockAccessFixture({ cellId, runId, provider });
     const report = await runAccessPreflight(fixture.args);
     if (report.acceptance_allowed !== false || report.mode !== "mock" || report.required_cell_count !== ACCESS_CELL_DEFINITIONS.length) {
       throw new Error("mock access report failed its fixed-denominator assertions");
@@ -119,7 +123,7 @@ async function createMockEvidence() {
     if (result?.status !== "simulated" || result.verified !== false || fixture.calls.dispatch !== 1) {
       throw new Error("the synthetic Images fixture did not produce its expected simulated result");
     }
-    scenarios.push({ report, fixture });
+    scenarios.push({ report, fixture, provider, cellId });
   }
 
   const results = ACCESS_CELL_DEFINITIONS.map((definition) => {
@@ -136,9 +140,10 @@ async function createMockEvidence() {
     throw new Error("mock access evidence did not preserve every required cell");
   }
 
-  const [accessSource, imagesSource, fixtureSource] = await Promise.all([
+  const [accessSource, imagesSource, openRouterSource, fixtureSource] = await Promise.all([
     readFile(path.join(repoRoot, "src/preflight/access.mjs")),
     readFile(path.join(repoRoot, "src/preflight/openai-images.mjs")),
+    readFile(path.join(repoRoot, "src/preflight/openrouter-images.mjs")),
     readFile(path.join(repoRoot, "fixtures/preflight/access-ports.mjs")),
   ]);
   return {
@@ -155,6 +160,9 @@ async function createMockEvidence() {
       synthetic_authorities: true,
       mock_adapter_dispatches: scenarios.reduce((total, { fixture }) => total + fixture.calls.dispatch, 0),
       actual_network_requests: 0,
+      scenarios: scenarios.map(({ provider, cellId, report: scenarioReport }) => ({
+        provider, cell_id: cellId, status: scenarioReport.cells.find((cell) => cell.cell_id === cellId).status,
+      })),
     },
     runtime: {
       node: process.versions.node,
@@ -166,6 +174,7 @@ async function createMockEvidence() {
     input_sha256: {
       "src/preflight/access.mjs": digest(accessSource),
       "src/preflight/openai-images.mjs": digest(imagesSource),
+      "src/preflight/openrouter-images.mjs": digest(openRouterSource),
       "fixtures/preflight/access-ports.mjs": digest(fixtureSource),
     },
     report,
@@ -207,7 +216,7 @@ async function main() {
   const evidence = await createMockEvidence();
   const output = options.output ?? "build/access-preflight-evidence.json";
   await writeEvidence(evidence, output, { stdout: false });
-  process.stdout.write(`Access preflight evidence written: ${path.relative(repoRoot, path.resolve(repoRoot, output))} (8 cells, 2 synthetic adapter dispatches, acceptance pending).\n`);
+  process.stdout.write(`Access preflight evidence written: ${path.relative(repoRoot, path.resolve(repoRoot, output))} (8 cells, 4 synthetic adapter dispatches, acceptance pending).\n`);
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {

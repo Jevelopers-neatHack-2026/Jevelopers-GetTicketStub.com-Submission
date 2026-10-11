@@ -41,7 +41,34 @@ function configurationFor(cellId) {
   };
 }
 
-function accessTarget(cellId) {
+export const OPENROUTER_FIXTURE_MODEL = 'synthetic-lab/image-model-offline';
+
+function openRouterConfigurationFor(cellId) {
+  return {
+    prompt_template_ref: `test:${cellId}:prompt-v1`,
+    prompt_template_sha256: digest(`test prompt for ${cellId}`),
+    provider_tag: 'synthetic-provider',
+    profile_sha256: digest(`test openrouter profile for ${cellId}`),
+    ...(cellId === 'image_edit' ? {
+      asset_ref: 'test:asset-source-v1',
+      asset_sha256: digest('test source image bytes'),
+      asset_mime: 'image/png',
+    } : {}),
+  };
+}
+
+function accessTarget(cellId, provider = 'openai') {
+  if (provider === 'openrouter') {
+    const configuration = openRouterConfigurationFor(cellId);
+    return {
+      service: 'openrouter',
+      endpoint: 'https://openrouter.ai/api/v1/images',
+      model: OPENROUTER_FIXTURE_MODEL,
+      sdk: { name: 'native-fetch', version: process.versions.node },
+      configuration,
+      configuration_sha256: canonicalHash(configuration),
+    };
+  }
   const configuration = configurationFor(cellId);
   return {
     service: 'openai',
@@ -53,7 +80,7 @@ function accessTarget(cellId) {
   };
 }
 
-export function accessPlan({ cellId = 'image_generation', runId = 'test:access-run-1' } = {}) {
+export function accessPlan({ cellId = 'image_generation', runId = 'test:access-run-1', provider = 'openai' } = {}) {
   if (!['image_generation', 'image_edit'].includes(cellId)) {
     throw new TypeError('The preflight fixture defines only the two Images cells; other provider targets remain external.');
   }
@@ -69,7 +96,7 @@ export function accessPlan({ cellId = 'image_generation', runId = 'test:access-r
         owner_role: definition.owner_role,
         selection: { state: selected ? 'owner_selected' : 'unresolved' },
         scope: fixtureScope,
-        target: selected ? accessTarget(cellId) : null,
+        target: selected ? accessTarget(cellId, provider) : null,
         spend: definition.billable === true ? {
           maximum_amount: '0.08',
           currency: 'USD',
@@ -149,6 +176,7 @@ function reservationBinding(reservation, attempt, expected, grantRef) {
 
 export function createMockAccessFixture({
   cellId = 'image_generation',
+  provider = 'openai',
   runId = 'test:access-run-1',
   now = fixtureTime(),
   pinDecision,
@@ -162,7 +190,7 @@ export function createMockAccessFixture({
   releaseFailure = false,
   holdAmount = '0.08',
 } = {}) {
-  const plan = accessPlan({ cellId, runId });
+  const plan = accessPlan({ cellId, runId, provider });
   const cell = plan.cells.find((candidate) => candidate.cell_id === cellId);
   const target = cell.target;
   const definition = ACCESS_CELL_DEFINITIONS.find((row) => row.cell_id === cellId);

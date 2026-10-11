@@ -10,3 +10,11 @@ export {
   validateAccessPlan,
 } from './access.mjs';
 export { createOpenAIImagesAdapter } from './openai-images.mjs';
+export {
+  OPENROUTER_PREFLIGHT_IMAGES_ENDPOINT,
+  OPENROUTER_PREFLIGHT_KEY_ENDPOINT,
+  OPENROUTER_PREFLIGHT_SERVICE,
+  createOpenRouterImagesAdapter,
+  openRouterCatalogEndpoint,
+  validateOpenRouterImageTarget,
+} from './openrouter-images.mjs';
