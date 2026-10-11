@@ -42,6 +42,7 @@ Local: copy `.env.example` to `.env` (git-ignored by `.gitignore`) and fill in t
    - The session ID is the workflow token, which groups one job's events.
    - Tags are `agent-harness@<40-char commit>` and `evidence:synthetic` for verification runs.
    - The root span input is the canonical JSON of the validated projected record, and nothing else.
+   - Saved v1 plans from the earlier verifier may omit `generation` and `priorTraceIds` only for generation 0; those values are reconstructed from the canonical input. Recovery rebuilds the bounded plan before sending and rejects a noncanonical workflow name.
 4. `encodeNeatlogsExportRequest` writes an OTLP `ExportTraceServiceRequest` protobuf. `sendNeatlogsPlan` POSTs it with `x-api-key`. Redirects are refused and request and response sizes are bounded.
 5. `readbackNeatlogsPlan` uses the Public API with the service-account token:
    - It calls `GET /project` and requires the configured UUID.

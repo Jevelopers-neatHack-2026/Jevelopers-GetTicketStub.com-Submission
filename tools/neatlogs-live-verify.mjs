@@ -145,10 +145,7 @@ function serializablePlan(plan) {
   };
 }
 
-export function loadPlan(path) {
-  const stat = statSync(path);
-  if (!stat.isFile() || stat.size < 2 || stat.size > MAX_PLAN_BYTES) throw new Error('Plan file is invalid.');
-  const parsed = parseNeatlogsJson(readFileSync(path, 'utf8'));
+function reconstructPlan(parsed) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
       || Object.keys(parsed).sort().join(',') !== 'schema,tags,traces,workflowName'
       || parsed.schema !== PLAN_SCHEMA || parsed.workflowName !== NEATLOGS_LIVE_WORKFLOW_NAME
@@ -160,8 +157,14 @@ export function loadPlan(path) {
   if (tags.length !== 2 || !/^agent-harness@[0-9a-f]{40}$/.test(tags[0]) || tags[1] !== 'evidence:synthetic') {
     throw new Error('Plan file is invalid.');
   }
+  const requiredTraceKeys = new Set([
+    'eventToken', 'eventType', 'fence', 'input', 'markerSpanId', 'revision',
+    'rootSpanId', 'sequence', 'sessionId', 'traceId'
+  ]);
+  const allowedTraceKeys = new Set([...requiredTraceKeys, 'generation', 'priorTraceIds']);
   if (parsed.traces.some(trace => !trace || typeof trace !== 'object' || Array.isArray(trace)
-      || Object.keys(trace).sort().join(',') !== 'eventToken,eventType,fence,generation,input,markerSpanId,priorTraceIds,revision,rootSpanId,sequence,sessionId,traceId')) {
+      || Object.keys(trace).some(key => !allowedTraceKeys.has(key))
+      || [...requiredTraceKeys].some(key => !Object.hasOwn(trace, key)))) {
     throw new Error('Plan file is invalid.');
   }
   const records = validateNeatlogsSourceRecords(parsed.traces.map(trace => {
@@ -172,12 +175,17 @@ export function loadPlan(path) {
   }));
   const traces = parsed.traces.map((trace, index) => {
     const record = records[index];
-    const generation = trace.generation;
+    // The earlier v1 writer always emitted these fields, but its reader
+    // explicitly supported generation-0 plans that omitted them. Keep that
+    // bounded legacy shape while rejecting explicit null or malformed values.
+    const generation = Object.hasOwn(trace, 'generation') ? trace.generation : 0;
     if (!Number.isSafeInteger(generation) || generation < 0 || generation > NEATLOGS_OTLP_LIMITS.generations) {
       throw new Error('Plan file is invalid.');
     }
-    const priorTraceIds = trace.priorTraceIds;
-    if (!Array.isArray(priorTraceIds) || priorTraceIds.length !== generation
+    const hasPriorTraceIds = Object.hasOwn(trace, 'priorTraceIds');
+    const priorTraceIds = hasPriorTraceIds ? trace.priorTraceIds : [];
+    if ((!hasPriorTraceIds && generation !== 0)
+        || !Array.isArray(priorTraceIds) || priorTraceIds.length !== generation
         || priorTraceIds.some(id => typeof id !== 'string')) {
       throw new Error('Plan file is invalid.');
     }
@@ -215,6 +223,34 @@ export function loadPlan(path) {
   });
 }
 
+function reconstructRecoveryPlan(plan) {
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)
+      || Object.keys(plan).sort().join(',') !== 'tags,traces,workflowName'
+      || plan.workflowName !== NEATLOGS_LIVE_WORKFLOW_NAME
+      || !Array.isArray(plan.traces) || plan.traces.length < 1
+      || plan.traces.length > NEATLOGS_LIVE_LIMITS.maxTraces) {
+    throw new Error('Plan file is invalid.');
+  }
+  validateNeatlogsTags(plan.tags);
+  for (const trace of plan.traces) {
+    if (!trace || typeof trace !== 'object' || Array.isArray(trace)
+        || typeof trace.input !== 'string' || Buffer.byteLength(trace.input, 'utf8') > 1_024
+        || !Number.isSafeInteger(trace.generation) || trace.generation < 0
+        || trace.generation > NEATLOGS_OTLP_LIMITS.generations
+        || !Array.isArray(trace.priorTraceIds)
+        || trace.priorTraceIds.length > NEATLOGS_OTLP_LIMITS.generations) {
+      throw new Error('Plan file is invalid.');
+    }
+  }
+  return reconstructPlan(serializablePlan(plan));
+}
+
+export function loadPlan(path) {
+  const stat = statSync(path);
+  if (!stat.isFile() || stat.size < 2 || stat.size > MAX_PLAN_BYTES) throw new Error('Plan file is invalid.');
+  return reconstructPlan(parseNeatlogsJson(readFileSync(path, 'utf8')));
+}
+
 // A regenerated trace is a new remote trace, so it gets fresh export times.
 function withFreshTimes(plan) {
   const now = Date.now() * 1e6;
@@ -237,7 +273,20 @@ function mergePlan(plan, regenerated, previousIds) {
 }
 
 export async function sendRecoveryGeneration(config, plan, missingTraceIds, options = {}) {
-  const regenerated = withFreshTimes(nextNeatlogsGeneration(plan, missingTraceIds));
+  let canonicalPlan;
+  try {
+    // Rebuild the closed outbound shape from bounded, validated projected
+    // inputs before selecting a new generation. Never trust caller metadata.
+    canonicalPlan = reconstructRecoveryPlan(plan);
+  } catch {
+    return Object.freeze({
+      regenerated: null,
+      blocked: true,
+      findings: Object.freeze(['plan_invalid']),
+      send: null
+    });
+  }
+  const regenerated = withFreshTimes(nextNeatlogsGeneration(canonicalPlan, missingTraceIds));
   const gated = await sendPlanWithPrivacyGate(config, regenerated, options);
   return Object.freeze({ regenerated, ...gated });
 }

@@ -29,8 +29,7 @@ import { readbackNeatlogsPlan, sendNeatlogsPlan } from '../../../src/observabili
 import {
   loadPlan,
   recoverableTraceIds,
-  sendRecoveryGeneration,
-  SYNTHETIC_CANARIES
+  sendRecoveryGeneration
 } from '../../../tools/neatlogs-live-verify.mjs';
 import { createNeatlogsSdkCapture } from '../../../src/observability/private/neatlogs-sdk-capture.js';
 
@@ -365,6 +364,17 @@ describe('export encoding', () => {
     assert.equal(loaded.traces[0].eventType, plan.traces[0].record.eventType);
     assert.equal(loaded.traces[0].fence, plan.traces[0].record.fence);
 
+    const legacyGenerationZero = storedPlan();
+    for (const trace of legacyGenerationZero.traces) {
+      delete trace.generation;
+      delete trace.priorTraceIds;
+    }
+    writeFileSync(path, JSON.stringify(legacyGenerationZero));
+    const loadedLegacy = loadPlan(path);
+    assert.ok(loadedLegacy.traces.every(trace => trace.generation === 0));
+    assert.ok(loadedLegacy.traces.every(trace => trace.priorTraceIds.length === 0));
+    assert.equal(loadedLegacy.traces[0].eventToken, plan.traces[0].eventToken);
+
     const unsafeWorkflow = { ...valid, workflowName: CANARIES[3] };
     writeFileSync(path, JSON.stringify(unsafeWorkflow));
     assert.throws(() => loadPlan(path), /Plan file is invalid/);
@@ -384,19 +394,37 @@ describe('export encoding', () => {
     writeFileSync(path, JSON.stringify(missingPriorList));
     assert.throws(() => loadPlan(path), /Plan file is invalid/);
 
+    const nullGeneration = storedPlan();
+    nullGeneration.traces[0].generation = null;
+    writeFileSync(path, JSON.stringify(nullGeneration));
+    assert.throws(() => loadPlan(path), /Plan file is invalid/);
+
     writeFileSync(path, 'x'.repeat(256 * 1024 + 1));
     assert.throws(() => loadPlan(path), /Plan file is invalid/);
   });
 
-  test('recovery applies the same outbound redaction gate before any fetch', async () => {
-    const contaminated = Object.freeze({ ...plan, workflowName: SYNTHETIC_CANARIES[3] });
+  test('recovery rejects an arbitrary noncanonical workflow before any fetch', async () => {
+    const privateWorkflow = 'PRIVATE_CUSTOMER_WORKFLOW_SECRET_q8f31';
+    const contaminated = Object.freeze({ ...plan, workflowName: privateWorkflow });
     const { fetchImpl, calls } = recordingFetch(() => response(200, null));
     const result = await sendRecoveryGeneration(configured(), contaminated, [plan.traces[0].traceId], {
       fetch: fetchImpl,
       secrets: [READ_TOKEN]
     });
     assert.equal(result.blocked, true);
-    assert.ok(result.findings.includes('canary_3'));
+    assert.deepEqual([...result.findings], ['plan_invalid']);
+    assert.equal(JSON.stringify(result).includes(privateWorkflow), false);
+    assert.equal(calls.length, 0);
+  });
+
+  test('recovery still blocks a configured secret in the canonical outbound plan', async () => {
+    const { fetchImpl, calls } = recordingFetch(() => response(200, null));
+    const result = await sendRecoveryGeneration(configured(), plan, [plan.traces[0].traceId], {
+      fetch: fetchImpl,
+      secrets: [NEATLOGS_LIVE_WORKFLOW_NAME]
+    });
+    assert.equal(result.blocked, true);
+    assert.deepEqual([...result.findings], ['credential_0']);
     assert.equal(calls.length, 0);
   });
 
