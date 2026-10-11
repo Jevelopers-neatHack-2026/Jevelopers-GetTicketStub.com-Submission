@@ -251,6 +251,10 @@ test('prepares the explicitly selected composer pair while retaining date, city,
   assert.equal(result.sourceIdentityBinding.bindingHashes.questionInstanceHash, question.questionInstanceHash);
   assert.equal(result.sourceIdentityBinding.bindingHashes.planHash, result.plan.planHash);
   assert.match(result.sourceIdentityBinding.digest, /^[a-f0-9]{64}$/);
+  const actualPlanInputTextBytes = result.plan.state.observations.reduce((sum, observation) => (
+    sum + Buffer.byteLength(observation.text, 'utf8') + Buffer.byteLength(observation.claimText, 'utf8')
+  ), 0);
+  assert.equal(result.sourceIdentityBinding.limits.observationTextBytes, actualPlanInputTextBytes);
   assert.ok(result.sourceIdentityBinding.utf8Bytes <= result.sourceIdentityBinding.limits.maxUtf8Bytes);
   assert.ok(Object.isFrozen(result.sourceIdentityBinding));
   assert.ok(Object.isFrozen(result.sourceIdentityBinding.selectedCandidates[0].facts));
@@ -489,6 +493,101 @@ function syntheticPairComposition(composition, pair, { perCandidate = 16, pointe
   });
 }
 
+function titleClaimsTextBytes(lengths) {
+  const claims = lengths.map((length, index) => ({
+    field: 'title',
+    value: `${index.toString(36)}${'x'.repeat(length - 1)}`,
+    origin: 'sourced',
+    retentionTags: ['event_identity', 'occurrence']
+  }));
+  return Buffer.byteLength(stableJsonTest(claims), 'utf8');
+}
+
+function lengthsForTitleTextBytes(targetBytes, prefix = []) {
+  for (let length = 1; length <= 512; length += 1) {
+    const lengths = [...prefix, length];
+    if (titleClaimsTextBytes(lengths) === targetBytes) return lengths;
+  }
+  throw new Error(`Could not construct exact ${targetBytes}-byte title group`);
+}
+
+function minimalPairComposition(composition, pair, leftLengths, rightLengths, pointerBytes = 8) {
+  const lengthsById = new Map([[pair[0], leftLengths], [pair[1], rightLengths]]);
+  const originalById = new Map(composition.occurrenceCandidates.map((candidate) => [candidate.candidateId, candidate]));
+  const replacementById = new Map();
+  for (const candidateId of pair) {
+    const original = originalById.get(candidateId);
+    assert.ok(original?.facts.title?.[0]?.supports?.[0]);
+    const evidenceId = original.facts.title[0].supports[0].evidenceId;
+    const evidence = composition.sources.find((source) => source.evidence?.evidenceId === evidenceId)?.evidence;
+    assert.ok(evidence);
+    const title = lengthsById.get(candidateId).map((length, index) => {
+      const value = `${index.toString(36)}${'x'.repeat(length - 1)}`;
+      return {
+        value,
+        origin: 'sourced',
+        supports: [syntheticSupport(evidence, `/${'p'.repeat(pointerBytes - 1)}`, value)]
+      };
+    });
+    replacementById.set(candidateId, {
+      schema: 'ei-occurrence-observation-internal/v1',
+      candidateId,
+      facts: { title }
+    });
+  }
+  const ordered = pair.map((candidateId) => replacementById.get(candidateId));
+  return cloneComposition(composition, {
+    occurrenceCandidates: composition.occurrenceCandidates.map((candidate) => replacementById.get(candidate.candidateId) ?? candidate),
+    occurrenceDecisions: [compareOccurrenceIdentity(ordered[0], ordered[1])]
+  });
+}
+
+function withDuplicateGroupIdLength(composition, length) {
+  return cloneComposition(composition, {
+    sources: composition.sources.map((source) => source.evidence
+      ? { ...source, evidence: { ...source.evidence, duplicateGroupId: 'd'.repeat(length) } }
+      : source)
+  });
+}
+
+function withSelectedPositionCount(composition, pair, positionCount) {
+  const evidenceIds = new Set(pair.map((candidateId) => {
+    const candidate = composition.occurrenceCandidates.find((item) => item.candidateId === candidateId);
+    return candidate.facts.title[0].supports[0].evidenceId;
+  }));
+  let changed = false;
+  const sources = composition.sources.map((source) => {
+    if (!source.evidence || !evidenceIds.has(source.evidence.evidenceId) || changed) return source;
+    changed = true;
+    return { ...source, evidence: { ...source.evidence, positionCount } };
+  });
+  assert.ok(changed);
+  return cloneComposition(composition, { sources });
+}
+
+function withFirstSelectedLocatorPadding(composition, pair, extraBytes) {
+  if (extraBytes === 0) return composition;
+  const candidateId = pair[0];
+  const replacements = new Map();
+  for (const candidate of composition.occurrenceCandidates) {
+    if (candidate.candidateId !== candidateId) continue;
+    const firstClaim = candidate.facts.title[0];
+    const firstSupport = firstClaim.supports[0];
+    const support = {
+      ...firstSupport,
+      locator: { ...firstSupport.locator, pointer: `${firstSupport.locator.pointer}${'p'.repeat(extraBytes)}` }
+    };
+    const title = [{ ...firstClaim, supports: [support] }, ...candidate.facts.title.slice(1)];
+    replacements.set(candidate.candidateId, { ...candidate, facts: { ...candidate.facts, title } });
+  }
+  const updated = composition.occurrenceCandidates.map((candidate) => replacements.get(candidate.candidateId) ?? candidate);
+  const pairCandidates = pair.map((candidateId) => updated.find((candidate) => candidate.candidateId === candidateId));
+  return cloneComposition(composition, {
+    occurrenceCandidates: updated,
+    occurrenceDecisions: [compareOccurrenceIdentity(pairCandidates[0], pairCandidates[1])]
+  });
+}
+
 test('groups 32 supported claims by their exact candidate and evidence identity without treating them as independent sources', async (t) => {
   const composition = await compose(t, [
     { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01' }), url: 'https://events.example.test/seattle' },
@@ -501,6 +600,9 @@ test('groups 32 supported claims by their exact candidate and evidence identity 
   assert.equal(result.sourceIdentityBinding.selectedCandidates.reduce((sum, candidate) => sum + candidate.facts.length, 0), 32);
   assert.equal(result.sourceIdentityBinding.observationGroups.length, 2);
   assert.equal(result.sourceIdentityBinding.limits.maxObservations, 32);
+  assert.equal(result.sourceIdentityBinding.limits.observationTextBytes,
+    result.plan.state.observations.reduce((sum, observation) => sum
+      + Buffer.byteLength(observation.text, 'utf8') + Buffer.byteLength(observation.claimText, 'utf8'), 0));
   assertBlockedPlan(result.plan, pair);
 
   const over = syntheticPairComposition(composition, pair, { perCandidate: 9, valueBytes: 512 });
@@ -511,12 +613,134 @@ test('groups 32 supported claims by their exact candidate and evidence identity 
   });
 });
 
-test('rejects the first selected projection whose immutable sidecar exceeds 65,536 UTF-8 bytes', async (t) => {
+test('retains more than 32 comparator provenance references in two grouped observations', async (t) => {
   const composition = await compose(t, [
     { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01' }), url: 'https://events.example.test/seattle' },
     { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
   ]);
   const pair = [candidateForCity(composition, 'Seattle').candidateId, candidateForCity(composition, 'Vancouver').candidateId].sort();
+  const input = syntheticPairComposition(composition, pair, { perCandidate: 16, extraSeries: true });
+  assert.equal(input.occurrenceDecisions[0].provenanceReferences.length, 33);
+
+  const result = prepare(input, pair);
+  assert.equal(result.sourceIdentityBinding.comparison.provenanceReferences.length, 33);
+  assert.equal(result.sourceIdentityBinding.observationGroups.length, 2);
+  assert.equal(result.plan.state.observations.length, 2);
+  assert.equal(result.sourceIdentityBinding.selectedCandidates.reduce((sum, candidate) => sum + candidate.facts.length, 0), 33);
+  assertBlockedPlan(result.plan, pair);
+});
+
+test('enforces exact UTF-8 observation and aggregate limits at the first byte over', async (t) => {
+  const composition = await compose(t, [
+    { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01' }), url: 'https://events.example.test/seattle' },
+    { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
+  ]);
+  const pair = composition.occurrenceCandidates.map((candidate) => candidate.candidateId).sort();
+  const leftAtFieldCap = lengthsForTitleTextBytes(4_096, Array(6).fill(512));
+  const exactField = prepare(minimalPairComposition(composition, pair, leftAtFieldCap, [8]), pair);
+  const exactFieldGroups = exactField.sourceIdentityBinding.observationGroups;
+  assert.equal(Buffer.byteLength(exactFieldGroups.find((group) => group.candidateId === pair[0]).text, 'utf8'), 4_096);
+  assert.equal(Buffer.byteLength(exactFieldGroups.find((group) => group.candidateId === pair[1]).text, 'utf8'), titleClaimsTextBytes([8]));
+  assert.ok(exactFieldGroups.every((group) => Buffer.byteLength(group.text, 'utf8') <= 4_096));
+
+  const fieldOver = minimalPairComposition(composition, pair, [...leftAtFieldCap.slice(0, -1), leftAtFieldCap.at(-1) + 1], [8]);
+  const smallGroupBytes = titleClaimsTextBytes([8]);
+  assert.ok(2 * (4_097 + smallGroupBytes) <= 10_000, 'aggregate cap does not mask the first per-group byte over');
+  assert.throws(() => prepare(fieldOver, pair), (error) => {
+    assert.ok(error instanceof SourceIdentityQuestionPreparationError);
+    assert.equal(error.code, 'RESOURCE_LIMIT_EXCEEDED');
+    return true;
+  });
+
+  const rightAtAggregateCap = lengthsForTitleTextBytes(904, [512]);
+  const exactAggregate = prepare(minimalPairComposition(composition, pair, leftAtFieldCap, rightAtAggregateCap), pair);
+  assert.deepEqual(exactAggregate.sourceIdentityBinding.observationGroups.map((group) => Buffer.byteLength(group.text, 'utf8')).sort((a, b) => a - b), [904, 4_096]);
+  assert.equal(exactAggregate.sourceIdentityBinding.limits.observationTextBytes, 10_000,
+    'the maintained preparer counts both equal text and claimText fields');
+
+  const aggregateOver = minimalPairComposition(composition, pair, leftAtFieldCap,
+    [...rightAtAggregateCap.slice(0, -1), rightAtAggregateCap.at(-1) + 1]);
+  assert.equal(2 * (4_096 + 905), 10_002);
+  assert.throws(() => prepare(aggregateOver, pair), (error) => {
+    assert.ok(error instanceof SourceIdentityQuestionPreparationError);
+    assert.equal(error.code, 'RESOURCE_LIMIT_EXCEEDED');
+    return true;
+  });
+});
+
+test('fails before scanning overlength strings and detects the exact first sidecar byte over', async (t) => {
+  const composition = await compose(t, [
+    { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01' }), url: 'https://events.example.test/seattle' },
+    { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
+  ]);
+  const pair = [candidateForCity(composition, 'Seattle').candidateId, candidateForCity(composition, 'Vancouver').candidateId].sort();
+  const original = composition.occurrenceCandidates.find((candidate) => candidate.candidateId === pair[0]);
+  const oversizedTitle = { ...original.facts.title[0], value: 'x'.repeat(1_000_000) };
+  const oversizedText = changedCandidate(composition, pair[0], (candidate) => ({
+    ...candidate,
+    facts: { ...candidate.facts, title: [oversizedTitle, ...candidate.facts.title.slice(1)] }
+  }));
+  assert.throws(() => prepare(oversizedText, pair), (error) => {
+    assert.ok(error instanceof SourceIdentityQuestionPreparationError);
+    assert.equal(error.code, 'RESOURCE_LIMIT_EXCEEDED');
+    return true;
+  });
+
+  const titleCount = 16;
+  const base = withSelectedPositionCount(withDuplicateGroupIdLength(
+    syntheticPairComposition(composition, pair, { perCandidate: titleCount, pointerBytes: 1 }), 1
+  ), pair, 9);
+  const baseResult = prepare(base, pair);
+  const pointerStep = prepare(withSelectedPositionCount(withDuplicateGroupIdLength(
+    syntheticPairComposition(composition, pair, { perCandidate: titleCount, pointerBytes: 2 }), 1
+  ), pair, 9), pair).sourceIdentityBinding.utf8Bytes - baseResult.sourceIdentityBinding.utf8Bytes;
+  const duplicateGroupStep = prepare(withSelectedPositionCount(withDuplicateGroupIdLength(
+    syntheticPairComposition(composition, pair, { perCandidate: titleCount, pointerBytes: 1 }), 2
+  ), pair, 9), pair).sourceIdentityBinding.utf8Bytes - baseResult.sourceIdentityBinding.utf8Bytes;
+  const locatorStep = prepare(withFirstSelectedLocatorPadding(base, pair, 1), pair)
+    .sourceIdentityBinding.utf8Bytes - baseResult.sourceIdentityBinding.utf8Bytes;
+  assert.ok(pointerStep > 0 && duplicateGroupStep > 0 && locatorStep > 0);
+
+  let exactInput;
+  let closest = { absoluteRemainder: Number.POSITIVE_INFINITY };
+  for (let pointerBytes = 1; pointerBytes <= 510 && !exactInput; pointerBytes += 1) {
+    for (let duplicateGroupLength = 1; duplicateGroupLength <= 128 && !exactInput; duplicateGroupLength += 1) {
+      const baseBytes = baseResult.sourceIdentityBinding.utf8Bytes
+        + pointerStep * (pointerBytes - 1) + duplicateGroupStep * (duplicateGroupLength - 1);
+      const locatorBytes = pointerBytes + 1;
+      const maxExtraLocatorBytes = 512 - locatorBytes;
+      const remainder = 65_536 - baseBytes;
+      for (let extra = 0; extra <= maxExtraLocatorBytes; extra += 1) {
+        const residual = remainder - extra * locatorStep;
+        if (Math.abs(residual) < closest.absoluteRemainder) {
+          closest = { absoluteRemainder: Math.abs(residual), residual, pointerBytes, duplicateGroupLength, extra };
+        }
+        if (residual === 0) {
+          exactInput = withSelectedPositionCount(withFirstSelectedLocatorPadding(withDuplicateGroupIdLength(
+            syntheticPairComposition(composition, pair, { perCandidate: titleCount, pointerBytes }), duplicateGroupLength
+          ), pair, extra), pair, 9);
+          break;
+        }
+      }
+    }
+  }
+  assert.ok(exactInput, `the 65,536-byte sidecar boundary is reachable within source locator and sidecar caps; base=${baseResult.sourceIdentityBinding.utf8Bytes}, pointerStep=${pointerStep}, duplicateGroupStep=${duplicateGroupStep}, locatorStep=${locatorStep}, closest=${JSON.stringify(closest)}`);
+  const atSidecarCap = prepare(exactInput, pair);
+  assert.equal(atSidecarCap.sourceIdentityBinding.utf8Bytes, 65_536);
+  const firstOverInput = withSelectedPositionCount(exactInput, pair, 10);
+  assert.throws(() => prepare(firstOverInput, pair), (error) => {
+    assert.ok(error instanceof SourceIdentityQuestionPreparationError);
+    assert.equal(error.code, 'RESOURCE_LIMIT_EXCEEDED');
+    return true;
+  });
+});
+
+test('rejects a materially oversized sidecar projection without truncating it', async (t) => {
+  const composition = await compose(t, [
+    { bytes: eventPage({ city: 'Seattle', startDate: '2027-08-01' }), url: 'https://events.example.test/seattle' },
+    { bytes: eventPage({ city: 'Vancouver', startDate: '2027-08-02' }), url: 'https://events.example.test/vancouver' }
+  ]);
+  const pair = composition.occurrenceCandidates.map((candidate) => candidate.candidateId).sort();
   const oversized = syntheticPairComposition(composition, pair, { perCandidate: 16, pointerBytes: 510 });
   assert.throws(() => prepare(oversized, pair), (error) => {
     assert.ok(error instanceof SourceIdentityQuestionPreparationError);

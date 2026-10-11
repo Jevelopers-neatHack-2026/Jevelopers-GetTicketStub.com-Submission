@@ -24,6 +24,7 @@ const MAX_OBSERVATIONS = 32;
 const MAX_TEXT_BYTES_PER_FIELD = 4_096;
 const MAX_TOTAL_TEXT_BYTES = 10_000;
 const MAX_SUPPORTS_PER_CLAIM = 8;
+const MAX_PROVENANCE_REFERENCES = MAX_FACTS * MAX_SUPPORTS_PER_CLAIM;
 const MAX_SIDE_CAR_UTF8_BYTES = 65_536;
 const MAX_SOURCE_BYTES = 512 * 1024;
 const MAX_LOCATOR_BYTES = 512;
@@ -79,7 +80,9 @@ function wellFormed(value) {
 }
 
 function safeText(value, maximum, { empty = false } = {}) {
-  if (typeof value !== 'string' || !wellFormed(value) || (!empty && value.length === 0)
+  if (typeof value !== 'string') fail();
+  if (value.length > maximum) fail('RESOURCE_LIMIT_EXCEEDED');
+  if (!wellFormed(value) || (!empty && value.length === 0)
     || (!empty && value.trim().length === 0) || value.includes('\0') || byteLength(value) > maximum) fail();
   return value;
 }
@@ -416,7 +419,9 @@ function observationsFor(pair, candidates, languageDescriptors, sourceById) {
     const claims = [...group.claimsByKey.values()].sort((left, right) => stableJson(left).localeCompare(stableJson(right), 'en'));
     const textBytes = serializedJsonByteLength(claims);
     if (textBytes > MAX_TEXT_BYTES_PER_FIELD) fail('RESOURCE_LIMIT_EXCEEDED');
-    totalTextBytes += textBytes;
+    // The maintained parser counts both `text` and `claimText`; this adapter
+    // supplies the same bounded group payload in both fields.
+    totalTextBytes += textBytes * 2;
     if (totalTextBytes > MAX_TOTAL_TEXT_BYTES) fail('RESOURCE_LIMIT_EXCEEDED');
     const text = stableJson(claims);
     const observationCore = Object.freeze({
@@ -575,7 +580,7 @@ function parseDecision(rawDecisions, pair, sourceById) {
     if (typeof value !== 'string' || !SHA256.test(value)) fail('SOURCE_BINDING_FAILED');
     return value;
   });
-  const provenanceReferences = safeArray(descriptors.provenanceReferences.value, MAX_OBSERVATIONS).map((reference) => {
+  const provenanceReferences = safeArray(descriptors.provenanceReferences.value, MAX_PROVENANCE_REFERENCES).map((reference) => {
     const record = safeDataRecord(reference, new Set(['evidenceId', 'contentHash', 'locator', 'field', 'value']));
     return Object.freeze({
       evidenceId: safeReference(record.evidenceId.value),

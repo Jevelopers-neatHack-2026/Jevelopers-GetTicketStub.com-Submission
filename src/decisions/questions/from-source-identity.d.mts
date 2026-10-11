@@ -115,6 +115,7 @@ export interface SourceIdentityBinding {
     maxObservations: 32;
     maxTextBytesPerField: 4_096;
     maxTotalTextBytes: 10_000;
+    /** Actual question-input bytes across both text and claimText fields. */
     observationTextBytes: number;
   }>;
   readonly digest: string;
