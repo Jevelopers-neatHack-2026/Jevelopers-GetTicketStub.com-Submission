@@ -1,13 +1,26 @@
+import fcntl
 import os
+import signal
 import subprocess
 import sys
-from _thread import interrupt_main
+from _thread import LockType
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
-from threading import Event, Timer
+from threading import Event, Lock, Thread
+from time import monotonic
 
 import pytest
 
 from integration_evals.processes import ProcessSettings, invoke
+from tests.fixtures.process_cancel import (
+    WATCHDOG_SECONDS,
+    CancellationTrace,
+    Gate,
+    Ready,
+    Role,
+    write_value,
+)
 
 
 @pytest.mark.parametrize("finish", ["success", "timeout"])
@@ -60,16 +73,171 @@ def test_descendants_stop_when_owner_invocation_ends(
     assert not marker.exists()
 
 
-def test_process_namespace_stops_when_invocation_is_cancelled(tmp_path: Path) -> None:
-    # Given a real long-lived owner invocation.
-    timer = Timer(0.25, interrupt_main)
-    settings = ProcessSettings(tmp_path, os.environ, b"", subprocess.DEVNULL, 3)
-    timer.start()
+def lease_available(path: Path) -> bool:
+    with path.open("r+b") as lease:
+        try:
+            fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        fcntl.flock(lease, fcntl.LOCK_UN)
+        return True
+
+
+@dataclass(frozen=True, slots=True)
+class Observer:
+    root: Path
+    deadline: float
+    stop: Event = field(default_factory=Event)
+    armed: Event = field(default_factory=Event)
+    dispatch_lock: LockType = field(default_factory=Lock)
+    events: list[str] = field(default_factory=list)
+    joined: Event = field(default_factory=Event)
+
+
+def wait_observation(observer: Observer, predicate: Callable[[], bool]) -> bool:
+    while not observer.stop.is_set() and monotonic() < observer.deadline:
+        if predicate():
+            return True
+        _ = observer.stop.wait(0.01)
+    return False
+
+
+def cancel_after_probe(observer: Observer) -> None:
+    root = observer.root
+    if not wait_observation(
+        observer, lambda: (root / "owner.json").exists() and (root / "observer.json").exists()
+    ):
+        observer.events.append("readiness-unavailable")
+        return
+    observer.events.append("owner-and-observer-ready")
+    if lease_available(root / "lease"):
+        observer.events.append("lifetime-lease-not-held")
+        return
+    observer.events.append("lifetime-lease-held")
+    write_value(root / "gate", Gate.PROBE.value)
+    if not wait_observation(
+        observer, lambda: (root / "sentinel").read_text(encoding="utf-8") == "probe-confirmed"
+    ):
+        observer.events.append("probe-unavailable")
+        return
+    observer.events.append("same-sentinel-probe-confirmed")
+    with observer.dispatch_lock:
+        if observer.armed.is_set() and monotonic() < observer.deadline:
+            observer.events.append("native-interrupt-dispatched")
+            os.kill(os.getpid(), signal.SIGINT)
+
+
+def invoke_observed(settings: ProcessSettings, observer: Observer, depth: int) -> None:
+    fixture = Path(__file__).parent / "fixtures/process_cancel.py"
+    thread = Thread(target=cancel_after_probe, args=(observer,), daemon=True)
+    observer.armed.set()
+    thread.start()
     try:
-        # When this test's invocation receives cancellation.
-        with pytest.raises(KeyboardInterrupt):
-            _ = invoke((sys.executable, "-c", "import signal; signal.pause()"), settings)
+        _ = invoke(
+            (sys.executable, str(fixture), str(observer.root), str(depth), "owner"), settings
+        )
+    except KeyboardInterrupt:
+        observer.events.append("invoke-interrupted")
+        raise
     finally:
-        timer.cancel()
-        timer.join()
-    # Then cancellation is propagated after task-owned resources are reaped.
+        with observer.dispatch_lock:
+            observer.armed.clear()
+        observer.stop.set()
+        thread.join(timeout=3)
+        if not thread.is_alive():
+            observer.joined.set()
+            observer.events.append("observer-joined")
+        assert not thread.is_alive()
+
+
+def assert_fixture_scope(root: Path, depth: int, events: list[str]) -> None:
+    ready = Ready.model_validate_json((root / "observer.json").read_bytes())
+    if sys.platform == "darwin":
+        assert (root / "fork-denied").read_text(encoding="utf-8") == "process-fork rejected"
+        assert ready.role is Role.OWNER
+        assert not (root / "leaf.json").exists()
+        events.append("macos-owner-only-fork-denial")
+    else:
+        assert ready.role is Role.LEAF
+        assert ready.session_leader
+        if depth == 2:
+            branch = Ready.model_validate_json((root / "branch.json").read_bytes())
+            assert branch.session_leader
+        events.append("linux-detached-observer-lease-closed")
+
+
+def cleanup_trace(observer: Observer, depth: int) -> CancellationTrace:
+    root = observer.root
+    with observer.dispatch_lock:
+        observer.armed.clear()
+    observer.stop.set()
+    write_value(root / "gate", Gate.QUIT.value)
+    cleanup = Observer(root, monotonic() + 3)
+    released = (
+        wait_observation(cleanup, lambda: lease_available(root / "lease"))
+        if (root / "lease").exists()
+        else None
+    )
+    trace = CancellationTrace(
+        platform=sys.platform,
+        depth=depth,
+        readiness=tuple(
+            Ready.model_validate_json(path.read_bytes())
+            for path in (root / "owner.json", root / "branch.json", root / "leaf.json")
+            if path.exists()
+        ),
+        observer=Ready.model_validate_json((root / "observer.json").read_bytes())
+        if (root / "observer.json").exists()
+        else None,
+        events=tuple(observer.events),
+        stdout=(root / "stdout").read_text(encoding="utf-8"),
+        marker=(root / "sentinel").read_text(encoding="utf-8")
+        if (root / "sentinel").exists()
+        else "unreached",
+        observer_thread_stopped=observer.joined.is_set(),
+        cleanup_lease_released=released,
+    )
+    _ = (root / "cancellation-trace.json").write_text(
+        trace.model_dump_json(indent=2), encoding="utf-8"
+    )
+    return trace
+
+
+@pytest.mark.parametrize("depth", [1, 2])
+def test_process_namespace_stops_when_invocation_is_cancelled(
+    tmp_path: Path, depth: int, record_testsuite_property: Callable[[str, str], None]
+) -> None:
+    # Given a detached observer that proves readiness, writability and a live lifetime lease.
+    output = tmp_path / "stdout"
+    events: list[str] = []
+    observer = Observer(tmp_path, monotonic() + 2, events=events)
+    started = monotonic()
+    try:
+        with output.open("w+b") as handle:
+            settings = ProcessSettings(
+                tmp_path, os.environ, b"", handle, 3, offline=True, writable_directory=tmp_path
+            )
+            # When readiness and a successful in-boundary probe cause native cancellation.
+            with pytest.raises(KeyboardInterrupt):
+                invoke_observed(settings, observer, depth)
+        # Then the actual lease is released before any cooperative fixture cleanup.
+        assert observer.joined.is_set()
+        assert monotonic() - started < WATCHDOG_SECONDS
+        assert events == [
+            "owner-and-observer-ready",
+            "lifetime-lease-held",
+            "same-sentinel-probe-confirmed",
+            "native-interrupt-dispatched",
+            "invoke-interrupted",
+            "observer-joined",
+        ]
+        assert lease_available(tmp_path / "lease")
+        events.append("lifetime-lease-reacquired-after-invoke")
+        write_value(tmp_path / "gate", Gate.RELEASE.value)
+        assert (tmp_path / "sentinel").read_text(encoding="utf-8") == "probe-confirmed"
+        assert_fixture_scope(tmp_path, depth, events)
+    finally:
+        trace = cleanup_trace(observer, depth)
+        record_testsuite_property(f"process-cancellation-depth-{depth}", trace.model_dump_json())
+        assert trace.cleanup_lease_released is not False
+        assert trace.observer_thread_stopped
