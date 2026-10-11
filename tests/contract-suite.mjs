@@ -633,6 +633,73 @@ cases.push(["stale authorization rejects before budget or provider transport", a
   assert.equal(state.transportCalls.length, 0);
 }]);
 
+cases.push(["private synthetic authority blocks authorization reuse after a lost claim response", async () => {
+  // This models a private fixture claim followed by a lost response. It is not
+  // evidence of a real issuer protocol, recovery path, or production restart.
+  const authorizationId = "fixture-lost-response-authorization";
+  const first = createHarness({
+    authorizationId,
+    authorizationActionId: "fixture-first-purchase-action"
+  });
+  const fixtureClaim = first.dependencies.authorizationVerifier.verifyAndClaim.bind(
+    first.dependencies.authorizationVerifier
+  );
+  let committedFixtureClaims = 0;
+  first.dependencies.authorizationVerifier.verifyAndClaim = async (check) => {
+    const result = await fixtureClaim(check);
+    assert.equal(result.status, "claimed");
+    committedFixtureClaims += 1;
+    throw new Error("private fixture simulates a lost response after claim commit");
+  };
+
+  await expectError(
+    first.runtime.submit(envelope(submitCommand()), scope),
+    "authorization_unavailable",
+    "not_dispatched"
+  );
+  const fixtureScope = `fixture-provider/${scope.tenantId}/${scope.projectId}`;
+  assert.equal(committedFixtureClaims, 1);
+  assert.equal(first.state.claimedAuthorizationActions.size, 2);
+  assert.equal(first.state.claimedAuthorizationActions.has(
+    `${fixtureScope}/action/fixture-first-purchase-action`
+  ), true);
+  assert.equal(first.state.claimedAuthorizationActions.has(
+    `${fixtureScope}/authorization/${authorizationId}`
+  ), true);
+  assert.equal(first.state.attempts.size, 0);
+  assert.equal(first.state.budgetCalls.length, 0);
+  assert.equal(first.state.transportCalls.length, 0);
+
+  const second = createHarness({
+    sharedAuthorizationActions: first.state.claimedAuthorizationActions,
+    authorizationId,
+    authorizationActionId: "fixture-second-purchase-action"
+  });
+  const secondPurchase = submitCommand({
+    productionBundle: { fixture: "different purchase" },
+    productionBundleDigest: "sha256:different-purchase-bundle",
+    quote: {
+      ...submitCommand().quote,
+      quoteId: "quote-fixture-second-purchase",
+      totalMinor: 1400,
+      productionBundleDigest: "sha256:different-purchase-bundle"
+    },
+    amountMinor: 1400,
+    idempotencyKey: "idem-fixture-second-purchase",
+    requestFingerprint: "sha256:fixture-second-purchase-request"
+  });
+  await expectError(
+    second.runtime.submit(envelope(secondPurchase), scope),
+    "stale_authorization",
+    "not_dispatched"
+  );
+  assert.equal(second.state.authorizationCalls.length, 1);
+  assert.equal(first.state.claimedAuthorizationActions.size, 2);
+  assert.equal(second.state.attempts.size, 0);
+  assert.equal(second.state.budgetCalls.length, 0);
+  assert.equal(second.state.transportCalls.length, 0);
+}]);
+
 cases.push(["legacy boolean authorization verification fails closed without an atomic action claim", async () => {
   const { runtime, state, dependencies } = createHarness();
   dependencies.authorizationVerifier.verify = async () => ({ authorized: true });
