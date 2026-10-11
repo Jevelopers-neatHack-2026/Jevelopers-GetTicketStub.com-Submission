@@ -85,7 +85,7 @@ async function fetchSourceJson<T>(source: SourceName, url: string): Promise<T | 
   try {
     const res = await fetch(url, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(6000), cache: "no-store" });
     if (!res.ok) {
-      done(res.status === 429 ? "rate_limited" : "http_error", res.status);
+      done(res.status === 429 ? "rate_limited" : res.status === 401 || res.status === 403 ? "auth_failed" : "http_error", res.status);
       return undefined;
     }
     const data = (await res.json().catch(() => undefined)) as T | undefined;

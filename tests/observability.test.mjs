@@ -66,7 +66,7 @@ function configure(capability = "agent", model = "anthropic/test-model") {
   process.env[`${prefix}_PROVIDER`] = "openrouter";
   process.env[`${prefix}_MODEL`] = model;
   process.env[`${prefix}_OPENROUTER_API_KEY`] = "offline-test-placeholder";
-  delete process.env.ANTHROPIC_API_KEY; delete process.env.OPENAI_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY; delete process.env.OPENAI_API_KEY; delete process.env.OPEN_METEO_API_KEY;
 }
 const isoDay = (offsetDays) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
 const named = (name) => sink.events.filter((e) => e.name === name);
@@ -331,7 +331,7 @@ test("research invalid JSON, search and demo-only rejection", async () => {
 });
 
 test("research live page: fetch, schema.org parse, forecast weather and enrichment are all measured", async () => {
-  configure("research"); delete process.env.OPEN_METEO_API_KEY;
+  configure("research");
   const page = `<script type="application/ld+json">{"@type":"MusicEvent","name":"Offline ${SEED}","startDate":"${isoDay(-10)}","location":{"name":"Hall","address":{"addressLocality":"Glasgow"}}}</script><p>Special guest Local Band.</p>`;
   globalThis.fetch = async (url) => {
     if (url.startsWith("https://example.com/")) return new Response(page);
@@ -385,7 +385,7 @@ test("research weather uses the Open-Meteo customer endpoints with the subscript
 test("research weather outside the forecast window is pending without calling Open-Meteo, and never uses the archive", async () => {
   configure("research"); process.env.TICKETSTUB_RESEARCH_PROVIDER = "anthropic";
   process.env.OPEN_METEO_API_KEY = "offline-test-placeholder";
-  for (const [offset, value, outcome] of [[-93, "Past weather is not available this far back", "skipped"], [16, "Forecast opens 16 days before the date", "pending"]]) {
+  for (const [offset, value, outcome] of [[-94, "Past weather is not available this far back", "skipped"], [17, "Forecast opens 16 days before the date", "pending"]]) {
     sink.clear();
     const page = `<script type="application/ld+json">{"@type":"MusicEvent","name":"Gig","startDate":"${isoDay(offset)}","location":{"name":"Hall","address":{"addressLocality":"Oslo"}}}</script>`;
     globalThis.fetch = async (url) => {
@@ -397,6 +397,32 @@ test("research weather outside the forecast window is pending without calling Op
     assert.deepEqual(weather.map((f) => [f.provenance, f.value]), [["pending", value]]);
     assert.deepEqual(named("source_fetch").map((e) => [e.fields.source, e.fields.outcome]).sort(), [["event_page", "ok"], ["weather_forecast", outcome]]);
   }
+  assertClean();
+});
+
+test("research weather for older dates inside the window asks the forecast API, and a rejected key is auth_failed", async () => {
+  configure("research"); process.env.TICKETSTUB_RESEARCH_PROVIDER = "anthropic";
+  process.env.OPEN_METEO_API_KEY = "offline-test-placeholder";
+  for (const offset of [-61, -91]) { // the old code sent these to the archive API, which API Standard does not include
+    sink.clear();
+    const hosts = [];
+    globalThis.fetch = async (url) => {
+      if (url.startsWith("https://example.com/")) return new Response(`<script type="application/ld+json">{"@type":"MusicEvent","name":"Gig","startDate":"${isoDay(offset)}","location":{"name":"Hall","address":{"addressLocality":"Oslo"}}}</script>`);
+      hosts.push(new URL(url).host);
+      if (url.includes("/v1/search?")) return response({ results: [{ latitude: 59.9, longitude: 10.7, name: "Oslo" }] });
+      return response({ daily: { temperature_2m_max: [null], precipitation_sum: [null] } }); // what the API returns for days it no longer keeps
+    };
+    const body = await (await research.POST(req({ url: "https://example.com/gig" }))).json();
+    assert.deepEqual(hosts, ["customer-geocoding-api.open-meteo.com", "customer-api.open-meteo.com"]);
+    assert.deepEqual(body.facts.filter((f) => f.id === "weather").map((f) => [f.provenance, f.value]), [["pending", "Weather lookup unavailable"]]);
+  }
+
+  sink.clear();
+  globalThis.fetch = async (url) => url.startsWith("https://example.com/")
+    ? new Response(`<script type="application/ld+json">{"@type":"MusicEvent","name":"Gig","startDate":"${isoDay(-2)}","location":{"name":"Hall","address":{"addressLocality":"Oslo"}}}</script>`)
+    : response({ error: true, reason: "API key invalid" }, 401);
+  await research.POST(req({ url: "https://example.com/gig" }));
+  assert.deepEqual(named("source_fetch").map((e) => [e.fields.source, e.fields.outcome, e.fields.upstreamStatus]).sort(), [["event_page", "ok", 200], ["weather_geocode", "auth_failed", 401]]);
   assertClean();
 });
 
