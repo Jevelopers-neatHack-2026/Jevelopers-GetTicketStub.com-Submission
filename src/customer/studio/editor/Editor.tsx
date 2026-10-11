@@ -11,6 +11,7 @@ import { AgentChat } from "@/customer/studio/agent/AgentChat";
 import { AgentNotes } from "@/customer/studio/agent/AgentNotes";
 import { Breadcrumbs } from "@/customer/nav/Breadcrumbs";
 import { LeavesMark } from "@/customer/pages/ui";
+import { HandleIcon } from "@/customer/nav/icons";
 import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { PaperButton, PaperSheet, Stamp, Switch, Tag, Tags, Tool, Tools } from "@/customer/desk/Desk";
 import { AskIcon, FlipIcon, FriendsIcon, RemixIcon } from "@/customer/desk/icons";
@@ -26,9 +27,13 @@ import { Tray } from "./Tray";
 import { FinishSheet, TearStage } from "./TearFlow";
 import { useIsClient, useMediaQuery } from "./useClient";
 import { useCamera } from "./useCamera";
+import { usePinchLook } from "./usePinchLook";
 import styles from "./Editor.module.css";
 
 const HINT_KEY = "ticketstub.hint.swipe.v1";
+const PANELS_KEY = "ticketstub.studio.panels.v1";
+/** Print preview comes on by itself past this zoom. */
+const AUTO_PREVIEW = 1.5;
 type SheetName = null | "styles" | "remix" | "agent" | "finish";
 
 /** Width / height of each style, so the stage can be sized to the stub before it renders. */
@@ -60,6 +65,27 @@ function hintSeen(): boolean {
     return localStorage.getItem(HINT_KEY) === "1";
   } catch {
     return true;
+  }
+}
+
+/** Which side panels are open on the desktop editor. Remembered across visits; storage can throw. */
+interface Panels {
+  rail: boolean;
+  insp: boolean;
+}
+function readPanels(): Panels {
+  try {
+    const v = JSON.parse(localStorage.getItem(PANELS_KEY) ?? "null") as Partial<Panels> | null;
+    return { rail: v?.rail !== false, insp: v?.insp !== false };
+  } catch {
+    return { rail: true, insp: true };
+  }
+}
+function writePanels(p: Panels) {
+  try {
+    localStorage.setItem(PANELS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage unavailable: the choice lasts for this visit */
   }
 }
 
@@ -97,11 +123,16 @@ function EditorLoaded({ id }: { id: string }) {
   const [pressing, setPressing] = useState(false);
   const [agentSeed, setAgentSeed] = useState<{ text: string; n: number } | undefined>();
   const [preview, setPreview] = useState(false);
+  const [camAway, setCamAway] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+  const [panels, setPanels] = useState<Panels>(readPanels);
   const desktop = useMediaQuery("(min-width: 960px)");
 
   const areaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const matRef = useRef<HTMLDivElement>(null);
+  const cameraRef = useRef<((r: DOMRect) => void) | null>(null);
   const dealN = useRef(0);
   const timers = useRef<number[]>([]);
   const later = useCallback((fn: () => void, ms: number) => {
@@ -179,7 +210,32 @@ function EditorLoaded({ id }: { id: string }) {
     setSheet("agent");
   }, []);
 
-  // Keyboard: ← → deal another style, F flips, Esc deselects.
+  const setPanelState = useCallback((next: Panels) => {
+    setPanels(next);
+    writePanels(next);
+  }, []);
+  const togglePanel = useCallback(
+    (which: keyof Panels) => {
+      play("toggle", { emphasis: "subtle", direction: panels[which] ? "back" : "forward" });
+      setPanelState({ ...panels, [which]: !panels[which] });
+    },
+    [panels, setPanelState],
+  );
+  /** Focus: fold both panels, or unfold them again. */
+  const toggleFocus = useCallback(() => {
+    const open = panels.rail || panels.insp;
+    play("toggle", { emphasis: "subtle", direction: open ? "back" : "forward" });
+    setPanelState({ rail: !open, insp: !open });
+  }, [panels, setPanelState]);
+
+  const zoomToSelection = useCallback(() => {
+    const el = areaRef.current?.querySelector<HTMLElement>("figure[data-edition] button[aria-pressed='true']");
+    if (!el) return;
+    play("tap", { emphasis: "subtle" });
+    cameraRef.current?.(el.getBoundingClientRect());
+  }, []);
+
+  // Keyboard: ← → deal another style, F flips, Z zooms to the selection, \ folds the side panels, Esc deselects.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (sheet || tearing || chipFact || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -193,13 +249,18 @@ function EditorLoaded({ id }: { id: string }) {
         dealStep(-1);
       } else if (e.key === "f" || e.key === "F") {
         flip();
+      } else if ((e.key === "z" || e.key === "Z") && desktop && selected && !flipped) {
+        zoomToSelection();
+      } else if (e.key === "\\" && desktop) {
+        e.preventDefault();
+        toggleFocus();
       } else if (e.key === "Escape") {
         setSelected(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sheet, tearing, chipFact, dealStep, flip]);
+  }, [sheet, tearing, chipFact, dealStep, flip, desktop, selected, flipped, zoomToSelection, toggleFocus]);
 
   /* ---- Gestures on the stage. Touch and mouse alike: the stub follows the pointer, a swipe past
      64px deals the next or previous style, a still press of 450ms opens All styles. Taps on stub
@@ -214,8 +275,8 @@ function EditorLoaded({ id }: { id: string }) {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 || camera.panning.current) return;
-    if ((e.target as HTMLElement).closest("[role='toolbar'], [role='radiogroup'], a, input, textarea")) return;
+    if (e.button !== 0 || camera.panning.current || pinch.active.current) return;
+    if ((e.target as HTMLElement).closest("[role='toolbar'], [role='radiogroup'], [data-note], [data-cam-mini], a, input, textarea")) return;
     const s = g.current;
     clearPress();
     s.x = e.clientX;
@@ -325,6 +386,31 @@ function EditorLoaded({ id }: { id: string }) {
     onCancelGesture: () => onPointerCancel(),
   });
 
+  const frameCam = camera.frame;
+  useEffect(() => {
+    cameraRef.current = frameCam;
+  }, [frameCam]);
+  const readCam = camera.read;
+  // The note card folds and the print guides show according to where the camera is.
+  useEffect(() => {
+    if (!desktop) return;
+    let away = false;
+    const on = () => {
+      const c = readCam();
+      if (c.away !== away) {
+        away = c.away;
+        setCamAway(c.away);
+        setPeek(false);
+      }
+      setZoomed(c.s > AUTO_PREVIEW);
+    };
+    window.addEventListener("ts-camera", on);
+    return () => window.removeEventListener("ts-camera", on);
+  }, [desktop, readCam]);
+
+  // Phone: pinch the stub to look closer; it springs back on release.
+  const pinch = usePinchLook({ enabled: !desktop, areaRef, onStart: () => onPointerCancel() });
+
   const shareToken = useMemo(() => (stub ? encodeStub(stub) : ""), [stub]);
 
   const onTorn = () => {
@@ -367,7 +453,7 @@ function EditorLoaded({ id }: { id: string }) {
 
   /** The stub on its stock, with the one being dealt off sliding away beside it. */
   const deck = (size: "md" | "lg") => (
-    <div className={styles.deck} data-stub-area>
+    <div className={styles.deck} data-stub-area data-deck>
       {dealing && (
         <div
           key={`out-${dealing.n}`}
@@ -399,8 +485,8 @@ function EditorLoaded({ id }: { id: string }) {
                   play("tap", { emphasis: "subtle" });
                 }}
               />
-              {preview && <div className={styles.safety} aria-hidden="true" />}
-              {preview && <div className={styles.bleed} aria-hidden="true" />}
+              {desktop && <div className={styles.safety} data-on={preview || zoomed || undefined} aria-hidden="true" />}
+              {desktop && <div className={styles.bleed} data-on={preview || zoomed || undefined} aria-hidden="true" />}
             </div>
           </MaterialFrame>
         </div>
@@ -410,7 +496,7 @@ function EditorLoaded({ id }: { id: string }) {
 
   const toolbar = (
     <DockedToolbar container={areaRef} clip={desktop} active={!!selected && !flipped} track={`${version.id}|${selected}|${stub.material}|${desktop}`}>
-      {selected && <FloatingToolbar stub={stub} selected={selected} onChange={update} onDone={() => setSelected(null)} onRemix={() => setSheet("remix")} />}
+      {selected && <FloatingToolbar stub={stub} selected={selected} onChange={update} onDone={() => setSelected(null)} onRemix={() => setSheet("remix")} onZoom={desktop ? zoomToSelection : undefined} />}
     </DockedToolbar>
   );
 
@@ -491,17 +577,38 @@ function EditorLoaded({ id }: { id: string }) {
             </div>
           </header>
 
-          <div className={styles.deskGrid}>
-            <aside className={styles.rail} aria-label="Styles">
-              <h2 className={styles.railTitle}>Styles</h2>
-              <StyleGridItems stub={stub} onPick={dealTo} variant="rail" />
+          <div className={styles.deskGrid} data-rail={panels.rail ? "open" : "folded"} data-insp={panels.insp ? "open" : "folded"}>
+            <aside className={styles.rail} data-folded={!panels.rail || undefined} aria-label="Styles">
+              <div className={styles.panelHead}>
+                <h2 className={styles.railTitle}>Styles</h2>
+                <button
+                  type="button"
+                  className={styles.fold}
+                  aria-label={panels.rail ? "Fold the styles column" : "Open the styles column"}
+                  title={panels.rail ? "Fold the styles column (\\)" : "Open the styles column (\\)"}
+                  aria-expanded={panels.rail}
+                  onClick={() => togglePanel("rail")}
+                >
+                  <HandleIcon open={panels.rail} />
+                </button>
+              </div>
+              <div className={styles.railBody} inert={!panels.rail}>
+                <StyleGridItems stub={stub} onPick={dealTo} variant="rail" />
+              </div>
             </aside>
 
             <main className={styles.deskCentre}>
               <div className={styles.matBar}>
                 <div className={styles.matSwitch}>
-                  <Switch checked={preview} onChange={setPreview} hint="Shows the safe area and the bleed">
+                  <Switch
+                    checked={preview}
+                    onChange={setPreview}
+                    hint={preview ? "Safe area and bleed stay on" : zoomed ? "Comes on by itself while zoomed in" : "Shows the safe area and the bleed"}
+                  >
                     Print preview
+                    <span className={styles.auto} data-on={(zoomed && !preview) || undefined}>
+                      Auto
+                    </span>
                   </Switch>
                 </div>
                 <span className={`desk-label ${styles.size}`}>
@@ -512,9 +619,11 @@ function EditorLoaded({ id }: { id: string }) {
               <div ref={matRef} className={styles.mat}>
                 <div className={styles.rulerTop} data-cam-top aria-hidden="true">
                   <span className={styles.band} data-cam-band-t />
+                  <span className={styles.hairX} data-cam-hx data-on="false" />
                 </div>
                 <div className={styles.rulerLeft} data-cam-left aria-hidden="true">
                   <span className={styles.band} data-cam-band-l />
+                  <span className={styles.hairY} data-cam-hy data-on="false" />
                 </div>
                 <div className={styles.matBody} data-cam-body>
                   <div
@@ -531,12 +640,26 @@ function EditorLoaded({ id }: { id: string }) {
                       <div className={styles.world} data-cam-world>
                         <div className={styles.stageBox}>{deck("lg")}</div>
                       </div>
+                      <AgentNotes
+                        stub={stub}
+                        onChange={update}
+                        onAsk={ask}
+                        onShowBack={showBack}
+                        variant="pin"
+                        folded={camAway && !peek}
+                        onUnfold={() => {
+                          play("open", { emphasis: "subtle" });
+                          setPeek(true);
+                        }}
+                      />
+                      <div className={styles.mini} data-cam-mini data-on="false" data-stub-area aria-hidden="true">
+                        <span className={styles.miniStub} data-cam-mini-stub />
+                        <span className={styles.miniView} data-cam-mini-view />
+                      </div>
                     </div>
                     {toolbar}
                   </div>
-                  <div className={styles.margin}>
-                    <AgentNotes stub={stub} onChange={update} onAsk={ask} onShowBack={showBack} variant="stack" />
-                  </div>
+                  <span className={styles.read} data-cam-read data-on="false" aria-hidden="true" />
                 </div>
               </div>
 
@@ -557,17 +680,32 @@ function EditorLoaded({ id }: { id: string }) {
                   </PaperButton>
                 </div>
                 <p className={styles.keys}>
-                  Scroll to zoom · middle-drag to pan · <kbd>0</kbd> fit · <kbd>←</kbd> <kbd>→</kbd> style · <kbd>F</kbd> flip
+                  Scroll to zoom · drag to pan · <kbd>0</kbd> fit · <kbd>Z</kbd> zoom to it · <kbd>←</kbd> <kbd>→</kbd> style · <kbd>F</kbd> flip · <kbd>{"\\"}</kbd> focus
                 </p>
               </div>
             </main>
 
-            <aside className={styles.inspector} aria-label="Inspector">
-              <div className={styles.inspectorScroll}>
-                <Inspector stub={stub} selected={selected} onChange={update} onDeselect={() => setSelected(null)} onRemix={() => setSheet("remix")} onFixFact={setChipFact} />
+            <aside className={styles.inspector} data-folded={!panels.insp || undefined} aria-label="Inspector">
+              <div className={styles.panelHead}>
+                <button
+                  type="button"
+                  className={styles.fold}
+                  aria-label={panels.insp ? "Fold the inspector" : "Open the inspector"}
+                  title={panels.insp ? "Fold the inspector (\\)" : "Open the inspector (\\)"}
+                  aria-expanded={panels.insp}
+                  onClick={() => togglePanel("insp")}
+                >
+                  <HandleIcon open={!panels.insp} />
+                </button>
+                <h2 className={styles.railTitle}>Inspector</h2>
               </div>
-              <div className={styles.inspectorTray}>
-                <Tray stub={stub} onChange={update} onTear={onTear} compact />
+              <div className={styles.inspBody} inert={!panels.insp}>
+                <div className={styles.inspectorScroll}>
+                  <Inspector stub={stub} selected={selected} onChange={update} onDeselect={() => setSelected(null)} onRemix={() => setSheet("remix")} onFixFact={setChipFact} />
+                </div>
+                <div className={styles.inspectorTray}>
+                  <Tray stub={stub} onChange={update} onTear={onTear} compact />
+                </div>
               </div>
             </aside>
           </div>

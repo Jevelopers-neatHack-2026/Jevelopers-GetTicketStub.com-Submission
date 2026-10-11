@@ -15,6 +15,8 @@ interface Props {
   onChange: (s: Stub) => void;
   onDone: () => void;
   onRemix: () => void;
+  /** Desktop: frames the selected field on the cutting mat. */
+  onZoom?: () => void;
 }
 
 const icon: SVGProps<SVGSVGElement> = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
@@ -50,6 +52,14 @@ function HideIcon() {
     </svg>
   );
 }
+function ZoomIcon() {
+  return (
+    <svg {...icon}>
+      <circle cx="10.5" cy="10.5" r="5.5" />
+      <path d="m14.6 14.6 5 5M8.2 10.5h4.6M10.5 8.2v4.6" />
+    </svg>
+  );
+}
 function DoneIcon() {
   return (
     <svg {...icon}>
@@ -61,7 +71,7 @@ function DoneIcon() {
 type Picker = null | "font" | "colour";
 
 /** Quick, one-tap edits for the selected element. Font and Colour open a small picker. Deeper options live in the inspector. */
-export function FloatingToolbar({ stub, selected, onChange, onDone, onRemix }: Props) {
+export function FloatingToolbar({ stub, selected, onChange, onDone, onRemix, onZoom }: Props) {
   const meta = EDITION_META[currentVersion(stub).edition];
   const [picker, setPicker] = useState<Picker>(null);
   const textual = selected === "title" || selected === "subtitle";
@@ -151,6 +161,11 @@ export function FloatingToolbar({ stub, selected, onChange, onDone, onRemix }: P
             }}
           >
             Hide
+          </Tool>
+        )}
+        {onZoom && (
+          <Tool icon={<ZoomIcon />} onClick={onZoom} title="Zoom to it (Z)">
+            Zoom to it
           </Tool>
         )}
         <Tool icon={<DoneIcon />} onClick={onDone}>

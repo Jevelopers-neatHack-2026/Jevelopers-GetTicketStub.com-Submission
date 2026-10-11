@@ -1,10 +1,11 @@
 "use client";
-// The agent as margin notes. It writes short notes beside the stub (a card under it on a phone, slips
-// in the margin of the cutting mat on desktop). Each note asks one thing and has one-tap answers.
+// The agent as notes. It writes short notes about the stub: one card under it on a phone, and on the
+// desktop one small taped card pinned in the corner of the cutting mat (it folds to a tab while the
+// camera is away from fit). Each note asks one thing and has one-tap answers; "‹ ›" step through them.
 // The full chat (AgentChat) opens only from Ask, or when the person types into a note.
 // Rule-based unless a model is configured, so the one MarkLegend line says "Simulated".
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Fact, Provenance, Stub } from "../types";
 import { currentVersion } from "../types";
 import { remixArt } from "../research/client";
@@ -34,10 +35,12 @@ interface Props {
   onAsk: (text?: string) => void;
   /** Flips the stub over so a change on the back is seen. */
   onShowBack: () => void;
-  variant: "card" | "stack";
+  variant: "card" | "pin";
+  /** The pinned card is folded to a tab (the camera is away from fit). */
+  folded?: boolean;
+  /** The tab was tapped. */
+  onUnfold?: () => void;
 }
-
-const MAX_STACK = 2;
 
 function FactMark({ f }: { f: Fact }) {
   return (
@@ -57,10 +60,11 @@ function list(items: ReactNode[]): ReactNode {
   ));
 }
 
-export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant }: Props) {
+export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant, folded = false, onUnfold }: Props) {
   const [gone, setGone] = useState<string[]>([]);
   const [leaving, setLeaving] = useState<{ id: string; dir: 1 | -1 } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [at, setAt] = useState(0);
 
   const commit = onChange;
 
@@ -212,28 +216,75 @@ export function AgentNotes({ stub, onChange, onAsk, onShowBack, variant }: Props
   });
 
   const open = notes.filter((n) => !gone.includes(n.id));
-  const shown = variant === "card" ? open.slice(0, 1) : open.slice(0, MAX_STACK);
+  // when a note is answered the next one is dealt in, with a small thud
+  const dealt = useRef(0);
+  const more = open.length > 0;
+  useEffect(() => {
+    if (gone.length > dealt.current && more) play("drop", { emphasis: "subtle" });
+    dealt.current = gone.length;
+  }, [gone.length, more]);
   const marks: (Provenance | "sandbox")[] = [...new Set<Provenance | "sandbox">([...ev.facts.map((f) => f.provenance), "simulated"])];
 
+  const total = gone.length + open.length;
+
+  if (variant === "pin") {
+    if (!open.length) return null;
+    const i = Math.min(at, open.length - 1);
+    const n = open[i];
+    const step = (d: 1 | -1) => {
+      play("select", { emphasis: "subtle", direction: d === 1 ? "forward" : "back" });
+      setAt(i + d);
+    };
+    return (
+      <section className={`${styles.wrap} ${styles.pin}`} data-folded={folded || undefined} data-note data-stub-area aria-label="Notes from the agent">
+        <button type="button" className={styles.tab} onClick={onUnfold} tabIndex={folded ? 0 : -1} aria-hidden={!folded || undefined} aria-label="Unfold the agent note">
+          Note · <span className={styles.count}>{gone.length + i + 1} of {total}</span>
+        </button>
+        <div className={styles.pinCard} inert={folded}>
+          <NoteCard
+            key={n.id}
+            note={n}
+            index={gone.length + i + 1}
+            total={total}
+            swipe={false}
+            leaving={leaving?.id === n.id ? leaving.dir : 0}
+            busy={!!busy}
+            withReply
+            nav={{ prev: i > 0 ? () => step(-1) : undefined, next: i < open.length - 1 ? () => step(1) : undefined }}
+            onDismiss={(dir) => {
+              play("flick", { emphasis: "subtle" });
+              dismiss(n.id, dir);
+            }}
+            onAsk={onAsk}
+          />
+          <div className={styles.legend}>
+            <MarkLegend marks={marks} />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const n = open[0];
   return (
-    <section className={`${styles.wrap} ${styles[variant]}`} aria-label="Notes from the agent">
-      {shown.map((n, i) => (
+    <section className={`${styles.wrap} ${styles.card}`} aria-label="Notes from the agent">
+      {n && (
         <NoteCard
           key={n.id}
           note={n}
-          index={gone.length + i + 1}
-          total={gone.length + open.length}
-          swipe={variant === "card"}
+          index={gone.length + 1}
+          total={total}
+          swipe
           leaving={leaving?.id === n.id ? leaving.dir : 0}
           busy={!!busy}
-          withReply={i === 0}
+          withReply
           onDismiss={(dir) => {
             play("flick", { emphasis: "subtle" });
             dismiss(n.id, dir);
           }}
           onAsk={onAsk}
         />
-      ))}
+      )}
       <MarkLegend marks={marks} />
     </section>
   );
@@ -247,6 +298,7 @@ function NoteCard({
   leaving,
   busy,
   withReply,
+  nav,
   onDismiss,
   onAsk,
 }: {
@@ -257,6 +309,8 @@ function NoteCard({
   leaving: 1 | -1 | 0;
   busy: boolean;
   withReply: boolean;
+  /** Steps through the notes (the pinned card only). */
+  nav?: { prev?: () => void; next?: () => void };
   onDismiss: (dir: 1 | -1) => void;
   onAsk: (text?: string) => void;
 }) {
@@ -312,9 +366,21 @@ function NoteCard({
         <span className="desk-label">
           Agent note · <span className={styles.count}>{index} of {total}</span>
         </span>
-        <button type="button" className={styles.close} aria-label="Dismiss this note" onClick={() => onDismiss(-1)}>
-          <CloseIcon />
-        </button>
+        <span className={styles.headBtns}>
+          {nav && (
+            <>
+              <button type="button" className={styles.step} aria-label="Previous note" disabled={!nav.prev} onClick={nav.prev}>
+                ‹
+              </button>
+              <button type="button" className={styles.step} aria-label="Next note" disabled={!nav.next} onClick={nav.next}>
+                ›
+              </button>
+            </>
+          )}
+          <button type="button" className={styles.close} aria-label="Dismiss this note" onClick={() => onDismiss(-1)}>
+            <CloseIcon />
+          </button>
+        </span>
       </header>
       <p className={styles.body}>{note.body}</p>
       <Tags label="Answers">

@@ -7,6 +7,16 @@
 //
 // Inputs: wheel and pinch zoom around the pointer; two-finger trackpad scroll, middle-drag, space +
 // drag, empty-mat drag and touch drag pan; + - 0 and arrows from the keyboard; double-click fits.
+//
+// Sharp zoom: the stub is live type in container units, not a bitmap. While the camera moves, the world
+// layer is promoted (will-change) so the gesture is cheap and the raster is allowed to go soft; 150 ms
+// after the last input the promotion is dropped (data-moving) and the browser re-rasters the stub at its
+// zoomed pixel size, so type, perforations, foil and art are crisp up to 400%. Nothing is re-laid out,
+// so the grid, the rulers and the hit-testing never move.
+//
+// Also here: the minimap (an overview card while away from fit), the measure readout (inches under the
+// cursor, on both rulers) and framing a rectangle ("zoom to selection"). The camera is never persisted:
+// every visit starts at fit.
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 
 export const MIN_SCALE = 0.25;
@@ -15,7 +25,9 @@ const KEY_STEP = 1.25;
 const PAN_STEP = 64;
 const KEEP_PX = 64; // how much of the stub must stay on the mat
 const EASE_MS = 70; // time constant of the eased zoom
-const MIN_LABEL_PX = 100; // the closest two ruler numbers may sit
+const MIN_LABEL_PX = 100;
+const SETTLE_MS = 150; // after the last input the stub is re-rastered at its zoomed size
+const MINI_PX = 132; // the long side of the minimap // the closest two ruler numbers may sit
 /** Ruler steps in inches. Each also sets the grid: major lines every step, fine lines every quarter (fifth from 5 up). */
 const STEPS = [0.25, 0.5, 1, 2, 5, 10];
 
@@ -41,6 +53,7 @@ interface Metrics {
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+const isAway = (c: Cam) => Math.abs(c.s - 1) > 0.001 || Math.abs(c.x) > 0.5 || Math.abs(c.y) > 0.5;
 
 /* ---- Wheel classification -------------------------------------------------------------------
    A browser gives no flag that says "mouse" or "trackpad", so we infer it, most certain evidence
@@ -60,6 +73,10 @@ export interface CameraApi {
   fit: () => void;
   /** Zoom about the middle of the mat, by a factor. */
   zoomBy: (factor: number) => void;
+  /** Frame a rectangle (screen px, e.g. a field's bounding box) in the middle of the mat, eased. */
+  frame: (r: DOMRect) => void;
+  /** The camera right now: scale, and whether it has left fit. */
+  read: () => { s: number; away: boolean };
   /** True while a drag-pan is running, so other pointer gestures on the mat stand down. */
   panning: RefObject<boolean>;
 }
@@ -90,9 +107,46 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
   useEffect(() => {
     cancelRef.current = onCancelGesture;
   });
-  const els = useRef<{ world: HTMLElement | null; body: HTMLElement | null; top: HTMLElement | null; left: HTMLElement | null; bandT: HTMLElement | null; bandL: HTMLElement | null; pct: HTMLElement | null; fitBtn: HTMLElement | null }>({
+  const els = useRef<{
+    world: HTMLElement | null; body: HTMLElement | null; top: HTMLElement | null; left: HTMLElement | null; bandT: HTMLElement | null; bandL: HTMLElement | null; pct: HTMLElement | null; fitBtn: HTMLElement | null;
+    mini: HTMLElement | null; miniStub: HTMLElement | null; miniView: HTMLElement | null; hx: HTMLElement | null; hy: HTMLElement | null; read: HTMLElement | null;
+  }>({
     world: null, body: null, top: null, left: null, bandT: null, bandL: null, pct: null, fitBtn: null,
+    mini: null, miniStub: null, miniView: null, hx: null, hy: null, read: null,
   });
+  const mini = useRef({ rx: 0, ry: 0, k: 1 });
+  const ptr = useRef({ x: 0, y: 0, on: false });
+  const mraf = useRef(0);
+
+  /* ---------- the measure tool: inches under the cursor, from the stub's top left ---------- */
+  const paintMeasure = useCallback(() => {
+    const e = els.current;
+    const area = areaRef.current;
+    if (!e.read || !area) return;
+    const p = ptr.current;
+    const on = p.on ? "true" : "false";
+    if (e.read.dataset.on !== on) {
+      e.read.dataset.on = on;
+      if (e.hx) e.hx.dataset.on = on;
+      if (e.hy) e.hy.dataset.on = on;
+    }
+    if (!p.on) return;
+    const m = met.current;
+    const c = cam.current;
+    const inch = (v: number) => {
+      const t = (Math.round(v * 100) / 100).toFixed(2);
+      return t.startsWith("-") ? `−${t.slice(1)}` : t;
+    };
+    const text = `${inch(((p.x - c.x) / c.s - m.ox) / m.inch)} × ${inch(((p.y - c.y) / c.s - m.oy) / m.inch)} in`;
+    if (e.read.textContent !== text) e.read.textContent = text;
+    const w = e.read.offsetWidth;
+    const h = e.read.offsetHeight;
+    const tx = p.x + 14 + w > area.clientWidth - 4 ? p.x - 14 - w : p.x + 14;
+    const ty = p.y + 20 + h > area.clientHeight - 4 ? p.y - 18 - h : p.y + 20;
+    e.read.style.transform = `translate(${tx}px, ${ty}px)`;
+    if (e.hx) e.hx.style.transform = `translateX(${p.x}px)`;
+    if (e.hy) e.hy.style.transform = `translateY(${p.y}px)`;
+  }, [areaRef]);
 
   /* ---------- painting ---------- */
   const paint = useCallback(() => {
@@ -102,6 +156,7 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
     const { x, y, s } = cam.current;
     const m = met.current;
     e.world.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+    e.world.style.setProperty("--inv", String(1 / s)); // hairlines drawn on the stub keep their weight
 
     const P = m.inch * s;
     const step = STEPS.find((st) => st * P >= MIN_LABEL_PX) ?? STEPS[STEPS.length - 1];
@@ -165,9 +220,35 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
 
     const pct = Math.round(s * 100);
     if (e.pct && e.pct.textContent !== `${pct}%`) e.pct.textContent = `${pct}%`;
-    if (e.fitBtn) e.fitBtn.dataset.fit = Math.abs(s - 1) < 0.001 && Math.abs(x) < 0.5 && Math.abs(y) < 0.5 ? "true" : "false";
+    const away = isAway(cam.current);
+    if (e.fitBtn) e.fitBtn.dataset.fit = away ? "false" : "true";
+
+    if (e.mini) {
+      // the overview covers the stub and a margin round it; the viewport rectangle is the mat's window onto it
+      const pad = Math.max(m.fw, m.fh) * 0.6;
+      const rx = m.ox - pad;
+      const ry = m.oy - pad;
+      const rw = m.fw + pad * 2;
+      const rh = m.fh + pad * 2;
+      const k = rw > 0 && rh > 0 ? MINI_PX / Math.max(rw, rh) : 1;
+      mini.current = { rx, ry, k };
+      e.mini.dataset.on = away ? "true" : "false";
+      e.mini.style.width = `${rw * k}px`;
+      e.mini.style.height = `${rh * k}px`;
+      if (e.miniStub) {
+        e.miniStub.style.transform = `translate(${(m.ox - rx) * k}px, ${(m.oy - ry) * k}px)`;
+        e.miniStub.style.width = `${m.fw * k}px`;
+        e.miniStub.style.height = `${m.fh * k}px`;
+      }
+      if (e.miniView) {
+        e.miniView.style.transform = `translate(${(-x / s - rx) * k}px, ${(-y / s - ry) * k}px)`;
+        e.miniView.style.width = `${(area.clientWidth / s) * k}px`;
+        e.miniView.style.height = `${(area.clientHeight / s) * k}px`;
+      }
+    }
+    paintMeasure();
     window.dispatchEvent(new Event("ts-camera"));
-  }, [areaRef, numClass]);
+  }, [areaRef, numClass, paintMeasure]);
 
   /* ---------- the loop ---------- */
   const flagMoving = useCallback(() => {
@@ -176,7 +257,7 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
     // will-change keeps a drag cheap, but is dropped at rest so the stub is re-sharpened at its new size
     w.dataset.moving = "true";
     window.clearTimeout(idle.current);
-    idle.current = window.setTimeout(() => delete w.dataset.moving, 160);
+    idle.current = window.setTimeout(() => delete w.dataset.moving, SETTLE_MS);
   }, []);
 
   const loop = useRef<(now: number) => void>(() => {});
@@ -301,6 +382,24 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
   }, [areaRef]);
 
   const fit = useCallback(() => glide({ x: 0, y: 0, s: 1 }), [glide]);
+  const frameRect = useCallback(
+    (r: DOMRect) => {
+      const area = areaRef.current;
+      if (!area) return;
+      const ar = area.getBoundingClientRect();
+      const c = cam.current;
+      const ww = r.width / c.s;
+      const wh = r.height / c.s;
+      if (ww < 1 || wh < 1) return;
+      const wx = (r.left - ar.left - c.x) / c.s + ww / 2;
+      const wy = (r.top - ar.top - c.y) / c.s + wh / 2;
+      // fill about 70% of the mat, never zooming out
+      const s = clamp(Math.min((area.clientWidth * 0.7) / ww, (area.clientHeight * 0.7) / wh), 1, MAX_SCALE);
+      glide({ s, x: area.clientWidth / 2 - wx * s, y: area.clientHeight / 2 - wy * s });
+    },
+    [areaRef, glide],
+  );
+  const read = useCallback(() => ({ s: cam.current.s, away: isAway(cam.current) }), []);
   const zoomBy = useCallback(
     (f: number) => {
       const [px, py] = centre();
@@ -324,6 +423,12 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
       bandL: mat.querySelector("[data-cam-band-l]"),
       pct: document.querySelector("[data-cam-pct]"),
       fitBtn: document.querySelector("[data-cam-fit]"),
+      mini: mat.querySelector("[data-cam-mini]"),
+      miniStub: mat.querySelector("[data-cam-mini-stub]"),
+      miniView: mat.querySelector("[data-cam-mini-view]"),
+      hx: mat.querySelector("[data-cam-hx]"),
+      hy: mat.querySelector("[data-cam-hy]"),
+      read: mat.querySelector("[data-cam-read]"),
     };
     let r = 0;
     const until = performance.now() + 1000;
@@ -350,7 +455,25 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
       if (performance.now() < until) r = requestAnimationFrame(tick);
     };
     r = requestAnimationFrame(tick);
+    // When the mat changes size (a side panel folds), a camera that has left fit keeps the stub where it is;
+    // at fit the stub simply stays centred, so the grid follows it frame by frame.
+    let aw0 = 0;
+    let ah0 = 0;
     const ro = new ResizeObserver(() => {
+      const area = areaRef.current;
+      if (area) {
+        const aw = area.clientWidth;
+        const ah = area.clientHeight;
+        if (aw0 && isAway(cam.current) && (aw !== aw0 || ah !== ah0)) {
+          const k = cam.current.s;
+          for (const c of [cam.current, tgt.current]) {
+            c.x -= ((aw - aw0) / 2) * k;
+            c.y -= ((ah - ah0) / 2) * k;
+          }
+        }
+        aw0 = aw;
+        ah0 = ah;
+      }
       measure();
       paint();
     });
@@ -359,12 +482,13 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
       cancelAnimationFrame(r);
       ro.disconnect();
     };
-  }, [enabled, matRef, layoutKey, inchesWide, paint]);
+  }, [enabled, matRef, areaRef, layoutKey, inchesWide, paint]);
 
   // Stop the loop on unmount.
   useEffect(() => {
     return () => {
       cancelAnimationFrame(raf.current);
+      cancelAnimationFrame(mraf.current);
       raf.current = 0;
       window.clearTimeout(idle.current);
     };
@@ -578,7 +702,69 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
     const onLeave = () => {
       hover = false;
       setMode();
+      ptr.current.on = false;
+      paintMeasure();
     };
+    // the measure tool follows the cursor from rAF
+    const onHover = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      const r = rectOf();
+      const over = (e.target as HTMLElement).closest?.("[data-note], [data-cam-mini]");
+      ptr.current = { x: e.clientX - r.left, y: e.clientY - r.top, on: !over };
+      if (!mraf.current)
+        mraf.current = requestAnimationFrame(() => {
+          mraf.current = 0;
+          paintMeasure();
+        });
+    };
+
+    // the minimap: click or drag to move the camera
+    const miniEl = els.current.mini;
+    const mdrag = { id: -1, dx: 0, dy: 0 };
+    const centreOn = (wx: number, wy: number): Cam => ({ s: cam.current.s, x: area.clientWidth / 2 - wx * cam.current.s, y: area.clientHeight / 2 - wy * cam.current.s });
+    const miniWorld = (e: PointerEvent) => {
+      const r = miniEl!.getBoundingClientRect();
+      const mm = mini.current;
+      return { wx: mm.rx + (e.clientX - r.left) / mm.k, wy: mm.ry + (e.clientY - r.top) / mm.k };
+    };
+    const onMiniDown = (e: PointerEvent) => {
+      if (e.button !== 0 || mdrag.id !== -1) return;
+      e.preventDefault();
+      const w = miniWorld(e);
+      const c = cam.current;
+      const onRect = !!(e.target as HTMLElement).closest("[data-cam-mini-view]");
+      mdrag.id = e.pointerId;
+      mdrag.dx = onRect ? w.wx - (area.clientWidth / 2 - c.x) / c.s : 0;
+      mdrag.dy = onRect ? w.wy - (area.clientHeight / 2 - c.y) / c.s : 0;
+      try {
+        miniEl!.setPointerCapture(e.pointerId);
+      } catch {
+        /* the pointer is already gone */
+      }
+      miniEl!.dataset.dragging = "true";
+      if (!onRect) glide(bound(centreOn(w.wx, w.wy)));
+    };
+    const onMiniMove = (e: PointerEvent) => {
+      if (e.pointerId !== mdrag.id) return;
+      const w = miniWorld(e);
+      jump(bound(centreOn(w.wx - mdrag.dx, w.wy - mdrag.dy)));
+    };
+    const onMiniUp = (e: PointerEvent) => {
+      if (e.pointerId !== mdrag.id) return;
+      mdrag.id = -1;
+      delete miniEl!.dataset.dragging;
+      try {
+        miniEl!.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+    };
+    if (miniEl) {
+      miniEl.addEventListener("pointerdown", onMiniDown);
+      miniEl.addEventListener("pointermove", onMiniMove);
+      miniEl.addEventListener("pointerup", onMiniUp);
+      miniEl.addEventListener("pointercancel", onMiniUp);
+    }
     const onBlur = () => {
       space = false;
       setMode();
@@ -596,6 +782,7 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
     area.addEventListener("keydown", onKey);
     area.addEventListener("pointerenter", onEnter);
     area.addEventListener("pointerleave", onLeave);
+    area.addEventListener("pointermove", onHover);
     window.addEventListener("keydown", onSpaceDown);
     window.addEventListener("keyup", onSpaceUp);
     window.addEventListener("blur", onBlur);
@@ -612,13 +799,20 @@ export function useCamera({ enabled, matRef, areaRef, layoutKey, inchesWide, num
       area.removeEventListener("keydown", onKey);
       area.removeEventListener("pointerenter", onEnter);
       area.removeEventListener("pointerleave", onLeave);
+      area.removeEventListener("pointermove", onHover);
+      if (miniEl) {
+        miniEl.removeEventListener("pointerdown", onMiniDown);
+        miniEl.removeEventListener("pointermove", onMiniMove);
+        miniEl.removeEventListener("pointerup", onMiniUp);
+        miniEl.removeEventListener("pointercancel", onMiniUp);
+      }
       window.removeEventListener("keydown", onSpaceDown);
       window.removeEventListener("keyup", onSpaceUp);
       window.removeEventListener("blur", onBlur);
       delete area.dataset.space;
       stop();
     };
-  }, [enabled, areaRef, zoomAt, jump, bound, glide, zoomBy, fit]);
+  }, [enabled, areaRef, zoomAt, jump, bound, glide, zoomBy, fit, paintMeasure]);
 
-  return { fit, zoomBy, panning };
+  return { fit, zoomBy, frame: frameRect, read, panning };
 }

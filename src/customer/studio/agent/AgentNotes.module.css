@@ -120,12 +120,113 @@
   border-bottom: 1px solid var(--desk-ink);
 }
 
-/* On the cutting mat the slips sit at slight angles, like real notes. */
-.stack .note:nth-of-type(odd) {
-  rotate: -0.7deg;
+/* On the cutting mat: one small card pinned in the top right corner, fixed to the screen (not the camera).
+   While the camera is away from fit it folds to a tab, so it never hides the stub. */
+.pin {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 6;
+  width: min(272px, calc(100% - 28px));
+  pointer-events: none;
 }
-.stack .note:nth-of-type(even) {
+.pinCard {
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
+  transform-origin: 100% 0;
+  transition:
+    transform 420ms var(--desk-spring),
+    opacity 200ms ease;
+}
+.pin .note {
   rotate: 0.6deg;
+  padding: 10px 12px 10px 16px;
+  gap: 8px;
+}
+.pin .body {
+  font: var(--type-ui);
+  line-height: 1.4;
+}
+/* the one legend line sits on its own slip, so it reads against the mat */
+.legend {
+  justify-self: end;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: var(--desk-paper-raised);
+  box-shadow:
+    inset 0 0 0 1px var(--desk-rule),
+    0 1px 0 var(--desk-ledge);
+}
+.pin[data-folded] .pinCard {
+  transform: translate(10px, -8px) rotate(3deg) scale(0.16);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.headBtns {
+  display: flex;
+  align-items: center;
+  margin: -6px -8px -6px 0;
+}
+.headBtns .close {
+  margin: 0;
+}
+.step {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 32px;
+  padding: 0 0 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--desk-ink-soft);
+  font: var(--type-h3);
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+.step:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--desk-ink) 7%, transparent);
+  color: var(--desk-ink);
+}
+.step:disabled {
+  opacity: 0.32;
+}
+
+/* the folded card: a small paper tab with a turned corner */
+.tab {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 7px 22px 7px 12px;
+  border: 0;
+  background: var(--desk-paper-raised);
+  color: var(--desk-ink);
+  font: var(--type-label);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  box-shadow: inset 3px 0 0 var(--desk-mark);
+  opacity: 0;
+  transform: translate(6px, -4px) scale(0.8);
+  transform-origin: 100% 0;
+  pointer-events: none;
+  transition:
+    transform 380ms var(--desk-spring),
+    opacity 200ms ease;
+}
+.pin[data-folded] .tab {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.tab:hover {
+  background: var(--desk-paper);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--desk-ink);
+  outline-offset: 2px;
 }
 
 @keyframes noteIn {
@@ -141,16 +242,11 @@
   }
 }
 
-@media (max-width: 1279.98px) and (min-width: 960px) {
-  /* a bottom shelf instead of a side margin: one note at a time */
-  .stack .note:nth-of-type(n + 2) {
-    display: none;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .note,
-  .note[data-leaving] {
+  .note[data-leaving],
+  .pinCard,
+  .tab {
     animation: none;
     transition: none;
   }
