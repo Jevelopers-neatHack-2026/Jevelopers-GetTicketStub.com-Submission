@@ -98,6 +98,17 @@ BEGIN
       OR principal.rolreplication OR principal.rolbypassrls
       OR pg_has_role(principal.oid, owner_role_oid, 'MEMBER')
       OR pg_has_role(principal.oid, migrator_role_oid, 'MEMBER')
+      -- PostgreSQL's predefined pg_* capability roles do not necessarily
+      -- carry a distinguishing rol* attribute. The finance runtime has no
+      -- need for any reserved predefined role, including roles that grant
+      -- server-file/program, cluster-observation, or broad data access.
+      OR left(principal.rolname, 3) = 'pg_'
+      OR EXISTS (
+        SELECT 1 FROM pg_roles predefined
+        WHERE left(predefined.rolname, 3) = 'pg_'
+          AND (pg_has_role(principal.oid, predefined.oid, 'USAGE')
+            OR pg_has_role(principal.oid, predefined.oid, 'SET'))
+      )
       OR EXISTS (
         SELECT 1 FROM pg_roles elevated
         WHERE (elevated.rolsuper OR elevated.rolcreatedb OR elevated.rolcreaterole
@@ -199,6 +210,34 @@ BEGIN
         AND (privilege.grantee = principal.oid OR pg_has_role(principal.oid, privilege.grantee, 'MEMBER'))
     ) THEN
       RAISE EXCEPTION 'CI finance runtime principal has an unreviewed function privilege'
+        USING ERRCODE = '42501';
+    END IF;
+
+    -- A callable SECURITY DEFINER routine can run with its owner's authority,
+    -- so audit every user/extension namespace, not only the finance schema.
+    -- ACL defaults include PUBLIC EXECUTE; role grants can be effective by
+    -- inheritance or by SET ROLE, including through transitive memberships.
+    IF EXISTS (
+      SELECT 1 FROM pg_proc function_obj
+      JOIN pg_namespace function_schema ON function_schema.oid = function_obj.pronamespace
+      CROSS JOIN LATERAL aclexplode(COALESCE(function_obj.proacl, acldefault('f', function_obj.proowner))) privilege
+      WHERE function_obj.prosecdef
+        AND function_schema.nspname <> 'information_schema'
+        AND left(function_schema.nspname, 3) <> 'pg_'
+        AND (has_schema_privilege(principal.oid, function_schema.oid, 'USAGE')
+          OR EXISTS (
+            SELECT 1 FROM aclexplode(COALESCE(function_schema.nspacl,
+              acldefault('n', function_schema.nspowner))) schema_privilege
+            WHERE schema_privilege.privilege_type = 'USAGE'
+              AND (schema_privilege.grantee = principal.oid
+                OR pg_has_role(principal.oid, schema_privilege.grantee, 'SET'))
+          ))
+        AND privilege.privilege_type = 'EXECUTE'
+        AND (privilege.grantee = 0 OR privilege.grantee = principal.oid
+          OR pg_has_role(principal.oid, privilege.grantee, 'USAGE')
+          OR pg_has_role(principal.oid, privilege.grantee, 'SET'))
+    ) THEN
+      RAISE EXCEPTION 'CI finance runtime principal can execute an unreviewed privileged routine'
         USING ERRCODE = '42501';
     END IF;
   END LOOP;

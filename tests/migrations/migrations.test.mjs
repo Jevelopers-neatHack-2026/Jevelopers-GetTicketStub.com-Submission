@@ -847,6 +847,23 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
   try {
     await installDisposableMarker(admin);
     await applyMigrationsThrough0005(admin, names);
+    // Seed authentic pre-0006 economics and a snapshot so every rejected
+    // privilege preflight proves that migration work leaves financial history
+    // unchanged, rather than comparing two empty ledgers.
+    await admin.query(
+      'CREATE TABLE cost_intelligence.financial_privacy_quarantine (' +
+      'record_kind text, record_hash text, tenant_id text, project_id text, environment text, billing_mode text)',
+    );
+    const preservationPool = new Pool({ ...config, max: 4 });
+    try {
+      const preservationScope = legacyScope('runtime-boundary-preflight-preservation');
+      await appendLegacyEvent(preservationPool, legacyRequest(preservationScope, { amount: '0.37' }));
+      const preservedProjection = await projectLegacyScope(preservationPool, preservationScope);
+      assert.equal(preservedProjection.ok, true, 'pre-0006 conservation fixture must have a complete snapshot');
+    } finally {
+      await preservationPool.end();
+      await admin.query('DROP TABLE cost_intelligence.financial_privacy_quarantine');
+    }
     financeRowsBefore = await captureLegacyFinancialRows(admin);
   } catch (error) {
     await admin.end();
@@ -1029,6 +1046,202 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
     cleanup: () => admin.query(`ALTER TABLE cost_intelligence.financial_ledger_events OWNER TO ${eventOwner}`),
   });
 
+  const runtimeLoginConfigForUpgrade = { ...runtimeDatabaseConfigFromEnvironment(), database: name };
+  const withRuntimeLogin = async action => {
+    const login = new Client(runtimeLoginConfigForUpgrade);
+    await login.connect();
+    try {
+      return await action(login);
+    } finally {
+      await login.end();
+    }
+  };
+  const appendOnlyTriggerState = async () => (await admin.query(
+    "SELECT tgenabled FROM pg_trigger WHERE tgname = 'financial_ledger_events_append_only'",
+  )).rows[0]?.tgenabled;
+  const createExternalGateway = async (schema, functionName) => admin.query(
+    `CREATE FUNCTION ${quoteIdentifier(schema)}.${quoteIdentifier(functionName)}()
+     RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog
+     AS $ci09$ BEGIN
+       ALTER TABLE cost_intelligence.financial_ledger_events DISABLE TRIGGER financial_ledger_events_append_only;
+     END $ci09$`,
+  );
+  const invokeGatewayAfterRejectedPreflight = async (schema, functionName, roleToAssume) => {
+    try {
+      await withRuntimeLogin(async login => {
+        if (roleToAssume) await login.query(`SET ROLE ${quoteIdentifier(roleToAssume)}`);
+        await login.query(`SELECT ${quoteIdentifier(schema)}.${quoteIdentifier(functionName)}()`);
+      });
+      assert.equal(await appendOnlyTriggerState(), 'D',
+        `${schema}.${functionName}: the pre-existing host EXECUTE grant remains active after rejection`);
+    } finally {
+      if (await appendOnlyTriggerState() === 'D') {
+        await admin.query('ALTER TABLE cost_intelligence.financial_ledger_events ENABLE TRIGGER financial_ledger_events_append_only');
+      }
+    }
+  };
+
+  // Preserve the original SET-only host-login reproduction. Rejecting 0006
+  // must not be described as removing this already active server capability.
+  scenarios.push({
+    label: 'host login SET-only pg_execute_server_program membership',
+    prepare: () => admin.query(`GRANT pg_execute_server_program TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`),
+    verifyRejected: () => withRuntimeLogin(async login => {
+      const membership = await login.query(
+        "SELECT pg_has_role(current_user, 'pg_execute_server_program', 'SET') AS can_set",
+      );
+      assert.equal(membership.rows[0].can_set, true, 'failed provisioning leaves the pre-existing SET grant in force');
+      await login.query('SET ROLE pg_execute_server_program');
+      assert.equal((await login.query('SELECT current_user')).rows[0].current_user, 'pg_execute_server_program');
+      await login.query("COPY (SELECT 'CI09_HARMLESS_EXECUTION_PROBE') TO PROGRAM 'cat >/dev/null'");
+    }),
+    cleanup: () => admin.query(`REVOKE pg_execute_server_program FROM ${runtimeRole}`),
+  });
+
+  // The policy covers all reserved predefined roles, including inherited and
+  // transitive paths whose capabilities have no distinguishing rol* flags.
+  scenarios.push({
+    label: 'host login inherited pg_read_server_files capability',
+    prepare: () => admin.query(`GRANT pg_read_server_files TO ${runtimeRole} WITH INHERIT TRUE, SET FALSE`),
+    verifyRejected: () => withRuntimeLogin(async login => {
+      const membership = await login.query(
+        "SELECT pg_has_role(current_user, 'pg_read_server_files', 'USAGE') AS inherited",
+      );
+      assert.equal(membership.rows[0].inherited, true, 'failed provisioning leaves inherited server-file access in force');
+    }),
+    cleanup: () => admin.query(`REVOKE pg_read_server_files FROM ${runtimeRole}`),
+  });
+  const writeFilesBridge = `ci09_write_files_bridge_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'host login transitive SET-only pg_write_server_files capability',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(writeFilesBridge)} NOLOGIN`);
+      await admin.query(`GRANT pg_write_server_files TO ${quoteIdentifier(writeFilesBridge)}`);
+      await admin.query(`GRANT ${quoteIdentifier(writeFilesBridge)} TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`);
+    },
+    verifyRejected: () => withRuntimeLogin(async login => {
+      await login.query(`SET ROLE ${quoteIdentifier(writeFilesBridge)}`);
+      await login.query('SET ROLE pg_write_server_files');
+      assert.equal((await login.query('SELECT current_user')).rows[0].current_user, 'pg_write_server_files');
+    }),
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(writeFilesBridge)} FROM ${runtimeRole}`);
+      await admin.query(`REVOKE pg_write_server_files FROM ${quoteIdentifier(writeFilesBridge)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(writeFilesBridge)}`);
+    },
+  });
+  const readDataBridge = `ci09_read_data_bridge_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'host login transitive inherited pg_read_all_data capability',
+    prepare: async () => {
+      await admin.query(`CREATE ROLE ${quoteIdentifier(readDataBridge)} NOLOGIN`);
+      await admin.query(`GRANT pg_read_all_data TO ${quoteIdentifier(readDataBridge)}`);
+      await admin.query(`GRANT ${quoteIdentifier(readDataBridge)} TO ${runtimeRole} WITH INHERIT TRUE, SET FALSE`);
+    },
+    verifyRejected: () => withRuntimeLogin(async login => {
+      const membership = await login.query(
+        "SELECT pg_has_role(current_user, 'pg_read_all_data', 'USAGE') AS inherited",
+      );
+      assert.equal(membership.rows[0].inherited, true, 'failed provisioning leaves inherited broad read access in force');
+    }),
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(readDataBridge)} FROM ${runtimeRole}`);
+      await admin.query(`REVOKE pg_read_all_data FROM ${quoteIdentifier(readDataBridge)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(readDataBridge)}`);
+    },
+  });
+  scenarios.push({
+    label: 'host login SET-only pg_write_all_data capability',
+    prepare: () => admin.query(`GRANT pg_write_all_data TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`),
+    verifyRejected: () => withRuntimeLogin(async login => {
+      await login.query('SET ROLE pg_write_all_data');
+      assert.equal((await login.query('SELECT current_user')).rows[0].current_user, 'pg_write_all_data');
+    }),
+    cleanup: () => admin.query(`REVOKE pg_write_all_data FROM ${runtimeRole}`),
+  });
+
+  // Retain the exact public SECURITY DEFINER trigger-disabling counterexample
+  // and add inherited, SET-only, PUBLIC/default-ACL, and non-public namespace
+  // paths. Each routine is invoked only after its migration was rejected; the
+  // trigger is restored before checking immutable financial rows.
+  const directGateway = 'ci09_admin_gateway';
+  scenarios.push({
+    label: 'host login direct external SECURITY DEFINER EXECUTE grant',
+    prepare: async () => {
+      await createExternalGateway('public', directGateway);
+      await admin.query(`REVOKE ALL ON FUNCTION public.${quoteIdentifier(directGateway)}() FROM PUBLIC`);
+      await admin.query(`GRANT EXECUTE ON FUNCTION public.${quoteIdentifier(directGateway)}() TO ${runtimeRole}`);
+    },
+    verifyRejected: () => invokeGatewayAfterRejectedPreflight('public', directGateway),
+    cleanup: () => admin.query(`REVOKE EXECUTE ON FUNCTION public.${quoteIdentifier(directGateway)}() FROM ${runtimeRole}`),
+  });
+  const inheritedGateway = 'ci09_inherited_gateway';
+  const inheritedGatewayRole = `ci09_gateway_inherit_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'host login inherited external SECURITY DEFINER EXECUTE grant',
+    prepare: async () => {
+      await createExternalGateway('public', inheritedGateway);
+      await admin.query(`REVOKE ALL ON FUNCTION public.${quoteIdentifier(inheritedGateway)}() FROM PUBLIC`);
+      await admin.query(`CREATE ROLE ${quoteIdentifier(inheritedGatewayRole)} NOLOGIN`);
+      await admin.query(`GRANT EXECUTE ON FUNCTION public.${quoteIdentifier(inheritedGateway)}() TO ${quoteIdentifier(inheritedGatewayRole)}`);
+      await admin.query(`GRANT ${quoteIdentifier(inheritedGatewayRole)} TO ${runtimeRole} WITH INHERIT TRUE, SET FALSE`);
+    },
+    verifyRejected: () => invokeGatewayAfterRejectedPreflight('public', inheritedGateway),
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(inheritedGatewayRole)} FROM ${runtimeRole}`);
+      await admin.query(`REVOKE EXECUTE ON FUNCTION public.${quoteIdentifier(inheritedGateway)}() FROM ${quoteIdentifier(inheritedGatewayRole)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(inheritedGatewayRole)}`);
+    },
+  });
+  const setGateway = 'ci09_set_only_gateway';
+  const setGatewayRole = `ci09_gateway_set_${randomUUID().replaceAll('-', '')}`;
+  scenarios.push({
+    label: 'host login SET-only external SECURITY DEFINER EXECUTE grant',
+    prepare: async () => {
+      await createExternalGateway('public', setGateway);
+      await admin.query(`REVOKE ALL ON FUNCTION public.${quoteIdentifier(setGateway)}() FROM PUBLIC`);
+      await admin.query(`CREATE ROLE ${quoteIdentifier(setGatewayRole)} NOLOGIN`);
+      await admin.query(`GRANT EXECUTE ON FUNCTION public.${quoteIdentifier(setGateway)}() TO ${quoteIdentifier(setGatewayRole)}`);
+      await admin.query(`GRANT ${quoteIdentifier(setGatewayRole)} TO ${runtimeRole} WITH INHERIT FALSE, SET TRUE`);
+    },
+    verifyRejected: () => invokeGatewayAfterRejectedPreflight('public', setGateway, setGatewayRole),
+    cleanup: async () => {
+      await admin.query(`REVOKE ${quoteIdentifier(setGatewayRole)} FROM ${runtimeRole}`);
+      await admin.query(`REVOKE EXECUTE ON FUNCTION public.${quoteIdentifier(setGateway)}() FROM ${quoteIdentifier(setGatewayRole)}`);
+      await admin.query(`DROP ROLE ${quoteIdentifier(setGatewayRole)}`);
+    },
+  });
+  const defaultAclGateway = 'ci09_default_acl_gateway';
+  scenarios.push({
+    label: 'host login external SECURITY DEFINER EXECUTE through default PUBLIC ACL',
+    prepare: async () => {
+      await createExternalGateway('public', defaultAclGateway);
+      const acl = await admin.query(
+        `SELECT routine.proacl IS NULL AS uses_default_acl,
+                has_function_privilege($1, routine.oid, 'EXECUTE') AS executable
+         FROM pg_proc routine WHERE routine.oid = $2::regprocedure`,
+        [runtimeLogin, `public.${defaultAclGateway}()`],
+      );
+      assert.deepEqual(acl.rows, [{ uses_default_acl: true, executable: true }],
+        'new SECURITY DEFINER routine retains PostgreSQL default PUBLIC EXECUTE');
+    },
+    verifyRejected: () => invokeGatewayAfterRejectedPreflight('public', defaultAclGateway),
+    cleanup: () => admin.query(`REVOKE EXECUTE ON FUNCTION public.${quoteIdentifier(defaultAclGateway)}() FROM PUBLIC`),
+  });
+  const extensionGateway = 'ci09_extension_gateway';
+  scenarios.push({
+    label: 'host login direct SECURITY DEFINER EXECUTE in a non-public extension namespace',
+    prepare: async () => {
+      await admin.query('CREATE SCHEMA ci09_extension');
+      await admin.query(`GRANT USAGE ON SCHEMA ci09_extension TO ${runtimeRole}`);
+      await createExternalGateway('ci09_extension', extensionGateway);
+      await admin.query(`REVOKE ALL ON FUNCTION ci09_extension.${quoteIdentifier(extensionGateway)}() FROM PUBLIC`);
+      await admin.query(`GRANT EXECUTE ON FUNCTION ci09_extension.${quoteIdentifier(extensionGateway)}() TO ${runtimeRole}`);
+    },
+    verifyRejected: () => invokeGatewayAfterRejectedPreflight('ci09_extension', extensionGateway),
+    cleanup: () => admin.query(`REVOKE EXECUTE ON FUNCTION ci09_extension.${quoteIdentifier(extensionGateway)}() FROM ${runtimeRole}`),
+  });
+
   try {
     for (const scenario of scenarios) {
       try {
@@ -1036,12 +1249,17 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
         await assert0006RejectedBeforeRecord(admin, migrationName, scenario.label);
         assert.deepEqual(await captureLegacyFinancialRows(admin), financeRowsBefore,
           `${scenario.label}: a rejected security migration leaves immutable ledger and projection rows unchanged`);
+        if (scenario.verifyRejected) await scenario.verifyRejected();
+        assert.deepEqual(await captureLegacyFinancialRows(admin), financeRowsBefore,
+          `${scenario.label}: exercising the still-active host grant changes no financial rows`);
       } finally {
         await scenario.cleanup();
       }
     }
 
     await apply0006ToLegacyDatabase(admin, migrationName);
+    assert.deepEqual(await captureLegacyFinancialRows(admin), financeRowsBefore,
+      'a successful re-audit after explicit host repair preserves pre-existing immutable financial rows');
     const runtimeConfig = { ...runtimeDatabaseConfigFromEnvironment(), database: name };
     const restricted = new Client(runtimeConfig);
     await restricted.connect();
@@ -1065,6 +1283,31 @@ test('0006 rejects pre-existing runtime role graphs and ACL escalation before a 
         await assert.rejects(restricted.query(`SET ROLE ${role}`), error => error.code === '42501',
           `the real runtime login cannot assume ${role}`);
       }
+      for (const role of [
+        'pg_execute_server_program', 'pg_read_server_files', 'pg_write_server_files',
+        'pg_read_all_data', 'pg_write_all_data',
+      ]) {
+        await assert.rejects(restricted.query(`SET ROLE ${role}`), error => error.code === '42501',
+          `the real runtime login cannot assume repaired predefined role ${role}`);
+      }
+      await assert.rejects(
+        restricted.query("COPY (SELECT 'CI09_HARMLESS_EXECUTION_PROBE') TO PROGRAM 'cat >/dev/null'"),
+        error => error.code === '42501',
+        'the real runtime login cannot execute a server program after the host membership repair and fresh audit',
+      );
+      for (const [schema, functionName] of [
+        ['public', 'ci09_admin_gateway'], ['public', 'ci09_inherited_gateway'],
+        ['public', 'ci09_set_only_gateway'], ['public', 'ci09_default_acl_gateway'],
+        ['ci09_extension', 'ci09_extension_gateway'],
+      ]) {
+        await assert.rejects(
+          restricted.query(`SELECT ${quoteIdentifier(schema)}.${quoteIdentifier(functionName)}()`),
+          error => error.code === '42501',
+          `the real runtime login cannot execute repaired host routine ${schema}.${functionName}`,
+        );
+      }
+      assert.equal(await appendOnlyTriggerState(), 'O',
+        'the append-only trigger stays enabled after host grants are repaired and 0006 is re-audited');
       await assert.rejects(restricted.query('CREATE TABLE cost_intelligence.ci09_runtime_ddl_probe (value integer)'),
         error => error.code === '42501');
       await assert.rejects(restricted.query('CREATE SCHEMA ci09_runtime_schema_probe'),
