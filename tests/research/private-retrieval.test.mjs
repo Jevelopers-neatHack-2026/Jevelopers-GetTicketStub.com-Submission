@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -32,7 +33,7 @@ function frontierWithSealHook(frontier, hook) {
   return wrapped;
 }
 
-function frontierWithDelayedCreateRun(frontier, gate, onCreate) {
+function frontierWithDelayedCreateRun(frontier, gate, onAttempt) {
   const wrapped = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'claimNext', 'admitTransportHop',
@@ -42,10 +43,20 @@ function frontierWithDelayedCreateRun(frontier, gate, onCreate) {
   ]) wrapped[name] = frontier[name].bind(frontier);
   wrapped.createRun = async (...args) => {
     await gate;
-    const created = await frontier.createRun(...args);
-    onCreate();
-    return created;
+    try { return await frontier.createRun(...args); }
+    finally { onAttempt(); }
   };
+  return wrapped;
+}
+
+function frontierWithMethodOverrides(frontier, overrides) {
+  const wrapped = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'createRun', 'claimNext', 'admitTransportHop',
+    'markTransportDispatchIntent', 'markTransportResponseReceived', 'settleTransportHopKnownZero',
+    'settleTransportHopBodyComplete', 'markTransportHopUnknown', 'getTransportProgress',
+    'completeCandidate', 'markUnresolved', 'stopRun', 'sealPrivateDraft', 'getSnapshot',
+  ]) wrapped[name] = Object.hasOwn(overrides, name) ? overrides[name] : frontier[name].bind(frontier);
   return wrapped;
 }
 
@@ -150,7 +161,7 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
     port: 80, dialPort: server.port, hostnames, addresses,
     onDial: () => requests.add('dial'),
   }));
-  const makeInput = ({ runId, server, seeds, limits, authorizeCurrent, retentionHandleFor, safeFetcher,
+  const makeInput = ({ runId, server, seeds, limits, authorizeCurrent, retentionHandleFor, safeFetcher, signal,
     frontier: frontierStore = frontier, store = evidenceStore }) => ({
     frontier: frontierStore,
     evidenceStore: store,
@@ -159,6 +170,7 @@ async function harness(t, { evidenceOptions = {}, hostnames = [LOCAL_FIXTURE_HOS
     runId,
     seeds,
     ...(limits ? { limits } : {}),
+    ...(signal ? { signal } : {}),
     retentionHandleFor: retentionHandleFor ?? (() => createRetention()),
     authorizeCurrent: authorizeCurrent ?? (() => true),
   });
@@ -201,6 +213,7 @@ test('one-hop limit admits and completes its last real request, then releases AE
   const observedStore = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'appendFact', 'ingestDerivedPdfEvidence', 'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) observedStore[name] = h.evidenceStore[name].bind(h.evidenceStore);
   observedStore.ingestEvidence = async (...args) => {
     fetchedBuffers.push(args[1].content);
@@ -429,6 +442,85 @@ test('an OS-process cancellation closes a slow active request and leaves its ful
   assert.equal(transport.spentBytes, 0);
 });
 
+test('abort races an initially-live hop settlement without a late commit', { timeout: 8_000 }, async (t) => {
+  for (const scenario of ['known-zero', 'unknown']) {
+    let settlementReached;
+    let settlementFinished;
+    let releaseSettlement;
+    const reached = new Promise((resolve) => { settlementReached = resolve; });
+    const finished = new Promise((resolve) => { settlementFinished = resolve; });
+    const held = new Promise((resolve) => { releaseSettlement = resolve; });
+    const controller = new AbortController();
+    const server = await startFixture((_request, response) => {
+      if (scenario === 'unknown') {
+        response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        response.write('<!doctype html><html><body>partial');
+        setTimeout(() => response.destroy(), 25);
+      } else {
+        respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+      }
+    });
+    t.after(() => server.close());
+    const h = await harness(t);
+    const settlementMethod = scenario === 'known-zero'
+      ? 'settleTransportHopKnownZero'
+      : 'markTransportHopUnknown';
+    let settlementCalls = 0;
+    const overrides = {
+      [settlementMethod]: async (...args) => {
+        settlementCalls += 1;
+        if (scenario === 'known-zero' && settlementCalls === 1) {
+          throw new Error('fail the SafeFetcher known-zero hook so finally owns the next settlement');
+        }
+        assert.equal(args.at(-1)?.aborted, false, 'the finalizer settlement starts while the run is still live');
+        settlementReached();
+        await held;
+        try { return await h.frontier[settlementMethod](...args); }
+        finally { settlementFinished(); }
+      },
+    };
+    if (scenario === 'known-zero') {
+      overrides.markTransportDispatchIntent = async () => {
+        throw new Error('controlled dispatch hook failure before socket creation');
+      };
+    }
+    const frontier = frontierWithMethodOverrides(h.frontier, overrides);
+    const runId = `private-late-${scenario}-settlement`;
+    const running = runPrivateRetrieval(h.makeInput({
+      runId, server, frontier, signal: controller.signal,
+      seeds: [{ url: sourceUrl(`/${scenario}`) }],
+      limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0 },
+    }));
+    const gateOutcome = await Promise.race([
+      reached.then(() => ({ reached: true })),
+      running.then((value) => ({ result: value }), (error) => ({ error: String(error) })),
+      new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 2_000)),
+    ]);
+    assert.equal(gateOutcome.reached, true, JSON.stringify(gateOutcome));
+    assert.equal(settlementCalls, scenario === 'known-zero' ? 2 : 1,
+      'the delayed operation is the intended initially-live finally settlement');
+    const abortStarted = Date.now();
+    controller.abort();
+    const result = await running;
+    assert.ok(Date.now() - abortStarted < 1_000, `${scenario} settlement wait is bounded to shutdown scale`);
+    assert.equal(result.draft, null);
+    assert.equal(result.status, 'cancelled');
+    releaseSettlement();
+    await Promise.race([
+      finished,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('late settlement did not acknowledge its attempt')), 1_000)),
+    ]);
+    const reopened = h.openFrontier();
+    const reopenedScope = await reopened.scopeForAuthenticatedRequest(request());
+    const transport = await reopened.getTransportProgress(reopenedScope, runId);
+    assert.equal(transport.reservedBytes, 20 * 1024 * 1024,
+      'a settlement whose outcome was uncertain at cancellation retains its full durable reservation');
+    assert.equal(transport.spentBytes, 0);
+    assert.equal(transport.states[scenario === 'known-zero' ? 'reserved' : 'response_received'], 1);
+    assert.equal(transport.states.known_zero ?? 0, 0);
+  }
+});
+
 test('a restarted runner reports an admitted stale lease incomplete without redispatching it', async (t) => {
   let requestCount = 0;
   const server = await startFixture((_request, response) => {
@@ -439,7 +531,14 @@ test('a restarted runner reports an admitted stale lease incomplete without redi
   const h = await harness(t);
   const runId = 'private-restart-unknown';
   const seeds = [{ url: sourceUrl('/already-dispatched') }];
-  await h.frontier.createRun(h.scope, { runId, seeds });
+  const limits = {
+    maxDepth: 0,
+    maxTransportAttemptAdmissions: 1,
+    maxInFlightLeases: 4,
+    durationMs: 30_000,
+    maxSuggestionsPerCompletion: 16,
+  };
+  await h.frontier.createRun(h.scope, { runId, seeds, limits });
   const priorClaim = await h.frontier.claimNext(h.scope, runId, { workerId: 'crashed-worker', claimKey: 'crashed-claim' });
   const attemptKey = 'crashed-in-flight-attempt';
   const admission = await h.frontier.admitTransportHop(h.scope, runId, {
@@ -453,18 +552,302 @@ test('a restarted runner reports an admitted stale lease incomplete without redi
   const restartedFrontier = h.openFrontier();
   const restartedScope = await restartedFrontier.scopeForAuthenticatedRequest(request());
   const result = await runPrivateRetrieval(h.makeInput({
-    runId, server, seeds, frontier: restartedFrontier,
+    runId, server, seeds, frontier: restartedFrontier, limits,
   }));
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
+  assert.ok(result.limitations.includes('dispatch_state_unknown'), JSON.stringify(result));
   assert.equal(requestCount, 0, 'a prior lease and admission do not authorize a second transport dispatch');
   const snapshot = await restartedFrontier.getSnapshot(restartedScope, runId);
   assert.equal(snapshot.counters.transportAttemptAdmissions, 1);
-  assert.equal(snapshot.candidates[0].state, 'leased');
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'unresolved_work'));
   const transport = await restartedFrontier.getTransportProgress(restartedScope, runId);
   assert.equal(transport.reservedBytes, 20 * 1024 * 1024);
   assert.equal(transport.spentBytes, 0);
   assert.equal(transport.states.response_received, 1);
+});
+
+test('encrypted receipts recover sealed cross-source identity after same-config restart with current authorization', async (t) => {
+  let requestCount = 0;
+  const same = eventHtml({ name: 'Moonlight Market', date: '2027-06-20', city: 'Boston' });
+  const conflict = eventHtml({ name: 'Moonlight Market', date: '2027-06-21', city: 'Boston' });
+  const server = await startFixture((requestValue, response) => {
+    requestCount += 1;
+    const body = requestValue.url === '/same-a' || requestValue.url === '/same-b' ? same : conflict;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, body);
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-receipt-sealed-restart';
+  const seeds = ['/same-a', '/same-b', '/conflict'].map((pathname) => ({ url: sourceUrl(pathname) }));
+  const limits = {
+    maxDepth: 0,
+    maxTransportAttemptAdmissions: 3,
+    maxInFlightLeases: 4,
+    durationMs: 30_000,
+    maxSuggestionsPerCompletion: 16,
+  };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  assert.equal(first.status, 'draft', JSON.stringify(first));
+  assert.ok(first.conflicts.some((item) => item.fields?.includes('start')));
+  assert.equal(requestCount, 3);
+
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const database = new DatabaseSync(path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite'));
+  try {
+    const manifest = JSON.parse(database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?')
+      .get(tenantHash).document);
+    const extension = database.prepare(`SELECT version FROM evidence_extension_schema
+      WHERE extension = 'private-retrieval-receipts'`).get();
+    assert.equal(manifest.schemaVersion, 1, 'receipt storage does not migrate the evidence manifest profile');
+    assert.equal(extension.version, 1, 'receipt storage keeps its own additive schema version');
+    const receipts = database.prepare(`SELECT state, schema_version, key_id, payload_hash, payload_bytes, sealed
+      FROM private_retrieval_receipts WHERE tenant_hash = ? ORDER BY receipt_key`).all(tenantHash);
+    assert.equal(receipts.length, 3);
+    assert.ok(receipts.every((row) => row.state === 'complete' && row.schema_version === 1));
+    for (const row of receipts) {
+      assert.equal(row.key_id, 'payload-test-v1');
+      assert.match(row.payload_hash, /^[a-f0-9]{64}$/);
+      assert.ok(row.payload_bytes > 0 && row.payload_bytes <= 512 * 1024);
+      const envelope = Buffer.from(row.sealed).toString('utf8');
+      for (const privateValue of ['Moonlight Market', 'Civic Hall', '2027-06-20', '2027-06-21', 'Boston']) {
+        assert.equal(envelope.includes(privateValue), false, `receipt envelope must not expose ${privateValue}`);
+      }
+    }
+  } finally {
+    database.close();
+  }
+
+  const reopenedFrontier = h.openFrontier();
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const recovered = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+  }));
+  assert.equal(requestCount, 3, 'sealed receipt replay performs no second transport');
+  assert.equal(recovered.status, 'draft', JSON.stringify(recovered));
+  assert.deepEqual(recovered.facts, first.facts);
+  assert.deepEqual(recovered.sources, first.sources);
+  assert.deepEqual(JSON.parse(JSON.stringify(recovered.occurrenceCandidates)),
+    JSON.parse(JSON.stringify(first.occurrenceCandidates)));
+  assert.deepEqual(JSON.parse(JSON.stringify(recovered.occurrenceDecisions)),
+    JSON.parse(JSON.stringify(first.occurrenceDecisions)));
+  assert.deepEqual(recovered.conflicts, first.conflicts);
+
+  h.setAcl(false);
+  const deniedFrontier = h.openFrontier();
+  const deniedStore = createEvidenceStore(h.evidenceConfig);
+  const denied = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: deniedFrontier, store: deniedStore,
+  }));
+  assert.equal(denied.draft, null);
+  assert.notEqual(denied.status, 'draft');
+  assert.ok(denied.limitations.includes('private_receipt_unavailable'));
+  assert.equal(requestCount, 3, 'revoked authorization cannot turn receipt replay into a new fetch');
+});
+
+test('a complete receipt recovers evidence committed before a failed frontier completion without redispatch', async (t) => {
+  let requestCount = 0;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-receipt-before-frontier-completion';
+  const seeds = [{ url: sourceUrl('/receipt-before-frontier') }];
+  const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1 };
+  let failCompletion = true;
+  const interruptedFrontier = frontierWithMethodOverrides(h.frontier, {
+    completeCandidate: async (...args) => {
+      if (failCompletion) {
+        failCompletion = false;
+        throw new Error('simulated interruption after receipt commit');
+      }
+      return h.frontier.completeCandidate(...args);
+    },
+  });
+  const interrupted = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: interruptedFrontier,
+  }));
+  assert.equal(interrupted.status, 'incomplete');
+  assert.equal(interrupted.draft, null);
+  assert.equal(requestCount, 1);
+  const beforeRestart = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(beforeRestart.candidates[0].state, 'leased');
+  assert.equal((await h.frontier.getTransportProgress(h.scope, runId)).reservedBytes, 0);
+
+  const reopenedFrontier = h.openFrontier();
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const recovered = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+  }));
+  assert.equal(recovered.status, 'draft', JSON.stringify(recovered));
+  assert.ok(recovered.facts.some((fact) => fact.field === 'startDate'));
+  assert.equal(requestCount, 1, 'frontier completion is repaired from the receipt without a second request');
+  const reopenedScope = await reopenedFrontier.scopeForAuthenticatedRequest(request());
+  const afterRestart = await reopenedFrontier.getSnapshot(reopenedScope, runId);
+  assert.equal(afterRestart.candidates[0].state, 'completed');
+});
+
+test('an expired encrypted receipt withholds replayed facts and does not authorize another request', async (t) => {
+  let requestCount = 0;
+  let evidenceNow = Date.now();
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t, { evidenceOptions: { now: () => evidenceNow } });
+  const runId = 'private-receipt-expired-restart';
+  const seeds = [{ url: sourceUrl('/receipt-expiry') }];
+  const limits = {
+    maxDepth: 0,
+    maxTransportAttemptAdmissions: 1,
+    maxInFlightLeases: 4,
+    durationMs: 30_000,
+    maxSuggestionsPerCompletion: 16,
+  };
+  const first = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits }));
+  assert.equal(first.status, 'draft', JSON.stringify(first));
+  assert.equal(requestCount, 1);
+
+  evidenceNow += 181_000;
+  const reopenedFrontier = h.openFrontier();
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const expired = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+  }));
+  assert.equal(expired.status, 'incomplete');
+  assert.equal(expired.draft, null);
+  assert.ok(expired.limitations.includes('private_receipt_expired'), JSON.stringify(expired));
+  assert.ok(expired.limitations.includes('private_receipt_unavailable'));
+  assert.equal(requestCount, 1, 'expired records and receipts never trigger a replacement fetch');
+
+  const tenantHash = createHash('sha256').update(`event-intelligence:tenant:v1:${TENANT}`).digest('hex');
+  const database = new DatabaseSync(path.join(h.evidenceConfig.directory, tenantHash, 'evidence.sqlite'));
+  try {
+    const row = database.prepare(`SELECT state, key_id, payload_hash, payload_bytes, sealed
+      FROM private_retrieval_receipts WHERE tenant_hash = ? LIMIT 1`).get(tenantHash);
+    assert.equal(row.state, 'expired');
+    assert.equal(row.key_id, null);
+    assert.equal(row.payload_hash, null);
+    assert.equal(row.payload_bytes, null);
+    assert.equal(row.sealed, null);
+  } finally {
+    database.close();
+  }
+});
+
+test('a durable pending receipt after the pre-dispatch crash boundary remains incomplete and is never redispatched', async (t) => {
+  let requestCount = 0;
+  let receiptBinding;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-pending-receipt-crash';
+  const seeds = [{ url: sourceUrl('/pending-receipt') }];
+  const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1 };
+  const store = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'appendFact', 'ingestEvidence', 'ingestDerivedPdfEvidence',
+    'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
+  ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
+  store.beginPrivateRunReceipt = async (scope, binding, authenticated, signal) => {
+    receiptBinding = binding;
+    const result = await h.evidenceStore.beginPrivateRunReceipt(scope, binding, authenticated, signal);
+    assert.deepEqual(result, { state: 'pending', created: true });
+    throw new Error('simulated process loss after durable pending receipt and before first admission');
+  };
+  const interrupted = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits, store }));
+  assert.equal(interrupted.draft, null);
+  assert.equal(requestCount, 0);
+  assert.equal((await h.frontier.getSnapshot(h.scope, runId)).counters.transportAttemptAdmissions, 0);
+  assert.ok(receiptBinding);
+  const pending = await h.evidenceStore.readPrivateRunReceipt(h.evidenceScope, {
+    runId, configHash: receiptBinding.configHash, candidate: receiptBinding.candidate,
+  }, request());
+  assert.equal(pending.state, 'pending');
+
+  const reopenedFrontier = h.openFrontier();
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const recovered = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+  }));
+  assert.equal(recovered.draft, null);
+  assert.equal(recovered.status, 'incomplete');
+  assert.ok(recovered.limitations.includes('private_receipt_pending'));
+  assert.ok(recovered.limitations.includes('cancelled_before_dispatch'));
+  assert.equal(requestCount, 0, 'a pending receipt is never a replay or dispatch grant');
+  const reopenedScope = await reopenedFrontier.scopeForAuthenticatedRequest(request());
+  const persisted = await reopenedFrontier.getSnapshot(reopenedScope, runId);
+  assert.equal(persisted.candidates[0].state, 'unresolved');
+  assert.equal(persisted.candidates[0].unresolvedReason, 'cancelled_before_dispatch');
+  assert.ok(persisted.stopReasons.some((entry) => entry.reason === 'unresolved_work'));
+  assert.deepEqual(await reopenedStore.beginPrivateRunReceipt(
+    await reopenedStore.scopeForAuthenticatedRequest(request()), receiptBinding, request(),
+  ), { state: 'pending', created: false }, 'an existing pending marker cannot become a fresh dispatch grant');
+});
+
+test('evidence committed before receipt completion remains explicit uncertainty after restart', async (t) => {
+  let requestCount = 0;
+  let receiptBinding;
+  const server = await startFixture((_request, response) => {
+    requestCount += 1;
+    respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
+  });
+  t.after(() => server.close());
+  const h = await harness(t);
+  const runId = 'private-evidence-before-receipt-crash';
+  const seeds = [{ url: sourceUrl('/evidence-before-receipt') }];
+  const limits = { maxDepth: 0, maxTransportAttemptAdmissions: 1 };
+  const store = Object.create(null);
+  for (const name of [
+    'scopeForAuthenticatedRequest', 'appendFact', 'ingestEvidence', 'ingestDerivedPdfEvidence',
+    'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'readPrivateRunReceipt',
+  ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
+  store.beginPrivateRunReceipt = async (scope, binding, authenticated, signal) => {
+    receiptBinding = binding;
+    return h.evidenceStore.beginPrivateRunReceipt(scope, binding, authenticated, signal);
+  };
+  store.finalizePrivateRunReceipt = async () => {
+    throw new Error('simulated crash after evidence and fact commits, before the complete receipt');
+  };
+  const interrupted = await runPrivateRetrieval(h.makeInput({ runId, server, seeds, limits, store }));
+  assert.equal(interrupted.status, 'incomplete');
+  assert.equal(interrupted.draft, null);
+  assert.equal(requestCount, 1);
+  const persistedEvidence = await h.evidenceStore.integritySnapshot(h.evidenceScope);
+  assert.ok(persistedEvidence.availableEvidence >= 1);
+  assert.ok(persistedEvidence.availableFacts >= 1);
+  assert.ok(receiptBinding);
+  assert.equal((await h.evidenceStore.readPrivateRunReceipt(h.evidenceScope, {
+    runId, configHash: receiptBinding.configHash, candidate: receiptBinding.candidate,
+  }, request())).state, 'pending');
+  const transport = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transport.reservedBytes, 0);
+  assert.ok(transport.spentBytes > 0);
+
+  const reopenedFrontier = h.openFrontier();
+  const reopenedScope = await reopenedFrontier.scopeForAuthenticatedRequest(request());
+  const reopenedStore = createEvidenceStore(h.evidenceConfig);
+  const recovered = await runPrivateRetrieval(h.makeInput({
+    runId, server, seeds, limits, frontier: reopenedFrontier, store: reopenedStore,
+  }));
+  assert.equal(recovered.status, 'incomplete');
+  assert.equal(recovered.draft, null, 'unreceipted stored facts are not assumed to belong to a completed selection');
+  assert.ok(recovered.limitations.includes('private_receipt_pending'), JSON.stringify(recovered));
+  assert.ok(recovered.limitations.includes('dispatch_state_unknown'));
+  assert.equal(requestCount, 1, 'an evidence/receipt crash gap never redispatches its old lease');
+  const snapshot = await reopenedFrontier.getSnapshot(reopenedScope, runId);
+  assert.equal(snapshot.candidates[0].state, 'unresolved');
+  assert.equal(snapshot.candidates[0].unresolvedReason, 'dispatch_state_unknown');
+  assert.equal((await reopenedFrontier.getTransportProgress(reopenedScope, runId)).spentBytes, transport.spentBytes);
 });
 
 test('remote cancellation bounds a never-resolving retention callback and ignores its late result', { timeout: 8_000 }, async (t) => {
@@ -482,6 +865,7 @@ test('remote cancellation bounds a never-resolving retention callback and ignore
   for (const name of [
     'scopeForAuthenticatedRequest', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
     'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.ingestEvidence = async (...args) => {
     ingestCalls += 1;
@@ -522,6 +906,7 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
   for (const name of [
     'scopeForAuthenticatedRequest', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
     'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.ingestEvidence = async (...args) => {
     ingestCalls += 1;
@@ -561,11 +946,11 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
   assert.ok(reopened.stopReasons.some((entry) => entry.reason === 'deadline'));
 });
 
-test('a createRun that resolves after timeout is stopped durably and cannot dispatch late', { timeout: 8_000 }, async (t) => {
+test('a delayed createRun cannot create a durable run after timeout or dispatch late', { timeout: 8_000 }, async (t) => {
   let releaseCreate;
-  let markCreated;
+  let markAttempted;
   const createGate = new Promise((resolve) => { releaseCreate = resolve; });
-  const lateCreateResolved = new Promise((resolve) => { markCreated = resolve; });
+  const lateCreateAttempted = new Promise((resolve) => { markAttempted = resolve; });
   let requestCount = 0;
   const server = await startFixture((_request, response) => {
     requestCount += 1;
@@ -573,7 +958,7 @@ test('a createRun that resolves after timeout is stopped durably and cannot disp
   });
   t.after(() => server.close());
   const h = await harness(t);
-  const frontier = frontierWithDelayedCreateRun(h.frontier, createGate, markCreated);
+  const frontier = frontierWithDelayedCreateRun(h.frontier, createGate, markAttempted);
   const runId = 'private-timeout-during-create';
   const running = runPrivateRetrieval(h.makeInput({
     runId,
@@ -591,17 +976,8 @@ test('a createRun that resolves after timeout is stopped durably and cannot disp
   assert.equal(requestCount, 0);
 
   releaseCreate();
-  await lateCreateResolved;
-  let snapshot;
-  const cleanupDeadline = Date.now() + 1_000;
-  do {
-    snapshot = await h.frontier.getSnapshot(h.scope, runId);
-    if (snapshot.stopReasons.some((entry) => entry.reason === 'deadline')) break;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  } while (Date.now() < cleanupDeadline);
-  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'deadline'),
-    'late run creation is followed by the already-expired durable stop');
-  assert.equal(snapshot.candidates[0].state, 'queued');
+  await lateCreateAttempted;
+  await assert.rejects(h.frontier.getSnapshot(h.scope, runId), (error) => error?.code === 'FRONTIER_NOT_FOUND');
 });
 
 test('the whole-run deadline interrupts an already-admitted last request and keeps uncertain capacity reserved', { timeout: 8_000 }, async (t) => {
@@ -654,7 +1030,7 @@ test('a remote stop during final evidence lookup returns promptly without materi
   const store = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
-    'lookupFact',
+    'lookupFact', 'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.materializeSelected = async (...args) => {
     materializeCalls += 1;
@@ -694,7 +1070,7 @@ test('the whole-run deadline withholds a final materialization that never return
   const store = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
-    'lookupEvidence', 'lookupFact',
+    'lookupEvidence', 'lookupFact', 'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.materializeSelected = async (...args) => {
     materializeCalls += 1;
@@ -733,7 +1109,7 @@ test('final selected readback rechecks current retention expiry after the compos
   const store = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
-    'lookupFact', 'materializeSelected',
+    'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.lookupEvidence = async (scope, evidenceId) => {
     const snapshot = await h.frontier.getSnapshot(h.scope, runId);
@@ -774,7 +1150,7 @@ test('final selected readback fails closed if the current decryption key is revo
   const store = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
-    'lookupEvidence', 'lookupFact',
+    'lookupEvidence', 'lookupFact', 'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.materializeSelected = async (...args) => {
     materializeCalls += 1;
@@ -884,6 +1260,7 @@ test('revocation while final selected materialization is returning withholds the
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence',
     'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.materializeSelected = async (...args) => {
     selectedCalls += 1;
@@ -927,6 +1304,7 @@ test('a remote stop committed before the durable release seal prevents final mat
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence',
     'ingestAssetSourceEvidence', 'lookupEvidence', 'lookupFact',
+    'beginPrivateRunReceipt', 'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.materializeSelected = async (...args) => {
     materializeCalls += 1;

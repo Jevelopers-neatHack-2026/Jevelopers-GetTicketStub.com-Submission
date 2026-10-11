@@ -64,6 +64,12 @@ const SELECTED_BATCH_LIMITS = Object.freeze({
   factMetadataBytes: 512 * 1024,
   supportReferences: 4_096,
 });
+const PRIVATE_RECEIPT_SCHEMA_VERSION = 1;
+const PRIVATE_RECEIPT_KIND = 'private-retrieval-receipt';
+const PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES = 512 * 1024;
+const PRIVATE_RECEIPT_MAX_ENVELOPE_BYTES = 768 * 1024;
+const PRIVATE_RECEIPT_MAX_ROWS_PER_TENANT = 4_096;
+const PRIVATE_RECEIPT_MAX_SEALED_BYTES_PER_TENANT = 32 * 1024 * 1024;
 const PDF_DERIVED_REPRESENTATION = 'pdf-derived-text';
 const PDF_DERIVED_BUNDLE_VERSION = 2;
 const PDF_DERIVATION_BINDING_VERSION = 1;
@@ -149,6 +155,11 @@ export class EvidenceStoreError extends Error {
 
 function fail(code) {
   throw new EvidenceStoreError(code);
+}
+
+function signalWasAborted(signal) {
+  try { return Reflect.apply(ABORT_SIGNAL_ABORTED_GETTER, signal, []); }
+  catch { fail('EVIDENCE_INVALID'); }
 }
 
 function isRecord(value) {
@@ -481,70 +492,314 @@ function observeNativeRejectedPromise(value) {
   }
 }
 
-async function withLocalTenantQueue(key, operation) {
+function awaitAbortableHostOperation(operation, signal) {
+  if (signal === undefined) return Promise.resolve().then(operation);
+  try { if (signalWasAborted(signal)) fail('EVIDENCE_CANCELLED'); } catch (error) { return Promise.reject(error); }
+  const pending = Promise.resolve().then(() => {
+    if (signalWasAborted(signal)) fail('EVIDENCE_CANCELLED');
+    return operation();
+  });
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => signal.removeEventListener('abort', onAbort);
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        if (signalWasAborted(signal)) fail('EVIDENCE_CANCELLED');
+      } catch (error) { reject(error); }
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signalWasAborted(signal)) onAbort();
+    pending.then((value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        if (signalWasAborted(signal)) fail('EVIDENCE_CANCELLED');
+        resolve(value);
+      } catch (error) { reject(error); }
+    }, (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    });
+  });
+}
+
+function sqliteBusy(error) {
+  return error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY';
+}
+
+function createLockContext(timeoutMs, externalSignal) {
+  const controller = new AbortController();
+  let failureCode = null;
+  const onExternalAbort = () => {
+    if (failureCode === null) failureCode = 'EVIDENCE_CANCELLED';
+    controller.abort();
+  };
+  if (externalSignal) {
+    if (externalSignal.aborted) onExternalAbort();
+    else externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+  const timer = setTimeout(() => {
+    if (failureCode === null) failureCode = 'EVIDENCE_BUSY';
+    controller.abort();
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    check() {
+      if (failureCode !== null) fail(failureCode);
+      if (controller.signal.aborted) fail('EVIDENCE_CANCELLED');
+    },
+    failure() { return failureCode; },
+    close() {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
+    },
+  };
+}
+
+function awaitWithLockContext(value, context) {
+  context.check();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => context.signal.removeEventListener('abort', onAbort);
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try { context.check(); } catch (error) { reject(error); }
+    };
+    context.signal.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve(value).then((result) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try { context.check(); resolve(result); } catch (error) { reject(error); }
+    }, (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    });
+  });
+}
+
+async function lockRetryDelay(context) {
+  context.check();
+  await awaitWithLockContext(new Promise((resolve) => setTimeout(resolve, 5)), context);
+  context.check();
+}
+
+function ensurePrivateReceiptSchema(database) {
+  const expected = [
+    ['tenant_hash', 'TEXT', 1, 1],
+    ['receipt_key', 'TEXT', 1, 2],
+    ['schema_version', 'INTEGER', 1, 0],
+    ['state', 'TEXT', 1, 0],
+    ['key_id', 'TEXT', 0, 0],
+    ['payload_hash', 'TEXT', 0, 0],
+    ['payload_bytes', 'INTEGER', 0, 0],
+    ['expires_at_ms', 'INTEGER', 1, 0],
+    ['sealed', 'BLOB', 0, 0],
+    ['updated_at_ms', 'INTEGER', 1, 0],
+  ];
+  const columns = database.prepare('PRAGMA table_info(private_retrieval_receipts)').all();
+  if (columns.length !== expected.length || columns.some((column, index) => {
+    const [name, type, notNull, primaryKeyPosition] = expected[index];
+    return column.name !== name || column.type !== type || column.notnull !== notNull || column.pk !== primaryKeyPosition;
+  })) fail('EVIDENCE_STORAGE');
+  const version = database.prepare(`SELECT version FROM evidence_extension_schema
+    WHERE extension = 'private-retrieval-receipts'`).get();
+  if (!version) {
+    database.prepare(`INSERT INTO evidence_extension_schema (extension, version)
+      VALUES ('private-retrieval-receipts', ?)`).run(PRIVATE_RECEIPT_SCHEMA_VERSION);
+    return;
+  }
+  if (version.version !== PRIVATE_RECEIPT_SCHEMA_VERSION) fail('EVIDENCE_STORAGE');
+}
+
+async function withLocalTenantQueue(key, operation, context) {
   const previous = TENANT_QUEUES.get(key) ?? Promise.resolve();
   let release;
   const current = new Promise((resolve) => { release = resolve; });
-  TENANT_QUEUES.set(key, current);
-  await previous.catch(() => {});
+  const tail = previous.catch(() => {}).then(() => current);
+  TENANT_QUEUES.set(key, tail);
+  tail.then(() => {
+    if (TENANT_QUEUES.get(key) === tail) TENANT_QUEUES.delete(key);
+  }, () => {
+    if (TENANT_QUEUES.get(key) === tail) TENANT_QUEUES.delete(key);
+  });
   try {
+    await awaitWithLockContext(previous.catch(() => {}), context);
+    context.check();
     return await operation();
   } finally {
     release();
-    if (TENANT_QUEUES.get(key) === current) TENANT_QUEUES.delete(key);
   }
 }
 
-async function withTenantLock(directory, timeoutMs, operation) {
-  return withLocalTenantQueue(directory, async () => {
-    let database;
-    let transactionOpen = false;
-    try {
+async function withTenantLock(directory, timeoutMs, operation, externalSignal, lockOptions = undefined) {
+  const context = createLockContext(timeoutMs, externalSignal);
+  try {
+    const run = async () => {
       const databasePath = path.join(directory, 'evidence.sqlite');
-      let priorStats = null;
+      let database;
+      let transactionOpen = false;
+      const closeDatabase = () => {
+        if (!database) return;
+        try { database.close(); } catch { /* close releases any rolled-back transaction */ }
+        database = undefined;
+      };
+      const retryOpen = async () => {
+        while (true) {
+          context.check();
+          let priorStats = null;
+          try {
+            priorStats = await awaitWithLockContext(lstat(databasePath), context);
+            if (priorStats.isSymbolicLink() || !priorStats.isFile()) fail('EVIDENCE_STORAGE');
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          try {
+            context.check();
+            // timeout: 0 is essential: SQLite's busy handler is synchronous and
+            // would prevent this operation's abort/deadline timer from running.
+            database = new DatabaseSync(databasePath, { timeout: 0 });
+            const openedStats = await awaitWithLockContext(lstat(databasePath), context);
+            if (openedStats.isSymbolicLink() || !openedStats.isFile()
+              || (priorStats && (openedStats.dev !== priorStats.dev || openedStats.ino !== priorStats.ino))) {
+              fail('EVIDENCE_STORAGE');
+            }
+            database.exec(`
+              PRAGMA journal_mode = DELETE;
+              PRAGMA synchronous = FULL;
+              PRAGMA secure_delete = ON;
+              PRAGMA trusted_schema = OFF;
+              CREATE TABLE IF NOT EXISTS evidence_manifest (
+                tenant_hash TEXT PRIMARY KEY NOT NULL,
+                document TEXT NOT NULL
+              ) STRICT;
+              CREATE TABLE IF NOT EXISTS sealed_bundles (
+                kind TEXT NOT NULL CHECK (kind IN ('evidence', 'fact')),
+                id TEXT NOT NULL,
+                sealed BLOB NOT NULL,
+                PRIMARY KEY (kind, id)
+              ) STRICT;
+              CREATE TABLE IF NOT EXISTS evidence_extension_schema (
+                extension TEXT PRIMARY KEY NOT NULL,
+                version INTEGER NOT NULL CHECK (version > 0)
+              ) STRICT;
+              CREATE TABLE IF NOT EXISTS private_retrieval_receipts (
+                tenant_hash TEXT NOT NULL,
+                receipt_key TEXT NOT NULL,
+                schema_version INTEGER NOT NULL,
+                state TEXT NOT NULL CHECK (state IN ('pending', 'complete', 'expired')),
+                key_id TEXT,
+                payload_hash TEXT,
+                payload_bytes INTEGER,
+                expires_at_ms INTEGER NOT NULL,
+                sealed BLOB,
+                updated_at_ms INTEGER NOT NULL,
+                PRIMARY KEY (tenant_hash, receipt_key)
+              ) STRICT;
+            `);
+            await awaitWithLockContext(chmod(databasePath, 0o600), context);
+            return;
+          } catch (error) {
+            closeDatabase();
+            if (!sqliteBusy(error)) throw error;
+            await lockRetryDelay(context);
+          }
+        }
+      };
       try {
-        priorStats = await lstat(databasePath);
-        if (priorStats.isSymbolicLink() || !priorStats.isFile()) fail('EVIDENCE_STORAGE');
+        await retryOpen();
+        if (lockOptions?.beforeBegin) {
+          while (true) {
+            context.check();
+            // This trusted synchronous callback is deliberately outside both the
+            // tenant queue and SQLite transaction. A busy retry repeats it after
+            // the asynchronous wait, immediately before attempting BEGIN.
+            lockOptions.beforeBegin();
+            context.check();
+            try {
+              database.exec('BEGIN IMMEDIATE');
+              transactionOpen = true;
+            } catch (error) {
+              if (!sqliteBusy(error)) throw error;
+              await lockRetryDelay(context);
+              continue;
+            }
+            try {
+              ensurePrivateReceiptSchema(database);
+              const result = operation(database, context.signal);
+              if (utilTypes.isPromise(result)) {
+                observeNativeRejectedPromise(result);
+                fail('EVIDENCE_STORAGE');
+              }
+              context.check();
+              database.exec('COMMIT');
+              transactionOpen = false;
+              return result;
+            } catch (error) {
+              if (transactionOpen) {
+                try { database.exec('ROLLBACK'); } catch { /* rollback may follow failed COMMIT */ }
+                transactionOpen = false;
+              }
+              if (!sqliteBusy(error)) throw error;
+              await lockRetryDelay(context);
+            }
+          }
+        }
+        while (true) {
+          context.check();
+          try {
+            database.exec('BEGIN IMMEDIATE');
+            transactionOpen = true;
+            break;
+          } catch (error) {
+            if (!sqliteBusy(error)) throw error;
+            await lockRetryDelay(context);
+          }
+        }
+        ensurePrivateReceiptSchema(database);
+        const pending = Promise.resolve().then(() => {
+          context.check();
+          return operation(database, context.signal);
+        });
+        const result = await awaitWithLockContext(pending, context);
+        context.check();
+        while (true) {
+          try {
+            database.exec('COMMIT');
+            transactionOpen = false;
+            break;
+          } catch (error) {
+            if (!sqliteBusy(error)) throw error;
+            await lockRetryDelay(context);
+          }
+        }
+        return result;
       } catch (error) {
-        if (error?.code !== 'ENOENT') throw error;
+        if (transactionOpen) {
+          try { database?.exec('ROLLBACK'); } catch { /* SQLite rolls back on close after process errors. */ }
+        }
+        if (context.failure() !== null) context.check();
+        if (sqliteBusy(error)) fail('EVIDENCE_BUSY');
+        throw error;
+      } finally {
+        closeDatabase();
       }
-      database = new DatabaseSync(databasePath, { timeout: timeoutMs });
-      const openedStats = await lstat(databasePath);
-      if (openedStats.isSymbolicLink() || !openedStats.isFile()
-        || (priorStats && (openedStats.dev !== priorStats.dev || openedStats.ino !== priorStats.ino))) fail('EVIDENCE_STORAGE');
-      database.exec(`
-        PRAGMA journal_mode = DELETE;
-        PRAGMA synchronous = FULL;
-        PRAGMA secure_delete = ON;
-        PRAGMA trusted_schema = OFF;
-        CREATE TABLE IF NOT EXISTS evidence_manifest (
-          tenant_hash TEXT PRIMARY KEY NOT NULL,
-          document TEXT NOT NULL
-        ) STRICT;
-        CREATE TABLE IF NOT EXISTS sealed_bundles (
-          kind TEXT NOT NULL CHECK (kind IN ('evidence', 'fact')),
-          id TEXT NOT NULL,
-          sealed BLOB NOT NULL,
-          PRIMARY KEY (kind, id)
-        ) STRICT;
-      `);
-      await chmod(databasePath, 0o600);
-      database.exec('BEGIN IMMEDIATE');
-      transactionOpen = true;
-      const result = await operation(database);
-      database.exec('COMMIT');
-      transactionOpen = false;
-      return result;
-    } catch (error) {
-      if (transactionOpen) {
-        try { database.exec('ROLLBACK'); } catch { /* SQLite rolls back on close after process errors. */ }
-      }
-      if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
-      throw error;
-    } finally {
-      database?.close();
-    }
-  });
+    };
+    if (lockOptions?.beforeBegin) return await run();
+    return await withLocalTenantQueue(directory, run, context);
+  } finally {
+    context.close();
+  }
 }
 
 function emptyManifest(tenantHash) {
@@ -681,7 +936,7 @@ function copySelectedSealedBundles(database, kind, records, lengths) {
   }
 }
 
-async function decryptSealedBundle(info, id, kind, sealedBytes, expectedKeyId, resolveKey, budget) {
+async function decryptSealedBundle(info, id, kind, sealedBytes, expectedKeyId, resolveKey, budget, signal) {
   if (sealedBytes.byteLength > (kind === 'evidence'
     ? SELECTED_BATCH_LIMITS.evidenceSealedBytes
     : SELECTED_BATCH_LIMITS.factSealedBytes)) fail('EVIDENCE_INVALID');
@@ -695,7 +950,7 @@ async function decryptSealedBundle(info, id, kind, sealedBytes, expectedKeyId, r
     chargeBudget(budget, 'factBytes', plaintextBytes, SELECTED_BATCH_LIMITS.factBytes);
   }
   chargeBudget(budget, 'decryptedBytes', plaintextBytes, SELECTED_BATCH_LIMITS.decryptedBytes);
-  const key = await resolveKey(info, kind === 'evidence' ? 'payload' : 'fact', envelope.keyId);
+  const key = await resolveKey(info, kind === 'evidence' ? 'payload' : 'fact', envelope.keyId, signal);
   try {
     return decryptSealedPayload(envelope, info.tenantHash, id, kind, key.key, plaintextBytes);
   } finally {
@@ -1203,7 +1458,7 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function readManifest(database, tenantHash) {
+  function readManifest(database, tenantHash) {
     try {
       const length = database.prepare('SELECT length(CAST(document AS BLOB)) AS bytes FROM evidence_manifest WHERE tenant_hash = ?').get(tenantHash);
       if (!length) return emptyManifest(tenantHash);
@@ -1219,7 +1474,7 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function writeManifest(database, manifest) {
+  function writeManifest(database, manifest) {
     try {
       const document = JSON.stringify(manifest);
       if (Buffer.byteLength(document, 'utf8') > 16 * 1024 * 1024) fail('EVIDENCE_STORAGE');
@@ -1230,9 +1485,362 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function resolveKey(info, purpose, keyId) {
+  function privateReceiptKey(info, runId, candidateId) {
+    return digest(Buffer.from(`event-intelligence:private-receipt:v1\0${info.tenantHash}\0${runId}\0${candidateId}`, 'utf8'));
+  }
+
+  async function sealPrivateReceipt(info, receiptKey, value, signal) {
+    let serialized;
+    try { serialized = JSON.stringify(value); } catch { fail('EVIDENCE_INVALID'); }
+    if (typeof serialized !== 'string') fail('EVIDENCE_INVALID');
+    const plaintext = Buffer.from(serialized, 'utf8');
+    if (plaintext.byteLength <= 0 || plaintext.byteLength > PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES) {
+      plaintext.fill(0);
+      fail('EVIDENCE_INVALID');
+    }
+    const payloadHash = digest(plaintext);
+    const key = await resolveKey(info, 'payload', undefined, signal);
     try {
-      const resolved = await config.resolveKey(Object.freeze({ tenantId: info.tenantId, purpose, ...(keyId ? { keyId } : {}) }));
+      const sealed = encodeSealedPayload(info.tenantHash, receiptKey, PRIVATE_RECEIPT_KIND, serialized, key.keyId, key.key);
+      if (sealed.byteLength > PRIVATE_RECEIPT_MAX_ENVELOPE_BYTES) {
+        sealed.fill(0);
+        fail('EVIDENCE_INVALID');
+      }
+      return { keyId: key.keyId, payloadHash, payloadBytes: plaintext.byteLength, sealed };
+    } finally {
+      key.key.fill(0);
+      plaintext.fill(0);
+    }
+  }
+
+  async function openPrivateReceipt(info, receiptKey, row, signal) {
+    if (!row || !Buffer.isBuffer(row.sealed) || row.sealed.byteLength <= 0
+      || row.sealed.byteLength > PRIVATE_RECEIPT_MAX_ENVELOPE_BYTES
+      || row.key_id === null || !isDigest(row.payload_hash)
+      || !Number.isSafeInteger(row.payload_bytes) || row.payload_bytes <= 0
+      || row.payload_bytes > PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES) fail('EVIDENCE_INTEGRITY');
+    const envelope = decodeSealedEnvelope(row.sealed, info.tenantHash, receiptKey, PRIVATE_RECEIPT_KIND);
+    if (envelope.keyId !== row.key_id) fail('EVIDENCE_INTEGRITY');
+    const encryptedBytes = base64DecodedByteLength(envelope.ciphertext);
+    if (encryptedBytes !== row.payload_bytes) fail('EVIDENCE_INTEGRITY');
+    const key = await resolveKey(info, 'payload', envelope.keyId, signal);
+    try {
+      const value = decryptSealedPayload(envelope, info.tenantHash, receiptKey, PRIVATE_RECEIPT_KIND, key.key, row.payload_bytes);
+      if (digest(Buffer.from(JSON.stringify(value), 'utf8')) !== row.payload_hash) {
+        wipePrivateTree(value);
+        fail('EVIDENCE_INTEGRITY');
+      }
+      return value;
+    } finally {
+      key.key.fill(0);
+    }
+  }
+
+  function normalizePrivateReceiptBase(inputValue) {
+    const input = ownDataRecord(inputValue, new Set(['runId', 'configHash', 'candidate', 'claim']));
+    if (!input || typeof input.runId !== 'string' || input.runId.length < 1 || input.runId.length > 96
+      || !isWellFormed(input.runId) || /[\u0000-\u001f\u007f]/.test(input.runId)
+      || !isDigest(input.configHash)) fail('EVIDENCE_INVALID');
+    const rawCandidate = ownDataRecord(input.candidate,
+      new Set(['candidateId', 'canonicalUrl', 'depth', 'seed', 'sourceRefs']));
+    if (!rawCandidate || !isDigest(rawCandidate.candidateId) || typeof rawCandidate.canonicalUrl !== 'string'
+      || rawCandidate.canonicalUrl.length > 8_192 || !Number.isSafeInteger(rawCandidate.depth)
+      || rawCandidate.depth < 0 || rawCandidate.depth > 2 || typeof rawCandidate.seed !== 'boolean') fail('EVIDENCE_INVALID');
+    const canonical = validateUrl(rawCandidate.canonicalUrl).href;
+    if (canonical !== rawCandidate.canonicalUrl) fail('EVIDENCE_INVALID');
+    const sourceRefsInput = safeArray(rawCandidate.sourceRefs, 250);
+    if (!sourceRefsInput) fail('EVIDENCE_INVALID');
+    const sourceRefs = sourceRefsInput.map((value) => {
+      const reference = ownDataRecord(value, new Set(['evidenceId', 'contentHash', 'locator', 'field', 'value']));
+      if (!reference || !validUuid(reference.evidenceId) || !isDigest(reference.contentHash)
+        || typeof reference.field !== 'string' || reference.field.length < 1 || reference.field.length > 120
+        || !isWellFormed(reference.field) || typeof reference.value !== 'string'
+        || reference.value.length < 1 || reference.value.length > 8_192 || !isWellFormed(reference.value)) fail('EVIDENCE_INVALID');
+      return {
+        evidenceId: reference.evidenceId,
+        contentHash: reference.contentHash,
+        locator: copyLocator(reference.locator),
+        field: reference.field,
+        value: reference.value,
+      };
+    });
+    const candidate = {
+      candidateId: rawCandidate.candidateId,
+      canonicalUrl: canonical,
+      depth: rawCandidate.depth,
+      seed: rawCandidate.seed,
+      sourceRefs,
+    };
+    const rawClaim = ownDataRecord(input.claim, new Set(['claimKey', 'workerId', 'leaseToken']));
+    if (!rawClaim || typeof rawClaim.claimKey !== 'string' || rawClaim.claimKey.length < 1 || rawClaim.claimKey.length > 192
+      || !/^[A-Za-z0-9._:-]+$/.test(rawClaim.claimKey)
+      || typeof rawClaim.workerId !== 'string' || rawClaim.workerId.length < 1 || rawClaim.workerId.length > 192
+      || !/^[A-Za-z0-9._:-]+$/.test(rawClaim.workerId) || !validUuid(rawClaim.leaseToken)) fail('EVIDENCE_INVALID');
+    return {
+      runId: input.runId,
+      configHash: input.configHash,
+      candidate,
+      claim: { claimKey: rawClaim.claimKey, workerId: rawClaim.workerId, leaseToken: rawClaim.leaseToken },
+    };
+  }
+
+  function normalizePrivateReceiptCompletion(value) {
+    const input = ownDataRecord(value, new Set([
+      'completionKey', 'outcome', 'suggestions', 'limitations', 'identity',
+    ]));
+    if (!input || typeof input.completionKey !== 'string' || input.completionKey.length < 1
+      || input.completionKey.length > 192 || !/^[A-Za-z0-9._:-]+$/.test(input.completionKey)
+      || !['links_observed', 'no_links', 'failed', 'access_restricted'].includes(input.outcome)) fail('EVIDENCE_INVALID');
+    const budget = { nodes: 0, bytes: 0, maximumBytes: PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES - 8_192 };
+    const suggestionsInput = safeArray(input.suggestions, 16);
+    if (!suggestionsInput) fail('EVIDENCE_INVALID');
+    const suggestions = suggestionsInput.map((suggestion) => cloneJsonValue(suggestion, 0, budget));
+    const limitationsInput = safeArray(input.limitations, 64);
+    if (!limitationsInput || limitationsInput.some((item) => typeof item !== 'string'
+      || item.length < 1 || item.length > 120 || !/^[a-z0-9_:-]+$/.test(item))) fail('EVIDENCE_INVALID');
+    const rawIdentity = ownDataRecord(input.identity,
+      new Set(['entityCandidates', 'occurrenceCandidates', 'transitionLinks', 'unresolvedTransitions']));
+    if (!rawIdentity) fail('EVIDENCE_INVALID');
+    const entityCandidates = safeArray(rawIdentity.entityCandidates, 23);
+    const occurrenceCandidates = safeArray(rawIdentity.occurrenceCandidates, 23);
+    const transitionLinks = safeArray(rawIdentity.transitionLinks, 64);
+    const unresolvedTransitions = safeArray(rawIdentity.unresolvedTransitions, 64);
+    if (!entityCandidates || !occurrenceCandidates || !transitionLinks || !unresolvedTransitions) fail('EVIDENCE_INVALID');
+    const identity = {
+      entityCandidates: entityCandidates.map((item) => cloneJsonValue(item, 0, budget)),
+      occurrenceCandidates: occurrenceCandidates.map((item) => cloneJsonValue(item, 0, budget)),
+      transitionLinks: transitionLinks.map((item) => cloneJsonValue(item, 0, budget)),
+      unresolvedTransitions: unresolvedTransitions.map((item) => cloneJsonValue(item, 0, budget)),
+    };
+    if ((input.outcome === 'links_observed') !== (suggestions.length > 0)) fail('EVIDENCE_INVALID');
+    return {
+      completionKey: input.completionKey,
+      outcome: input.outcome,
+      suggestions,
+      limitations: [...limitationsInput],
+      identity,
+    };
+  }
+
+  function validatePrivateReceiptReferences(value) {
+    const input = ownDataRecord(value, new Set(['evidenceRefs', 'factRefs']));
+    if (!input) fail('EVIDENCE_INTEGRITY');
+    const evidenceInput = safeArray(input.evidenceRefs, 8);
+    const factInput = safeArray(input.factRefs, 128);
+    if (!evidenceInput || !factInput) fail('EVIDENCE_INTEGRITY');
+    let totalPositions = 0;
+    const evidenceRefs = evidenceInput.map((entry) => {
+      const reference = ownDataRecord(entry, new Set([
+        'evidenceId', 'version', 'contentHash', 'representation', 'derivationDigest', 'positions',
+      ]));
+      if (!reference || !validUuid(reference.evidenceId) || !Number.isSafeInteger(reference.version)
+        || reference.version < 1 || !isDigest(reference.contentHash)
+        || !['raw', 'pdf-derived-text', 'asset-source-excerpt'].includes(reference.representation)
+        || (reference.derivationDigest !== null && !isDigest(reference.derivationDigest))) fail('EVIDENCE_INTEGRITY');
+      const positionsInput = safeArray(reference.positions, 128);
+      if (!positionsInput) fail('EVIDENCE_INTEGRITY');
+      totalPositions += positionsInput.length;
+      if (totalPositions > 128) fail('EVIDENCE_INTEGRITY');
+      const positions = positionsInput.map((positionValue) => {
+        const position = ownDataRecord(positionValue, new Set(['locator', 'contentHash']));
+        if (!position || !isDigest(position.contentHash)) fail('EVIDENCE_INTEGRITY');
+        return { locator: copyLocator(position.locator), contentHash: position.contentHash };
+      });
+      return {
+        evidenceId: reference.evidenceId,
+        version: reference.version,
+        contentHash: reference.contentHash,
+        representation: reference.representation,
+        derivationDigest: reference.derivationDigest,
+        positions,
+      };
+    });
+    const factRefs = factInput.map((entry) => {
+      const reference = ownDataRecord(entry, new Set([
+        'factId', 'field', 'status', 'valueHash', 'supportEvidenceIds', 'supportContentHashes', 'supports',
+      ]));
+      if (!reference || !validUuid(reference.factId) || typeof reference.field !== 'string'
+        || reference.field.length < 1 || reference.field.length > 120 || !FACT_STATUSES.has(reference.status)
+        || !isDigest(reference.valueHash)) fail('EVIDENCE_INTEGRITY');
+      const supportEvidenceIds = safeArray(reference.supportEvidenceIds, 128);
+      const supportContentHashes = safeArray(reference.supportContentHashes, 128);
+      const supportsInput = safeArray(reference.supports, 512);
+      if (!supportEvidenceIds || !supportContentHashes || !supportsInput
+        || supportEvidenceIds.some((id) => !validUuid(id))
+        || supportContentHashes.some((hash) => !isDigest(hash))) fail('EVIDENCE_INTEGRITY');
+      const supports = supportsInput.map((supportValue) => {
+        const support = ownDataRecord(supportValue, new Set([
+          'evidenceId', 'positionId', 'contentHash', 'duplicateGroupId',
+        ]));
+        if (!support || !validUuid(support.evidenceId) || !validUuid(support.positionId)
+          || !isDigest(support.contentHash) || !isDigest(support.duplicateGroupId)) fail('EVIDENCE_INTEGRITY');
+        return {
+          evidenceId: support.evidenceId,
+          positionId: support.positionId,
+          contentHash: support.contentHash,
+          duplicateGroupId: support.duplicateGroupId,
+        };
+      });
+      if (JSON.stringify([...new Set(supportEvidenceIds)].sort()) !== JSON.stringify(supportEvidenceIds)
+        || JSON.stringify([...new Set(supportContentHashes)].sort()) !== JSON.stringify(supportContentHashes)
+        || JSON.stringify([...new Set(supports.map((support) => support.evidenceId))].sort()) !== JSON.stringify(supportEvidenceIds)
+        || JSON.stringify([...new Set(supports.map((support) => support.contentHash))].sort()) !== JSON.stringify(supportContentHashes)) {
+        fail('EVIDENCE_INTEGRITY');
+      }
+      return {
+        factId: reference.factId,
+        field: reference.field,
+        status: reference.status,
+        valueHash: reference.valueHash,
+        supportEvidenceIds,
+        supportContentHashes,
+        supports,
+      };
+    });
+    if (new Set(evidenceRefs.map((reference) => reference.evidenceId)).size !== evidenceRefs.length
+      || new Set(factRefs.map((reference) => reference.factId)).size !== factRefs.length) fail('EVIDENCE_INTEGRITY');
+    return { evidenceRefs, factRefs };
+  }
+
+  function receiptReferencesForMaterialized(info, materialized) {
+    const evidenceRefs = (materialized?.evidence ?? []).map((item) => {
+      const handleInfo = EVIDENCE_HANDLES.get(item.handle);
+      if (!handleInfo || handleInfo.tenantHash !== info.tenantHash) fail('EVIDENCE_DENIED');
+      return {
+        evidenceId: handleInfo.evidenceId,
+        version: item.metadata.version,
+        contentHash: item.metadata.contentHash,
+        representation: item.metadata.representation ?? 'raw',
+        derivationDigest: item.metadata.derivationDigest ?? null,
+        positions: item.positions.map((position) => ({
+          locator: cloneJsonValue(position.locator),
+          contentHash: position.contentHash,
+        })),
+      };
+    });
+    const factRefs = (materialized?.facts ?? []).map((fact) => {
+      const factSupports = [];
+      const sourceCandidates = fact.status === 'conflicting' ? fact.candidates : [fact];
+      for (const sourceFact of sourceCandidates) {
+        for (const support of sourceFact.supports ?? []) {
+          const evidenceInfo = EVIDENCE_HANDLES.get(support.evidence);
+          const positionInfo = POSITION_HANDLES.get(support.position);
+          if (!evidenceInfo || !positionInfo || evidenceInfo.tenantHash !== info.tenantHash
+            || positionInfo.tenantHash !== info.tenantHash || evidenceInfo.evidenceId !== positionInfo.evidenceId) {
+            fail('EVIDENCE_INTEGRITY');
+          }
+          factSupports.push({
+            evidenceId: evidenceInfo.evidenceId,
+            positionId: positionInfo.positionId,
+            contentHash: support.contentHash,
+            duplicateGroupId: support.duplicateGroupId,
+          });
+        }
+      }
+      const fingerprintBytes = Buffer.from(JSON.stringify({
+        factId: fact.factId,
+        field: fact.field,
+        status: fact.status,
+        rawValue: fact.rawValue,
+        normalizedValue: fact.normalizedValue,
+        precision: fact.precision,
+        candidates: fact.status === 'conflicting' ? fact.candidates.map((candidate) => ({
+          originStatus: candidate.originStatus,
+          rawValue: candidate.rawValue,
+          normalizedValue: candidate.normalizedValue,
+          precision: candidate.precision,
+          supports: candidate.supports.map((support) => ({
+            contentHash: support.contentHash,
+            duplicateGroupId: support.duplicateGroupId,
+          })),
+        })) : undefined,
+        supports: factSupports,
+      }), 'utf8');
+      let valueHash;
+      try { valueHash = digest(fingerprintBytes); } finally { fingerprintBytes.fill(0); }
+      return {
+        factId: fact.factId,
+        field: fact.field,
+        status: fact.status,
+        valueHash,
+        supportEvidenceIds: [...new Set(factSupports.map((support) => support.evidenceId))].sort(),
+        supportContentHashes: [...new Set(factSupports.map((support) => support.contentHash))].sort(),
+        supports: factSupports,
+      };
+    });
+    return { evidenceRefs, factRefs };
+  }
+
+  async function privateReceiptRowSnapshot(info, directory, receiptKey, signal) {
+    return withExpiryAwareTenantLock(info, directory, async (database) => {
+      const row = database.prepare(`SELECT schema_version, state, key_id, payload_hash, payload_bytes,
+        expires_at_ms, sealed, updated_at_ms FROM private_retrieval_receipts
+        WHERE tenant_hash = ? AND receipt_key = ?`).get(info.tenantHash, receiptKey);
+      if (!row) return null;
+      if (row.schema_version !== PRIVATE_RECEIPT_SCHEMA_VERSION || !['pending', 'complete', 'expired'].includes(row.state)
+        || !Number.isSafeInteger(row.expires_at_ms) || !Number.isSafeInteger(row.updated_at_ms)) fail('EVIDENCE_INTEGRITY');
+      if (row.state === 'expired') return { state: 'expired', expiresAtMs: row.expires_at_ms };
+      if (row.expires_at_ms <= currentTime()) {
+        database.prepare(`UPDATE private_retrieval_receipts SET state = 'expired', key_id = NULL,
+          payload_hash = NULL, payload_bytes = NULL, sealed = NULL, updated_at_ms = ?
+          WHERE tenant_hash = ? AND receipt_key = ? AND state IN ('pending', 'complete')`)
+          .run(currentTime(), info.tenantHash, receiptKey);
+        return { state: 'expired', expiresAtMs: row.expires_at_ms };
+      }
+      if (row.state === 'pending' || row.state === 'complete') {
+        if (typeof row.key_id !== 'string' || !isDigest(row.payload_hash)
+          || !Number.isSafeInteger(row.payload_bytes) || row.payload_bytes <= 0
+          || row.payload_bytes > PRIVATE_RECEIPT_MAX_PLAINTEXT_BYTES
+          || row.sealed === null || row.sealed.byteLength <= 0
+          || row.sealed.byteLength > PRIVATE_RECEIPT_MAX_ENVELOPE_BYTES) fail('EVIDENCE_INTEGRITY');
+      }
+      return {
+        state: row.state,
+        key_id: row.key_id,
+        payload_hash: row.payload_hash,
+        payload_bytes: row.payload_bytes,
+        expiresAtMs: row.expires_at_ms,
+        updatedAtMs: row.updated_at_ms,
+        sealed: row.sealed === null ? null : Buffer.from(row.sealed),
+      };
+    }, signal);
+  }
+
+  function privateReceiptRowMatchesSync(info, directory, receiptKey, expected) {
+    const databasePath = path.join(directory, 'evidence.sqlite');
+    let database;
+    try {
+      const before = lstatSync(databasePath);
+      if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
+      database = new DatabaseSync(databasePath, { readOnly: true, timeout: 0 });
+      const after = lstatSync(databasePath);
+      if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) {
+        fail('EVIDENCE_STORAGE');
+      }
+      database.exec('PRAGMA trusted_schema = OFF');
+      const row = database.prepare(`SELECT schema_version, state, key_id, payload_hash, payload_bytes,
+        expires_at_ms, sealed, updated_at_ms FROM private_retrieval_receipts
+        WHERE tenant_hash = ? AND receipt_key = ?`).get(info.tenantHash, receiptKey);
+      if (!row || row.schema_version !== PRIVATE_RECEIPT_SCHEMA_VERSION || row.state !== expected.state
+        || row.key_id !== expected.key_id || row.payload_hash !== expected.payload_hash
+        || row.payload_bytes !== expected.payload_bytes || row.expires_at_ms !== expected.expiresAtMs
+        || row.updated_at_ms !== expected.updatedAtMs || !row.sealed || !expected.sealed) return false;
+      return Buffer.from(row.sealed).equals(expected.sealed);
+    } catch (error) {
+      if (error instanceof EvidenceStoreError) throw error;
+      if (sqliteBusy(error)) fail('EVIDENCE_BUSY');
+      fail('EVIDENCE_STORAGE');
+    } finally {
+      try { database?.close(); } catch { /* close read snapshot */ }
+    }
+  }
+
+  async function resolveKey(info, purpose, keyId, signal) {
+    try {
+      const resolved = await awaitAbortableHostOperation(
+        () => config.resolveKey(Object.freeze({ tenantId: info.tenantId, purpose, ...(keyId ? { keyId } : {}) })),
+        signal,
+      );
       return validateKeyResult(resolved, keyId);
     } catch (error) {
       if (error instanceof EvidenceStoreError) throw error;
@@ -1240,7 +1848,7 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function encryptBundle(info, id, kind, data) {
+  async function encryptBundle(info, id, kind, data, signal) {
     let serialized;
     try { serialized = JSON.stringify(data); } catch { fail('EVIDENCE_INVALID'); }
     if (typeof serialized !== 'string') fail('EVIDENCE_INVALID');
@@ -1249,7 +1857,7 @@ export function createEvidenceStore(options) {
       ? SELECTED_BATCH_LIMITS.evidenceDecryptedBytes
       : SELECTED_BATCH_LIMITS.factRecordBytes;
     if (plaintextBytes <= 0 || plaintextBytes > maximum) fail('EVIDENCE_INVALID');
-    const key = await resolveKey(info, kind === 'evidence' ? 'payload' : 'fact');
+    const key = await resolveKey(info, kind === 'evidence' ? 'payload' : 'fact', undefined, signal);
     try {
       return {
         keyId: key.keyId,
@@ -1260,7 +1868,7 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function decryptBundle(info, id, kind, database, expectedKeyId) {
+  async function decryptBundle(info, id, kind, database, expectedKeyId, signal) {
     const envelopeBytes = readSealedBundle(database, kind, id);
     try {
       const envelope = decodeSealedEnvelope(envelopeBytes, info.tenantHash, id, kind);
@@ -1270,7 +1878,7 @@ export function createEvidenceStore(options) {
         ? SELECTED_BATCH_LIMITS.evidenceDecryptedBytes
         : SELECTED_BATCH_LIMITS.factRecordBytes;
       if (plaintextBytes > maximum) fail('EVIDENCE_INVALID');
-      const key = await resolveKey(info, kind === 'evidence' ? 'payload' : 'fact', envelope.keyId);
+      const key = await resolveKey(info, kind === 'evidence' ? 'payload' : 'fact', envelope.keyId, signal);
       try {
         return decryptSealedPayload(envelope, info.tenantHash, id, kind, key.key, plaintextBytes);
       } finally {
@@ -1281,18 +1889,19 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function authorize(info, request, action, evidenceIds, factIds = []) {
+  async function authorize(info, request, action, evidenceIds, factIds = [], signal) {
     if (typeof config.authorizePrivateAccess !== 'function') fail('EVIDENCE_DENIED');
     let result;
     try {
-      result = await config.authorizePrivateAccess(Object.freeze({
+      result = await awaitAbortableHostOperation(() => config.authorizePrivateAccess(Object.freeze({
         tenantId: info.tenantId,
         request,
         action,
         evidenceIds: Object.freeze([...new Set(evidenceIds)]),
         factIds: Object.freeze([...new Set(factIds)]),
-      }));
-    } catch {
+      })), signal);
+    } catch (error) {
+      if (error instanceof EvidenceStoreError) throw error;
       fail('EVIDENCE_DENIED');
     }
     if (result !== true) fail('EVIDENCE_DENIED');
@@ -1320,32 +1929,28 @@ export function createEvidenceStore(options) {
 
   function checkCancellation(signal) {
     if (signal === undefined) return;
-    try {
-      if (Reflect.apply(ABORT_SIGNAL_ABORTED_GETTER, signal, [])) fail('EVIDENCE_CANCELLED');
-    } catch (error) {
-      if (error instanceof EvidenceStoreError) throw error;
-      fail('EVIDENCE_INVALID');
-    }
+    if (signalWasAborted(signal)) fail('EVIDENCE_CANCELLED');
   }
 
-  async function resolveRetention(info, kind, nowMs, sourceKind, upperBoundMs, retentionHandle) {
+  async function resolveRetention(info, kind, nowMs, sourceKind, upperBoundMs, retentionHandle, signal) {
     let result;
     try {
-      result = await config.resolveRetention(Object.freeze({
+      result = await awaitAbortableHostOperation(() => config.resolveRetention(Object.freeze({
         tenantId: info.tenantId,
         kind,
         sourceKind,
         nowMs,
         ...(Number.isSafeInteger(upperBoundMs) ? { sourceExpiresAtMs: upperBoundMs } : {}),
         ...(retentionHandle !== undefined ? { retentionHandle } : {}),
-      }));
-    } catch {
+      })), signal);
+    } catch (error) {
+      if (error instanceof EvidenceStoreError) throw error;
       fail('EVIDENCE_DENIED');
     }
     return validateRetentionResult(result, nowMs, limits.maxRetentionMs, upperBoundMs);
   }
 
-  async function expireRecords(database, manifest, nowMs) {
+  function expireRecords(database, manifest, nowMs) {
     let changed = false;
     for (const record of Object.values(manifest.records)) {
       if (record.state === 'available' && record.expiresAtMs <= nowMs) {
@@ -1380,25 +1985,29 @@ export function createEvidenceStore(options) {
         }
       }
     }
-    if (changed) await writeManifest(database, manifest);
+    if (changed) writeManifest(database, manifest);
     return changed;
   }
 
-  async function persistExpirySweep(info, directory) {
+  async function persistExpirySweep(info, directory, signal) {
     await withTenantLock(directory, limits.lockTimeoutMs, async (database) => {
       const manifest = await readManifest(database, info.tenantHash);
       await expireRecords(database, manifest, currentTime());
-    });
+    }, signal);
   }
 
-  async function withExpiryCleanup(info, directory, operation) {
+  async function withExpiryCleanup(info, directory, operation, signal) {
     try {
       return await operation();
     } catch (operationError) {
+      if (operationError instanceof EvidenceStoreError && operationError.code === 'EVIDENCE_CANCELLED') {
+        throw operationError;
+      }
+      if (signal !== undefined && signalWasAborted(signal)) throw safePublicError(operationError);
       // The operation transaction has already rolled back. Persist only a fresh
       // expiry sweep in its own transaction, so a failed mutation never commits.
       try {
-        await persistExpirySweep(info, directory);
+        await persistExpirySweep(info, directory, signal);
       } catch (cleanupError) {
         throw safePublicError(cleanupError);
       }
@@ -1406,8 +2015,10 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function withExpiryAwareTenantLock(info, directory, operation) {
-    return withExpiryCleanup(info, directory, () => withTenantLock(directory, limits.lockTimeoutMs, operation));
+  async function withExpiryAwareTenantLock(info, directory, operation, signal, lockOptions = undefined) {
+    return withExpiryCleanup(info, directory, () => withTenantLock(
+      directory, limits.lockTimeoutMs, operation, signal, lockOptions,
+    ), signal);
   }
 
   function makeFinalStateVerifier(info, directory, evidenceIds, factIds) {
@@ -1418,7 +2029,7 @@ export function createEvidenceStore(options) {
       const uniqueFactIds = [...new Set(factIds)];
       const before = lstatSync(databasePath);
       if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
-      database = new DatabaseSync(databasePath, { readOnly: true, timeout: limits.lockTimeoutMs });
+      database = new DatabaseSync(databasePath, { readOnly: true, timeout: 0 });
       const after = lstatSync(databasePath);
       if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) {
         fail('EVIDENCE_STORAGE');
@@ -1526,7 +2137,7 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function commitNewBundle(database, kind, id, sealedBytes) {
+  function commitNewBundle(database, kind, id, sealedBytes) {
     try {
       database.prepare('INSERT INTO sealed_bundles (kind, id, sealed) VALUES (?, ?, ?)').run(kind, id, sealedBytes);
     } catch (error) {
@@ -1895,13 +2506,26 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function materializeSelectedInternal(scope, selectionValue, request, signal, action, returnMode = 'selected', evidenceLimit = 8) {
+  async function materializeSelectedInternal(
+    scope,
+    selectionValue,
+    request,
+    signal,
+    action,
+    returnMode = 'selected',
+    evidenceLimit = 8,
+    deferCurrentAuthorization = false,
+    finalizationHook,
+  ) {
     const info = scopeInfo(scope);
     checkCancellation(signal);
     const budget = newMaterializationBudget();
     const selection = ownDataRecord(selectionValue, new Set(['evidence', 'facts']));
     if (!selection) fail('EVIDENCE_INVALID');
-    const evidenceHandles = safeArray(selection.evidence, SELECTED_BATCH_LIMITS.evidenceCount);
+    const evidenceHandles = safeArray(selection.evidence, Math.max(
+      SELECTED_BATCH_LIMITS.evidenceCount,
+      Math.min(evidenceLimit, SELECTED_BATCH_LIMITS.positionCount),
+    ));
     const factHandles = safeArray(selection.facts, SELECTED_BATCH_LIMITS.factCount);
     if (!evidenceHandles || !factHandles || evidenceHandles.length + factHandles.length === 0) fail('EVIDENCE_INVALID');
     const explicitEvidenceIds = [];
@@ -1987,7 +2611,7 @@ export function createEvidenceStore(options) {
       const evidenceViews = [];
       const evidenceById = new Map();
       for (const record of snapshot.evidence) {
-        const bundle = await decryptSealedBundle(info, record.id, 'evidence', record.sealed, record.encryptionKeyId, resolveKey, snapshot.budget);
+        const bundle = await decryptSealedBundle(info, record.id, 'evidence', record.sealed, record.encryptionKeyId, resolveKey, snapshot.budget, signal);
         try {
           checkCancellation(signal);
           const view = materializeEvidenceBundle(info, record, bundle, snapshot.budget);
@@ -2001,7 +2625,7 @@ export function createEvidenceStore(options) {
       }
       const factViews = [];
       for (const record of snapshot.facts) {
-        const stored = await decryptSealedBundle(info, record.id, 'fact', record.sealed, record.encryptionKeyId, resolveKey, snapshot.budget);
+        const stored = await decryptSealedBundle(info, record.id, 'fact', record.sealed, record.encryptionKeyId, resolveKey, snapshot.budget, signal);
         try {
           checkCancellation(signal);
           validateMaterializedFact(record, stored, evidenceById, snapshot.budget);
@@ -2013,9 +2637,9 @@ export function createEvidenceStore(options) {
 
       checkCancellation(signal);
       finalVerifier = makeFinalStateVerifier(info, directory, evidenceIds, factIds);
-      // This is the final host authorization decision. Everything that can await,
-      // including key resolution, has completed; no DB/write lock is held.
-      authorizeCurrent(info, request, action, evidenceIds, factIds);
+      // Everything that can await, including key resolution, has completed; no
+      // DB/write lock is held. appendFact defers this hook until its final CAS prep.
+      if (!deferCurrentAuthorization) authorizeCurrent(info, request, action, evidenceIds, factIds);
       // Keep this synchronous tail together: current persisted state, every selected
       // record's retention deadline, cancellation, then immutable result release.
       finalVerifier.check(snapshot);
@@ -2026,11 +2650,25 @@ export function createEvidenceStore(options) {
         return Object.freeze({ ...view, metadata: frozenMetadata(record) });
       });
       const materialized = deepFreeze({ evidence: refreshedEvidenceViews, facts: factViews });
+      if (finalizationHook !== undefined) {
+        if (typeof finalizationHook !== 'function') fail('EVIDENCE_INVALID');
+        const hookResult = finalizationHook({
+          snapshot,
+          finalVerifier,
+          evidenceIds: Object.freeze([...evidenceIds]),
+          factIds: Object.freeze([...factIds]),
+          materialized,
+        });
+        if (hookResult !== undefined) fail('EVIDENCE_INVALID');
+        checkCancellation(signal);
+      }
       if (returnMode === 'fact') return materialized.facts[0];
       if (returnMode === 'positions') return materialized.evidence[0].positions;
       return materialized;
     } catch (error) {
-      try { await persistExpirySweep(info, directory); } catch (cleanupError) { throw safePublicError(cleanupError); }
+      if (!(error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED')) {
+        try { await persistExpirySweep(info, directory, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
+      }
       throw safePublicError(error);
     } finally {
       finalVerifier?.close();
@@ -2053,8 +2691,9 @@ export function createEvidenceStore(options) {
     return scope;
   }
 
-  async function ingestEvidence(scope, inputValue) {
+  async function ingestEvidence(scope, inputValue, signal, snapshotAttempt = 0) {
     const info = scopeInfo(scope);
+    checkCancellation(signal);
     const input = ownDataRecord(inputValue, new Set([
       'sourceUrl', 'canonicalUrl', 'redirectChain', 'content', 'contentType', 'retrievedAt', 'sourceKind', 'positions', 'retentionHandle',
     ]));
@@ -2095,123 +2734,198 @@ export function createEvidenceStore(options) {
       throw error instanceof EvidenceStoreError ? error : new EvidenceStoreError('EVIDENCE_INVALID');
     }
     let activeIndexKey;
+    let sealed;
+    let sealedBytes;
+    let duplicateBytes;
+    let directory;
+    const historicalIndexKeys = [];
+    const retryWithFreshSnapshot = async () => {
+      checkCancellation(signal);
+      if (snapshotAttempt >= 7) fail('EVIDENCE_BUSY');
+      sourceBytes.fill(0);
+      for (const position of positions) position.bytes.fill(0);
+      activeIndexKey?.key.fill(0);
+      sealed?.bytes.fill(0);
+      duplicateBytes?.fill(0);
+      for (const key of historicalIndexKeys) key.fill(0);
+      return ingestEvidence(scope, inputValue, signal, snapshotAttempt + 1);
+    };
     try {
       const sourceKind = input.sourceKind;
       const nowMs = currentTime();
       const retrievedAtMs = Date.parse(input.retrievedAt);
-      const retention = await resolveRetention(info, 'evidence', nowMs, sourceKind, undefined, input.retentionHandle);
-      activeIndexKey = await resolveKey(info, 'source-index');
+      const retention = await resolveRetention(info, 'evidence', nowMs, sourceKind, undefined, input.retentionHandle, signal);
+      checkCancellation(signal);
+      activeIndexKey = await resolveKey(info, 'source-index', undefined, signal);
+      checkCancellation(signal);
       const sourceIdentity = `${sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`;
-      const directory = await tenantDirectory(info);
-      return await withExpiryAwareTenantLock(info, directory, async (database) => {
+      directory = await tenantDirectory(info);
+      const snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
         const transactionTime = currentTime();
         await expireRecords(database, manifest, transactionTime);
         if (retention.expiresAtMs <= transactionTime) fail('EVIDENCE_EXPIRED');
-        const matchingFamily = Object.values(manifest.families).find((family) =>
-          family.sourceKeyId === activeIndexKey.keyId
-            ? family.sourceKeyHmac === stableHmac(activeIndexKey.key, sourceIdentity)
-            : false);
-        let family = matchingFamily;
-        if (!family) {
-          for (const candidate of Object.values(manifest.families)) {
-            if (candidate.sourceKeyId === activeIndexKey.keyId) continue;
-            const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId);
-            try {
-              if (candidate.sourceKeyHmac === stableHmac(oldIndexKey.key, sourceIdentity)) {
-                family = candidate;
-                break;
-              }
-            } finally {
-              oldIndexKey.key.fill(0);
-            }
+        const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        const document = row?.document ?? null;
+        return {
+          document,
+          manifest: document === null ? emptyManifest(info.tenantHash) : validateManifest(JSON.parse(document), info.tenantHash),
+        };
+      }, signal);
+
+      const families = Object.values(snapshot.manifest.families);
+      let family = families.find((candidate) => candidate.sourceKeyId === activeIndexKey.keyId
+        && candidate.sourceKeyHmac === stableHmac(activeIndexKey.key, sourceIdentity));
+      if (!family) {
+        for (const candidate of families) {
+          if (candidate.sourceKeyId === activeIndexKey.keyId) continue;
+          const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId, signal);
+          historicalIndexKeys.push(oldIndexKey.key);
+          if (candidate.sourceKeyHmac === stableHmac(oldIndexKey.key, sourceIdentity)) {
+            family = candidate;
+            break;
           }
         }
-        const priorIds = family ? [...family.recordIds] : [];
-        const latestId = priorIds.at(-1);
-        const latest = latestId ? manifest.records[latestId] : null;
-        if (latest?.state === 'available' && latest.contentHash === sourceContentHash) {
-          const existing = await decryptBundle(info, latest.id, 'evidence', database, latest.encryptionKeyId);
+      }
+      const priorIds = family ? [...family.recordIds] : [];
+      const latestId = priorIds.at(-1);
+      const latest = latestId ? snapshot.manifest.records[latestId] : null;
+      if (latest?.state === 'available' && latest.contentHash === sourceContentHash) {
+        const duplicateRecord = copyEvidenceRecord(latest);
+        duplicateBytes = await withExpiryAwareTenantLock(info, directory, async (database) => {
+          const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+          if ((row?.document ?? null) !== snapshot.document) return null;
           if (currentTime() >= latest.expiresAtMs) fail('EVIDENCE_EXPIRED');
-          const evidence = newEvidenceHandle(info, latest.id);
-          const positionHandles = existing.positions.map((position) => newPositionHandle(info, latest.id, position.id, sourceKind));
-          sourceBytes.fill(0);
-          for (const position of positions) position.bytes.fill(0);
-          return Object.freeze({ evidence, positions: Object.freeze(positionHandles), created: false, metadata: frozenMetadata(latest) });
+          return readSealedBundle(database, 'evidence', latest.id);
+        }, signal);
+        if (!duplicateBytes) return await retryWithFreshSnapshot();
+        const budget = newMaterializationBudget();
+        const existing = await decryptSealedBundle(
+          info, latest.id, 'evidence', duplicateBytes, latest.encryptionKeyId, resolveKey, budget, signal,
+        );
+        try {
+          const view = materializeEvidenceBundle(info, duplicateRecord, existing, budget);
+          if (currentTime() >= latest.expiresAtMs) fail('EVIDENCE_EXPIRED');
+          const stillCurrent = await withExpiryAwareTenantLock(info, directory, async (database, lockSignal) => {
+            checkCancellation(lockSignal);
+            const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+            if ((row?.document ?? null) !== snapshot.document) return false;
+            if (currentTime() >= latest.expiresAtMs) fail('EVIDENCE_EXPIRED');
+            const count = Number(database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ? AND id = ?')
+              .get('evidence', latest.id).count);
+            if (count !== 1) fail('EVIDENCE_INTEGRITY');
+            checkCancellation(lockSignal);
+            return true;
+          }, signal);
+          if (!stillCurrent) return await retryWithFreshSnapshot();
+          return Object.freeze({
+            evidence: view.handle,
+            positions: Object.freeze(view.positions.map((position) => position.handle)),
+            created: false,
+            metadata: view.metadata,
+          });
+        } finally {
+          wipePrivateTree(existing);
         }
-        const familyId = family?.id ?? randomUUID();
-        const evidenceId = randomUUID();
-        const version = family ? (family.versionCount ?? priorIds.length) + 1 : 1;
-        const positionIds = positions.map((position) => position.id);
-        const positionHashes = Object.fromEntries(positions.map((position) => [position.id, position.contentHash]));
-        const bundle = {
-          schemaVersion: 1,
-          source: {
-            sourceUrl: originalUrl,
-            canonicalUrl,
-            redirectChain,
-            contentType: input.contentType,
-            sourceKind,
-            retrievedAt: input.retrievedAt,
-            retrievedAtMs,
-            contentHash: sourceContentHash,
-          },
-          positions: positions.map((position) => ({
-            id: position.id,
-            locator: position.locator,
-            contentHash: position.contentHash,
-            content: position.bytes.toString('base64'),
-          })),
-        };
-        const sealed = await encryptBundle(info, evidenceId, 'evidence', bundle);
-        if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
-        const nowIso = new Date(nowMs).toISOString();
-        const duplicateGroupId = digest(Buffer.from(`event-intelligence:duplicate:v1:${info.tenantHash}:${sourceContentHash}`, 'utf8'));
-        const record = {
-          id: evidenceId,
-          version,
-          previousId: latest?.id ?? null,
-          contentHash: sourceContentHash,
-          duplicateGroupId,
+      }
+
+      const familyId = family?.id ?? randomUUID();
+      const evidenceId = randomUUID();
+      const version = family ? (family.versionCount ?? priorIds.length) + 1 : 1;
+      const positionIds = positions.map((position) => position.id);
+      const positionHashes = Object.fromEntries(positions.map((position) => [position.id, position.contentHash]));
+      const bundle = {
+        schemaVersion: 1,
+        source: {
+          sourceUrl: originalUrl,
+          canonicalUrl,
+          redirectChain,
+          contentType: input.contentType,
+          sourceKind,
           retrievedAt: input.retrievedAt,
-          createdAt: nowIso,
-          createdAtMs: nowMs,
           retrievedAtMs,
-          expiresAtMs: retention.expiresAtMs,
-          policyId: retention.policyId,
-          policyVersion: retention.policyVersion,
-          state: 'available',
-          encryptionKeyId: sealed.keyId,
-          positionIds,
-          positionHashes,
-        };
-        await commitNewBundle(database, 'evidence', evidenceId, sealed.bytes);
+          contentHash: sourceContentHash,
+        },
+        positions: positions.map((position) => ({
+          id: position.id,
+          locator: position.locator,
+          contentHash: position.contentHash,
+          content: position.bytes.toString('base64'),
+        })),
+      };
+      sealed = await encryptBundle(info, evidenceId, 'evidence', bundle, signal);
+      sealedBytes = sealed.bytes;
+      checkCancellation(signal);
+      const committedAtMs = currentTime();
+      if (retention.expiresAtMs <= committedAtMs) fail('EVIDENCE_EXPIRED');
+      const duplicateGroupId = digest(Buffer.from(`event-intelligence:duplicate:v1:${info.tenantHash}:${sourceContentHash}`, 'utf8'));
+      const record = {
+        id: evidenceId,
+        version,
+        previousId: latest?.id ?? null,
+        contentHash: sourceContentHash,
+        duplicateGroupId,
+        retrievedAt: input.retrievedAt,
+        createdAt: new Date(committedAtMs).toISOString(),
+        createdAtMs: committedAtMs,
+        retrievedAtMs,
+        expiresAtMs: retention.expiresAtMs,
+        policyId: retention.policyId,
+        policyVersion: retention.policyVersion,
+        state: 'available',
+        encryptionKeyId: sealed.keyId,
+        positionIds,
+        positionHashes,
+      };
+      const committed = await withExpiryAwareTenantLock(info, directory, async (database, lockSignal) => {
+        checkCancellation(lockSignal);
+        const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        if ((row?.document ?? null) !== snapshot.document) return false;
         if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        const manifest = snapshot.document === null
+          ? emptyManifest(info.tenantHash)
+          : validateManifest(JSON.parse(row.document), info.tenantHash);
+        if (manifest.records[evidenceId]) fail('EVIDENCE_BUSY');
         manifest.records[evidenceId] = record;
-        if (!family) {
-          family = {
+        let currentFamily = family ? manifest.families[family.id] : null;
+        if (family && !currentFamily) fail('EVIDENCE_BUSY');
+        if (!currentFamily) {
+          currentFamily = {
             id: familyId,
             sourceKeyId: activeIndexKey.keyId,
             sourceKeyHmac: stableHmac(activeIndexKey.key, sourceIdentity),
             versionCount: 0,
             recordIds: [],
           };
-          manifest.families[familyId] = family;
+          manifest.families[familyId] = currentFamily;
         }
-        family.recordIds.push(evidenceId);
-        family.versionCount = version;
+        currentFamily.recordIds.push(evidenceId);
+        currentFamily.versionCount = version;
+        await commitNewBundle(database, 'evidence', evidenceId, sealedBytes);
         await writeManifest(database, manifest);
+        checkCancellation(lockSignal);
         if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
-        const evidence = newEvidenceHandle(info, evidenceId);
-        const positionHandles = positions.map((position) => newPositionHandle(info, evidenceId, position.id, sourceKind));
-        return Object.freeze({ evidence, positions: Object.freeze(positionHandles), created: true, metadata: frozenMetadata(record) });
+        return true;
+      }, signal);
+      if (!committed) return await retryWithFreshSnapshot();
+      return Object.freeze({
+        evidence: newEvidenceHandle(info, evidenceId),
+        positions: Object.freeze(positions.map((position) => newPositionHandle(info, evidenceId, position.id, sourceKind))),
+        created: true,
+        metadata: frozenMetadata(record),
       });
     } catch (error) {
+      if (directory && error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED') {
+        try { await persistExpirySweep(info, directory, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
+      }
       throw safePublicError(error);
     } finally {
       sourceBytes.fill(0);
       for (const position of positions) position.bytes.fill(0);
       activeIndexKey?.key.fill(0);
+      sealed?.bytes.fill(0);
+      duplicateBytes?.fill(0);
+      for (const key of historicalIndexKeys) key.fill(0);
     }
   }
 
@@ -2268,7 +2982,7 @@ export function createEvidenceStore(options) {
     let directoryForCleanup;
     try {
       checkCancellation(signal);
-      retention = await resolveRetention(info, 'evidence', retentionStartMs, sourceKind, undefined, input.retentionHandle);
+      retention = await resolveRetention(info, 'evidence', retentionStartMs, sourceKind, undefined, input.retentionHandle, signal);
       if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
       let extraction;
       try {
@@ -2475,7 +3189,7 @@ export function createEvidenceStore(options) {
       if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
 
       const action = 'ingest_asset_source_evidence';
-      activeIndexKey = await resolveKey(info, 'source-index');
+      activeIndexKey = await resolveKey(info, 'source-index', undefined, signal);
       const sourceIdentity = `event-intelligence:source-family:${ASSET_SOURCE_EXCERPT_REPRESENTATION}:v1\u0000${sourceKind}\u0000${normalizeSourceUrl(sourceUrl)}`;
       const currentFamilyHmac = stableHmac(activeIndexKey.key, sourceIdentity);
       const directory = await tenantDirectory(info);
@@ -2485,7 +3199,7 @@ export function createEvidenceStore(options) {
         await expireRecords(database, manifest, currentTime());
         const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
         return { document: row?.document ?? null };
-      });
+      }, signal);
       const manifest = snapshot.document === null ? emptyManifest(info.tenantHash)
         : validateManifest(JSON.parse(snapshot.document), info.tenantHash);
       const sourceFamilies = Object.values(manifest.families)
@@ -2496,7 +3210,7 @@ export function createEvidenceStore(options) {
       if (!family) {
         for (const candidate of sourceFamilies) {
           if (candidate.sourceKeyId === activeIndexKey.keyId) continue;
-          const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId);
+          const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId, signal);
           historicalIndexKeys.push(oldIndexKey.key);
           if (candidate.sourceKeyHmac === stableHmac(oldIndexKey.key, sourceIdentity)) {
             family = candidate;
@@ -2511,42 +3225,28 @@ export function createEvidenceStore(options) {
           && candidate.contentHash === sourceContentHash && candidate.derivationDigest === derivationDigest);
       if (existingRecord) {
         const existingSnapshot = copyEvidenceRecord(existingRecord, ASSET_SOURCE_MAX_POSITIONS);
-        await authorize(info, request, action, [existingRecord.id]);
+        await authorize(info, request, action, [existingRecord.id], [], signal);
         checkCancellation(signal);
         authorizeCurrent(info, request, action, [existingRecord.id]);
         checkCancellation(signal);
-        const finalNow = currentTime();
-        if (existingRecord.expiresAtMs <= finalNow) fail('EVIDENCE_EXPIRED');
+        if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         if (existingRecord.expiresAtMs > retention.expiresAtMs) fail('EVIDENCE_DENIED');
-        const databasePath = path.join(directory, 'evidence.sqlite');
-        let database;
-        let transactionOpen = false;
-        try {
-          const before = lstatSync(databasePath);
-          if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
-          database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
-          const after = lstatSync(databasePath);
-          if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
-          database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
-          transactionOpen = true;
-          checkCancellation(signal);
+        await withTenantLock(directory, limits.lockTimeoutMs, (database, lockSignal) => {
+          checkCancellation(lockSignal);
           if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
           const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
           if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
           const bundleCount = Number(database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ? AND id = ?')
             .get('evidence', existingRecord.id).count);
           if (bundleCount !== 1) fail('EVIDENCE_EXPIRED');
-          checkCancellation(signal);
+          checkCancellation(lockSignal);
           if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
-          database.exec('COMMIT');
-          transactionOpen = false;
-        } catch (error) {
-          if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
-          if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
-          throw error;
-        } finally {
-          database?.close();
-        }
+        }, signal, {
+          beforeBegin: () => {
+            authorizeCurrent(info, request, action, [existingRecord.id]);
+            checkCancellation(signal);
+          },
+        });
         checkCancellation(signal);
         if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         return Object.freeze({
@@ -2564,9 +3264,9 @@ export function createEvidenceStore(options) {
       const latestId = activeFamily?.recordIds.at(-1);
       const latest = latestId ? manifest.records[latestId] : null;
       const evidenceId = randomUUID();
-      payloadKey = await resolveKey(info, 'payload');
+      payloadKey = await resolveKey(info, 'payload', undefined, signal);
       sealedBytes = encodeSealedPayload(info.tenantHash, evidenceId, 'evidence', serialized, payloadKey.keyId, payloadKey.key);
-      await authorize(info, request, action, [evidenceId]);
+      await authorize(info, request, action, [evidenceId], [], signal);
       checkCancellation(signal);
       authorizeCurrent(info, request, action, [evidenceId]);
       checkCancellation(signal);
@@ -2595,18 +3295,8 @@ export function createEvidenceStore(options) {
         representation: ASSET_SOURCE_EXCERPT_REPRESENTATION,
         derivationDigest,
       };
-      const databasePath = path.join(directory, 'evidence.sqlite');
-      let database;
-      let transactionOpen = false;
-      try {
-        const before = lstatSync(databasePath);
-        if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
-        database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
-        const after = lstatSync(databasePath);
-        if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
-        database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
-        transactionOpen = true;
-        checkCancellation(signal);
+      await withTenantLock(directory, limits.lockTimeoutMs, (database, lockSignal) => {
+        checkCancellation(lockSignal);
         if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
         if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
@@ -2636,17 +3326,14 @@ export function createEvidenceStore(options) {
         database.prepare('INSERT INTO sealed_bundles (kind, id, sealed) VALUES (?, ?, ?)').run('evidence', evidenceId, sealedBytes);
         database.prepare(`INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)
           ON CONFLICT (tenant_hash) DO UPDATE SET document = excluded.document`).run(info.tenantHash, manifestDocument);
-        checkCancellation(signal);
+        checkCancellation(lockSignal);
         if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
-        database.exec('COMMIT');
-        transactionOpen = false;
-      } catch (error) {
-        if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
-        if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
-        throw error;
-      } finally {
-        database?.close();
-      }
+      }, signal, {
+        beforeBegin: () => {
+          authorizeCurrent(info, request, action, [evidenceId]);
+          checkCancellation(signal);
+        },
+      });
       checkCancellation(signal);
       if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
       return Object.freeze({
@@ -2660,7 +3347,7 @@ export function createEvidenceStore(options) {
       });
     } catch (error) {
       if (error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED' && directoryForCleanup) {
-        try { await persistExpirySweep(info, directoryForCleanup); } catch (cleanupError) { throw safePublicError(cleanupError); }
+        try { await persistExpirySweep(info, directoryForCleanup, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
       }
       throw safePublicError(error);
     } finally {
@@ -2715,7 +3402,7 @@ export function createEvidenceStore(options) {
       checkCancellation(signal);
       // Resolve the source's already-authorized retention deadline before starting
       // the killable decoder. Decode time never resets or extends this deadline.
-      retention = await resolveRetention(info, 'evidence', retentionStartMs, input.sourceKind, undefined, input.retentionHandle);
+      retention = await resolveRetention(info, 'evidence', retentionStartMs, input.sourceKind, undefined, input.retentionHandle, signal);
       if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
       const timeoutMs = readerInput.timeoutMs ?? PDF_DERIVED_DEFAULT_TIMEOUT_MS;
       const effectiveTextLimit = Math.min(
@@ -2871,7 +3558,7 @@ export function createEvidenceStore(options) {
       if (Buffer.byteLength(serialized, 'utf8') > SELECTED_BATCH_LIMITS.evidenceDecryptedBytes) fail('EVIDENCE_INVALID');
 
       const action = 'ingest_derived_pdf_evidence';
-      activeIndexKey = await resolveKey(info, 'source-index');
+      activeIndexKey = await resolveKey(info, 'source-index', undefined, signal);
       const derivedIdentity = `event-intelligence:source-family:pdf-derived:v1\u0000${input.sourceKind}\u0000${normalizeSourceUrl(canonicalUrl)}`;
       const currentFamilyHmac = stableHmac(activeIndexKey.key, derivedIdentity);
       const directory = await tenantDirectory(info);
@@ -2881,7 +3568,7 @@ export function createEvidenceStore(options) {
         await expireRecords(database, manifest, currentTime());
         const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
         return { document: row?.document ?? null };
-      });
+      }, signal);
       let manifest = snapshot.document === null ? emptyManifest(info.tenantHash) : validateManifest(JSON.parse(snapshot.document), info.tenantHash);
       const derivedFamilies = Object.values(manifest.families).filter((family) => family.representation === PDF_DERIVED_REPRESENTATION);
       if (derivedFamilies.length > 256) fail('EVIDENCE_BUSY');
@@ -2890,7 +3577,7 @@ export function createEvidenceStore(options) {
       if (!family) {
         for (const candidate of derivedFamilies) {
           if (candidate.sourceKeyId === activeIndexKey.keyId) continue;
-          const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId);
+          const oldIndexKey = await resolveKey(info, 'source-index', candidate.sourceKeyId, signal);
           historicalIndexKeys.push(oldIndexKey.key);
           if (candidate.sourceKeyHmac === stableHmac(oldIndexKey.key, derivedIdentity)) {
             family = candidate;
@@ -2905,43 +3592,27 @@ export function createEvidenceStore(options) {
           && candidate.contentHash === sourceContentHash && candidate.derivationDigest === derivationDigest);
       if (existingRecord) {
         const existingSnapshot = copyEvidenceRecord(existingRecord, limits.maxPositionCount);
-        await authorize(info, request, action, [existingRecord.id]);
+        await authorize(info, request, action, [existingRecord.id], [], signal);
         checkCancellation(signal);
         authorizeCurrent(info, request, action, [existingRecord.id]);
         checkCancellation(signal);
-        const finalNow = currentTime();
-        if (existingRecord.expiresAtMs <= finalNow) fail('EVIDENCE_EXPIRED');
+        if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         if (existingRecord.expiresAtMs > retention.expiresAtMs) fail('EVIDENCE_DENIED');
-        const databasePath = path.join(directory, 'evidence.sqlite');
-        let database;
-        let transactionOpen = false;
-        try {
-          const before = lstatSync(databasePath);
-          if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
-          database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
-          const after = lstatSync(databasePath);
-          if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
-          database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
-          transactionOpen = true;
-          // DatabaseSync may block while another process owns the write lock.
-          // Re-evaluate the privacy deadline only after acquiring that lock.
-          checkCancellation(signal);
+        await withTenantLock(directory, limits.lockTimeoutMs, (database, lockSignal) => {
+          checkCancellation(lockSignal);
           if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
           const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
           if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
           const bundleCount = Number(database.prepare('SELECT COUNT(*) AS count FROM sealed_bundles WHERE kind = ? AND id = ?').get('evidence', existingRecord.id).count);
           if (bundleCount !== 1) fail('EVIDENCE_EXPIRED');
-          checkCancellation(signal);
+          checkCancellation(lockSignal);
           if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
-          database.exec('COMMIT');
-          transactionOpen = false;
-        } catch (error) {
-          if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
-          if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
-          throw error;
-        } finally {
-          database?.close();
-        }
+        }, signal, {
+          beforeBegin: () => {
+            authorizeCurrent(info, request, action, [existingRecord.id]);
+            checkCancellation(signal);
+          },
+        });
         checkCancellation(signal);
         if (existingRecord.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         return Object.freeze({
@@ -2955,9 +3626,9 @@ export function createEvidenceStore(options) {
       const latestId = activeFamily?.recordIds.at(-1);
       const latest = latestId ? manifest.records[latestId] : null;
       const evidenceId = randomUUID();
-      payloadKey = await resolveKey(info, 'payload');
+      payloadKey = await resolveKey(info, 'payload', undefined, signal);
       sealedBytes = encodeSealedPayload(info.tenantHash, evidenceId, 'evidence', serialized, payloadKey.keyId, payloadKey.key);
-      await authorize(info, request, action, [evidenceId]);
+      await authorize(info, request, action, [evidenceId], [], signal);
       checkCancellation(signal);
       authorizeCurrent(info, request, action, [evidenceId]);
       checkCancellation(signal);
@@ -2987,21 +3658,8 @@ export function createEvidenceStore(options) {
         derivationDigest,
       };
 
-      const databasePath = path.join(directory, 'evidence.sqlite');
-      let database;
-      let transactionOpen = false;
-      try {
-        const before = lstatSync(databasePath);
-        if (before.isSymbolicLink() || !before.isFile()) fail('EVIDENCE_STORAGE');
-        database = new DatabaseSync(databasePath, { timeout: limits.lockTimeoutMs });
-        const after = lstatSync(databasePath);
-        if (after.isSymbolicLink() || !after.isFile() || before.dev !== after.dev || before.ino !== after.ino) fail('EVIDENCE_STORAGE');
-        database.exec('PRAGMA trusted_schema = OFF; BEGIN IMMEDIATE');
-        transactionOpen = true;
-        // A busy timeout can consume most or all of the remaining retention
-        // period. The earlier authorization/preparation timestamp is not a
-        // valid basis for a write after this synchronous lock acquisition.
-        checkCancellation(signal);
+      await withTenantLock(directory, limits.lockTimeoutMs, (database, lockSignal) => {
+        checkCancellation(lockSignal);
         if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
         const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
         if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
@@ -3032,20 +3690,14 @@ export function createEvidenceStore(options) {
         database.prepare('INSERT INTO sealed_bundles (kind, id, sealed) VALUES (?, ?, ?)').run('evidence', evidenceId, sealedBytes);
         database.prepare(`INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)
           ON CONFLICT (tenant_hash) DO UPDATE SET document = excluded.document`).run(info.tenantHash, document);
-        // The same synchronous store clock is checked after payload and
-        // manifest work, immediately before commit, so an expiring wait or
-        // write cannot publish a record past its already-authorized deadline.
-        checkCancellation(signal);
+        checkCancellation(lockSignal);
         if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
-        database.exec('COMMIT');
-        transactionOpen = false;
-      } catch (error) {
-        if (transactionOpen) { try { database.exec('ROLLBACK'); } catch { /* rollback on close */ } }
-        if (error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY') fail('EVIDENCE_BUSY');
-        throw error;
-      } finally {
-        database?.close();
-      }
+      }, signal, {
+        beforeBegin: () => {
+          authorizeCurrent(info, request, action, [evidenceId]);
+          checkCancellation(signal);
+        },
+      });
       checkCancellation(signal);
       if (retention.expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
       return Object.freeze({
@@ -3056,7 +3708,7 @@ export function createEvidenceStore(options) {
     } catch (error) {
       if (error instanceof EvidenceStoreError && error.code === 'EVIDENCE_EXPIRED') {
         if (directoryForCleanup) {
-          try { await persistExpirySweep(info, directoryForCleanup); } catch (cleanupError) { throw safePublicError(cleanupError); }
+          try { await persistExpirySweep(info, directoryForCleanup, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
         }
       }
       throw safePublicError(error);
@@ -3070,8 +3722,9 @@ export function createEvidenceStore(options) {
     }
   }
 
-  async function lookupEvidence(scope, evidenceId) {
+  async function lookupEvidence(scope, evidenceId, signal) {
     const info = scopeInfo(scope);
+    checkCancellation(signal);
     if (!validUuid(evidenceId)) fail('EVIDENCE_NOT_FOUND');
     const directory = await tenantDirectory(info);
     try {
@@ -3080,7 +3733,7 @@ export function createEvidenceStore(options) {
         await expireRecords(database, manifest, currentTime());
         if (!manifest.records[evidenceId]) fail('EVIDENCE_NOT_FOUND');
         return newEvidenceHandle(info, evidenceId);
-      });
+      }, signal);
     } catch (error) {
       throw safePublicError(error);
     }
@@ -3231,9 +3884,11 @@ export function createEvidenceStore(options) {
     return { field, status: input.status, ...value, method, supports };
   }
 
-  async function appendFact(scope, inputValue, request) {
+  async function appendFact(scope, inputValue, request, signal) {
     const info = scopeInfo(scope);
+    checkCancellation(signal);
     const parsed = await parseFactInput(inputValue);
+    checkCancellation(signal);
     const allSupports = parsed.status === 'conflicting'
       ? parsed.candidates.flatMap((candidate) => candidate.supports)
       : parsed.supports ?? [];
@@ -3246,80 +3901,140 @@ export function createEvidenceStore(options) {
       return { support, evidenceId: evidence.evidenceId, positionId: position.positionId, sourceKind: position.sourceKind };
     });
     const evidenceIds = supportRefs.map((reference) => reference.evidenceId);
-    await authorize(info, request, 'validate_fact_support', evidenceIds);
     const directory = await tenantDirectory(info);
+    let sealed;
     try {
-      return await withExpiryAwareTenantLock(info, directory, async (database) => {
+      const uniqueEvidence = new Map();
+      for (const support of supportRefs) uniqueEvidence.set(support.evidenceId, support.support.evidence);
+      let materialized = null;
+      if (uniqueEvidence.size > 0) {
+        materialized = await materializeSelectedInternal(
+          scope,
+          { evidence: [...uniqueEvidence.values()], facts: [] },
+          request,
+          signal,
+          'validate_fact_support',
+          'selected',
+          Math.min(SELECTED_BATCH_LIMITS.positionCount, limits.maxPositionCount),
+          true,
+        );
+      } else {
+        await authorize(info, request, 'validate_fact_support', [], [], signal);
+      }
+      checkCancellation(signal);
+
+      const evidenceById = new Map((materialized?.evidence ?? []).map((evidence) => [
+        EVIDENCE_HANDLES.get(evidence.handle)?.evidenceId,
+        evidence,
+      ]));
+      for (const reference of supportRefs) {
+        const evidence = evidenceById.get(reference.evidenceId);
+        const record = evidence?.metadata;
+        const position = evidence?.positions.find((candidate) =>
+          POSITION_HANDLES.get(candidate.handle)?.positionId === reference.positionId);
+        const receivedLocator = POSITION_HANDLES.get(reference.support.position);
+        if (!record || !position || !receivedLocator || receivedLocator.positionId !== reference.positionId
+          || record.representation !== undefined
+          || record.contentHash !== reference.support.contentHash) fail('EVIDENCE_INVALID');
+        reference.sourceContentHash = record.contentHash;
+        reference.positionContentHash = position.contentHash;
+        reference.duplicateGroupId = record.duplicateGroupId;
+        if (reference.sourceKind === 'customer_supplied'
+          && parsed.status !== 'customer_supplied' && parsed.status !== 'conflicting') fail('EVIDENCE_INVALID');
+      }
+      if (parsed.status === 'customer_supplied' && !supportRefs.some((reference) => reference.sourceKind === 'customer_supplied')) fail('EVIDENCE_INVALID');
+      if (parsed.status === 'conflicting') {
+        for (const candidate of parsed.candidates) {
+          const candidateRefs = candidate.supports.map((support) => supportRefs.find((reference) => reference.support === support)).filter(Boolean);
+          if (candidateRefs.length !== candidate.supports.length) fail('EVIDENCE_INVALID');
+          if (candidate.originStatus === 'customer_supplied' && !candidateRefs.some((reference) => reference.sourceKind === 'customer_supplied')) fail('EVIDENCE_INVALID');
+          if (candidate.originStatus !== 'customer_supplied' && candidateRefs.some((reference) => reference.sourceKind === 'customer_supplied')) fail('EVIDENCE_INVALID');
+        }
+      }
+
+      // Capture the exact post-expiry manifest before calling retention/key hosts.
+      // The final write CAS below compares this byte-for-byte inside BEGIN IMMEDIATE.
+      const snapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
         const manifest = await readManifest(database, info.tenantHash);
-        const nowMs = currentTime();
-        await expireRecords(database, manifest, nowMs);
-        for (const reference of supportRefs) {
-          const record = manifest.records[reference.evidenceId];
-          if (!record) fail('EVIDENCE_INVALID');
-          if (record.state !== 'available' || record.expiresAtMs <= nowMs) fail('EVIDENCE_EXPIRED');
-          if (record.representation !== undefined) fail('EVIDENCE_INVALID');
-          if (reference.support.contentHash !== record.contentHash) fail('EVIDENCE_INVALID');
-          if (!record.positionIds.includes(reference.positionId)) fail('EVIDENCE_INVALID');
-          const bundle = await decryptBundle(info, record.id, 'evidence', database, record.encryptionKeyId);
-          if (currentTime() >= record.expiresAtMs) fail('EVIDENCE_EXPIRED');
-          const position = bundle.positions.find((candidate) => candidate.id === reference.positionId);
-          if (!position || !record.positionHashes[reference.positionId]
-            || position.contentHash !== record.positionHashes[reference.positionId]
-            || digest(Buffer.from(position.content, 'base64')) !== position.contentHash) fail('EVIDENCE_INTEGRITY');
-          if (bundle.source.sourceKind !== reference.sourceKind) fail('EVIDENCE_INTEGRITY');
-          const receivedLocator = POSITION_HANDLES.get(reference.support.position);
-          if (!receivedLocator || receivedLocator.positionId !== position.id) fail('EVIDENCE_INVALID');
-          if (reference.sourceKind === 'customer_supplied'
-            && parsed.status !== 'customer_supplied' && parsed.status !== 'conflicting') fail('EVIDENCE_INVALID');
-          reference.duplicateGroupId = record.duplicateGroupId;
-        }
-        if (parsed.status === 'customer_supplied' && !supportRefs.some((reference) => reference.sourceKind === 'customer_supplied')) fail('EVIDENCE_INVALID');
-        if (parsed.status === 'conflicting') {
-          for (const candidate of parsed.candidates) {
-            const candidateRefs = candidate.supports.map((support) => supportRefs.find((reference) => reference.support === support)).filter(Boolean);
-            if (candidateRefs.length !== candidate.supports.length) fail('EVIDENCE_INVALID');
-            if (candidate.originStatus === 'customer_supplied' && !candidateRefs.some((reference) => reference.sourceKind === 'customer_supplied')) fail('EVIDENCE_INVALID');
-            if (candidate.originStatus !== 'customer_supplied' && candidateRefs.some((reference) => reference.sourceKind === 'customer_supplied')) fail('EVIDENCE_INVALID');
-          }
-        }
-        const supportingRecords = [...new Set(evidenceIds)].map((id) => manifest.records[id]);
-        const supportExpiry = supportingRecords.length ? Math.min(...supportingRecords.map((record) => record.expiresAtMs)) : undefined;
-        const factRetention = await resolveRetention(info, 'fact', nowMs, parsed.status, supportExpiry);
-        const retentionCheck = currentTime();
-        if (factRetention.expiresAtMs <= retentionCheck
-          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= retentionCheck)) fail('EVIDENCE_EXPIRED');
-        const factId = randomUUID();
-        const normalized = serializeFactForStorage(parsed, supportRefs);
-        const sealed = await encryptBundle(info, factId, 'fact', normalized);
-        const beforeInsert = currentTime();
-        if (factRetention.expiresAtMs <= beforeInsert
-          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= beforeInsert)) fail('EVIDENCE_EXPIRED');
-        const factMetadata = {
-          id: factId,
-          status: parsed.status,
-          state: 'available',
-          createdAt: new Date(nowMs).toISOString(),
-          createdAtMs: nowMs,
-          expiresAtMs: factRetention.expiresAtMs,
-          policyId: factRetention.policyId,
-          policyVersion: factRetention.policyVersion,
-          encryptionKeyId: sealed.keyId,
-          supportEvidenceIds: [...new Set(evidenceIds)],
-          supportContentHashes: [...new Set(supportRefs.map((reference) => reference.support.contentHash))],
+        await expireRecords(database, manifest, currentTime());
+        const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        const document = row?.document ?? null;
+        return {
+          document,
+          manifest: document === null ? emptyManifest(info.tenantHash) : validateManifest(JSON.parse(document), info.tenantHash),
         };
-        await commitNewBundle(database, 'fact', factId, sealed.bytes);
-        const beforeManifest = currentTime();
-        if (factRetention.expiresAtMs <= beforeManifest
-          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= beforeManifest)) fail('EVIDENCE_EXPIRED');
+      }, signal);
+      const supportRecords = [...new Set(evidenceIds)].map((id) => snapshot.manifest.records[id]);
+      if (supportRecords.some((record) => !record || record.state !== 'available')) fail('EVIDENCE_EXPIRED');
+      for (const reference of supportRefs) {
+        const record = snapshot.manifest.records[reference.evidenceId];
+        if (!record || record.representation !== undefined || record.contentHash !== reference.sourceContentHash
+          || !record.positionIds.includes(reference.positionId)
+          || record.positionHashes[reference.positionId] !== reference.positionContentHash) fail('EVIDENCE_INVALID');
+      }
+      const nowMs = currentTime();
+      const supportExpiry = supportRecords.length ? Math.min(...supportRecords.map((record) => record.expiresAtMs)) : undefined;
+      const factRetention = await resolveRetention(info, 'fact', nowMs, parsed.status, supportExpiry, undefined, signal);
+      checkCancellation(signal);
+      const afterRetention = currentTime();
+      if (factRetention.expiresAtMs <= afterRetention
+        || supportRecords.some((record) => record.expiresAtMs <= afterRetention)) fail('EVIDENCE_EXPIRED');
+      const factId = randomUUID();
+      const normalized = serializeFactForStorage(parsed, supportRefs);
+      sealed = await encryptBundle(info, factId, 'fact', normalized, signal);
+      checkCancellation(signal);
+      authorizeCurrent(info, request, 'validate_fact_support', evidenceIds, []);
+      checkCancellation(signal);
+      const createdAtMs = currentTime();
+      if (factRetention.expiresAtMs <= createdAtMs
+        || supportRecords.some((record) => record.expiresAtMs <= createdAtMs)) fail('EVIDENCE_EXPIRED');
+      const factMetadata = {
+        id: factId,
+        status: parsed.status,
+        state: 'available',
+        createdAt: new Date(createdAtMs).toISOString(),
+        createdAtMs,
+        expiresAtMs: factRetention.expiresAtMs,
+        policyId: factRetention.policyId,
+        policyVersion: factRetention.policyVersion,
+        encryptionKeyId: sealed.keyId,
+        supportEvidenceIds: [...new Set(evidenceIds)],
+        supportContentHashes: [...new Set(supportRefs.map((reference) => reference.support.contentHash))],
+      };
+      return await withExpiryAwareTenantLock(info, directory, (database, lockSignal) => {
+        checkCancellation(lockSignal);
+        const currentRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        if ((currentRow?.document ?? null) !== snapshot.document) fail('EVIDENCE_BUSY');
+        const manifest = snapshot.document === null
+          ? emptyManifest(info.tenantHash)
+          : validateManifest(JSON.parse(currentRow.document), info.tenantHash);
+        if (manifest.facts[factId]) fail('EVIDENCE_BUSY');
+        const commitTime = currentTime();
+        if (factRetention.expiresAtMs <= commitTime
+          || supportRecords.some((record) => record.expiresAtMs <= commitTime
+            || manifest.records[record.id]?.state !== 'available'
+            || manifest.records[record.id]?.expiresAtMs !== record.expiresAtMs)) fail('EVIDENCE_EXPIRED');
+        commitNewBundle(database, 'fact', factId, sealed.bytes);
         manifest.facts[factId] = factMetadata;
-        await writeManifest(database, manifest);
-        const beforeReturn = currentTime();
-        if (factRetention.expiresAtMs <= beforeReturn
-          || supportingRecords.some((record) => record.state !== 'available' || record.expiresAtMs <= beforeReturn)) fail('EVIDENCE_EXPIRED');
+        writeManifest(database, manifest);
+        checkCancellation(lockSignal);
+        const beforeCommit = currentTime();
+        if (factRetention.expiresAtMs <= beforeCommit
+          || supportRecords.some((record) => record.expiresAtMs <= beforeCommit)) fail('EVIDENCE_EXPIRED');
         return newFactHandle(info, factId);
+      }, signal, {
+        beforeBegin: () => {
+          authorizeCurrent(info, request, 'validate_fact_support', evidenceIds, []);
+          checkCancellation(signal);
+        },
       });
     } catch (error) {
+      if (!(error instanceof EvidenceStoreError && error.code === 'EVIDENCE_CANCELLED')) {
+        try { await persistExpirySweep(info, directory, signal); } catch (cleanupError) { throw safePublicError(cleanupError); }
+      }
       throw safePublicError(error);
+    } finally {
+      sealed?.bytes.fill(0);
     }
   }
 
@@ -3379,8 +4094,9 @@ export function createEvidenceStore(options) {
     });
   }
 
-  async function lookupFact(scope, factId) {
+  async function lookupFact(scope, factId, signal) {
     const info = scopeInfo(scope);
+    checkCancellation(signal);
     if (!validUuid(factId)) fail('EVIDENCE_NOT_FOUND');
     const directory = await tenantDirectory(info);
     try {
@@ -3389,7 +4105,7 @@ export function createEvidenceStore(options) {
         await expireRecords(database, manifest, currentTime());
         if (!manifest.facts[factId]) fail('EVIDENCE_NOT_FOUND');
         return newFactHandle(info, factId);
-      });
+      }, signal);
     } catch (error) {
       throw safePublicError(error);
     }
@@ -3514,6 +4230,372 @@ export function createEvidenceStore(options) {
     }
   }
 
+  function normalizePrivateReceiptLookup(inputValue) {
+    const input = ownDataRecord(inputValue, new Set(['runId', 'configHash', 'candidate']));
+    if (!input) fail('EVIDENCE_INVALID');
+    const normalized = normalizePrivateReceiptBase({
+      ...input,
+      claim: {
+        claimKey: 'receipt.lookup',
+        workerId: 'receipt.lookup',
+        leaseToken: '00000000-0000-4000-8000-000000000000',
+      },
+    });
+    return { runId: normalized.runId, configHash: normalized.configHash, candidate: normalized.candidate };
+  }
+
+  function sameReceiptBinding(value, binding) {
+    return value && value.schemaVersion === PRIVATE_RECEIPT_SCHEMA_VERSION
+      && value.tenantId === binding.tenantId && value.runId === binding.runId
+      && value.configHash === binding.configHash
+      && JSON.stringify(value.candidate) === JSON.stringify(binding.candidate);
+  }
+
+  async function beginPrivateRunReceipt(scope, inputValue, request, signal) {
+    const info = scopeInfo(scope);
+    checkCancellation(signal);
+    const base = normalizePrivateReceiptBase(inputValue);
+    const receiptKey = privateReceiptKey(info, base.runId, base.candidate.candidateId);
+    const body = { schemaVersion: PRIVATE_RECEIPT_SCHEMA_VERSION, tenantId: info.tenantId, ...base, phase: 'pending' };
+    const sealed = await sealPrivateReceipt(info, receiptKey, body, signal);
+    let directory;
+    try {
+      directory = await tenantDirectory(info);
+      authorizeCurrent(info, request, 'write_private_run_receipt', [], []);
+      checkCancellation(signal);
+      const now = currentTime();
+      const expiresAtMs = now + limits.maxRetentionMs;
+      if (!Number.isSafeInteger(expiresAtMs)) fail('EVIDENCE_INVALID');
+      const result = await withExpiryAwareTenantLock(info, directory, (database, lockSignal) => {
+        checkCancellation(lockSignal);
+        const existing = database.prepare(`SELECT state, payload_hash, expires_at_ms FROM private_retrieval_receipts
+          WHERE tenant_hash = ? AND receipt_key = ?`).get(info.tenantHash, receiptKey);
+        if (existing) {
+          if (!['pending', 'complete', 'expired'].includes(existing.state)) fail('EVIDENCE_INTEGRITY');
+          if (existing.state === 'pending' && existing.payload_hash !== sealed.payloadHash) fail('EVIDENCE_INTEGRITY');
+          return { state: existing.state, created: false };
+        }
+        const totals = database.prepare(`SELECT COUNT(*) AS row_count,
+          COALESCE(SUM(length(sealed)), 0) AS sealed_bytes
+          FROM private_retrieval_receipts WHERE tenant_hash = ?`).get(info.tenantHash);
+        if (totals.row_count >= PRIVATE_RECEIPT_MAX_ROWS_PER_TENANT
+          || totals.sealed_bytes + sealed.sealed.byteLength > PRIVATE_RECEIPT_MAX_SEALED_BYTES_PER_TENANT) {
+          fail('EVIDENCE_STORAGE');
+        }
+        const insertedAt = currentTime();
+        if (expiresAtMs <= insertedAt) fail('EVIDENCE_EXPIRED');
+        database.prepare(`INSERT INTO private_retrieval_receipts
+          (tenant_hash, receipt_key, schema_version, state, key_id, payload_hash, payload_bytes,
+            expires_at_ms, sealed, updated_at_ms)
+          VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`)
+          .run(info.tenantHash, receiptKey, PRIVATE_RECEIPT_SCHEMA_VERSION, sealed.keyId,
+            sealed.payloadHash, sealed.payloadBytes, expiresAtMs, sealed.sealed, insertedAt);
+        checkCancellation(lockSignal);
+        return { state: 'pending', created: true };
+      }, signal, {
+        beforeBegin: () => {
+          authorizeCurrent(info, request, 'write_private_run_receipt', [], []);
+          checkCancellation(signal);
+        },
+      });
+      if (result.state === 'expired') return Object.freeze({ state: 'expired', created: false });
+      return Object.freeze(result);
+    } catch (error) {
+      throw safePublicError(error);
+    } finally {
+      sealed.sealed.fill(0);
+      wipePrivateTree(body);
+    }
+  }
+
+  async function finalizePrivateRunReceipt(scope, inputValue, request, signal) {
+    const info = scopeInfo(scope);
+    checkCancellation(signal);
+    const input = ownDataRecord(inputValue, new Set([
+      'runId', 'configHash', 'candidate', 'claim', 'completion', 'selection',
+    ]));
+    if (!input) fail('EVIDENCE_INVALID');
+    const base = normalizePrivateReceiptBase({
+      runId: input.runId,
+      configHash: input.configHash,
+      candidate: input.candidate,
+      claim: input.claim,
+    });
+    const completion = normalizePrivateReceiptCompletion(input.completion);
+    const selection = ownDataRecord(input.selection, new Set(['evidence', 'facts']));
+    if (!selection) fail('EVIDENCE_INVALID');
+    const evidenceHandles = safeArray(selection.evidence, 8);
+    const factHandles = safeArray(selection.facts, 128);
+    if (!evidenceHandles || !factHandles) fail('EVIDENCE_INVALID');
+    const directEvidenceIds = evidenceHandles.map((handle) => {
+      const record = EVIDENCE_HANDLES.get(handle);
+      if (!record || record.tenantHash !== info.tenantHash || record.tenantId !== info.tenantId) fail('EVIDENCE_DENIED');
+      return record.evidenceId;
+    });
+    const selectedFactIds = factHandles.map((handle) => {
+      const record = FACT_HANDLES.get(handle);
+      if (!record || record.tenantHash !== info.tenantHash || record.tenantId !== info.tenantId) fail('EVIDENCE_DENIED');
+      return record.factId;
+    });
+    if (new Set(directEvidenceIds).size !== directEvidenceIds.length
+      || new Set(selectedFactIds).size !== selectedFactIds.length) fail('EVIDENCE_INVALID');
+    const receiptKey = privateReceiptKey(info, base.runId, base.candidate.candidateId);
+    const directory = await tenantDirectory(info);
+    let pendingSnapshot;
+    let pendingBody;
+    let materialized;
+    let body;
+    let sealed;
+    try {
+      pendingSnapshot = await privateReceiptRowSnapshot(info, directory, receiptKey, signal);
+      if (!pendingSnapshot || pendingSnapshot.state === 'expired') fail('EVIDENCE_EXPIRED');
+      pendingBody = await openPrivateReceipt(info, receiptKey, pendingSnapshot, signal);
+      if (!sameReceiptBinding(pendingBody, { ...base, tenantId: info.tenantId })) fail('EVIDENCE_INTEGRITY');
+      if (!['pending', 'complete'].includes(pendingBody.phase)
+        || pendingSnapshot.state !== pendingBody.phase) fail('EVIDENCE_INTEGRITY');
+
+      if (directEvidenceIds.length + selectedFactIds.length > 0) {
+        materialized = await materializeSelectedInternal(
+          scope,
+          { evidence: evidenceHandles, facts: factHandles },
+          request,
+          signal,
+          'write_private_run_receipt',
+          'selected',
+          8,
+          true,
+        );
+      } else {
+        await authorize(info, request, 'write_private_run_receipt', [], [], signal);
+      }
+      checkCancellation(signal);
+
+      const { evidenceRefs, factRefs } = receiptReferencesForMaterialized(info, materialized);
+      const evidenceIds = evidenceRefs.map((reference) => reference.evidenceId);
+      const factIds = factRefs.map((reference) => reference.factId);
+      if (evidenceRefs.length > 8 || factRefs.length > 128
+        || new Set(evidenceIds).size !== evidenceIds.length || new Set(factIds).size !== factIds.length) fail('EVIDENCE_INVALID');
+
+      const manifestSnapshot = await withExpiryAwareTenantLock(info, directory, async (database) => {
+        const manifest = await readManifest(database, info.tenantHash);
+        await expireRecords(database, manifest, currentTime());
+        const row = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        const document = row?.document ?? null;
+        const currentManifest = document === null ? emptyManifest(info.tenantHash)
+          : validateManifest(JSON.parse(document), info.tenantHash);
+        let expiresAtMs = currentTime() + limits.maxRetentionMs;
+        if (!Number.isSafeInteger(expiresAtMs)) fail('EVIDENCE_INVALID');
+        for (const reference of evidenceRefs) {
+          const record = currentManifest.records[reference.evidenceId];
+          if (!record || record.state !== 'available' || record.version !== reference.version
+            || record.contentHash !== reference.contentHash
+            || (record.representation ?? 'raw') !== reference.representation
+            || (record.derivationDigest ?? null) !== reference.derivationDigest) fail('EVIDENCE_EXPIRED');
+          expiresAtMs = Math.min(expiresAtMs, record.expiresAtMs);
+        }
+        for (const reference of factRefs) {
+          const record = currentManifest.facts[reference.factId];
+          if (!record || record.state !== 'available' || record.status !== reference.status
+            || record.supportEvidenceIds.slice().sort().join('\0') !== reference.supportEvidenceIds.join('\0')
+            || record.supportContentHashes.slice().sort().join('\0') !== reference.supportContentHashes.join('\0')) fail('EVIDENCE_EXPIRED');
+          expiresAtMs = Math.min(expiresAtMs, record.expiresAtMs);
+        }
+        if (expiresAtMs <= currentTime()) fail('EVIDENCE_EXPIRED');
+        return { document, manifest: currentManifest, expiresAtMs };
+      }, signal);
+
+      body = {
+        schemaVersion: PRIVATE_RECEIPT_SCHEMA_VERSION,
+        tenantId: info.tenantId,
+        ...base,
+        phase: 'complete',
+        completion,
+        evidenceRefs,
+        factRefs,
+      };
+      sealed = await sealPrivateReceipt(info, receiptKey, body, signal);
+      authorizeCurrent(info, request, 'write_private_run_receipt', evidenceIds, factIds);
+      checkCancellation(signal);
+      const committed = await withExpiryAwareTenantLock(info, directory, (database, lockSignal) => {
+        checkCancellation(lockSignal);
+        const manifestRow = database.prepare('SELECT document FROM evidence_manifest WHERE tenant_hash = ?').get(info.tenantHash);
+        if ((manifestRow?.document ?? null) !== manifestSnapshot.document) fail('EVIDENCE_BUSY');
+        const currentTimeMs = currentTime();
+        if (manifestSnapshot.expiresAtMs <= currentTimeMs) fail('EVIDENCE_EXPIRED');
+        const currentManifest = manifestSnapshot.document === null ? emptyManifest(info.tenantHash)
+          : validateManifest(JSON.parse(manifestRow.document), info.tenantHash);
+        for (const reference of evidenceRefs) {
+          const record = currentManifest.records[reference.evidenceId];
+          if (!record || record.state !== 'available' || record.version !== reference.version
+            || record.contentHash !== reference.contentHash || record.expiresAtMs <= currentTimeMs) fail('EVIDENCE_EXPIRED');
+        }
+        for (const reference of factRefs) {
+          const record = currentManifest.facts[reference.factId];
+          if (!record || record.state !== 'available' || record.expiresAtMs <= currentTimeMs
+            || record.status !== reference.status) fail('EVIDENCE_EXPIRED');
+        }
+        const row = database.prepare(`SELECT schema_version, state, key_id, payload_hash, payload_bytes,
+          expires_at_ms, sealed, updated_at_ms FROM private_retrieval_receipts
+          WHERE tenant_hash = ? AND receipt_key = ?`).get(info.tenantHash, receiptKey);
+        if (!row || row.schema_version !== PRIVATE_RECEIPT_SCHEMA_VERSION
+          || row.state !== pendingSnapshot.state || row.key_id !== pendingSnapshot.key_id
+          || row.payload_hash !== pendingSnapshot.payload_hash || row.payload_bytes !== pendingSnapshot.payload_bytes
+          || row.expires_at_ms !== pendingSnapshot.expiresAtMs || row.updated_at_ms !== pendingSnapshot.updatedAtMs
+          || !row.sealed || !Buffer.from(row.sealed).equals(pendingSnapshot.sealed)) fail('EVIDENCE_BUSY');
+        if (row.state === 'complete') {
+          if (row.payload_hash !== sealed.payloadHash) fail('EVIDENCE_INTEGRITY');
+          return 'already_complete';
+        }
+        if (row.state !== 'pending' || row.expires_at_ms <= currentTimeMs) fail('EVIDENCE_EXPIRED');
+        const totals = database.prepare(`SELECT COALESCE(SUM(length(sealed)), 0) AS sealed_bytes
+          FROM private_retrieval_receipts WHERE tenant_hash = ?`).get(info.tenantHash);
+        const existingEnvelopeBytes = Buffer.from(row.sealed).byteLength;
+        if (totals.sealed_bytes - existingEnvelopeBytes + sealed.sealed.byteLength
+          > PRIVATE_RECEIPT_MAX_SEALED_BYTES_PER_TENANT) fail('EVIDENCE_STORAGE');
+        database.prepare(`UPDATE private_retrieval_receipts SET state = 'complete', key_id = ?, payload_hash = ?,
+          payload_bytes = ?, expires_at_ms = ?, sealed = ?, updated_at_ms = ?
+          WHERE tenant_hash = ? AND receipt_key = ? AND state = 'pending'`)
+          .run(sealed.keyId, sealed.payloadHash, sealed.payloadBytes,
+            Math.min(row.expires_at_ms, manifestSnapshot.expiresAtMs), sealed.sealed, currentTimeMs,
+            info.tenantHash, receiptKey);
+        checkCancellation(lockSignal);
+        return 'complete';
+      }, signal, {
+        beforeBegin: () => {
+          authorizeCurrent(info, request, 'write_private_run_receipt', evidenceIds, factIds);
+          checkCancellation(signal);
+        },
+      });
+      return Object.freeze({ state: committed });
+    } catch (error) {
+      throw safePublicError(error);
+    } finally {
+      pendingSnapshot?.sealed?.fill(0);
+      if (pendingBody) wipePrivateTree(pendingBody);
+      if (body) wipePrivateTree(body);
+      sealed?.sealed.fill(0);
+    }
+  }
+
+  async function readPrivateRunReceipt(scope, inputValue, request, signal) {
+    const info = scopeInfo(scope);
+    checkCancellation(signal);
+    const lookup = normalizePrivateReceiptLookup(inputValue);
+    const receiptKey = privateReceiptKey(info, lookup.runId, lookup.candidate.candidateId);
+    const directory = await tenantDirectory(info);
+    let row;
+    let body;
+    try {
+      row = await privateReceiptRowSnapshot(info, directory, receiptKey, signal);
+      if (!row) return Object.freeze({ state: 'missing' });
+      if (row.state === 'expired') return Object.freeze({ state: 'expired' });
+      body = await openPrivateReceipt(info, receiptKey, row, signal);
+      if (!sameReceiptBinding(body, { ...lookup, tenantId: info.tenantId })) {
+        return Object.freeze({ state: 'mismatch' });
+      }
+      const base = normalizePrivateReceiptBase({
+        runId: body.runId,
+        configHash: body.configHash,
+        candidate: body.candidate,
+        claim: body.claim,
+      });
+      if (!['pending', 'complete'].includes(body.phase) || body.phase !== row.state
+        || JSON.stringify(base) !== JSON.stringify({
+          runId: body.runId,
+          configHash: body.configHash,
+          candidate: body.candidate,
+          claim: body.claim,
+        })) fail('EVIDENCE_INTEGRITY');
+      if (body.phase === 'pending') {
+        await authorize(info, request, 'read_private_run_receipt', [], [], signal);
+        authorizeCurrent(info, request, 'read_private_run_receipt', [], []);
+        checkCancellation(signal);
+        if (currentTime() >= row.expiresAtMs || !privateReceiptRowMatchesSync(info, directory, receiptKey, row)) {
+          fail(currentTime() >= row.expiresAtMs ? 'EVIDENCE_EXPIRED' : 'EVIDENCE_BUSY');
+        }
+        return Object.freeze({ state: 'pending', ...base });
+      }
+
+      const header = ownDataRecord(body, new Set([
+        'schemaVersion', 'tenantId', 'runId', 'configHash', 'candidate', 'claim', 'phase',
+        'completion', 'evidenceRefs', 'factRefs',
+      ]));
+      if (!header || header.schemaVersion !== PRIVATE_RECEIPT_SCHEMA_VERSION) fail('EVIDENCE_INTEGRITY');
+      const completion = normalizePrivateReceiptCompletion(body.completion);
+      const { evidenceRefs, factRefs } = validatePrivateReceiptReferences({
+        evidenceRefs: body.evidenceRefs,
+        factRefs: body.factRefs,
+      });
+      if (evidenceRefs.length === 0 && factRefs.length === 0
+        && (completion.identity.entityCandidates.length > 0 || completion.identity.occurrenceCandidates.length > 0
+          || completion.identity.transitionLinks.length > 0 || completion.identity.unresolvedTransitions.length > 0
+          || completion.suggestions.length > 0)) fail('EVIDENCE_INTEGRITY');
+      const evidenceHandles = [];
+      for (const reference of evidenceRefs) {
+        evidenceHandles.push(await lookupEvidence(scope, reference.evidenceId, signal));
+      }
+      const factHandles = [];
+      for (const reference of factRefs) factHandles.push(await lookupFact(scope, reference.factId, signal));
+      const evidenceIds = evidenceRefs.map((reference) => reference.evidenceId);
+      const factIds = factRefs.map((reference) => reference.factId);
+      let materialized;
+      if (evidenceIds.length + factIds.length > 0) {
+        const finalizationHook = ({ snapshot, finalVerifier, materialized: current }) => {
+          const actual = receiptReferencesForMaterialized(info, current);
+          if (JSON.stringify(actual.evidenceRefs) !== JSON.stringify(evidenceRefs)
+            || JSON.stringify(actual.factRefs) !== JSON.stringify(factRefs)) fail('EVIDENCE_INTEGRITY');
+          if (currentTime() >= row.expiresAtMs
+            || !privateReceiptRowMatchesSync(info, directory, receiptKey, row)) fail('EVIDENCE_EXPIRED');
+          authorizeCurrent(info, request, 'read_private_run_receipt', evidenceIds, factIds);
+          checkCancellation(signal);
+          finalVerifier.check(snapshot);
+          if (currentTime() >= row.expiresAtMs
+            || !privateReceiptRowMatchesSync(info, directory, receiptKey, row)) fail('EVIDENCE_EXPIRED');
+        };
+        materialized = await materializeSelectedInternal(
+          scope,
+          { evidence: evidenceHandles, facts: factHandles },
+          request,
+          signal,
+          'read_private_run_receipt',
+          'selected',
+          8,
+          true,
+          finalizationHook,
+        );
+      } else {
+        await authorize(info, request, 'read_private_run_receipt', [], [], signal);
+        if (currentTime() >= row.expiresAtMs
+          || !privateReceiptRowMatchesSync(info, directory, receiptKey, row)) fail('EVIDENCE_EXPIRED');
+        authorizeCurrent(info, request, 'read_private_run_receipt', [], []);
+        checkCancellation(signal);
+        if (currentTime() >= row.expiresAtMs
+          || !privateReceiptRowMatchesSync(info, directory, receiptKey, row)) fail('EVIDENCE_EXPIRED');
+        materialized = { evidence: Object.freeze([]), facts: Object.freeze([]) };
+      }
+      const result = deepFreeze({
+        state: 'complete',
+        runId: base.runId,
+        configHash: base.configHash,
+        candidate: cloneJsonValue(base.candidate),
+        claim: cloneJsonValue(base.claim),
+        completionKey: completion.completionKey,
+        outcome: completion.outcome,
+        suggestions: completion.suggestions,
+        limitations: completion.limitations,
+        identity: completion.identity,
+        evidenceIds: Object.freeze(evidenceIds),
+        facts: materialized.facts,
+      });
+      return result;
+    } catch (error) {
+      throw safePublicError(error);
+    } finally {
+      row?.sealed?.fill(0);
+      if (body) wipePrivateTree(body);
+    }
+  }
+
   return Object.freeze({
     scopeForAuthenticatedRequest: createScope,
     ingestEvidence,
@@ -3530,5 +4612,8 @@ export function createEvidenceStore(options) {
     listFacts,
     purgeExpired,
     integritySnapshot,
+    beginPrivateRunReceipt,
+    finalizePrivateRunReceipt,
+    readPrivateRunReceipt,
   });
 }

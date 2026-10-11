@@ -2223,12 +2223,14 @@ test('a reentrant current authorizer that changes SQLite state fails the asset C
     authorizePrivateAccessCurrent({ action }) {
       if (action === 'ingest_asset_source_evidence') {
         currentCalls += 1;
-        const database = new DatabaseSync(path.join(directory, tenantHash(), 'evidence.sqlite'));
-        try {
-          database.prepare('INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)')
-            .run(tenantHash(), JSON.stringify({ schemaVersion: 1, tenantHash: tenantHash(), records: {}, families: {}, facts: {} }));
-        } finally {
-          database.close();
+        if (currentCalls === 1) {
+          const database = new DatabaseSync(path.join(directory, tenantHash(), 'evidence.sqlite'));
+          try {
+            database.prepare('INSERT INTO evidence_manifest (tenant_hash, document) VALUES (?, ?)')
+              .run(tenantHash(), JSON.stringify({ schemaVersion: 1, tenantHash: tenantHash(), records: {}, families: {}, facts: {} }));
+          } finally {
+            database.close();
+          }
         }
       }
       return true;
@@ -2238,7 +2240,7 @@ test('a reentrant current authorizer that changes SQLite state fails the asset C
   await assert.rejects(harness.store.ingestAssetSourceEvidence(
     scope, sourceInput(documentFrom(eventPage()), harness.createPermit(TENANT)), request(TENANT),
   ), (error) => error instanceof EvidenceStoreError && error.code === 'EVIDENCE_BUSY');
-  assert.equal(currentCalls, 1);
+  assert.equal(currentCalls, 2, 'the current host callback is rechecked at the final synchronous CAS boundary');
   const state = readDatabase(directory);
   assert.equal(Object.keys(state.manifest.records).length, 0);
   assert.equal(state.evidenceCount, 0);

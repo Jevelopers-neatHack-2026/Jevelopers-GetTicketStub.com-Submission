@@ -69,6 +69,12 @@ if (mode === 'ingest') {
   const store = createStore({ holdPayloadKey: true });
   const scope = await store.scopeForAuthenticatedRequest({ principal: { tenantId } });
   await store.ingestEvidence(scope, input());
+} else if (mode === 'hold-lock') {
+  const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'), { timeout: 0 });
+  database.exec('BEGIN IMMEDIATE');
+  await writeFile(markerPath, 'writer-transaction-open');
+  setInterval(() => {}, 1_000);
+  await new Promise(() => {});
 } else if (mode === 'crash-commit') {
   const database = new DatabaseSync(path.join(directory, tenantHash, 'evidence.sqlite'), { timeout: 10_000 });
   database.exec('BEGIN IMMEDIATE');

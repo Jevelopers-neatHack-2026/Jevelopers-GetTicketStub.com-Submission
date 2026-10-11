@@ -193,8 +193,8 @@ export interface DiscoveryFrontierOptions<Request = unknown> {
 
 export interface DiscoveryFrontierStore<Request = unknown> {
   scopeForAuthenticatedRequest(request: Request): Promise<FrontierTenantScope>;
-  createRun(scope: FrontierTenantScope, input: FrontierRunInput): Promise<FrontierSnapshot>;
-  claimNext(scope: FrontierTenantScope, runId: string, input: { readonly workerId: string; readonly claimKey: string }): Promise<FrontierClaimResult>;
+  createRun(scope: FrontierTenantScope, input: FrontierRunInput, signal?: AbortSignal): Promise<FrontierSnapshot>;
+  claimNext(scope: FrontierTenantScope, runId: string, input: { readonly workerId: string; readonly claimKey: string }, signal?: AbortSignal): Promise<FrontierClaimResult>;
   /** Persist admission before a future adapter dispatches; replay only returns historical state. */
   admitAttempt(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string;
@@ -202,7 +202,7 @@ export interface DiscoveryFrontierStore<Request = unknown> {
     readonly kind: 'initial' | 'retry' | 'redirect';
     readonly previousAttemptKey?: string;
     readonly url: string;
-  }): Promise<FrontierAttemptResult>;
+  }, signal?: AbortSignal): Promise<FrontierAttemptResult>;
   /** Atomically admits one actual hop and reserves the full 20MiB decoded ceiling before DNS/socket dispatch. */
   admitTransportHop(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string;
@@ -210,44 +210,44 @@ export interface DiscoveryFrontierStore<Request = unknown> {
     readonly kind: 'initial' | 'retry' | 'redirect';
     readonly previousAttemptKey?: string;
     readonly url: string;
-  }): Promise<FrontierTransportAdmissionResult>;
+  }, signal?: AbortSignal): Promise<FrontierTransportAdmissionResult>;
   /** CAS transition. A replayed transition never authorizes another dispatch. */
   markTransportDispatchIntent(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string; readonly attemptKey: string;
-  }): Promise<Readonly<Record<string, unknown>>>;
+  }, signal?: AbortSignal): Promise<Readonly<Record<string, unknown>>>;
   markTransportResponseReceived(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string; readonly attemptKey: string;
-  }): Promise<Readonly<Record<string, unknown>>>;
+  }, signal?: AbortSignal): Promise<Readonly<Record<string, unknown>>>;
   /** Only use when local transport evidence proves body decoding never began. */
   settleTransportHopKnownZero(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string; readonly attemptKey: string;
-  }): Promise<Readonly<Record<string, unknown>>>;
+  }, signal?: AbortSignal): Promise<Readonly<Record<string, unknown>>>;
   /** EOF-only settlement; partial or ambiguous decodes retain the full reservation. */
   settleTransportHopBodyComplete(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string; readonly attemptKey: string;
-  }, decodedBytes: number): Promise<Readonly<Record<string, unknown>>>;
+  }, decodedBytes: number, signal?: AbortSignal): Promise<Readonly<Record<string, unknown>>>;
   markTransportHopUnknown(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string; readonly attemptKey: string;
-  }): Promise<Readonly<Record<string, unknown>>>;
-  getTransportProgress(scope: FrontierTenantScope, runId: string): Promise<FrontierTransportProgress>;
+  }, signal?: AbortSignal): Promise<Readonly<Record<string, unknown>>>;
+  getTransportProgress(scope: FrontierTenantScope, runId: string, signal?: AbortSignal): Promise<FrontierTransportProgress>;
   completeCandidate(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string;
     readonly completionKey: string;
     readonly outcome: 'links_observed' | 'no_links' | 'failed' | 'access_restricted';
     readonly suggestions: readonly FrontierSuggestionInput[];
     readonly truncatedCount?: number;
-  }): Promise<FrontierSnapshot>;
+  }, signal?: AbortSignal): Promise<FrontierSnapshot>;
   markUnresolved(scope: FrontierTenantScope, runId: string, input: {
     readonly leaseToken: string;
     readonly reason: 'worker_lost' | 'dispatch_state_unknown' | 'cancelled_before_dispatch';
-  }): Promise<FrontierSnapshot>;
+  }, signal?: AbortSignal): Promise<FrontierSnapshot>;
   stopRun(scope: FrontierTenantScope, runId: string,
-    reason: 'cancelled' | 'budget_denied' | 'access_restricted' | 'adequate_facts' | 'review_required' | 'deadline'): Promise<FrontierSnapshot>;
+    reason: 'cancelled' | 'budget_denied' | 'access_restricted' | 'adequate_facts' | 'review_required' | 'deadline', signal?: AbortSignal): Promise<FrontierSnapshot>;
   /** Atomic final-release/cancel race guard; an already sealed run cannot be canceled retroactively. */
-  sealPrivateDraft(scope: FrontierTenantScope, runId: string): Promise<Readonly<{
+  sealPrivateDraft(scope: FrontierTenantScope, runId: string, signal?: AbortSignal): Promise<Readonly<{
     state: 'sealed' | 'already_sealed' | 'denied'; reason?: string;
   }>>;
-  getSnapshot(scope: FrontierTenantScope, runId: string): Promise<FrontierSnapshot>;
+  getSnapshot(scope: FrontierTenantScope, runId: string, signal?: AbortSignal): Promise<FrontierSnapshot>;
   close(): void;
 }
 

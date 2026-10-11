@@ -350,6 +350,31 @@ function isBusy(error) {
   return error?.errcode === 5 || error?.errcode === 6 || error?.code === 'ERR_SQLITE_BUSY';
 }
 
+function checkOperationSignal(signal) {
+  if (signal?.aborted) fail('FRONTIER_STOPPED');
+}
+
+async function retryDelay(deadline, signal) {
+  checkOperationSignal(signal);
+  const remaining = deadline - performance.now();
+  if (remaining <= 0) fail('FRONTIER_BUSY');
+  await new Promise((resolve, reject) => {
+    let timer;
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(new DiscoveryFrontierError('FRONTIER_STOPPED'));
+    };
+    timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, Math.min(8, Math.max(1, remaining)));
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
+  checkOperationSignal(signal);
+}
+
 function safeStorageError(error) {
   if (error instanceof DiscoveryFrontierError) return error;
   if (error?.errcode === 13 || error?.code === 'ERR_SQLITE_FULL') {
@@ -524,64 +549,74 @@ function safeIntegerTime(value) {
   return value;
 }
 
-async function openDatabase(directory, tenantHash, timeoutMs) {
+async function openDatabase(directory, tenantHash, deadline, signal) {
   const tenantDirectory = path.join(directory, tenantHash);
-  await ensureDirectory(tenantDirectory);
   const databasePath = path.join(tenantDirectory, 'frontier.sqlite');
-  let priorStats = null;
-  try {
-    priorStats = await lstat(databasePath);
-    if (priorStats.isSymbolicLink() || !priorStats.isFile()) fail('FRONTIER_STORAGE');
-  } catch (error) {
-    if (error instanceof DiscoveryFrontierError) throw error;
-    if (error?.code !== 'ENOENT') throw safeStorageError(error);
-  }
-  let database;
-  try {
-    database = new DatabaseSync(databasePath, { timeout: timeoutMs });
-    const openedStats = await lstat(databasePath);
-    if (openedStats.isSymbolicLink() || !openedStats.isFile()
-      || (priorStats && (openedStats.dev !== priorStats.dev || openedStats.ino !== priorStats.ino))) {
-      fail('FRONTIER_STORAGE');
-    }
-    database.exec(`
-      PRAGMA journal_mode = DELETE;
-      PRAGMA synchronous = FULL;
-      PRAGMA secure_delete = ON;
-      PRAGMA trusted_schema = OFF;
-      PRAGMA foreign_keys = ON;
-      PRAGMA max_page_count = ${MAX_DATABASE_PAGES};
-    `);
-    const version = database.prepare('PRAGMA user_version').get().user_version;
-    if (version !== 0 && version !== 1 && version !== SCHEMA_VERSION) fail('FRONTIER_VERSION');
-    database.exec('BEGIN IMMEDIATE');
+  while (true) {
+    checkOperationSignal(signal);
+    let database;
     try {
-      database.exec(schemaSql());
-      if (version === 1) {
-        // V1 recorded planner admissions but had no durable transport or body
-        // accounting. Any such admission may have reached the network and
-        // consumed decoded bytes. Preserve that uncertainty as a full-run
-        // reservation rather than treating the new ledger as fresh capacity.
-        database.prepare(`INSERT OR IGNORE INTO frontier_transport_legacy_uncertainty
-          (tenant_hash, run_id, reserved_bytes)
-          SELECT tenant_hash, run_id, ${MAX_DECODED_BYTES_PER_RUN}
-          FROM frontier_attempts GROUP BY tenant_hash, run_id`).run();
+      await ensureDirectory(tenantDirectory);
+      let priorStats = null;
+      try {
+        priorStats = await lstat(databasePath);
+        if (priorStats.isSymbolicLink() || !priorStats.isFile()) fail('FRONTIER_STORAGE');
+      } catch (error) {
+        if (error instanceof DiscoveryFrontierError) throw error;
+        if (error?.code !== 'ENOENT') throw safeStorageError(error);
       }
-      if (version !== SCHEMA_VERSION) database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-      database.exec('COMMIT');
+      checkOperationSignal(signal);
+      // A DatabaseSync busy timeout blocks the event loop, which prevents the
+      // caller's deadline and abort listeners from running. Retry SQLITE_BUSY
+      // asynchronously instead, with this one absolute operation deadline.
+      database = new DatabaseSync(databasePath, { timeout: 0 });
+      const openedStats = await lstat(databasePath);
+      if (openedStats.isSymbolicLink() || !openedStats.isFile()
+        || (priorStats && (openedStats.dev !== priorStats.dev || openedStats.ino !== priorStats.ino))) {
+        fail('FRONTIER_STORAGE');
+      }
+      database.exec(`
+        PRAGMA journal_mode = DELETE;
+        PRAGMA synchronous = FULL;
+        PRAGMA secure_delete = ON;
+        PRAGMA trusted_schema = OFF;
+        PRAGMA foreign_keys = ON;
+        PRAGMA max_page_count = ${MAX_DATABASE_PAGES};
+      `);
+      const version = database.prepare('PRAGMA user_version').get().user_version;
+      if (version !== 0 && version !== 1 && version !== SCHEMA_VERSION) fail('FRONTIER_VERSION');
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database.exec(schemaSql());
+        if (version === 1) {
+          // V1 recorded planner admissions but had no durable transport or body
+          // accounting. Any such admission may have reached the network and
+          // consumed decoded bytes. Preserve that uncertainty as a full-run
+          // reservation rather than treating the new ledger as fresh capacity.
+          database.prepare(`INSERT OR IGNORE INTO frontier_transport_legacy_uncertainty
+            (tenant_hash, run_id, reserved_bytes)
+            SELECT tenant_hash, run_id, ${MAX_DECODED_BYTES_PER_RUN}
+            FROM frontier_attempts GROUP BY tenant_hash, run_id`).run();
+        }
+        if (version !== SCHEMA_VERSION) database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+        checkOperationSignal(signal);
+        database.exec('COMMIT');
+      } catch (error) {
+        try { database.exec('ROLLBACK'); } catch { /* Keep the original migration failure. */ }
+        throw error;
+      }
+      await chmod(databasePath, 0o600);
+      const pageSize = database.prepare('PRAGMA page_size').get().page_size;
+      const pageCount = database.prepare('PRAGMA page_count').get().page_count;
+      if (!Number.isSafeInteger(pageSize) || !Number.isSafeInteger(pageCount)
+        || pageSize * pageCount > MAX_DATABASE_BYTES) fail('FRONTIER_STORAGE_LIMIT');
+      return database;
     } catch (error) {
-      try { database.exec('ROLLBACK'); } catch { /* Keep the original migration failure. */ }
-      throw error;
+      try { database?.close(); } catch { /* Close failures do not replace the bounded error. */ }
+      if (error instanceof DiscoveryFrontierError) throw error;
+      if (!isBusy(error)) throw safeStorageError(error);
+      await retryDelay(deadline, signal);
     }
-    await chmod(databasePath, 0o600);
-    const pageSize = database.prepare('PRAGMA page_size').get().page_size;
-    const pageCount = database.prepare('PRAGMA page_count').get().page_count;
-    if (!Number.isSafeInteger(pageSize) || !Number.isSafeInteger(pageCount)
-      || pageSize * pageCount > MAX_DATABASE_BYTES) fail('FRONTIER_STORAGE_LIMIT');
-    return database;
-  } catch (error) {
-    try { database?.close(); } catch { /* Close failures do not replace the bounded error. */ }
-    throw safeStorageError(error);
   }
 }
 
@@ -592,14 +627,32 @@ function pageBytes(database) {
   return size * count;
 }
 
-function transaction(database, callback) {
+async function transaction(database, callback, deadline, signal) {
   let open = false;
   try {
-    database.exec('BEGIN IMMEDIATE');
+    while (true) {
+      checkOperationSignal(signal);
+      try {
+        database.exec('BEGIN IMMEDIATE');
+        break;
+      } catch (error) {
+        if (!isBusy(error)) throw error;
+        await retryDelay(deadline, signal);
+      }
+    }
     open = true;
     const result = callback(database);
     if (pageBytes(database) > MAX_DATABASE_BYTES) fail('FRONTIER_STORAGE_LIMIT');
-    database.exec('COMMIT');
+    while (true) {
+      checkOperationSignal(signal);
+      try {
+        database.exec('COMMIT');
+        break;
+      } catch (error) {
+        if (!isBusy(error)) throw error;
+        await retryDelay(deadline, signal);
+      }
+    }
     open = false;
     return result;
   } catch (error) {
@@ -982,15 +1035,18 @@ export function createDiscoveryFrontierStore(options) {
     if (closed) fail('FRONTIER_STORAGE');
   }
 
-  async function withScope(scope, operation) {
+  async function withScope(scope, operation, signal) {
     assertOpen();
     let scopeInfo;
     try { scopeInfo = tenantScopes.get(scope); } catch { scopeInfo = undefined; }
     if (!scopeInfo) fail('FRONTIER_DENIED');
-    const database = await openDatabase(directory, scopeInfo.tenantHash, lockTimeoutMs);
+    checkOperationSignal(signal);
+    const deadline = performance.now() + lockTimeoutMs;
+    const database = await openDatabase(directory, scopeInfo.tenantHash, deadline, signal);
     try {
       assertOpen();
-      return transaction(database, (db) => operation(db, scopeInfo));
+      checkOperationSignal(signal);
+      return await transaction(database, (db) => operation(db, scopeInfo), deadline, signal);
     } catch (error) {
       throw safeStorageError(error);
     } finally {
@@ -1009,7 +1065,7 @@ export function createDiscoveryFrontierStore(options) {
     return scope;
   }
 
-  async function createRun(scope, value) {
+  async function createRun(scope, value, signal) {
     const input = normalizeRunInput(value);
     return withScope(scope, (database, { tenantHash }) => {
       const prior = database.prepare(`SELECT config_hash FROM frontier_runs
@@ -1045,10 +1101,10 @@ export function createDiscoveryFrontierStore(options) {
         });
       }
       return snapshotInTransaction(database, tenantHash, input.runId);
-    });
+    }, signal);
   }
 
-  async function claimNext(scope, runIdValue, workerValue) {
+  async function claimNext(scope, runIdValue, workerValue, signal) {
     if (!validId(runIdValue, 96)) fail();
     const worker = normalizeWorkerInput(workerValue);
     return withScope(scope, (database, { tenantHash }) => {
@@ -1090,17 +1146,17 @@ export function createDiscoveryFrontierStore(options) {
       const claim = database.prepare(`SELECT * FROM frontier_claims
         WHERE tenant_hash = ? AND run_id = ? AND claim_key = ?`).get(tenantHash, runIdValue, worker.claimKey);
       return claimResult(database, tenantHash, runIdValue, claim, false);
-    });
+    }, signal);
   }
 
-  async function admitAttempt(scope, runIdValue, value) {
+  async function admitAttempt(scope, runIdValue, value, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = normalizeAttemptInput(value);
     return withScope(scope, (database, { tenantHash }) => {
       let run = getRun(database, tenantHash, runIdValue);
       run = advanceClock(database, tenantHash, run, now);
       return admitAttemptInTransaction(database, tenantHash, runIdValue, run, input);
-    });
+    }, signal);
   }
 
   function transportCapacityInTransaction(database, tenantHash, runIdValue) {
@@ -1127,7 +1183,7 @@ export function createDiscoveryFrontierStore(options) {
       availableBytes: MAX_DECODED_BYTES_PER_RUN - reservedBytes - spentBytes, states, legacyUnknownRuns });
   }
 
-  async function admitTransportHop(scope, runIdValue, value) {
+  async function admitTransportHop(scope, runIdValue, value, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = normalizeAttemptInput(value);
     return withScope(scope, (database, { tenantHash }) => {
@@ -1169,10 +1225,10 @@ export function createDiscoveryFrontierStore(options) {
       return deepFreeze({ state: 'admitted', attemptKey: admission.attemptKey,
         sequence: admission.sequence, admittedAtMs: admission.admittedAtMs,
         stopAfterThisAdmission: admission.stopAfterThisAdmission, capacity: after });
-    });
+    }, signal);
   }
 
-  async function updateTransportHop(scope, runIdValue, value, nextState, decodedBytes) {
+  async function updateTransportHop(scope, runIdValue, value, nextState, decodedBytes, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = ownRecord(value, new Set(['leaseToken', 'attemptKey']));
     if (!input || !validId(input.leaseToken, 64) || !validId(input.attemptKey, 128)) fail();
@@ -1222,38 +1278,38 @@ export function createDiscoveryFrontierStore(options) {
       }
       return deepFreeze({ state: 'updated', transportState: nextState,
         capacity: transportCapacityInTransaction(database, tenantHash, runIdValue) });
-    });
+    }, signal);
   }
 
-  async function markTransportDispatchIntent(scope, runIdValue, input) {
-    return updateTransportHop(scope, runIdValue, input, 'dispatch_intent');
+  async function markTransportDispatchIntent(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'dispatch_intent', undefined, signal);
   }
 
-  async function markTransportResponseReceived(scope, runIdValue, input) {
-    return updateTransportHop(scope, runIdValue, input, 'response_received');
+  async function markTransportResponseReceived(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'response_received', undefined, signal);
   }
 
-  async function settleTransportHopKnownZero(scope, runIdValue, input) {
-    return updateTransportHop(scope, runIdValue, input, 'known_zero');
+  async function settleTransportHopKnownZero(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'known_zero', undefined, signal);
   }
 
-  async function settleTransportHopBodyComplete(scope, runIdValue, input, decodedBytes) {
-    return updateTransportHop(scope, runIdValue, input, 'body_complete', decodedBytes);
+  async function settleTransportHopBodyComplete(scope, runIdValue, input, decodedBytes, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'body_complete', decodedBytes, signal);
   }
 
-  async function markTransportHopUnknown(scope, runIdValue, input) {
-    return updateTransportHop(scope, runIdValue, input, 'unknown');
+  async function markTransportHopUnknown(scope, runIdValue, input, signal) {
+    return updateTransportHop(scope, runIdValue, input, 'unknown', undefined, signal);
   }
 
-  async function getTransportProgress(scope, runIdValue) {
+  async function getTransportProgress(scope, runIdValue, signal) {
     if (!validId(runIdValue, 96)) fail();
     return withScope(scope, (database, { tenantHash }) => {
       getRun(database, tenantHash, runIdValue);
       return transportCapacityInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
-  async function completeCandidate(scope, runIdValue, value) {
+  async function completeCandidate(scope, runIdValue, value, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = normalizeCompletionInput(value);
     const payloadHash = digest(stableJson({ outcome: input.outcome, suggestions: input.suggestions,
@@ -1308,10 +1364,10 @@ export function createDiscoveryFrontierStore(options) {
       const updated = getRun(database, tenantHash, runIdValue);
       expireOrExhaust(database, tenantHash, updated, now);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
-  async function markUnresolved(scope, runIdValue, value) {
+  async function markUnresolved(scope, runIdValue, value, signal) {
     if (!validId(runIdValue, 96)) fail();
     const input = normalizeUnresolvedInput(value);
     return withScope(scope, (database, { tenantHash }) => {
@@ -1335,10 +1391,10 @@ export function createDiscoveryFrontierStore(options) {
         .run(tenantHash, runIdValue, claim.candidate_id);
       recordStop(database, tenantHash, runIdValue, 'unresolved_work', run.last_clock_ms, true);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
-  async function stopRun(scope, runIdValue, reason) {
+  async function stopRun(scope, runIdValue, reason, signal) {
     if (!validId(runIdValue, 96)
       || !['cancelled', 'budget_denied', 'access_restricted', 'adequate_facts', 'review_required', 'deadline'].includes(reason)) fail();
     return withScope(scope, (database, { tenantHash }) => {
@@ -1351,10 +1407,10 @@ export function createDiscoveryFrontierStore(options) {
       }
       recordStop(database, tenantHash, runIdValue, reason, run.last_clock_ms, true);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
-  async function sealPrivateDraft(scope, runIdValue) {
+  async function sealPrivateDraft(scope, runIdValue, signal) {
     if (!validId(runIdValue, 96)) fail();
     return withScope(scope, (database, { tenantHash }) => {
       const run = advanceClock(database, tenantHash, getRun(database, tenantHash, runIdValue), now);
@@ -1380,16 +1436,16 @@ export function createDiscoveryFrontierStore(options) {
         WHERE tenant_hash = ? AND run_id = ? AND state = 'open'`)
         .run(run.last_clock_ms, tenantHash, runIdValue);
       return deepFreeze({ state: 'sealed' });
-    });
+    }, signal);
   }
 
-  async function getSnapshot(scope, runIdValue) {
+  async function getSnapshot(scope, runIdValue, signal) {
     if (!validId(runIdValue, 96)) fail();
     return withScope(scope, (database, { tenantHash }) => {
       const run = getRun(database, tenantHash, runIdValue);
       expireOrExhaust(database, tenantHash, run, now);
       return snapshotInTransaction(database, tenantHash, runIdValue);
-    });
+    }, signal);
   }
 
   return Object.freeze({

@@ -89,6 +89,14 @@ export async function extractDeterministically(documentInput, options = {}) {
   }
 
   const bytes = Buffer.from(document.bytes);
+  try {
+    return await extractOwnedBytes(document, bytes, signal, limits, diagnostics);
+  } finally {
+    bytes.fill(0);
+  }
+}
+
+async function extractOwnedBytes(document, bytes, signal, limits, diagnostics) {
   const sourceHash = sha256(bytes);
   const source = sourceFromDocument(document, sourceHash);
   const contentType = document.contentType.split(";", 1)[0].trim().toLowerCase();

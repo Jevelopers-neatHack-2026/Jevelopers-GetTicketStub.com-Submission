@@ -597,6 +597,22 @@ function allSourcePositions(drafts, linkDrafts) {
   return [...positions.values()];
 }
 
+function isValidPdfTextBoxLocator(value) {
+  const locator = ownRecord(value, new Set([
+    "kind", "pageIndex", "textIndex", "x", "y", "width", "height", "pageWidth", "pageHeight",
+    "rotation", "coordinateSystem", "geometry",
+  ]));
+  return Boolean(locator && locator.kind === "pdf-text-box"
+    && Number.isSafeInteger(locator.pageIndex) && locator.pageIndex >= 0
+    && Number.isSafeInteger(locator.textIndex) && locator.textIndex >= 0
+    && [locator.x, locator.y, locator.width, locator.height, locator.pageWidth, locator.pageHeight].every(Number.isFinite)
+    && locator.x >= 0 && locator.y >= 0 && locator.width >= 0 && locator.height >= 0
+    && locator.pageWidth > 0 && locator.pageHeight > 0
+    && [0, 90, 180, 270].includes(locator.rotation)
+    && locator.coordinateSystem === "viewport-points-top-left"
+    && locator.geometry === "approximate-text-item");
+}
+
 function reconcileStoredSourcePositions(positionValues, source) {
   const actual = ownArray(positionValues, MAX_POSITIONS);
   if (!actual || actual.length === 0) fail("EVIDENCE_POSITION_MISSING");
@@ -607,6 +623,11 @@ function reconcileStoredSourcePositions(positionValues, source) {
   const reconciled = [];
   for (const value of actual) {
     const position = ownRecord(value, new Set(["handle", "locator", "contentHash"]));
+    // Stored derived-PDF positions have their own locator representation and
+    // cannot bind the raw fetched bytes consumed by this composer. Preserve the
+    // established source-binding error for that representation boundary while
+    // keeping malformed raw-position errors on the stored-mismatch path.
+    if (position?.handle && isValidPdfTextBoxLocator(position.locator)) fail("SOURCE_BINDING_FAILED");
     const locator = ownTextRange(position?.locator);
     if (!position || !position.handle || !locator || locator.endByte > source.document.bytes.byteLength
       || !HEX_SHA256.test(position.contentHash)) fail("STORED_SOURCE_MISMATCH");
@@ -1009,7 +1030,7 @@ export async function composeSourceIdentity(inputValue) {
         sourceKind: "external",
         positions: positions.map(({ locator, content }) => ({ locator, content })),
         retentionHandle: source.retentionHandle,
-      }));
+      }, guard.controller.signal));
       guard.check();
       const ingestResult = ownRecord(ingest, new Set(["evidence", "positions", "created", "metadata"]));
       const ingestMetadata = metadataSnapshot(ingestResult?.metadata, fullHash);
@@ -1086,7 +1107,7 @@ export async function composeSourceIdentity(inputValue) {
         };
         scope = await guard.awaitCall(() => input.methods.scopeForAuthenticatedRequest(input.request));
         guard.check();
-        const factHandle = await guard.awaitCall(() => input.methods.appendFact(scope, factInput, input.request));
+        const factHandle = await guard.awaitCall(() => input.methods.appendFact(scope, factInput, input.request, guard.controller.signal));
         guard.check();
         if (!factHandle || typeof factHandle !== "object") fail("SOURCE_BINDING_FAILED");
         source.identityFacts.push({ draft, factHandle });

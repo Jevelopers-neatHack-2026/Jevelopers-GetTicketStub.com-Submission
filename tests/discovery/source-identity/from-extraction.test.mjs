@@ -619,6 +619,36 @@ test("stored URL and content-type mismatches stop before any sourced fact is app
   }
 });
 
+test("a malformed raw position locator retains the stored-source mismatch error", async (t) => {
+  const harness = await createHarness(t);
+  const bytes = await fixture("multi-event.html");
+  const storeView = Object.create(null);
+  for (const method of ["scopeForAuthenticatedRequest", "ingestEvidence", "appendFact"]) {
+    storeView[method] = harness.store[method].bind(harness.store);
+  }
+  storeView.materializeSelected = async (scope, selection, authenticatedRequest, signal) => {
+    const selected = await harness.store.materializeSelected(scope, selection, authenticatedRequest, signal);
+    if (selection.facts.length !== 0 || selected.evidence.length === 0) return selected;
+    const first = selected.evidence[0];
+    return Object.freeze({
+      evidence: Object.freeze([Object.freeze({
+        ...first,
+        positions: Object.freeze(first.positions.map((position, index) => index === 0
+          ? Object.freeze({ ...position, locator: Object.freeze({ kind: "pdf-text-box" }) }) : position)),
+      })]),
+      facts: selected.facts,
+    });
+  };
+
+  await expectCompositionError(
+    composeSourceIdentity(sourceInput(storeView, document(bytes), harness.createPermit())),
+    "STORED_SOURCE_MISMATCH",
+  );
+  const scope = await harness.store.scopeForAuthenticatedRequest(request());
+  assert.equal((await harness.store.integritySnapshot(scope)).availableFacts, 0,
+    "malformed stored positions fail before fact writes");
+});
+
 test("a customer-supplied stored descriptor cannot be reused for external source claims", async (t) => {
   const harness = await createHarness(t);
   const bytes = await fixture("multi-event.html");

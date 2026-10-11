@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { SafeFetcher, RetrievalError } from '../security/controlled-fetch.mjs';
 import { runWithSafeFetchLifecycle, safeFetchProvenance } from '../security/internal/fetch-lifecycle.mjs';
@@ -24,7 +24,7 @@ if (DECODED_INFLIGHT_BOUND_BYTES >= DECODED_BUFFER_MARGIN_BYTES) {
 const TEXT_ACCEPTED_BYTES = 20 * 1024 * 1024 - DECODED_BUFFER_MARGIN_BYTES;
 const MEDIA_ACCEPTED_BYTES = 10 * 1024 * 1024 - DECODED_BUFFER_MARGIN_BYTES;
 const CANCELLATION_REASONS = new Set([
-  'cancelled', 'budget_denied', 'deadline', 'access_restricted', 'adequate_facts', 'review_required', 'unresolved_work',
+  'cancelled', 'budget_denied', 'deadline', 'access_restricted', 'adequate_facts', 'review_required',
 ]);
 const STOP_LIMITATIONS = new Map([
   ['attempt_limit', 'transport_attempt_limit'],
@@ -194,7 +194,8 @@ function snapshotRunInput(value) {
   ]);
   const evidenceStore = exactMethods(input.evidenceStore, [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
-    'lookupEvidence', 'lookupFact', 'materializeSelected',
+    'lookupEvidence', 'lookupFact', 'materializeSelected', 'beginPrivateRunReceipt',
+    'finalizePrivateRunReceipt', 'readPrivateRunReceipt',
   ]);
   if (!frontier || !evidenceStore || !(input.safeFetcher instanceof SafeFetcher)) fail();
   return {
@@ -245,6 +246,17 @@ async function awaitBoundedCleanup(operation, timeoutMs = 250) {
   const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); });
   try { await Promise.race([pending, timeout]); }
   finally { clearTimeout(timer); }
+}
+
+async function awaitAbortableCleanup(operation, timeoutMs = 250) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await awaitBoundedCleanup(() => operation(controller.signal), timeoutMs + 25);
+  } finally {
+    clearTimeout(timer);
+    if (!controller.signal.aborted) controller.abort();
+  }
 }
 
 function authorized(input, stage) {
@@ -317,6 +329,29 @@ function factFingerprint(fact) {
       duplicateGroupId: support.duplicateGroupId,
       independence: support.independence,
     })),
+  });
+}
+
+function digestJson(value) {
+  return createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
+}
+
+function receiptCandidate(candidate) {
+  return Object.freeze({
+    candidateId: candidate.candidateId,
+    canonicalUrl: candidate.canonicalUrl,
+    depth: candidate.depth,
+    seed: candidate.seed,
+    sourceRefs: Object.freeze(candidate.sourceRefs.map((reference) => Object.freeze({ ...reference }))),
+  });
+}
+
+function emptyIdentityResult() {
+  return Object.freeze({
+    entityCandidates: Object.freeze([]),
+    occurrenceCandidates: Object.freeze([]),
+    transitionLinks: Object.freeze([]),
+    unresolvedTransitions: Object.freeze([]),
   });
 }
 
@@ -453,6 +488,7 @@ function projection(identity, selectedEvidence, selectedFacts, progress, limitat
  */
 export async function runPrivateRetrieval(value) {
   const input = snapshotRunInput(value);
+  const runConfigHash = digestJson({ runId: input.runId, seeds: input.seeds, limits: input.limits });
   const limitations = new Set([
     'source_authority_not_evaluated', 'rights_not_evaluated', 'billable_usage_unknown', 'provider_and_external_egress_not_measured',
   ]);
@@ -478,7 +514,13 @@ export async function runPrivateRetrieval(value) {
   const abortError = () => new RetrievalError(stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : 'CANCELED');
   const persistStop = (reason) => {
     if (!runCreated) return;
-    const pending = Promise.resolve().then(() => input.frontier.stopRun(scope, input.runId, reason)).catch(() => {});
+    const cleanup = new AbortController();
+    const timer = setTimeout(() => cleanup.abort(), 500);
+    const pending = Promise.resolve().then(() => input.frontier.stopRun(scope, input.runId, reason, cleanup.signal))
+      .catch(() => {}).finally(() => {
+        clearTimeout(timer);
+        if (!cleanup.signal.aborted) cleanup.abort();
+      });
     localStopPromise = Promise.all([localStopPromise, pending]).then(() => undefined);
   };
   const abortForStop = (reason) => {
@@ -533,7 +575,7 @@ export async function runPrivateRetrieval(value) {
         runId: input.runId,
         seeds: input.seeds,
         limits: input.limits,
-      });
+      }, controller.signal);
       void Promise.resolve(creating).then(() => {
         runCreated = true;
         if (controller.signal.aborted) persistStop(stopCause === 'deadline' ? 'deadline' : 'cancelled');
@@ -553,7 +595,7 @@ export async function runPrivateRetrieval(value) {
         await new Promise((resolve) => setTimeout(resolve, 25));
         if (!watcherOpen) break;
         try {
-          const snapshot = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId));
+          const snapshot = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId, controller.signal));
           if (snapshotHasBlockingStop(snapshot)) {
             const blocking = snapshot.stopReasons.find((entry) => CANCELLATION_REASONS.has(entry.reason));
             if (blocking) abortForStop(blocking.reason);
@@ -570,7 +612,7 @@ export async function runPrivateRetrieval(value) {
 
     const readActiveSnapshot = async () => {
       checkDeadline();
-      const snapshot = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId));
+      const snapshot = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId, controller.signal));
       if (snapshotHasBlockingStop(snapshot)) {
         const blocking = snapshot.stopReasons.find((entry) => CANCELLATION_REASONS.has(entry.reason));
         if (blocking) abortForStop(blocking.reason);
@@ -579,9 +621,128 @@ export async function runPrivateRetrieval(value) {
       return snapshot;
     };
 
+    const retainReceipt = (receipt) => {
+      for (const evidenceId of receipt.evidenceIds) evidenceIds.add(evidenceId);
+      for (const fact of receipt.facts) outputFacts.set(fact.factId, fact);
+      for (const limitation of receipt.limitations) limitations.add(limitation);
+      const identity = receipt.identity;
+      if (identity.entityCandidates.length > 0 || identity.occurrenceCandidates.length > 0
+        || identity.transitionLinks.length > 0 || identity.unresolvedTransitions.length > 0) {
+        candidateResults.push(identity);
+      }
+    };
+
+    const recoverDurableReceipts = async () => {
+      const snapshot = await readActiveSnapshot();
+      const durableCandidates = snapshot.candidates.filter((candidate) =>
+        candidate.state === 'completed' || candidate.state === 'leased');
+      for (const candidate of durableCandidates) {
+        if (!authorized(input, 'candidate')) {
+          limitations.add('authorization_revoked');
+          runFailure = 'authorization_revoked';
+          return;
+        }
+        let receipt;
+        try {
+          receipt = await awaitOperation(() => input.evidenceStore.readPrivateRunReceipt(evidenceScope, {
+            runId: input.runId,
+            configHash: runConfigHash,
+            candidate: receiptCandidate(candidate),
+          }, input.request, controller.signal));
+        } catch (error) {
+          const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
+          limitations.add(limitationFor(code));
+          limitations.add('private_receipt_unavailable');
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        if (receipt.state !== 'complete') {
+          limitations.add(`private_receipt_${receipt.state}`);
+          if (candidate.state === 'leased' && receipt.state !== 'mismatch') {
+            const reason = candidate.admittedAttemptCount > 0
+              ? 'dispatch_state_unknown' : 'cancelled_before_dispatch';
+            limitations.add(reason);
+            if (candidate.activeLease?.claimKey && candidate.activeLease?.workerId) {
+              try {
+                const priorClaim = await awaitOperation(() => input.frontier.claimNext(scope, input.runId, {
+                  workerId: candidate.activeLease.workerId,
+                  claimKey: candidate.activeLease.claimKey,
+                }, controller.signal));
+                if (priorClaim.state === 'claimed') {
+                  await awaitOperation(() => input.frontier.markUnresolved(scope, input.runId, {
+                    leaseToken: priorClaim.leaseToken,
+                    reason,
+                  }, controller.signal));
+                }
+              } catch {
+                // Keep the explicit uncertainty even if the durable lease cannot be resolved now.
+              }
+            }
+          }
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        if (candidate.state === 'completed' && candidate.completionOutcome !== receipt.outcome) {
+          limitations.add('private_receipt_completion_mismatch');
+          runFailure = 'private_receipt_unavailable';
+          return;
+        }
+        if (candidate.state === 'leased') {
+          if (candidate.activeLease?.claimKey !== receipt.claim.claimKey) {
+            limitations.add('private_receipt_claim_mismatch');
+            runFailure = 'private_receipt_unavailable';
+            return;
+          }
+          const priorClaim = await awaitOperation(() => input.frontier.claimNext(scope, input.runId, {
+            workerId: receipt.claim.workerId,
+            claimKey: receipt.claim.claimKey,
+          }, controller.signal));
+          if (priorClaim.state !== 'claimed' && priorClaim.state !== 'completed') {
+            limitations.add('private_receipt_completion_unavailable');
+            runFailure = 'private_receipt_unavailable';
+            return;
+          }
+          if (priorClaim.leaseToken !== receipt.claim.leaseToken || priorClaim.candidate.candidateId !== candidate.candidateId) {
+            limitations.add('private_receipt_claim_mismatch');
+            runFailure = 'private_receipt_unavailable';
+            return;
+          }
+          if (priorClaim.state === 'claimed') {
+            await awaitOperation(() => input.frontier.completeCandidate(scope, input.runId, {
+              leaseToken: receipt.claim.leaseToken,
+              completionKey: receipt.completionKey,
+              outcome: receipt.outcome,
+              suggestions: receipt.suggestions,
+            }, controller.signal));
+          }
+        }
+        retainReceipt(receipt);
+      }
+    };
+
+    await recoverDurableReceipts();
+
     const processClaim = async (claim) => {
       const candidate = claim.candidate;
+      const priorLimitations = new Set(limitations);
+      const candidateEvidenceIds = new Set();
+      const candidateFacts = [];
+      const claimBinding = Object.freeze({
+        claimKey: claim.claimKey,
+        workerId: claim.workerId,
+        leaseToken: claim.leaseToken,
+      });
+      const completionKey = `complete:${claim.leaseToken}:${randomUUID()}`;
       let snapshot = await readActiveSnapshot();
+      const candidateSnapshot = snapshot.candidates.find((item) => item.candidateId === candidate.candidateId);
+      if (!candidateSnapshot || candidateSnapshot.canonicalUrl !== candidate.canonicalUrl
+        || candidateSnapshot.depth !== candidate.depth) throw new RetrievalError('TRANSPORT_FAILURE');
+      const candidateBinding = receiptCandidate(candidateSnapshot);
+      const receiptBinding = Object.freeze({
+        runId: input.runId,
+        configHash: runConfigHash,
+        candidate: candidateBinding,
+      });
       const observation = snapshot.observations.find((item) => item.targetCandidateId === candidate.candidateId);
       const suppliedUrl = observation?.suppliedUrl;
       if (typeof suppliedUrl !== 'string' || urlHasSensitiveMaterial(suppliedUrl)) {
@@ -591,6 +752,22 @@ export async function runPrivateRetrieval(value) {
         abortForStop('access_restricted');
         persistStop('access_restricted');
         throw new RetrievalError('POLICY_DENIED');
+      }
+      const pendingReceipt = await awaitOperation(() => input.evidenceStore.beginPrivateRunReceipt(evidenceScope, {
+        ...receiptBinding,
+        claim: claimBinding,
+      }, input.request, controller.signal));
+      if (pendingReceipt.state !== 'pending' || pendingReceipt.created !== true) {
+        const reason = candidateSnapshot.admittedAttemptCount > 0
+          ? 'dispatch_state_unknown' : 'cancelled_before_dispatch';
+        limitations.add(pendingReceipt.state === 'pending'
+          ? 'private_receipt_pending' : 'private_receipt_already_exists');
+        limitations.add(reason);
+        await awaitOperation(() => input.frontier.markUnresolved(scope, input.runId, {
+          leaseToken: claim.leaseToken,
+          reason,
+        }, controller.signal));
+        return;
       }
       const hopRecords = [];
       let previousAttemptKey;
@@ -604,7 +781,7 @@ export async function runPrivateRetrieval(value) {
       const stateForHop = (index) => hopRecords[index];
       const checkNoBlockingStop = async () => {
         checkDeadline();
-        const current = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId));
+        const current = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId, controller.signal));
         if (snapshotHasBlockingStop(current)) {
           const blocking = current.stopReasons.find((entry) => CANCELLATION_REASONS.has(entry.reason));
           if (blocking) abortForStop(blocking.reason);
@@ -622,7 +799,7 @@ export async function runPrivateRetrieval(value) {
             kind: hopIndex === 0 ? 'initial' : 'redirect',
             ...(hopIndex > 0 ? { previousAttemptKey } : {}),
             url,
-          }));
+          }, controller.signal));
           if (admission.state === 'denied') {
             if (admission.reason === 'decoded_budget') {
               abortForStop('budget_denied');
@@ -653,7 +830,7 @@ export async function runPrivateRetrieval(value) {
           await checkNoBlockingStop();
           await awaitOperation(() => input.frontier.markTransportDispatchIntent(scope, input.runId, {
             leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
-          }));
+          }, controller.signal));
           record.state = 'dispatch_intent';
           await checkNoBlockingStop();
         },
@@ -663,7 +840,7 @@ export async function runPrivateRetrieval(value) {
           await checkNoBlockingStop();
           await awaitOperation(() => input.frontier.markTransportResponseReceived(scope, input.runId, {
             leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
-          }));
+          }, controller.signal));
           record.state = 'response_received';
         },
         async onKnownZero({ hopIndex }) {
@@ -671,7 +848,7 @@ export async function runPrivateRetrieval(value) {
           if (!record || record.decodeStarted || record.bodyComplete) return;
           await awaitOperation(() => input.frontier.settleTransportHopKnownZero(scope, input.runId, {
             leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
-          }));
+          }, controller.signal));
           record.state = 'known_zero';
           activeHops.delete(record.attemptKey);
         },
@@ -685,7 +862,7 @@ export async function runPrivateRetrieval(value) {
           if (!record || !record.decodeStarted || record.bodyComplete) throw new RetrievalError('TRANSPORT_FAILURE');
           await awaitOperation(() => input.frontier.settleTransportHopBodyComplete(scope, input.runId, {
             leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
-          }, decodedBytes));
+          }, decodedBytes, controller.signal));
           record.bodyComplete = true;
           record.state = 'body_complete';
           activeHops.delete(record.attemptKey);
@@ -760,7 +937,7 @@ export async function runPrivateRetrieval(value) {
           }));
           const composedSource = selectedResult.sources[0];
           if (composedSource?.evidence?.evidenceId) {
-            evidenceIds.add(composedSource.evidence.evidenceId);
+            candidateEvidenceIds.add(composedSource.evidence.evidenceId);
           }
           if (selectedResult.facts.length + outputFacts.size > MAX_SELECTED_FACTS) {
             limitations.add('selected_fact_limit');
@@ -768,7 +945,7 @@ export async function runPrivateRetrieval(value) {
             persistStop('budget_denied');
             throw new RetrievalError('RESOURCE_LIMIT');
           }
-          for (const fact of selectedResult.facts) outputFacts.set(fact.factId, fact);
+          candidateFacts.push(...selectedResult.facts);
           selectedSuggestions = selectedResult.linkCandidates.map((link) => ({
             url: link.url,
             sourceRefs: [{
@@ -806,7 +983,7 @@ export async function runPrivateRetrieval(value) {
               }, input.request, controller.signal));
               if (asset.outcome === 'stored') {
                 assetRecord = { evidenceId: asset.metadata.evidenceId, role: 'asset-source-excerpt' };
-                evidenceIds.add(asset.metadata.evidenceId);
+                candidateEvidenceIds.add(asset.metadata.evidenceId);
               } else {
                 limitations.add(`asset_source_${asset.code.toLowerCase()}`);
               }
@@ -833,17 +1010,25 @@ export async function runPrivateRetrieval(value) {
           try {
             if (record.state === 'reserved') {
               // The beforeHop hook did not complete, so no DNS/socket/body path began.
-              const settlement = input.frontier.settleTransportHopKnownZero(scope, input.runId, {
-                leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
-              });
-              if (controller.signal.aborted) await awaitBoundedCleanup(() => settlement);
-              else await settlement;
+              if (controller.signal.aborted) {
+                await awaitAbortableCleanup((signal) => input.frontier.settleTransportHopKnownZero(scope, input.runId, {
+                  leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
+                }, signal));
+              } else {
+                await awaitOperation(() => input.frontier.settleTransportHopKnownZero(scope, input.runId, {
+                  leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
+                }, controller.signal));
+              }
             } else if (record.state === 'dispatch_intent' || record.state === 'response_received') {
-              const settlement = input.frontier.markTransportHopUnknown(scope, input.runId, {
-                leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
-              });
-              if (controller.signal.aborted) await awaitBoundedCleanup(() => settlement);
-              else await settlement;
+              if (controller.signal.aborted) {
+                await awaitAbortableCleanup((signal) => input.frontier.markTransportHopUnknown(scope, input.runId, {
+                  leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
+                }, signal));
+              } else {
+                await awaitOperation(() => input.frontier.markTransportHopUnknown(scope, input.runId, {
+                  leaseToken: claim.leaseToken, attemptKey: record.attemptKey,
+                }, controller.signal));
+              }
             }
           } catch { /* Persisted full reservation remains conservative when settlement cannot be proven. */ }
           activeHops.delete(record.attemptKey);
@@ -852,11 +1037,10 @@ export async function runPrivateRetrieval(value) {
 
       if (controller.signal.aborted) {
         const hasAdmissions = candidate.admittedAttemptCount > 0 || hopRecords.length > 0;
-        const unresolved = input.frontier.markUnresolved(scope, input.runId, {
+        await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
           leaseToken: claim.leaseToken,
           reason: hasAdmissions ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
-        });
-        await awaitBoundedCleanup(() => unresolved);
+        }, signal));
         throw abortError();
       }
 
@@ -866,30 +1050,57 @@ export async function runPrivateRetrieval(value) {
         return;
       }
 
-      if (selectedResult) {
-        const src = selectedResult.sources[0];
-        if (src?.evidence?.evidenceId) candidateResults.push({
+      const outcome = failure
+        ? (failure.code === 'POLICY_DENIED' ? 'access_restricted' : 'failed')
+        : selectedOutcome;
+      if (pdfRecord) candidateEvidenceIds.add(pdfRecord.evidenceId);
+      if (assetRecord) candidateEvidenceIds.add(assetRecord.evidenceId);
+      if (candidateEvidenceIds.size > MAX_SELECTED_EVIDENCE || candidateFacts.length > MAX_SELECTED_FACTS) {
+        limitations.add('candidate_receipt_selection_limit');
+        throw new RetrievalError('RESOURCE_LIMIT');
+      }
+      const candidateIdentity = selectedResult?.sources[0]?.evidence?.evidenceId
+        ? Object.freeze({
           entityCandidates: selectedResult.entityCandidates,
           occurrenceCandidates: selectedResult.occurrenceCandidates,
           transitionLinks: selectedResult.transitionLinks,
           unresolvedTransitions: selectedResult.unresolvedTransitions,
-        });
+        })
+        : emptyIdentityResult();
+      const candidateSuggestions = failure ? [] : selectedSuggestions;
+      const evidenceHandles = [];
+      for (const evidenceId of candidateEvidenceIds) {
+        evidenceHandles.push(await awaitOperation(() => input.evidenceStore.lookupEvidence(evidenceScope, evidenceId, controller.signal)));
       }
-      if (pdfRecord) evidenceIds.add(pdfRecord.evidenceId);
-      if (assetRecord) evidenceIds.add(assetRecord.evidenceId);
-
-      const outcome = failure
-        ? (failure.code === 'POLICY_DENIED' ? 'access_restricted' : 'failed')
-        : selectedOutcome;
+      const factHandles = [];
+      for (const fact of candidateFacts) {
+        factHandles.push(await awaitOperation(() => input.evidenceStore.lookupFact(evidenceScope, fact.factId, controller.signal)));
+      }
+      const candidateLimitations = [...limitations].filter((value) => !priorLimitations.has(value));
+      await awaitOperation(() => input.evidenceStore.finalizePrivateRunReceipt(evidenceScope, {
+        ...receiptBinding,
+        claim: claimBinding,
+        completion: {
+          completionKey,
+          outcome,
+          suggestions: candidateSuggestions,
+          limitations: candidateLimitations,
+          identity: candidateIdentity,
+        },
+        selection: { evidence: evidenceHandles, facts: factHandles },
+      }, input.request, controller.signal));
+      for (const evidenceId of candidateEvidenceIds) evidenceIds.add(evidenceId);
+      for (const fact of candidateFacts) outputFacts.set(fact.factId, fact);
+      if (selectedResult?.sources[0]?.evidence?.evidenceId) candidateResults.push(candidateIdentity);
       await awaitOperation(() => input.frontier.completeCandidate(scope, input.runId, {
         leaseToken: claim.leaseToken,
-        completionKey: `complete:${claim.leaseToken}:${randomUUID()}`,
+        completionKey,
         outcome,
-        suggestions: failure ? [] : selectedSuggestions,
-      }));
+        suggestions: candidateSuggestions,
+      }, controller.signal));
     };
 
-    while (!controller.signal.aborted) {
+    while (!controller.signal.aborted && !runFailure) {
       const current = await readActiveSnapshot();
       stopLimitation(current, limitations);
       if (current.state !== 'active' && current.stopReason !== 'attempt_limit') break;
@@ -906,7 +1117,7 @@ export async function runPrivateRetrieval(value) {
       const claim = await awaitOperation(() => input.frontier.claimNext(scope, input.runId, {
         workerId: input.workerId,
         claimKey: `claim:${input.workerId}:${randomUUID()}`,
-      }));
+      }, controller.signal));
       if (claim.state === 'claimed') {
         if (claim.replayed) {
           // A restart may observe old durable claims. Their lease never grants redispatch.
@@ -914,7 +1125,7 @@ export async function runPrivateRetrieval(value) {
           await awaitOperation(() => input.frontier.markUnresolved(scope, input.runId, {
             leaseToken: claim.leaseToken,
             reason: claim.candidate.admittedAttemptCount > 0 ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
-          }));
+          }, controller.signal));
           continue;
         }
         try { await processClaim(claim); }
@@ -922,10 +1133,10 @@ export async function runPrivateRetrieval(value) {
           const code = stopCause === 'deadline' ? 'DEADLINE_EXCEEDED' : safeFailureCode(error);
           limitations.add(limitationFor(code));
           if (code === 'CANCELED' || code === 'DEADLINE_EXCEEDED' || controller.signal.aborted) {
-            await awaitBoundedCleanup(() => input.frontier.markUnresolved(scope, input.runId, {
+            await awaitAbortableCleanup((signal) => input.frontier.markUnresolved(scope, input.runId, {
               leaseToken: claim.leaseToken,
               reason: claim.candidate.admittedAttemptCount > 0 ? 'dispatch_state_unknown' : 'cancelled_before_dispatch',
-            }));
+            }, signal));
             break;
           }
           if (code === 'INVALID_INPUT') {
@@ -946,14 +1157,14 @@ export async function runPrivateRetrieval(value) {
     }
 
     await awaitOperation(() => localStopPromise);
-    const finalSnapshot = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId));
+    const finalSnapshot = await awaitOperation(() => input.frontier.getSnapshot(scope, input.runId, controller.signal));
     stopLimitation(finalSnapshot, limitations);
     if (externalAbort || snapshotHasBlockingStop(finalSnapshot) || controller.signal.aborted) {
       if (stopCause === 'deadline') return incompleteWithProgress(input.runId, finalSnapshot, [...limitations, 'deadline_exceeded']);
       return incompleteResult(input.runId, 'cancelled', [...limitations, 'cancelled']);
     }
     if (runFailure) return incompleteResult(input.runId, 'incomplete', [...limitations, runFailure]);
-    const transport = await awaitOperation(() => input.frontier.getTransportProgress(scope, input.runId));
+    const transport = await awaitOperation(() => input.frontier.getTransportProgress(scope, input.runId, controller.signal));
     const hasLeased = finalSnapshot.candidates.some((candidate) => candidate.state === 'leased');
     if (transport.reservedBytes > 0 || hasLeased || finalSnapshot.candidates.some((candidate) => candidate.state === 'unresolved')) {
       limitations.add('transport_state_unknown_or_unresolved_work');
@@ -972,18 +1183,18 @@ export async function runPrivateRetrieval(value) {
     }
     const evidenceHandles = [];
     for (const evidenceId of evidenceIds) {
-      evidenceHandles.push(await awaitOperation(() => input.evidenceStore.lookupEvidence(evidenceScope, evidenceId)));
+      evidenceHandles.push(await awaitOperation(() => input.evidenceStore.lookupEvidence(evidenceScope, evidenceId, controller.signal)));
     }
     const factHandles = [];
     for (const factId of outputFacts.keys()) {
-      factHandles.push(await awaitOperation(() => input.evidenceStore.lookupFact(evidenceScope, factId)));
+      factHandles.push(await awaitOperation(() => input.evidenceStore.lookupFact(evidenceScope, factId, controller.signal)));
     }
     await awaitOperation(() => localStopPromise);
     checkDeadline();
     watcherOpen = false;
     await awaitOperation(() => watcherPromise);
     watcherDrained = true;
-    const release = await awaitOperation(() => input.frontier.sealPrivateDraft(scope, input.runId));
+    const release = await awaitOperation(() => input.frontier.sealPrivateDraft(scope, input.runId, controller.signal));
     if (release.state !== 'sealed' && release.state !== 'already_sealed') {
       limitations.add(release.reason === 'transport_uncertain' ? 'transport_state_unknown_or_unresolved_work' : 'release_seal_denied');
       return incompleteWithProgress(input.runId, finalSnapshot, [...limitations]);
