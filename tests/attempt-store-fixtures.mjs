@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -72,28 +72,129 @@ function childEnvironment(payload) {
 }
 
 export async function runAttemptChild(payload, timeoutMs = 30_000) {
-  const source = [
-    "const payload = JSON.parse(process.env.FC_ATTEMPT_CHILD_PAYLOAD);",
-    "const imported = await import(process.env.FC_ATTEMPT_MODULE_URL);",
-    "const hooks = payload.exitAt === \"temporary_file_sync\"",
-    "  ? { afterTemporaryFileSync: () => process.exit(73) }",
-    "  : payload.exitAt === \"writer_lock\" ? { afterLock: () => process.exit(74) } : undefined;",
-    "const store = await imported.createLocalAttemptPersistence({",
-    "  directory: payload.directory,",
-    "  providerId: payload.providerId,",
-    "  mode: payload.mode,",
-    "  ...(hooks === undefined ? {} : { faultHooks: hooks })",
-    "});",
-    "const result = await store.claimSubmitAttempt(payload.record);",
-    "process.stdout.write(JSON.stringify(result) + \"\\n\");",
-    "if (payload.exitAt === \"after_claim\") process.exit(75);"
-  ].join("\n");
+  const source = `
+import { readFile, writeFile } from "node:fs/promises";
+const payload = JSON.parse(process.env.FC_ATTEMPT_CHILD_PAYLOAD);
+if (payload.fixtureOutput === "malformed") {
+  process.stdout.write("{malformed fixture output}\\n");
+  process.exit(0);
+}
+const imported = await import(process.env.FC_ATTEMPT_MODULE_URL);
+const pause = (milliseconds) => new Promise((resolvePause) => setTimeout(resolvePause, milliseconds));
+const hooks = {};
+if (payload.exitAt === "temporary_file_sync") {
+  hooks.afterTemporaryFileSync = () => process.exit(73);
+} else if (payload.exitAt === "writer_lock") {
+  hooks.afterLock = () => process.exit(74);
+} else if (payload.afterLockDelayMs !== undefined || payload.gate !== undefined) {
+  hooks.afterLock = async () => {
+    if (payload.afterLockDelayMs !== undefined) await pause(payload.afterLockDelayMs);
+    if (payload.gate === undefined) return;
+    await writeFile(payload.gate.readyFile, JSON.stringify({ pid: process.pid, readyAt: Date.now() }) + "\\n", {
+      flag: "wx",
+      mode: 0o600
+    });
+    const deadline = Date.now() + payload.gate.timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        await readFile(payload.gate.releaseFile);
+        return;
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+        await pause(10);
+      }
+    }
+    const error = new Error("fixture_lock_gate_timeout");
+    error.code = "fixture_lock_gate_timeout";
+    throw error;
+  };
+}
+const reportAttempts = payload.reportAttempts === true || payload.retryStorageBusy !== undefined;
+const store = await imported.createLocalAttemptPersistence({
+  directory: payload.directory,
+  providerId: payload.providerId,
+  mode: payload.mode,
+  ...(Object.keys(hooks).length === 0 ? {} : { faultHooks: hooks })
+});
+const attemptLog = [];
+const startedAt = performance.now();
+const retry = payload.retryStorageBusy;
+const retryDeadline = retry === undefined ? undefined : startedAt + retry.deadlineMs;
+let result;
+let failure;
+for (;;) {
+  const attemptStartedAt = performance.now();
+  if (retryDeadline !== undefined && attemptStartedAt >= retryDeadline) {
+    failure = Object.assign(new Error("fixture_retry_deadline"), { code: "fixture_retry_deadline" });
+    break;
+  }
+  try {
+    result = await store.claimSubmitAttempt(payload.record);
+    attemptLog.push({
+      attempt: attemptLog.length + 1,
+      outcome: result.claimed ? "claimed" : "conflict",
+      elapsedMs: Number((performance.now() - attemptStartedAt).toFixed(3))
+    });
+    break;
+  } catch (error) {
+    const code = typeof error?.code === "string" ? error.code : null;
+    attemptLog.push({
+      attempt: attemptLog.length + 1,
+      errorCode: code,
+      elapsedMs: Number((performance.now() - attemptStartedAt).toFixed(3))
+    });
+    if (retry === undefined || code !== "storage_busy") {
+      failure = error;
+      break;
+    }
+    const remainingMs = retryDeadline - performance.now();
+    if (remainingMs <= 0) {
+      failure = Object.assign(new Error("fixture_retry_deadline"), { code: "fixture_retry_deadline" });
+      break;
+    }
+    const childIndex = Number.isSafeInteger(payload.childIndex) ? payload.childIndex : 0;
+    const jitterMs = retry.jitterMs ?? 0;
+    const jitter = jitterMs === 0 ? 0 : (childIndex * 7 + attemptLog.length * 11) % jitterMs;
+    const delayMs = Math.min(retry.delayMs + jitter, remainingMs);
+    await pause(delayMs);
+  }
+}
+const elapsedMs = Number((performance.now() - startedAt).toFixed(3));
+if (failure !== undefined) {
+  if (!reportAttempts) throw failure;
+  process.stdout.write(JSON.stringify({
+    errorCode: typeof failure?.code === "string" ? failure.code : null,
+    errorName: typeof failure?.name === "string" ? failure.name : "Error",
+    errorMessage: typeof failure?.message === "string" ? failure.message : String(failure),
+    attempts: attemptLog,
+    busyAttempts: attemptLog.filter((attempt) => attempt.errorCode === "storage_busy").length,
+    elapsedMs
+  }) + "\\n");
+  process.exitCode = 2;
+} else {
+  process.stdout.write(JSON.stringify(reportAttempts
+    ? {
+        result,
+        attempts: attemptLog,
+        busyAttempts: attemptLog.filter((attempt) => attempt.errorCode === "storage_busy").length,
+        elapsedMs
+      }
+    : result) + "\\n");
+}
+if (failure === undefined && payload.exitAt === "after_claim") process.exit(75);
+`;
   const childPayload = {
     directory: payload.directory,
     providerId: payload.providerId ?? ATTEMPT_PROVIDER,
     mode: payload.mode ?? ATTEMPT_MODE,
     record: payload.record,
-    ...(payload.exitAt === undefined ? {} : { exitAt: payload.exitAt })
+    ...(payload.exitAt === undefined ? {} : { exitAt: payload.exitAt }),
+    ...(payload.reportAttempts === undefined ? {} : { reportAttempts: payload.reportAttempts }),
+    ...(payload.retryStorageBusy === undefined ? {} : { retryStorageBusy: payload.retryStorageBusy }),
+    ...(payload.childIndex === undefined ? {} : { childIndex: payload.childIndex }),
+    ...(payload.afterLockDelayMs === undefined ? {} : { afterLockDelayMs: payload.afterLockDelayMs }),
+    ...(payload.gate === undefined ? {} : { gate: payload.gate }),
+    ...(payload.fixtureOutput === undefined ? {} : { fixtureOutput: payload.fixtureOutput })
   };
   return new Promise((resolveChild, rejectChild) => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", source], {

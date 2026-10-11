@@ -33,6 +33,18 @@ using the existing store's process-liveness check, not by expiring claims.
 Malformed locks, corruption, missing committed state, unsupported formats,
 and storage/access failures stop the operation.
 
+A single `claimSubmitAttempt` call can fail with `storage_busy` when a live or
+uncertain writer keeps the lock through the store's finite acquisition
+attempts. The store does not promise that every competing caller will acquire
+the lock or wait until it becomes available. In particular, a caller must not
+turn a local contention failure into a retry of `runtime.submit`, provider
+transport, budget/finance authorization, or another external effect. The
+runtime fails closed as `persistence_unavailable` / `not_dispatched` when it
+cannot persist its claim. The process-race tests use an opt-in, bounded
+fixture-only retry for exactly `storage_busy`, always with the same immutable
+claim record; that test mechanism does not change runtime behavior or grant
+external retry authority.
+
 Each attempt history is limited to 1,000,000 rows. An exact repeat at the
 limit remains a safe no-op; a changed update beyond the limit fails with
 `storage_unavailable` before changing either the snapshot or commit marker.
