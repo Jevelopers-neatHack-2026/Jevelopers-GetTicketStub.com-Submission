@@ -69,7 +69,7 @@ python3 .github/scripts/run_ops_owned_command.py --route ops-quota-shutdown-rest
 python3 .github/scripts/run_ops_owned_command.py --route ops-runbook-clean-start
 ```
 
-The owner accepts only these fixed routes. Do not run `npm test` or either AH-11-OPS fixture directly; each route needs the fresh registry and private temporary directory that the owner creates.
+The owner accepts only these fixed routes. It caps cleanup authority at 16 unique recorded groups across both registries and reconciles at most six custody sidecars. Its configured post-command wait allowances sum to 18.4 seconds; this is a sum of bounded waits, not a universal wall-clock guarantee. Do not run `npm test` or either AH-11-OPS fixture directly; each route needs the fresh registry and private temporary directory that the owner creates.
 
 ## Docs
 

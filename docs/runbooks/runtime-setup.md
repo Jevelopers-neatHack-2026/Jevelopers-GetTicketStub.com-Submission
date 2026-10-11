@@ -51,7 +51,7 @@ python3 .github/scripts/run_ops_owned_command.py --route ops-quota-shutdown-rest
 python3 .github/scripts/run_ops_owned_command.py --route ops-runbook-clean-start
 ```
 
-The owner creates a fresh private `TMPDIR` and registry for every route, then reconciles both the outer and OPS13 local registries before writing a fixed receipt under `.runtime-artifacts/`. Bare `npm test` and direct AH-11-OPS `make verify` commands do not provide this ownership and remain fail-closed. The owner uses only the three route IDs shown above and checks the pinned Node version without installing packages or contacting a provider.
+The owner creates a fresh private `TMPDIR` and registry for every route, then reconciles both the outer and OPS13 local registries before writing a fixed receipt under `.runtime-artifacts/`. Across both namespaces it permits at most 16 unique recorded process groups and six custody sidecars (49,152 bytes total). The configured post-command waits sum to 18.4 seconds: 2.25 seconds for the target group, 1.75 seconds for one combined registry batch and final absence check, 9.6 seconds for watchdog shutdown, and up to 4.8 seconds for sixteen independent sidecar-group probes. This is the sum of bounded wait allowances, not a universal wall-clock guarantee. Bare `npm test` and direct AH-11-OPS `make verify` commands do not provide this ownership and remain fail-closed. The owner uses only the three route IDs shown above and checks the pinned Node version without installing packages or contacting a provider.
 
 ## Named verification cases
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -29,6 +30,8 @@ SIDECAR_COUNT_MAX = 6
 SIDECAR_TOTAL_MAX_BYTES = 49_152
 SIDECAR_CANDIDATE_MAX = 256
 SIDECAR_READ_MAX_BYTES = 1_048_576
+SIDECAR_GROUP_PROBE_MAX = 16
+SIDECAR_GROUP_PROBE_MS = 300
 REGISTRY_DIRECTORY_ENTRY_MAX = 512
 TMP_IMMEDIATE_ENTRY_MAX = 1_024
 TREE_DESCENDANT_MAX = 4_096
@@ -48,7 +51,16 @@ DIRECT_REAP_MS = 500
 TARGET_RECHECK_MS = 250
 WATCHDOG_STOP_SEQUENCE_MS = (4_000, 250, 500, 4_000, 100, 250, 250, 250)
 WATCHDOG_STOP_MAX_MS = 9_600
+POST_COMMAND_WAIT_MAX_MS = 18_400
 MAX_REPORTED_ELAPSED_MS = 600_000
+SUPPORTED_CUSTODY_DIRECTORY_PREFIXES = (
+    "ah11-jev-sigterm-",
+    "ah11-jev-fixture-failure-",
+    "ah11-jev-marker-missing-",
+    "ah11-jev-marker-partial-",
+    "ah11-jev-owned-group-finalizer-",
+    "ah11-ops-temp-custody-retry-",
+)
 UUID4_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 SIDECAR_NAME_RE = re.compile(r"^owned-groups\.json\.temp-custody\.([0-9]{1,12})\.([0-9a-f]{16})\.json$")
 SIDECAR_TEMP_RE = re.compile(
@@ -103,6 +115,32 @@ _received_signal: int | None = None
 
 class OwnerFailure(Exception):
     """A fixed internal failure category; never serialized verbatim."""
+
+
+class WaitBudget:
+    """Reserve every specified post-command wait against one fixed ledger."""
+
+    def __init__(self, maximum_ms: int = POST_COMMAND_WAIT_MAX_MS):
+        self.maximum_ms = maximum_ms
+        self.remaining_ms = maximum_ms
+        self.used_ms = 0
+        self.exhausted = False
+
+    def reserve(self, requested_ms: int) -> tuple[int, bool]:
+        if requested_ms <= 0:
+            return 0, False
+        granted = min(requested_ms, self.remaining_ms)
+        self.remaining_ms -= granted
+        self.used_ms += granted
+        return granted, granted < requested_ms
+
+    def settle(self, granted_ms: int, started: float, limited: bool, resolved: bool) -> None:
+        elapsed_ms = min(granted_ms, math.ceil(max(0.0, time.monotonic() - started) * 1_000))
+        unused_ms = granted_ms - elapsed_ms
+        self.remaining_ms += unused_ms
+        self.used_ms -= unused_ms
+        if limited and not resolved:
+            self.exhausted = True
 
 
 def sha256(data: bytes) -> str:
@@ -234,6 +272,16 @@ def atomic_write_json(path: Path, value: object, mode: int = 0o600) -> bool:
 
 def valid_uuid4(value: object) -> bool:
     return isinstance(value, str) and UUID4_RE.fullmatch(value) is not None
+
+
+def supported_custody_directory(name: str, namespace: str) -> bool:
+    if namespace == "outer":
+        prefixes = SUPPORTED_CUSTODY_DIRECTORY_PREFIXES[:5]
+    elif namespace == "local":
+        prefixes = SUPPORTED_CUSTODY_DIRECTORY_PREFIXES[5:]
+    else:
+        return False
+    return any(name.startswith(prefix) for prefix in prefixes)
 
 
 def validate_registry_value(value: object) -> dict[str, object]:
@@ -414,25 +462,43 @@ def read_small_json(path: Path, limit: int = 4_096) -> object:
         raise OwnerFailure("control_json") from exc
 
 
-def wait_file(path: Path, process: subprocess.Popen[bytes], timeout_ms: int) -> bool:
-    deadline = time.monotonic() + timeout_ms / 1000
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            return False
+def wait_file(path: Path, process: subprocess.Popen[bytes], timeout_ms: int,
+              budget: WaitBudget | None = None) -> bool:
+    granted = timeout_ms
+    limited = False
+    if budget is not None:
+        granted, limited = budget.reserve(timeout_ms)
+    started = time.monotonic()
+    deadline = started + granted / 1000
+    while True:
         try:
             info = path.lstat()
             if stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+                if budget is not None:
+                    budget.settle(granted, started, limited, True)
                 return True
         except FileNotFoundError:
             pass
         except OSError:
+            if budget is not None:
+                budget.settle(granted, started, limited, False)
             return False
-        time.sleep(0.01)
+        if process.poll() is not None:
+            if budget is not None:
+                budget.settle(granted, started, limited, False)
+            return False
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(0.01, remaining))
     try:
         info = path.lstat()
-        return stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode)
+        found = stat.S_ISREG(info.st_mode) and not stat.S_ISLNK(info.st_mode)
     except OSError:
-        return False
+        found = False
+    if budget is not None:
+        budget.settle(granted, started, limited, found)
+    return found
 
 
 def group_exists(pgid: int) -> bool | None:
@@ -445,16 +511,28 @@ def group_exists(pgid: int) -> bool | None:
         return None
 
 
-def wait_groups(pgids: list[int], max_elapsed_ms: int) -> dict[int, bool | None]:
-    deadline = time.monotonic() + max_elapsed_ms / 1000
+def wait_groups(pgids: list[int], max_elapsed_ms: int,
+                budget: WaitBudget | None = None) -> dict[int, bool | None]:
     unique = sorted(set(pgids))
     latest = {pgid: group_exists(pgid) for pgid in unique}
+    if all(value is False for value in latest.values()):
+        return latest
+    granted = max_elapsed_ms
+    limited = False
+    if budget is not None:
+        granted, limited = budget.reserve(max_elapsed_ms)
+    started = time.monotonic()
+    deadline = started + granted / 1000
     while True:
         latest = {pgid: group_exists(pgid) for pgid in unique}
         if all(value is False for value in latest.values()):
+            if budget is not None:
+                budget.settle(granted, started, limited, True)
             return latest
         remaining = deadline - time.monotonic()
         if remaining <= 0:
+            if budget is not None:
+                budget.settle(granted, started, limited, False)
             return latest
         time.sleep(min(0.025, remaining))
 
@@ -474,18 +552,19 @@ def signal_groups(pgids: list[int], sig: int) -> dict[int, str]:
     return result
 
 
-def cleanup_groups(pgids: list[int], term_ms: int = TERM_WAIT_MS, kill_ms: int = KILL_WAIT_MS) -> dict[str, object]:
+def cleanup_groups(pgids: list[int], term_ms: int = TERM_WAIT_MS, kill_ms: int = KILL_WAIT_MS,
+                   budget: WaitBudget | None = None) -> dict[str, object]:
     unique = sorted(set(group for group in pgids
                         if isinstance(group, int) and not isinstance(group, bool) and group > 1))
     initial = {group: group_exists(group) for group in unique}
     targets = [group for group, state in initial.items() if state is True]
     continued = signal_groups(targets, signal.SIGCONT)
     term = signal_groups(targets, signal.SIGTERM)
-    after_term = wait_groups(targets, term_ms)
+    after_term = wait_groups(targets, term_ms, budget)
     remaining = [group for group, state in after_term.items() if state is True]
     continued_after_term = signal_groups(remaining, signal.SIGCONT)
     killed = signal_groups(remaining, signal.SIGKILL)
-    after_kill = wait_groups(remaining, kill_ms)
+    after_kill = wait_groups(remaining, kill_ms, budget)
     final = dict(initial)
     final.update(after_term)
     final.update(after_kill)
@@ -505,22 +584,67 @@ def cleanup_groups(pgids: list[int], term_ms: int = TERM_WAIT_MS, kill_ms: int =
     }
 
 
-def wait_process(process: subprocess.Popen[bytes], timeout_ms: int) -> tuple[int | None, bool]:
+def wait_process(process: subprocess.Popen[bytes], timeout_ms: int,
+                 budget: WaitBudget | None = None) -> tuple[int | None, bool]:
+    granted = timeout_ms
+    limited = False
+    if budget is not None:
+        granted, limited = budget.reserve(timeout_ms)
+    started = time.monotonic()
     try:
-        return process.wait(timeout=timeout_ms / 1000), True
+        result = process.wait(timeout=granted / 1000)
+        if budget is not None:
+            budget.settle(granted, started, limited, True)
+        return result, True
     except (subprocess.TimeoutExpired, OSError):
+        if budget is not None:
+            budget.settle(granted, started, limited, False)
         return None, False
 
 
+def capture_finished(capture: Capture | None) -> bool:
+    return capture is None or all(not thread.is_alive() for thread in capture.threads)
+
+
+def wait_process_and_capture(process: subprocess.Popen[bytes], capture: Capture | None,
+                             timeout_ms: int, budget: WaitBudget | None = None
+                             ) -> tuple[int | None, bool, bool]:
+    granted = timeout_ms
+    limited = False
+    if budget is not None:
+        granted, limited = budget.reserve(timeout_ms)
+    started = time.monotonic()
+    deadline = started + granted / 1000
+    while True:
+        exit_code = process.poll()
+        reaped = exit_code is not None
+        drained = capture_finished(capture)
+        if reaped and drained:
+            if budget is not None:
+                budget.settle(granted, started, limited, True)
+            return exit_code, True, True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            if budget is not None:
+                budget.settle(granted, started, limited, False)
+            return exit_code, reaped, drained
+        time.sleep(min(0.01, remaining))
+
+
 def cleanup_target_group(pgid: int, process: subprocess.Popen[bytes] | None,
-                         command_exit: int | None, command_reaped: bool
-                         ) -> tuple[int | None, bool, bool, str]:
+                         command_exit: int | None, command_reaped: bool,
+                         capture: Capture | None = None,
+                         budget: WaitBudget | None = None,
+                         cleanup_attempted: bool = False
+                         ) -> tuple[int | None, bool, bool, bool, str]:
     """Reconcile the selected command PGID, including after its leader exits."""
     escalation = "none"
     initial = group_exists(pgid)
-    if initial is True:
+    if initial is True and cleanup_attempted:
+        escalation = "unconfirmed"
+    elif initial is True:
         try:
-            cleanup = cleanup_groups([pgid], TERM_WAIT_MS, KILL_WAIT_MS)
+            cleanup = cleanup_groups([pgid], TERM_WAIT_MS, KILL_WAIT_MS, budget)
             if any(value == "sent" for value in cleanup.get("kill", {}).values()):
                 escalation = "kill"
             elif any(value == "sent" for value in cleanup.get("term", {}).values()):
@@ -531,40 +655,81 @@ def cleanup_target_group(pgid: int, process: subprocess.Popen[bytes] | None,
             escalation = "unconfirmed"
     elif initial is None:
         escalation = "unconfirmed"
-    if not command_reaped:
-        if process is None:
-            command_exit, command_reaped = None, False
-        else:
-            command_exit, command_reaped = wait_process(process, DIRECT_REAP_MS)
+    if process is not None and not command_reaped:
+        command_exit, command_reaped, capture_drained = wait_process_and_capture(
+            process, capture, DIRECT_REAP_MS, budget
+        )
+    else:
+        capture_drained = capture_finished(capture)
+        if capture is not None and not capture_drained:
+            # The leader-reaped path shares the direct-reap slot with capture drain.
+            started = time.monotonic()
+            deadline = started + DIRECT_REAP_MS / 1000
+            granted = DIRECT_REAP_MS
+            limited = False
+            if budget is not None:
+                granted, limited = budget.reserve(DIRECT_REAP_MS)
+                deadline = started + granted / 1000
+            while not capture_finished(capture) and time.monotonic() < deadline:
+                time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
+            capture_drained = capture_finished(capture)
+            if budget is not None:
+                budget.settle(granted, started, limited, capture_drained)
     try:
-        final_group = wait_groups([pgid], TARGET_RECHECK_MS)
+        final_group = wait_groups([pgid], TARGET_RECHECK_MS, budget)
         group_absent = final_group.get(pgid) is False
     except OSError:
         group_absent = False
     if not group_absent:
         escalation = "unconfirmed"
-    return command_exit, command_reaped, group_absent, escalation
+    return command_exit, command_reaped, group_absent, capture_drained, escalation
 
 
-def stop_watchdog(process: subprocess.Popen[bytes], pgid: int | None) -> dict[str, object]:
-    exit_code, reaped = wait_process(process, WATCHDOG_STOP_SEQUENCE_MS[0])
+def stop_watchdog(process: subprocess.Popen[bytes], pgid: int | None,
+                  budget: WaitBudget | None = None) -> dict[str, object]:
+    exit_code, reaped = wait_process(process, WATCHDOG_STOP_SEQUENCE_MS[0], budget)
     cleanup: dict[str, object] = {"allAbsent": False, "groups": []}
     if not reaped and pgid is not None:
-        cleanup = cleanup_groups([pgid], 250, 500)
-        exit_code, reaped = wait_process(process, WATCHDOG_STOP_SEQUENCE_MS[3])
+        cleanup = cleanup_groups([pgid], 250, 500, budget)
+        exit_code, reaped = wait_process(process, WATCHDOG_STOP_SEQUENCE_MS[3], budget)
         if not reaped:
-            cleanup_groups([pgid], 100, 250)
-            exit_code, reaped = wait_process(process, WATCHDOG_STOP_SEQUENCE_MS[6])
+            cleanup_groups([pgid], 100, 250, budget)
+            exit_code, reaped = wait_process(process, WATCHDOG_STOP_SEQUENCE_MS[6], budget)
     if pgid is not None:
-        final_status = wait_groups([pgid], WATCHDOG_STOP_SEQUENCE_MS[7])
+        final_status = wait_groups([pgid], WATCHDOG_STOP_SEQUENCE_MS[7], budget)
         absent = final_status.get(pgid) is False
     else:
         absent = False
-    return {"exitCode": exit_code, "reaped": reaped, "groupAbsent": absent, "cleanup": cleanup}
+    return {"exitCode": exit_code, "reaped": reaped, "groupAbsent": absent,
+            "cleanup": cleanup}
+
+
+WATCHDOG_TARGET_STATE_SOURCE = r'''
+def running_control_transition(candidate):
+    global target, ack_sent
+    if not isinstance(candidate, int) or isinstance(candidate, bool) or candidate <= 1:
+        return False
+    if target is None:
+        if not group_identity(candidate):
+            return False
+        target = candidate
+    elif candidate != target:
+        return False
+    if not ack_sent:
+        ack_sent = atomic_write(ack_path, {"schema":"ops-owned-group-target-ack.v1",
+                                           "targetPgid":candidate,"verified":True})
+        if not ack_sent:
+            return False
+    return True
+def terminal_control_matches(candidate):
+    if target is None:
+        return candidate is None and not ack_sent
+    return ack_sent and candidate == target
+'''
 
 
 def _watchdog_source() -> str:
-    return r'''
+    source = r'''
 import json, os, signal, stat, sys, time, uuid
 control_path, registry_path, ready_path, ack_path, result_path, limit_text = sys.argv[1:7]
 limit_ms = int(limit_text)
@@ -668,6 +833,7 @@ def read_registry():
 def group_identity(pgid):
     try: return os.getpgid(pgid) == pgid and exists(pgid) is True
     except (ProcessLookupError, PermissionError, OSError): return False
+__WATCHDOG_TARGET_STATE_SOURCE__
 if not atomic_write(ready_path, {"schema":"ops-owned-group-watchdog-ready.v1","pid":os.getpid(),
                                  "pgid":os.getpgrp(),"startedMonotonicNs":started_ns}):
     sys.exit(93)
@@ -680,19 +846,11 @@ while time.monotonic() < deadline:
     if isinstance(control, dict) and control.get("schema") == "ops-owned-group-control.v1":
         state = control.get("state")
         candidate = control.get("targetPgid")
-        if state == "running" and isinstance(candidate, int) and not isinstance(candidate, bool) and candidate > 1:
-            if target is not None and candidate != target: break
-            if group_identity(candidate):
-                target = candidate
-                if not ack_sent:
-                    ack_sent = atomic_write(ack_path, {"schema":"ops-owned-group-target-ack.v1",
-                                                       "targetPgid":candidate,"verified":True})
-            else:
-                break
+        if state == "running":
+            if not running_control_transition(candidate): break
         elif state in ("finish", "cleanup"):
+            if not terminal_control_matches(candidate): break
             control_state = state
-            if candidate is not None and isinstance(candidate, int) and not isinstance(candidate, bool) and candidate > 1:
-                target = candidate
             break
     time.sleep(0.02)
 else:
@@ -701,10 +859,11 @@ else:
 target_cleanup = {"groups": [], "final": {}, "allAbsent": False}
 group_cleanup = {"groups": [], "final": {}, "allAbsent": False}
 registry_error = None
-if timed_out:
+if timed_out or control_state == "cleanup":
     target_cleanup = cleanup([target]) if target is not None else {
-        "groups": [], "final": {}, "allAbsent": False, "unresolved": "target_not_acknowledged"
+        "groups": [], "final": {}, "allAbsent": True, "not_needed": True
     }
+if timed_out:
     registry = read_registry()
     if registry is None:
         registry_error = "unreadable_or_invalid"
@@ -712,7 +871,8 @@ if timed_out:
         groups = [x for x in registry["groups"] if x not in (target, os.getpgrp())]
         group_cleanup = cleanup(groups)
 else:
-    target_cleanup = {"groups": [], "final": {}, "allAbsent": True, "not_needed": True}
+    if control_state != "cleanup":
+        target_cleanup = {"groups": [], "final": {}, "allAbsent": True, "not_needed": True}
     group_cleanup = {"groups": [], "final": {}, "allAbsent": True, "not_needed": True}
 if not atomic_write(result_path, {
     "schema":"ops-owned-group-watchdog-result.v1",
@@ -724,6 +884,7 @@ if not atomic_write(result_path, {
 }):
     sys.exit(94)
 '''
+    return source.replace("__WATCHDOG_TARGET_STATE_SOURCE__", WATCHDOG_TARGET_STATE_SOURCE)
 
 
 def _bootstrap_source() -> str:
@@ -821,35 +982,29 @@ class Capture:
                 info = os.fstat(descriptor)
                 if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600):
                     raise OwnerFailure("capture_file_type")
-                with os.fdopen(descriptor, "ab", buffering=0, closefd=False) as output:
-                    while True:
-                        chunk = pipe.read(65_536)
-                        if not chunk:
-                            return
-                        with self.lock:
-                            stream_room = STREAM_MAX_BYTES - self.retained[name]
-                            combined_room = COMBINED_STREAM_MAX_BYTES - self.combined
-                            keep = max(0, min(len(chunk), stream_room, combined_room))
-                            if keep:
-                                output.write(chunk[:keep])
-                                self.retained[name] += keep
-                                self.combined += keep
-                            if keep != len(chunk):
-                                self.overflow.set()
+                while True:
+                    chunk = pipe.read1(65_536)
+                    if not chunk:
+                        return
+                    with self.lock:
+                        stream_room = STREAM_MAX_BYTES - self.retained[name]
+                        combined_room = COMBINED_STREAM_MAX_BYTES - self.combined
+                        keep = max(0, min(len(chunk), stream_room, combined_room))
+                        if keep:
+                            view = memoryview(chunk)[:keep]
+                            while view:
+                                written = os.write(descriptor, view)
+                                if written <= 0:
+                                    raise OSError("short_capture_write")
+                                view = view[written:]
+                            self.retained[name] += keep
+                            self.combined += keep
+                        if keep != len(chunk):
+                            self.overflow.set()
             finally:
                 os.close(descriptor)
         except (OSError, OwnerFailure):
             self.read_failed.set()
-
-    def join(self, timeout: float = 2.0) -> bool:
-        deadline = time.monotonic() + timeout
-        for thread in self.threads:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            thread.join(remaining)
-        return all(not thread.is_alive() for thread in self.threads)
-
 
 def file_digest(path: Path, capture: Capture | None = None) -> dict[str, object]:
     try:
@@ -923,11 +1078,12 @@ def validate_sidecar_value(data: bytes, path: Path, registry_path: Path,
         registry_parent = registry_path.parent.resolve(strict=True)
     except OSError as exc:
         raise OwnerFailure("sidecar_directory") from exc
+    namespace = "local" if registry_parent.parent == tmp_real else "outer"
     if (parent_real != tmp_real or stat.S_ISLNK(directory_info.st_mode)
             or not stat.S_ISDIR(directory_info.st_mode)
             or stat.S_IMODE(directory_info.st_mode) != 0o700
             or directory_info.st_uid != os.getuid()
-            or not directory.name.startswith("ah11-ops-")):
+            or not supported_custody_directory(directory.name, namespace)):
         raise OwnerFailure("sidecar_directory")
     expected_tag = hashlib.sha256(directory_text.encode("utf-8")).hexdigest()[:16]
     match = SIDECAR_NAME_RE.fullmatch(path.name)
@@ -976,7 +1132,7 @@ def validate_sidecar_value(data: bytes, path: Path, registry_path: Path,
         "ownerPid": filename_pid,
         "launches": launches,
         "bytes": len(data),
-        "namespace": "local" if registry_parent.parent == tmp_real else "outer",
+        "namespace": namespace,
     }
 
 
@@ -1182,110 +1338,115 @@ def write_registry_state(path: Path, registry: dict[str, object], groups: list[i
     return reread == next_value
 
 
-def reconcile_registry(path: Path, sidecars: list[dict[str, object]],
-                       protected: set[int], global_group_ids: set[int]) -> dict[str, object]:
+def reconcile_registries(
+        contexts: list[tuple[str, Path, dict[str, object]]],
+        records: list[dict[str, object]], protected: set[int],
+        budget: WaitBudget,
+        watchdog_cleanup: dict[str, object] | None = None) -> dict[str, object]:
     result: dict[str, object] = {
-        "empty": False, "groupsObserved": 0, "groupsAbsent": set(),
+        "outerEmpty": False, "localEmpty": len(contexts) == 1,
+        "groupsObserved": 0, "groupsAbsent": set(),
         "pendingRemaining": None, "ok": False, "escalation": "none",
     }
-    try:
-        registry = read_registry(path)
-    except OwnerFailure:
+    groups_by_namespace: dict[str, list[int]] = {}
+    for namespace, _path, registry in contexts:
+        groups_by_namespace[namespace] = list(registry["groups"])
+        rows = [row for record in records if record.get("namespace") == namespace
+                for row in record["launches"]]
+        for token in registry["pendingLaunches"]:
+            matches = [row for row in rows if row["launchToken"] == token]
+            if (len(matches) != 1 or matches[0]["spawnAttempted"] is not False
+                    or matches[0]["directPid"] is not None or matches[0]["groupId"] is not None):
+                return result
+
+    listed_groups = [group for groups in groups_by_namespace.values() for group in groups]
+    unique_groups = sorted(set(listed_groups))
+    if (len(listed_groups) != len(unique_groups) or len(unique_groups) > REGISTRY_GROUP_MAX
+            or any(group in protected for group in unique_groups)):
         return result
-    rows = [row for sidecar in sidecars for row in sidecar["launches"]]
-    tokens: dict[str, list[dict[str, object]]] = {}
-    for row in rows:
-        tokens.setdefault(str(row["launchToken"]), []).append(row)
-    for pending_token in registry["pendingLaunches"]:
-        matches = tokens.get(str(pending_token), [])
-        if len(matches) != 1:
+    result["groupsObserved"] = len(unique_groups)
+
+    if watchdog_cleanup is None:
+        cleanup_result = cleanup_groups(unique_groups, budget=budget)
+        if any(value == "sent" for value in cleanup_result.get("kill", {}).values()):
+            result["escalation"] = "kill"
+        elif any(value == "sent" for value in cleanup_result.get("term", {}).values()):
+            result["escalation"] = "term"
+        if any(cleanup_result.get("final", {}).get(group) is not False for group in unique_groups):
             return result
-        row = matches[0]
-        if (row["spawnAttempted"] is not False or row["directPid"] is not None
-                or row["groupId"] is not None):
+    else:
+        if (watchdog_cleanup.get("allAbsent") is not True
+                or sorted(watchdog_cleanup.get("groups", [])) != unique_groups):
             return result
-    groups_before = list(registry["groups"])
-    if any(group in protected for group in groups_before):
-        return result
-    if not global_group_ids.isdisjoint(set(groups_before)):
-        return result
-    global_group_ids.update(groups_before)
-    if len(global_group_ids) > REGISTRY_GROUP_MAX * 2:
-        return result
-    result["groupsObserved"] = len(groups_before)
-    cleanup_status: dict[int, bool | None] = {}
-    escalation = "none"
-    if groups_before:
-        cleanup_result = cleanup_groups(groups_before)
-        cleanup_status = cleanup_result.get("final", {})
-        if any(v == "sent" for v in cleanup_result.get("kill", {}).values()):
-            escalation = "kill"
-        elif any(v == "sent" for v in cleanup_result.get("term", {}).values()):
-            escalation = "term"
-    result["escalation"] = escalation
-    if any(cleanup_status.get(group) is not False for group in groups_before):
-        return result
-    groups_absent = set(groups_before)
+        if any(value == "sent" for value in watchdog_cleanup.get("kill", {}).values()):
+            result["escalation"] = "kill"
+        elif any(value == "sent" for value in watchdog_cleanup.get("term", {}).values()):
+            result["escalation"] = "term"
+
+    if unique_groups:
+        final_groups = wait_groups(unique_groups, TARGET_RECHECK_MS, budget)
+        if any(final_groups.get(group) is not False for group in unique_groups):
+            return result
+    groups_absent = set(unique_groups)
     result["groupsAbsent"] = groups_absent
-    latest = registry
-    try:
-        latest = read_registry(path)
-    except OwnerFailure:
-        return result
-    latest_groups = list(latest["groups"])
-    if latest_groups != groups_before:
-        newly_seen = [group for group in latest_groups if group not in global_group_ids]
-        if newly_seen:
-            if any(group in protected for group in newly_seen):
+
+    # A registry change after the one cleanup batch is incomplete custody.
+    # Never discover a second batch of groups and signal it from a later snapshot.
+    for namespace, path, original in contexts:
+        try:
+            if read_registry(path) != original:
                 return result
-            global_group_ids.update(newly_seen)
-            if len(global_group_ids) > REGISTRY_GROUP_MAX * 2:
-                return result
-            result["groupsObserved"] = int(result["groupsObserved"]) + len(newly_seen)
-            more = cleanup_groups(newly_seen)
-            if any(more.get("final", {}).get(group) is not False for group in newly_seen):
-                return result
-            groups_absent.update(newly_seen)
-            if any(v == "sent" for v in more.get("kill", {}).values()):
-                result["escalation"] = "kill"
-            elif any(v == "sent" for v in more.get("term", {}).values()) and result["escalation"] == "none":
-                result["escalation"] = "term"
-            try:
-                latest = read_registry(path)
-            except OwnerFailure:
-                return result
-            latest_groups = list(latest["groups"])
-        if any(group not in groups_absent for group in latest_groups):
+        except OwnerFailure:
             return result
-    pending_before = list(latest["pendingLaunches"])
-    cancelable = set()
-    for token in pending_before:
-        matches = tokens.get(str(token), [])
-        if len(matches) != 1:
-            continue
-        row = matches[0]
-        if (row["spawnAttempted"] is False and row["directPid"] is None
-                and row["groupId"] is None):
-            cancelable.add(token)
-    next_groups = [group for group in latest_groups if group not in groups_absent]
-    next_pending = [token for token in pending_before if token not in cancelable]
-    if next_groups != latest_groups or next_pending != pending_before:
-        if not write_registry_state(path, latest, next_groups, next_pending):
+
+    for namespace, path, original in contexts:
+        if original["groups"] or original["pendingLaunches"]:
+            if not write_registry_state(path, original, [], []):
+                return result
+
+    pending_remaining = 0
+    for namespace, path, _original in contexts:
+        try:
+            final = read_registry(path)
+        except OwnerFailure:
             return result
-    try:
-        final = read_registry(path)
-    except OwnerFailure:
-        return result
-    result["pendingRemaining"] = len(final["pendingLaunches"])
-    result["empty"] = final["groups"] == [] and final["pendingLaunches"] == []
-    result["groupsAbsent"] = groups_absent
-    result["ok"] = result["empty"]
+        if final["groups"] or final["pendingLaunches"]:
+            return result
+        pending_remaining += len(final["pendingLaunches"])
+        result[f"{namespace}Empty"] = True
+    result["pendingRemaining"] = pending_remaining
+    result["ok"] = True
     return result
+
+
+def probe_sidecar_groups(records: list[dict[str, object]], counters: dict[str, int],
+                         budget: WaitBudget) -> set[int] | None:
+    group_ids = sorted({
+        row["groupId"]
+        for record in records
+        for row in record["launches"]
+        if row["spawnAttempted"] is True and row["groupId"] is not None
+    })
+    if len(group_ids) > SIDECAR_GROUP_PROBE_MAX:
+        counters["boundExceeded"] = 1
+        return None
+    absent: set[int] = set()
+    for group_id in group_ids:
+        if counters["sidecarGroupProbes"] >= SIDECAR_GROUP_PROBE_MAX:
+            counters["boundExceeded"] = 1
+            return None
+        counters["sidecarGroupProbes"] += 1
+        observed = wait_groups([group_id], SIDECAR_GROUP_PROBE_MS, budget)
+        if observed.get(group_id) is not False:
+            return None
+        absent.add(group_id)
+    return absent
 
 
 def sidecar_rows_resolved(records: list[dict[str, object]], namespace: str,
                           registry_result: dict[str, object],
-                          original_registry: dict[str, object] | None) -> bool:
+                          original_registry: dict[str, object] | None,
+                          independently_absent: set[int]) -> bool:
     rows = [row for record in records if record.get("namespace") == namespace
             for row in record.get("launches", [])]
     if original_registry is None:
@@ -1306,6 +1467,8 @@ def sidecar_rows_resolved(records: list[dict[str, object]], namespace: str,
             if not (row["groupAbsent"] is True and row["registryCleared"] is True):
                 return False
             continue
+        if group_id not in independently_absent:
+            return False
         if group_id in original_groups:
             if group_id not in absent:
                 return False
@@ -1445,10 +1608,13 @@ def preflight_external_sidecars(records: list[dict[str, object]],
 
 def reconcile_custody(tmp_root: Path, outer_registry_path: Path,
                       target_pgid: int | None, watchdog_pgid: int | None,
-                      expected_directories: dict[str, tuple[int, int]]) -> dict[str, object]:
+                      expected_directories: dict[str, tuple[int, int]],
+                      budget: WaitBudget,
+                      watchdog_cleanup: dict[str, object] | None = None) -> dict[str, object]:
     counters = {
         "registryEntries": 0, "candidates": 0, "finalSidecarCount": 0,
         "sidecarReadBytes": 0, "finalSidecarBytes": 0,
+        "sidecarGroupProbes": 0,
         "treeDescendants": 0, "treeBytes": 0,
         "boundExceeded": 0,
     }
@@ -1489,51 +1655,25 @@ def reconcile_custody(tmp_root: Path, outer_registry_path: Path,
         errors.append("sidecar_count_limit")
     if not validate_sidecar_inventory(records, outer_before, local_before):
         errors.append("sidecar_registry_mismatch")
+    if errors:
+        return outcome
     protected = {os.getpgrp()}
     if target_pgid is not None:
         protected.add(target_pgid)
     if watchdog_pgid is not None:
         protected.add(watchdog_pgid)
-    all_groups: set[int] = set()
-    outer_result = reconcile_registry(
-        outer_registry_path, sidecar_records_for_namespace(records, "outer"),
-        protected, all_groups
-    )
-    outcome["groupsObserved"] = int(outer_result.get("groupsObserved", 0))
-    outcome["outerRegistryEmpty"] = outer_result.get("empty") is True
-    outcome["pendingLaunchesRemaining"] = outer_result.get("pendingRemaining")
-    outcome["escalationStage"] = outer_result.get("escalation", "none")
-    local_result: dict[str, object] = {"empty": True, "ok": True, "groupsObserved": 0,
-                                       "groupsAbsent": set(), "pendingRemaining": 0}
+    contexts: list[tuple[str, Path, dict[str, object]]] = [("outer", outer_registry_path, outer_before)]
     if local_registry_path is not None and local_before is not None:
-        local_result = reconcile_registry(
-            local_registry_path, sidecar_records_for_namespace(records, "local"),
-            protected, all_groups
-        )
-        outcome["localRegistryEmpty"] = local_result.get("empty") is True
-        outcome["groupsObserved"] = int(outcome["groupsObserved"]) + int(local_result.get("groupsObserved", 0))
-        if local_result.get("escalation") == "kill" or (
-                local_result.get("escalation") == "term" and outcome["escalationStage"] == "none"):
-            outcome["escalationStage"] = local_result.get("escalation")
-    outer_pending = outer_result.get("pendingRemaining")
-    local_pending = local_result.get("pendingRemaining")
-    if (isinstance(outer_pending, int) and not isinstance(outer_pending, bool)
-            and isinstance(local_pending, int) and not isinstance(local_pending, bool)):
-        outcome["pendingLaunchesRemaining"] = outer_pending + local_pending
-    else:
-        outcome["pendingLaunchesRemaining"] = None
-    resolved_rows = (
-        outer_result.get("ok") is True
-        and sidecar_rows_resolved(records, "outer", outer_result, outer_before)
-        and local_result.get("ok") is True
-        and sidecar_rows_resolved(records, "local", local_result, local_before or {
-            "groups": [], "pendingLaunches": []
-        })
+        contexts.append(("local", local_registry_path, local_before))
+    registry_result = reconcile_registries(
+        contexts, records, protected, budget, watchdog_cleanup
     )
-    if retry_dir is not None and local_before is None:
-        resolved_rows = False
-    if not resolved_rows or errors:
-        outcome["sidecarsReconciled"] = False
+    outcome["groupsObserved"] = int(registry_result.get("groupsObserved", 0))
+    outcome["outerRegistryEmpty"] = registry_result.get("outerEmpty") is True
+    outcome["localRegistryEmpty"] = registry_result.get("localEmpty") is True
+    outcome["pendingLaunchesRemaining"] = registry_result.get("pendingRemaining")
+    outcome["escalationStage"] = registry_result.get("escalation", "none")
+    if registry_result.get("ok") is not True:
         return outcome
     if not outcome["outerRegistryEmpty"] or not outcome["localRegistryEmpty"]:
         return outcome
@@ -1547,6 +1687,24 @@ def reconcile_custody(tmp_root: Path, outer_registry_path: Path,
         local_paths = preflight_tree(retry_dir, counters, local_path)
         if local_paths is None:
             return outcome
+    independently_absent = probe_sidecar_groups(records, counters, budget)
+    if independently_absent is None:
+        return outcome
+    outer_result = {
+        "ok": registry_result.get("ok") is True,
+        "empty": registry_result.get("outerEmpty") is True,
+        "groupsAbsent": registry_result.get("groupsAbsent", set()),
+    }
+    local_result = {
+        "ok": registry_result.get("ok") is True,
+        "empty": registry_result.get("localEmpty") is True,
+        "groupsAbsent": registry_result.get("groupsAbsent", set()),
+    }
+    if (not sidecar_rows_resolved(records, "outer", outer_result, outer_before, independently_absent)
+            or not sidecar_rows_resolved(records, "local", local_result,
+                                         local_before or {"groups": [], "pendingLaunches": []},
+                                         independently_absent)):
+        return outcome
     for record, paths in prepared_external:
         if not remove_preflighted_directory(record["directory"], paths):
             return outcome
@@ -1622,7 +1780,7 @@ def validate_receipt_value(value: object, expected_route: str) -> bool:
         item = value.get(key)
         if not isinstance(item, int) or isinstance(item, bool) or item < 0:
             return False
-    if (value["wrapperExitCode"] > 255 or value["groupsObserved"] > REGISTRY_GROUP_MAX * 2
+    if (value["wrapperExitCode"] > 255 or value["groupsObserved"] > REGISTRY_GROUP_MAX
             or value["sidecarsObserved"] > SIDECAR_COUNT_MAX
             or value["sidecarsReconciledCount"] > SIDECAR_COUNT_MAX
             or value["sidecarsReconciledCount"] > value["sidecarsObserved"]):
@@ -1646,6 +1804,88 @@ def validate_receipt_value(value: object, expected_route: str) -> bool:
     if value["elapsedMs"] > MAX_REPORTED_ELAPSED_MS:
         return False
     if value["elapsedCapped"] and value["wrapperExitCode"] == 0:
+        return False
+    return True
+
+
+def valid_cleanup_record(value: object, expected_groups: list[int] | None,
+                        allow_not_needed: bool) -> bool:
+    if not isinstance(value, dict):
+        return False
+    groups = value.get("groups")
+    all_absent = value.get("allAbsent")
+    if (not isinstance(groups, list)
+            or any(not isinstance(group, int) or isinstance(group, bool) or group <= 1 for group in groups)
+            or len(set(groups)) != len(groups)
+            or not isinstance(all_absent, bool)):
+        return False
+    if expected_groups is not None and sorted(groups) != sorted(expected_groups):
+        return False
+    if value.get("not_needed") is True:
+        return allow_not_needed and groups == [] and all_absent is True and value.get("final") == {}
+    final = value.get("final")
+    if not isinstance(final, dict) or set(final) != {str(group) for group in groups}:
+        return False
+    if all_absent and any(state is not False for state in final.values()):
+        return False
+    return True
+
+
+def validate_watchdog_result(value: object, expected_pid: int,
+                             expected_target_pgid: int | None) -> bool:
+    required = {
+        "schema", "pid", "pgid", "startedMonotonicNs", "timedOut", "controlState",
+        "targetPgid", "targetAckSent", "targetCleanup", "registryError",
+        "registeredGroupCleanup", "elapsedMs",
+    }
+    if not isinstance(value, dict) or set(value) != required:
+        return False
+    if (value.get("schema") != "ops-owned-group-watchdog-result.v1"
+            or value.get("pid") != expected_pid or value.get("pgid") != expected_pid
+            or not isinstance(value.get("timedOut"), bool)
+            or not isinstance(value.get("targetAckSent"), bool)):
+        return False
+    started_ns = value.get("startedMonotonicNs")
+    elapsed_ms = value.get("elapsedMs")
+    if (not isinstance(started_ns, int) or isinstance(started_ns, bool) or started_ns <= 0
+            or not isinstance(elapsed_ms, int) or isinstance(elapsed_ms, bool)
+            or not 0 <= elapsed_ms <= WATCHDOG_LIMIT_MS + 10_000):
+        return False
+    target = value.get("targetPgid")
+    if target is not None and (not isinstance(target, int) or isinstance(target, bool) or target <= 1):
+        return False
+    if value["targetAckSent"]:
+        if target is None or target != expected_target_pgid:
+            return False
+    elif target is not None:
+        return False
+    timed_out = value["timedOut"]
+    control_state = value.get("controlState")
+    if timed_out:
+        if control_state != "watchdog_timeout":
+            return False
+    elif control_state not in ("finish", "cleanup"):
+        return False
+    target_groups = [target] if value["targetAckSent"] else []
+    cleanup_was_requested = timed_out or control_state == "cleanup"
+    if not valid_cleanup_record(value.get("targetCleanup"),
+                                target_groups if cleanup_was_requested else [],
+                                allow_not_needed=(not cleanup_was_requested
+                                                  or not value["targetAckSent"])):
+        return False
+    registry_error = value.get("registryError")
+    if registry_error not in (None, "unreadable_or_invalid"):
+        return False
+    registry_cleanup = value.get("registeredGroupCleanup")
+    if timed_out:
+        if not valid_cleanup_record(registry_cleanup, None, allow_not_needed=False):
+            return False
+        groups = registry_cleanup.get("groups", [])
+        if len(groups) > REGISTRY_GROUP_MAX:
+            return False
+    elif (registry_error is not None
+          or not valid_cleanup_record(registry_cleanup, [], allow_not_needed=True)
+          or registry_cleanup.get("not_needed") is not True):
         return False
     return True
 
@@ -1800,75 +2040,97 @@ def run_route(route: str, root: Path) -> int:
     except (OwnerFailure, OSError, ValueError, subprocess.SubprocessError):
         owner_error = True
     finally:
+        cleanup_budget = WaitBudget()
         if control_path is not None:
             state = "finish" if not owner_error and command_exit == 0 and _received_signal is None else "cleanup"
             if not atomic_control(control_path, state, target_pgid):
                 owner_error = True
-        if process is not None:
-            if target_pgid is not None:
-                command_exit, command_reaped, command_absent, escalation_stage = cleanup_target_group(
-                    target_pgid, process, command_exit, command_reaped
-                )
-            elif not command_reaped:
-                command_exit, command_reaped = wait_process(process, DIRECT_REAP_MS)
-                escalation_stage = "unconfirmed"
-            if not command_reaped or not command_absent or escalation_stage == "unconfirmed":
-                owner_error = True
-        # On the watchdog timeout path, let its exact-group cleanup finish before
-        # the parent reads the registries. It never mutates their contents.
+
+        # Bounded watchdog shutdown is also the result-publication wait. The
+        # durable result is read after the producer is stopped, including when
+        # poll() already reports that it exited.
         watchdog_record: object = None
-        if watchdog is not None and result_path is not None:
+        if watchdog is not None and watchdog_pgid is not None:
             try:
-                if wait_file(result_path, watchdog, 4_000):
-                    watchdog_record = read_small_json(result_path, 8_192)
+                stop = stop_watchdog(watchdog, watchdog_pgid, cleanup_budget)
+                watchdog_reaped = stop["reaped"] is True
+                watchdog_absent = stop["groupAbsent"] is True
+                if (not watchdog_reaped or not watchdog_absent or stop["exitCode"] != 0):
+                    owner_error = True
+                if stop.get("cleanup", {}).get("allAbsent") is not True and not watchdog_absent:
+                    owner_error = True
+            except (OSError, ValueError):
+                owner_error = True
+        if result_path is not None and watchdog_pgid is not None:
+            try:
+                watchdog_record = read_small_json(result_path, 8_192)
             except OwnerFailure:
                 watchdog_record = None
-        if watchdog_record is None and watchdog is not None and result_path is not None:
-            try:
-                if watchdog.poll() is not None and wait_file(result_path, watchdog, 250):
-                    watchdog_record = read_small_json(result_path, 8_192)
-            except OwnerFailure:
-                watchdog_record = None
-        watchdog_protocol_ok = bool(
-            isinstance(watchdog_record, dict)
-            and set(watchdog_record) == {
-                "schema", "pid", "pgid", "startedMonotonicNs", "timedOut",
-                "controlState", "targetPgid", "targetAckSent", "targetCleanup",
-                "registryError", "registeredGroupCleanup", "elapsedMs",
-            }
-            and watchdog_record.get("schema") == "ops-owned-group-watchdog-result.v1"
-            and watchdog_record.get("pid") == watchdog_pgid
-            and watchdog_record.get("pgid") == watchdog_pgid
-            and watchdog_record.get("timedOut") is False
-            and watchdog_record.get("controlState") in ("finish", "cleanup")
-            and watchdog_record.get("targetPgid") == target_pgid
-            and watchdog_record.get("targetAckSent") is (target_pgid is not None)
-            and isinstance(watchdog_record.get("startedMonotonicNs"), int)
-            and not isinstance(watchdog_record.get("startedMonotonicNs"), bool)
-            and isinstance(watchdog_record.get("elapsedMs"), int)
-            and not isinstance(watchdog_record.get("elapsedMs"), bool)
-            and 0 <= watchdog_record.get("elapsedMs", -1) <= WATCHDOG_LIMIT_MS + 10_000
-            and isinstance(watchdog_record.get("targetCleanup"), dict)
-            and isinstance(watchdog_record.get("registeredGroupCleanup"), dict)
+        watchdog_protocol_ok = (
+            watchdog_pgid is not None
+            and validate_watchdog_result(watchdog_record, watchdog_pgid, target_pgid)
         )
         if not watchdog_protocol_ok:
             owner_error = True
-        if isinstance(watchdog_record, dict) and watchdog_record.get("timedOut") is True:
-            timeout_stage = "watchdog"
-            target_cleanup = watchdog_record.get("targetCleanup")
-            registered_cleanup = watchdog_record.get("registeredGroupCleanup")
-            if (not isinstance(target_cleanup, dict)
-                    or target_cleanup.get("allAbsent") is not True):
+        watchdog_target_cleanup_attempted = False
+        watchdog_registry_cleanup: dict[str, object] | None = None
+        if watchdog_protocol_ok and isinstance(watchdog_record, dict):
+            timed_out = watchdog_record["timedOut"] is True
+            if timed_out:
+                timeout_stage = "watchdog"
                 owner_error = True
-            if (not isinstance(registered_cleanup, dict)
-                    or registered_cleanup.get("allAbsent") is not True):
+                target_cleanup = watchdog_record["targetCleanup"]
+                registered_cleanup = watchdog_record["registeredGroupCleanup"]
+                if (not isinstance(target_cleanup, dict)
+                        or target_cleanup.get("allAbsent") is not True
+                        or not isinstance(registered_cleanup, dict)
+                        or registered_cleanup.get("allAbsent") is not True
+                        or watchdog_record["registryError"] is not None):
+                    owner_error = True
+                else:
+                    watchdog_registry_cleanup = registered_cleanup
+            watchdog_target_cleanup_attempted = (
+                watchdog_record["targetAckSent"] is True
+                and (timed_out or watchdog_record["controlState"] == "cleanup")
+            )
+            if (watchdog_target_cleanup_attempted
+                    and watchdog_record["targetCleanup"].get("allAbsent") is not True):
                 owner_error = True
-        if (tmp_root is not None and registry_path is not None
-                and command_reaped and command_absent):
+
+        capture_drained = capture is None
+        if process is not None:
+            if target_pgid is not None:
+                (command_exit, command_reaped, command_absent, capture_drained,
+                 escalation_stage) = cleanup_target_group(
+                    target_pgid, process, command_exit, command_reaped,
+                    capture, cleanup_budget, watchdog_target_cleanup_attempted,
+                )
+            else:
+                command_exit, command_reaped, capture_drained = wait_process_and_capture(
+                    process, capture, DIRECT_REAP_MS, cleanup_budget
+                )
+                command_absent = False
+                escalation_stage = "unconfirmed"
+        elif target_pgid is None:
+            command_absent = True
+        if (not command_reaped or not command_absent or not capture_drained
+                or escalation_stage == "unconfirmed"):
+            owner_error = True
+
+        timeout_cleanup_confirmed = (
+            not (watchdog_protocol_ok and isinstance(watchdog_record, dict)
+                 and watchdog_record.get("timedOut") is True)
+            or watchdog_registry_cleanup is not None
+        )
+        if (watchdog_protocol_ok and watchdog_reaped and watchdog_absent
+                and timeout_cleanup_confirmed
+                and tmp_root is not None and registry_path is not None
+                and command_reaped and command_absent and capture_drained):
             try:
                 custody = reconcile_custody(
                     tmp_root, registry_path, target_pgid, watchdog_pgid,
-                    state_directory_identities,
+                    state_directory_identities, cleanup_budget,
+                    watchdog_registry_cleanup,
                 )
             except Exception:
                 owner_error = True
@@ -1882,20 +2144,8 @@ def run_route(route: str, root: Path) -> int:
                 owner_error = True
         else:
             owner_error = True
-        if watchdog is not None and watchdog_pgid is not None:
-            try:
-                stop = stop_watchdog(watchdog, watchdog_pgid)
-                watchdog_reaped = stop["reaped"] is True
-                watchdog_absent = stop["groupAbsent"] is True
-                if not watchdog_reaped or not watchdog_absent or stop["exitCode"] != 0:
-                    owner_error = True
-                if stop.get("cleanup", {}).get("allAbsent") is not True and not watchdog_absent:
-                    owner_error = True
-            except (OSError, ValueError):
-                owner_error = True
-        if capture is not None:
-            if not capture.join(2.0):
-                owner_error = True
+        if cleanup_budget.exhausted:
+            owner_error = True
         for signum, previous in previous_handlers.items():
             try:
                 signal.signal(signum, previous)

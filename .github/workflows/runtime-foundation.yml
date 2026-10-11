@@ -133,7 +133,7 @@ jobs:
                           or isinstance(value.get("pendingLaunchesRemaining"), bool)
                           or value.get("pendingLaunchesRemaining") != 0):
                       raise ValueError("incomplete")
-                  for key, maximum in (("elapsedMs", 600000), ("groupsObserved", 32),
+                  for key, maximum in (("elapsedMs", 600000), ("groupsObserved", 16),
                                        ("sidecarsObserved", 6), ("sidecarsReconciledCount", 6)):
                       item = value.get(key)
                       if not isinstance(item, int) or isinstance(item, bool) or not 0 <= item <= maximum:
