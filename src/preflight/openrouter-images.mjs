@@ -336,14 +336,17 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         || Date.parse(input.deadline_at) <= readClock(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
-      readClock(now);
       const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
         target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at, now });
       const credential = Object.freeze({ token });
+      // The credential await may outlast the deadline (or the clock may fault), so re-check before the host prepare.
+      if (Date.parse(input.deadline_at) <= readClock(now)) {
+        throw error('preflight_deadline_passed', 'The approved operation deadline passed while the credential was resolved.');
+      }
       const hostPrepared = dispatchPort.prepare ? await dispatchPort.prepare({ ...input, credential }) : undefined;
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target, scope: input.scope, grant_ref: input.grant_ref,
-        deadline_at: input.deadline_at, credential, hostPrepared });
+      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target, grant_ref: input.grant_ref,
+        scope: Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref }), deadline_at: input.deadline_at, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {
