@@ -69,6 +69,62 @@ test('read-only server review maps categories and every exact operation to actua
   assert.equal(journalCount(), rows); zeroEffects(host);
 });
 
+test('review rejects owner, controls-policy and TTL drift across initial owner, awaited store and final owner reads', async t => {
+  for (const stage of ['first-owner','store','final-owner']) for (const drift of ['owner','policy','ttl']) {
+    const host = await setup(t); await initialize(host); const view = await host.composition.current(principal);
+    const persisted = () => ({ current: host.store.db.prepare('SELECT * FROM creative_composition_current_v1').all(), revisions: host.store.db.prepare('SELECT * FROM creative_composition_revisions_v1').all() });
+    const before = persisted(), counts = host.counts(), rows = host.adapter.db.prepare('SELECT COUNT(*) AS n FROM control_composition_actions_v1').get().n;
+    let entered, release; const started = new Promise(resolve => { entered = resolve; }), barrier = new Promise(resolve => { release = resolve; });
+    if (stage === 'store') {
+      const get = host.ports.storage.getCurrentComposition; let calls = 0;
+      host.ports.storage.getCurrentComposition = async input => { const value = await get(input); if (++calls === 3) { entered(); await barrier; } return value; };
+    } else {
+      const resolve = host.ports.composition.resolveCurrent; let calls = 0;
+      host.ports.composition.resolveCurrent = async input => { const value = await resolve(input); if (++calls === (stage === 'first-owner' ? 1 : 2)) { entered(); await barrier; } return value; };
+    }
+    const rejected = assert.rejects(host.composition.review(principal,{projection_sha256:view.projection.projection_sha256,draft:{categories:{name_size:'large'},exact:{}}}));
+    await started;
+    if (drift === 'owner') host.policy.permitted_asset_ids = [];
+    if (drift === 'policy') host.policy.locked_fields = ['name_size'];
+    if (drift === 'ttl') host.advance(60001);
+    release(); await rejected;
+    assert.deepEqual(persisted(), before, `${stage}/${drift} cannot publish`);
+    if (drift === 'ttl') assert.throws(() => current(host), {code:'stale_version'}, 'expired evidence must keep the public current read stale');
+    assert.equal(host.counts().jobs, counts.jobs); assert.equal(host.counts().composition_previews, counts.composition_previews);
+    assert.equal(host.adapter.db.prepare('SELECT COUNT(*) AS n FROM control_composition_actions_v1').get().n, rows); zeroEffects(host);
+  }
+});
+
+test('review normalizes two layout categories and preserves disjoint exact edits while same-field overlaps reject', async t => {
+  const host = await setup(t); await initialize(host); const view = await host.composition.current(principal);
+  const draft = {categories:{layout:'stacked',layout_emphasis:'name',name_size:'large'},exact:{text:'Taylor Sample'}};
+  const review = await host.composition.review(principal,{projection_sha256:view.projection.projection_sha256,draft});
+  assertCompositionDraftReview(review,view.projection,draft);assert.equal(review.changes.length,3);
+  assert.deepEqual(review.changes.map(x=>x.kind).sort(),['set_layer_layout','set_text','set_text_size']);
+  for (const draft of [
+    {categories:{name_size:'large'},exact:{text_size:{value:'31',unit:'px'}}},
+    {categories:{layout:'stacked',layout_emphasis:'name'},exact:{layout:{x_milli:1,y_milli:1}}},
+    {categories:{logo_position:'bottom'},exact:{logo:{x_milli:1,y_milli:1}}},
+  ]) await assert.rejects(host.composition.review(principal,{projection_sha256:view.projection.projection_sha256,draft}));
+  assert.equal(host.counts().composition_previews,0);zeroEffects(host);
+});
+
+test('review rehashes awaited stored state and preview bytes rather than trusting retained digest fields', async t => {
+  for (const corruption of ['geometry','preview']) {
+    const host = await setup(t); await initialize(host); const view = await host.composition.current(principal), before = current(host);
+    const get = host.ports.storage.getCurrentComposition; let calls = 0;
+    host.ports.storage.getCurrentComposition = async input => {
+      const value = await get(input); if (++calls !== 3) return value;
+      const copied = structuredClone(value);
+      if (corruption === 'geometry') copied.revision.geometry.find(x=>x.layer_id==='layer:name').layout.x_milli++;
+      else copied.preview_bytes[copied.preview_bytes.length-1] ^= 1;
+      return copied;
+    };
+    await assert.rejects(host.composition.review(principal,{projection_sha256:view.projection.projection_sha256,draft:{categories:{name_size:'large'},exact:{}}}));
+    assert.deepEqual(current(host), before); assert.equal(host.counts().composition_previews,0);zeroEffects(host);
+  }
+});
+
 test('composition reads are uninitialized and read-only; initialization requires its exact reviewed binding', async t => {
   const host = await setup(t), empty = await host.composition.current(principal);
   await host.composition.current(principal); assert.equal(current(host), null); assert.equal(host.counts().composition_resolves, 0); zeroEffects(host);

@@ -82,7 +82,11 @@ export class CompositionControlsAdapter {
     this.assertTransactionFree();
     const after = this.context(principal, true);
     if (canonical(this.binding(context)) !== canonical(this.binding(after)) || this.now() >= view.projection.expires_at) throw new CompositionControlsError('stale_version', 'review');
-    const plan = createCompositionControlPlan({ revision: stored?.revision, policy: this.readPolicy(principal, after), projection: view.projection,
+    const policy = this.readPolicy(principal, after);
+    const storedProjection = createCompositionControlProjection({ revision: stored?.revision, preview_bytes: Uint8Array.from(stored?.preview_bytes ?? []), policy,
+      principal, selection_revision: after.selection.revision, can_apply: true, now_ms: this.now() });
+    if (canonical(storedProjection) !== canonical(view.projection)) throw new CompositionControlsError('stale_version', 'review');
+    const plan = createCompositionControlPlan({ revision: stored.revision, policy, projection: view.projection,
       action: { action_version: COMPOSITION_APPLY_VERSION, action_id: 'controls-draft-review', intent: 'apply', ...input } });
     const fields = { set_text: 'text', set_text_size: 'text_size', set_layer_layout: 'layout', position_approved_logo: 'logo' };
     const changes = plan.operations.map(operation => {
@@ -93,6 +97,11 @@ export class CompositionControlsAdapter {
     });
     const body = { contract: 'CreativeCompositionDraftReview', schema_version: '1.0', projection_sha256: input.projection_sha256,
       draft_sha256: canonicalHash(input.draft), changes, approval: false, purchase: false };
+    // The awaited store read above is not an owner assertion. Finish through
+    // the genuine public GET's native owner and same-connection store fences.
+    const finalView = await this.current(principal);
+    this.assertTransactionFree(); this.context(principal, true);
+    if (finalView.status !== 'current' || canonical(finalView.projection) !== canonical(view.projection) || canonical(finalView.preview) !== canonical(view.preview)) throw new CompositionControlsError('stale_version', 'review');
     return assertCompositionDraftReview(safe({ ...body, review_sha256: canonicalHash(body) }), view.projection, input.draft);
   }
   async history(principal, options = {}) {

@@ -61,7 +61,7 @@ export function assertCompositionDraftReview(value, projection, draft) {
   }
   for (const [field, value] of Object.entries(draft.exact)) {
     const control = projection.exact_controls[field];
-    if (!control || control.locked) deny();
+    if (!control || control.locked || Object.keys(draft.categories).some(category => categoryFields[category] === field)) deny();
     if (canonical(value) !== canonical(control.value)) requested.add(field);
   }
   for (const change of x.changes) {
