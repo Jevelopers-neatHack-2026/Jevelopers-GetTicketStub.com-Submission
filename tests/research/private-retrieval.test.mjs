@@ -1306,13 +1306,12 @@ test('the whole-run deadline withholds a final materialization that never return
   const runId = 'private-deadline-final-materialize';
   let materializeCalls = 0;
   let persistedDeadlineAtMs;
-  let secondEntryAtMs;
-  let secondReleaseAtMs;
-  let secondRemainingAtMs;
-  let finalEntryAtMs;
-  let finalRemainingAtMs;
-  let secondGateEntered = false;
-  let secondGateReleased = false;
+  let releaseSealCompletedAtMs;
+  let releaseSealState;
+  let sealWrapperReturnedAtMs;
+  let sealReturnGateWaitMs;
+  let finalMaterializationEnteredAtMs;
+  let finalEntryRemainingAtMs;
   const store = Object.create(null);
   for (const name of [
     'scopeForAuthenticatedRequest', 'ingestEvidence', 'appendFact', 'ingestDerivedPdfEvidence', 'ingestAssetSourceEvidence',
@@ -1320,21 +1319,13 @@ test('the whole-run deadline withholds a final materialization that never return
   ]) store[name] = h.evidenceStore[name].bind(h.evidenceStore);
   store.materializeSelected = async (...args) => {
     materializeCalls += 1;
-    if (materializeCalls === 2) {
-      secondEntryAtMs = Date.now();
-      secondGateEntered = true;
-      assert.ok(Number.isSafeInteger(persistedDeadlineAtMs), 'the real frontier run persisted its original deadline');
-      const releaseAtMs = persistedDeadlineAtMs - 1_400;
-      const waitMs = Math.max(0, releaseAtMs - Date.now());
-      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
-      secondReleaseAtMs = Date.now();
-      secondRemainingAtMs = persistedDeadlineAtMs - secondReleaseAtMs;
-      assert.ok(secondReleaseAtMs < persistedDeadlineAtMs, 'the second source-composition phase resumes before the original deadline');
-      secondGateReleased = true;
-    }
     if (materializeCalls < 3) return h.evidenceStore.materializeSelected(...args);
-    finalEntryAtMs = Date.now();
-    finalRemainingAtMs = persistedDeadlineAtMs - finalEntryAtMs;
+    assert.ok(releaseSealCompletedAtMs <= Date.now() && ['sealed', 'already_sealed'].includes(releaseSealState),
+      'the final selected materialization follows a successful durable release seal');
+    assert.ok(Number.isSafeInteger(persistedDeadlineAtMs), 'the real frontier run persisted its original deadline');
+    finalMaterializationEnteredAtMs = Date.now();
+    finalEntryRemainingAtMs = persistedDeadlineAtMs - finalMaterializationEnteredAtMs;
+    assert.ok(finalEntryRemainingAtMs > 0, 'the sealed final materialization is entered before the original deadline');
     materializationStarted();
     return new Promise(() => {});
   };
@@ -1344,6 +1335,17 @@ test('the whole-run deadline withholds a final materialization that never return
       const created = await h.frontier.createRun(...args);
       persistedDeadlineAtMs = created.deadlineAtMs;
       return created;
+    },
+    sealPrivateDraft: async (...args) => {
+      const sealed = await h.frontier.sealPrivateDraft(...args);
+      releaseSealState = sealed.state;
+      releaseSealCompletedAtMs = Date.now();
+      const gateUntilMs = persistedDeadlineAtMs - 1_400;
+      const waitMs = Math.max(0, gateUntilMs - Date.now());
+      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+      sealReturnGateWaitMs = Date.now() - releaseSealCompletedAtMs;
+      sealWrapperReturnedAtMs = Date.now();
+      return sealed;
     },
   });
   const running = runPrivateRetrieval(h.makeInput({
@@ -1366,21 +1368,30 @@ test('the whole-run deadline withholds a final materialization that never return
     const outcome = phase.kind === 'returned'
       ? JSON.stringify({ status: phase.result.status, limitations: phase.result.limitations })
       : String(phase.error);
-    assert.fail(`run ended before final materialization; calls=${materializeCalls}; elapsedMs=${Date.now() - startedAt}; outcome=${outcome}`);
+    const phases = JSON.stringify({
+      persistedDeadlineAtMs,
+      releaseSealState,
+      releaseSealCompletedAtMs,
+      sealWrapperReturnedAtMs,
+      sealReturnGateWaitMs,
+      finalMaterializationEnteredAtMs,
+      finalEntryRemainingAtMs,
+    });
+    assert.fail(`run ended before stalled final materialization; calls=${materializeCalls}; elapsedMs=${Date.now() - startedAt}; phases=${phases}; outcome=${outcome}`);
   }
   assert.ok(Number.isSafeInteger(persistedDeadlineAtMs));
-  assert.ok(secondEntryAtMs <= secondReleaseAtMs && secondReleaseAtMs <= finalEntryAtMs,
-    'the second composition phase is explicitly gated before the third final materialization');
-  assert.ok(secondRemainingAtMs > 0 && secondRemainingAtMs <= 1_400,
-    'the second phase resumes in the intentionally reserved final portion of the original deadline');
-  assert.ok(finalRemainingAtMs > 0 && finalRemainingAtMs <= 1_500,
-    'the stalled final materialization begins with a measured, bounded portion of the original persisted deadline remaining');
-  assert.equal(secondGateEntered, true, 'the second composition phase reached its synchronization gate');
-  assert.equal(secondGateReleased, true, 'the second composition phase was released against the original deadline');
-  const deadlineObservedAt = Date.now();
+  assert.ok(releaseSealCompletedAtMs <= sealWrapperReturnedAtMs && sealWrapperReturnedAtMs <= finalMaterializationEnteredAtMs,
+    'both real materializations and the durable release seal finish before the final call enters');
+  assert.ok(['sealed', 'already_sealed'].includes(releaseSealState));
+  assert.ok(finalEntryRemainingAtMs > 0 && finalEntryRemainingAtMs <= 1_500,
+    'the actual final materialization is entered with a measured, bounded portion of the original persisted deadline remaining');
+  const sealReturnRemainingAtMs = persistedDeadlineAtMs - sealWrapperReturnedAtMs;
+  assert.ok(sealReturnRemainingAtMs > 0 && sealReturnRemainingAtMs <= 1_500,
+    'the real seal wrapper returns only after the original deadline gate opens');
+  assert.ok(sealReturnGateWaitMs >= 0);
   const result = await running;
-  const finalPhaseWaitMs = Date.now() - deadlineObservedAt;
-  assert.ok(finalPhaseWaitMs < 2_000, 'the final-release phase remains covered after watcher drain');
+  const finalEntryWaitMs = Date.now() - finalMaterializationEnteredAtMs;
+  assert.ok(finalEntryWaitMs < 2_000, 'the final-release phase remains covered after watcher drain');
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('deadline_exceeded'));
@@ -1390,10 +1401,11 @@ test('the whole-run deadline withholds a final materialization that never return
   assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'deadline'));
   t.diagnostic(JSON.stringify({
     persistedDeadlineAtMs,
-    secondGateWaitMs: secondReleaseAtMs - secondEntryAtMs,
-    secondRemainingAtMs,
-    finalRemainingAtMs,
-    finalPhaseWaitMs,
+    releaseSealState,
+    sealReturnGateWaitMs,
+    sealReturnRemainingAtMs,
+    finalEntryRemainingAtMs,
+    finalEntryWaitMs,
     wholeRunElapsedMs: Date.now() - startedAt,
   }));
 });
