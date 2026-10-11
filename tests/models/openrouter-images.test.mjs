@@ -411,6 +411,255 @@ test("concept inspection rejects reference accessors before reading them or insp
   });
 });
 
+test("concept inspection bounds cumulative snapshot values, aliases, sparse slots, and JSON structure", async (t) => {
+  const profile = { capabilities: { generation: false, edit: { max_input_references: 2 } },
+    supported_parameters: { ...orProfile().supported_parameters, input_references: { type: "range", min: 2, max: 2 } } };
+
+  async function assertCopyBoundaryRejects(field, value, concept = parentlessConcept(2)) {
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const scope = { ...concept.ctx.scope, [field]: value };
+    const originalStringify = JSON.stringify;
+    let copiedScopeSerializations = 0;
+    JSON.stringify = function (candidate, ...rest) {
+      if (candidate !== null && typeof candidate === "object" && Object.hasOwn(candidate, field)) {
+        copiedScopeSerializations += 1;
+      }
+      return Reflect.apply(originalStringify, this, [candidate, ...rest]);
+    };
+    try {
+      await assert.rejects(harness.provider.inspectConceptReferences({ scope, references: concept.references,
+        maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 }),
+      (error) => error instanceof OpenRouterImagesProviderError && error.code === "invalid_provider_input");
+    } finally {
+      JSON.stringify = originalStringify;
+    }
+    assert.equal(copiedScopeSerializations, 0, "the rejected input never reaches the shared core serializer");
+    assert.equal(concept.counters.assetReads, 0, "snapshot rejection happens before any reference byte reads");
+    assert.equal(concept.counters.staged, 0);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  }
+
+  await t.test("expanded null slots across repeated aliases are cumulatively bounded", async () => {
+    const primitiveRow = Array(4096).fill(null);
+    await assertCopyBoundaryRejects("review_accounting", Array(64).fill(primitiveRow));
+  });
+
+  await t.test("expanded booleans, numbers, and undefined slots are cumulatively bounded", async () => {
+    const primitiveRow = Array.from({ length: 4096 }, (_, index) => {
+      if (index % 4 === 0) return true;
+      if (index % 4 === 1) return 1.25;
+      if (index % 4 === 2) return undefined;
+      return false;
+    });
+    await assertCopyBoundaryRejects("review_accounting", Array(16).fill(primitiveRow));
+  });
+
+  await t.test("sparse array holes consume the same cumulative slot budget", async () => {
+    await assertCopyBoundaryRejects("review_sparse", Array(65_536));
+  });
+
+  await t.test("JSON key and structural bytes are charged before object-copy allocation", async () => {
+    const structure = Object.create(null);
+    for (let index = 0; index < 15_500; index += 1) {
+      structure[`${String(index).padStart(5, "0")}_${"x".repeat(54)}`] = null;
+    }
+    await assertCopyBoundaryRejects("review_structure", structure);
+  });
+
+  await t.test("escaped control, quote, slash, paired and unpaired Unicode strings fit by encoded bytes", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const edgeCharacters = `\b\t\n\f\r\u0000\u001f"\\😀\u2028\ud800x\udc00`;
+    const escapedString = `${'"\\'.repeat(258_000)}${edgeCharacters}`;
+    const scope = { ...concept.ctx.scope, review_escaped_string: escapedString };
+    const encodedBytes = Buffer.byteLength(JSON.stringify(scope), "utf8") +
+      Buffer.byteLength(JSON.stringify(concept.references), "utf8") +
+      String(1024 * 1024).length + String(2 * 1024 * 1024).length;
+    assert.ok(encodedBytes > 1_000_000 && encodedBytes < 1024 * 1024, "the valid control is near the encoded-byte ceiling");
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("escaped controls and paired plus isolated surrogates fit exactly at the encoded-byte ceiling", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const edgeCharacters = `\b\t\n\f\r\u0000\u001f"\\😀\u2028\ud800x\udc00`;
+    const limit = 1024 * 1024;
+    const baseScope = { ...concept.ctx.scope, review_exact_escaped_string: edgeCharacters };
+    const baseBytes = Buffer.byteLength(JSON.stringify(baseScope), "utf8") +
+      Buffer.byteLength(JSON.stringify(concept.references), "utf8") +
+      Buffer.byteLength(JSON.stringify(limit), "utf8") +
+      Buffer.byteLength(JSON.stringify(2 * limit), "utf8");
+    const padding = "a".repeat(limit - baseBytes);
+    const scope = { ...concept.ctx.scope, review_exact_escaped_string: edgeCharacters + padding };
+    const encodedBytes = Buffer.byteLength(JSON.stringify(scope), "utf8") +
+      Buffer.byteLength(JSON.stringify(concept.references), "utf8") +
+      Buffer.byteLength(JSON.stringify(limit), "utf8") +
+      Buffer.byteLength(JSON.stringify(2 * limit), "utf8");
+    assert.equal(encodedBytes, limit);
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: limit, maximum_aggregate_reference_bytes: 2 * limit });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("one encoded byte beyond the escaped-string ceiling rejects before core serialization", async () => {
+    const concept = parentlessConcept(2);
+    const edgeCharacters = `\b\t\n\f\r\u0000\u001f"\\😀\u2028\ud800x\udc00`;
+    const limit = 1024 * 1024;
+    const baseScope = { ...concept.ctx.scope, review_exact_escaped_string: edgeCharacters };
+    const baseBytes = Buffer.byteLength(JSON.stringify(baseScope), "utf8") +
+      Buffer.byteLength(JSON.stringify(concept.references), "utf8") +
+      Buffer.byteLength(JSON.stringify(limit), "utf8") +
+      Buffer.byteLength(JSON.stringify(2 * limit), "utf8");
+    await assertCopyBoundaryRejects("review_exact_escaped_string", edgeCharacters + "a".repeat(limit - baseBytes + 1));
+  });
+
+  await t.test("primitive JSON byte accounting admits the exact ceiling and rejects one byte over", async () => {
+    const concept = parentlessConcept(2);
+    const primitiveValues = [null, true, false, 0, -0, 1.25, -12.5, Number.NaN, Number.POSITIVE_INFINITY, undefined];
+    const budget = { values: primitiveValues, omitted: undefined, padding: "" };
+    const limit = 1024 * 1024;
+    const baseScope = { ...concept.ctx.scope, review_primitive_budget: budget };
+    const baseBytes = Buffer.byteLength(JSON.stringify(baseScope), "utf8") +
+      Buffer.byteLength(JSON.stringify(concept.references), "utf8") +
+      Buffer.byteLength(JSON.stringify(limit), "utf8") +
+      Buffer.byteLength(JSON.stringify(2 * limit), "utf8");
+    budget.padding = "a".repeat(limit - baseBytes);
+    const scope = { ...concept.ctx.scope, review_primitive_budget: budget };
+    const encodedBytes = Buffer.byteLength(JSON.stringify(scope), "utf8") +
+      Buffer.byteLength(JSON.stringify(concept.references), "utf8") +
+      Buffer.byteLength(JSON.stringify(limit), "utf8") +
+      Buffer.byteLength(JSON.stringify(2 * limit), "utf8");
+    assert.equal(encodedBytes, limit);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: limit, maximum_aggregate_reference_bytes: 2 * limit });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+
+    await assertCopyBoundaryRejects("review_primitive_budget", { ...budget, padding: `${budget.padding}a` });
+  });
+
+  await t.test("quote and backslash expansion beyond the encoded-byte ceiling rejects before core serialization", async () => {
+    const escapedString = '"\\'.repeat(262_000);
+    await assertCopyBoundaryRejects("review_escaped_string", escapedString);
+  });
+
+  await t.test("the exact cumulative slot ceiling remains valid for a two-reference inspection", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const scope = { ...concept.ctx.scope, review_boundary_slots: Array(65_513).fill(false) };
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("the exact cumulative value ceiling remains valid for a bounded object", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const structure = Object.create(null);
+    for (let index = 0; index < 65_513; index += 1) {
+      structure[`k${index.toString(36).padStart(4, "0")}`] = null;
+    }
+    const scope = { ...concept.ctx.scope, review_boundary_object: structure };
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("the exact cumulative property ceiling remains valid and rejects one more hidden property", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const structure = Object.create(null);
+    for (let index = 0; index < 65_516; index += 1) {
+      Object.defineProperty(structure, `hidden_${index}`, { value: null, enumerable: false });
+    }
+    const scope = { ...concept.ctx.scope, review_boundary_properties: structure };
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+
+    Object.defineProperty(structure, "hidden_extra", { value: null, enumerable: false });
+    await assertCopyBoundaryRejects("review_boundary_properties", structure);
+  });
+
+  await t.test("a near-ceiling valid object remains admissible", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const structure = Object.create(null);
+    for (let index = 0; index < 37_000; index += 1) {
+      structure[`${String(index).padStart(5, "0")}_${"x".repeat(14)}`] = null;
+    }
+    const scope = { ...concept.ctx.scope, review_boundary_structure: structure };
+    const encodedBytes = Buffer.byteLength(JSON.stringify(scope), "utf8") +
+      Buffer.byteLength(JSON.stringify(concept.references), "utf8") +
+      String(1024 * 1024).length + String(2 * 1024 * 1024).length;
+    assert.ok(encodedBytes > 1_000_000 && encodedBytes < 1024 * 1024, "the valid control is near the encoded-byte ceiling");
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("mixed primitive and escaped-string values remain valid in ordinary inspection", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const scope = { ...concept.ctx.scope,
+      review_primitives: [null, true, false, 0, -0, 1.25, Number.NaN, Number.POSITIVE_INFINITY, undefined],
+      review_unicode: `\b\t\n\f\r\u0000\u001f"\\😀\u2028\ud800\udc00`,
+    };
+    const inspected = await harness.provider.inspectConceptReferences({ scope, references: concept.references,
+      maximum_single_reference_bytes: 1024 * 1024, maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("ordinary parentless two-reference inspection remains valid", async () => {
+    const concept = parentlessConcept(2);
+    const events = [];
+    const harness = orHarness({ operation: "edit", profile, ports: { events }, assetPort: concept.assetPort });
+    const inspected = await harness.provider.inspectConceptReferences({ scope: concept.ctx.scope,
+      references: concept.references, maximum_single_reference_bytes: 1024 * 1024,
+      maximum_aggregate_reference_bytes: 2 * 1024 * 1024 });
+    assert.equal(inspected.length, 2);
+    assert.equal(concept.counters.assetReads, 2);
+    assert.equal(harness.fetchCount, 0);
+    assert.deepEqual(events, []);
+  });
+});
+
 test("concept inspection snapshots reference identities before its first byte read", async () => {
   const concept = parentlessConcept(2);
   const profile = { capabilities: { generation: false, edit: { max_input_references: 2 } },

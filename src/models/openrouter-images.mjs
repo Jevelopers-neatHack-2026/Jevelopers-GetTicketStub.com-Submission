@@ -111,6 +111,8 @@ const INSPECTION_ARGUMENT_KEYS = Object.freeze(["scope", "references", "maximum_
   "maximum_aggregate_reference_bytes"]);
 const MAX_INSPECTION_SNAPSHOT_DEPTH = 128;
 const MAX_INSPECTION_SNAPSHOT_NODES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_VALUES = 65_536;
+const MAX_INSPECTION_SNAPSHOT_PROPERTIES = 65_536;
 const MAX_INSPECTION_SNAPSHOT_BYTES = 1024 * 1024;
 
 function rejectInspectionInput(field) {
@@ -119,14 +121,73 @@ function rejectInspectionInput(field) {
   });
 }
 
+function accountInspectionValue(state, field) {
+  state.values += 1;
+  if (state.values > MAX_INSPECTION_SNAPSHOT_VALUES) rejectInspectionInput(field);
+}
+
+function accountInspectionProperties(state, count, field) {
+  if (count > MAX_INSPECTION_SNAPSHOT_PROPERTIES - state.properties) rejectInspectionInput(field);
+  state.properties += count;
+}
+
+function accountInspectionBytes(state, count, field) {
+  if (!Number.isSafeInteger(count) || count < 0 || count > MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes) {
+    rejectInspectionInput(field);
+  }
+  state.bytes += count;
+}
+
+function encodedJsonStringBytes(value, maximum) {
+  let bytes = 2; // JSON string delimiters.
+  if (bytes > maximum) return undefined;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0x22 || code === 0x5c) bytes += 2;
+    else if (code <= 0x1f) bytes += code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d ? 2 : 6;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else bytes += 6;
+    } else if (code >= 0xdc00 && code <= 0xdfff) bytes += 6;
+    else if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else bytes += 3;
+    if (bytes > maximum) return undefined;
+  }
+  return bytes;
+}
+
+function accountInspectionString(state, value, field) {
+  const bytes = encodedJsonStringBytes(value, MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes);
+  if (bytes === undefined) rejectInspectionInput(field);
+  accountInspectionBytes(state, bytes, field);
+}
+
 function snapshotInspectionValue(value, field, state, depth = 0) {
-  if (value === null || typeof value === "boolean") return value;
-  if (typeof value === "string") {
-    state.bytes += Buffer.byteLength(value, "utf8");
-    if (state.bytes > MAX_INSPECTION_SNAPSHOT_BYTES) rejectInspectionInput(field);
+  accountInspectionValue(state, field);
+  if (value === null) {
+    accountInspectionBytes(state, 4, field);
     return value;
   }
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean") {
+    accountInspectionBytes(state, value ? 4 : 5, field);
+    return value;
+  }
+  if (typeof value === "string") {
+    accountInspectionString(state, value, field);
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      accountInspectionBytes(state, 4, field);
+      return null;
+    }
+    accountInspectionBytes(state, String(value === 0 ? 0 : value).length, field);
+    return value;
+  }
   if (value === undefined) return undefined;
   if (typeof value === "bigint" || typeof value === "function" || typeof value === "symbol") rejectInspectionInput(field);
   if (utilTypes.isProxy(value)) rejectInspectionInput(field);
@@ -136,36 +197,65 @@ function snapshotInspectionValue(value, field, state, depth = 0) {
   }
   state.active.add(value);
   try {
-    const descriptors = Object.getOwnPropertyDescriptors(value);
     if (Array.isArray(value)) {
-      if (Object.getPrototypeOf(value) !== Array.prototype || Object.hasOwn(descriptors, "toJSON")) rejectInspectionInput(field);
-      const length = descriptors.length?.value;
+      if (Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertyDescriptor(value, "toJSON")) rejectInspectionInput(field);
+      const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
       if (!Number.isSafeInteger(length) || length > MAX_INSPECTION_SNAPSHOT_NODES) rejectInspectionInput(field);
-      for (const key of Object.keys(descriptors)) {
-        if (!Object.hasOwn(descriptors[key], "value")) rejectInspectionInput(field);
+      // Every array slot is copied, including sparse holes. Check the minimum
+      // expanded value count and exact JSON delimiters before allocating the copy.
+      if (length > MAX_INSPECTION_SNAPSHOT_VALUES - state.values) rejectInspectionInput(field);
+      const keys = Reflect.ownKeys(value);
+      accountInspectionProperties(state, keys.length, field);
+      for (const key of keys) {
+        if (typeof key !== "string") continue;
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!descriptor || !Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
       }
+      accountInspectionBytes(state, 2 + Math.max(0, length - 1), field);
       const copy = new Array(length);
       Object.setPrototypeOf(copy, null);
       for (let index = 0; index < length; index += 1) {
-        const descriptor = descriptors[index];
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
         if (!descriptor) {
-          copy[index] = null;
+          copy[index] = snapshotInspectionValue(null, field, state, depth + 1);
           continue;
         }
         if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
         const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
-        copy[index] = child === undefined ? null : child;
+        if (child === undefined) {
+          accountInspectionBytes(state, 4, field);
+          copy[index] = null;
+        } else copy[index] = child;
       }
       return Object.freeze(copy);
     }
-    if (!isRecord(value) || Object.hasOwn(descriptors, "toJSON")) rejectInspectionInput(field);
+    if (!isRecord(value) || Object.getOwnPropertyDescriptor(value, "toJSON")) rejectInspectionInput(field);
+    const keys = Reflect.ownKeys(value);
+    accountInspectionProperties(state, keys.length, field);
+    let enumerableCount = 0;
+    let outputCount = 0;
+    let structureBytes = 2; // JSON object delimiters.
+    for (const key of keys) {
+      if (typeof key !== "string") continue;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
+      if (!descriptor.enumerable) continue;
+      enumerableCount += 1;
+      if (descriptor.value === undefined) continue;
+      const keyBytes = encodedJsonStringBytes(key, MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes - structureBytes);
+      if (keyBytes === undefined) rejectInspectionInput(field);
+      structureBytes += keyBytes + 1 + (outputCount === 0 ? 0 : 1); // key, colon, and comma.
+      if (structureBytes > MAX_INSPECTION_SNAPSHOT_BYTES - state.bytes) rejectInspectionInput(field);
+      outputCount += 1;
+    }
+    if (enumerableCount > MAX_INSPECTION_SNAPSHOT_VALUES - state.values) rejectInspectionInput(field);
+    accountInspectionBytes(state, structureBytes, field);
     const copy = Object.create(null);
-    for (const key of Object.keys(descriptors)) {
-      const descriptor = descriptors[key];
+    for (const key of keys) {
+      if (typeof key !== "string") continue;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
       if (!Object.hasOwn(descriptor, "value")) rejectInspectionInput(field);
       if (!descriptor.enumerable) continue;
-      state.bytes += Buffer.byteLength(key, "utf8");
-      if (state.bytes > MAX_INSPECTION_SNAPSHOT_BYTES) rejectInspectionInput(field);
       const child = snapshotInspectionValue(descriptor.value, field, state, depth + 1);
       if (child !== undefined) copy[key] = child;
     }
@@ -177,11 +267,10 @@ function snapshotInspectionValue(value, field, state, depth = 0) {
 
 function snapshotConceptInspectionArguments(args) {
   if (utilTypes.isProxy(args) || !isRecord(args)) rejectInspectionInput("concept_reference_request");
-  const descriptors = Object.getOwnPropertyDescriptors(args);
-  const state = { active: new WeakSet(), nodes: 0, bytes: 0 };
+  const state = { active: new WeakSet(), nodes: 0, values: 0, properties: 0, bytes: 0 };
   const copy = Object.create(null);
   for (const key of INSPECTION_ARGUMENT_KEYS) {
-    const descriptor = descriptors[key];
+    const descriptor = Object.getOwnPropertyDescriptor(args, key);
     if (!descriptor) {
       copy[key] = undefined;
       continue;
