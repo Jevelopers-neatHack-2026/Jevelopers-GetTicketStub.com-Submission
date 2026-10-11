@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { generateImage, providerFailure } from "@/server/ai/providers";
 import { buildArtPrompt } from "@/customer/studio/research/artPrompt";
 import type { ArtLayer, Edition, EventData } from "@/customer/studio/types";
 import { ensureDevice, getRequestContext, requireCapability } from "@/server/context";
@@ -29,26 +30,6 @@ interface ArtRequest {
 
 function freshSeed(): number {
   return Math.floor(Math.random() * 2_147_483_647);
-}
-
-async function openAiImage(prompt: string): Promise<string | undefined> {
-  if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") return undefined;
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return undefined;
-  try {
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: "gpt-image-1", prompt, size: "1024x1536", n: 1, quality: "medium", output_format: "jpeg", output_compression: 82 }),
-      signal: AbortSignal.timeout(90_000),
-    });
-    if (!res.ok) return undefined;
-    const data = (await res.json()) as { data?: { b64_json?: string }[] };
-    const b64 = data.data?.[0]?.b64_json;
-    return b64 ? `data:image/jpeg;base64,${b64}` : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export async function POST(req: Request) {
@@ -82,9 +63,13 @@ export async function POST(req: Request) {
     { key: `ip:${hashToken(clientIp(req))}`, max: PER_IP },
     ...(rc.actor.kind === "account" ? [{ key: `acc:${rc.actor.id}`, max: PER_ACCOUNT }] : []),
   ];
-  // Storage off: no counters to spend, so fail open to procedural art and never call OpenAI.
+  // Only a live server with an image provider key spends anyone's allowance.
+  const imageProvider =
+    process.env.TICKETSTUB_RUNTIME_MODE === "live" &&
+    !!(process.env.TICKETSTUB_ART_PROVIDER === "openrouter" ? process.env.TICKETSTUB_ART_OPENROUTER_API_KEY : process.env.OPENAI_API_KEY)?.trim();
+  // Storage off: no counters to spend, so fail open to procedural art and never call a provider.
   const saving = storageAvailable();
-  const quota = saving ? await getStorage().useArtQuota(quotas, Date.now(), process.env.TICKETSTUB_RUNTIME_MODE === "live" && !!process.env.OPENAI_API_KEY) : { ok: true as const };
+  const quota = saving ? await getStorage().useArtQuota(quotas, Date.now(), imageProvider) : { ok: true as const };
   if (!quota.ok) {
     // Over the cap: say so, and hand back procedural art so the caller never has to show a broken stub.
     const art: ArtLayer = { kind: "procedural", seed, vibe, provenance: "simulated" };
@@ -94,10 +79,17 @@ export async function POST(req: Request) {
     );
   }
 
-  const src = saving ? await openAiImage(buildArtPrompt(body.event, vibe)) : undefined;
-  if (src) {
-    const art: ArtLayer = { kind: "image", src, seed, vibe, provenance: "live" };
-    return reply(art);
+  if (saving) {
+    try {
+      const result = await generateImage(buildArtPrompt(body.event, vibe), req.signal);
+      if (result) {
+        const art: ArtLayer = { kind: "image", src: result.value, seed, vibe, provenance: "live", providerMetadata: result.metadata };
+        return reply(art);
+      }
+    } catch (error) {
+      const failure = providerFailure(error);
+      if (failure && (process.env.TICKETSTUB_ART_PROVIDER === "openrouter" || failure.body.code === "invalid_provider_configuration")) return reply(failure.body, failure.status);
+    }
   }
 
   if (body.first && body.edition === "researched" && !vibe) {

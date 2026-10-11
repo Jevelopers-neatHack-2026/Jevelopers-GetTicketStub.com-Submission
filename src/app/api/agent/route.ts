@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { generateText, providerFailure } from "@/server/ai/providers";
 import type { EventData } from "@/customer/studio/types";
 import { getRequestContext, requireCapability } from "@/server/context";
 import { HttpError, errorResponse, foreignOrigin } from "@/server/http";
 
-// Optional free-text agent replies. Only answers when ANTHROPIC_API_KEY is configured;
-// otherwise 204 and the client uses its rule-based, clearly labelled simulated agent.
+// Optional direct-provider replies retain the labelled simulated fallback.
+// Explicit OpenRouter failures return a bounded error instead of silently falling back.
 
 export async function POST(req: Request) {
   if (process.env.TICKETSTUB_RUNTIME_MODE !== "live") return new NextResponse(null, { status: 204 });
@@ -14,8 +15,6 @@ export async function POST(req: Request) {
   } catch (e) {
     return errorResponse(e);
   }
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return new NextResponse(null, { status: 204 });
 
   let body: { event?: EventData; message?: string };
   try {
@@ -37,18 +36,12 @@ ${facts || "(none)"}
 Message: ${message}`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 300, system, messages: [{ role: "user", content: user }] }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return new NextResponse(null, { status: 204 });
-    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-    const reply = data.content?.find((c) => c.type === "text")?.text?.trim();
-    if (!reply) return new NextResponse(null, { status: 204 });
-    return NextResponse.json({ reply, provenance: "live" });
-  } catch {
+    const result = await generateText({ capability: "agent", prompt: user, system, maxTokens: 300, signal: req.signal });
+    if (!result) return new NextResponse(null, { status: 204 });
+    return NextResponse.json({ reply: result.value, provenance: "live", providerMetadata: result.metadata });
+  } catch (error) {
+    const failure = providerFailure(error);
+    if (failure && (process.env.TICKETSTUB_AGENT_PROVIDER === "openrouter" || failure.body.code === "invalid_provider_configuration")) return NextResponse.json(failure.body, { status: failure.status });
     return new NextResponse(null, { status: 204 });
   }
 }

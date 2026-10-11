@@ -169,10 +169,15 @@ export function AgentChat(props: { stub: Stub; onChange: (s: Stub) => void; /** 
     }
     if (t.endsWith("?")) {
       setBusy("Thinking…");
-      const live = await askAgent(stubRef.current, text);
-      setBusy(undefined);
-      if (live) return say(live.reply, "live");
-      return say("I can keep facts, fix unsure ones and remix the art. Try “Make it moodier”.");
+      try {
+        const live = await askAgent(stubRef.current, text);
+        if (live) return say(live.reply, "live");
+        return say("I can keep facts, fix unsure ones and remix the art. Try “Make it moodier”.");
+      } catch (error) {
+        return say(error instanceof Error ? error.message : "The agent is unavailable. Try again in a moment.");
+      } finally {
+        setBusy(undefined);
+      }
     }
     return remix(text);
   };
