@@ -1,0 +1,25 @@
+{
+  "schema": "synthetic-producer-png-parser-fixtures/1",
+  "evidenceClass": "private synthetic diagnostic renderer outputs; not a ProductionBundle and not approved for fulfillment",
+  "handoffEligible": false,
+  "printProduction": {
+    "repository": "Jevelopers-neatHack-2026/print-production",
+    "sourceCommit": "26e608e893b60f5d1e1bd22c47c639e0b1b3518f",
+    "sourceTree": "460cbc8b2e2919220860d489e447d6b21b111381",
+    "mainCommitAtCapture": "e2c946b0c4f979227c19d0534ac71b5d5a85badb",
+    "mainTreeAtCapture": "460cbc8b2e2919220860d489e447d6b21b111381",
+    "workflowRunId": 38124525468,
+    "artifactId": 11696439367,
+    "artifactName": "pdf-position-private-1",
+    "artifactArchiveBytes": 221750,
+    "artifactArchiveSha256": "6e08fadbd3f26c779c35c2bcb8ef6adda96f9923fa6b95aef0ca7d631a4d72cc"
+  },
+  "fixtureBytePins": {
+    "arabic.png": { "bytes": 18593, "sha256": "cb854eb314186863ea9feadb1a528943c8577cf94f9650c784483ea6a1c78cac" },
+    "combining.png": { "bytes": 20806, "sha256": "ec750e61355d4c073936c0307e97181b32ae4916421e8d6131d6d72d24a9ca13" },
+    "ligatures.png": { "bytes": 20129, "sha256": "de1ba142cf66e2a859bd48dce8c68357e05923563a58dd6fe51e288c0cdb9dcd" },
+    "literal.png": { "bytes": 24814, "sha256": "5ec23ec09090de89f33a99bfc5e297a30c668bebae10120b6951c0e0a6264925" },
+    "multiline.png": { "bytes": 17679, "sha256": "bfb00490268f0c98de7729bd5970559876b4f0f2f8d8e4c09b3b4270da2a2ecc" },
+    "wrap.png": { "bytes": 44252, "sha256": "6f248c94659f7ee3fdd135e424b1fa99bd465e67b4aefa1307fbbd9c464231d8" }
+  }
+}
