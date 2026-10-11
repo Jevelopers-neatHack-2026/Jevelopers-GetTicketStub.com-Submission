@@ -1122,7 +1122,7 @@ test('remote cancellation bounds a never-resolving retention callback and ignore
 
 test('the whole-run deadline bounds a never-resolving final retention callback after the last admission', { timeout: 10_000 }, async (t) => {
   const runDurationMs = 5_000;
-  const responseLeadMs = 1_250;
+  const settlementReturnLeadMs = 1_250;
   const maximumMappingWidthMs = 25;
   let retentionStarted;
   let resolveRetention;
@@ -1143,10 +1143,11 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
   let effectiveDeadlineLowerPerfMs;
   let effectiveDeadlineUpperPerfMs;
   let requestReceivedAtPerfMs;
-  let responseTargetPerfMs;
+  let settlementReturnTargetPerfMs;
   let responseStartedAtPerfMs;
   let responseFinishedAtPerfMs;
   let bodySettledAtPerfMs;
+  let settlementWrapperReturnAtPerfMs;
   let retentionCallbackStartedAtPerfMs;
   let runReturnedAtPerfMs;
   let retentionCalls = 0;
@@ -1157,8 +1158,7 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
       response.destroy();
       return;
     }
-    responseTargetPerfMs = effectiveDeadlineLowerPerfMs - responseLeadMs;
-    responseStartedAtPerfMs = await waitUntilPerfAtOrAfter(responseTargetPerfMs);
+    responseStartedAtPerfMs = performance.now();
     response.once('finish', () => { responseFinishedAtPerfMs = performance.now(); });
     respond(response, 200, { 'content-type': 'text/html; charset=utf-8' }, eventHtml());
   });
@@ -1201,6 +1201,8 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
     settleTransportHopBodyComplete: async (...args) => {
       const settled = await h.frontier.settleTransportHopBodyComplete(...args);
       bodySettledAtPerfMs = performance.now();
+      settlementReturnTargetPerfMs = effectiveDeadlineLowerPerfMs - settlementReturnLeadMs;
+      settlementWrapperReturnAtPerfMs = await waitUntilPerfAtOrAfter(settlementReturnTargetPerfMs);
       return settled;
     },
   });
@@ -1245,16 +1247,17 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
       effectiveDeadlineLowerPerfMs: effectiveDeadlineLowerPerfMs ?? null,
       effectiveDeadlineUpperPerfMs: effectiveDeadlineUpperPerfMs ?? null,
       requestReceivedAtPerfMs: requestReceivedAtPerfMs ?? null,
-      responseTargetPerfMs: responseTargetPerfMs ?? null,
+      settlementReturnTargetPerfMs: settlementReturnTargetPerfMs ?? null,
       responseStartedAtPerfMs: responseStartedAtPerfMs ?? null,
       bodySettledAtPerfMs: bodySettledAtPerfMs ?? null,
+      settlementWrapperReturnAtPerfMs: settlementWrapperReturnAtPerfMs ?? null,
     })}`);
   }
   const remainingAtRetentionCallbackMs = effectiveDeadlineLowerPerfMs - retentionCallbackStartedAtPerfMs;
   const remainingAtRequestMs = effectiveDeadlineLowerPerfMs - requestReceivedAtPerfMs;
   const diagnostics = () => ({
     runDurationMs,
-    responseLeadMs,
+    settlementReturnLeadMs,
     tcpConnectionCount,
     requestCount,
     runEntryPerfBeforeMs,
@@ -1275,10 +1278,11 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
     effectiveDeadlineIntervalWidthMs: effectiveDeadlineUpperPerfMs - effectiveDeadlineLowerPerfMs,
     requestReceivedAtPerfMs: requestReceivedAtPerfMs ?? null,
     remainingAtRequestMs,
-    responseTargetPerfMs: responseTargetPerfMs ?? null,
+    settlementReturnTargetPerfMs: settlementReturnTargetPerfMs ?? null,
     responseStartedAtPerfMs: responseStartedAtPerfMs ?? null,
     responseFinishedAtPerfMs: responseFinishedAtPerfMs ?? null,
     bodySettledAtPerfMs: bodySettledAtPerfMs ?? null,
+    settlementWrapperReturnAtPerfMs: settlementWrapperReturnAtPerfMs ?? null,
     retentionCallbackStartedAtPerfMs,
     remainingAtRetentionCallbackMs,
     retentionCalls,
@@ -1299,8 +1303,16 @@ test('the whole-run deadline bounds a never-resolving final retention callback a
     'the effective deadline interval is narrow and bounded');
   assert.ok(remainingAtRequestMs > 500,
     'the admitted real HTTP request reached the fixture with more than 500ms remaining');
-  assert.ok(responseStartedAtPerfMs >= responseTargetPerfMs,
-    'the real HTTP body was not released before the conservative response phase');
+  assert.ok(responseStartedAtPerfMs >= requestReceivedAtPerfMs,
+    'the real HTTP response started after the admitted request reached the fixture');
+  assert.ok(responseFinishedAtPerfMs < settlementReturnTargetPerfMs,
+    'the real HTTP response finished before the test phase gate');
+  assert.ok(bodySettledAtPerfMs < settlementReturnTargetPerfMs,
+    'the real HTTP body settled durably before the test phase gate');
+  assert.ok(settlementWrapperReturnAtPerfMs >= settlementReturnTargetPerfMs,
+    'the test wrapper returned from real body settlement at the original absolute phase target');
+  assert.ok(settlementWrapperReturnAtPerfMs < retentionCallbackStartedAtPerfMs,
+    'the final retention callback begins only after the settlement wrapper returns');
   assert.ok(bodySettledAtPerfMs < retentionCallbackStartedAtPerfMs,
     'the admitted response body settled in the frontier before final retention began');
   assert.ok(remainingAtRetentionCallbackMs >= 250 && remainingAtRetentionCallbackMs <= 1_500,
