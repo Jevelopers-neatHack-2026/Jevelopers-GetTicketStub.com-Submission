@@ -1,5 +1,7 @@
 {
-  "source": "Neatlogs dashboard backend (signed-in owner session, read-only), project 'Complete's project' (US); queried 2026-10-11 21:57-22:05 UTC",
+  "source": "Curated owner/agent-prepared summary of reported Neatlogs dashboard/backend and host observations, not a raw backend export or host log. Owner reported signed-in read-only queries of project 'Complete's project' (US), 2026-10-11 21:57-22:05 UTC; raw responses/logs are not retained here.",
+  "provenance_limits": "Screenshots show research success (workflow, two tools, one LLM), research timeout (workflow, one tool, no LLM), and agent reply (workflow, one LLM, no tool). They do not display trace/session IDs, producer revision, live/production tags, UTC timestamps or HTTP 422. Exact IDs/times, inputs, production/runtime binding and app responses below are owner-reported and cannot be independently joined to screenshots. Art recovery is summary-only, with one reported workflow span and no screenshot.",
+  "cost_limits": "Dashboard cost display is not verified billing. Provider-reported cost is exported only when supplied as a finite value; otherwise absent/unknown. No production per-span provider-cost or billing receipts are retained. Reported no further AI spend is based on absent LLM spans/zero reported provider attempts, not independently verified accounting.",
   "producer": {
     "repository": "Jevelopers-neatHack-2026/getticketstub.com",
     "published_commit": "e4a19931b5febbf6efdb85e11d1d3da1b88106fe",
@@ -16,7 +18,7 @@
     { "session": "op_Ba1UqOiaCYptAdmD", "trace": "d3d7bccece4e343b863db06eec4ad578", "workflow": "ticketstub.research", "status": "ERROR",
       "spans": 2, "llm_calls": 0, "tool_calls": 1, "duration_ms": 8030, "started": "2026-10-11T21:56:48.584Z",
       "tree": ["ticketstub.research WORKFLOW ERROR 8.0s", "source.event_page TOOL ERROR timeout 8.0s"],
-      "app_behaviour": "HTTP 422 unreadable_link returned to the user; no AI spend after the failed fetch",
+      "app_behaviour": "Owner reported HTTP 422 unreadable_link returned to the user and no further AI spend after the failed fetch; no LLM span is shown, but billing was not independently verified",
       "screenshot": "trace-research-failure.jpg" },
     { "session": "op_bKlgNUuxjOhpVUkv", "trace": "63b4db3d65091615052591841c961ed1", "workflow": "ticketstub.agent", "status": "OK",
       "spans": 2, "llm_calls": 1, "tokens": 158, "duration_ms": 3243, "started": "2026-10-11T21:56:04.862Z",
@@ -24,10 +26,10 @@
       "screenshot": "trace-agent-reply.jpg" },
     { "session": "op_T-joQyeRzoJG175A", "trace": "8fc27f1ac8ceee3ef891900a9147a350", "workflow": "ticketstub.art", "status": "OK",
       "spans": 1, "llm_calls": 0, "started": "2026-10-11 ~22:00 UTC (not recorded precisely)",
-      "app_behaviour": "Recovery: internal error before any image-model call (ops log code=internal, attempts=0, ~23 ms); app answered 200 with procedural art (fallback=procedural)" }
+      "app_behaviour": "Owner-reported recovery, summary-only: internal error before any image-model call (ops log code=internal, attempts=0, ~23 ms); app answered 200 with procedural art (fallback=procedural). Applies to the observed requests only; raw host/backend evidence is not retained" }
   ],
-  "accepted_not_stored": {
-    "note": "Neatlogs returned HTTP 200 with no rejected spans for every export (host log: '[ops] neatlogs: export accepted (HTTP 200)', no failure lines), but these sessions were not found 30+ s later. Same receiver behaviour as documented in agent-harness#38: acceptance is not storage.",
+  "not_found_in_reported_readback_window": {
+    "note": "Owner reported these 3 of 7 production sessions not found 30+ s later during the queried window. The reported host line '[ops] neatlogs: export accepted (HTTP 200)' is once-only per process and establishes at least one reported success, not every export's acceptance. No per-export counters, session-to-ACK joins, raw responses or finalization results are retained. Client-side loss, server-side loss and delayed finalization remain unresolved; permanent non-storage is unverified. agent-harness#38 concerns separate operations and does not establish this app's cause.",
     "sessions": ["op_91uV_p0TBBEX8JfW (research, Billboard page, HTTP 200)", "op_LNoK2VHvk6U5V_cr (research, .invalid link, 422)", "op_j0o1z48tG3dNjntU (art, procedural fallback)"]
   },
   "earlier_local_runs": ["op_rwZtLKTb0n7tkbln", "op_VfByrGlgaMSBcSbI", "op_gAq1S0abPWDcYJ4H (development environment, local build)"]
