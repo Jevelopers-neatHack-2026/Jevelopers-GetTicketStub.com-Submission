@@ -306,10 +306,15 @@ test('billable dispatch exists only through a trusted host port and re-checks th
   assert.equal(bare.prepare, undefined);
   await assert.rejects(bare.dispatch({ cell_id: 'image_generation', target: target() }), (error) => error.code === 'adapter_unavailable');
   const seen = [];
+  const hostDispatchInputs = [];
   const calls = [];
   const composed = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort({ calls }), fetchImpl, dispatchPort: {
     async prepare(input) { seen.push(['prepare', input.cell_id, input.credential.token]); return { host_prepared: input.cell_id }; },
-    async dispatch(input) { seen.push(['dispatch', input.cell_id, input.credential.token, input.prepared, input.signal instanceof AbortSignal]); return { host: 'result' }; },
+    async dispatch(input) {
+      hostDispatchInputs.push(input);
+      seen.push(['dispatch', input.cell_id, input.credential.token, input.prepared, input.signal instanceof AbortSignal]);
+      return { host: 'result' };
+    },
   } });
   const input = billable('image_edit');
   const prepared = await composed.prepare(input);
@@ -319,6 +324,8 @@ test('billable dispatch exists only through a trusted host port and re-checks th
   assert.ok(!JSON.stringify(prepared).includes(TOKEN_CANARY), 'the credential is not in the value the runner holds');
   assert.deepEqual(await composed.dispatch(dispatchInput(input, prepared)), { host: 'result' });
   assert.deepEqual(seen, [['prepare', 'image_edit', TOKEN_CANARY], ['dispatch', 'image_edit', TOKEN_CANARY, { host_prepared: 'image_edit' }, true]]);
+  assert.equal(hostDispatchInputs[0].configuration, hostDispatchInputs[0].target.configuration);
+  assert.ok(Object.isFrozen(hostDispatchInputs[0].configuration), 'host dispatch receives the frozen authenticated configuration');
   // The pin is re-checked on both entry points, and a dispatch needs a prepared value this adapter minted.
   const wrong = billable('image_generation');
   wrong.target.service = 'openai';
@@ -332,12 +339,23 @@ test('billable dispatch exists only through a trusted host port and re-checks th
     ['prepared from another cell', { ...ok, prepared }],
     ['different grant', { ...ok, prepared: okPrepared, grant_ref: 'grant:other' }],
     ['different deadline', { ...ok, prepared: okPrepared, deadline_at: deadline(10_000) }],
-    ['different target object', { ...ok, prepared: okPrepared, target: target('image_generation') }],
+    ['different target contents', { ...ok, prepared: okPrepared, target: { ...target('image_generation'), model: 'synthetic-lab/other-image' } }],
+    ['configuration differs from target pin', { ...ok, prepared: okPrepared, configuration: { ...ok.configuration, provider_tag: 'other-provider' } }],
     ['mismatched pin', { ...ok, prepared: okPrepared, target: wrong.target }],
   ]) await assert.rejects(composed.dispatch({ ...bad, metering: meteringInput() }),
     (error) => ['credential_unavailable', 'unsupported_image_configuration'].includes(error.code), name);
   assert.equal(seen.filter(([kind]) => kind === 'dispatch').length, 1, 'no rejected dispatch reached the host port');
   assert.equal(seen.length, before + 1, 'only the one valid prepare ran after the rejections');
+
+  const structurallyEqual = billable('image_generation');
+  const structurallyEqualPrepared = await composed.prepare(structurallyEqual);
+  assert.deepEqual(await composed.dispatch(dispatchInput({ ...structurallyEqual,
+    target: structuredClone(structurallyEqual.target) }, structurallyEqualPrepared)), { host: 'result' },
+  'a separately allocated but content-identical target retains the exact pinned binding');
+  assert.equal(hostDispatchInputs[1].configuration, hostDispatchInputs[1].target.configuration);
+  assert.ok(Object.isFrozen(hostDispatchInputs[1].configuration));
+  assert.equal(seen.filter(([kind]) => kind === 'dispatch').length, 2);
+  assert.equal(seen.length, before + 3, 'the structural-copy case reaches host prepare and dispatch once');
   assert.equal(requests.length, 0, 'the metadata adapter never sends a paid request');
   // A port without prepare still gets a credential-bound prepare step.
   const noPrepare = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl, dispatchPort: {
@@ -446,7 +464,7 @@ test('prepare rechecks finite clock and deadline after credential and host prepa
   const expiredWhileResolving = createOpenRouterImagesAdapter({ now: clock, fetchImpl, dispatchPort,
     credentialPort: grantCredentialPort({ mutate(value) { nowMs += 500; return value; } }) });
   await assert.rejects(expiredWhileResolving.prepare(billable('image_generation', { deadline_at: deadline(100) })),
-    (error) => error.code === 'credential_unavailable');
+    (error) => error.code === 'preflight_deadline_passed');
   assert.deepEqual(hostCalls, [], 'a deadline that passes during credential resolution never reaches host preparation');
 
   nowMs = Date.parse('2031-03-04T05:06:07.000Z');
@@ -816,7 +834,7 @@ test('a prepared value is single use and bound to the scope it was prepared for'
 test('prepare re-checks the deadline after the credential await and never calls the host prepare once it has passed', async () => {
   for (const [name, phase, change, code] of [
     ['deadline passes after resolution', 'after', (r) => r + 200_000, 'preflight_deadline_passed'],
-    ['clock fault during resolution fails closed in the credential step', 'before', () => NaN, 'credential_unavailable']]) {
+    ['clock fault during resolution fails closed as adapter unavailable', 'before', () => NaN, 'adapter_unavailable']]) {
     let reading = clock();
     const inner = grantCredentialPort();
     const hostCalls = [];
@@ -847,4 +865,124 @@ test('prepare stores a copy of the scope, so later mutation of the caller object
   assert.equal(dispatches, 0, 'a mutated caller scope no longer matches the stored copy');
   await adapter.dispatch(dispatchInput({ ...input, scope: original }, prepared));
   assert.equal(dispatches, 1);
+});
+
+test('prepare rejects each binding mutation during credential and host awaits, with unchanged positive controls', async () => {
+  nowMs = Date.parse('2031-03-04T05:06:07.000Z');
+  const mutations = [
+    ['account_ref', (input) => { input.scope.account_ref = 'account:changed'; }],
+    ['project_ref', (input) => { input.scope.project_ref = 'project:changed'; }],
+    ['target contents', (input) => { input.target.model = 'synthetic-lab/changed-image'; }],
+    ['grant_ref', (input) => { input.grant_ref = 'grant:changed'; }],
+    ['deadline_at', (input) => { input.deadline_at = new Date(nowMs + 240_000).toISOString(); }],
+    ['configuration contents', (input) => { input.configuration.provider_tag = 'changed-provider'; }],
+    ['configuration removal', (input) => { delete input.configuration; }],
+    ['configuration addition', (input) => { input.configuration = structuredClone(input.target.configuration); }, true],
+  ];
+
+  const exercise = async (phase, { mutation, mutationName, omitConfiguration = false } = {}) => {
+    const context = `${phase} await / ${mutationName ?? 'unchanged input'}`;
+    const input = billable();
+    input.scope = { ...input.scope };
+    if (omitConfiguration) delete input.configuration;
+    const expected = {
+      account_ref: input.scope.account_ref,
+      project_ref: input.scope.project_ref,
+      grant_ref: input.grant_ref,
+      deadline_at: input.deadline_at,
+      target: structuredClone(input.target),
+      hasConfiguration: Object.hasOwn(input, 'configuration'),
+    };
+    const credentialEntered = deferred();
+    const credentialGate = deferred();
+    const credentialBase = grantCredentialPort();
+    const credentialSource = {
+      evidence_mode: 'live',
+      resolveCredential(args) {
+        credentialEntered.resolve(structuredClone(args));
+        return credentialBase.resolveCredential(args).then((resolved) => credentialGate.promise.then(() => resolved));
+      },
+    };
+    const hostEntered = deferred();
+    const hostGate = deferred();
+    const hostInputs = [];
+    const dispatchInputs = [];
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialSource,
+      fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+        async prepare(hostInput) {
+          hostInputs.push(hostInput);
+          if (phase === 'host') {
+            hostEntered.resolve(hostInput);
+            await hostGate.promise;
+          }
+          return { host_prepared: true };
+        },
+        async dispatch(hostInput) { dispatchInputs.push(hostInput); return { dispatched: true }; },
+      } });
+    const preparing = adapter.prepare(input);
+
+    if (phase === 'credential') {
+      const credentialRequest = await credentialEntered.promise;
+      assert.equal(credentialRequest.account_ref, expected.account_ref);
+      assert.equal(credentialRequest.project_ref, expected.project_ref);
+      assert.equal(credentialRequest.grant_ref, expected.grant_ref);
+      assert.equal(credentialRequest.target_binding.model, expected.target.model);
+      mutation?.(input);
+      credentialGate.resolve();
+    } else {
+      credentialGate.resolve();
+      const hostInput = await hostEntered.promise;
+      assert.equal(hostInput.scope.account_ref, expected.account_ref);
+      assert.equal(hostInput.scope.project_ref, expected.project_ref);
+      assert.equal(hostInput.grant_ref, expected.grant_ref);
+      assert.equal(hostInput.deadline_at, expected.deadline_at);
+      assert.deepEqual(hostInput.target, expected.target);
+      assert.equal(Object.hasOwn(hostInput, 'configuration'), expected.hasConfiguration);
+      if (expected.hasConfiguration) {
+        assert.deepEqual(hostInput.configuration, expected.target.configuration);
+        assert.equal(hostInput.configuration, hostInput.target.configuration);
+        assert.ok(Object.isFrozen(hostInput.configuration));
+      }
+      mutation?.(input);
+      assert.equal(hostInput.scope.account_ref, expected.account_ref, 'host receives a frozen scope snapshot');
+      assert.equal(hostInput.target.model, expected.target.model, 'host receives a frozen target snapshot');
+      if (expected.hasConfiguration) {
+        assert.equal(hostInput.configuration.provider_tag, expected.target.configuration.provider_tag,
+          'host configuration is the authenticated frozen target configuration');
+      }
+      hostGate.resolve();
+    }
+
+    if (mutation) {
+      await assert.rejects(preparing, (error) => error.code === 'credential_unavailable', context);
+      assert.equal(hostInputs.length, phase === 'credential' ? 0 : 1,
+        `${context} has the expected host preparation boundary`);
+      assert.equal(dispatchInputs.length, 0, `${context} never reaches host dispatch`);
+      return;
+    }
+
+    const prepared = await preparing;
+    assert.equal(hostInputs.length, 1);
+    const dispatchPayload = { ...input, target: structuredClone(expected.target), scope: { ...input.scope }, prepared,
+      metering: meteringInput() };
+    if (expected.hasConfiguration) dispatchPayload.configuration = structuredClone(expected.target.configuration);
+    assert.deepEqual(await adapter.dispatch(dispatchPayload), { dispatched: true });
+    assert.equal(dispatchInputs.length, 1, `${context} remains dispatchable`);
+    if (expected.hasConfiguration) {
+      assert.equal(dispatchInputs[0].configuration, dispatchInputs[0].target.configuration,
+        'dispatch receives the authenticated configuration from its frozen target snapshot');
+      assert.ok(Object.isFrozen(dispatchInputs[0].configuration));
+      assert.equal(dispatchInputs[0].configuration.provider_tag, expected.target.configuration.provider_tag);
+    } else {
+      assert.equal(Object.hasOwn(dispatchInputs[0], 'configuration'), false);
+    }
+  };
+
+  for (const phase of ['credential', 'host']) {
+    await exercise(phase);
+    await exercise(phase, { omitConfiguration: true });
+    for (const [name, mutate, omitConfiguration] of mutations) {
+      await exercise(phase, { mutation: mutate, mutationName: name, omitConfiguration: Boolean(omitConfiguration) });
+    }
+  }
 });

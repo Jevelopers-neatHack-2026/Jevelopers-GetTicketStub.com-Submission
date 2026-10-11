@@ -115,6 +115,60 @@ function targetBinding(target, scope) {
   };
 }
 
+function freezeTree(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) freezeTree(child);
+  return Object.freeze(value);
+}
+
+function capturePrepareBinding(input) {
+  let cellId;
+  let target;
+  let scope;
+  let grantRef;
+  let deadlineAt;
+  let hasConfiguration;
+  let configurationHash;
+  try {
+    cellId = input.cell_id;
+    target = structuredClone(input.target);
+    scope = Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref });
+    grantRef = input.grant_ref;
+    deadlineAt = input.deadline_at;
+    hasConfiguration = Object.hasOwn(input, 'configuration');
+    if (hasConfiguration) configurationHash = canonicalHash(input.configuration);
+  } catch {
+    throw error('credential_unavailable', 'Billable preparation bindings could not be captured safely.');
+  }
+  validateOpenRouterImageTarget(cellId, target);
+  let targetHash;
+  let pinnedConfigurationHash;
+  try {
+    targetHash = canonicalHash(target);
+    pinnedConfigurationHash = canonicalHash(target.configuration);
+  }
+  catch { throw error('unsupported_image_configuration', 'OpenRouter target must be a canonical JSON pin.'); }
+  if (hasConfiguration && configurationHash !== pinnedConfigurationHash) {
+    throw error('credential_unavailable', 'Billable configuration does not match the pinned target configuration.');
+  }
+  target = freezeTree(target);
+  const matches = (candidate) => {
+    try {
+      return candidate?.cell_id === cellId
+        && candidate?.grant_ref === grantRef
+        && candidate?.deadline_at === deadlineAt
+        && candidate?.scope?.account_ref === scope.account_ref
+        && candidate?.scope?.project_ref === scope.project_ref
+        && Object.hasOwn(candidate, 'configuration') === hasConfiguration
+        && (!hasConfiguration || canonicalHash(candidate.configuration) === pinnedConfigurationHash)
+        && canonicalHash(candidate?.target) === targetHash;
+    } catch { return false; }
+  };
+  const hostInput = Object.freeze({ ...input, cell_id: cellId, target, scope, grant_ref: grantRef, deadline_at: deadlineAt,
+    ...(Object.hasOwn(input, 'configuration') ? { configuration: target.configuration } : {}) });
+  return { cellId, target, targetHash, scope, grantRef, deadlineAt, hasConfiguration, pinnedConfigurationHash, matches, hostInput };
+}
+
 /** The catalog URL for an explicit author/slug model id. Segments are encoded; nothing else is interpolated. */
 export function openRouterCatalogEndpoint(modelId) {
   const match = typeof modelId === 'string' ? MODEL_ID.exec(modelId) : null;
@@ -205,14 +259,16 @@ async function resolveCredential(credentialPort, { purpose = 'read_only_account_
     const checkedAt = readClock(now);
     const expiresAt = Date.parse(resolved.expires_at);
     const deadline = deadlineAt ? Date.parse(deadlineAt) : undefined;
+    if (deadlineAt && (!Number.isFinite(deadline) || deadline <= checkedAt)) {
+      throw error('preflight_deadline_passed', 'The approved operation deadline passed during credential resolution.');
+    }
     if (typeof resolved.expires_at !== 'string' || !Number.isFinite(expiresAt)
-      || expiresAt <= checkedAt
-      || (deadlineAt && (!Number.isFinite(deadline) || deadline <= checkedAt || expiresAt < deadline))) {
+      || expiresAt <= checkedAt || (deadlineAt && expiresAt < deadline)) {
       throw error('credential_unavailable', 'Scoped credential is expired or will not remain valid through the operation deadline.');
     }
     return resolved.token;
   } catch (cause) {
-    if (cause instanceof AccessPreflightError && cause.code === 'adapter_unavailable') throw cause;
+    if (cause instanceof AccessPreflightError && ['adapter_unavailable', 'preflight_deadline_passed'].includes(cause.code)) throw cause;
     throw error('credential_unavailable', 'Credential provider did not return a usable access token.');
   }
 }
@@ -378,24 +434,31 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
     // dispatch cannot reach the host port without a credential that was resolved for this grant and deadline.
     const preparedState = new WeakMap();
     adapter.prepare = async (input) => {
-      validateOpenRouterImageTarget(input.cell_id, input.target);
-      if (typeof input.grant_ref !== 'string' || !SAFE_REF.test(input.grant_ref)
-        || typeof input.deadline_at !== 'string' || !Number.isFinite(Date.parse(input.deadline_at))
-        || Date.parse(input.deadline_at) <= readClock(now)) {
+      const binding = capturePrepareBinding(input);
+      if (typeof binding.grantRef !== 'string' || !SAFE_REF.test(binding.grantRef)
+        || typeof binding.deadlineAt !== 'string' || !Number.isFinite(Date.parse(binding.deadlineAt))
+        || Date.parse(binding.deadlineAt) <= readClock(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
-      const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
-        target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at, now });
+      const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: binding.scope,
+        target: binding.target, grantRef: binding.grantRef, deadlineAt: binding.deadlineAt, now });
+      if (!binding.matches(input)) {
+        throw error('credential_unavailable', 'Billable preparation bindings changed during credential resolution.');
+      }
       // Credential lookup is asynchronous. Recheck the clock/deadline before handing its token to host preparation.
-      remainingUntil(input.deadline_at, now);
+      remainingUntil(binding.deadlineAt, now);
       const credential = Object.freeze({ token });
-      const hostPrepared = dispatchPort.prepare ? await dispatchPort.prepare({ ...input, credential }) : undefined;
+      const hostPrepared = dispatchPort.prepare
+        ? await dispatchPort.prepare(Object.freeze({ ...binding.hostInput, credential })) : undefined;
+      if (!binding.matches(input)) {
+        throw error('credential_unavailable', 'Billable preparation bindings changed during host preparation.');
+      }
       // Host preparation is also asynchronous. Never mint a dispatchable value after the grant's deadline.
-      remainingUntil(input.deadline_at, now);
+      remainingUntil(binding.deadlineAt, now);
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target,
-        scope: Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref }), grant_ref: input.grant_ref,
-        deadline_at: input.deadline_at, credential, hostPrepared });
+      preparedState.set(prepared, { cell_id: binding.cellId, target: binding.target, target_hash: binding.targetHash,
+        has_configuration: binding.hasConfiguration, configuration_hash: binding.pinnedConfigurationHash,
+        scope: binding.scope, grant_ref: binding.grantRef, deadline_at: binding.deadlineAt, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {
@@ -404,7 +467,14 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       }
       validateOpenRouterImageTarget(input.cell_id, input.target);
       const state = isRecord(input.prepared) ? preparedState.get(input.prepared) : undefined;
-      if (!state || state.cell_id !== input.cell_id || state.target !== input.target
+      let targetMatches = false;
+      try {
+        targetMatches = Boolean(state)
+          && canonicalHash(input.target) === state.target_hash
+          && Object.hasOwn(input, 'configuration') === state.has_configuration
+          && (!state.has_configuration || canonicalHash(input.configuration) === state.configuration_hash);
+      } catch { /* invalid binding */ }
+      if (!state || state.cell_id !== input.cell_id || !targetMatches
         || state.grant_ref !== input.grant_ref || state.deadline_at !== input.deadline_at
         || !isRecord(input.scope) || input.scope.account_ref !== state.scope?.account_ref
         || input.scope.project_ref !== state.scope?.project_ref) {
@@ -413,8 +483,12 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
       const signal = boundedTransportSignal(state.deadline_at, runnerCancellationSignal(input), now);
       // A correctly bound and validated prepared value is single use; consume it before the host port can run.
       preparedState.delete(input.prepared);
-      return dispatchPort.dispatch({ ...input, prepared: state.hostPrepared, credential: state.credential,
-        signal });
+      const hostInput = { ...input, cell_id: state.cell_id, target: state.target, scope: state.scope,
+        grant_ref: state.grant_ref, deadline_at: state.deadline_at, prepared: state.hostPrepared,
+        credential: state.credential, signal };
+      if (state.has_configuration) hostInput.configuration = state.target.configuration;
+      else delete hostInput.configuration;
+      return dispatchPort.dispatch(hostInput);
     };
   } else {
     adapter.dispatch = async () => {
