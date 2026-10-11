@@ -94,8 +94,9 @@ export const productionIssue = (code, path = '') => ({ ok: false, errors: [{ cod
 
 /** Sanitized errors never interpolate input or exceptions. Defaults preserve uncertainty. */
 export function createProductionError(code, context) {
+  if (typeof code !== 'string' || !Object.hasOwn(productionErrorRegistry, code)) return productionIssue('INVALID_INPUT');
   const record = productionErrorRegistry[code];
-  if (!record) return productionIssue('INVALID_INPUT');
+  if (context === null || typeof context !== 'object' || Array.isArray(context) || !checkTrustedContext(context.scope, context.scope).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const diagnostic = context.diagnostic_ref ?? { state: 'unavailable', ...context.scope, correlation_id: context.correlation_id, reason_code: 'STORAGE_UNAVAILABLE' };
   const value = { contract: 'ProductionError', schema_version: '1.0.0', policy_version: '1.0.0', module: 'print-production', operation: context.operation, code,
     ...record, diagnostic_ref: diagnostic, blocking_condition: context.blocking_condition ?? 'input', side_effects: context.side_effects ?? 'unknown', usage_state: context.usage_state ?? 'unknown',

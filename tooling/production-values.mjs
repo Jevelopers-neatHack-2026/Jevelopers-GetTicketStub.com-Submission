@@ -146,6 +146,7 @@ export function checkTemplateSpec(input, scope) {
 }
 
 export function checkPersonalizationSchema(input, template) {
+  if (!validateContract('TemplateSpec', template).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const parsed = checkProductionValueIntegrity('PersonalizationSchema', input, { tenant_id: template.tenant_id, project_id: template.project_id });
   if (!parsed.ok) return parsed;
   if (!checkTrustedContext(input, { tenant_id: template.tenant_id, project_id: template.project_id }).ok) return productionIssue('NOT_FOUND');
@@ -249,6 +250,7 @@ export function privateMillimetresToNm(input, maximumNm) {
 }
 
 export function translateProductionGeometry(input, context) {
+  if (context === null || typeof context !== 'object' || Array.isArray(context) || !checkTrustedContext(context.scope, context.scope).ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const spec = checkPrintSpec(input, { trusted_scope: context.scope });
   if (!spec.ok) return spec;
   const c = spec.value.constraints;

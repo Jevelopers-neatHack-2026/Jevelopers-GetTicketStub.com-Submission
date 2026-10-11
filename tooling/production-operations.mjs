@@ -1,4 +1,4 @@
-import { validateContract, checkTrustedContext, canonicalJson, hashManifest, ContractError } from './runtime.mjs';
+import { validateContract, validatePrimitive, checkTrustedContext, canonicalJson, hashManifest, ContractError } from './runtime.mjs';
 import { productionIssue, productionOk, validateProductionReference, checkProductionAuthority } from './production-errors.mjs';
 import { checkProductionValueIntegrity } from './production-values.mjs';
 export { productionErrorRegistry, createProductionError, checkProductionError, validateProductionReference, adaptProductionRevision, checkProductionApproval, checkProductionAuthority, checkProductionHostApproval } from './production-errors.mjs';
@@ -73,6 +73,15 @@ export function productionSemanticDigest(operation, input, pins) {
 }
 
 export function compareProductionIdempotency(input, prior) {
+  for (const value of [input, prior]) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return productionIssue('INVALID_INPUT');
+    try { canonicalJson(value); }
+    catch (error) { if (error instanceof ContractError) return productionIssue('INVALID_INPUT'); throw error; }
+    if (!checkTrustedContext(value, { tenant_id: value.tenant_id, project_id: value.project_id }).ok ||
+        typeof value.operation !== 'string' || !Object.hasOwn(productionRequests, value.operation) ||
+        typeof value.idempotency_key !== 'string' || !/^[A-Za-z0-9_.:-]{1,256}(?![\s\S])/.test(value.idempotency_key) ||
+        !validatePrimitive('Sha256', value.digest).ok) return productionIssue('INVALID_INPUT');
+  }
   const fields = ['tenant_id', 'project_id', 'operation', 'idempotency_key'];
   if (!fields.every(key => input[key] === prior[key])) return productionIssue('NOT_FOUND');
   return input.digest === prior.digest ? productionOk({ relationship: 'same_input', replay_authorized: false }) : productionIssue('IDEMPOTENCY_CONFLICT');

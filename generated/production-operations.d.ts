@@ -109,7 +109,8 @@ export declare function checkCsvInput(value: unknown, context: CsvContext): Prod
 export declare const productionArchiveLimits: { readonly payloads: 97; readonly zip_entries: 98; readonly outer_descriptors: 100; readonly entry_bytes: 8388608; readonly payload_bytes: 33554432; readonly archive_bytes: 41943040; readonly manifest_bytes: 4194304; readonly detached_bytes: 1048576 };
 export declare const productionJsonLimits: { readonly maximum_depth: 64; readonly maximum_tokens: 100000 };
 export declare function safeProductionFilename(value: string): boolean;
-export declare function verifyProductionZip(value: Uint8Array, expected: readonly ArtifactFile[]): ProductionCheck<readonly ProductionObservedFile[]>;
+export type ProductionZipDescriptor = Pick<ArtifactFile, 'filename' | 'byte_size' | 'byte_hash'>;
+export declare function verifyProductionZip(value: Uint8Array, expected: readonly ProductionZipDescriptor[]): ProductionCheck<readonly ProductionObservedFile[]>;
 export declare function productionBundleContentHash(value: ProductionBundle_2_0_0): Sha256;
 export declare function productionPayloadSetHash(value: readonly ArtifactFile[]): Sha256;
 export declare function checkProductionFile(value: unknown): ProductionCheck<ArtifactFile>;

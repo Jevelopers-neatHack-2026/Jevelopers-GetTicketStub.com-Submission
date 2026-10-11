@@ -1,5 +1,5 @@
 import { crc32 } from 'node:zlib';
-import { hashBytes } from './runtime.mjs';
+import { hashBytes, validatePrimitive } from './runtime.mjs';
 import { productionIssue, productionOk } from './production-errors.mjs';
 
 export const productionArchiveLimits = Object.freeze({ payloads: 97, zip_entries: 98, outer_descriptors: 100, entry_bytes: 8388608, payload_bytes: 33554432, archive_bytes: 41943040, manifest_bytes: 4194304, detached_bytes: 1048576 });
@@ -15,6 +15,10 @@ export function verifyProductionZip(input, expected) {
   const count = b.readUInt16LE(end + 10), centralStart = b.readUInt32LE(end + 16), centralSize = b.readUInt32LE(end + 12);
   if (count > limits.zip_entries) return productionIssue('RESOURCE_LIMIT');
   if (count !== expected.length || b.readUInt16LE(end + 8) !== count || centralStart + centralSize !== end || centralStart > end) return productionIssue('INTEGRITY_FAILURE');
+  for (const descriptor of expected) {
+    if (descriptor === null || typeof descriptor !== 'object' || Array.isArray(descriptor) || !safeProductionFilename(descriptor.filename) ||
+        !Number.isSafeInteger(descriptor.byte_size) || descriptor.byte_size < 0 || !validatePrimitive('Sha256', descriptor.byte_hash).ok) return productionIssue('INTEGRITY_FAILURE');
+  }
   const descriptors = [...expected].sort((a, b) => a.filename < b.filename ? -1 : a.filename > b.filename ? 1 : 0);
   if (new Set(descriptors.map(entry => entry.filename.toLowerCase())).size !== descriptors.length) return productionIssue('INTEGRITY_FAILURE');
   let central = centralStart, local = 0, total = 0;

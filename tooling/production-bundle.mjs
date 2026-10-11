@@ -91,6 +91,9 @@ export function verifyProductionBundleFiles(input, context) {
   if (!trusted.ok) return productionIssue('INVALID_TRUST_CONTEXT');
   const outer = inventory(trusted.value.file_set, limits.outer_descriptors);
   if (!outer.ok) return outer;
+  for (const file of input) {
+    if (file === null || typeof file !== 'object' || Array.isArray(file) || !safeProductionFilename(file.filename) || !(file.bytes instanceof Uint8Array)) return productionIssue('INTEGRITY_FAILURE');
+  }
   if (new Set(input.map(file => file.filename?.toLowerCase())).size !== input.length || input.length !== outer.value.length) return productionIssue('INTEGRITY_FAILURE');
   const actual = new Map();
   for (const observed of input) {

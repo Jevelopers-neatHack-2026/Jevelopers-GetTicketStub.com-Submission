@@ -90,6 +90,8 @@ CSV is disabled before fetch/scheduling. Conditional CsvDialect/CsvMapping/CsvCh
 
 ArtifactFile/2 carries exact raw byte hash/length, safe flat ASCII names, closed roles and explicit nullable geometry/profile/characteristics. Nonvisual JSON/ZIP/ICC cannot invent visual dimensions. Profile JSON is a description, not ICC bytes. Hybrid SVG/PDF is not automatically all-vector.
 
+The standalone ZIP check accepts readonly byte descriptors containing filename, byte_size and byte_hash. Full ArtifactFile/2 metadata validation occurs in the bundle and manifest checks.
+
 1. Hash all final shipped payloads, including reports/profile/lineage and applicable source/preview/output.
 2. ProductionBundle/2 files contains payloads only: at most 97; no manifest, archive, detached or nested ZIP.
 3. Bundle content hashes canonical manifest excluding only bundle_hash. Insert it and serialize exact canonical UTF-8 without BOM/newline; raw manifest has its own byte hash.
