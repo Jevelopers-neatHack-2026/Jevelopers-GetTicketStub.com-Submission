@@ -168,3 +168,19 @@ test('trusted scope refresh clears former action UI and rejects cross-scope curr
   await page.route('**/api/schema',async route=>{const response=await route.fetch(),data=await response.json();data.schema.tenant_id='other_fixture_tenant';await route.fulfill({response,json:data});},{times:1});
   await page.getByRole('button',{name:'Refresh current composition',exact:true}).click();await expect(page.locator('#composition-error')).toContainText('exact preview unavailable');await expect(page.locator('#composition-preview')).toBeHidden();await expect(page.locator('#operation-status')).toHaveText('No composition operation submitted in this scope.');await expect(page.getByRole('button',{name:'Read existing operation',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Review artwork style',exact:true})).toBeDisabled();expect(await counts(request)).toMatchObject({composition_previews:1,image_calls:0});
 });
+
+
+test('mixed-case public history renders binary pages with keyboard continuation and zero read effects',async({page,request})=>{
+  await initialize(page);const ids=['Z_history','a_history','A_history','_history','z_history','B_history','b_history','C_history','c_history','D_history','d_history'];let last;
+  for(let i=0;i<ids.length;i++){
+    const current=(await(await request.get('/api/composition/current')).json()).view;
+    const body={action_version:'creative-composition-apply/1.0',action_id:ids[i],projection_sha256:current.projection.projection_sha256,intent:'apply',draft:{categories:{name_size:i%2?'small':'large'},exact:{}}};
+    last=(await(await request.post('/api/composition/apply',{data:body})).json()).result;expect(last.ok).toBe(true);
+  }
+  await refresh(page,last);const full=(await(await request.get('/api/composition/history?limit=20')).json()).view;expect(full.ok).toBe(true);
+  const expected=full.identity.revisions.map(r=>r.revision_id);expect(expected).toEqual([...expected].sort());expect(expected).toHaveLength(12);
+  const before=await counts(request);const historyResponse=page.waitForResponse(r=>r.url().includes('/api/composition/history?limit=10'));
+  await page.getByRole('button',{name:'Read composition history',exact:true}).focus();await page.keyboard.press('Enter');expect((await(await historyResponse).json()).view.ok).toBe(true);await expect(page.locator('#composition-history li')).toHaveCount(10);
+  const next=page.getByRole('button',{name:'Read more composition history',exact:true});await expect(next).toBeVisible();await next.focus();const nextResponse=page.waitForResponse(r=>r.url().includes('after_revision_id='));await page.keyboard.press('Enter');expect((await(await nextResponse).json()).view.ok).toBe(true);await expect(page.locator('#composition-history li')).toHaveCount(12);
+  const actual=await page.locator('#composition-history li').allTextContents();expect(actual.map(x=>x.split(' · ')[0])).toEqual(expected);await expect(next).toBeHidden();expect(await counts(request)).toEqual(before);expect(before).toMatchObject({image_calls:0,jev_calls:0,reservations:0,composition_previews:11});
+});

@@ -6,6 +6,7 @@ import { join, basename } from 'node:path';
 import { createIntegratedHost, fixturePrincipal as principal } from '../../fixtures/controls/integrated-host.mjs';
 import { canonicalHash } from 'creative-engine/contracts';
 import { spawnSync } from 'node:child_process';
+import { assertCompositionHistory, assertCompositionHistoryIdentity } from '../../src/controls/composition-view.mjs';
 
 async function setup(t, options = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'controls-composition-'));
@@ -276,5 +277,37 @@ test('read-only completed-job recovery remains available after edit revocation w
   assert.equal(await host.composition.lookup({ ...principal, project_id: 'other_project' }, body.action_id), null);
   host.policy.can_read = false;
   assert.equal(await host.composition.lookup(principal, body.action_id), null);
+  zeroEffects(host);
+});
+
+
+test('public mixed-case history keeps binary full-page and single-row pagination equal without normalizing corrupt order', async t => {
+  const host = await setup(t), initialized = await initialize(host);
+  const ids = ['Z_mixed', 'a_mixed', 'A_mixed', '_mixed', 'z_mixed'];
+  for (let i = 0; i < ids.length; i++) {
+    const result = await host.composition.apply(principal, await action(host, {}, { name_size: i % 2 ? 'small' : 'large' }, ids[i]));
+    assert.equal(result.ok, true, JSON.stringify(result));
+  }
+  const before = host.counts(), full = await host.composition.history(principal, { limit: 20 });
+  assert.equal(assertCompositionHistory(full).ok, true);
+  const expected = [initialized.result.revision_id, ...ids.map(id => `revision:${id}`)].sort();
+  assert.deepEqual(full.identity.revisions.map(r => r.revision_id), expected);
+  assert.equal(new Set(full.identity.revisions.map(r => r.created_at)).size, 1, 'fixture explicitly exercises equal-time ID tie ordering');
+  const pages = []; let after;
+  do {
+    const view = await host.composition.history(principal, { limit: 1, ...(after ? { after_revision_id: after } : {}) });
+    assertCompositionHistory(view); pages.push(...view.identity.revisions); after = view.identity.next_after_revision_id;
+  } while (after);
+  assert.deepEqual(pages, full.identity.revisions);
+  const reversed = structuredClone(full.identity); reversed.revisions.reverse();
+  assert.throws(() => assertCompositionHistoryIdentity(reversed), 'consumer must reject reversed producer order rather than sort it');
+  const duplicated = structuredClone(full.identity); duplicated.revisions.push(duplicated.revisions[0]);
+  assert.throws(() => assertCompositionHistoryIdentity(duplicated));
+  const crossScope = structuredClone(full.identity); crossScope.revisions[0].design_version_id = 'other_design';
+  assert.throws(() => assertCompositionHistoryIdentity(crossScope));
+  await assert.rejects(host.composition.history({ ...principal, tenant_id: 'other_tenant' }));
+  host.policy.can_read = false;
+  await assert.rejects(host.composition.history(principal));
+  assert.deepEqual(host.counts(), before, 'all history and rejected reads perform zero execution');
   zeroEffects(host);
 });

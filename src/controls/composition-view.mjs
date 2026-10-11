@@ -89,7 +89,7 @@ export function assertCompositionHistoryIdentity(value) {
         !validId(r.revision_id) || seen.has(r.revision_id) || !digest(r.revision_sha256) || !validId(r.design_version_id) || !digest(r.design_version_sha256) ||
         (r.parent_revision_id === null ? r.parent_revision_sha256 !== null : !validId(r.parent_revision_id) || !digest(r.parent_revision_sha256)) ||
         typeof r.created_at !== 'string' || !Number.isFinite(Date.parse(r.created_at)) || Date.parse(r.created_at) > previousTime ||
-        Date.parse(r.created_at) === previousTime && r.revision_id.localeCompare(previousId) < 0 ||
+        Date.parse(r.created_at) === previousTime && r.revision_id < previousId ||
         x.current && (r.design_version_id !== x.current.design_version_id || r.design_version_sha256 !== x.current.design_version_sha256)) deny();
     seen.add(r.revision_id); previousTime = Date.parse(r.created_at); previousId = r.revision_id;
   }
