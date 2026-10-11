@@ -54,5 +54,7 @@ jobs:
       - run: make verify CASE=eval-policy-unit MODE=unit
       - run: make verify CASE=safe-retrieval MODE=mock
       - run: make verify CASE=content-privacy MODE=mock
+      - name: Test EI research candidate compatibility bundle
+        run: make verify CASE=research-api MODE=mock
       - run: npm run test:runner
       - run: npm run typecheck

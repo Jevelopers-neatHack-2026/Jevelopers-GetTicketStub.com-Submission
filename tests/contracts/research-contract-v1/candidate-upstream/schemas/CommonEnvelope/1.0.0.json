@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/CommonEnvelope/1.0.0",
+  "title": "CommonEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "schema_version", "policy_version", "event_id", "tenant_id", "project_id", "correlation_id", "producer", "occurred_at", "observed_at", "ingested_at", "environment", "billing_mode", "source_refs"],
+  "properties": {
+    "contract": { "const": "CommonEnvelope", "x-classification": "public" },
+    "schema_version": { "const": "1.0.0", "x-classification": "public" },
+    "policy_version": { "const": "1.0.0", "x-classification": "public" },
+    "event_id": { "$ref": "#/$defs/EventId", "x-classification": "internal" },
+    "tenant_id": { "$ref": "#/$defs/TenantId", "x-classification": "restricted" },
+    "project_id": { "$ref": "#/$defs/ProjectId", "x-classification": "restricted" },
+    "workflow_id": { "$ref": "#/$defs/WorkflowId", "x-classification": "internal" },
+    "run_id": { "$ref": "#/$defs/RunId", "x-classification": "internal" },
+    "job_id": { "$ref": "#/$defs/JobId", "x-classification": "internal" },
+    "artifact_id": { "$ref": "#/$defs/ArtifactId", "x-classification": "restricted" },
+    "design_id": { "$ref": "#/$defs/DesignId", "x-classification": "restricted" },
+    "design_version_id": { "$ref": "#/$defs/DesignVersionId", "x-classification": "restricted" },
+    "order_id": { "$ref": "#/$defs/OrderId", "x-classification": "restricted" },
+    "trace_id": { "$ref": "#/$defs/TraceId", "x-classification": "internal" },
+    "correlation_id": { "$ref": "#/$defs/CorrelationId", "x-classification": "internal" },
+    "evidence_id": { "$ref": "#/$defs/EvidenceId", "x-classification": "internal" },
+    "usage_event_id": { "$ref": "#/$defs/UsageEventId", "x-classification": "internal" },
+    "logical_operation_id": { "$ref": "#/$defs/LogicalOperationId", "x-classification": "internal" },
+    "provider_attempt_id": { "$ref": "#/$defs/ProviderAttemptId", "x-classification": "internal" },
+    "billable_attempt_id": { "$ref": "#/$defs/BillableAttemptId", "x-classification": "internal" },
+    "transport_attempt_id": { "$ref": "#/$defs/TransportAttemptId", "x-classification": "internal" },
+    "provider_request_id": { "$ref": "#/$defs/ProviderRequestId", "x-classification": "restricted" },
+    "producer": {
+      "type": "object", "additionalProperties": false, "required": ["module", "source_revision", "build_revision"], "x-classification": "internal",
+      "properties": {
+        "module": { "type": "string", "enum": ["getticketstub.com", "agent-harness", "event-intelligence", "creative-engine", "print-production", "fulfillment-connectors", "cost-intelligence", "team-dashboard", "integration-evals", "shared-contracts"], "x-classification": "public" },
+        "source_revision": { "$ref": "#/$defs/SourceRevision", "x-classification": "public" },
+        "build_revision": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$", "x-classification": "internal" }
+      }
+    },
+    "occurred_at": { "$ref": "#/$defs/UtcTime", "x-classification": "internal" },
+    "observed_at": { "$ref": "#/$defs/UtcTime", "x-classification": "internal" },
+    "ingested_at": { "$ref": "#/$defs/UtcTime", "x-classification": "internal" },
+    "environment": { "type": "string", "enum": ["development", "test", "production"], "x-classification": "public" },
+    "billing_mode": { "type": "string", "enum": ["live", "sandbox", "simulated"], "x-classification": "public" },
+    "source_refs": {
+      "type": "array", "maxItems": 100, "x-classification": "restricted",
+      "items": { "type": "object", "additionalProperties": false, "required": ["kind", "id"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["artifact", "evidence", "source_observation", "provider_request", "manifest"], "x-classification": "internal" },
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,256}$", "x-classification": "restricted" },
+          "content_hash": { "$ref": "#/$defs/Sha256", "x-classification": "restricted" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "TenantId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'TenantId'>" },
+    "ProjectId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'ProjectId'>" },
+    "EventId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'EventId'>" },
+    "WorkflowId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'WorkflowId'>" },
+    "RunId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'RunId'>" },
+    "JobId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'JobId'>" },
+    "ArtifactId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'ArtifactId'>" },
+    "DesignId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'DesignId'>" },
+    "DesignVersionId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'DesignVersionId'>" },
+    "OrderId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'OrderId'>" },
+    "TraceId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'TraceId'>" },
+    "CorrelationId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'CorrelationId'>" },
+    "EvidenceId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'EvidenceId'>" },
+    "UsageEventId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'UsageEventId'>" },
+    "LogicalOperationId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'LogicalOperationId'>" },
+    "ProviderAttemptId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'ProviderAttemptId'>" },
+    "BillableAttemptId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'BillableAttemptId'>" },
+    "TransportAttemptId": { "type": "string", "format": "uuid", "tsType": "Brand<string, 'TransportAttemptId'>" },
+    "ProviderRequestId": { "type": ["string", "null"], "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9_.:-]+$", "tsType": "Brand<string, 'ProviderRequestId'> | null" },
+    "SourceRevision": { "type": "string", "pattern": "^[a-f0-9]{40}$", "tsType": "Brand<string, 'SourceRevision'>" },
+    "UtcTime": { "type": "string", "format": "utc-time", "tsType": "Brand<string, 'UtcTime'>" },
+    "Sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$", "tsType": "Brand<string, 'Sha256'>" },
+    "ExactDecimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$", "tsType": "Brand<string, 'ExactDecimal'>" }
+  }
+}
