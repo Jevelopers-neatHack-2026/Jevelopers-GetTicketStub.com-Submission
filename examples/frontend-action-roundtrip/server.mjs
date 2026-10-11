@@ -11,6 +11,7 @@ const files = { '/': ['index.html', 'text/html'], '/app.mjs': ['app.mjs', 'text/
   '/inspection-presentation.html': ['inspection-presentation.html', 'text/html'],
   '/inspection-presentation.mjs': ['inspection-presentation.mjs', 'text/javascript'],
   '/inspection-consumer.mjs': ['../../src/controls/inspection-consumer.mjs', 'text/javascript'],
+  '/public-result.mjs': ['../../src/controls/public-result.mjs', 'text/javascript'],
   '/inspection-inputs.json': ['../../fixtures/controls/inspection-presentation-inputs.json', 'application/json'] };
 const json = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
 const mode = { mode: 'mock', authority: 'MOCK trusted host fixture; no actual membership', transport: 'native provider with intercepted offline fetch', backend: 'actual local API/planning/SQLite versions/telemetry' };

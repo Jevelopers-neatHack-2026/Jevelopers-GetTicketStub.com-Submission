@@ -1,5 +1,6 @@
 import { assertRenderableSchema, defaultDraft, activeQuestions, canonical } from '/schema.mjs';
 import { applyErrorMessage, historyErrorMessage } from './messages.mjs';
+import { projectApplyResult, projectCounters, projectHistoryList, projectHistoryResult } from '/public-result.mjs';
 const $ = id => document.getElementById(id);
 let schema, draft, lastAction, operationId, operationStatus, historySelection, pending = false;
 async function api(path, body) {
@@ -7,18 +8,19 @@ async function api(path, body) {
   if (!response.ok) throw new Error('Request unavailable');
   return response.json();
 }
-function counter(data) { if (data.counters) $('counters').textContent = `Jobs: ${data.counters.jobs} · JEV calls: ${data.counters.jev_calls} · Image calls: ${data.counters.image_calls}`; }
+function counter(data) { const counts = projectCounters(data); if (counts) $('counters').textContent = `Jobs: ${counts.jobs} · JEV calls: ${counts.jev_calls} · Image calls: ${counts.image_calls}`; }
 function error(message) { $('error').textContent = message; $('error').hidden = false; $('error').focus(); }
 function result(data) {
-  counter(data); $('error').hidden = true;
+  counter(data);
+  data = projectApplyResult(data);
+  $('error').hidden = true;
   if (data.operation_id) operationId = data.operation_id;
   if (data.status) operationStatus = data.status;
   if (!data.ok && operationId) $('cancel').disabled = false;
   if (!data.ok) {
-    if (data.operation_id) $('status').textContent = `Apply did not complete. Existing operation: ${data.operation_id}.`;
+    $('status').textContent = operationId ? `Apply did not complete. Existing operation: ${operationId}.` : 'Apply did not complete. Operation reference unavailable. Retry last Apply to recover its identity.';
     error(applyErrorMessage(data)); return;
   }
-  if (data.operation_id) operationId = data.operation_id;
   $('status').textContent = data.code === 'cancelled' ? 'Operation cancelled. No approval or purchase was created.' :
     `${data.code === 'replayed' ? 'Existing operation returned' : data.code === 'completed' ? 'Artwork revision saved' : data.code === 'ready' ? 'Typed handoff ready' : 'Apply accepted'}: ${operationId}. No approval or purchase was created.`;
   if (data.result?.design_version) refreshHistory();
@@ -91,10 +93,10 @@ for (const [id, path] of [['handoff', '/api/dispatch'], ['cancel', '/api/cancel'
 });
 async function refreshHistory() {
   try {
-    const data = await api('/api/history');
-    if (!data.ok || !Array.isArray(data.result?.items) || !data.selection) return;
+    const data = projectHistoryList(await api('/api/history'));
+    if (!data) { $('history-section').hidden = true; return; }
     historySelection = data.selection; $('history-version').replaceChildren();
-    for (const item of data.result.items) { const option = document.createElement('option'); option.value = item.design_version_id; option.textContent = `${item.design_version_id} · ${item.artifact.content_hash}`; $('history-version').append(option); }
+    for (const item of data.items) { const option = document.createElement('option'); option.value = item.design_version_id; option.textContent = `${item.design_version_id} · ${item.artifact.content_hash}`; $('history-version').append(option); }
     $('history-section').hidden = false;
   } catch { $('history-section').hidden = true; }
 }
@@ -102,10 +104,11 @@ for (const id of ['compare-history', 'restore-history']) $(id).addEventListener(
   try {
     const body = { design_version_id: $('history-version').value };
     if (id === 'restore-history') { body.expected_selection_revision = historySelection.revision; body.action_id = `restore_${crypto.randomUUID()}`; }
-    const data = await api(id === 'restore-history' ? '/api/restore' : '/api/compare', body); counter(data);
+    const response = await api(id === 'restore-history' ? '/api/restore' : '/api/compare', body); counter(response);
+    const data = projectHistoryResult(response, id === 'restore-history');
     if (!data.ok) return error(historyErrorMessage(data));
-    $('history-result').textContent = id === 'restore-history' ? `Selected saved artwork ${data.result.selection.design_version_id}. No image call or approval created.` : `Compared exact hashes ${data.result.left.artifact.content_hash} and ${data.result.right.artifact.content_hash}.`;
-    if (id === 'restore-history') { $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(data.result.selection.design_version_id)}`; $('artwork-preview').hidden = false; await refresh(); }
+    $('history-result').textContent = id === 'restore-history' ? `Selected saved artwork ${data.result.design_version_id}. No image call or approval created.` : `Compared exact hashes ${data.result.left} and ${data.result.right}.`;
+    if (id === 'restore-history') { $('artwork-preview').src = `/api/artifact?design_version_id=${encodeURIComponent(data.result.design_version_id)}`; $('artwork-preview').hidden = false; await refresh(); }
   } catch { error('Version operation unavailable.'); }
 });
 refresh();

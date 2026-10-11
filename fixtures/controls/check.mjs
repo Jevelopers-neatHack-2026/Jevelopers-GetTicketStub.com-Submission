@@ -25,7 +25,7 @@ function run(command, argv, cwd, label, env = {}) {
   results.push({ command: label, exit_code: result.status, passed: result.status === 0, ...(Object.keys(counts).length ? { counts } : {}) });
   for (const line of (result.stdout ?? '').split('\n')) if (line.startsWith('# {"controls_probe":')) reviewProbes.push(JSON.parse(line.slice(2)));
 }
-run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs', 'tests/controls/inspection-consumer.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs tests/controls/inspection-consumer.test.mjs');
+run(process.execPath, ['--test', '--test-reporter=tap', 'tests/controls/actions.test.mjs', 'tests/controls/integration.test.mjs', 'tests/controls/review-regressions.test.mjs', 'tests/controls/native.test.mjs', 'tests/controls/inspection-consumer.test.mjs', 'tests/controls/public-result.test.mjs'], root, 'node --test --test-reporter=tap tests/controls/actions.test.mjs tests/controls/integration.test.mjs tests/controls/review-regressions.test.mjs tests/controls/native.test.mjs tests/controls/inspection-consumer.test.mjs tests/controls/public-result.test.mjs');
 if (runBrowser || args.includes('--types')) run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', '../../tests/controls/types/tsconfig.json'],
   fixtureDir, 'tsc --strict --module NodeNext (source ESM consumer; package export pending)');
 if (runBrowser) run(process.execPath, ['node_modules/@playwright/test/cli.js', 'test', '--reporter=list,json'], fixtureDir,

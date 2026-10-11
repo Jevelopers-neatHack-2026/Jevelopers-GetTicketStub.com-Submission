@@ -18,6 +18,7 @@ const files = {
   '/messages.mjs': ['messages.mjs', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/schema.mjs': ['../../src/controls/schema.mjs', 'text/javascript; charset=utf-8'],
+  '/public-result.mjs': ['../../src/controls/public-result.mjs', 'text/javascript; charset=utf-8'],
 };
 const json = (res, body, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
 const server = createServer(async (req, res) => {

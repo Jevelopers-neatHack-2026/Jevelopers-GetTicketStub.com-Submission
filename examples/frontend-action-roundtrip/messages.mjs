@@ -16,10 +16,18 @@ const messages = {
   conflict: 'Another operation is pending. Resolve it before applying another draft.',
   cancelled: 'This operation is cancelled. It cannot be handed off.',
 };
+// Read own scalar data without invoking accessors or coercing upstream values.
+function own(value, key) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+}
 export function applyErrorMessage(data) {
-  const code = data?.code;
-  if (code === 'unavailable' && !data.backend_error &&
-      ['creative.composition.consume/1', 'creative.compound.consume/1'].includes(data.pending_bridge)) {
+  const code = own(data, 'code');
+  if (code === 'unavailable' && !own(data, 'backend_error') &&
+      ['creative.composition.consume/1', 'creative.compound.consume/1'].includes(own(data, 'pending_bridge'))) {
     return 'Handoff unavailable. Required composition integration is pending; this action did not dispatch an image or reserve funds.';
   }
   // Only recognized string codes select local text. Never coerce or render an
@@ -39,7 +47,7 @@ const historyMessages = {
   not_found: 'Saved version is unavailable. Refresh controls and choose a current saved version.',
 };
 export function historyErrorMessage(data) {
-  const code = data.error?.code;
-  return Object.hasOwn(historyMessages, code) ? historyMessages[code] :
+  const code = own(own(data, 'error'), 'code');
+  return typeof code === 'string' && Object.hasOwn(historyMessages, code) ? historyMessages[code] :
     'Version operation did not complete. Refresh controls and review current versions and access before retrying.';
 }

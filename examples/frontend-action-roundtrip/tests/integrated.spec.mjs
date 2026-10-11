@@ -341,6 +341,81 @@ test('stale old-tab Restore keeps actual selection and typed refresh guidance wi
   await other.close();
 });
 
+const unsafeOperationReferences = [
+  ['embedded GitHub', 'op.ghp_' + 'a'.repeat(36)], ['embedded API key', 'op.sk-' + 'a'.repeat(24)],
+  ['embedded access token', 'op.access_token:synthetic-private'], ['embedded Bearer', 'op.Bearer+synthetic-private-marker'],
+  ['signed URL', 'https://example.invalid/object?sig=synthetic-private'], ['null', null], ['number', 42],
+  ['object', { private: 'synthetic-private' }], ['array', ['op.synthetic-private']],
+];
+const fixedReferenceAlert = 'Apply did not complete. Dispatch and reservation status are not confirmed here. Check the existing operation before retrying.';
+for (const [label, operation_id] of unsafeOperationReferences) test(`failed Apply ${label} reference is screened before status, recovery state or requests`, async ({ page, request }, testInfo) => {
+  const before = await counters(request), selection = (await (await request.get('/api/history')).json()).selection;
+  const errors = [], requests = []; page.on('pageerror', e => errors.push(e.message));
+  page.on('request', req => requests.push({ url: req.url(), body: req.postData() }));
+  const captured = await captureHandlerExceptions(page); let intercepted = 0;
+  await page.route('**/api/apply', route => { intercepted++; return route.fulfill({ json: { ok: false, code: 'unavailable', status: 'unknown', operation_id } }); });
+  await page.getByLabel('Artwork style').selectOption('vibrant'); await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText(fixedReferenceAlert); await expect(page.getByRole('alert')).toBeFocused();
+  await expect(page.locator('#status')).toHaveText('Apply did not complete. Operation reference unavailable. Retry last Apply to recover its identity.');
+  await page.getByRole('button', { name: 'Retry last Apply' }).click();
+  await expect.poll(() => intercepted).toBe(2); await expect(page.getByRole('alert')).toBeFocused();
+  const actions = requests.filter(req => req.url.endsWith('/api/apply')).map(req => JSON.parse(req.body));
+  expect(actions).toHaveLength(2); expect(actions[1]).toEqual(actions[0]);
+  await page.getByRole('button', { name: 'Refresh controls' }).click();
+  await expect(page.locator('#status')).toHaveText('No operation submitted.'); await expect(page.getByRole('button', { name: 'Cancel operation' })).toBeDisabled();
+  expect(await page.locator('body').innerText()).not.toMatch(/ghp_|op\.sk-|access_token|Bearer|example\.invalid|synthetic-private/);
+  expect(JSON.stringify(requests)).not.toMatch(/ghp_|op\.sk-|access_token|Bearer|example\.invalid|synthetic-private/);
+  expect(await counters(request)).toEqual(before); expect((await (await request.get('/api/history')).json()).selection).toEqual(selection);
+  expect(captured.exceptions).toEqual([]); expect(errors).toEqual([]); await captured.session.detach();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await testInfo.attach('failed-reference-projection', { body: JSON.stringify({ label, intercepted, alert: fixedReferenceAlert, requests, before, after: await counters(request), exceptions: captured.exceptions, errors, selection_unchanged: true, synthetic_failed_response_only: true }), contentType: 'application/json' });
+});
+
+for (const operation_id of ['op.safe-1', 'op.normal:2+v']) test(`failed Apply safe reference ${operation_id} remains visible and available after refresh`, async ({ page, request }) => {
+  const before = await counters(request);
+  await page.route('**/api/apply', route => route.fulfill({ json: { ok: false, code: 'unavailable', status: 'unknown', operation_id } }));
+  await page.getByLabel('Artwork style').selectOption('vibrant'); await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('reservation may remain held'); await expect(page.getByRole('alert')).toBeFocused();
+  await expect(page.locator('#status')).toContainText(operation_id);
+  await page.getByRole('button', { name: 'Refresh controls' }).click();
+  await expect(page.locator('#status')).toHaveText(`Controls refreshed. Existing operation: ${operation_id}.`);
+  await expect(page.getByRole('button', { name: 'Cancel operation' })).toBeEnabled(); expect(await counters(request)).toEqual(before);
+});
+
+test('unsafe subsequent failed references preserve actual known operation retry, lookup and cancellation identity', async ({ page, request }, testInfo) => {
+  const errors = [], requests = []; page.on('pageerror', e => errors.push(e.message));
+  page.on('request', req => { if (req.method() === 'POST') requests.push({ url: req.url(), body: req.postDataJSON() }); });
+  const captured = await captureHandlerExceptions(page);
+  await request.post('/__fixture/state', { data: { provider_fault: 'connection-loss' } });
+  await page.getByLabel('Artwork style').selectOption('vibrant');
+  const accepted = page.waitForResponse('**/api/apply'); await page.getByRole('button', { name: 'Apply changes', exact: true }).click();
+  const known = await (await accepted).json(); expect(known.ok).toBe(false); expect(known.code).toBe('unavailable'); expect(known.operation_id).toMatch(/^op_/);
+  await expect(page.locator('#status')).toContainText(known.operation_id);
+  const before = await counters(request); expect(before).toMatchObject({ jobs: 1, image_calls: 1, jev_calls: 0, reservations: 1, holds: 1, releases: 0 });
+  for (const [, operation_id] of unsafeOperationReferences.slice(0, 5)) {
+    await page.route('**/api/apply', route => route.fulfill({ json: { ok: false, code: 'unavailable', status: 'completed', operation_id } }));
+    await page.getByRole('button', { name: 'Retry last Apply' }).click();
+    await expect(page.getByRole('alert')).toHaveText(fixedReferenceAlert); await expect(page.getByRole('alert')).toBeFocused();
+    await expect(page.locator('#status')).toHaveText(`Apply did not complete. Existing operation: ${known.operation_id}.`);
+    expect(await counters(request)).toEqual(before); await page.unroute('**/api/apply');
+  }
+  // A real retry resolves the original stored action, without a new job/send.
+  const replayed = page.waitForResponse('**/api/apply'); await page.getByRole('button', { name: 'Retry last Apply' }).click();
+  const replay = await (await replayed).json(); expect(replay.operation_id).toBe(known.operation_id); expect(await counters(request)).toEqual(before);
+  await page.getByRole('button', { name: 'Refresh controls' }).click();
+  await expect(page.locator('#status')).toContainText(known.operation_id); await expect(page.getByRole('button', { name: 'Cancel operation' })).toBeEnabled();
+  const cancelled = page.waitForResponse('**/api/cancel'); await page.getByRole('button', { name: 'Cancel operation' }).click();
+  expect((await (await cancelled).json()).code).toBe('cancelled'); await expect(page.locator('#status')).toContainText('Operation cancelled');
+  expect(requests.at(-1).body).toEqual({ operation_id: known.operation_id });
+  const applies = requests.filter(req => req.url.endsWith('/api/apply')); expect(applies.every(req => req.body.action_id === applies[0].body.action_id)).toBe(true);
+  expect(JSON.stringify(requests)).not.toMatch(/ghp_|access_token|Bearer|example\.invalid|synthetic-private/);
+  expect(await page.locator('body').innerText()).not.toMatch(/ghp_|access_token|Bearer|example\.invalid|synthetic-private/);
+  expect(await counters(request)).toEqual(before); expect(captured.exceptions).toEqual([]); expect(errors).toEqual([]); await captured.session.detach();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: 'test-results/failed-operation-reference-fixed.png', fullPage: true });
+  await testInfo.attach('actual-recovery-reference-preserved', { body: JSON.stringify({ known, replay, requests, before, after: await counters(request), exceptions: captured.exceptions, errors, live_calls: 0 }), contentType: 'application/json' });
+});
+
 test('Compare current read revocation keeps selection and typed permission guidance without a caught handler exception', async ({ page, request }, testInfo) => {
   await expect(page.getByLabel('Historical artwork version').locator('option')).toHaveCount(1);
   const selected = (await (await request.get('/api/history')).json()).selection, before = await counters(request);
