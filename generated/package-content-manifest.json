@@ -2,10 +2,11 @@
   "policy_version": "1.0.0",
   "self_exclusion": "generated/package-content-manifest.json",
   "files": {
-    "CHANGELOG.md": "sha256:e59647fcea119e7feb5a10d134b795860c56cc760765101331f504b35f24b172",
-    "README.md": "sha256:14c844fa6f5792de5aae796e6c351cfdcf8e96103b41cc69a673a62d0b51142b",
+    "CHANGELOG.md": "sha256:f3f67f9b090189974b7d0ed79c308c2171a48c698b32656df242853cc9fea1d1",
+    "README.md": "sha256:fb47e47fac2b2d58a7aeeb87b61dedd34acc9fd88869a496baa2684f3821d38b",
     "compatibility/baselines.json": "sha256:17d68ad42ac0f79f086a06cf69e0488050213881f736fc4b9a41fb43aa266ce2",
     "compatibility/checkpoint-findings.json": "sha256:5d4cbda288da222e6954982caf2810573b4c8ac70c6a37ce3acd42c252d860b5",
+    "compatibility/ci-findings.json": "sha256:6601db0a334979e2078980407c89253680aa546d6aa1705fda1be6036d78bfdc",
     "compatibility/consumers.json": "sha256:a579ae86529d8b24cb9bfdf30b5bb205222a5a90a0c54ab00d2d0c13377b92c7",
     "compatibility/downstream-observations.json": "sha256:5d6cdf80561ad10fd8d514559ee3ea48632b8150a72628758f22e460bda31162",
     "compatibility/finance-delta-findings.json": "sha256:e6facd79a6e6f59d45f3d7c4a32c0e5576185fa07c4fa6bd17af8c5d6002e348",
@@ -22,7 +23,7 @@
     "docs/architecture/OWNERSHIP.md": "sha256:5f53c8e15c017e73783d997ce228a3b0528521198f026c0618d5f2b8aa3d7e60",
     "docs/authority-dependencies.json": "sha256:d4bed3cb91e46fa0e13fb50981f6cbb7f63a6aaab23494089cb94e48f44b5293",
     "docs/commerce-evidence-contracts.md": "sha256:06d86487b370fd655018d304d2fb259b4a2c7b0eb6b65ecfc870abc9cf412a29",
-    "docs/consumer-handoff.md": "sha256:1a86b1e574f24cdec1732d4934ca6a1f2b9b0e84cd4c9e5de467f2a4eeb71f6c",
+    "docs/consumer-handoff.md": "sha256:7722d7b5118bff02d8e13387f292fb1bbf4796f62ee518160078ee82032f00ad",
     "docs/contract-catalog.md": "sha256:f8809b85d020912817b3d4c604d6b4320635314e5bf3405c85563ccc7e1a7785",
     "docs/dependency-handoff.md": "sha256:dcce9e3b26d6f92aa03081da58521e1a16cbacadcb75f61014c385c13a40445c",
     "docs/finance-v2-contracts.md": "sha256:daaa481a73136f68eb2ff61f328cae4e26e666297dff7d483ab15a4fff6faeac",
@@ -161,9 +162,9 @@
     "generated/primitives.d.ts": "sha256:fa051a2f8d5bdbcb675f89016374fc78aa2d9208092faa4995fd43679bec64f1",
     "generated/registry.mjs": "sha256:dcdfd5f7b558ff56e70e5026f4466928b8f8cd192d12fdb8093cba135bcefa6e",
     "generated/research-creative.d.ts": "sha256:2363ecff355c5772e5e42a343cf7e7f797cb6a2a4409ca742553764a70fe3b37",
-    "generated/schema-manifest.json": "sha256:de974945d56469026820b671eb222142875817618bfe696a7cb377763d9af4e7",
+    "generated/schema-manifest.json": "sha256:8251f468b0bcef81823d80263012e4d6b6fb3de90aa86a6cfa521a99a42f49da",
     "generated/validators.mjs": "sha256:83fadb1f1b70c460abb5d854b52f6bd84716710d1aabc38312717cdc36042d66",
-    "package.json": "sha256:34b7af0cbdc3d3209add89812c1375720857a26dbf19edfe57d945a23eaefcd9",
+    "package.json": "sha256:c7c7055cab65efb285178239e230db9514ab02b2e9a082ab4648f30fd52e2ba7",
     "schemas/ApprovalReceipt/1.0.0.json": "sha256:e931682224c8239bf65f5aa74d3e8e66564870cf84b95695de0557af36d6a63b",
     "schemas/ApprovalReference/1.0.0.json": "sha256:6d84c310e0a866c9fff4e8990a6e1c0bf508cb069e92769c54861769c8b5ef30",
     "schemas/ApprovalVerificationOutcome/1.0.0.json": "sha256:2ec93908f85321d836f926ecefb968276673f1f779b7237abbba4a6307bbee19",
@@ -226,5 +227,5 @@
     "tooling/research-creative.mjs": "sha256:8f15cbd565aa97f77edc3b45c7b5e850de06e2806cbadd11e17742418d7c7a40",
     "tooling/runtime.mjs": "sha256:66d969987a44cb106644d423e8c915b4fd07516fbf063f5120697aa91bd2333f"
   },
-  "digest": "sha256:170479754e346b4d8c493e36322a85f940eaf679ae4387a6274f05e1c5c7e802"
+  "digest": "sha256:114d0f1c4fa4ca0c264bbc17f11122a4b3a57d209cc8c629d6f934fdbd56abc0"
 }

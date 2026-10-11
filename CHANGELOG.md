@@ -1,5 +1,9 @@
 # Candidate changes
 
+## 0.7.1 (unreleased)
+
+SC-CI-001 makes native consumer observation settle on deadline, connection failure, socket closure/error and child exit. Pending and subsequently queued commands fail explicitly; graceful disconnect fences the current event queue; failure cleanup kills and reaps the driver with a bounded cleanup wait. The 60-second observation deadline is unchanged. Source/archive bindings and canonical execution requirements remain enforced. Failure history and the local inspector permission block are retained in [the CI finding receipt](compatibility/ci-findings.json); exact-candidate Linux CI and independent review remain pending. No schema or fixture encoding, Finance behavior, accepted consumer pin or adoption status changes.
+
 ## 0.7.0 (unreleased)
 
 The consumer runner independently verifies the package fixtures and collects actual module/call evidence through parent-owned native debugger observations; driver-written audit rows and public nonce echoes are not execution proof. Approval consumption binds the exact production handoff, current approval and immutable artwork/preview/facts/composition. Fulfillment progress survives unknown and cancellation intermediates. Research answer references bind exact requests; malformed batch records return typed failures. Public evaluation projection requires a separate adapter-supplied public ID. Requirements retain authoritative dependency/body-hash data and distinguish artifact stages from release closure evidence.

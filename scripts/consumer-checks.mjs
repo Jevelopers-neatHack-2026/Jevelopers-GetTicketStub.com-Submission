@@ -7,7 +7,7 @@ import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { hashBytes, hashManifest } from '../tooling/runtime.mjs';
 import { contentManifestPath, safePackagePath, verifyPackageContents } from './package-content.mjs';
-import { observeConsumerDriver } from './consumer-observer.mjs';
+import { observeConsumerDriver, ConsumerObservationError } from './consumer-observer.mjs';
 
 export const knownConsumers = Object.freeze(['agent-harness', 'event-intelligence', 'creative-engine', 'print-production', 'fulfillment-connectors', 'cost-intelligence', 'team-dashboard', 'integration-evals', 'getticketstub.com']);
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
@@ -162,7 +162,7 @@ export async function consumerChecks(manifest, paths = {}) {
     } catch (error) {
       if (!(error instanceof Error)) throw error;
       const codes = ['BLOCKED_SHARED_REVISION_MISMATCH', 'BLOCKED_DIRTY_SHARED_CHECKOUT', 'ARTIFACT_INTEGRITY_MISMATCH', 'INVALID_PACKAGE_ARCHIVE', 'PACKAGE_CONTENT_MISMATCH', 'INVALID_PACKAGE_PATH'];
-      block(codes.includes(error.message) ? error.message : error.code === 'ENOENT' ? 'BLOCKED_MISSING_LOCAL_ARTIFACT' : 'INVALID_LOCAL_INTEGRATION_ARTIFACT');
+      block(error instanceof ConsumerObservationError ? error.code : codes.includes(error.message) ? error.message : error.code === 'ENOENT' ? 'BLOCKED_MISSING_LOCAL_ARTIFACT' : 'INVALID_LOCAL_INTEGRATION_ARTIFACT');
     } finally { if (temp) await rm(temp, { recursive: true, force: true }); }
   }
   return { failures, records, checkout_records };
