@@ -8,6 +8,10 @@ async function tabTo(page: Page, target: Locator) {
   }
   throw new Error('Keyboard target was unreachable.');
 }
+
+async function boundedScrollControls(region: Locator) {
+  await expect.poll(() => region.evaluate((element) => { const viewport = element.getBoundingClientRect(); const tools = element.querySelector('.td-table-tools')!; return [tools, ...tools.querySelectorAll('button')].every((node) => { const bounds = node.getBoundingClientRect(); return bounds.left >= viewport.left - 1 && bounds.right <= viewport.right + 1; }); })).toBe(true);
+}
 async function scan(page: Page, name: string) {
   const results = await new AxeBuilder({ page }).analyze();
   await writeFile(test.info().outputPath(`${name}-axe.json`), JSON.stringify(results, null, 2));
@@ -107,4 +111,63 @@ test('TD-10 axe negative control detects an unlabeled control then recovers', as
   await writeFile(test.info().outputPath('negative-control-axe.json'), JSON.stringify(negative, null, 2));
   expect(negative.violations.some((violation) => violation.id === 'button-name')).toBe(true);
   await page.locator('#axe-negative-control').evaluate((element) => element.remove()); await scan(page, 'negative-control-recovered');
+});
+
+for (const sample of ['negative', 'subcent']) {
+  test(`TD-10 return restores exact originating ${sample} result`, async ({ page }) => {
+    await page.goto('/admin/finance/transactions?examples=components');
+    const label = sample === 'negative' ? 'Open synthetic negative record' : 'Open synthetic sub-cent record';
+    await tabTo(page, page.getByRole('link', { name: label })); await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Transaction detail', level: 1 })).toBeFocused();
+    await tabTo(page, page.getByRole('link', { name: 'Return to results' })); await page.keyboard.press('Enter');
+    await expect(page.getByRole('link', { name: label })).toBeFocused();
+  });
+}
+test('TD-10 reloaded detail has safe heading fallback and unknown IDs reveal no sample amount', async ({ page }) => {
+  await page.goto('/admin/finance/transactions/subcent-ui-sample?examples=components'); await page.reload();
+  await tabTo(page, page.getByRole('link', { name: 'Return to results' })); await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Transactions', level: 1 })).toBeFocused();
+  for (const path of ['/transactions/not-a-synthetic-record', '/events/subcent-ui-sample']) {
+    await page.goto('/admin/finance' + path + '?examples=components');
+    await expect(page.getByRole('heading', { name: 'Synthetic record unavailable' })).toBeVisible();
+    await expect(page.getByText('-12345678901234567890.000000137', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('0.000000137', { exact: true })).toHaveCount(0);
+    await scan(page, path.includes('/events/') ? 'unknown-event' : 'unknown-transaction');
+    await tabTo(page, page.getByRole('link', { name: 'Return to results' })); await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Transactions', level: 1 })).toBeFocused();
+  }
+});
+test('TD-10 narrow tables preserve practical widths and keyboard scrolling exposes every column', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 }); await page.goto('/admin/finance/transactions?examples=components');
+  for (const caption of ['Synthetic records — display examples', 'Synthetic category display — exact data alternative']) {
+    const region = page.getByRole('region', { name: caption, exact: true });
+    const widths = await region.getByRole('columnheader').evaluateAll((headers) => headers.map((header) => header.getBoundingClientRect().width)); expect(Math.min(...widths)).toBeGreaterThanOrEqual(200);
+    const amount = region.getByText('-12345678901234567890.000000137', { exact: true }); await expect(amount).toHaveCSS('white-space', 'nowrap');
+    expect(await amount.evaluate((element) => { const amount = element.closest('.td-amount')!.getBoundingClientRect(); const cell = element.closest('td')!.getBoundingClientRect(); return amount.right <= cell.right && amount.left >= cell.left; })).toBe(true);
+    const right = page.getByRole('button', { name: `Scroll ${caption} right`, exact: true }); await tabTo(page, right); await expect(right).toHaveCSS('outline-style', 'solid'); await page.keyboard.press('Enter');
+    await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0); await boundedScrollControls(region);
+    await page.keyboard.press('End'); await expect(right).toHaveAttribute('aria-disabled', 'true'); await boundedScrollControls(region);
+    expect(await region.getByRole('columnheader').last().evaluate((element) => { const bounds = element.getBoundingClientRect(); const viewport = element.closest('.td-table-scroll')!.getBoundingClientRect(); return bounds.left >= viewport.left && bounds.right <= viewport.right; })).toBe(true);
+    await region.screenshot({ path: test.info().outputPath(caption.startsWith('Synthetic records') ? 'records-right.png' : 'chart-table-right.png') });
+    await page.keyboard.press('Home'); await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBe(0); await boundedScrollControls(region);
+    await region.screenshot({ path: test.info().outputPath(caption.startsWith('Synthetic records') ? 'records-left.png' : 'chart-table-left.png') });
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await scan(page, 'narrow-scrollable-tables');
+  await page.setViewportSize({ width: 1280, height: 900 }); await page.evaluate(() => { document.body.style.zoom = '2'; });
+  for (const region of await page.locator('.td-table-scroll').all()) {
+    const amount = region.getByText('-12345678901234567890.000000137', { exact: true });
+    expect(await amount.evaluate((element) => { const amount = element.closest('.td-amount')!.getBoundingClientRect(); const cell = element.closest('td')!.getBoundingClientRect(); return amount.right <= cell.right && amount.left >= cell.left; })).toBe(true);
+    for (const position of ['start', 'middle', 'end']) { await region.evaluate((element, position) => { element.scrollLeft = position === 'start' ? 0 : position === 'end' ? element.scrollWidth : (element.scrollWidth - element.clientWidth) / 2; }, position); await boundedScrollControls(region); }
+    await region.evaluate((element) => { element.scrollLeft = (element.querySelector('td .td-amount')!.closest('td') as HTMLElement).offsetLeft; });
+  }
+  await page.screenshot({ path: test.info().outputPath('amount-state-zoom200.png'), fullPage: true }); await scan(page, 'enlarged-amount-state');
+});
+
+test('TD-10 originating result removed by a changed filter falls back to heading', async ({ page }) => {
+  await page.goto('/admin/finance/transactions?examples=components');
+  await tabTo(page, page.getByRole('link', { name: 'Open synthetic negative record' })); await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Transaction detail', level: 1 })).toBeFocused();
+  await page.evaluate(() => { const url = new URL(window.location.href); url.searchParams.set('sample', 'none'); window.history.replaceState(null, '', url); window.dispatchEvent(new PopStateEvent('popstate')); });
+  await tabTo(page, page.getByRole('link', { name: 'Return to results' })); await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Transactions', level: 1 })).toBeFocused(); await expect(page.getByText('No rows to display.')).toBeVisible();
 });

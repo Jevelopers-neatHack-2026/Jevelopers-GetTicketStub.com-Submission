@@ -35,10 +35,12 @@
 .team-dashboard .td-filter p { margin-top: .4rem; }
 .team-dashboard .td-controls, .team-dashboard .td-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
 .team-dashboard button:disabled { cursor: default; border-style: dashed; }
-.team-dashboard .td-table-scroll { overflow-x: auto; max-width: 100%; padding: .4rem; }
-.team-dashboard .td-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.team-dashboard .td-table-frame { min-width: 0; max-width: 100%; }
+.team-dashboard .td-table-scroll { overflow-x: auto; max-width: 100%; padding: .6rem; scroll-behavior: auto; }
+.team-dashboard .td-table-tools { position: sticky; left: 0; width: 100%; background: var(--ts-bg); margin-bottom: .5rem; }
+.team-dashboard .td-table { background: var(--ts-bg); min-width: 66rem; width: 66rem; border-collapse: collapse; table-layout: auto; }
 .team-dashboard .td-table caption { text-align: left; font-weight: 600; margin: .5rem 0; }
-.team-dashboard .td-table th, .team-dashboard .td-table td { padding: .7rem .5rem; vertical-align: top; text-align: left; border-bottom: 1px solid var(--td-border); overflow-wrap: anywhere; }
+.team-dashboard .td-table th, .team-dashboard .td-table td { background: var(--ts-bg); word-break: normal; padding: .7rem .5rem; vertical-align: top; text-align: left; border-bottom: 1px solid var(--td-border); overflow-wrap: anywhere; }
 .team-dashboard .td-table th { font-weight: 600; }
 .team-dashboard .td-sort-label { display: block; font-size: 1rem; font-weight: 400; }
 .team-dashboard .td-chart-bars { list-style: none; padding: 0; display: grid; gap: 1rem; }
@@ -51,6 +53,10 @@
 .team-dashboard .td-scope dl { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0; }
 .team-dashboard .td-scope dt { font-weight: 600; }
 .team-dashboard .td-scope dd { margin: 0; }
-@media (max-width: 30rem) { .team-dashboard .td-table th, .team-dashboard .td-table td { padding: .4rem .2rem; } .team-dashboard .td-table th button { padding: .5rem .2rem; } }
+@media (max-width: 30rem) { .team-dashboard .td-table th, .team-dashboard .td-table td { background: var(--ts-bg); word-break: normal; padding: .4rem .2rem; } .team-dashboard .td-table th button { padding: .5rem .2rem; } }
 
 @container (max-width: 48rem) { .team-dashboard .td-layout { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; } .team-dashboard nav ul { display: flex; flex-wrap: wrap; gap: .25rem; } }
+
+.team-dashboard .td-table .td-amount { white-space: nowrap; overflow-wrap: normal; }
+
+.team-dashboard .td-table-content { width: max-content; min-width: 100%; }

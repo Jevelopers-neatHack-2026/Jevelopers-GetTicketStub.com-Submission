@@ -1,3 +1,4 @@
+import { TableScroll } from './TableScroll';
 import { AmountText, type AmountDisplay } from './AmountText';
 import { Tooltip } from './Tooltip';
 export type ChartItem = Readonly<{ status: 'visible'; id: string; label: string; amount: AmountDisplay; position: number; note: string }> | Readonly<{ status: 'restricted'; id: string }>;
@@ -12,8 +13,8 @@ export function BreakdownChart({ title, items }: { title: string; items: readonl
         {drawable && <Tooltip label={`Details for ${item.label}`} text={item.note} />}
       </>}</li>;
     })}</ul>
-    <table className="td-table"><caption>{title} — exact data alternative</caption><thead><tr><th scope="col">Category</th><th scope="col">Exact value and currency</th><th scope="col">Access</th></tr></thead>
+    <TableScroll caption={`${title} — exact data alternative`}><table className="td-table"><colgroup><col style={{ width: '40%' }} /><col style={{ width: '40%' }} /><col style={{ width: '20%' }} /></colgroup><caption>{title} — exact data alternative</caption><thead><tr><th scope="col">Category</th><th scope="col">Exact value and currency</th><th scope="col">Access</th></tr></thead>
       <tbody>{items.map((item) => <tr key={item.id}><th scope="row">{item.status === 'restricted' ? 'Restricted category' : item.label}</th><td><AmountText amount={item.status === 'restricted' ? { status: 'restricted' } : item.amount} /></td><td>{item.status === 'restricted' ? 'Restricted' : 'Visible'}</td></tr>)}{items.length === 0 && <tr><td colSpan={3}><p role="status">No categories to display.</p></td></tr>}</tbody>
-    </table>
+    </table></TableScroll>
   </section>;
 }

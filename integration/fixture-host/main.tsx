@@ -13,9 +13,16 @@ function FixtureHost() {
   const [query, setQuery] = useState(window.location.search);
   const [sort, setSort] = useState<TableSort>({ key: 'record', direction: 'ascending' });
   const [restoreFocus, setRestoreFocus] = useState(false);
+  const [originLink, setOriginLink] = useState<{ path: string; id: string }>();
+  const [returnFocusId, setReturnFocusId] = useState<string>();
   const search = new URLSearchParams(query);
   function navigate(href: string, restore = false) {
     const target = new URL(href, window.location.origin);
+    if (target.pathname.includes('/transactions/')) {
+      const active = document.activeElement;
+      setOriginLink(active instanceof HTMLAnchorElement && active.id && new URL(active.href).pathname === target.pathname ? { path: target.pathname, id: active.id } : undefined);
+    }
+    if (restore) setReturnFocusId(originLink?.path === window.location.pathname ? originLink.id : undefined);
     window.history.pushState(null, '', target.pathname + (target.search || window.location.search));
     setPathname(window.location.pathname); setQuery(window.location.search); setRestoreFocus(restore);
   }
@@ -35,7 +42,7 @@ function FixtureHost() {
     </aside>
     <main><Dashboard basePath={configuredBase} pathname={pathname} navigate={navigate}
       access={authenticated ? authorizedFixture : { status: 'restricted' }} provider={connected ? provider : undefined}
-      renderRoute={({ data, route }) => examples ? <ComponentExamples route={route} navigate={navigate} sample={search.get('sample') ?? 'all'} onSampleChange={(value) => changeSample('sample', value)} page={search.get('page') === '2' ? '2' : '1'} onPageChange={(direction) => changeSample('page', direction === 'next' ? '2' : '1')} sort={sort} onSort={setSort} returnToResults={(href) => navigate(href, true)} restoreFocus={restoreFocus} /> : <section><h2>Connected read-only extension</h2><p>{data.text}</p></section>} /></main>
+      renderRoute={({ data, route }) => examples ? <ComponentExamples route={route} navigate={navigate} sample={search.get('sample') ?? 'all'} onSampleChange={(value) => changeSample('sample', value)} page={search.get('page') === '2' ? '2' : '1'} onPageChange={(direction) => changeSample('page', direction === 'next' ? '2' : '1')} sort={sort} onSort={setSort} returnToResults={(href) => navigate(href, true)} restoreFocus={restoreFocus} returnFocusId={returnFocusId} /> : <section><h2>Connected read-only extension</h2><p>{data.text}</p></section>} /></main>
   </>;
 }
 createRoot(document.getElementById('root')!).render(<FixtureHost />);

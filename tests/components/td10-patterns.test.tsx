@@ -1,3 +1,4 @@
+import { renderToString } from 'react-dom/server';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AmountText, MetricCard, StateBadge, FilterSelect, Pagination, DataTable, BreakdownChart, Tooltip, EvidenceLink, ScopeContext, ReturnToResults, type AmountDisplay, type ChartItem, type EvidenceDisplay, type EvidencePolicy, type ScopeDisplay } from '../../src';
@@ -41,6 +42,15 @@ describe('TD-10 controlled controls and table', () => {
     const { container } = render(<DataTable caption="Projected records" columns={sampleColumns} rows={rows} sort={{ key: 'record', direction: 'ascending' }} onSort={sort} linkPolicy={policy} />);
     const table = screen.getByRole('table', { name: 'Projected records' }); expect(within(table).getAllByRole('columnheader')).toHaveLength(4); expect(within(table).getByRole('rowheader')).toBeVisible();
     const header = within(table).getByRole('columnheader', { name: /Record/u }); expect(header).toHaveAttribute('aria-sort', 'ascending'); fireEvent.click(within(header).getByRole('button')); expect(sort).toHaveBeenCalledWith({ key: 'record', direction: 'descending' }); expect(header).toHaveAttribute('aria-sort', 'ascending'); expect(container.innerHTML).not.toContain('canary');
+  });
+  it('server renders table content before browser layout measurements', () => { const html = renderToString(<DataTable caption="Server table" columns={sampleColumns} rows={sampleRows} linkPolicy={policy} />); expect(html).toContain('Server table'); expect(html).toContain('-12345678901234567890.000000137'); });
+  it('offers native keyboard-operable buttons for an overflowing read-only table', () => {
+    render(<DataTable caption="Scrollable records" columns={sampleColumns} rows={sampleRows} linkPolicy={policy} />);
+    const region = screen.getByRole('region', { name: 'Scrollable records' });
+    Object.defineProperties(region, { clientWidth: { value: 300 }, scrollWidth: { value: 900 }, scrollLeft: { value: 0, writable: true } });
+    const scroll = vi.fn(({ left }: { left: number }) => { region.scrollLeft = Math.min(600, Math.max(0, left)); fireEvent.scroll(region); }); Object.defineProperty(region, 'scrollTo', { value: scroll }); fireEvent.scroll(region);
+    const right = screen.getByRole('button', { name: 'Scroll Scrollable records right' }); expect(right).toHaveAttribute('aria-controls', region.id); fireEvent.click(right); expect(scroll).toHaveBeenLastCalledWith({ left: 225, behavior: 'auto' });
+    fireEvent.keyDown(right, { key: 'End' }); expect(region.scrollLeft).toBe(600); expect(right).toHaveAttribute('aria-disabled', 'true'); fireEvent.keyDown(right, { key: 'Home' }); expect(region.scrollLeft).toBe(0);
   });
   it('renders explicit empty rows without fabricated amounts', () => { render(<DataTable caption="Empty display" columns={sampleColumns} rows={[]} linkPolicy={policy} />); expect(screen.getByText('No rows to display.')).toBeVisible(); expect(screen.queryByText('0')).toBeNull(); });
 });
