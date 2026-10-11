@@ -1,0 +1,776 @@
+{
+  "status": "DRAFT_SYNTHETIC_REHEARSAL_NOT_PRODUCT_DEMO",
+  "silent": true,
+  "audioTracks": 0,
+  "subtitles": "Burned-in exact captions plus SRT/VTT sidecars; no embedded subtitle stream",
+  "durationSeconds": 150.0,
+  "bytes": 2012777,
+  "localSizeTargetBytes": 20000000,
+  "targetIsOrganizerRequirement": false,
+  "viewingContext": "1280x720 native; mobile landscape/fullscreen780x439. Portrait uses packaged transcript, not a readability claim for tiny inline playback.",
+  "versions": {
+    "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version 8.1 Copyright (c) 2007-2026 the FFmpeg developers",
+    "Chrome": "Chrome/154.0.8037.98",
+    "Node": "v24.15.0",
+    "Python": "3.9.6",
+    "Pillow": "11.3.0"
+  },
+  "command": "python3 tools/render_rehearsal.py",
+  "sourceMode": "Exact general scene screenText/captionText; plain-text fallback chosen so dense supporting diagrams need not shrink",
+  "frames": [
+    {
+      "sceneId": "scene-01-concept-title",
+      "position": "start",
+      "frame": 0,
+      "path": "review/visual/rehearsal/inspection/scene-01-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-01-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-01-concept-title",
+      "position": "end",
+      "frame": 389,
+      "path": "review/visual/rehearsal/inspection/scene-01-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-01-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-02-context-design-review",
+      "position": "start",
+      "frame": 390,
+      "path": "review/visual/rehearsal/inspection/scene-02-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-02-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-02-context-design-review",
+      "position": "end",
+      "frame": 809,
+      "path": "review/visual/rehearsal/inspection/scene-02-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-02-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-03-hold-revise-handoff",
+      "position": "start",
+      "frame": 810,
+      "path": "review/visual/rehearsal/inspection/scene-03-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-03-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-03-hold-revise-handoff",
+      "position": "end",
+      "frame": 1289,
+      "path": "review/visual/rehearsal/inspection/scene-03-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-03-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-04-product-evidence-status",
+      "position": "start",
+      "frame": 1290,
+      "path": "review/visual/rehearsal/inspection/scene-04-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-04-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-04-product-evidence-status",
+      "position": "end",
+      "frame": 1769,
+      "path": "review/visual/rehearsal/inspection/scene-04-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-04-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-05-neatlogs-evidence",
+      "position": "start",
+      "frame": 1770,
+      "path": "review/visual/rehearsal/inspection/scene-05-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-05-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-05-neatlogs-evidence",
+      "position": "end",
+      "frame": 2219,
+      "path": "review/visual/rehearsal/inspection/scene-05-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-05-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-06-entire-evidence",
+      "position": "start",
+      "frame": 2220,
+      "path": "review/visual/rehearsal/inspection/scene-06-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-06-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-06-entire-evidence",
+      "position": "end",
+      "frame": 2669,
+      "path": "review/visual/rehearsal/inspection/scene-06-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-06-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-07-cfo-ai-evidence",
+      "position": "start",
+      "frame": 2670,
+      "path": "review/visual/rehearsal/inspection/scene-07-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-07-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-07-cfo-ai-evidence",
+      "position": "end",
+      "frame": 3119,
+      "path": "review/visual/rehearsal/inspection/scene-07-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-07-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-08-comparison-and-results",
+      "position": "start",
+      "frame": 3120,
+      "path": "review/visual/rehearsal/inspection/scene-08-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-08-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-08-comparison-and-results",
+      "position": "end",
+      "frame": 3599,
+      "path": "review/visual/rehearsal/inspection/scene-08-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-08-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-09-submission-gate",
+      "position": "start",
+      "frame": 3600,
+      "path": "review/visual/rehearsal/inspection/scene-09-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-09-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-09-submission-gate",
+      "position": "end",
+      "frame": 4049,
+      "path": "review/visual/rehearsal/inspection/scene-09-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-09-end-mobile.png"
+    },
+    {
+      "sceneId": "scene-10-status-and-docs-cta",
+      "position": "start",
+      "frame": 4050,
+      "path": "review/visual/rehearsal/inspection/scene-10-start.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-10-start-mobile.png"
+    },
+    {
+      "sceneId": "scene-10-status-and-docs-cta",
+      "position": "end",
+      "frame": 4499,
+      "path": "review/visual/rehearsal/inspection/scene-10-end.png",
+      "mobilePath": "review/visual/rehearsal/inspection/scene-10-end-mobile.png"
+    }
+  ],
+  "noPaidCalls": true,
+  "tts": false,
+  "publication": false,
+  "independentApproval": "pending",
+  "authorFrameInspection": {
+    "status": "PASS_AUTHOR_CHECK_ONLY",
+    "scope": "All 20 decoded scene start/end frames inspected at native1280x720 and mobile landscape780x439 through start/end contact pairs; all17 rendered cue exact-text/overflow checks passed. Not continuous playback or independent approval.",
+    "sceneIds": [
+      "scene-01-concept-title",
+      "scene-02-context-design-review",
+      "scene-03-hold-revise-handoff",
+      "scene-04-product-evidence-status",
+      "scene-05-neatlogs-evidence",
+      "scene-06-entire-evidence",
+      "scene-07-cfo-ai-evidence",
+      "scene-08-comparison-and-results",
+      "scene-09-submission-gate",
+      "scene-10-status-and-docs-cta"
+    ],
+    "findings": "No clipping, compositor tiling, wrong scene, isolated positive savings claim, or obscured draft/status qualification in final inspected frames."
+  },
+  "limitations": [
+    "Pinned product release/runtime evidence is not available in the consumed documentation-only product source.",
+    "Neatlogs SPN-01 use evidence is pending and no Neatlogs usage claim is approved.",
+    "Entire SPN-02 checkpoint and graph evidence is pending and no Entire usage claim is approved.",
+    "CFO.ai SPN-03 business-plan evidence is pending and no CFO.ai use or financial claim is approved.",
+    "EVAL-02 comparable baseline and candidate evidence is pending; no measured improvement or savings claim is approved.",
+    "The official quote-post URL, confirmed cutoff, team/name/project fields, public project repository, public demo URL and submitter authorization are unresolved.",
+    "Asset rights, provenance, brand, accessibility and destination reviews remain pending for final media."
+  ],
+  "hashes": [
+    {
+      "path": "demo/rehearsal-scenes.json",
+      "sha256": "2dcc324c4e41cd5b103b2630774ac08cc771e811e17219026b7204f4bef32fca",
+      "bytes": 31238
+    },
+    {
+      "path": "demo/storyboard.md",
+      "sha256": "412840002cd4908961fc6a66166050307c1426c7be88062c6cd22ab94019f6da",
+      "bytes": 5125
+    },
+    {
+      "path": "demo/narration.md",
+      "sha256": "9acec3f0efd53772baa66d69487fc3cc69eb4e027d7e05690610fb7152d06f72",
+      "bytes": 3017
+    },
+    {
+      "path": "demo/rehearsal-transcript.md",
+      "sha256": "6d15ba0ae0b32c1f0e7ae9232687b39bf759e6ae44659c900da30600604e1984",
+      "bytes": 5169
+    },
+    {
+      "path": "demo/exports/silent-synthetic-rehearsal.mp4",
+      "sha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
+      "bytes": 2012777
+    },
+    {
+      "path": "demo/exports/rehearsal-render-plan.json",
+      "sha256": "4a34976e55559da0980cea196022a642ec04d2cf3ad69925fcff7378befaeeb7",
+      "bytes": 29326
+    },
+    {
+      "path": "demo/captions/silent-rehearsal.srt",
+      "sha256": "efb9159af59e22b5fa2f7781ed25e1bda245ee833eb09662c435ab19e197a610",
+      "bytes": 2234
+    },
+    {
+      "path": "demo/captions/silent-rehearsal.vtt",
+      "sha256": "acd7579f4471f06fee0d7949185e4e000760f35f0a931fdad24eab29fc2a3322",
+      "bytes": 2200
+    },
+    {
+      "path": "demo/deck/rehearsal-scenes.html",
+      "sha256": "212b7d09fe923a8a0a3bc54c7a20936ed53b49d56eb94ffd8fa86d4f0b8bcb01",
+      "bytes": 25904
+    },
+    {
+      "path": "tools/render_rehearsal.py",
+      "sha256": "57a1d67b51b86cb752edc04d16231830f7e47bb4b5847c0e1fe83a73efea8982",
+      "bytes": 10855
+    },
+    {
+      "path": "tools/render_rehearsal.mjs",
+      "sha256": "74e9cbcc471df0d74589ede07826f51f13e92ac1f91fe0b99c8ddc2e67896ca0",
+      "bytes": 4419
+    },
+    {
+      "path": "review/visual/rehearsal/browser.json",
+      "sha256": "92d0b83fa4ee5ec015c1cfe7b32c32fc8e844f2bacd9b3d5e599d1eb683a07eb",
+      "bytes": 20663
+    },
+    {
+      "path": "review/visual/rehearsal/ffprobe.json",
+      "sha256": "9fb1ae033268d1ae411072a82e24019c767362f778ed21cb8c899e6b6fb8c379",
+      "bytes": 2283
+    },
+    {
+      "path": "demo/exports/frames/cue-05.png",
+      "sha256": "299a57372d7270712736b917b9a34bbb3d2d4634ffcab29ac8bd8899c50d7233",
+      "bytes": 61243
+    },
+    {
+      "path": "demo/exports/frames/cue-11.png",
+      "sha256": "0507af27d7acabcaee8f409bd82cb16fdc903a97284d63825ea48abea281db0b",
+      "bytes": 93011
+    },
+    {
+      "path": "demo/exports/frames/cue-10.png",
+      "sha256": "cb804f44a5b4be1db473b36cd2cc4ae3228472386fa5e57f77daba286120341e",
+      "bytes": 84541
+    },
+    {
+      "path": "demo/exports/frames/cue-04.png",
+      "sha256": "ea8e6ed6c55b1f9b71fe501e155a53d88bd4dcf0de861edd40d737b7acb505d4",
+      "bytes": 69694
+    },
+    {
+      "path": "demo/exports/frames/cue-12.png",
+      "sha256": "bfd3dc310e51e483d76c8a56a698f7e071b470cc7d4337dea7f76d5672ecf275",
+      "bytes": 89006
+    },
+    {
+      "path": "demo/exports/frames/cue-06.png",
+      "sha256": "2030a8e9724e874677783424da075e01d5aec488204749d8bef8caaf32e94e5b",
+      "bytes": 83870
+    },
+    {
+      "path": "demo/exports/frames/cue-07.png",
+      "sha256": "076fd7df44e38d892ae7f2e1680370ece02e7078220e4ef5067cfe4c690fc8a8",
+      "bytes": 92192
+    },
+    {
+      "path": "demo/exports/frames/cue-13.png",
+      "sha256": "38082fad8223c09da41aa07125146dc458ed33b88802f64d7af95ef486639233",
+      "bytes": 77989
+    },
+    {
+      "path": "demo/exports/frames/cue-03.png",
+      "sha256": "b16315fe7e2c4ac603eb8e4ba5baac45e9ba5f075adcaf0890ec64a348e14ebf",
+      "bytes": 53945
+    },
+    {
+      "path": "demo/exports/frames/cue-02.png",
+      "sha256": "9bf9d3b8f9899054635b824026e418ca38df5ab6a93119effa9d97eb4b327281",
+      "bytes": 65709
+    },
+    {
+      "path": "demo/exports/frames/cue-16.png",
+      "sha256": "8d16e9f3cab26534ed0b4dd2af0550f82b2ddc6d86de421d619f6850559fe279",
+      "bytes": 61206
+    },
+    {
+      "path": "demo/exports/frames/cue-00.png",
+      "sha256": "eca6e1b5453ef0d81b5ed3dcaf5c491c37022ffd145415e147b74aad32875391",
+      "bytes": 85605
+    },
+    {
+      "path": "demo/exports/frames/cue-14.png",
+      "sha256": "df3dcd380c2e465930b9f3ffb0af443a746bb7b1e1125bcb2a5879092d7187b7",
+      "bytes": 108043
+    },
+    {
+      "path": "demo/exports/frames/cue-15.png",
+      "sha256": "9d43d0786369058fee21fc442a19139a60eaa163cb7a22d199f24c7b4e7a3494",
+      "bytes": 108044
+    },
+    {
+      "path": "demo/exports/frames/cue-01.png",
+      "sha256": "31183ad4981e84bfab46248e49ed637fbf0d2008005f3e187c7b9ced0c1a6402",
+      "bytes": 80296
+    },
+    {
+      "path": "demo/exports/frames/cue-09.png",
+      "sha256": "d766d0a3a957542a193362997617f62b90468e90d60a1cafd0d530000a9483d9",
+      "bytes": 90542
+    },
+    {
+      "path": "demo/exports/frames/cue-08.png",
+      "sha256": "163fb954016e0f3fa086d542b02c4a721ffffe048d2761dd9364c300065b3e70",
+      "bytes": 84335
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-08-start-mobile.png",
+      "sha256": "1cfe2b19335bc0f88500083a86336c554b594c6bb3c89c20fbcc162dd73c033d",
+      "bytes": 118511
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-06-pair.png",
+      "sha256": "cb65dbf2975a7a4845e7de440d5268e8d3aff38fac5273f0ee89b3e3028b9151",
+      "bytes": 413401
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-07-pair.png",
+      "sha256": "66ef2bf040cdcde3e7d9b67fa17a96e94fa0fc1310effc68abbcbd0c6a86d283",
+      "bytes": 419307
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-05-pair-mobile.png",
+      "sha256": "fa0f84d8a03d10f56a9b57bf18c802c4a65cd49f020f99c314ab979ba285ba89",
+      "bytes": 237432
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-06-end.png",
+      "sha256": "b4d437383670c84cd23d5674260c3489ccbb2d5093d62521751b1008674cfffe",
+      "bytes": 208436
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-01-start.png",
+      "sha256": "e5040a3021cdba5fc0489d157f2f6c172aeb63e0518aad833f4bb6f9a034ee6d",
+      "bytes": 215535
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-03-start-mobile.png",
+      "sha256": "fb05ecaac1d377a33345b2657b9786106568b88051745c74c2899ed6ab03c5b7",
+      "bytes": 101859
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-07-end.png",
+      "sha256": "a2cd48c93850d1850abbd8940d0ff03160390c6289ca00b9d9ddb9199f3c5d35",
+      "bytes": 211571
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-10-pair.png",
+      "sha256": "0e5ca905bb2eff2e2f1e0f55403a634cd5673ce03826e8c0dc7b42ece282b774",
+      "bytes": 304736
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-07-start-mobile.png",
+      "sha256": "d97d2ef06541fd0a03a23f0b8f85d50273e6a050e8cdacb7cce8086919986f68",
+      "bytes": 127091
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-02-pair-mobile.png",
+      "sha256": "b9269c91baf7d43da7161b37f51cc7e53275a226d7d65c50fa8fe174ab49af3d",
+      "bytes": 165410
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-07-start.png",
+      "sha256": "b45ef41ba684dee7cefed6722fb86e76662f814833b19dfddd9d3490e9a61f33",
+      "bytes": 222135
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-05-end.png",
+      "sha256": "80b101e3ba401d7d47acd36f8b3aa6c2113b680ddc068857ac34e0e789c60261",
+      "bytes": 201746
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-09-start-mobile.png",
+      "sha256": "51150b20b1892a200bbb6234cfce0987d19355329084ed90e847545d3460ef1d",
+      "bytes": 152733
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-03-pair-mobile.png",
+      "sha256": "87432e2c1a811979df2f1c11fbbdeb4f6c918990790cac7abd6cbc04bea8da47",
+      "bytes": 188222
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-02-start-mobile.png",
+      "sha256": "8e9d964b4cb7b3c1dafafbe3676d4d82c7eaec5eec4cfec622bdac4ecc5dab14",
+      "bytes": 92556
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-06-start-mobile.png",
+      "sha256": "1a0d80045b63a78e803b2ff4599283dc106ae8fd5fc69719bb6d6ddb480a88e5",
+      "bytes": 126205
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-04-pair-mobile.png",
+      "sha256": "693261dc3d56a93537f4ed7ea2130713c681d3aadfcbbaf690ea4f165f1a750e",
+      "bytes": 260290
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-01-pair.png",
+      "sha256": "8b8e10e086cce4503e58b731f55064a244f11daa009c49a2a94dcd6ffc5124bf",
+      "bytes": 405831
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-04-end.png",
+      "sha256": "a269148c74df635946abb85641dcd330f36964916624f3394f51196e7212d4cb",
+      "bytes": 225545
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-06-start.png",
+      "sha256": "8bcf58d34dde10939fc967693f01e5c3867e16fb9e3f42dc4752279a72bceafa",
+      "bytes": 219334
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-01-start-mobile.png",
+      "sha256": "fc9d9100665421af78b17dd790f0ab21cc41808af10adb0a9b5298de5179d7c6",
+      "bytes": 124590
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-07-end-mobile.png",
+      "sha256": "5766d98929f971c3e2aebba9182d34e26f7115477100fd0e0b44d2848942d7bd",
+      "bytes": 122089
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-01-end.png",
+      "sha256": "a590d8b2c66ffa8c361e3da13725de53a7d63070744c7b74903539a699783154",
+      "bytes": 202442
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-08-end-mobile.png",
+      "sha256": "014d124d8c32d80f33918796f0818c61136a9a709244de4291945ef2c861997f",
+      "bytes": 119097
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-08-end.png",
+      "sha256": "ce11c4cbbf2c8c3bc97f0246e885a36fcb2aa13a3e4e0d1d71400065b8f09507",
+      "bytes": 204021
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-03-start.png",
+      "sha256": "22a7f55ed24f0a72ac843a79b2ba5af21c998dd75bc10bde6aee3d724a94545d",
+      "bytes": 175889
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-01-pair-mobile.png",
+      "sha256": "fd2dbdfe915755f823b738a226f33b436c2f5beda3ac9264238bc87122f2a085",
+      "bytes": 236628
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-08-start.png",
+      "sha256": "7068c1edb0cf2670e5f69f9ef2bf6a44f0d07d1964cfb530d49b35ee5abc71bd",
+      "bytes": 204386
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-06-pair-mobile.png",
+      "sha256": "78b9854cb4f6681a934700cb5d4266b3e3651f1ae3739018cdfef90531e0a807",
+      "bytes": 241975
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-01-end-mobile.png",
+      "sha256": "a4a221d45b6b6a6fa0f0104adb35d7922f82b2d4571f1afb1289c9aae36ff66a",
+      "bytes": 117325
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-09-end-mobile.png",
+      "sha256": "bdf6113693271b59130cd907aa3af2e5767093cd3d98cc5c193ac4a962a5a2f3",
+      "bytes": 148744
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-09-end.png",
+      "sha256": "2ef029139154104ae7d91cd5e57edc72219c02b6ecf97358daeba761e81e56a8",
+      "bytes": 255343
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-05-start-mobile.png",
+      "sha256": "483f28380ef4d9437df9dfae3760344a18c346291be6a08fc6812646a5ce6777",
+      "bytes": 125163
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-05-start.png",
+      "sha256": "5defd37c04d32723d0ad88bda62accbebee8d564c740cfaa50356013ed46593b",
+      "bytes": 218781
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-06-end-mobile.png",
+      "sha256": "d994517d543754f0e26d6c79815d6c9024aa7826ae629d5e74e5cbd9d8f6c771",
+      "bytes": 120681
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-10-pair-mobile.png",
+      "sha256": "f7164c269d443265dc6e86e9ca0b1a5f60db2560763ff827eea024ef955dc614",
+      "bytes": 182270
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-09-pair-mobile.png",
+      "sha256": "e0930287cb9dbe1e053c5e23f6581d5ec5b6f91bdb7c5616e0f300bd9a5b8132",
+      "bytes": 295785
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-05-pair.png",
+      "sha256": "7891ce53e2319f917553cbc6c6b75373c0b01e141277b531ed9aec284cbee4cf",
+      "bytes": 406378
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-04-pair.png",
+      "sha256": "936c19a237cabb6873ad1000b7844ff7cce67c2dfd59fab4e7bfa416408f7a24",
+      "bytes": 437994
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-10-end.png",
+      "sha256": "75017842c7b9829bcedbef73a6c40c768677dd954676222e39df8d0f51f22448",
+      "bytes": 157106
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-04-end-mobile.png",
+      "sha256": "6433c0cc92bc9dbb470f7a6b0ea48f9c1735efdee59965f4c66e56c7cf3aa54c",
+      "bytes": 132467
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-07-pair-mobile.png",
+      "sha256": "cce45faccb6b31cad2f839cb38bec53c64c57e50f49821581367d2f894ead7b0",
+      "bytes": 244156
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-08-pair.png",
+      "sha256": "3eb137c5eb41616a9f78087b5e1848ccec923d967d4d205c0eec4c3c2c35d1e0",
+      "bytes": 397254
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-09-pair.png",
+      "sha256": "0e2a9daec67f7d0c159fe3e444b3c14f713aea664c9aaa24901be16f08a6ef8f",
+      "bytes": 501119
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-03-end-mobile.png",
+      "sha256": "2d0e12022b2bb29270485a4652dd8cf72c06d5564052c09dcb96d7273de68426",
+      "bytes": 89632
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-02-end.png",
+      "sha256": "2178134ea13b29c9470b388e93f6d39edd634023bd2f73e1d24be8f441ccd27c",
+      "bytes": 131509
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-08-pair-mobile.png",
+      "sha256": "57bbf853f8fcc19469ab5f459d4b8033f1bb62864e10af9a6e7a8b1c463f1418",
+      "bytes": 234226
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-02-pair.png",
+      "sha256": "d0c2fb4638197ea983de6a290ede89c132ae9d71464019f2ab0486f40b796a12",
+      "bytes": 280881
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-03-pair.png",
+      "sha256": "180c2dd2e9bd1e5cae830fe15037b8be97b61c2ed94c4d2888a796fa2a8fcc5d",
+      "bytes": 319505
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-02-start.png",
+      "sha256": "753bc1488e795c122db1274499fc41e92720b0c1eceff777df482aca31aebcf9",
+      "bytes": 161338
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-09-start.png",
+      "sha256": "c7fae144a45f8887420ecf6ec3b94e626fed30747999f13494422b1e2d273611",
+      "bytes": 263211
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-10-start-mobile.png",
+      "sha256": "957320ec24a489ab7be21587dc02d7b7a12aa77f216ff0ef4cc306220fb26978",
+      "bytes": 92393
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-03-end.png",
+      "sha256": "22747fb1e09801677aac4c10ae443503565a714b82d599646ea52d1fbdd40a46",
+      "bytes": 153820
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-02-end-mobile.png",
+      "sha256": "a3afc6e4a3b80519a6fa3d0f29da1b9fd8ded7a37357d5ac8617861f235cb808",
+      "bytes": 75349
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-10-start.png",
+      "sha256": "07f9a68bcc982ef9c55c19d167311885d62219c68c69b80dde28cc2836799545",
+      "bytes": 160928
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-04-start.png",
+      "sha256": "4c243fabb007f07ec5ad7c08e33e174331c70239d8c48cd9303fc2a0ed279306",
+      "bytes": 225065
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-05-end-mobile.png",
+      "sha256": "a1b8c5befcbdee53883d7e63dc580e8c7178ec28a5ff77d61e469cc89202f417",
+      "bytes": 116112
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-10-end-mobile.png",
+      "sha256": "170ac00b1b9c2f7d96116f3a953e7402d2bd3c83a9d40b51a955e2fb51036272",
+      "bytes": 92516
+    },
+    {
+      "path": "review/visual/rehearsal/inspection/scene-04-start-mobile.png",
+      "sha256": "604e088c3dd276378436de0ab3856a64cc4995768792922d5d5012dfc58e6c90",
+      "bytes": 130911
+    }
+  ],
+  "artifact": {
+    "path": "demo/exports/silent-synthetic-rehearsal.mp4",
+    "sha256": "c2bc7ca195d9be07c7cc007c4cdd5e1cf7b7d2ebc5530f64e2d441c6288f9ace",
+    "width": 1280,
+    "height": 720,
+    "codec": "h264",
+    "pixelFormat": "yuv420p",
+    "fps": 30,
+    "frames": 4500,
+    "durationSeconds": 150,
+    "bytes": 2012777
+  },
+  "sourceCommit": "75123ec8a99a94ecbb1227eae945efa62a175091",
+  "sourcePaths": [
+    "demo/rehearsal-scenes.json",
+    "demo/storyboard.md",
+    "demo/narration.md",
+    "demo/rehearsal-transcript.md"
+  ],
+  "sceneIds": [
+    "scene-01-concept-title",
+    "scene-02-context-design-review",
+    "scene-03-hold-revise-handoff",
+    "scene-04-product-evidence-status",
+    "scene-05-neatlogs-evidence",
+    "scene-06-entire-evidence",
+    "scene-07-cfo-ai-evidence",
+    "scene-08-comparison-and-results",
+    "scene-09-submission-gate",
+    "scene-10-status-and-docs-cta"
+  ],
+  "captionMetrics": {
+    "cues": 17,
+    "minDurationSeconds": 4.333333333333332,
+    "maxCharactersPerSecond": 17.03883495145629,
+    "maxCharactersPerCue": 138,
+    "segmentation": "Complete sentences; concatenated cues equal original captionText exactly; frame-aligned boundaries at30fps.",
+    "timingScope": "Silent content display timing; no speech/audio synchronization claim."
+  },
+  "accessibility": {
+    "contrast": [
+      {
+        "foreground": "#17140F",
+        "background": "#F4ECDD",
+        "ratio": 15.645459255762226,
+        "usage": "main text and inverse caption band"
+      },
+      {
+        "foreground": "#F4ECDD",
+        "background": "#26302A",
+        "ratio": 11.626520142200903,
+        "usage": "persistent status"
+      }
+    ],
+    "thresholds": {
+      "normalText": 4.5,
+      "largeText": 3,
+      "essentialMarks": 3,
+      "largeDefinition": ">=24CSSpx normal or >=18.667CSSpx bold at actual viewing size; all pairs exceed normal threshold anyway."
+    },
+    "nativeTypeCSSpx": {
+      "smallestEssentialSponsorAndStatus": 28,
+      "bodyAndCaptions": 32,
+      "headings": 36
+    },
+    "landscape780EffectiveCSSpx": {
+      "smallestEssentialSponsorAndStatus": 17.0625,
+      "bodyAndCaptions": 19.5,
+      "headings": 21.9375
+    },
+    "safeArea": "Meaningful text remains at least5% from encoded frame edges; caption band y526..680, main text bottom<=510; all17 actual browser overflow checks passed.",
+    "readingOrder": "Persistent draft/silent status, exact scene screenText in source order, then exact current caption. SRT/VTT and general transcript preserve full text/time order; scene02 explicit context\u2192design\u2192human review; scene03 hold/revise and planned handoff.",
+    "colorIndependence": "Every state uses written DRAFT/PENDING/BLOCKED/NOT A PRODUCT DEMO labels, not color alone.",
+    "keyboardFocus": "N/A static encoded video/text cards have no interactive controls. Hosting player controls remain future destination review.",
+    "portraitInline": "Not checked as a readable video context; use general packaged transcript or landscape/fullscreen.",
+    "audio": "No audio track, speech, TTS, or audio synchronization claim; silent captioned rehearsal."
+  },
+  "testResult": {
+    "command": "python3 -m unittest discover -s tests -p 'test_visual_*.py' -v",
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0
+  },
+  "attemptHistory": [
+    {
+      "issue": "Initial same-document hash navigation repeated first scene",
+      "fix": "Force full query-string navigation; assert exact scene text and caption before encoding",
+      "final": "All17 exact DOM matches pass."
+    },
+    {
+      "issue": "Initial compositor resize produced first-frame tiling",
+      "fix": "Wait after metrics, document.fonts.ready, two animation frames, and paint settling",
+      "final": "Final scene01 decoded start inspected clean; all20 boundaries inspected."
+    },
+    {
+      "issue": "Initial balanced-word caption segmentation isolated a fragment of a negated savings sentence",
+      "fix": "Preserve whole sentences without changing general copy; reject overlong source sentence",
+      "final": "17 sentence-preserving cues; exact caption reconstruction passes."
+    },
+    {
+      "issue": "Inspection requested nonexistent -pair-native file name",
+      "fix": "Used actual -pair.png and -pair-mobile.png paths",
+      "final": "All10 final scene pairs inspected in bounded batches."
+    },
+    {
+      "issue": "All-scene image output exceeded model context",
+      "fix": "Re-inspected final pairs in batches of two scenes",
+      "final": "All10 final pairs viewed at both sizes."
+    }
+  ],
+  "receiptCorrection": {
+    "finding": "MMREL-001",
+    "status": "FIXED_AUTHOR_CHECK_ONLY_PENDING_INDEPENDENT_REVIEW",
+    "method": "ffprobe now receives repository-relative MP4 input with repository cwd; filename is deterministic and relative. Existing media/source/caption/image bytes unchanged.",
+    "checkedReports": [
+      "review/visual/rehearsal/**/*.json",
+      "review/visual/rehearsal/**/*.md",
+      "demo/exports/rehearsal-render-plan.json"
+    ],
+    "independentReview": "pending",
+    "mediaReencoded": false,
+    "reproduction": {
+      "status": "PASS_AUTHOR_CHECK_ONLY",
+      "actualFfprobeIdenticalFromSecondCheckout": true,
+      "relativeFilename": "demo/exports/silent-synthetic-rehearsal.mp4",
+      "baselineCommit": "4ec6eebe01e716376b401e44095213c32780f498",
+      "changedMediaCaptionHtmlInspectionPaths": [],
+      "localPathFindingsInCurrentReports": 0,
+      "regression": "Detects machine-local filesystem prefixes, allows public URL paths, rejects video paths outside repository, resolves macOS checkout directory aliases."
+    }
+  }
+}
