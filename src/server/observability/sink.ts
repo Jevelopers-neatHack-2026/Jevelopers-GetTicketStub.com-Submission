@@ -91,16 +91,32 @@ export function setOpsSink(sink: OpsSink | null | undefined): void {
   else g.__ticketstubOpsSink = sink;
 }
 
+/** Logs, once per distinct setting, which sinks were selected: only known sink names and the setting's length. */
+const selectionsNoted = new Set<string>();
+/** Tests: forget which selections were already noted. */
+export const resetSelectionNotes = (): void => selectionsNoted.clear();
+function noteSelection(wanted: Set<string>, sinks: OpsSink[], rawLength: number): void {
+  const requested = ["log", "neatlogs"].filter((s) => wanted.has(s));
+  const unknown = [...wanted].filter((s) => s !== "log" && s !== "neatlogs" && s !== "off").length;
+  const key = `${requested.join(",")}|${unknown}|${sinks.map((s) => s.name).join(",")}`;
+  if (selectionsNoted.has(key) || (requested.length === 0 && unknown === 0)) return;
+  selectionsNoted.add(key);
+  console.info(`[ops] telemetry sinks: ${sinks.map((s) => s.name).join(",") || "none"} (requested: ${requested.join(",") || "none"}; unrecognised entries: ${unknown}; setting length: ${rawLength})`);
+}
+
 /** The active sink, or undefined when collection is off. Read per operation so a restart is not needed in tests. */
 export function activeSink(): OpsSink | undefined {
   if (g.__ticketstubOpsSink !== undefined) return g.__ticketstubOpsSink ?? undefined;
-  const wanted = new Set((process.env.TICKETSTUB_OPS_TELEMETRY ?? "").toLowerCase().split(",").map((v) => v.trim()));
+  const raw = process.env.TICKETSTUB_OPS_TELEMETRY ?? "";
+  // Tolerate quotes or semicolons/spaces a host UI may add around the list.
+  const wanted = new Set(raw.toLowerCase().replace(/["']/g, "").split(/[\s,;]+/).filter(Boolean));
   const sinks: OpsSink[] = [];
   if (wanted.has("log")) sinks.push(logSink);
   if (wanted.has("neatlogs")) {
     const n = neatlogs();
     if (n) sinks.push(n);
   }
+  noteSelection(wanted, sinks, raw.length);
   return sinks.length === 0 ? undefined : sinks.length === 1 ? sinks[0] : fanOut(sinks);
 }
 
