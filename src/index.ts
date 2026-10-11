@@ -149,3 +149,17 @@ export type {
   ProdigiPrintAreaSize,
   ProdigiProductVariant
 } from "./prodigi-product-details.js";
+export { inspectPngBytes, PNG_INSPECTION_LIMITS } from "./png-inspection.js";
+export type {
+  PngExpectationFailure,
+  PngExpectationFailureCode,
+  PngExpectationField,
+  PngExpectationReport,
+  PngInspectionCode,
+  PngInspectionMetadata,
+  PngInspectionResult,
+  PngInspectionStatus,
+  PngObservedContentType,
+  PngObservedFormat,
+  PngPhysicalResolution
+} from "./png-inspection.js";

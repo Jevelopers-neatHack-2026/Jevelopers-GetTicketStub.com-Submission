@@ -67,3 +67,6 @@ jobs:
 
       - name: Verify private simulated Product Details decoder fixtures
         run: npm run verify:prodigi-product-details
+
+      - name: Verify private bounded PNG byte inspection fixtures
+        run: npm run verify:png-inspection
