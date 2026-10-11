@@ -9,7 +9,7 @@
 // Neatlogs sink is the only network path, and it is off unless both the setting and the key are present. Tests
 // install the in-memory collector with setOpsSink.
 import { createHash } from "node:crypto";
-import { neatlogsConfig, neatlogsSink } from "./neatlogs";
+import { neatlogsConfig, neatlogsConfigProblem, neatlogsSink, noteOnce } from "./neatlogs";
 import { OPS_ENVIRONMENTS, type OpsEnvironment, type OpsEvent } from "./schema";
 
 export interface OpsSink {
@@ -52,7 +52,10 @@ const g = globalThis as unknown as { __ticketstubOpsSink?: OpsSink | null; __tic
 /** One Neatlogs sink per process and configuration, because it holds each open operation's events until it closes. */
 function neatlogs(): OpsSink | undefined {
   const config = neatlogsConfig();
-  if (!config) return undefined;
+  if (!config) {
+    noteOnce("config", `requested but not configured: ${neatlogsConfigProblem() ?? "unknown reason"}`);
+    return undefined;
+  }
   const id = createHash("sha256").update(`${config.endpoint}|${config.tags.join(",")}|${config.apiKey}`).digest("hex").slice(0, 16);
   if (g.__ticketstubNeatlogs?.id !== id) g.__ticketstubNeatlogs = { id, sink: neatlogsSink({ config }) };
   return g.__ticketstubNeatlogs.sink;
