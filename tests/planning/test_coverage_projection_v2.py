@@ -415,26 +415,33 @@ class CoverageProjectionV2Tests(unittest.TestCase):
         report = self.validate(release_path=self.paths["release"], require_specialists=False)
         self.assertEqual(report["status"], "SCOPED_RELEASE_EVIDENCE_READY")
         mutations = {
-            "consumer_key": "CE-LEAF",
-            "consumer_requirement_ids": ["REQ-GLOBAL"],
-            "consumer_stage": "canonical_agreement_and_fixture",
-            "producer_key": "CE-LEAF",
-            "producer_requirement_ids": ["REQ-LOCAL"],
-            "external_artifact_id": "EXT-CANONICAL",
-            "producer_stage": "fixture",
-            "evidence_id": "ev-missing",
-            "producer_evidence_id": "ev-missing",
-            "content_sha256": "f" * 64,
-            "source_revision": "b" * 40,
-            "mode": "recorded",
+            "relation_id": ("STG-UNKNOWN", "STAGE_EVIDENCE_CARDINALITY_INVALID"),
+            "consumer_key": ("CE-LEAF", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "consumer_requirement_ids": (["REQ-GLOBAL"], "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "consumer_stage": ("canonical_agreement_and_fixture", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "producer_key": ("CE-LEAF", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "producer_requirement_ids": (["REQ-LOCAL"], "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "external_artifact_id": ("EXT-CANONICAL", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "producer_stage": ("fixture", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "evidence_id": ("ev-missing", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "producer_evidence_id": ("ev-missing", "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "content_sha256": ("f" * 64, "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "source_revision": ("b" * 40, "STAGE_EVIDENCE_BINDING_MISMATCH"),
+            "mode": ("recorded", "STAGE_EVIDENCE_BINDING_MISMATCH"),
         }
-        for field, value in mutations.items():
+        for field, (value, expected_code) in mutations.items():
             with self.subTest(field=field):
                 changed = copy.deepcopy(release)
                 changed["stage_evidence"][0][field] = value
                 self.paths["release"].write_bytes(_bytes(changed))
                 report = self.validate(release_path=self.paths["release"], require_specialists=False)
-                self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(report))
+                self.assertIn(expected_code, self.codes(report))
+
+        changed = copy.deepcopy(release)
+        changed["stage_evidence"][1]["external_artifact_id"] = "EXT-OTHER"
+        self.paths["release"].write_bytes(_bytes(changed))
+        report = self.validate(release_path=self.paths["release"], require_specialists=False)
+        self.assertIn("STAGE_EVIDENCE_BINDING_MISMATCH", self.codes(report))
 
     def test_v2_release_cannot_lower_a_leafs_declared_stage(self) -> None:
         release, expected_paths = self._release_manifest()
