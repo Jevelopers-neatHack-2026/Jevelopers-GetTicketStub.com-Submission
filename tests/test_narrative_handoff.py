@@ -15,6 +15,9 @@ class NarrativeHandoffTests(unittest.TestCase):
         cls.scenes = json.loads((ROOT / "demo/rehearsal-scenes.json").read_text())
         cls.claim_data = json.loads((ROOT / "messaging/claims.json").read_text())
         cls.inventory = json.loads((ROOT / "docs/collateral-inventory.json").read_text())
+        cls.official_formats = json.loads(
+            (ROOT / "review/official-format-sources.json").read_text()
+        )
         cls.claims = {row["id"]: row for row in cls.claim_data["claims"]}
         cls.ctas = {row["id"]: row for row in cls.claim_data["ctas"]}
         cls.deliverables = {
@@ -166,6 +169,28 @@ class NarrativeHandoffTests(unittest.TestCase):
         self.assertIn("OFFICIAL NEATLOGS SUBMISSION POST", copy)
         self.assertIn("CTA-REPOSITORY-DOCS-001", copy)
         self.assertIn(self.ctas["CTA-REPOSITORY-DOCS-001"]["exactText"], copy)
+
+    def test_official_formats_keep_video_unknowns_and_submission_blockers_explicit(self):
+        sources = {row["sourceId"]: row for row in self.official_formats["sources"]}
+        organizer = sources["OFFICIAL-NEATHACK-2026"]["observedRequirements"]
+        self.assertEqual(organizer["videoMaximumSeconds"], 180)
+        self.assertEqual(
+            set(organizer["perSponsorVideoFacets"]),
+            {"architecture", "implementation", "runtime", "reasoning", "result"},
+        )
+        self.assertIsNone(organizer["videoAspectRatio"]["value"])
+        self.assertIsNone(organizer["videoFileSizeLimit"]["value"])
+        self.assertIsNone(organizer["officialQuotePost"]["url"])
+        self.assertIsNone(organizer["confirmedFinalCutoff"]["value"])
+
+        post = sources["OFFICIAL-X-POST-2026"]["observedRequirements"]
+        self.assertEqual(post["ordinaryPostMaximumCharacters"], 280)
+        image = sources["OFFICIAL-X-IMAGE-2026"]["observedRequirements"]
+        self.assertEqual(
+            image["singleImageStandardAspectRatiosDisplayedInFull"],
+            {"wideLimit": "2:1", "tallLimit": "3:4"},
+        )
+        self.assertEqual(image["localDraftDimensions"]["status"], "local_choice_not_platform_requirement")
 
 
 if __name__ == "__main__":
