@@ -916,16 +916,21 @@ export function createCorrectionHistoryStore(options) {
   async function withTransaction(info, directory, operation, signal, finalBoundary, transactionOptions = undefined) {
     const timeoutMs = transactionOptions?.timeoutMs ?? limits.lockTimeoutMs;
     return withTenantDatabaseQueue(directory,
-      () => withTransactionUnlocked(info, directory, operation, signal, finalBoundary, { timeoutMs, sync: transactionOptions?.sync === true }),
+      () => withTransactionUnlocked(info, directory, operation, signal, finalBoundary, {
+        timeoutMs,
+        sync: transactionOptions?.sync === true,
+        beforeBegin: transactionOptions?.beforeBegin,
+      }),
       signal);
   }
 
-  async function withBindingTransaction(info, directory, operation, signal) {
+  async function withBindingTransaction(info, directory, operation, signal, beforeBegin) {
     const delays = [2, 4, 8, 12, 20, 30, 40];
     for (let attempt = 0; ; attempt += 1) {
       throwIfAborted(signal);
       try {
-        return await withTransaction(info, directory, operation, signal, undefined, { timeoutMs: 0, sync: true });
+        return await withTransaction(info, directory, operation, signal, undefined,
+          { timeoutMs: 0, sync: true, beforeBegin });
       } catch (error) {
         if (!(error instanceof ReviewHistoryError) || error.code !== 'REVIEW_BUSY' || attempt >= delays.length) throw error;
         await abortableWait(new Promise((resolve) => setTimeout(resolve, delays[attempt])), signal);
@@ -1044,6 +1049,8 @@ export function createCorrectionHistoryStore(options) {
           last_invalidation_target_hash TEXT,
           PRIMARY KEY (event_key, binding_hash)
         ) STRICT;
+        CREATE INDEX IF NOT EXISTS correction_cache_bindings_expiry
+          ON correction_cache_bindings (expires_at_ms, event_key, binding_hash);
         CREATE TABLE IF NOT EXISTS correction_cache_operations (
           event_key TEXT NOT NULL,
           operation_hash TEXT NOT NULL,
@@ -1095,6 +1102,7 @@ export function createCorrectionHistoryStore(options) {
       await chmod(databasePath, 0o600);
       // The configured clock is host code. Sample it before BEGIN so even a synchronous
       // reentrant clock cannot run while this connection owns SQLite's writer lock.
+      if (transactionOptions.beforeBegin) await transactionOptions.beforeBegin();
       const transactionNow = nowMs();
       database.exec('BEGIN IMMEDIATE');
       open = true;
@@ -1561,12 +1569,12 @@ export function createCorrectionHistoryStore(options) {
     const eventKey = keyed(info, indexKey, 'event', eventId);
     const directory = await tenantDirectory(info);
     try {
-      const raw = await withTransaction(info, directory, (database) => {
-        expireHistory(database, eventKey, nowMs());
+      const raw = await withTransaction(info, directory, (database, time) => {
+        expireHistory(database, eventKey, time.now);
         const head = database.prepare('SELECT * FROM heads WHERE event_key = ?').get(eventKey);
         if (!head) fail('REVIEW_NOT_FOUND');
         if (head.state !== 'available') fail('REVIEW_EXPIRED');
-        if (head.expires_at_ms <= nowMs()) fail('REVIEW_EXPIRED');
+        if (head.expires_at_ms <= time.now) fail('REVIEW_EXPIRED');
         const row = rowForVersion(database, eventKey, baseVersionId);
         if (!row || row.content_hash !== baseContentHash) fail('REVIEW_VERSION_CONFLICT');
         return { row, headExpiryMs: head.expires_at_ms };
@@ -1953,16 +1961,17 @@ export function createCorrectionHistoryStore(options) {
     const actorId = await authorizeRequest(info, request, null, 'purge_correction_history');
     const directory = await tenantDirectory(info);
     try {
-      return await withTransaction(info, directory, async (database) => {
-        const now = nowMs();
+      const purged = await withBindingTransaction(info, directory, (database, time) => {
+        const now = time.now;
+        database.prepare('DELETE FROM correction_cache_bindings WHERE expires_at_ms <= ?').run(now);
         const expiredEvents = database.prepare("SELECT event_key FROM heads WHERE state = 'available' AND expires_at_ms <= ? LIMIT ?")
           .all(now, limits.maxHistories);
         let purged = 0;
         for (const row of expiredEvents) if (expireHistory(database, row.event_key, now)) purged += 1;
         return purged;
-      }, undefined, async () => {
-        await reauthorizeRequest(info, request, null, 'purge_correction_history', actorId);
-      });
+      }, undefined, () => reauthorizeRequest(info, request, null, 'purge_correction_history', actorId));
+      await reauthorizeRequest(info, request, null, 'purge_correction_history', actorId);
+      return purged;
     } catch (error) {
       throw mapStorageError(error);
     }
@@ -1973,9 +1982,16 @@ export function createCorrectionHistoryStore(options) {
     const eventId = validateEventId(eventIdValue);
     const actorId = await authorizeRequest(info, request, eventId, action, field);
     const indexKey = await indexKeyFor(info);
-    const eventKey = keyed(info, indexKey, 'event', eventId);
-    const directory = await tenantDirectory(info);
-    return Object.freeze({ scope, info, eventId, actorId, indexKey, eventKey, directory, request, action, field });
+    let transferred = false;
+    try {
+      const eventKey = keyed(info, indexKey, 'event', eventId);
+      const directory = await tenantDirectory(info);
+      const context = Object.freeze({ scope, info, eventId, actorId, indexKey, eventKey, directory, request, action, field });
+      transferred = true;
+      return context;
+    } finally {
+      if (!transferred) indexKey.fill(0);
+    }
   }
 
   function disposeBindingContext(context) {
@@ -2201,7 +2217,9 @@ export function createCorrectionHistoryStore(options) {
   }
 
   async function bindingRows(context, versionId = undefined, contentHash = undefined) {
-    const rows = await withBindingTransaction(context.info, context.directory, (database) => {
+    const rows = await withBindingTransaction(context.info, context.directory, (database, time) => {
+      database.prepare('DELETE FROM correction_cache_bindings WHERE event_key = ? AND expires_at_ms <= ?')
+        .run(context.eventKey, time.now);
       if (versionId === undefined) return database.prepare('SELECT * FROM correction_cache_bindings WHERE event_key = ? ORDER BY binding_hash')
         .all(context.eventKey);
       return database.prepare(`SELECT * FROM correction_cache_bindings WHERE event_key = ? AND bound_version_id = ?

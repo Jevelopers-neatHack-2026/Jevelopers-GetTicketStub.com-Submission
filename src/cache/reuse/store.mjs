@@ -1126,6 +1126,10 @@ export function createScopedReuseStore(options) {
     database.prepare('DELETE FROM reuse_observations WHERE entry_id = ?').run(entry.entry_id);
     database.prepare('DELETE FROM reuse_private_links WHERE public_entry_id = ?').run(entry.entry_id);
     database.prepare('DELETE FROM reuse_consumer_refs WHERE entry_id = ?').run(entry.entry_id);
+    if (entry.scope_kind === 'tenant_private' && entry.partition_hash) {
+      database.prepare(`DELETE FROM reuse_correction_reservations WHERE entry_id = ?
+        AND scope_kind = 'tenant_private' AND partition_hash = ?`).run(entry.entry_id, entry.partition_hash);
+    }
     return transitioned;
   }
 
@@ -2109,6 +2113,9 @@ export function createScopedReuseStore(options) {
       || !Number.isSafeInteger(binding.cacheVersion) || binding.cacheVersion < 1
       || binding.scopeKind !== 'tenant_private' || !/^[a-f0-9]{64}$/.test(binding.cacheBindingHash)
       || !/^[a-f0-9]{64}$/.test(binding.cacheSourceContentHash)
+      || !Number.isSafeInteger(binding.cacheExpiresAtMs) || !Number.isSafeInteger(binding.historyExpiresAtMs)
+      || !Number.isSafeInteger(binding.expiresAtMs)
+      || binding.expiresAtMs !== Math.min(binding.cacheExpiresAtMs, binding.historyExpiresAtMs)
       || !operation || !string(operation.operationId, 128) || !Number.isSafeInteger(operation.fence)
       || operation.fence < 1 || operation.baseVersionId !== binding.historyVersionId
       || operation.baseContentHash !== binding.historyContentHash
@@ -2149,8 +2156,10 @@ export function createScopedReuseStore(options) {
     }));
     if (signalAborted(signal) || !preflight.row
       || preflight.row.version !== binding.cacheVersion || preflight.row.binding_hash !== binding.cacheBindingHash
+      || preflight.row.expires_at_ms !== binding.cacheExpiresAtMs
       || preflight.row.identity_hash !== keys.identityHash || preflight.row.content_hash_mac !== keys.contentMac
-      || preflight.row.pins_hash !== keys.pinsHash || preflight.row.scope_kind !== 'tenant_private') {
+      || preflight.row.pins_hash !== keys.pinsHash || preflight.row.scope_kind !== 'tenant_private'
+      || binding.expiresAtMs !== Math.min(preflight.row.expires_at_ms, binding.historyExpiresAtMs)) {
       fail('REUSE_DENIED');
     }
     let reservation;
@@ -2180,6 +2189,8 @@ export function createScopedReuseStore(options) {
         || reservation.profileRef !== binding.profileRef
         || reservation.bindingHash !== binding.cacheBindingHash || reservation.version !== binding.cacheVersion
         || reservation.contentHash !== binding.cacheSourceContentHash || reservation.expiresAtMs !== binding.cacheExpiresAtMs
+        || reservation.expiresAtMs > binding.historyExpiresAtMs
+        || binding.expiresAtMs !== Math.min(reservation.expiresAtMs, binding.historyExpiresAtMs)
         || stable(reservation.identity) !== stable(index.identity) || stable(reservation.pins) !== stable(index.pins)
         || (reservation.outboxSlots !== Math.max(1, reservationConsumers.length))) fail('REUSE_INTEGRITY');
     }
@@ -2809,6 +2820,19 @@ export function createScopedReuseStore(options) {
         const current = database.prepare('SELECT * FROM reuse_entries WHERE entry_id = ? AND scope_kind = ? AND partition_hash = ?')
           .get(row.entry_id, scopeKind, keys.partitionHash);
         if (expireEntry(database, scopeKind === 'public_profile' ? null : info, current, payload, time.now, { ...keys, payloadKey: payloadKey ?? keys.payloadKey })) purged += 1;
+      });
+    }
+    if (scopeKind === 'tenant_private') {
+      await authorize(info, request, action);
+      await withDatabase((database, time) => {
+        database.prepare(`DELETE FROM reuse_correction_reservations
+          WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND entry_id IN (
+            SELECT entry_id FROM reuse_entries
+            WHERE scope_kind = 'tenant_private' AND partition_hash = ? AND expires_at_ms <= ? AND payload_purged = 1
+              AND entry_id IN (SELECT entry_id FROM reuse_correction_reservations
+                WHERE scope_kind = 'tenant_private' AND partition_hash = ?)
+            ORDER BY expires_at_ms, entry_id LIMIT 500
+          )`).run(keys.partitionHash, keys.partitionHash, time.now, keys.partitionHash);
       });
     }
     return Object.freeze({ purged, retainedOutboxPending: (await outboxSnapshot(scope, request, scopeKind)).unresolved });

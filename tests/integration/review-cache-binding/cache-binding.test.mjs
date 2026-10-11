@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createScopedReuseStore } from '../../../src/cache/reuse/store.mjs';
 import { createCorrectionCacheBinding } from '../../../src/review/history/cache-binding.mjs';
-import { ReviewHistoryError } from '../../../src/review/history/store.mjs';
+import { createCorrectionHistoryStore, ReviewHistoryError } from '../../../src/review/history/store.mjs';
 
 const EPOCH = Date.parse('2026-10-10T15:00:00.000Z');
 const EVENT_ID = 'event-binding-001';
@@ -58,6 +58,7 @@ async function fixture(t, options = {}) {
     resolveTenant: (value) => value?.principal?.tenantId,
     resolveActor: (value) => value?.principal?.actorId,
     authorize({ tenantId, actorId, request: value }) {
+      if (options.history?.authorize) return options.history.authorize({ tenantId, actorId, request: value });
       return value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === tenantId
         && value?.principal?.actorId === actorId && actorId !== 'outsider';
     },
@@ -68,12 +69,12 @@ async function fixture(t, options = {}) {
     },
     resolveRetention({ tenantId, nowMs, sourceExpiresAtMs, retentionHandle }) {
       if (options.history?.resolveRetention) return options.history.resolveRetention({ tenantId, nowMs, sourceExpiresAtMs, retentionHandle });
-      if (tenantId !== 'tenant-binding' || !permits.has(retentionHandle)) throw new Error('synthetic history retention denied');
+      if (!['tenant-binding', 'tenant-other'].includes(tenantId) || !permits.has(retentionHandle)) throw new Error('synthetic history retention denied');
       return { expiresAtMs: Math.min(nowMs + 60_000, sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
         policyId: 'synthetic-history-retention', policyVersion: '1', accessPolicy: 'tenant_private' };
     },
     lockedFields: ['event_status'],
-    now: () => clock.value,
+    now: options.history?.now ?? (() => clock.value),
   };
   const cacheOptions = {
     directory: path.join(root, 'cache'),
@@ -117,8 +118,8 @@ async function fixture(t, options = {}) {
   };
   const authorizeFinalDisclosure = options.authorizeFinalDisclosure ?? ((decision) => decision.tenantId === 'tenant-binding'
     && decision.actorId !== 'outsider' && decision.action === 'private_profile.read');
-  const makeStore = () => createCorrectionCacheBinding({ history: historyOptions, cache: cacheOptions,
-    authorizeFinalDisclosure, operationTimeoutMs: options.operationTimeoutMs });
+  const makeStore = (timeoutMs = options.operationTimeoutMs) => createCorrectionCacheBinding({ history: historyOptions, cache: cacheOptions,
+    authorizeFinalDisclosure, operationTimeoutMs: timeoutMs });
   const store = makeStore();
   const authRequest = request();
   const scope = await store.scopeForAuthenticatedRequest(authRequest);
@@ -130,20 +131,26 @@ async function createSeed(f) {
     idempotencyKey: 'initialize-binding-event', retentionHandle: f.createPermit() }, f.authRequest);
 }
 
-function cacheProfile() {
+function cacheProfile(options = {}) {
   return Object.freeze({
-    identity: IDENTITY,
-    contentHash: CONTENT_HASH,
+    identity: options.identity ?? IDENTITY,
+    contentHash: options.contentHash ?? CONTENT_HASH,
     pins: PINS,
     facts: Object.freeze({ event_name: Object.freeze({ status: 'sourced', value: 'ignored input' }) }),
     observation: Object.freeze({ source: 'synthetic local observation' }),
-    freshnessTtlMs: 30_000,
-    expiresAtMs: EPOCH + 45_000,
+    freshnessTtlMs: options.freshnessTtlMs ?? 30_000,
+    expiresAtMs: options.expiresAtMs ?? EPOCH + 45_000,
   });
 }
 
-function lookup() {
-  return Object.freeze({ identity: IDENTITY, contentHash: CONTENT_HASH, pins: PINS });
+function lookup(options = {}) {
+  return Object.freeze({ identity: options.identity ?? IDENTITY, contentHash: options.contentHash ?? CONTENT_HASH, pins: options.pins ?? PINS });
+}
+
+async function historyStoreFor(f, requestValue = f.authRequest) {
+  const history = createCorrectionHistoryStore(f.historyOptions);
+  const scope = await history.scopeForAuthenticatedRequest(requestValue);
+  return { history, scope };
 }
 
 function runWorker(args) {
@@ -187,6 +194,11 @@ async function waitForSignal(signal, label, timeoutMs = 3_000) {
   } finally { clearTimeout(timer); }
 }
 
+async function withPhase(label, operation) {
+  try { return await operation; }
+  catch (error) { throw new Error(`${label}: ${error?.code ?? error?.message ?? error}`, { cause: error }); }
+}
+
 test('composed correction binds exact history provenance, invalidates cache locally, and keeps ACK status separate', async (t) => {
   const f = await fixture(t);
   const seeded = await createSeed(f);
@@ -221,6 +233,77 @@ test('composed correction binds exact history provenance, invalidates cache loca
     (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
   await assert.rejects(f.store.getPrivateProfile(f.scope, EVENT_ID, request('tenant-binding', 'outsider'), lookup()),
     (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
+});
+
+test('composed correction never invokes the configured history clock while holding its SQLite writer lock', async (t) => {
+  let armed = false;
+  let historyDatabasePath;
+  const attempts = [];
+  const f = await fixture(t, { history: { now() {
+    if (armed) {
+      const attempt = { result: 'writer acquired' };
+      let database;
+      try {
+        database = new DatabaseSync(historyDatabasePath, { timeout: 0 });
+        database.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
+        database.exec('ROLLBACK');
+      } catch (error) {
+        attempt.result = 'writer rejected';
+        attempt.errorCode = error?.code ?? null;
+        attempt.errorMessage = String(error?.message ?? error);
+      } finally {
+        database?.close();
+        attempts.push(attempt);
+      }
+    }
+    return EPOCH;
+  } } });
+  const seeded = await createSeed(f);
+  const tenantHash = createHash('sha256').update('event-intelligence:review-tenant:v1:tenant-binding').digest('hex');
+  historyDatabasePath = path.join(f.historyOptions.directory, tenantHash, 'history.sqlite');
+  armed = true;
+  let revised;
+  try {
+    revised = await f.store.applyCorrection(f.scope, {
+      eventId: EVENT_ID,
+      baseVersionId: seeded.snapshot.versionId,
+      baseContentHash: seeded.snapshot.contentHash,
+      field: 'event_date',
+      value: { precision: 'date', value: '2027-06-20' },
+      idempotencyKey: 'clock-writer-guard-correction',
+      retentionHandle: f.createPermit(),
+    }, f.authRequest);
+  } finally {
+    armed = false;
+  }
+
+  assert.equal(revised.snapshot.revision, seeded.snapshot.revision + 1);
+  assert.ok(attempts.length > 0, 'the injected clock was exercised during the composed correction');
+  assert.deepEqual(attempts.filter((attempt) => attempt.result !== 'writer acquired'), []);
+});
+
+test('failed history binding context setup zeroes its acquired index key', async (t) => {
+  const f = await fixture(t);
+  await createSeed(f);
+  const historyDirectory = f.historyOptions.directory;
+  await rename(historyDirectory, `${historyDirectory}.preserved`);
+  await writeFile(historyDirectory, 'regular file prevents tenant-directory setup');
+
+  const originalFill = Buffer.prototype.fill;
+  let contextKeyWasZeroed = false;
+  Buffer.prototype.fill = function(value, ...args) {
+    const contextBinding = value === 0 && this.byteLength === 32 && /bindingContext/.test(new Error().stack ?? '');
+    const result = Reflect.apply(originalFill, this, [value, ...args]);
+    if (contextBinding) contextKeyWasZeroed = this.every((byte) => byte === 0);
+    return result;
+  };
+  try {
+    await assert.rejects(f.store.getHistory(f.scope, EVENT_ID, f.authRequest),
+      (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_STORAGE');
+  } finally {
+    Buffer.prototype.fill = originalFill;
+  }
+  assert.equal(contextKeyWasZeroed, true);
 });
 
 test('composed reads resolve only an exact issued binding and reject malformed mapping state', async (t) => {
@@ -565,13 +648,18 @@ test('timed-out binding callback cannot commit after an exact retry advances the
   const initialRejection = assert.rejects(initialAttempt,
     (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_ABORTED');
   await waitForSignal(observationStarted, 'first private source observation callback');
-  await initialRejection;
+  await withPhase('first timed-out bind rejection', initialRejection);
 
-  const retried = await f.store.bindPrivateProfile(f.scope, EVENT_ID, input, request());
+  // The 500ms deadline is the intentional first-attempt fault. Exact recovery gets a
+  // separate bounded budget so host scheduling does not turn recovery into a second timeout.
+  const recoveryStore = f.makeStore(2_000);
+  const recoveryScope = await recoveryStore.scopeForAuthenticatedRequest(request());
+  const retried = await withPhase('exact retry bind', recoveryStore.bindPrivateProfile(recoveryScope, EVENT_ID, input, request()));
   assert.equal(retried.status, 'bound');
   releaseFirstObservation();
-  await waitForSignal(oldContinuation, 'late callback continuation guard');
-  assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, request(), lookup())).status, 'hit');
+  await withPhase('late callback continuation guard', waitForSignal(oldContinuation, 'late callback continuation guard'));
+  const finalRead = await withPhase('read after late callback', recoveryStore.getPrivateProfile(recoveryScope, EVENT_ID, request(), lookup()));
+  assert.equal(finalRead.status, 'hit');
   const database = new DatabaseSync(path.join(f.root, 'cache', 'scoped-reuse.sqlite'));
   try {
     assert.equal(database.prepare('SELECT COUNT(*) AS count FROM reuse_entries').get().count, 1);
@@ -737,16 +825,366 @@ test('asynchronous and hostile final disclosure results fail closed without then
   assert.equal(thenReads, 0);
 });
 
-test('cache cleanup at its private retention expiry never permits an old bound read', async (t) => {
+test('cache expiry atomically removes its reservation and history cleanup retires only the expired mapping', async (t) => {
   const f = await fixture(t);
   await createSeed(f);
-  await f.store.bindPrivateProfile(f.scope, EVENT_ID, { idempotencyKey: 'bind-retention-cleanup', profile: cacheProfile() }, f.authRequest);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-retention-cleanup', profile: cacheProfile() }, f.authRequest);
+  const cache = createScopedReuseStore(f.cacheOptions);
+  const cacheScope = await cache.scopeForAuthenticatedRequest(f.authRequest);
+  const cacheDb = new DatabaseSync(cacheDatabasePath(f.root));
+  let legacyReservation;
+  try {
+    const entry = cacheDb.prepare('SELECT * FROM reuse_entries WHERE binding_hash IS NOT NULL').get();
+    const reservation = cacheDb.prepare('SELECT * FROM reuse_correction_reservations WHERE entry_id = ?').get(entry.entry_id);
+    assert.ok(reservation);
+    legacyReservation = { ...reservation, payload: Buffer.from(reservation.payload) };
+  } finally { cacheDb.close(); }
+
+  f.clock.value = EPOCH + 45_000;
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 1);
+
+  const afterCacheExpiry = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    const entry = afterCacheExpiry.prepare(`SELECT eligible, payload_bytes, payload_purged, length(payload) AS payload_length
+      FROM reuse_entries WHERE binding_hash IS NOT NULL`).get();
+    assert.deepEqual({ ...entry }, { eligible: 0, payload_bytes: 0, payload_purged: 1, payload_length: 0 });
+    assert.equal(afterCacheExpiry.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0);
+    assert.deepEqual(afterCacheExpiry.prepare('SELECT status, COUNT(*) AS count FROM reuse_outbox GROUP BY status').all().map((row) => ({ ...row })),
+      [{ status: 'pending', count: 1 }]);
+    const history = new DatabaseSync(historyDatabasePath(f.root));
+    try {
+      assert.equal(history.prepare("SELECT state FROM heads WHERE state = 'available'").get().state, 'available');
+      assert.equal(history.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 1);
+      assert.ok(history.prepare('SELECT length(sealed) AS bytes FROM correction_cache_bindings').get().bytes > 0);
+      assert.equal(history.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+    } finally { history.close(); }
+  } finally { afterCacheExpiry.close(); }
+
+  // Recreate the former stale private row so the bounded compatibility sweep is exercised.
+  const legacyDb = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    legacyDb.prepare(`INSERT INTO reuse_correction_reservations
+      (entry_id, scope_kind, partition_hash, binding_hash, outbox_slots, payload_key_id, payload, payload_bytes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(legacyReservation.entry_id, legacyReservation.scope_kind,
+      legacyReservation.partition_hash, legacyReservation.binding_hash, legacyReservation.outbox_slots,
+      legacyReservation.payload_key_id, legacyReservation.payload, legacyReservation.payload_bytes);
+  } finally { legacyDb.close(); }
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 0);
+  const afterResidualSweep = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(afterResidualSweep.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0);
+    assert.equal(afterResidualSweep.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+  } finally { afterResidualSweep.close(); }
+
+  const historyStore = await historyStoreFor(f);
+  assert.equal(await historyStore.history.purgeExpired(historyStore.scope, f.authRequest), 0);
+  const afterHistorySweep = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(afterHistorySweep.prepare("SELECT state FROM heads WHERE state = 'available'").get().state, 'available');
+    assert.equal(afterHistorySweep.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+    assert.equal(afterHistorySweep.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+  } finally { afterHistorySweep.close(); }
+
+  f.clock.value = EPOCH + 60_000;
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 0);
+  assert.equal(await historyStore.history.purgeExpired(historyStore.scope, f.authRequest), 1);
+  const finalHistory = new DatabaseSync(historyDatabasePath(f.root));
+  const finalCache = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(finalHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 0);
+    assert.equal(finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0);
+    assert.equal(finalCache.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+  } finally { finalHistory.close(); finalCache.close(); }
+  assert.equal((await f.store.outboxSnapshot(f.scope, f.authRequest)).readiness, 'blocked_pending_external_ack');
+});
+
+test('composed binding enumeration prunes an expired mapping and preserves a later live binding and history references', async (t) => {
+  const f = await fixture(t);
+  await createSeed(f);
+  const laterIdentity = Object.freeze({ ...IDENTITY, occurrenceId: 'occurrence-binding-later' });
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-expiry-first', profile: cacheProfile() }, f.authRequest);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-expiry-later', profile: cacheProfile({ identity: laterIdentity, expiresAtMs: EPOCH + 50_000,
+      freshnessTtlMs: 50_000 }) },
+    f.authRequest);
+  f.clock.value = EPOCH + 45_000;
+
+  assert.deepEqual(await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup()), { status: 'miss' });
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    const live = history.prepare('SELECT expires_at_ms, length(sealed) AS bytes FROM correction_cache_bindings').get();
+    assert.equal(live.expires_at_ms, EPOCH + 50_000);
+    assert.ok(live.bytes > 0);
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 2);
+    assert.equal(history.prepare("SELECT state FROM heads WHERE state = 'available'").get().state, 'available');
+  } finally { history.close(); }
+  assert.equal((await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup({ identity: laterIdentity }))).status, 'hit');
+});
+
+test('correction after cache effective expiry keeps the history reference invalidation without a second cache event', async (t) => {
+  const f = await fixture(t);
+  const seeded = await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-correction-after-expiry', profile: cacheProfile() }, f.authRequest);
   const cache = createScopedReuseStore(f.cacheOptions);
   const cacheScope = await cache.scopeForAuthenticatedRequest(f.authRequest);
   f.clock.value = EPOCH + 45_000;
-  const purged = await cache.purgeExpired(cacheScope, f.authRequest);
-  assert.equal(purged.purged, 1);
-  assert.deepEqual(await f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup()),
-    { status: 'unavailable', reason: 'expired' });
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 1);
+
+  const revised = await f.store.applyCorrection(f.scope, {
+    eventId: EVENT_ID,
+    baseVersionId: seeded.snapshot.versionId,
+    baseContentHash: seeded.snapshot.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-20' },
+    idempotencyKey: 'correction-after-cache-effective-expiry',
+    retentionHandle: f.createPermit(),
+  }, f.authRequest);
+  assert.equal(revised.snapshot.revision, seeded.snapshot.revision + 1);
+
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  const cacheDb = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM invalidations').get().count, 1);
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_history_invalidation_ops').get().count, 0);
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0);
+  } finally { history.close(); cacheDb.close(); }
   assert.equal((await f.store.outboxSnapshot(f.scope, f.authRequest)).readiness, 'blocked_pending_external_ack');
+});
+
+test('an expiry race leaves the durable history barrier until exact retry retires the expired mapping', async (t) => {
+  let releaseIndexKey;
+  let signalIndexKey;
+  let indexResolveCount = 0;
+  let blockIndexResolution = false;
+  const indexResolutionStarted = new Promise((resolve) => { signalIndexKey = resolve; });
+  const f = await fixture(t, { cache: { resolveKey({ tenantId, scope, purpose, keyId }) {
+    if (blockIndexResolution && tenantId === 'tenant-binding' && purpose === 'index' && ++indexResolveCount === 2) {
+      blockIndexResolution = false;
+      signalIndexKey();
+      return new Promise((resolve) => {
+        releaseIndexKey = () => resolve({ keyId: `${scope}:${purpose}:${tenantId}:v1`,
+          key: createHash('sha256').update(`${tenantId}:${scope}:${purpose}:cache-test-key`).digest() });
+      });
+    }
+    const resolvedId = `${scope}:${purpose}:${tenantId ?? 'global'}:v1`;
+    if (keyId && keyId !== resolvedId) throw new Error('synthetic cache key unavailable');
+    return { keyId: resolvedId,
+      key: createHash('sha256').update(`${tenantId}:${scope}:${purpose}:cache-test-key`).digest() };
+  } } });
+  t.after(() => releaseIndexKey?.());
+  const seeded = await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-expiry-race', profile: cacheProfile() }, f.authRequest);
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: seeded.snapshot.versionId,
+    baseContentHash: seeded.snapshot.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-22' },
+    idempotencyKey: 'correction-expiry-race-exact-retry',
+    retentionHandle: f.createPermit(),
+  };
+  blockIndexResolution = true;
+  indexResolveCount = 0;
+  const firstAttempt = f.store.applyCorrection(f.scope, input, f.authRequest);
+  const rejected = assert.rejects(firstAttempt, (error) => ['REUSE_DENIED', 'REVIEW_DENIED'].includes(error?.code));
+  await waitForSignal(indexResolutionStarted, 'cache invalidation index-key resolution after history binding enumeration');
+  const cache = createScopedReuseStore(f.cacheOptions);
+  const cacheScope = await cache.scopeForAuthenticatedRequest(f.authRequest);
+  f.clock.value = EPOCH + 45_000;
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 1);
+  releaseIndexKey();
+  await rejected;
+  await assert.rejects(f.store.getPrivateProfile(f.scope, EVENT_ID, f.authRequest, lookup()),
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_BUSY');
+
+  const recovered = await f.store.applyCorrection(f.scope, input, f.authRequest);
+  assert.equal(recovered.snapshot.revision, seeded.snapshot.revision + 1);
+  const history = new DatabaseSync(historyDatabasePath(f.root));
+  const cacheDb = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(history.prepare("SELECT phase FROM correction_cache_state WHERE kind = 'correction'").get().phase, 'complete');
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM invalidations').get().count, 1);
+    assert.equal(history.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_history_invalidation_ops').get().count, 0);
+  } finally { history.close(); cacheDb.close(); }
+});
+
+test('correction invalidation that commits before expiry keeps its receipt and does not duplicate the outbox event', async (t) => {
+  const f = await fixture(t);
+  const seeded = await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-correction-before-expiry', profile: cacheProfile() }, f.authRequest);
+  const input = {
+    eventId: EVENT_ID,
+    baseVersionId: seeded.snapshot.versionId,
+    baseContentHash: seeded.snapshot.contentHash,
+    field: 'event_date',
+    value: { precision: 'date', value: '2027-06-23' },
+    idempotencyKey: 'correction-before-cache-expiry',
+    retentionHandle: f.createPermit(),
+  };
+  await f.store.applyCorrection(f.scope, input, f.authRequest);
+  const cache = createScopedReuseStore(f.cacheOptions);
+  const cacheScope = await cache.scopeForAuthenticatedRequest(f.authRequest);
+  f.clock.value = EPOCH + 45_000;
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 1);
+  assert.equal((await f.store.applyCorrection(f.scope, input, f.authRequest)).replayed, true);
+  const cacheDb = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_history_invalidation_ops').get().count, 1);
+    assert.equal(cacheDb.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0);
+  } finally { cacheDb.close(); }
+});
+
+test('tenant-scoped residual reservation cleanup progresses past 500 rows and preserves another tenant', async (t) => {
+  const f = await fixture(t);
+  await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-residual-default', profile: cacheProfile() }, f.authRequest);
+  const otherRequest = request('tenant-other', 'actor-binding');
+  const otherScope = await f.store.scopeForAuthenticatedRequest(otherRequest);
+  await f.store.createHistory(otherScope, { eventId: EVENT_ID, sourceFacts: initialFacts(),
+    idempotencyKey: 'initialize-other-tenant-event', retentionHandle: f.createPermit() }, otherRequest);
+  const otherIdentity = Object.freeze({ ...IDENTITY, occurrenceId: 'occurrence-other-tenant' });
+  await f.store.bindPrivateProfile(otherScope, EVENT_ID,
+    { idempotencyKey: 'bind-residual-other-tenant', profile: cacheProfile({ identity: otherIdentity, expiresAtMs: EPOCH + 55_000 }) },
+    otherRequest);
+
+  const cache = createScopedReuseStore(f.cacheOptions);
+  const cacheScope = await cache.scopeForAuthenticatedRequest(f.authRequest);
+  const database = new DatabaseSync(cacheDatabasePath(f.root));
+  let expiredEntry;
+  let oldReservation;
+  try {
+    expiredEntry = database.prepare('SELECT * FROM reuse_entries WHERE expires_at_ms = ?').get(EPOCH + 45_000);
+    oldReservation = database.prepare('SELECT * FROM reuse_correction_reservations WHERE entry_id = ?').get(expiredEntry.entry_id);
+    oldReservation = { ...oldReservation, payload: Buffer.from(oldReservation.payload) };
+  } finally { database.close(); }
+
+  f.clock.value = EPOCH + 45_000;
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 1);
+  const seedLegacy = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    const insertEntry = seedLegacy.prepare(`INSERT INTO reuse_entries
+      (entry_id, scope_kind, partition_hash, identity_hash, cache_key_hash, content_hash_mac, pins_hash, version,
+       created_at_ms, expires_at_ms, eligible, payload_key_id, payload, payload_bytes, payload_purged, binding_hash)
+      VALUES (?, 'tenant_private', ?, ?, ?, ?, ?, 1, ?, ?, 0, ?, ?, 0, 1, ?)`);
+    const insertReservation = seedLegacy.prepare(`INSERT INTO reuse_correction_reservations
+      (entry_id, scope_kind, partition_hash, binding_hash, outbox_slots, payload_key_id, payload, payload_bytes)
+      VALUES (?, 'tenant_private', ?, ?, 1, ?, ?, ?)`);
+    for (let index = 0; index < 501; index += 1) {
+      const entryId = `legacy-expired-reservation-${String(index).padStart(4, '0')}`;
+      const uniqueHash = index.toString(16).padStart(64, '0');
+      insertEntry.run(entryId, expiredEntry.partition_hash, 'a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64), 'd'.repeat(64),
+        EPOCH, EPOCH + 45_000, oldReservation.payload_key_id, Buffer.alloc(0), uniqueHash);
+      insertReservation.run(entryId, expiredEntry.partition_hash, uniqueHash, oldReservation.payload_key_id,
+        oldReservation.payload, oldReservation.payload_bytes);
+    }
+  } finally { seedLegacy.close(); }
+
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 0);
+  const afterFirstSweep = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(afterFirstSweep.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 2);
+    assert.equal(afterFirstSweep.prepare(`SELECT COUNT(*) AS count FROM reuse_correction_reservations
+      WHERE partition_hash = ?`).get(expiredEntry.partition_hash).count, 1);
+    assert.equal(afterFirstSweep.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+  } finally { afterFirstSweep.close(); }
+
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 0);
+  const afterSecondSweep = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(afterSecondSweep.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 1);
+    assert.equal(afterSecondSweep.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+  } finally { afterSecondSweep.close(); }
+
+  const otherTenantHash = createHash('sha256').update('event-intelligence:review-tenant:v1:tenant-other').digest('hex');
+  const otherHistory = new DatabaseSync(path.join(f.historyOptions.directory, otherTenantHash, 'history.sqlite'));
+  try {
+    assert.equal(otherHistory.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 1);
+    assert.equal(otherHistory.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+  } finally { otherHistory.close(); }
+});
+
+test('cache expiry consumes the reserved retention event at the exact outbox capacity boundary', async (t) => {
+  const f = await fixture(t, { cache: { maxOutboxEntries: 2 } });
+  await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-capacity-expiry', profile: cacheProfile() }, f.authRequest);
+  const cache = createScopedReuseStore(f.cacheOptions);
+  const cacheScope = await cache.scopeForAuthenticatedRequest(f.authRequest);
+  const before = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(before.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 0);
+    assert.equal(before.prepare('SELECT SUM(outbox_slots) AS count FROM reuse_correction_reservations').get().count, 1);
+  } finally { before.close(); }
+  f.clock.value = EPOCH + 45_000;
+  assert.equal((await cache.purgeExpired(cacheScope, f.authRequest)).purged, 1);
+  const after = new DatabaseSync(cacheDatabasePath(f.root));
+  try {
+    assert.equal(after.prepare('SELECT COUNT(*) AS count FROM reuse_outbox').get().count, 1);
+    assert.equal(after.prepare("SELECT COUNT(*) AS count FROM reuse_outbox WHERE status = 'pending'").get().count, 1);
+    assert.equal(after.prepare('SELECT COUNT(*) AS count FROM reuse_correction_reservations').get().count, 0);
+  } finally { after.close(); }
+});
+
+test('history mapping purge rechecks current authorization after a real SQLite writer conflict before retry', async (t) => {
+  let revoked = false;
+  let watchTransactionClock = false;
+  let sawTransactionClock;
+  const transactionClockObserved = new Promise((resolve) => { sawTransactionClock = resolve; });
+  const f = await fixture(t, { history: {
+    authorize({ tenantId, actorId, request: value }) {
+      return !revoked && value?.serverContextToken === TRUSTED_TOKEN && value?.principal?.tenantId === tenantId
+        && value?.principal?.actorId === actorId && actorId !== 'outsider';
+    },
+    now() {
+      if (watchTransactionClock) {
+        watchTransactionClock = false;
+        sawTransactionClock();
+      }
+      return f.clock.value;
+    },
+  } });
+  await createSeed(f);
+  await f.store.bindPrivateProfile(f.scope, EVENT_ID,
+    { idempotencyKey: 'bind-purge-auth-race', profile: cacheProfile() }, f.authRequest);
+  f.clock.value = EPOCH + 45_000;
+  const history = await historyStoreFor(f);
+  const blocker = new DatabaseSync(historyDatabasePath(f.root), { timeout: 0 });
+  blocker.exec('PRAGMA busy_timeout = 0; BEGIN IMMEDIATE');
+  watchTransactionClock = true;
+  const purgeAttempt = history.history.purgeExpired(history.scope, f.authRequest);
+  const rejected = assert.rejects(purgeAttempt,
+    (error) => error instanceof ReviewHistoryError && error.code === 'REVIEW_DENIED');
+  try {
+    await waitForSignal(transactionClockObserved, 'history purge transaction clock before locked BEGIN');
+    revoked = true;
+  } finally {
+    blocker.exec('ROLLBACK');
+    blocker.close();
+  }
+  await rejected;
+  const deniedSweep = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(deniedSweep.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 1);
+    assert.equal(deniedSweep.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+  } finally { deniedSweep.close(); }
+
+  revoked = false;
+  assert.equal(await history.history.purgeExpired(history.scope, f.authRequest), 0);
+  const allowedSweep = new DatabaseSync(historyDatabasePath(f.root));
+  try {
+    assert.equal(allowedSweep.prepare('SELECT COUNT(*) AS count FROM correction_cache_bindings').get().count, 0);
+    assert.equal(allowedSweep.prepare('SELECT COUNT(*) AS count FROM downstream_references').get().count, 1);
+    assert.equal(allowedSweep.prepare("SELECT state FROM heads WHERE state = 'available'").get().state, 'available');
+  } finally { allowedSweep.close(); }
 });
