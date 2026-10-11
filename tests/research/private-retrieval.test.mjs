@@ -1218,41 +1218,156 @@ test('a delayed createRun cannot create a durable run after timeout or dispatch 
   await assert.rejects(h.frontier.getSnapshot(h.scope, runId), (error) => error?.code === 'FRONTIER_NOT_FOUND');
 });
 
-test('the whole-run deadline interrupts an already-admitted last request and keeps uncertain capacity reserved', { timeout: 8_000 }, async (t) => {
+test('the whole-run deadline interrupts an already-admitted last request and keeps uncertain capacity reserved', { timeout: 10_000 }, async (t) => {
   let requestCount = 0;
+  let tcpConnectionCount = 0;
   let responseClosed = false;
+  let socketClosed = false;
+  let lateBodyAttempted = false;
+  let lateBodyDelivered = false;
+  let lateBodySawClosedResponse = false;
+  let persistedDeadlineAtMs;
+  let requestReceivedAtMs;
+  let responseClosedAtMs;
+  let socketClosedAtMs;
+  let lateBodyAttemptedAtMs;
   let delayedResponse;
+  let resolveRequestReceived;
+  let resolveLateBodyAttempt;
+  const requestReceived = new Promise((resolve) => { resolveRequestReceived = resolve; });
+  const lateBodyAttempt = new Promise((resolve) => { resolveLateBodyAttempt = resolve; });
   const server = await startFixture((_request, response) => {
     requestCount += 1;
+    requestReceivedAtMs = Date.now();
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.write('<!doctype html>');
-    response.once('close', () => { responseClosed = true; clearTimeout(delayedResponse); });
-    delayedResponse = setTimeout(() => response.end(eventHtml()), 1_000);
+    response.once('close', () => {
+      responseClosed = true;
+      responseClosedAtMs = Date.now();
+    });
+    const remainingMs = Number.isSafeInteger(persistedDeadlineAtMs)
+      ? persistedDeadlineAtMs - Date.now() : 0;
+    delayedResponse = setTimeout(() => {
+      lateBodyAttempted = true;
+      lateBodyAttemptedAtMs = Date.now();
+      lateBodySawClosedResponse = response.destroyed;
+      if (!response.destroyed) {
+        lateBodyDelivered = true;
+        response.end(eventHtml());
+      }
+      resolveLateBodyAttempt();
+    }, Math.max(0, remainingMs) + 250);
+    resolveRequestReceived();
   });
-  t.after(() => server.close());
+  server.server.on('connection', (socket) => {
+    tcpConnectionCount += 1;
+    socket.once('close', () => {
+      socketClosed = true;
+      socketClosedAtMs = Date.now();
+    });
+  });
+  t.after(async () => {
+    clearTimeout(delayedResponse);
+    await server.close();
+  });
   const h = await harness(t);
   const runId = 'private-deadline-last-hop';
+  const frontier = frontierWithMethodOverrides(h.frontier, {
+    createRun: async (...args) => {
+      const created = await h.frontier.createRun(...args);
+      persistedDeadlineAtMs = created.deadlineAtMs;
+      return created;
+    },
+  });
+  const runStartedAtMs = Date.now();
   const running = runPrivateRetrieval(h.makeInput({
     runId,
     server,
+    frontier,
     seeds: [{ url: sourceUrl('/slow-body') }],
-    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: 750 },
+    limits: { maxTransportAttemptAdmissions: 1, maxDepth: 0, durationMs: 5_000 },
   }));
-  const deadlineObservedAt = Date.now();
+  const runOutcome = running.then(
+    (result) => ({ kind: 'returned', result }),
+    (error) => ({ kind: 'rejected', error }),
+  );
+  const phase = await Promise.race([
+    requestReceived.then(() => ({ kind: 'request-received' })),
+    runOutcome,
+  ]);
+  if (phase.kind !== 'request-received') {
+    const outcome = phase.kind === 'returned'
+      ? JSON.stringify({ status: phase.result.status, limitations: phase.result.limitations })
+      : String(phase.error);
+    assert.fail(`run ended before a real local HTTP request arrived; requestCount=${requestCount}; elapsedMs=${Date.now() - runStartedAtMs}; outcome=${outcome}`);
+  }
+  const remainingAtRequestMs = persistedDeadlineAtMs - requestReceivedAtMs;
+  assert.equal(tcpConnectionCount, 1, 'the local fixture observed a real TCP connection');
+  assert.equal(requestCount, 1, 'the local HTTP handler observed the admitted request');
+  assert.ok(Number.isSafeInteger(persistedDeadlineAtMs), 'the real frontier persisted the original run deadline');
+  assert.ok(remainingAtRequestMs > 500, 'the request reached the fixture with a bounded window left on the original deadline');
+  assert.ok(requestReceivedAtMs < persistedDeadlineAtMs, 'the request arrived before the whole-run deadline');
+
   const result = await running;
-  assert.ok(Date.now() - deadlineObservedAt < 2_000, 'the final authorized hop is bounded by the run deadline');
+  const deadlineReturnLagMs = Date.now() - persistedDeadlineAtMs;
+  assert.ok(deadlineReturnLagMs < 2_000, 'the final authorized hop returns promptly after the original run deadline');
+  assert.ok(responseClosedAtMs >= persistedDeadlineAtMs - 100,
+    'the active local response remains open until the original run deadline');
   assert.equal(result.status, 'incomplete');
   assert.equal(result.draft, null);
   assert.ok(result.limitations.includes('deadline_exceeded'));
-  assert.equal(requestCount, 1);
-  const snapshot = await h.frontier.getSnapshot(h.scope, runId);
-  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'attempt_limit'));
-  assert.ok(snapshot.stopReasons.some((entry) => entry.reason === 'deadline'));
-  const transport = await h.frontier.getTransportProgress(h.scope, runId);
-  assert.equal(transport.reservedBytes, 20 * 1024 * 1024);
-  assert.equal(transport.spentBytes, 0);
-  assert.equal(transport.states.unknown, 1);
-  assert.equal(responseClosed, true, 'deadline abort closes the local socket before the delayed body can arrive');
+  const snapshotBeforeLateBody = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshotBeforeLateBody.deadlineAtMs, persistedDeadlineAtMs, 'phase synchronization did not reset the persisted deadline');
+  assert.ok(snapshotBeforeLateBody.stopReasons.some((entry) => entry.reason === 'attempt_limit'));
+  assert.ok(snapshotBeforeLateBody.stopReasons.some((entry) => entry.reason === 'deadline'));
+  assert.equal(snapshotBeforeLateBody.counters.transportAttemptAdmissions, 1);
+  assert.equal(snapshotBeforeLateBody.candidates[0].state, 'unresolved');
+  assert.equal(snapshotBeforeLateBody.candidates[0].admittedAttemptCount, 1);
+  const transportBeforeLateBody = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transportBeforeLateBody.reservedBytes, 20 * 1024 * 1024);
+  assert.equal(transportBeforeLateBody.spentBytes, 0);
+  assert.equal(transportBeforeLateBody.states.unknown, 1);
+  assert.equal(responseClosed, true, 'deadline abort closes the local response socket');
+  assert.equal(socketClosed, true, 'the TCP socket is closed before the late body attempt');
+
+  await lateBodyAttempt;
+  assert.equal(lateBodyAttempted, true, 'the scheduled late body phase actually ran');
+  assert.ok(lateBodyAttemptedAtMs > persistedDeadlineAtMs, 'the late body phase begins after the original deadline');
+  assert.equal(lateBodySawClosedResponse, true, 'the response was already closed at the late body phase');
+  assert.equal(lateBodyDelivered, false, 'a late body cannot reach the closed client');
+  assert.ok(responseClosedAtMs < lateBodyAttemptedAtMs);
+  assert.ok(socketClosedAtMs < lateBodyAttemptedAtMs);
+  const snapshotAfterLateBody = await h.frontier.getSnapshot(h.scope, runId);
+  assert.equal(snapshotAfterLateBody.deadlineAtMs, persistedDeadlineAtMs);
+  assert.deepEqual(
+    snapshotAfterLateBody.candidates.map(({ candidateId, state, admittedAttemptCount }) => ({ candidateId, state, admittedAttemptCount })),
+    snapshotBeforeLateBody.candidates.map(({ candidateId, state, admittedAttemptCount }) => ({ candidateId, state, admittedAttemptCount })),
+    'the late server callback cannot complete or otherwise change the unresolved candidate',
+  );
+  assert.deepEqual(
+    snapshotAfterLateBody.stopReasons.map((entry) => entry.reason).sort(),
+    snapshotBeforeLateBody.stopReasons.map((entry) => entry.reason).sort(),
+  );
+  const transportAfterLateBody = await h.frontier.getTransportProgress(h.scope, runId);
+  assert.equal(transportAfterLateBody.reservedBytes, transportBeforeLateBody.reservedBytes);
+  assert.equal(transportAfterLateBody.spentBytes, transportBeforeLateBody.spentBytes);
+  assert.deepEqual(transportAfterLateBody.states, transportBeforeLateBody.states);
+  t.diagnostic(JSON.stringify({
+    runStartedAtMs,
+    persistedDeadlineAtMs,
+    requestReceivedAtMs,
+    remainingAtRequestMs,
+    tcpConnectionCount,
+    requestCount,
+    responseClosedAtMs,
+    socketClosedAtMs,
+    lateBodyAttemptedAtMs,
+    lateBodyDelivered,
+    deadlineReturnLagMs,
+    reservedBytesAfterLateBody: transportAfterLateBody.reservedBytes,
+    spentBytesAfterLateBody: transportAfterLateBody.spentBytes,
+    statesAfterLateBody: transportAfterLateBody.states,
+  }));
 });
 
 test('a remote stop during final evidence lookup returns promptly without materializing a draft', { timeout: 8_000 }, async (t) => {
