@@ -14,9 +14,11 @@ function result(data) {
   counter(data);
   data = projectApplyResult(data);
   $('error').hidden = true;
-  if (data.operation_id) operationId = data.operation_id;
+  if (data.operation_id && data.operation_id !== operationId) {
+    operationId = data.operation_id; operationStatus = 'unknown';
+  }
   if (data.status) operationStatus = data.status;
-  if (!data.ok && operationId) $('cancel').disabled = false;
+  if (!data.ok) $('cancel').disabled = ['completed', 'cancelled'].includes(operationStatus) || (!operationId && !lastAction);
   if (!data.ok) {
     $('status').textContent = operationId ? `Apply did not complete. Existing operation: ${operationId}.` : 'Apply did not complete. Operation reference unavailable. Retry last Apply to recover its identity.';
     error(applyErrorMessage(data)); return;

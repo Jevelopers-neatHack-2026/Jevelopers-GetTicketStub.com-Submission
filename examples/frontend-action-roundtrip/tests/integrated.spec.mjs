@@ -382,6 +382,36 @@ for (const operation_id of ['op.safe-1', 'op.normal:2+v']) test(`failed Apply sa
   await expect(page.getByRole('button', { name: 'Cancel operation' })).toBeEnabled(); expect(await counters(request)).toEqual(before);
 });
 
+const malformedOutcomes = [
+  ['incomplete completion', { ok: true, code: 'completed', status: 'completed' }],
+  ['job-only completion', { ok: true, code: 'completed', status: 'completed', backend_job_id: 'job.safe-1' }],
+  ['design-only completion', { ok: true, code: 'completed', status: 'completed', result: { design_version: { design_version_id: 'design.safe-1', artifact: { content_hash: 'a'.repeat(64) } } } }],
+  ['incomplete replay', { ok: true, code: 'replayed', status: 'completed', replayed: true }],
+  ['contradictory acceptance', { ok: true, code: 'accepted', status: 'completed' }],
+  ['unsupported pending', { ok: true, code: 'pending', status: 'pending' }],
+];
+for (const [label, outcome] of malformedOutcomes) test(`Apply ${label} cannot claim saved artwork or promote an unsupported lifecycle`, async ({ page, request }, testInfo) => {
+  const before = await counters(request), selection = (await (await request.get('/api/history')).json()).selection;
+  const errors = []; page.on('pageerror', e => errors.push(e.message)); const captured = await captureHandlerExceptions(page);
+  let intercepted = 0;
+  // Synthetic malformed consumer input only; no successful integrated journey is claimed.
+  await page.route('**/api/apply', route => { intercepted++; return route.fulfill({ json: { ...outcome, operation_id: 'op.synthetic-safe' } }); });
+  await page.getByLabel('Artwork style').selectOption('vibrant');
+  await page.getByRole('button', { name: 'Apply changes', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('alert')).toHaveText(fixedReferenceAlert); await expect(page.getByRole('alert')).toBeFocused();
+  await expect(page.locator('#status')).toHaveText('Apply did not complete. Operation reference unavailable. Retry last Apply to recover its identity.');
+  await expect(page.locator('#artifact')).toBeHidden(); await expect(page.locator('#artwork-preview')).toBeHidden();
+  expect(await page.locator('body').innerText()).not.toMatch(/Artwork revision saved|Revision saved\.|Apply accepted|op.synthetic-safe/);
+  await page.getByRole('button', { name: 'Retry last Apply' }).click(); await expect.poll(() => intercepted).toBe(2);
+  await expect(page.getByRole('alert')).toBeFocused();
+  await page.getByRole('button', { name: 'Refresh controls' }).click();
+  await expect(page.locator('#status')).toHaveText('No operation submitted.'); await expect(page.getByRole('button', { name: 'Cancel operation' })).toBeDisabled();
+  expect(await counters(request)).toEqual(before); expect((await (await request.get('/api/history')).json()).selection).toEqual(selection);
+  expect(captured.exceptions).toEqual([]); expect(errors).toEqual([]); await captured.session.detach();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await testInfo.attach('malformed-result-consistency', { body: JSON.stringify({ label, outcome, intercepted, before, after: await counters(request), selection_unchanged: true, exceptions: captured.exceptions, errors, synthetic_malformed_response_only: true }), contentType: 'application/json' });
+});
+
 test('unsafe subsequent failed references preserve actual known operation retry, lookup and cancellation identity', async ({ page, request }, testInfo) => {
   const errors = [], requests = []; page.on('pageerror', e => errors.push(e.message));
   page.on('request', req => { if (req.method() === 'POST') requests.push({ url: req.url(), body: req.postDataJSON() }); });
@@ -399,6 +429,22 @@ test('unsafe subsequent failed references preserve actual known operation retry,
     await expect(page.locator('#status')).toHaveText(`Apply did not complete. Existing operation: ${known.operation_id}.`);
     expect(await counters(request)).toEqual(before); await page.unroute('**/api/apply');
   }
+  const contradictory = [
+    ['same-ID unavailable/completed', { ok: false, code: 'unavailable', status: 'completed' }],
+    ['same-ID unavailable/cancelled', { ok: false, code: 'unavailable', status: 'cancelled' }],
+    ['same-ID unavailable/ready', { ok: false, code: 'unavailable', status: 'ready' }],
+    ...malformedOutcomes,
+  ];
+  for (const [, outcome] of contradictory) {
+    await page.route('**/api/apply', route => route.fulfill({ json: { ...outcome, operation_id: known.operation_id } }));
+    await page.getByRole('button', { name: 'Retry last Apply' }).focus(); await page.keyboard.press('Enter');
+    await expect(page.getByRole('alert')).toHaveText(fixedReferenceAlert); await expect(page.getByRole('alert')).toBeFocused();
+    await expect(page.locator('#status')).toHaveText(`Apply did not complete. Existing operation: ${known.operation_id}.`);
+    await expect(page.getByRole('button', { name: 'Cancel operation' })).toBeEnabled();
+    await expect(page.locator('#artifact')).toBeHidden(); await expect(page.locator('#artwork-preview')).toBeHidden();
+    expect(await page.locator('body').innerText()).not.toMatch(/Artwork revision saved|Revision saved\.|Apply accepted/);
+    expect(await counters(request)).toEqual(before); await page.unroute('**/api/apply');
+  }
   // A real retry resolves the original stored action, without a new job/send.
   const replayed = page.waitForResponse('**/api/apply'); await page.getByRole('button', { name: 'Retry last Apply' }).click();
   const replay = await (await replayed).json(); expect(replay.operation_id).toBe(known.operation_id); expect(await counters(request)).toEqual(before);
@@ -413,7 +459,7 @@ test('unsafe subsequent failed references preserve actual known operation retry,
   expect(await counters(request)).toEqual(before); expect(captured.exceptions).toEqual([]); expect(errors).toEqual([]); await captured.session.detach();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: 'test-results/failed-operation-reference-fixed.png', fullPage: true });
-  await testInfo.attach('actual-recovery-reference-preserved', { body: JSON.stringify({ known, replay, requests, before, after: await counters(request), exceptions: captured.exceptions, errors, live_calls: 0 }), contentType: 'application/json' });
+  await testInfo.attach('actual-recovery-reference-preserved', { body: JSON.stringify({ known, replay, contradictory, requests, before, after: await counters(request), exceptions: captured.exceptions, errors, live_calls: 0 }), contentType: 'application/json' });
 });
 
 test('Compare current read revocation keeps selection and typed permission guidance without a caught handler exception', async ({ page, request }, testInfo) => {

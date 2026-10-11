@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { projectApplyResult, projectCounters, projectHistoryList, projectHistoryResult } from '../../src/controls/public-result.mjs';
 import { applyErrorMessage, historyErrorMessage } from '../../examples/frontend-action-roundtrip/messages.mjs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ApplyStore } from '../../src/controls/actions.mjs';
+import { fixtureState, principal, projection, action } from '../../fixtures/controls/state.mjs';
 
 const digest = `sha256:${'a'.repeat(64)}`;
 const design = { design_version_id: 'design.safe-1', artifact: { content_hash: digest } };
@@ -51,4 +56,53 @@ test('artwork, history selection and counters project only validated references 
   assert.equal(projectHistoryResult({ ok: true, result: { selection: { ...selection, design_version_id: 'id.access_token:private' } } }, true).ok, false);
   assert.equal(projectCounters({ counters: { jobs: 'synthetic-private', jev_calls: 0, image_calls: 0 } }), undefined);
   assert.deepEqual(projectCounters({ counters: { jobs: 1, jev_calls: 0, image_calls: 1 } }), { jobs: 1, jev_calls: 0, image_calls: 1 });
+});
+
+test('contradictory and incomplete result shapes cannot promote identity or lifecycle', () => {
+  const common = { operation_id: 'op.safe', status: 'completed' };
+  const incomplete = [
+    { ok: false, code: 'unavailable', ...common }, { ok: false, code: 'failed', ...common },
+    { ok: false, code: 'permission', ...common }, { ok: true, code: 'completed', ...common },
+    { ok: true, code: 'completed', ...common, backend_job_id: 'job.safe' },
+    { ok: true, code: 'completed', ...common, result: { design_version: design } },
+    { ok: true, code: 'replayed', replayed: true, ...common },
+    { ok: true, code: 'accepted', ...common }, { ok: true, code: 'ready', operation_id: 'op.safe', status: 'ready' },
+    { ok: true, code: 'pending', operation_id: 'op.safe', status: 'pending' },
+    { ok: true, code: 'unrecognized', operation_id: 'op.safe', status: 'running' },
+    { ok: true, code: 'accepted', operation_id: 'op.safe', status: 'queued', replayed: true },
+    { ok: true, code: 'completed', ...common, backend_job_id: 'job.safe', result: { design_version: design }, backend_error: {} },
+    { ok: 'true', code: 'completed', ...common }, { ok: false, code: 'unavailable', operation_id: 'op.safe', status: null },
+    { ok: false, code: 'unavailable', operation_id: 'op.safe', status: 'cancelled' },
+    { ok: false, code: 'unavailable', operation_id: 'op.safe', status: 'ready' },
+    { ok: false, code: 'failed', operation_id: 'op.safe', result: { design_version: design } },
+  ];
+  for (const input of incomplete) {
+    const view = projectApplyResult(input);
+    assert.equal(view.ok, false); assert.equal(view.operation_id, undefined); assert.equal(view.status, undefined);
+    assert.equal(view.result, undefined); assert.equal(applyErrorMessage(view), fallback);
+  }
+  const noStatus = projectApplyResult({ ok: false, code: 'unavailable', operation_id: 'op.safe', backend_error: { code: 'unavailable' } });
+  assert.equal(noStatus.operation_id, 'op.safe'); assert.equal(noStatus.status, undefined); assert.match(applyErrorMessage(noStatus), /reservation may remain held/);
+  const completed = { ok: true, code: 'completed', ...common, backend_job_id: 'job.safe', result: { design_version: design } };
+  assert.equal(projectApplyResult(completed).ok, true);
+  assert.equal(projectApplyResult({ ...completed, code: 'replayed', replayed: true }).ok, true);
+});
+
+test('genuine accepted ready replayed and cancelled local results retain supported meaning', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'control-result-shapes-')), state = fixtureState();
+  const store = new ApplyStore(join(dir, 'controls.sqlite'), () => projection(state));
+  try {
+    const payload = action(state), accepted = store.apply(principal, payload);
+    assert.equal(projectApplyResult(accepted).ok, true); assert.equal(projectApplyResult(accepted).status, 'queued');
+    const queuedReplay = store.apply(principal, payload); assert.equal(queuedReplay.code, 'replayed'); assert.equal(projectApplyResult(queuedReplay).status, 'queued');
+    const ready = store.dispatch(principal, accepted.operation_id); assert.equal(ready.code, 'ready'); assert.equal(projectApplyResult(ready).ok, true);
+    const readyReplay = store.dispatch(principal, accepted.operation_id); assert.equal(readyReplay.code, 'replayed'); assert.equal(projectApplyResult(readyReplay).status, 'ready');
+    for (const mutate of [op => op.tasks = [null], op => op.tasks[0].changes = [null], op => op.tasks = [],
+      op => op.logical_operation_id = 'op.other', op => op.approval = true, op => op.tasks[0].changes[0].value = 'unsupported']) {
+      const malformed = structuredClone(ready); mutate(malformed.operation);
+      assert.equal(projectApplyResult(malformed).ok, false); assert.equal(projectApplyResult(malformed).operation_id, undefined);
+    }
+    const cancelled = store.cancel(principal, accepted.operation_id); assert.equal(projectApplyResult(cancelled).status, 'cancelled');
+    const cancelledReplay = store.apply(principal, payload); assert.equal(cancelledReplay.ok, false); assert.equal(projectApplyResult(cancelledReplay).status, 'cancelled');
+  } finally { store.close(); await rm(dir, { recursive: true, force: true }); }
 });
