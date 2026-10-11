@@ -15852,7 +15852,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -15862,7 +15862,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -15931,7 +15931,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -15941,7 +15941,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16010,7 +16010,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16020,7 +16020,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16089,7 +16089,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16099,7 +16099,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16168,7 +16168,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16178,7 +16178,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16247,7 +16247,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16257,7 +16257,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16326,7 +16326,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16336,7 +16336,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16405,7 +16405,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16415,7 +16415,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16484,7 +16484,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16494,7 +16494,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16563,7 +16563,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16573,7 +16573,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16642,7 +16642,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16652,7 +16652,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16721,7 +16721,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16731,7 +16731,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16876,7 +16876,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16886,7 +16886,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -16955,7 +16955,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -16965,7 +16965,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17034,7 +17034,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17044,7 +17044,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17113,7 +17113,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17123,7 +17123,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17192,7 +17192,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17202,7 +17202,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17271,7 +17271,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17281,7 +17281,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17350,7 +17350,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17360,7 +17360,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17505,7 +17505,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17515,7 +17515,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17584,7 +17584,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17594,7 +17594,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17663,7 +17663,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17673,7 +17673,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
@@ -17742,7 +17742,7 @@
         "reference": "Internal candidate-review permission only under the assigned repository task; source-owner, brand and destination rights are not granted.",
         "owner": "User-assigned marketing-material supervisor; relevant upstream source owners retain external rights authority.",
         "approvedDestinations": [
-          "Internal repository candidate review"
+          "repository-internal-review"
         ],
         "externalPublication": "not granted"
       },
@@ -17752,7 +17752,7 @@
         "reason": "First-party draft text, local tooling, or internal evidence; no third-party content permission is inferred."
       },
       "allowedDestinations": [
-        "Internal repository candidate review"
+        "repository-internal-review"
       ],
       "allowedModifications": [
         "Keep the exact source path, checksum, draft/internal classification, limitations and relevant accessible alternative linked; changed bytes require refreshed provenance and review."
