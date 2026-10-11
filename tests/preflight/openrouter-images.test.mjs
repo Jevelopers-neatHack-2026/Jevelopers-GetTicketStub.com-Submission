@@ -589,3 +589,80 @@ test('prepare fails closed with credential_unavailable when the scope is not a r
     await assert.rejects(adapter.prepare(billable('image_generation', { scope })), (error) => error.code === 'credential_unavailable');
   }
 });
+
+test('a target mutated between prepare and dispatch is refused before the host dispatch, and consumes the prepared value', async () => {
+  for (const [name, mutate] of [
+    ['model', (t) => { t.model = 'evil-author/evil-model'; }],
+    ['nested configuration.provider_tag', (t) => { t.configuration.provider_tag = 'evil-tag'; }]]) {
+    let dispatches = 0;
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async dispatch() { dispatches += 1; return {}; } } });
+    const input = billable();
+    const prepared = await adapter.prepare(input);
+    mutate(input.target);
+    await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'unsupported_image_configuration', name);
+    assert.equal(dispatches, 0, name);
+    await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable', `${name}: single use`);
+  }
+});
+
+test('a caller changing grant_ref, deadline_at, or cell_id during the credential await does not change the binding', async () => {
+  let dispatches = 0;
+  const inner = grantCredentialPort();
+  const input = billable();
+  const original = { cell_id: input.cell_id, grant_ref: input.grant_ref, deadline_at: input.deadline_at };
+  const credentialSource = { evidence_mode: 'live', async resolveCredential(args) {
+    const result = inner.resolveCredential(args);
+    input.grant_ref = 'grant:test:other';
+    input.deadline_at = deadline(60_000);
+    input.cell_id = 'image_edit';
+    return result;
+  } };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialSource, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { dispatches += 1; return {}; } } });
+  const prepared = await adapter.prepare(input);
+  // The mutated cell_id fails target validation first; the mutated grant and deadline fail the binding check.
+  await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'unsupported_image_configuration');
+  await assert.rejects(adapter.dispatch({ ...input, cell_id: original.cell_id, prepared }), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 0);
+  await adapter.dispatch({ ...input, ...original, prepared });
+  assert.equal(dispatches, 1);
+});
+
+test('a target mutated during the credential await fails closed before the host prepare', async () => {
+  const inner = grantCredentialPort();
+  const input = billable();
+  let hostCalls = 0;
+  const credentialSource = { evidence_mode: 'live', async resolveCredential(args) {
+    const result = inner.resolveCredential(args);
+    input.target.configuration.provider_tag = 'evil-tag';
+    return result;
+  } };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialSource, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { hostCalls += 1; return {}; }, async dispatch() { return {}; } } });
+  await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration');
+  assert.equal(hostCalls, 0);
+});
+
+test('a throwing scope getter fails closed as credential_unavailable', async () => {
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { throw new Error('host prepare must not run'); }, async dispatch() { return {}; } } });
+  const scope = { account_ref: fixtureScope.account_ref, get project_ref() { throw new Error('boom'); } };
+  await assert.rejects(adapter.prepare(billable('image_generation', { scope })), (error) => error.code === 'credential_unavailable');
+});
+
+test('fields the validator and binding never read do not affect the target digest, and the host sees the bound configuration', async () => {
+  let dispatches = 0;
+  let hostConfiguration;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch(args) { dispatches += 1; hostConfiguration = args.configuration; return {}; } } });
+  const input = billable();
+  input.target.note = undefined;
+  input.target.when = new Date();
+  input.target.ratio = NaN;
+  const prepared = await adapter.prepare(input);
+  input.target.ratio = Infinity;
+  await adapter.dispatch({ ...input, configuration: { divergent: true }, prepared });
+  assert.equal(dispatches, 1);
+  assert.equal(hostConfiguration, input.target.configuration, 'a divergent top-level configuration never reaches the host');
+});

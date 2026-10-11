@@ -118,6 +118,22 @@ export function validateOpenRouterImageTarget(cellId, target) {
   }
 }
 
+/**
+ * Re-validates a target and returns a canonical digest over exactly the fields the binding uses (the target's
+ * identity is compared by reference at dispatch, so its content must be pinned separately). Fields the validator and
+ * the binding never read are not hashed; anything that cannot be validated or hashed fails closed.
+ */
+function targetContentDigest(cellId, target) {
+  try {
+    validateOpenRouterImageTarget(cellId, target);
+    return canonicalHash({ service: target.service, endpoint: target.endpoint, model: target.model,
+      sdk: { name: target.sdk.name, version: target.sdk.version }, configuration: target.configuration,
+      configuration_sha256: target.configuration_sha256 });
+  } catch {
+    throw error('unsupported_image_configuration', 'The OpenRouter image target changed or cannot be canonically hashed.');
+  }
+}
+
 function safeCredentialEvidence(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || typeof value.ref !== 'string' || !SAFE_REF.test(value.ref)
@@ -341,24 +357,24 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         || Date.parse(deadline_at) <= readClock(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
-      const liveScope = input.scope;
-      if (!isRecord(liveScope) || typeof liveScope.account_ref !== 'string' || typeof liveScope.project_ref !== 'string') {
+      let scope;
+      let hostScope;
+      try {
+        // Each ref is read exactly once; a throwing getter or a non-record scope fails closed.
+        const liveScope = input.scope;
+        if (!isRecord(liveScope)) throw new TypeError('scope');
+        const account_ref = liveScope.account_ref;
+        const project_ref = liveScope.project_ref;
+        if (typeof account_ref !== 'string' || typeof project_ref !== 'string') throw new TypeError('scope refs');
+        scope = Object.freeze({ account_ref, project_ref });
+        // The host keeps seeing any other scope fields (tenant, budget) as before, but as a frozen copy.
+        hostScope = Object.freeze({ ...liveScope, account_ref, project_ref });
+      } catch {
         throw error('credential_unavailable', 'A billable credential needs a provider account and project scope.');
       }
-      const scope = Object.freeze({ account_ref: liveScope.account_ref, project_ref: liveScope.project_ref });
-      // The host keeps seeing any other scope fields (tenant, budget) as before, but as a frozen copy.
-      const hostScope = Object.freeze({ ...liveScope, account_ref: scope.account_ref, project_ref: scope.project_ref });
-      let targetDigest;
-      try { targetDigest = canonicalHash(target); } catch {
-        throw error('unsupported_image_configuration', 'The OpenRouter image target cannot be canonically hashed.');
-      }
+      const targetDigest = targetContentDigest(cell_id, target);
       const assertTargetUnchanged = () => {
-        let current;
-        try {
-          validateOpenRouterImageTarget(cell_id, target);
-          current = canonicalHash(target);
-        } catch { current = undefined; }
-        if (current !== targetDigest) {
+        if (targetContentDigest(cell_id, target) !== targetDigest) {
           throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was validated.');
         }
       };
@@ -371,10 +387,11 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         throw error('preflight_deadline_passed', 'The approved operation deadline passed while the credential was resolved.');
       }
       const hostPrepared = dispatchPort.prepare
-        ? await dispatchPort.prepare({ ...input, cell_id, target, grant_ref, deadline_at, scope: hostScope, credential }) : undefined;
+        ? await dispatchPort.prepare({ ...input, cell_id, target, configuration: target.configuration, grant_ref, deadline_at,
+          scope: hostScope, credential }) : undefined;
       assertTargetUnchanged();
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id, target, grant_ref, scope, deadline_at, credential, hostPrepared });
+      preparedState.set(prepared, { cell_id, target, targetDigest, grant_ref, scope, deadline_at, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {
@@ -386,8 +403,12 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         || input.scope.project_ref !== state.scope?.project_ref) {
         throw error('credential_unavailable', 'Prepared credentials are not bound to this grant, deadline, scope, and target.');
       }
-      // A prepared value is single use: it is consumed before the host port can run, so a replay is refused.
+      // A prepared value is single use: it is consumed before the host port can run, so a replay is refused. That
+      // includes a refusal below: a target whose content moved since prepare consumes the value and fails closed.
       preparedState.delete(input.prepared);
+      if (targetContentDigest(state.cell_id, state.target) !== state.targetDigest) {
+        throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was prepared.');
+      }
       const remaining = Date.parse(state.deadline_at) - readClock(now);
       if (!Number.isFinite(remaining) || remaining <= 0) throw error('preflight_deadline_passed', 'The approved operation deadline has passed.');
       // The runner passes its cancellation signal (operator abort combined with the operation deadline) as
@@ -397,7 +418,8 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
         throw error('adapter_unavailable', 'The runner cancellation signal must be a native AbortSignal.');
       }
       const timeout = AbortSignal.timeout(Math.min(remaining, 120_000));
-      return dispatchPort.dispatch({ ...input, prepared: state.hostPrepared, credential: state.credential,
+      // The runner passes the bound target's configuration; the host always sees that one, never a divergent copy.
+      return dispatchPort.dispatch({ ...input, configuration: state.target.configuration, prepared: state.hostPrepared, credential: state.credential,
         signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout });
     };
   } else {
