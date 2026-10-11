@@ -50,8 +50,10 @@ test("every edition prints the credit right after the kept live weather on the f
   for (const edition of EDITIONS) {
     const html = render(event([weather()]), edition);
     assert.equal(count(html), 1, edition);
-    assert.ok(html.indexOf("17°C · rain".toUpperCase()) >= 0 || html.indexOf("17°C · rain") >= 0, edition);
-    assert.ok(html.indexOf(CREDIT) > Math.max(html.indexOf("17°C · rain"), html.indexOf("17°C · RAIN")), `${edition}: credit sits under the weather`);
+    // The hidden description names the facts first; the fact line is the last mention, and the credit follows it.
+    const line = Math.max(html.lastIndexOf("17°C · rain"), html.lastIndexOf("17°C · RAIN"));
+    assert.ok(line > html.indexOf("Facts on the stub"), `${edition}: found the fact line, not the description`);
+    assert.ok(html.indexOf(CREDIT) > line, `${edition}: credit sits under the weather`);
   }
 });
 
@@ -71,9 +73,24 @@ test("no credit without Open-Meteo weather on the stub: simulated, pending, hidd
   assert.equal(count(renderToStaticMarkup(createElement(StubView, { stub: hidden }))), 0);
 });
 
+test("a weather value the person corrected is not credited to Open-Meteo; a confirmation still is", async () => {
+  const { applyCorrection, undoCorrection } = await import("../src/customer/studio/facts/corrections.ts");
+  const stub = newStub(event([weather()]), "corrected");
+  const show = (st) => count(renderToStaticMarkup(createElement(StubView, { stub: st })));
+  const corrected = applyCorrection(stub, { factId: "weather", value: "Sunny, 25°C", now: new Date("2026-10-11T12:00:00Z") });
+  assert.equal(show(corrected), 0);
+  assert.equal(show(undoCorrection(corrected, "weather", new Date("2026-10-11T12:01:00Z"))), 1);
+  assert.equal(show(applyCorrection(stub, { factId: "weather", value: weather().value })), 1);
+});
+
 test("the back's fact list credits the weather it lists, and not a programme", () => {
   const generic = { type: "generic", setlist: undefined };
   assert.equal(count(render(event([weather({ kept: false })], generic), "researched", true)), 1); // listed on the back only
   assert.equal(count(render(event([weather()], generic), "researched", true)), 2); // and on the front once kept
   assert.equal(count(render(event([weather({ kept: false })], { ...generic, programme: ["Doors", "Encore"] }), "researched", true)), 0);
+  // A full list gives up its last row to the credit instead of clipping it (portrait cap 9).
+  const many = Array.from({ length: 9 }, (_, i) => ({ id: `f${i}`, label: `Fact ${i}`, value: `Fact ${i}`, source: "event page", confidence: 0.9, provenance: "live" }));
+  const html = render(event([weather({ kept: false }), ...many], generic), "researched", true);
+  assert.equal(count(html), 1);
+  assert.ok(html.includes("Fact 6") && !html.includes("Fact 7"), "eight facts plus the credit");
 });
