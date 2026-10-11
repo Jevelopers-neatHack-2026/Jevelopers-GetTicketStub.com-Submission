@@ -1,0 +1,40 @@
+{
+  "fixture_version": "1.0.0",
+  "provenance": {
+    "synthetic": true,
+    "environment": "test",
+    "billing_mode": "simulated",
+    "evidence_mode": "mocked",
+    "external_calls": 0
+  },
+  "exact_money": {
+    "count": 1000,
+    "unit_amount": "0.00001",
+    "currency": "USD",
+    "expected_total": "0.01"
+  },
+  "billable_retries": {
+    "logical_operations": 1,
+    "billable_attempts": 2,
+    "expected_event_count": 2
+  },
+  "unknowns": {
+    "amount": null,
+    "quantity": null,
+    "expected_amount_completeness": "unknown",
+    "expected_quantity_completeness": "unknown"
+  },
+  "cumulative_reservation": {
+    "authorization": "1.00",
+    "first_partial": "0.20",
+    "second_partial": "0.60",
+    "second_partial_effective": "0.60",
+    "final_overrun": "1.10",
+    "overrun": "0.10"
+  },
+  "estimated_correction": {
+    "estimate": "1.00",
+    "confirmed": "1.10",
+    "effective": "1.1"
+  }
+}

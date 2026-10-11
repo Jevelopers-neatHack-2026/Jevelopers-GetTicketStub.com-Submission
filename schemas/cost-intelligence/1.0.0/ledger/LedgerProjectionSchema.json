@@ -1,0 +1,597 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jevelopers.org/cost-intelligence/ledger/LedgerProjectionSchema/1.0.0",
+  "x-schema-completeness": "complete",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "snapshotId",
+    "projectionHash",
+    "scope",
+    "asOf",
+    "eventCount",
+    "amounts",
+    "quantities"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "snapshotId": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "projectionHash": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "scope": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "tenantId",
+        "projectId",
+        "environment",
+        "billingMode",
+        "actorId"
+      ],
+      "properties": {
+        "tenantId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "projectId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "const": "development",
+              "type": "string"
+            },
+            {
+              "const": "test",
+              "type": "string"
+            },
+            {
+              "const": "production",
+              "type": "string"
+            }
+          ]
+        },
+        "billingMode": {
+          "anyOf": [
+            {
+              "const": "live",
+              "type": "string"
+            },
+            {
+              "const": "sandbox",
+              "type": "string"
+            },
+            {
+              "const": "simulated",
+              "type": "string"
+            }
+          ]
+        },
+        "actorId": {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        }
+      }
+    },
+    "asOf": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "eventCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "amounts": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "eventType",
+          "classification",
+          "currency",
+          "eventCount",
+          "knownAmountCount",
+          "unknownAmountCount",
+          "knownSubtotal",
+          "totalAmount",
+          "completeness"
+        ],
+        "properties": {
+          "eventType": {
+            "anyOf": [
+              {
+                "const": "usage_observation",
+                "type": "string"
+              },
+              {
+                "const": "reservation_authorized",
+                "type": "string"
+              },
+              {
+                "const": "dispatch",
+                "type": "string"
+              },
+              {
+                "const": "charge",
+                "type": "string"
+              },
+              {
+                "const": "consumption",
+                "type": "string"
+              },
+              {
+                "const": "reservation_release",
+                "type": "string"
+              },
+              {
+                "const": "expense",
+                "type": "string"
+              },
+              {
+                "const": "revenue",
+                "type": "string"
+              },
+              {
+                "const": "refund",
+                "type": "string"
+              },
+              {
+                "const": "credit",
+                "type": "string"
+              },
+              {
+                "const": "discount",
+                "type": "string"
+              },
+              {
+                "const": "fee",
+                "type": "string"
+              },
+              {
+                "const": "tax",
+                "type": "string"
+              },
+              {
+                "const": "reimbursement",
+                "type": "string"
+              },
+              {
+                "const": "cash_movement",
+                "type": "string"
+              },
+              {
+                "const": "reversal",
+                "type": "string"
+              },
+              {
+                "const": "adjustment",
+                "type": "string"
+              },
+              {
+                "const": "correction",
+                "type": "string"
+              }
+            ]
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "const": "sale",
+                "type": "string"
+              },
+              {
+                "const": "discount",
+                "type": "string"
+              },
+              {
+                "const": "sale_refund",
+                "type": "string"
+              },
+              {
+                "const": "pass_through_tax",
+                "type": "string"
+              },
+              {
+                "const": "supplier_credit",
+                "type": "string"
+              },
+              {
+                "const": "supplier_expense",
+                "type": "string"
+              },
+              {
+                "const": "reimbursement",
+                "type": "string"
+              },
+              {
+                "const": "payout_transfer",
+                "type": "string"
+              },
+              {
+                "const": "direct_cost",
+                "type": "string"
+              },
+              {
+                "const": "operating_expense",
+                "type": "string"
+              },
+              {
+                "const": "operating_revenue",
+                "type": "string"
+              },
+              {
+                "const": "award_grant",
+                "type": "string"
+              },
+              {
+                "const": "capital_funding",
+                "type": "string"
+              },
+              {
+                "const": "sponsorship",
+                "type": "string"
+              },
+              {
+                "const": "in_kind_support",
+                "type": "string"
+              },
+              {
+                "const": "payable_labor",
+                "type": "string"
+              },
+              {
+                "const": "reservation_memo",
+                "type": "string"
+              },
+              {
+                "const": "usage_memo",
+                "type": "string"
+              }
+            ]
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "eventCount": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "knownAmountCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unknownAmountCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "knownSubtotal": {
+            "anyOf": [
+              {
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+                "maxLength": 40,
+                "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "totalAmount": {
+            "anyOf": [
+              {
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+                "maxLength": 40,
+                "description": "Base-10 decimal string with at most 18 fractional digits; never use binary floating point for money.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completeness": {
+            "anyOf": [
+              {
+                "const": "unknown",
+                "type": "string"
+              },
+              {
+                "const": "partial",
+                "type": "string"
+              },
+              {
+                "const": "complete",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "quantities": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "eventType",
+          "classification",
+          "currency",
+          "unitName",
+          "relation",
+          "observationCount",
+          "knownQuantityCount",
+          "unknownQuantityCount",
+          "incompleteObservationCount",
+          "knownSubtotal",
+          "totalQuantity",
+          "completeness"
+        ],
+        "properties": {
+          "eventType": {
+            "anyOf": [
+              {
+                "const": "usage_observation",
+                "type": "string"
+              },
+              {
+                "const": "reservation_authorized",
+                "type": "string"
+              },
+              {
+                "const": "dispatch",
+                "type": "string"
+              },
+              {
+                "const": "charge",
+                "type": "string"
+              },
+              {
+                "const": "consumption",
+                "type": "string"
+              },
+              {
+                "const": "reservation_release",
+                "type": "string"
+              },
+              {
+                "const": "expense",
+                "type": "string"
+              },
+              {
+                "const": "revenue",
+                "type": "string"
+              },
+              {
+                "const": "refund",
+                "type": "string"
+              },
+              {
+                "const": "credit",
+                "type": "string"
+              },
+              {
+                "const": "discount",
+                "type": "string"
+              },
+              {
+                "const": "fee",
+                "type": "string"
+              },
+              {
+                "const": "tax",
+                "type": "string"
+              },
+              {
+                "const": "reimbursement",
+                "type": "string"
+              },
+              {
+                "const": "cash_movement",
+                "type": "string"
+              },
+              {
+                "const": "reversal",
+                "type": "string"
+              },
+              {
+                "const": "adjustment",
+                "type": "string"
+              },
+              {
+                "const": "correction",
+                "type": "string"
+              }
+            ]
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "const": "sale",
+                "type": "string"
+              },
+              {
+                "const": "discount",
+                "type": "string"
+              },
+              {
+                "const": "sale_refund",
+                "type": "string"
+              },
+              {
+                "const": "pass_through_tax",
+                "type": "string"
+              },
+              {
+                "const": "supplier_credit",
+                "type": "string"
+              },
+              {
+                "const": "supplier_expense",
+                "type": "string"
+              },
+              {
+                "const": "reimbursement",
+                "type": "string"
+              },
+              {
+                "const": "payout_transfer",
+                "type": "string"
+              },
+              {
+                "const": "direct_cost",
+                "type": "string"
+              },
+              {
+                "const": "operating_expense",
+                "type": "string"
+              },
+              {
+                "const": "operating_revenue",
+                "type": "string"
+              },
+              {
+                "const": "award_grant",
+                "type": "string"
+              },
+              {
+                "const": "capital_funding",
+                "type": "string"
+              },
+              {
+                "const": "sponsorship",
+                "type": "string"
+              },
+              {
+                "const": "in_kind_support",
+                "type": "string"
+              },
+              {
+                "const": "payable_labor",
+                "type": "string"
+              },
+              {
+                "const": "reservation_memo",
+                "type": "string"
+              },
+              {
+                "const": "usage_memo",
+                "type": "string"
+              }
+            ]
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "unitName": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "const": "standalone",
+                "type": "string"
+              },
+              {
+                "const": "included_subset",
+                "type": "string"
+              },
+              {
+                "const": "unknown_relation",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observationCount": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "knownQuantityCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unknownQuantityCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "incompleteObservationCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "knownSubtotal": {
+            "anyOf": [
+              {
+                "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+                "maxLength": 40,
+                "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "totalQuantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+                "maxLength": 40,
+                "description": "Non-negative base-10 decimal string with at most 18 fractional digits.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completeness": {
+            "anyOf": [
+              {
+                "const": "unknown",
+                "type": "string"
+              },
+              {
+                "const": "incomplete",
+                "type": "string"
+              },
+              {
+                "const": "complete",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

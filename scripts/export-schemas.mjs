@@ -15,6 +15,8 @@ const combinedValidators = Object.freeze({
   ReservationCommandSchema: 'validateReservationCommandBoundary',
   ReservationSnapshotSchema: 'validateReservationSnapshotBoundary',
   FinancialSummaryPageSchema: 'validateFinancialSummaryPageBoundary',
+  LedgerAppendRequestSchema: 'validateLedgerAppendRequestBoundary',
+  LedgerProjectionRequestSchema: 'validateLedgerProjectionRequestBoundary',
   ExportRequestSchema: 'validateExportRequestBoundary',
 });
 const entries = [
@@ -26,7 +28,9 @@ const entries = [
   ['budgets', 'ReleaseReservationCommandSchema'], ['budgets', 'ReservationCommandSchema'],
   ['budgets', 'ReservationSnapshotSchema'], ['budgets', 'BudgetChangeRequestSchema'],
   ['budgets', 'BudgetChangeReceiptSchema'], ['budgets', 'ExpenseAdjustmentRequestSchema'], ['budgets', 'PostingReceiptSchema'],
-  ['ledger', 'FinancialEventSchema'], ['reporting', 'FinancialSummaryFiltersSchema'], ['reporting', 'FinancialSummaryQuerySchema'],
+  ['ledger', 'FinancialEventSchema'], ['ledger', 'LedgerEventTypeSchema'], ['ledger', 'LedgerClassificationSchema'],
+  ['ledger', 'LedgerAppendRequestSchema'], ['ledger', 'LedgerAppendReceiptSchema'], ['ledger', 'LedgerProjectionRequestSchema'],
+  ['ledger', 'LedgerProjectionSchema'], ['reporting', 'FinancialSummaryFiltersSchema'], ['reporting', 'FinancialSummaryQuerySchema'],
   ['reporting', 'SummarySourceWatermarkSchema'], ['reporting', 'FinancialSummaryPageSchema'],
   ['reconciliation', 'ReconciliationRequestSchema'], ['reconciliation', 'ReconciliationRunSchema'], ['reconciliation', 'ReconciliationResultSchema'],
   ['integrations', 'ExportRequestSchema'], ['integrations', 'ExportManifestSchema'],

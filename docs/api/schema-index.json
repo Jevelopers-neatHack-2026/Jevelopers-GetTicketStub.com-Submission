@@ -156,6 +156,50 @@
       "sha256": "67313c8e6e0c9fdb4a319e45a958e5de9e1a85413c472b4c4af637b8d56710c9"
     },
     {
+      "module": "ledger",
+      "name": "LedgerEventTypeSchema",
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerEventTypeSchema.json",
+      "completeness": "complete",
+      "sha256": "8a44bdbd7073449b4f4df51e5415fe814e194501834277238e14d0883d042967"
+    },
+    {
+      "module": "ledger",
+      "name": "LedgerClassificationSchema",
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerClassificationSchema.json",
+      "completeness": "complete",
+      "sha256": "303a3dcb3bb373955a664c4a7eac3870631a54919c7b0e9012bb2ef93bdac94f"
+    },
+    {
+      "module": "ledger",
+      "name": "LedgerAppendRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerAppendRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateLedgerAppendRequestBoundary",
+      "sha256": "fb77042ccbd5de8ed85b676c203fc6697bf41ef2b46a19401038d3166d6c7227"
+    },
+    {
+      "module": "ledger",
+      "name": "LedgerAppendReceiptSchema",
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerAppendReceiptSchema.json",
+      "completeness": "complete",
+      "sha256": "0020643b0052198833e40a8e5e1b5ac77ebfc342bb51a16b57876cf022115878"
+    },
+    {
+      "module": "ledger",
+      "name": "LedgerProjectionRequestSchema",
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionRequestSchema.json",
+      "completeness": "partial_wrapper_requires_combined_validation",
+      "combined_validator": "validateLedgerProjectionRequestBoundary",
+      "sha256": "c79e69f03558eb449f6c5a546446910f2d93011f91b54c212f699f0246706f1b"
+    },
+    {
+      "module": "ledger",
+      "name": "LedgerProjectionSchema",
+      "path": "schemas/cost-intelligence/1.0.0/ledger/LedgerProjectionSchema.json",
+      "completeness": "complete",
+      "sha256": "2e1a1003c24c2108f3344df77b8210e0778f1cc30b6da30dedd122cb64629ee8"
+    },
+    {
       "module": "reporting",
       "name": "FinancialSummaryFiltersSchema",
       "path": "schemas/cost-intelligence/1.0.0/reporting/FinancialSummaryFiltersSchema.json",
