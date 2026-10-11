@@ -145,6 +145,9 @@ def assert_tls(capture: TlsCapture, mutation: Mutation) -> None:
             | "unchecked-aggregate"
             | "extra-slot"
             | "early-handshake-deadline"
+            | "unchecked-dns-addresses"
+            | "unchecked-dns-cname"
+            | "unchecked-dns-id"
         ):
             escaped = ()
         case _:

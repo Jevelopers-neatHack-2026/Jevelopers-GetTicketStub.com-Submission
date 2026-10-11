@@ -192,6 +192,9 @@ def assert_concurrency(capture: ConcurrencyCapture, mutation: Mutation) -> None:
             | "unchecked-tls-hostname"
             | "unchecked-tls-trust"
             | "early-handshake-deadline"
+            | "unchecked-dns-addresses"
+            | "unchecked-dns-cname"
+            | "unchecked-dns-id"
         ):
             extra_slot = False
         case _:

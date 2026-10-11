@@ -10,11 +10,13 @@ type BudgetMutation = Literal["unchecked-gzip-wire", "unchecked-aggregate"]
 type TlsMutation = Literal[
     "unchecked-tls-hostname", "unchecked-tls-trust", "early-handshake-deadline"
 ]
+type DnsMutation = Literal["unchecked-dns-addresses", "unchecked-dns-cname", "unchecked-dns-id"]
 type Mutation = (
     Literal["baseline", "always-reject", "unchecked-private", "unchecked-wire", "extra-slot"]
     | ResolverMutation
     | BudgetMutation
     | TlsMutation
+    | DnsMutation
 )
 type Scenario = Literal[
     "safe-alias", "private-transition", "mixed-answers", "metadata-alias", "ip-alias"
@@ -138,6 +140,9 @@ def assert_resolver_inputs(capture: ResolverCapture, mutation: Mutation) -> None
             | "unchecked-tls-hostname"
             | "unchecked-tls-trust"
             | "early-handshake-deadline"
+            | "unchecked-dns-addresses"
+            | "unchecked-dns-cname"
+            | "unchecked-dns-id"
         ):
             affected = ()
         case _:

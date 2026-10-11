@@ -23,6 +23,7 @@ const source = async name => {
 };
 const api = await import(await source('src/security/index.mjs'));
 const fixtures = await import(await source('tests/security/support.mjs'));
+const { DnsWireResolver } = await import(await source('src/security/internal/dns-wire.mjs'));
 const fixtureRoot = resolve(dirname(request.configuration_artifact), '../../fixtures');
 const catalog = JSON.parse(await readFile(resolve(fixtureRoot, 'catalog.json'), 'utf8'));
 const negative = catalog.fixtures.find(item => item.id === 'source-negative');
@@ -31,7 +32,7 @@ if (!request.case.fixtures.includes('source-negative') || negative?.path !== 'da
   || negative.sha256 !== hash(negativeBytes)) throw new Error('Retrieval fixture mismatch');
 const metadata = JSON.parse(negativeBytes);
 if (typeof metadata.url !== 'string') throw new Error('Invalid retrieval fixture');
-const result = await probeRetrieval(api, fixtures, metadata.url);
+const result = await probeRetrieval(api, { ...fixtures, DnsWireResolver }, metadata.url);
 const limitations = [
   'Source-only mock fixture hooks, not installed-package adoption or owner-accepted integration.',
   'Partial IE-11A coverage; fixture server counters are not authoritative external egress capture.',

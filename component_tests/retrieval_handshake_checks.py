@@ -53,6 +53,9 @@ def assert_handshake(capture: HandshakeCapture, mutation: Mutation) -> None:
             | "extra-slot"
             | "unchecked-tls-hostname"
             | "unchecked-tls-trust"
+            | "unchecked-dns-addresses"
+            | "unchecked-dns-cname"
+            | "unchecked-dns-id"
         ):
             assert capture.passed is True
             assert capture.window_min_ms <= capture.outcome_elapsed_ms <= capture.window_max_ms

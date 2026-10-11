@@ -64,7 +64,8 @@ transport containment.
 `redirects_checked` requires a successful positive transport control, rejected
 negative calls, no protected fixture connection, a received redirect response that
 is rejected before the protected endpoint, the actual redirect-limit error, and
-all injected resolver-input and HTTPS authentication redirect checks described below.
+all injected resolver-input, HTTPS authentication and actual DNS-wire redirect checks
+described below.
 `resource_limits_enforced` is limited to declared wire length, chunked identity
 and gzip encoded-body bytes, actual gzip decoded bytes, cumulative decoded bytes,
 per-instance request count, the bounded concurrency/cancellation checks, and the
@@ -131,6 +132,36 @@ This covers active HTTP awaiting headers, not body-read, resolver, connect or TL
 cancellation. All event ordering, outcomes and natural closure precede forced cleanup.
 No fixed sleeps, fake clock, private state changes or timeout increases are used.
 
+`dns_wire` imports the pinned owner's internal `DnsWireResolver` through the
+adapter's confined source path. This class is not an installed public package
+export. A bounded integration-owned packet responder supplies specified DNS bytes
+on task-local UDP/TCP; the owner's actual implementation performs resolution and
+policy checks. No system resolver settings or host DNS configuration are changed.
+
+Two supporting controls resolve only: a safe UDP CNAME chain and a valid UDP-TC/TCP
+fallback return known public-answer digests. Those addresses never enter an HTTP
+client or get remapped onto a fixture. Four negative cases first receive an actual
+local HTTP request, then redirect to a valid synthetic DNS name on the same fixture
+port. The second-hop hook delegates to the actual wire resolver: private/mixed
+answers and a forbidden CNAME must return `POLICY_DENIED`; a wrong-ID TCP reply
+must return `DNS_FAILURE`. Each requires initial HTTP and no final HTTP transport.
+
+If a negative lookup unexpectedly returns data, the hook first records that actual
+accepted result/digest and then unconditionally stops before forwarding any address.
+`control_stop`, its code and provenance distinguish this injected fixture stop from
+the owner's DNS verdict. Such acceptance fails the DNS group and redirects_checked,
+even if the final fetch reports the controlled denial. Valid OwnerResponse output
+retains the complete failed capture; no artificial runtime error discards it.
+
+The live verdict requires the actual root A/AAAA pair per transport, exact alias
+queries, expected reply flags/IDs, successful sends, no fixture socket/protocol
+errors, matching UDP/TCP query IDs/questions/frames and HTTP-before-wire ordering.
+Replies wait for both query types; TCP replies also wait for the empty AAAA sibling's
+natural close before the A reply, preventing cancellation from hiding its trace.
+Query arrival order and random16-bit IDs are observed, not assumed unique or fixed.
+Captures retain query/reply/frame hashes, numeric source/destination ports and event
+order. TCP peer closes are observed; UDP has no invented peer-close telemetry.
+
 `tls_redirects` uses owner-generated certificates A/B inside the existing private
 TMPDIR and the actual HTTPS fixture. A trusted relative redirect must return known
 bytes/hash. A redirect to a whitelisted hostname absent from A's SANs must fail TLS
@@ -160,8 +191,9 @@ listener has no TLS/HTTP parser; its byte counts are not validated ClientHello,
 HTTP-request or handshake-success telemetry. Early rejections retain an unreached
 stage. Linux CI must prove all groups fit the unchanged 30-second case timeout.
 
-Uncovered obligations remain explicit in every artifact: wire DNS, TTL rebinding,
-actual CNAME following and mixed wire-DNS answers; the overall deadline and cancellation during
+Uncovered obligations remain explicit in every artifact: system/recursive DNS,
+TTL rebinding, reply races, arbitrary CNAME graphs, IPv6 wire answers and untested
+packet guards; the overall deadline and cancellation during
 body reads/resolution/connect/TLS, plus real job cancellation;
 production TLS/public CA/networking; image/PDF and downstream parser limits; real rejection
 handoff into research, JEV or creative; and authoritative external egress capture.
@@ -173,7 +205,7 @@ blocked. All unselected original cases remain planned, not implicitly passed.
 
 The separately invoked `component_tests` suite uses actual `execute` and `save_run`
 with clean owned snapshots and all 42 original cases. It compares a real baseline
-with thirteen deliberately weakened owned copies: an always-reject fetcher, unchecked
+with sixteen deliberately weakened owned copies: an always-reject fetcher, unchecked
 loopback fetching, and removal of only the identity-body streaming wire counter.
 The positive control detects always-reject behavior; incoming protected server
 counters detect unchecked loopback fetching. The wire-counter mutation must accept
@@ -203,6 +235,17 @@ second successful handshake must expose certificate B's public digest, proving
 fixture rotation rather than assuming it. A separate timer copy divides only the
 connect-timer delay by ten while declared limits remain unchanged. Its real early
 deadline and closure must fail the lower timing bound and resource observation.
+Three DNS copies remove both redundant wire-address guards, only the CNAME hostname
+validation, or only the transaction-ID comparison. The actual wire verdict/query
+trace must expose each defect and make the explicit DNS/redirect group fail. Any
+returned addresses are stopped by the negative-only safety hook, so mutation tests
+cannot dial public/private answers. The independent resolver-only positives remain
+required; no competing resolver or copied domain policy is introduced.
+The existing cached-resolution copy also affects this group: it reuses the owned
+origin loopback result at the redirect and skips wire resolution entirely. Tests
+require actual final local HTTP/known bytes, no DNS queries and a failed DNS group.
+That bypass is distinct from the negative hook's control stop, which never ran;
+it is not a successful fetch to a wire-returned public address.
 Original producer checkouts stay unchanged.
 
 ```sh

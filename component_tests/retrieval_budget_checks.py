@@ -120,6 +120,9 @@ def assert_byte_budgets(capture: BudgetCapture, mutation: Mutation) -> None:
             | "unchecked-tls-hostname"
             | "unchecked-tls-trust"
             | "early-handshake-deadline"
+            | "unchecked-dns-addresses"
+            | "unchecked-dns-cname"
+            | "unchecked-dns-id"
         ):
             escaped = None
         case _:

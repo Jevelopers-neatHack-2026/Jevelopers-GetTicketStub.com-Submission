@@ -9,13 +9,15 @@ import pytest
 
 from component_tests.retrieval_budget_checks import assert_byte_budgets, mutate_budget
 from component_tests.retrieval_concurrency_checks import assert_concurrency
+from component_tests.retrieval_dns_checks import assert_dns
+from component_tests.retrieval_dns_mutations import mutate_protocol, mutation_source
 from component_tests.retrieval_handshake_checks import assert_handshake
 from component_tests.retrieval_resolver_checks import (
     Mutation,
     assert_resolver_inputs,
     mutate_resolver,
 )
-from component_tests.retrieval_tls_checks import assert_tls, mutate_tls
+from component_tests.retrieval_tls_checks import assert_tls
 from component_tests.retrieval_wire_checks import Capture, assert_observed_outcome
 from integration_evals.artifacts import digest, load_record, read_bytes
 from integration_evals.errors import fail
@@ -91,8 +93,15 @@ def mutate_producer(original: str, mutation: Mutation) -> str:
             guard = "if (this.#active < DEFAULT_RUN_LIMITS.concurrentFetches)"
             assert original.count(guard) == 1
             changed = original.replace(guard, guard.replace(" < ", " <= "), 1)
-        case "unchecked-tls-hostname" | "unchecked-tls-trust" | "early-handshake-deadline":
-            changed = mutate_tls(original, mutation)
+        case (
+            "unchecked-tls-hostname"
+            | "unchecked-tls-trust"
+            | "early-handshake-deadline"
+            | "unchecked-dns-addresses"
+            | "unchecked-dns-cname"
+            | "unchecked-dns-id"
+        ):
+            changed = mutate_protocol(original, mutation)
         case _:
             assert_never(mutation)
     return changed
@@ -128,7 +137,7 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
             ("checkout", "--detach", git_value(Path(os.environ[variable]), "rev-parse", "HEAD")),
         )
     producer = tmp_path / "event-intelligence"
-    target = producer / "src/security/controlled-fetch.mjs"
+    target = producer / mutation_source(mutation)
     original = target.read_text(encoding="utf-8")
     changed = mutate_producer(original, mutation)
     if changed != original:
@@ -162,6 +171,9 @@ def retrieval_workspace(tmp_path: Path, mutation: Mutation) -> Path:
         "unchecked-tls-hostname",
         "unchecked-tls-trust",
         "early-handshake-deadline",
+        "unchecked-dns-addresses",
+        "unchecked-dns-cname",
+        "unchecked-dns-id",
     ],
 )
 def test_real_retrieval_component_archives_observed_boundary(
@@ -202,6 +214,7 @@ def test_real_retrieval_component_archives_observed_boundary(
     assert_concurrency(capture.concurrency, mutation)
     assert_tls(capture.tls_redirects, mutation)
     assert_handshake(capture.handshake_deadline, mutation)
+    assert_dns(capture.dns_wire, mutation)
     original_archive = read_bytes(archive / "run.json")
     with pytest.raises(FileExistsError):
         _ = save_run(run, retrieval_workspace / "reports", tracker, suite, settings.artifacts)
