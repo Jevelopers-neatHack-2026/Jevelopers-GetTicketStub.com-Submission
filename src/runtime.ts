@@ -29,6 +29,8 @@ import type {
   RuntimeAudit,
   RuntimeDependencies,
   RuntimeOptions,
+  RuntimeMeteringRecorder,
+  RuntimeMeteringObservation,
   ProviderTransportRequest,
   SharedShape,
   ShipmentCommand,
@@ -46,9 +48,15 @@ const RUNTIME_VERSION = "0.1.0";
 const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/;
 
 interface ExecuteHooks<T> {
-  readonly beforeTransport?: (transportCalled: boolean) => void;
+  readonly beforeTransport?: (transportCalled: boolean) => void | Promise<void>;
   readonly onSuccess?: (value: T, sideEffectState: AttemptEffectState) => Promise<void>;
   readonly onFailure?: (sideEffectState: AttemptEffectState) => Promise<void>;
+  readonly meteringAttempt?: {
+    readonly logicalOperationId: string;
+    readonly billableAttemptId: string;
+    readonly sourceRefs: () => readonly string[];
+    readonly quoteAmount?: RuntimeMeteringObservation["quoteAmount"];
+  };
 }
 
 interface Decoded<T> {
@@ -97,6 +105,26 @@ function validAuthorizationClaim(value: AuthorizationClaimResult): value is Extr
     typeof value.authorizationId === "string" && value.authorizationId.trim() !== "" && value.authorizationId.length <= 512 &&
     typeof value.actionId === "string" && value.actionId.trim() !== "" && value.actionId.length <= 512 &&
     typeof value.claimReference === "string" && value.claimReference.trim() !== "" && value.claimReference.length <= 512;
+}
+
+function validBudgetReservationReference(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 512 && value.trim() === value &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value);
+}
+
+function quoteAmountEvidence(totalMinor: number, currency: string): NonNullable<RuntimeMeteringObservation["quoteAmount"]> {
+  return {
+    amount: { representation: "minor_units", units: String(totalMinor), currency },
+    basis: "provider_confirmed"
+  };
+}
+
+function quoteAmountFromResult(value: unknown): RuntimeMeteringObservation["quoteAmount"] | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const candidate = value as { currency?: unknown; totalMinor?: unknown };
+  if (typeof candidate.currency !== "string" || !/^[A-Z]{3}$/.test(candidate.currency) ||
+      !Number.isSafeInteger(candidate.totalMinor) || (candidate.totalMinor as number) < 0) return undefined;
+  return quoteAmountEvidence(candidate.totalMinor as number, candidate.currency);
 }
 
 export class FulfillmentConnectorRuntime {
@@ -327,12 +355,18 @@ export class FulfillmentConnectorRuntime {
           });
           throw this.failure("submit", "budget_denied", "not_dispatched");
         }
+        if (!validBudgetReservationReference(result.reference)) {
+          currentAttempt = await this.saveAttempt({
+            ...currentAttempt,
+            budgetReservationState: "unknown",
+            updatedAt: this.dependencies.clock.now()
+          });
+          throw this.failure("submit", "budget_unavailable", "not_dispatched");
+        }
         currentAttempt = await this.saveAttempt({
           ...currentAttempt,
           budgetReservationState: "reserved",
-          ...(typeof result.reference === "string" && result.reference.trim() !== ""
-            ? { budgetReservationReference: result.reference }
-            : {}),
+          budgetReservationReference: result.reference,
           updatedAt: this.dependencies.clock.now()
         });
         this.assertQuoteCurrent(command.quote);
@@ -340,6 +374,19 @@ export class FulfillmentConnectorRuntime {
         return this.adapter.submit(command, context);
       },
       {
+        meteringAttempt: {
+          logicalOperationId: authorizationClaim.actionId,
+          billableAttemptId: currentAttempt.claimId,
+          sourceRefs: () => [
+            `authorization-claim:${authorizationClaim.claimReference}`,
+            `quote:${command.quote.quoteId}`,
+            `bundle:${command.productionBundleDigest}`,
+            ...(currentAttempt.budgetReservationReference === undefined
+              ? []
+              : [`budget-reservation:${currentAttempt.budgetReservationReference}`])
+          ],
+          quoteAmount: quoteAmountEvidence(command.quote.totalMinor, command.quote.currency)
+        },
         beforeTransport: (transportCalled) => this.assertQuoteCurrent(
           command.quote,
           transportCalled ? "possible" : "not_dispatched"
@@ -417,7 +464,16 @@ export class FulfillmentConnectorRuntime {
       throw this.failure("cancel", "authorization_unavailable", "not_dispatched");
     }
 
-    return this.execute("cancel", scope, (context) => this.adapter.cancel(command, context));
+    return this.execute("cancel", scope, (context) => this.adapter.cancel(command, context), {
+      meteringAttempt: {
+        logicalOperationId: authorizationClaim.actionId,
+        billableAttemptId: authorizationClaim.claimReference,
+        sourceRefs: () => [
+          `authorization-claim:${authorizationClaim.claimReference}`,
+          `provider-request:${command.providerRequestId}`
+        ]
+      }
+    });
   }
 
   private async decode<T>(operation: Operation, envelope: unknown, trustedScope: TrustedScope): Promise<Decoded<T>> {
@@ -474,13 +530,75 @@ export class FulfillmentConnectorRuntime {
     this.assertRuntimeMode(operation);
     this.assertProviderSupport(operation);
 
+    const capability = this.descriptor.operations[operation];
+    const externalEffect = capability.sideEffect === "external";
+    let metering: RuntimeMeteringRecorder | undefined;
+    if (this.dependencies.metering !== undefined) {
+      try { metering = await this.dependencies.metering(trustedScope); }
+      catch {
+        await this.callFailureHook(hooks, "not_dispatched");
+        throw this.failure(operation, "usage_sink_unavailable", "not_dispatched");
+      }
+      let configuredForScope = false;
+      try { configuredForScope = metering.isConfiguredFor(this.descriptor.providerId, this.mode, trustedScope); }
+      catch { configuredForScope = false; }
+      if (!configuredForScope) {
+        await this.callFailureHook(hooks, "not_dispatched");
+        throw this.failure(operation, "usage_sink_unavailable", "not_dispatched");
+      }
+    }
+    if (externalEffect && (metering === undefined || hooks.meteringAttempt === undefined)) {
+      await this.callFailureHook(hooks, "not_dispatched");
+      throw this.failure(operation, "usage_sink_unavailable", "not_dispatched");
+    }
+    if (externalEffect && metering !== undefined) {
+      try {
+        const replay = await metering.replayPending();
+        if (replay.pending !== 0 || replay.failures.length !== 0) {
+          await this.callFailureHook(hooks, "not_dispatched");
+          throw this.failure(operation, "usage_sink_unavailable", "not_dispatched");
+        }
+      } catch (error) {
+        await this.callFailureHook(hooks, "not_dispatched");
+        if (error instanceof ConnectorError) throw error;
+        throw this.failure(operation, "usage_sink_unavailable", "not_dispatched");
+      }
+    }
+
+    const meteringKey = hooks.meteringAttempt === undefined
+      ? `runtime:${this.newReference()}`
+      : `runtime:${hooks.meteringAttempt.billableAttemptId}`;
+    const operationEffect: RuntimeMeteringObservation["effect"] = externalEffect
+      ? capability.mayCharge ? "potentially_billable_effect" : "unknown_effect"
+      : "non_billable_observation";
+    const currentSourceRefs = (): readonly string[] => hooks.meteringAttempt?.sourceRefs() ?? [];
+    const recordMetering = async (
+      observation: RuntimeMeteringObservation,
+      requireDelivery: boolean,
+      sideEffectState: AttemptEffectState
+    ): Promise<void> => {
+      if (metering === undefined) return;
+      let result;
+      try { result = await metering.recordObservation(observation); }
+      catch { throw this.failure(operation, "usage_sink_unavailable", sideEffectState); }
+      if (requireDelivery && result.status !== "recorded") {
+        throw this.failure(operation, "usage_sink_unavailable", sideEffectState);
+      }
+      if (!requireDelivery && result.status === "blocked") {
+        throw this.failure(operation, "usage_sink_unavailable", sideEffectState);
+      }
+    };
+
     let transportCalled = false;
+    let lastTransportAttemptId: string | null = null;
+    let lastProviderRequestId: string | undefined;
+    let finalObservationAttempted = false;
     const context: AdapterCallContext = {
       mode: this.mode,
       clock: this.dependencies.clock,
       transport: {
         mode: this.mode,
-        request: <R>(request: ProviderTransportRequest): Promise<R> => {
+        request: async <R>(request: ProviderTransportRequest): Promise<R> => {
           this.assertRuntimeMode(operation);
           let requestSnapshot: ProviderTransportRequest;
           try {
@@ -488,7 +606,26 @@ export class FulfillmentConnectorRuntime {
           } catch {
             throw this.failure(operation, "invalid_input", transportCalled ? "possible" : "not_dispatched");
           }
-          hooks.beforeTransport?.(transportCalled);
+          await hooks.beforeTransport?.(transportCalled);
+          const transportAttemptId = this.newReference();
+          lastTransportAttemptId = transportAttemptId;
+          if (metering !== undefined) {
+            await recordMetering({
+              operation,
+              sourceEventKey: `${meteringKey}:${transportAttemptId}:dispatching`,
+              ...(hooks.meteringAttempt === undefined ? {} : {
+                logicalOperationId: hooks.meteringAttempt.logicalOperationId,
+                billableAttemptId: hooks.meteringAttempt.billableAttemptId
+              }),
+              transportAttemptId,
+              outcome: "dispatching",
+              completeness: "partial",
+              sourceRefs: currentSourceRefs(),
+              ...(hooks.meteringAttempt?.quoteAmount === undefined ? {} : { quoteAmount: hooks.meteringAttempt.quoteAmount }),
+              chargeAmount: { amount: null, basis: "unknown" },
+              effect: operationEffect
+            }, true, transportCalled ? "possible" : "not_dispatched");
+          }
           transportCalled = true;
           return this.dependencies.transport.request<R>(requestSnapshot);
         }
@@ -496,11 +633,33 @@ export class FulfillmentConnectorRuntime {
     };
 
     try {
-      await this.recordUsage({
-        operation,
-        outcome: "dispatching",
-        sideEffectState: "not_dispatched"
-      }, trustedScope);
+      if (metering !== undefined) {
+        if (externalEffect && hooks.meteringAttempt === undefined) {
+          throw this.failure(operation, "usage_sink_unavailable", "not_dispatched");
+        }
+        if (!externalEffect || hooks.meteringAttempt !== undefined) {
+          await recordMetering({
+            operation,
+            sourceEventKey: `${meteringKey}:${externalEffect ? "prepared" : "started"}`,
+            ...(hooks.meteringAttempt === undefined ? {} : {
+              logicalOperationId: hooks.meteringAttempt.logicalOperationId,
+              billableAttemptId: hooks.meteringAttempt.billableAttemptId
+            }),
+            outcome: externalEffect ? "attempt_prepared" : "dispatching",
+            completeness: "partial",
+            sourceRefs: currentSourceRefs(),
+            ...(hooks.meteringAttempt?.quoteAmount === undefined ? {} : { quoteAmount: hooks.meteringAttempt.quoteAmount }),
+            chargeAmount: { amount: null, basis: "unknown" },
+            effect: operationEffect
+          }, true, "not_dispatched");
+        }
+      } else if (!externalEffect) {
+        await this.recordUsage({
+          operation,
+          outcome: "dispatching",
+          sideEffectState: "not_dispatched"
+        }, trustedScope);
+      }
     } catch (error) {
       await this.callFailureHook(hooks, "not_dispatched");
       if (error instanceof ConnectorError) throw error;
@@ -513,9 +672,35 @@ export class FulfillmentConnectorRuntime {
       if (result.status === "unsupported") {
         throw this.failure(operation, "unsupported", transportCalled ? "possible" : "not_dispatched");
       }
-      successfulSideEffect = this.descriptor.operations[operation].sideEffect === "external";
+      successfulSideEffect = externalEffect;
       const sideEffectState = successfulSideEffect ? "confirmed" : "not_dispatched";
       await hooks.onSuccess?.(result.value, sideEffectState);
+      if (result.value !== null && typeof result.value === "object" &&
+          "providerRequestId" in result.value && typeof (result.value as { readonly providerRequestId?: unknown }).providerRequestId === "string") {
+        lastProviderRequestId = (result.value as { readonly providerRequestId: string }).providerRequestId;
+      }
+
+      if (metering !== undefined) {
+        const outcome = externalEffect ? "provider_accepted" : "observed";
+        const observedQuoteAmount = hooks.meteringAttempt?.quoteAmount ?? quoteAmountFromResult(result.value);
+        await recordMetering({
+          operation,
+          sourceEventKey: `${meteringKey}:${lastTransportAttemptId ?? "no-transport"}:${outcome}`,
+          ...(hooks.meteringAttempt === undefined ? {} : {
+            logicalOperationId: hooks.meteringAttempt.logicalOperationId,
+            billableAttemptId: hooks.meteringAttempt.billableAttemptId
+          }),
+          ...(lastTransportAttemptId === null ? {} : { transportAttemptId: lastTransportAttemptId }),
+          ...(lastProviderRequestId === undefined ? {} : { providerRequestId: lastProviderRequestId }),
+          outcome,
+          completeness: "complete",
+          sourceRefs: currentSourceRefs(),
+          ...(observedQuoteAmount === undefined ? {} : { quoteAmount: observedQuoteAmount }),
+          chargeAmount: { amount: null, basis: "unknown" },
+          effect: externalEffect ? capability.mayCharge ? "confirmed_effect" : "unknown_effect" : "non_billable_observation"
+        }, false, sideEffectState);
+        finalObservationAttempted = true;
+      }
 
       const outputShapes = OUTPUT_SHAPES[operation];
       for (const shape of outputShapes) this.assertBindingAvailable(operation, shape);
@@ -534,11 +719,13 @@ export class FulfillmentConnectorRuntime {
         throw this.failure(operation, outbound.failure.code, sideEffectState);
       }
       this.assertReceipts(operation, outbound.receipts, outputShapes, trustedScope);
-      await this.recordUsageBestEffort({
-        operation,
-        outcome: "succeeded",
-        sideEffectState
-      }, trustedScope);
+      if (metering === undefined) {
+        await this.recordUsageBestEffort({
+          operation,
+          outcome: "succeeded",
+          sideEffectState
+        }, trustedScope);
+      }
       return {
         operation,
         mode: this.mode,
@@ -550,11 +737,37 @@ export class FulfillmentConnectorRuntime {
     } catch (error) {
       const sideEffectState = this.effectState(error, operation, transportCalled, successfulSideEffect);
       await this.callFailureHook(hooks, sideEffectState);
-      await this.recordUsageBestEffort({
-        operation,
-        outcome: "failed",
-        sideEffectState
-      }, trustedScope);
+      if (metering !== undefined && !finalObservationAttempted) {
+        const outcome = externalEffect
+          ? sideEffectState === "confirmed" ? "provider_accepted" : transportCalled ? "unknown" : "not_dispatched"
+          : transportCalled ? "unknown" : "not_dispatched";
+        try {
+          await recordMetering({
+            operation,
+            sourceEventKey: `${meteringKey}:${lastTransportAttemptId ?? "no-transport"}:${outcome}`,
+            ...(hooks.meteringAttempt === undefined ? {} : {
+              logicalOperationId: hooks.meteringAttempt.logicalOperationId,
+              billableAttemptId: hooks.meteringAttempt.billableAttemptId
+            }),
+            ...(lastTransportAttemptId === null ? {} : { transportAttemptId: lastTransportAttemptId }),
+            ...(lastProviderRequestId === undefined ? {} : { providerRequestId: lastProviderRequestId }),
+            outcome,
+            completeness: outcome === "unknown" ? "partial" : "complete",
+            sourceRefs: currentSourceRefs(),
+            ...(hooks.meteringAttempt?.quoteAmount === undefined ? {} : { quoteAmount: hooks.meteringAttempt.quoteAmount }),
+            chargeAmount: { amount: null, basis: "unknown" },
+            effect: externalEffect
+              ? sideEffectState === "confirmed" ? "confirmed_effect" : sideEffectState === "not_dispatched" ? "potentially_billable_effect" : "unknown_effect"
+              : "non_billable_observation"
+          }, false, sideEffectState);
+        } catch { /* the durable attempt record remains authoritative when recording is unavailable */ }
+      } else if (metering === undefined) {
+        await this.recordUsageBestEffort({
+          operation,
+          outcome: "failed",
+          sideEffectState
+        }, trustedScope);
+      }
       throw this.normalizeFailure(error, operation, sideEffectState, transportCalled);
     }
   }

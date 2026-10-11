@@ -335,6 +335,44 @@ export interface UsageSink {
   record(contractPayload: unknown): Promise<void>;
 }
 
+/** Observation facts accepted by the runtime's durable metering adapter. */
+export interface RuntimeMeteringObservation {
+  readonly operation: Operation;
+  readonly sourceEventKey?: string;
+  readonly logicalOperationId?: string;
+  readonly billableAttemptId?: string;
+  readonly transportAttemptId?: string;
+  readonly providerRequestId?: string;
+  readonly outcome: "observed" | "attempt_prepared" | "dispatching" | "provider_accepted" | "not_dispatched" | "unknown";
+  readonly completeness: "complete" | "partial" | "unknown";
+  readonly durationMs?: number;
+  readonly sourceRefs?: readonly string[];
+  readonly quoteAmount?: {
+    readonly amount: null |
+      { readonly representation: "decimal"; readonly value: string; readonly currency: string } |
+      { readonly representation: "scaled"; readonly units: string; readonly scale: number; readonly currency: string } |
+      { readonly representation: "minor_units"; readonly units: string; readonly currency: string };
+    readonly basis: "unknown" | "estimated" | "provider_confirmed";
+  };
+  readonly chargeAmount?: {
+    readonly amount: null |
+      { readonly representation: "decimal"; readonly value: string; readonly currency: string } |
+      { readonly representation: "scaled"; readonly units: string; readonly scale: number; readonly currency: string } |
+      { readonly representation: "minor_units"; readonly units: string; readonly currency: string };
+    readonly basis: "unknown" | "estimated" | "provider_confirmed";
+  };
+  readonly effect: "non_billable_observation" | "potentially_billable_effect" | "confirmed_effect" | "unknown_effect";
+}
+
+export interface RuntimeMeteringRecorder {
+  isConfiguredFor(providerId: string, mode: ProviderMode, scope: TrustedScope): boolean;
+  recordObservation(input: RuntimeMeteringObservation): Promise<{ readonly status: string; readonly reason?: string }>;
+  replayPending(): Promise<{ readonly pending: number; readonly failures: readonly string[] }>;
+}
+
+/** Opens a tenant/project-scoped durable metering recorder for one runtime call. */
+export type RuntimeMeteringResolver = (scope: TrustedScope) => Promise<RuntimeMeteringRecorder>;
+
 export interface ProviderAdapter {
   readonly descriptor: ProviderDescriptor;
   quote(command: QuoteCommand, context: AdapterCallContext): Promise<ProviderResult<QuoteResult>>;
@@ -354,6 +392,8 @@ export interface RuntimeDependencies {
   readonly authorizationVerifier: AuthorizationVerifier;
   readonly budgetClient: BudgetClient;
   readonly usageSink: UsageSink;
+  /** Billable operations fail closed when no durable metering recorder is configured. */
+  readonly metering?: RuntimeMeteringResolver;
 }
 
 export interface RuntimeOptions {
