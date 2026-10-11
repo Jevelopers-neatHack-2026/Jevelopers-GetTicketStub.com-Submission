@@ -531,7 +531,7 @@ test("content-addressed storage snapshots caller bytes before its first await", 
     Buffer.from("immutable original bytes"));
 });
 
-test("storage schema v2 migrates additively through private provider attribution, inspection, and concepts v10", async (t) => {
+test("storage schema v2 migrates additively through concepts and composition schema v13", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "creative-version-v2-migration-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const databasePath = join(root, "versions.sqlite");
@@ -551,7 +551,7 @@ test("storage schema v2 migrates additively through private provider attribution
   PRAGMA user_version=2;`);
   db.close();
   const migrated = new CreativeVersionStore({ databasePath, objectRoot });
-  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 10);
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 13);
   const preserved = { ...migrated.db.prepare(`SELECT job_id,brief_id,actor_id,action_id,operation,request_hash,status,
     lease_hash,lease_expires_at,result_json,error_json FROM creative_jobs WHERE job_id='legacy-job'`).get() };
   assert.deepEqual(preserved, {
@@ -589,7 +589,7 @@ test("storage schema v2 migrates additively through private provider attribution
   migrated.close();
 });
 
-test("reconstructed v9 private attribution tables migrate to v10 with populated rows, CHECKs, triggers, and foreign keys", async (t) => {
+test("reconstructed v9 private attribution tables migrate through v13 with populated rows, CHECKs, triggers, and foreign keys", async (t) => {
   const { root, store: originalStore } = await createStore(t);
   const actor_id = "actor-v9-migration";
   let portId = 0;
@@ -617,9 +617,14 @@ test("reconstructed v9 private attribution tables migrate to v10 with populated 
   const pendingRow = await makeJobAndDispatch("legacy-pending-action", "edit", "legacy-pending-transport");
 
   // This fixture reconstructs the two legacy private attribution tables and user_version 9 on the current
-  // store schema. It exercises the additive private-table rebuild without claiming a full historical v9 database.
+  // non-composition store schema. It exercises the additive private-table rebuild and later composition
+  // migrations without claiming a byte-for-byte historical v9 database.
   originalStore.db.exec(`DROP TABLE private_provider_attributions;
     DROP TABLE private_provider_usage_attributions;
+    DROP TABLE creative_composition_action_leases_v1;
+    DROP TABLE creative_composition_current_v1;
+    DROP TABLE creative_composition_actions_v1;
+    DROP TABLE creative_composition_revisions_v1;
     CREATE TABLE private_provider_attributions (
       tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, job_id TEXT NOT NULL, action_id TEXT NOT NULL,
       actor_id TEXT NOT NULL, request_hash TEXT NOT NULL, operation TEXT NOT NULL CHECK(operation IN ('generate','edit')),
@@ -684,7 +689,7 @@ test("reconstructed v9 private attribution tables migrate to v10 with populated 
 
   migratedStore = new CreativeVersionStore({ databasePath, objectRoot });
   t.after(() => migratedStore?.close());
-  assert.equal(migratedStore.db.prepare("PRAGMA user_version").get().user_version, 10);
+  assert.equal(migratedStore.db.prepare("PRAGMA user_version").get().user_version, 13);
   assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_attributions`).get() }, expectedProvider);
   assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_usage_attributions`).get() }, expectedUsage);
   assert.deepEqual({ ...migratedStore.db.prepare(`SELECT * FROM private_provider_attribution_pending`).get() }, expectedPending);
@@ -749,7 +754,7 @@ test("reconstructed v9 private attribution tables migrate to v10 with populated 
     .all().map((row) => ({ ...row }));
   migratedStore.close();
   migratedStore = new CreativeVersionStore({ databasePath, objectRoot });
-  assert.equal(migratedStore.db.prepare("PRAGMA user_version").get().user_version, 10);
+  assert.equal(migratedStore.db.prepare("PRAGMA user_version").get().user_version, 13);
   assert.deepEqual(migratedStore.db.prepare(`SELECT * FROM private_provider_attributions ORDER BY job_id`).all()
     .map((row) => ({ ...row })), expectedProvidersAfterMigration);
   assert.deepEqual(migratedStore.db.prepare(`SELECT * FROM private_provider_usage_attributions ORDER BY job_id`).all()

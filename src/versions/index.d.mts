@@ -1,7 +1,8 @@
-import type { CreativeConceptVersionStoreMethods } from "../api/v1.mjs";
+import type { CreativeCompositionVersionStoreMethods, CreativeConceptVersionStoreMethods } from "../api/v1.mjs";
 
 declare module "./store.mjs" {
   interface CreativeVersionStore extends CreativeConceptVersionStoreMethods {}
+  interface CreativeVersionStore extends CreativeCompositionVersionStoreMethods {}
 }
 
 export { createCreativeVersionApiPorts } from "./api-ports.mjs";

@@ -1442,6 +1442,10 @@ async function runImageDispatch(driver, operation, rawInput) {
     if (dispatchCurrent !== input.dispatch_intent_ref) {
       fail("dispatch_fence_closed", "The same-connection job and lease owner fence did not confirm the current dispatch intent.", { outcome: "unknown" });
     }
+    // The owner callback is trusted and synchronous, but it can consume time
+    // or abort the request. Recheck only local proof state after it so the
+    // transport starts while the exact authorization snapshot is still live.
+    assertLiveFence(input, postAck, credential, now(), deadlineMs, expected, transportAckState);
   }
 
   let response;

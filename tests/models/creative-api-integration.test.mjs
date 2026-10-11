@@ -8,9 +8,11 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createCreativeApi } from "../../src/api/v1.mjs";
 import { canonicalHash, canonicalSerialize, normalizeResearchPackage, validateCreativeBrief } from "../../src/contracts/index.mjs";
+import { createCompositionEditPlan, hashCompositionLayerManifest } from "../../src/contracts/approval-handoff.mjs";
+import { compositionStateHash, createCompositionProductionEnvelope, createCompositionRevision } from "../../src/contracts/composition-authority.mjs";
 import { createOpenAIImagesProvider } from "creative-engine/models";
 import { createCreativeVersionApiPorts } from "../../src/versions/api-ports.mjs";
-import { CreativeVersionStore } from "../../src/versions/store.mjs";
+import { CreativeVersionStore, VersionStoreError } from "../../src/versions/store.mjs";
 import { createSqliteTelemetryOutbox, USAGE_PROFILE } from "../../src/telemetry/index.mjs";
 import { completeResearchPackage } from "../../fixtures/planning/research-packages.mjs";
 import { makePng } from "../../fixtures/models/png.mjs";
@@ -52,6 +54,166 @@ function conceptRequest(actionId, schemaVersion = "1.1", requestedCount = 2) {
     payload: { brief_id: SCOPE.brief_id, plan_id: `concept-plan-${actionId}`, requested_count: requestedCount,
       references: [{ asset_id: "asset-1", role_ref: "primary-subject" },
         { asset_id: "asset-2", role_ref: "supporting-detail" }] } };
+}
+
+function compositionRequest(actionId, operation, payload) {
+  const occurred = "2026-10-10T12:20:00.000Z";
+  return { contract: "CreativeApiRequest", schema_version: "1.2", event_id: `event-${actionId}`,
+    request_id: `request-${actionId}`, tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id,
+    correlation_id: `correlation-${actionId}`, producer: "creative-composition-api-integration",
+    occurred_at: occurred, ingested_at: occurred, environment: "test", billing_mode: "simulated",
+    source_refs: [], operation, ...(actionId ? { action_id: actionId } : {}), payload: { brief_id: SCOPE.brief_id,
+      design_version_id: "design-image-parent-1", ...payload } };
+}
+
+function compositionV13Request(actionId, operation, payload) {
+  const occurred = "2026-10-10T12:20:00.000Z";
+  return { contract: "CreativeApiRequest", schema_version: "1.3", event_id: `event-${actionId}`,
+    request_id: `request-${actionId}`, tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id,
+    correlation_id: `correlation-${actionId}`, producer: "creative-composition-api-integration",
+    occurred_at: occurred, ingested_at: occurred, environment: "test", billing_mode: "simulated",
+    source_refs: [], operation, ...(actionId ? { action_id: actionId } : {}), payload: { brief_id: SCOPE.brief_id,
+      design_version_id: "design-image-parent-1", ...payload } };
+}
+
+function initialComposition(context, design, selection, previewBytes,
+  { includeLogo = false, previewWidthPx = 16, previewHeightPx = 16, previewMimeType = "image/png",
+    lockedLayerIds = [], factualTextLayers = [], titleValue = "Example Festival" } = {}) {
+  const scope = { ...SCOPE, brief_id: SCOPE.brief_id };
+  const briefHash = canonicalHash(context.brief);
+  const factsHash = canonicalHash(context.brief.facts);
+  const packageHash = canonicalHash(context.research);
+  const compositionId = "composition:api-initial";
+  const revisionId = "composition-revision:api-initial";
+  const artifact = { artifact_id: design.artifact.artifact_id, locator_ref: "object:fixture:artwork",
+    sha256: design.artifact.content_hash.slice(7), mime_type: "image/png", width_px: 16, height_px: 16,
+    access_policy_ref: "access:fixture:artwork" };
+  const binding = { tenant_id: scope.tenant_id, project_id: scope.project_id,
+    design_version: { design_version_id: design.design_version_id, artwork_sha256: design.artifact.content_hash.slice(7) },
+    brief: { brief_id: scope.brief_id, sha256: briefHash.slice(7) },
+    facts: { revision_id: context.research.event_id, sha256: factsHash.slice(7) }, assets: [],
+    composition: { composition_id: compositionId, revision_id: revisionId, sha256: "0".repeat(64) },
+    preview_sha256: hash(previewBytes).slice(7) };
+  const layer_manifest = [
+    { layer_id: "layer:artwork", kind: "artwork", artifact_id: artifact.artifact_id, sha256: artifact.sha256 },
+    { layer_id: "layer:title", kind: "text", role: "title", value: titleValue },
+  ];
+  let assetRights = [];
+  if (includeLogo) {
+    const asset = context.research.assets.items.find((item) => item.asset_id === "asset-2");
+    const permission_ref = "permission:asset-2:logo/1";
+    const boundAsset = { asset_id: asset.asset_id, sha256: asset.content_hash.slice(7), permission_ref, intended_use: "logo" };
+    binding.assets = [boundAsset];
+    const bytes = context.referenceAssetBytes.get(asset.asset_id);
+    layer_manifest.push({ layer_id: "layer:logo", kind: "approved_asset", asset_id: asset.asset_id,
+      asset_sha256: boundAsset.sha256, permission_ref,
+      artifact: { artifact_id: "artifact:asset-2-logo", locator_ref: "object:fixture:asset-2-logo",
+        sha256: boundAsset.sha256, mime_type: asset.media_type, width_px: 16, height_px: 16,
+        access_policy_ref: "access:fixture:asset-2-logo" } });
+    assetRights = ["display", "modify", "reproduce"].map((action) => ({ asset_id: asset.asset_id, action,
+      source_ref: asset.source_id, content_hash: asset.content_hash, package_id: context.research.package_id,
+      package_hash: packageHash, permission_ref, intended_use: "logo", evidence_ref: `proof:${action}:asset-2`,
+      checked_at: NOW - 1000, expires_at: NOW + 60_000 }));
+    assert.ok(bytes instanceof Uint8Array);
+  }
+  binding.composition.sha256 = hashCompositionLayerManifest({ binding, artifact, layer_manifest, trustedScope: scope });
+  const checked_at = NOW - 1000;
+  const expires_at = NOW + 60_000;
+  const dependencies = { brief_hash: briefHash, facts_revision_id: context.research.event_id, facts_sha256: factsHash,
+    package_id: context.research.package_id, package_sha256: packageHash,
+    design_version_id: design.design_version_id, design_version_sha256: design.design_hash,
+    artwork_sha256: design.artifact.content_hash, parent_version_id: design.parent_version_id,
+    parent_design_hash: null, selection_revision: selection.revision, asset_rights: assetRights, edit_policy: null,
+    authority_proof: { proof_ref: "authority-proof:api-fixture", state_sha256: `sha256:${"0".repeat(64)}`,
+      checked_at, expires_at } };
+  const policyBody = { contract: "CreativeCompositionEditPolicy", schema_version: "1.0",
+    policy_ref: "edit-policy:api-fixture", policy_version: "fixture-v1", brief_hash: briefHash,
+    facts_revision_id: context.research.event_id, facts_sha256: factsHash, package_id: context.research.package_id,
+    package_sha256: packageHash, design_version_id: design.design_version_id,
+    design_version_sha256: design.design_hash, artwork_sha256: design.artifact.content_hash,
+    selection_revision: selection.revision, locked_layer_ids: lockedLayerIds, factual_text_layers: factualTextLayers,
+    checked_at, expires_at };
+  dependencies.edit_policy = { ...policyBody, policy_sha256: canonicalHash(policyBody) };
+  const geometry = [
+    { layer_id: "layer:artwork", layout: null, text_size: null },
+    { layer_id: "layer:title", layout: { x_milli: 100, y_milli: 100, width_milli: 800 },
+      text_size: { value: "18", unit: "pt" } },
+  ];
+  if (includeLogo) geometry.push({ layer_id: "layer:logo", layout: { x_milli: 700, y_milli: 700,
+    width_milli: 200, height_milli: 200 }, text_size: null });
+  const raw = { tenant_id: scope.tenant_id, project_id: scope.project_id, brief_id: scope.brief_id,
+    composition_id: compositionId, revision_id: revisionId, parent_revision_id: null,
+    parent_revision_sha256: null, binding, artwork: artifact, layer_manifest, geometry, dependencies,
+    preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+      preview_id: "preview:api-initial", preview_sha256: hash(previewBytes), byte_length: previewBytes.byteLength,
+      mime_type: previewMimeType, width_px: previewWidthPx, height_px: previewHeightPx,
+      proof_ref: "preview-proof:api-initial",
+      state_sha256: `sha256:${"0".repeat(64)}`, checked_at, expires_at } };
+  const stateHash = compositionStateHash(raw);
+  raw.dependencies.authority_proof.state_sha256 = stateHash;
+  raw.preview.state_sha256 = stateHash;
+  return createCompositionRevision(raw, { trustedScope: scope, previewBytes, nowMs: NOW }).revision;
+}
+
+function replacePublishedCompositionPreviewForIntegrityTest(context, actionId, revision, previewBytes) {
+  const db = context.store.db;
+  const guardedTables = ["creative_composition_actions_v1", "creative_composition_revisions_v1"];
+  const triggers = db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='trigger'
+    AND tbl_name IN (?,?) ORDER BY name`).all(...guardedTables);
+  assert.ok(triggers.length >= 6, "the fixture records every immutable publication guard it temporarily bypasses");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+    const revisionJson = canonicalSerialize(revision);
+    const actionResultJson = canonicalSerialize({ status: "published", revision_id: revision.revision_id,
+      revision_sha256: revision.revision_sha256 });
+    const composition = createCompositionProductionEnvelope(revision);
+    const preview_access = { contract: "CreativeCompositionPreviewAccess", schema_version: "1.1",
+      preview_id: revision.preview.preview_id, sha256: revision.preview.preview_sha256,
+      byte_length: previewBytes.byteLength, mime_type: revision.preview.mime_type,
+      width_px: revision.preview.width_px, height_px: revision.preview.height_px,
+      bytes_base64: Buffer.from(previewBytes).toString("base64") };
+    const jobResultJson = canonicalSerialize({ status: "saved", composition,
+      revision_sha256: revision.revision_sha256, selection_revision: revision.dependencies.selection_revision, preview_access });
+    const revisionChanges = db.prepare(`UPDATE creative_composition_revisions_v1 SET revision_sha256=?,state_sha256=?,
+      preview_sha256=?,preview_byte_length=?,preview_bytes=?,revision_json=?
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND composition_id=? AND revision_id=?`)
+      .run(revision.revision_sha256, revision.state_sha256, revision.preview.preview_sha256, previewBytes.byteLength,
+        previewBytes, revisionJson, SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id,
+        revision.composition_id, revision.revision_id).changes;
+    assert.equal(revisionChanges, 1);
+    const currentChanges = db.prepare(`UPDATE creative_composition_current_v1 SET revision_sha256=?
+      WHERE tenant_id=? AND project_id=? AND brief_id=? AND composition_id=? AND revision_id=?`)
+      .run(revision.revision_sha256, SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id,
+        revision.composition_id, revision.revision_id).changes;
+    assert.equal(currentChanges, 1);
+    const actionChanges = db.prepare(`UPDATE creative_composition_actions_v1 SET candidate_revision_json=?,preview_sha256=?,
+      preview_bytes=?,result_json=? WHERE tenant_id=? AND project_id=? AND brief_id=? AND action_id=?`)
+      .run(revisionJson, revision.preview.preview_sha256, previewBytes, actionResultJson,
+        SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, actionId).changes;
+    assert.equal(actionChanges, 1);
+    const jobChanges = db.prepare("UPDATE creative_jobs SET result_json=? WHERE tenant_id=? AND project_id=? AND action_id=?")
+      .run(jobResultJson, SCOPE.tenant_id, SCOPE.project_id, actionId).changes;
+    assert.equal(jobChanges, 1);
+    for (const trigger of triggers) db.exec(trigger.sql);
+    db.exec("COMMIT");
+  } catch (error) {
+    if (db.isTransaction) db.exec("ROLLBACK");
+    throw error;
+  }
+  const restored = db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='trigger'
+    AND tbl_name IN (?,?) ORDER BY name`).all(...guardedTables);
+  assert.deepEqual(restored, triggers, "the original immutable publication guards are restored byte-for-byte");
+}
+
+function compositionCurrentAssertion(input) {
+  return { contract: "CreativeCompositionCurrentAssertionResult", schema_version: "1.1", status: "current",
+    scope: input.scope, composition_id: input.composition_id,
+    current_revision_id: input.target_revision_id, current_revision_sha256: input.target_revision_sha256,
+    selection_revision: input.selection_revision, design_version_id: input.design_version_id,
+    design_version_sha256: input.design_version_sha256, facts_revision_id: input.facts_revision_id,
+    facts_sha256: input.facts_sha256, package_id: input.package_id, package_sha256: input.package_sha256,
+    proof_ref: "current-proof:api-fixture", checked_at: input.checked_at, expires_at: NOW + 60_000 };
 }
 
 function cancelRequest(actionId, jobId) {
@@ -110,7 +272,8 @@ function authorityPorts() {
   };
 }
 
-async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api", sameSourcePage = false } = {}) {
+async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api", sameSourcePage = false,
+  compositionLogo = false, leaseDurationMs = 60_000 } = {}) {
   const root = suppliedRoot ?? await mkdtemp(join(tmpdir(), "creative-image-api-integration-"));
   if (suppliedRoot === undefined) t.after(async () => rm(root, { recursive: true, force: true }));
   const databasePath = join(root, "versions.sqlite");
@@ -138,6 +301,8 @@ async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api"
     evidence_refs: [asset2SourcePage] });
   researchInput.permissions.items.push({ asset_id: "asset-2", action: "reproduce", status: "granted",
     evidence_refs: [asset2SourcePage] });
+  if (compositionLogo) researchInput.permissions.items.push({ asset_id: "asset-2", action: "display", status: "granted",
+    evidence_refs: [asset2SourcePage] });
   const research = normalizeResearchPackage(researchInput, { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id });
 
   const brief = await jsonFixture("brief");
@@ -152,6 +317,7 @@ async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api"
     { asset_id: "asset-1", action: "reproduce", status: "granted", evidence_refs: ["page-1"] },
     { asset_id: "asset-2", action: "modify", status: "granted", evidence_refs: [asset2SourcePage] },
     { asset_id: "asset-2", action: "reproduce", status: "granted", evidence_refs: [asset2SourcePage] },
+    ...(compositionLogo ? [{ asset_id: "asset-2", action: "display", status: "granted", evidence_refs: [asset2SourcePage] }] : []),
   ];
   const trustedBrief = validateCreativeBrief(brief, { trustedScope: SCOPE });
   store.putBrief({ scope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id }, brief: trustedBrief });
@@ -209,7 +375,7 @@ async function setup(t, { root: suppliedRoot, initialNow = NOW, idPrefix = "api"
       package_hash: input.package_hash, checked_at: input.now,
       expires_at: new Date(NOW + 5 * 60_000).toISOString(), evidence_ref: "synthetic-permission-proof" }; },
   };
-  const adapted = createCreativeVersionApiPorts({ store, idFactory: () => `${idPrefix === "api" ? "version-port" : `${idPrefix}-version-port`}-${++id}`, leaseDurationMs: 60_000,
+  const adapted = createCreativeVersionApiPorts({ store, idFactory: () => `${idPrefix === "api" ? "version-port" : `${idPrefix}-version-port`}-${++id}`, leaseDurationMs,
     otherPorts: { provider, metering, planning: { getCurrentResearchPackage: () => research,
       assetPermissionVerifier: permissionVerifier } } });
   const ports = { ...adapted.ports,
@@ -468,6 +634,9 @@ test("actual Creative API v1.1 concepts.create edits two authorized references a
     assert.deepEqual(candidate.design_version.source_refs, ["page-1", "page-2"]);
     assert.equal(candidate.creative_concept_lineage.source_assets.length, 2);
     assert.equal(Object.isFrozen(candidate.creative_concept_lineage.source_assets[0]), true);
+    assert.equal(candidate.creative_concept_lineage.adapter_snapshot.provider_name, "openai");
+    assert.equal(candidate.creative_concept_lineage.adapter_snapshot.configuration.size, "16x16");
+    assert.equal(Object.hasOwn(candidate.creative_concept_lineage.adapter_snapshot, "provider_tag"), false);
   }
   assert.deepEqual(context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id }), selectionBefore,
     "publishing concepts does not select either sibling");
@@ -2664,4 +2833,1420 @@ test("cancellation, expired deadline, or revoked asset permission during async u
       assert.deepEqual(JSON.parse(rawUsage.usage_json).missing_fields, ["usage.profile_mapping_pending"]);
     });
   }
+});
+
+test("API 1.2 composition.get remains null until explicit create publishes exact owner bytes", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 17, height: 16 }));
+  const revision = initialComposition(context, design, selection, previewBytes, { previewWidthPx: 17 });
+  let resolves = 0;
+  let assertions = 0;
+  context.ports.composition = {
+    async resolveCurrent() { resolves += 1; return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision, preview_bytes: Uint8Array.from(previewBytes) }; },
+    assertCurrent(input) { assertions += 1; return compositionCurrentAssertion(input); },
+  };
+  const before = { dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
+    posts: context.counters.provider_posts, settlements: context.counters.settlements };
+  const empty = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+  assert.equal(empty.ok, true, JSON.stringify(empty));
+  assert.deepEqual(empty.result, { composition: null, status: "not_initialized" });
+  assert.equal(resolves, 0, "empty reads do not ask an owner port to invent a composition");
+
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-create-api", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  assert.equal(created.schema_version, "1.2");
+  assert.equal(created.result.status, "saved");
+  assert.equal(created.result.composition.revision.revision_sha256, revision.revision_sha256);
+  assert.equal(created.result.preview_access.sha256, hash(previewBytes));
+  assert.deepEqual(Buffer.from(created.result.preview_access.bytes_base64, "base64"), Buffer.from(previewBytes));
+  const persisted = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(persisted.revision.revision_sha256, revision.revision_sha256);
+  assert.deepEqual(persisted.preview_bytes, previewBytes);
+
+  const read = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+  assert.equal(read.ok, true, JSON.stringify(read));
+  assert.equal(read.result.status, "current");
+  assert.equal(read.result.composition.revision.revision_sha256, revision.revision_sha256);
+  assert.deepEqual(Buffer.from(read.result.preview_access.bytes_base64, "base64"), Buffer.from(previewBytes));
+  assert.equal(resolves, 2, "explicit create and populated read each resolve the owner-backed revision");
+  assert.equal(assertions, 2, "create and read both use an owner-backed synchronous currentness assertion");
+  assert.deepEqual({ dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
+    posts: context.counters.provider_posts, settlements: context.counters.settlements }, before,
+  "composition create/get are offline and add no provider or billing effects");
+});
+
+test("composition create and update roll back thenable commit ports and keep synchronous publication", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-sync-commit-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const sourceBytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  const revision = initialComposition(context, design, selection, sourceBytes);
+  const preparedBytes = Uint8Array.from(makePng({ width: 17, height: 16, transparent: true }));
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision, preview_bytes: Uint8Array.from(sourceBytes) }; },
+    async preparePreview(input) {
+      const checked_at = NOW - 500;
+      return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+        preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+          preview_id: `preview:${input.action_id}`, preview_sha256: hash(preparedBytes),
+          byte_length: preparedBytes.byteLength, mime_type: "image/png", width_px: 17, height_px: 16,
+          proof_ref: `preview-proof:${input.action_id}`, state_sha256: input.candidate.state_sha256,
+          checked_at, expires_at: NOW + 60_000 },
+        authority_proof: { proof_ref: `authority-proof:${input.action_id}`,
+          state_sha256: input.candidate.state_sha256, checked_at, expires_at: NOW + 60_000 },
+        preview_bytes: Uint8Array.from(preparedBytes) };
+    },
+    assertCurrent(input) { return compositionCurrentAssertion(input); },
+  };
+
+  const synchronousCommit = context.ports.storage.commitCompositionRevision;
+  context.ports.storage.commitCompositionRevision = (input, transaction) =>
+    Promise.resolve(synchronousCommit(input, transaction));
+  const failedCreate = await context.api.invoke(authorizedActor(), compositionRequest(
+    "composition-async-commit-create", "composition.create", {}));
+  assert.equal(failedCreate.ok, false, JSON.stringify(failedCreate));
+  assert.equal(failedCreate.error.code, "unavailable");
+  assert.equal(failedCreate.error.field, "job_publication");
+  assert.equal(await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id }), null, "a thenable create commit rolls back its staged revision and current pointer");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count,
+    0, "the failed create commit leaves no immutable revision");
+  assert.equal(context.store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?")
+    .get("composition-async-commit-create").status, "failed");
+
+  context.ports.storage.commitCompositionRevision = synchronousCommit;
+  const created = await context.api.invoke(authorizedActor(), compositionRequest(
+    "composition-sync-commit-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const parent = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(parent.revision.revision_sha256, revision.revision_sha256,
+    "the normal synchronous commit remains usable after the rejected adapter contract");
+  const plan = createCompositionEditPlan({ plan_id: "composition-plan:async-commit-update/1",
+    binding: parent.revision.binding, layer_manifest: parent.revision.layer_manifest,
+    target_composition_revision_id: "composition-revision:async-commit-update",
+    operations: [{ operation_id: "set-title/async-commit", kind: "set_text", layer_id: "layer:title",
+      value: "This child must not publish" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+
+  context.ports.storage.commitCompositionRevision = (input, transaction) =>
+    Promise.resolve(synchronousCommit(input, transaction));
+  const failedUpdate = await context.api.invoke(authorizedActor(), compositionRequest(
+    "composition-async-commit-update", "composition.update", { plan }));
+  assert.equal(failedUpdate.ok, false, JSON.stringify(failedUpdate));
+  assert.equal(failedUpdate.error.code, "unavailable");
+  assert.equal(failedUpdate.error.field, "job_publication");
+  const currentAfterUpdate = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(currentAfterUpdate.revision.revision_id, parent.revision.revision_id);
+  assert.equal(currentAfterUpdate.revision.revision_sha256, parent.revision.revision_sha256,
+    "a thenable update commit cannot replace the parent revision");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count,
+    1, "the failed update leaves no child revision");
+  assert.equal(context.store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?")
+    .get("composition-async-commit-update").status, "failed");
+  const action = await context.ports.storage.getCompositionAction({ scope: SCOPE,
+    action_id: "composition-async-commit-update" });
+  assert.notEqual(action.status, "published", "a thenable commit cannot publish its staged composition action");
+});
+
+test("API 1.3 history exposes identity only and fresh revalidation restores current service after expiry and same-design restore", async (t) => {
+  const context = await setup(t, { compositionLogo: true });
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-v13-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const artworkBytes = Uint8Array.from(await context.store.getArtifactBytes({ scope: SCOPE,
+    brief_id: SCOPE.brief_id, design_version_id: design.design_version_id }));
+  const originalPreviewBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  const parent = initialComposition(context, design, selection, originalPreviewBytes, { includeLogo: true,
+    lockedLayerIds: ["layer:logo"], factualTextLayers: [{ layer_id: "layer:title", fact_id: "fact-api-1",
+      fact_sha256: canonicalHash(context.brief.facts), text_sha256: hash("Example Event") }], titleValue: "Example Event" });
+  let ownerRevision = parent;
+  let ownerPreviewBytes = originalPreviewBytes;
+  let invalidEvidenceTransform = null;
+  let rejectedEvidenceCalls = 0;
+  let successfulRevalidationCalls = 0;
+  let previewCalls = 0;
+  const regeneratedPreviewBytes = Uint8Array.from(makePng({ width: 17, height: 16, transparent: true }));
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: ownerRevision, preview_bytes: Uint8Array.from(ownerPreviewBytes) }; },
+    async resolveRevalidation(input) {
+      if (input.action_id === "composition-v13-revalidate") successfulRevalidationCalls += 1;
+      else rejectedEvidenceCalls += 1;
+      const checkedAt = NOW + 60_001;
+      const rights = parent.dependencies.asset_rights.map((proof) => ({ ...proof,
+        package_id: input.research_package.package_id, package_hash: input.package_hash,
+        checked_at: checkedAt, expires_at: checkedAt + 60_000 }));
+      const { policy_sha256: _oldPolicyHash, ...policyBody } = parent.dependencies.edit_policy;
+      const editPolicy = { ...policyBody, brief_hash: input.brief_hash,
+        facts_revision_id: input.research_package.event_id, facts_sha256: canonicalHash(input.brief.facts),
+        package_id: input.research_package.package_id, package_sha256: input.package_hash,
+        design_version_id: input.selected_design.design_version_id,
+        design_version_sha256: input.selected_design.design_hash,
+        artwork_sha256: input.selected_design.artifact.content_hash,
+        selection_revision: input.selection_revision, checked_at: checkedAt, expires_at: checkedAt + 60_000 };
+      editPolicy.policy_sha256 = canonicalHash(editPolicy);
+      const evidence = { contract: "CreativeCompositionRevalidationEvidence", schema_version: "1.0",
+        scope: input.scope, composition_id: input.composition_id, expected_current: input.expected_current,
+        candidate_revision_id: input.candidate_revision_id, brief_hash: input.brief_hash,
+        facts_revision_id: input.research_package.event_id, facts_sha256: canonicalHash(input.brief.facts),
+        package_id: input.research_package.package_id, package_sha256: input.package_hash,
+        design_version_id: input.selected_design.design_version_id,
+        design_version_sha256: input.selected_design.design_hash, selection_revision: input.selection_revision,
+        asset_rights: rights, edit_policy: editPolicy };
+      return invalidEvidenceTransform ? invalidEvidenceTransform(evidence, input) : evidence;
+    },
+    async readApprovedAssetBytes(input) {
+      const asset = context.research.assets.items.find((item) => item.asset_id === input.asset_id);
+      return { asset_id: asset.asset_id, content_hash: asset.content_hash, mime_type: asset.media_type,
+        bytes: Uint8Array.from(context.referenceAssetBytes.get(input.asset_id)) };
+    },
+    async preparePreview(input) {
+      previewCalls += 1;
+      const checked_at = NOW + 60_001;
+      const state_sha256 = input.candidate.state_sha256;
+      return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+        preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+          preview_id: `preview:${input.action_id}`, preview_sha256: hash(regeneratedPreviewBytes),
+          byte_length: regeneratedPreviewBytes.byteLength, mime_type: "image/png", width_px: 17, height_px: 16,
+          proof_ref: `preview-proof:${input.action_id}`, state_sha256, checked_at, expires_at: checked_at + 60_000 },
+        authority_proof: { proof_ref: `authority-proof:${input.action_id}`, state_sha256,
+          checked_at, expires_at: checked_at + 60_000 }, preview_bytes: Uint8Array.from(regeneratedPreviewBytes) };
+    },
+    assertCurrent(input) {
+      const result = compositionCurrentAssertion(input);
+      return { ...result,
+        // The owner assertion must be fresh relative to each operation. The
+        // fixture clock advances before revalidation, so a constant NOW-based
+        // expiry would correctly fail the publication fence.
+        expires_at: input.checked_at + 60_000,
+        current_revision_id: input.expected_current_revision_id ?? input.target_revision_id,
+        current_revision_sha256: input.expected_current_revision_sha256 ?? input.target_revision_sha256 };
+    },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-v13-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  assert.equal(created.schema_version, "1.2");
+  const before = { dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
+    posts: context.counters.provider_posts, settlements: context.counters.settlements };
+
+  const foreignActor = { ...authorizedActor(), tenant_id: "tenant-composition-foreign", project_id: "project-composition-foreign" };
+  const foreignUpdatePlan = createCompositionEditPlan({ plan_id: "composition-plan:foreign-action/1",
+    binding: parent.binding, layer_manifest: parent.layer_manifest,
+    target_composition_revision_id: "composition-revision:foreign-action",
+    operations: [{ operation_id: "foreign-action-title/1", kind: "set_text", layer_id: "layer:title", value: "Foreign" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+  const foreignActionAttempts = [
+    compositionRequest("composition-v13-create", "composition.create", {}),
+    compositionRequest("composition-v13-create", "composition.update", { plan: foreignUpdatePlan }),
+    compositionV13Request("composition-v13-create", "composition.revalidate", {
+      design_version_id: design.design_version_id, expected_current_revision_id: parent.revision_id,
+      expected_current_revision_sha256: parent.revision_sha256, candidate_revision_id: "composition-revision:foreign" }),
+  ];
+  for (const foreignRequest of foreignActionAttempts) {
+    const foreignAttempt = await context.api.invoke(foreignActor, foreignRequest);
+    assert.equal(foreignAttempt.ok, false, JSON.stringify(foreignAttempt));
+    assert.equal(foreignAttempt.error.code, "scope_denied");
+  }
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+    "cross-tenant reuse of a create action ID cannot inspect or mutate its composition history");
+  assert.equal(successfulRevalidationCalls, 0);
+  assert.equal(previewCalls, 0);
+
+  const getIdentity = context.ports.storage.getCurrentCompositionIdentity;
+  context.ports.storage.getCurrentCompositionIdentity = undefined;
+  const unavailableHistory = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id }));
+  assert.equal(unavailableHistory.ok, false, JSON.stringify(unavailableHistory));
+  assert.equal(unavailableHistory.error.code, "unavailable");
+  context.ports.storage.getCurrentCompositionIdentity = getIdentity;
+
+  const validHistoryIdentity = await getIdentity({ scope: SCOPE, design_version_id: design.design_version_id });
+  context.ports.storage.getCurrentCompositionIdentity = async () => ({ ...validHistoryIdentity,
+    selection_revision: 0, updated_at: "not-a-UTC-time" });
+  const malformedIdentity = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id }));
+  assert.equal(malformedIdentity.ok, false, JSON.stringify(malformedIdentity));
+  assert.equal(malformedIdentity.error.code, "failed");
+  assert.equal(malformedIdentity.error.field, "composition.current_identity");
+  context.ports.storage.getCurrentCompositionIdentity = getIdentity;
+  const listRevisions = context.ports.storage.listCompositionRevisions;
+  context.ports.storage.listCompositionRevisions = async () => ({ items: [{ ...parent,
+    dependencies: { ...parent.dependencies, design_version_id: "design:other-tenant" } }], has_more: false });
+  const malformedHistory = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id }));
+  assert.equal(malformedHistory.ok, false, JSON.stringify(malformedHistory));
+  assert.equal(malformedHistory.error.code, "failed");
+  assert.equal(malformedHistory.error.field, "composition.history_record");
+  context.ports.storage.listCompositionRevisions = listRevisions;
+
+  context.advanceClock(60_001);
+  const staleRead = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+  assert.equal(staleRead.ok, false, JSON.stringify(staleRead));
+  assert.equal(staleRead.error.code, "stale_version");
+  const restore = apiRequest("composition-v13-same-design-restore", "restore", null, "page-1");
+  restore.payload = { brief_id: SCOPE.brief_id, target_design_version_id: design.design_version_id,
+    expected_selection_revision: selection.revision };
+  const restored = await context.api.invoke(authorizedActor(), restore);
+  assert.equal(restored.ok, true, JSON.stringify(restored));
+  assert.equal(restored.result.selection.design_version_id, design.design_version_id);
+  assert.equal(restored.result.selection.revision, selection.revision + 1);
+
+  const historyRequest = compositionV13Request(null, "composition.history", { design_version_id: design.design_version_id, limit: 5 });
+  const history = await context.api.invoke(authorizedActor(), historyRequest);
+  assert.equal(history.ok, true, JSON.stringify(history));
+  assert.equal(history.schema_version, "1.3");
+  assert.equal(history.result.status, "identity_only");
+  assert.equal(history.result.selection_compatibility, "changed");
+  assert.deepEqual(history.result.current, { composition_id: parent.composition_id, revision_id: parent.revision_id,
+    revision_sha256: parent.revision_sha256, design_version_id: design.design_version_id,
+    design_version_sha256: design.design_hash, selection_revision: selection.revision, updated_at: history.result.current.updated_at });
+  assert.equal(history.result.revisions[0].revision_id, parent.revision_id);
+  assert.equal(Object.hasOwn(history.result.revisions[0], "preview_bytes"), false);
+  assert.equal(Object.hasOwn(history.result.revisions[0], "preview_access"), false);
+  assert.equal(Object.hasOwn(history.result, "preview_access"), false);
+
+  const invalidParent = await context.api.invoke(authorizedActor(), compositionV13Request("composition-v13-wrong-parent",
+    "composition.revalidate", { design_version_id: design.design_version_id,
+      expected_current_revision_id: parent.revision_id, expected_current_revision_sha256: `sha256:${"0".repeat(64)}`,
+      candidate_revision_id: "composition-revision:wrong-parent" }));
+  assert.equal(invalidParent.ok, false, JSON.stringify(invalidParent));
+  assert.equal(invalidParent.error.code, "stale_version");
+  const reusedRevisionId = await context.api.invoke(authorizedActor(), compositionV13Request("composition-v13-reused-revision",
+    "composition.revalidate", { design_version_id: design.design_version_id,
+      expected_current_revision_id: parent.revision_id, expected_current_revision_sha256: parent.revision_sha256,
+      candidate_revision_id: parent.revision_id }));
+  assert.equal(reusedRevisionId.ok, false, JSON.stringify(reusedRevisionId));
+  assert.equal(reusedRevisionId.error.code, "invalid_request");
+
+  const failedEvidenceCases = [
+    { name: "cross-scope owner evidence", code: "scope_denied", field: "composition.revalidation_evidence.scope",
+      transform(evidence) { evidence.scope = { ...evidence.scope, tenant_id: "tenant-forged" }; return evidence; } },
+    { name: "revoked logo permission proof", code: "permission_denied", field: "composition.asset_rights",
+      transform(evidence) { evidence.asset_rights = evidence.asset_rights.filter((proof) => proof.action !== "display"); return evidence; } },
+    { name: "owner policy drops a locked logo", code: "permission_denied", field: "composition.revalidation_policy",
+      transform(evidence) { const { policy_sha256: _hash, ...body } = evidence.edit_policy;
+        body.locked_layer_ids = []; evidence.edit_policy = { ...body, policy_sha256: canonicalHash(body) }; return evidence; } },
+    { name: "owner policy drops factual text protection", code: "permission_denied", field: "composition.revalidation_policy",
+      transform(evidence) { const { policy_sha256: _hash, ...body } = evidence.edit_policy;
+        body.factual_text_layers = []; evidence.edit_policy = { ...body, policy_sha256: canonicalHash(body) }; return evidence; } },
+  ];
+  for (const [index, sample] of failedEvidenceCases.entries()) {
+    invalidEvidenceTransform = sample.transform;
+    const rejected = await context.api.invoke(authorizedActor(), compositionV13Request(`composition-v13-reject-${index}`,
+      "composition.revalidate", { design_version_id: design.design_version_id,
+        expected_current_revision_id: parent.revision_id, expected_current_revision_sha256: parent.revision_sha256,
+        candidate_revision_id: `composition-revision:rejected-${index}` }));
+    assert.equal(rejected.ok, false, `${sample.name}: ${JSON.stringify(rejected)}`);
+    assert.equal(rejected.error.code, sample.code, sample.name);
+    assert.equal(rejected.error.field, sample.field, sample.name);
+    assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+      `${sample.name} leaves the old immutable current revision as the only revision`);
+    assert.equal(previewCalls, 0, `${sample.name} is rejected before preview generation`);
+  }
+  invalidEvidenceTransform = null;
+  const resolver = context.ports.composition.resolveRevalidation;
+  context.ports.composition.resolveRevalidation = undefined;
+  const missingResolver = await context.api.invoke(authorizedActor(), compositionV13Request("composition-v13-no-resolver",
+    "composition.revalidate", { design_version_id: design.design_version_id,
+      expected_current_revision_id: parent.revision_id, expected_current_revision_sha256: parent.revision_sha256,
+      candidate_revision_id: "composition-revision:no-resolver" }));
+  assert.equal(missingResolver.ok, false, JSON.stringify(missingResolver));
+  assert.equal(missingResolver.error.code, "unavailable");
+  context.ports.composition.resolveRevalidation = resolver;
+  assert.equal(previewCalls, 0, "a missing optional API 1.3 capability fails closed before preview work");
+
+  const preparePreview = context.ports.composition.preparePreview;
+  let resolveCancelPreviewEntered;
+  const cancelPreviewEntered = new Promise((resolve) => { resolveCancelPreviewEntered = resolve; });
+  let releaseCancelPreview;
+  const cancelPreviewGate = new Promise((resolve) => { releaseCancelPreview = resolve; });
+  context.ports.composition.preparePreview = async (input) => {
+    const preview = await preparePreview(input);
+    resolveCancelPreviewEntered(input);
+    await cancelPreviewGate;
+    return preview;
+  };
+  const cancelRevalidationRequest = compositionV13Request("composition-v13-revalidate-cancel",
+    "composition.revalidate", { design_version_id: design.design_version_id,
+      expected_current_revision_id: parent.revision_id, expected_current_revision_sha256: parent.revision_sha256,
+      candidate_revision_id: "composition-revision:cancelled-renewal" });
+  const cancelRevalidationPromise = context.api.invoke(authorizedActor(), cancelRevalidationRequest);
+  const cancelPreviewInput = await cancelPreviewEntered;
+  assert.equal(cancelPreviewInput.candidate.revision_id, "composition-revision:cancelled-renewal");
+  const pendingRevalidationJob = context.store.db.prepare("SELECT job_id,status FROM creative_jobs WHERE action_id=?")
+    .get(cancelRevalidationRequest.action_id);
+  assert.equal(pendingRevalidationJob.status, "running");
+  const cancelRevalidation = await context.api.invoke(authorizedActor(),
+    cancelRequest("composition-v13-revalidate-cancel-request", pendingRevalidationJob.job_id));
+  assert.equal(cancelRevalidation.ok, true, JSON.stringify(cancelRevalidation));
+  assert.equal(cancelRevalidation.job.status, "cancelled");
+  releaseCancelPreview();
+  const rejectedCancellation = await cancelRevalidationPromise;
+  assert.equal(rejectedCancellation.ok, false, JSON.stringify(rejectedCancellation));
+  assert.equal(rejectedCancellation.error.code, "cancelled");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+    "cancelled revalidation never publishes its renewed child");
+  assert.equal((await context.ports.storage.getCompositionAction({ scope: SCOPE,
+    action_id: cancelRevalidationRequest.action_id })).status, "cancelled");
+  context.ports.composition.preparePreview = preparePreview;
+
+  const request = compositionV13Request("composition-v13-revalidate", "composition.revalidate", {
+    design_version_id: design.design_version_id, expected_current_revision_id: parent.revision_id,
+    expected_current_revision_sha256: parent.revision_sha256, candidate_revision_id: "composition-revision:v13-renewed" });
+  const renewed = await context.api.invoke(authorizedActor(), request);
+  assert.equal(renewed.ok, true, JSON.stringify({ renewed,
+    job: context.store.db.prepare("SELECT status,error_json FROM creative_jobs WHERE action_id=?").get(request.action_id),
+    action: context.store.db.prepare("SELECT status,result_json FROM creative_composition_actions_v1 WHERE action_id=?").get(request.action_id),
+    current: context.store.db.prepare("SELECT revision_id,revision_sha256,selection_revision FROM creative_composition_current_v1").get() }));
+  assert.equal(renewed.schema_version, "1.3");
+  assert.equal(renewed.result.contract, "CreativeCompositionRevalidationResult");
+  assert.equal(renewed.result.status, "saved");
+  const child = renewed.result.composition.revision;
+  const committedChild = await context.ports.storage.getCompositionRevision({ scope: SCOPE,
+    composition_id: parent.composition_id, revision_id: child.revision_id });
+  ownerRevision = committedChild.revision;
+  ownerPreviewBytes = committedChild.preview_bytes;
+  assert.equal(child.parent_revision_id, parent.revision_id);
+  assert.equal(child.parent_revision_sha256, parent.revision_sha256);
+  assert.equal(child.dependencies.selection_revision, selection.revision + 1);
+  assert.equal(canonicalSerialize(child.artwork), canonicalSerialize(parent.artwork));
+  assert.equal(canonicalSerialize(child.layer_manifest), canonicalSerialize(parent.layer_manifest));
+  assert.equal(canonicalSerialize(child.geometry), canonicalSerialize(parent.geometry));
+  assert.deepEqual(parent.dependencies.edit_policy.locked_layer_ids, ["layer:logo"]);
+  assert.deepEqual(parent.dependencies.edit_policy.factual_text_layers.map((item) => item.layer_id), ["layer:title"]);
+  assert.deepEqual(child.dependencies.edit_policy.locked_layer_ids, ["layer:logo"]);
+  assert.equal(canonicalSerialize(child.dependencies.edit_policy.factual_text_layers),
+    canonicalSerialize(parent.dependencies.edit_policy.factual_text_layers));
+  assert.equal(child.dependencies.asset_rights.length, parent.dependencies.asset_rights.length);
+  assert.notEqual(child.revision_sha256, parent.revision_sha256);
+  assert.equal(successfulRevalidationCalls, 1);
+  assert.equal(rejectedEvidenceCalls, failedEvidenceCases.length + 1);
+  assert.equal(previewCalls, 2);
+  assert.deepEqual(Buffer.from(renewed.result.preview_access.bytes_base64, "base64"), Buffer.from(regeneratedPreviewBytes));
+  const parentAgain = await context.ports.storage.getCompositionRevision({ scope: SCOPE,
+    composition_id: parent.composition_id, revision_id: parent.revision_id });
+  assert.equal(parentAgain.revision.revision_sha256, parent.revision_sha256);
+  assert.deepEqual(parentAgain.preview_bytes, originalPreviewBytes);
+  const artworkAfter = await context.store.getArtifactBytes({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: design.design_version_id });
+  assert.deepEqual(Buffer.from(artworkAfter), Buffer.from(artworkBytes));
+
+  const currentHistory = await context.api.invoke(authorizedActor(), historyRequest);
+  assert.equal(currentHistory.ok, true, JSON.stringify(currentHistory));
+  assert.equal(currentHistory.result.current.revision_id, child.revision_id);
+  assert.equal(currentHistory.result.selection_compatibility, "current");
+  const currentGet = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+  assert.equal(currentGet.ok, true, JSON.stringify(currentGet));
+  assert.equal(currentGet.result.composition.revision.revision_id, child.revision_id);
+
+  context.advanceClock(60_001);
+  const replay = await context.api.invoke(authorizedActor(), request);
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.result.composition.revision.revision_sha256, child.revision_sha256);
+  assert.deepEqual(Buffer.from(replay.result.preview_access.bytes_base64, "base64"), Buffer.from(regeneratedPreviewBytes));
+  assert.equal(successfulRevalidationCalls, 1, "completed replay does not request fresh rights or policy proofs");
+  assert.equal(previewCalls, 2, "completed replay does not prepare another preview");
+  const completedRevalidationJob = context.store.db.prepare("SELECT job_id,status FROM creative_jobs WHERE action_id=?")
+    .get(request.action_id);
+  assert.equal(completedRevalidationJob.status, "completed");
+  const completedCancel = cancelRequest("composition-v13-completed-cancel", completedRevalidationJob.job_id);
+  const completedCancellation = await context.api.invoke(authorizedActor(), completedCancel);
+  assert.equal(completedCancellation.ok, true, JSON.stringify(completedCancellation));
+  assert.equal(completedCancellation.job.status, "completed",
+    "cancelling a completed renewal is idempotent and does not regress its completed job");
+  const completedCancelReplay = await context.api.invoke(authorizedActor(), completedCancel);
+  assert.equal(completedCancelReplay.ok, true, JSON.stringify(completedCancelReplay));
+  assert.equal(completedCancelReplay.job.status, "completed");
+  assert.deepEqual({ dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
+    posts: context.counters.provider_posts, settlements: context.counters.settlements }, before);
+});
+
+test("composition create/get validate exact decoded PNG, JPEG, and WebP preview metadata", async (t) => {
+  const samples = [
+    { format: "png", mime_type: "image/png", bytes: Uint8Array.from(makePng({ width: 16, height: 16 })) },
+    { format: "jpeg", mime_type: "image/jpeg", bytes: new Uint8Array(await readFile(
+      new URL("../../fixtures/models/valid-16x16.jpg", import.meta.url))) },
+    { format: "webp", mime_type: "image/webp", bytes: new Uint8Array(await readFile(
+      new URL("../../fixtures/models/valid-16x16.webp", import.meta.url))) },
+  ];
+  for (const sample of samples) await t.test(sample.format, async (subtest) => {
+    const context = await setup(subtest);
+    const seedPlan = await jsonFixture("generate-plan");
+    seedPlan.base.brief_hash = canonicalHash(context.brief);
+    seedPlan.source_refs = ["page-1"];
+    seedPlan.steps[0].source_refs = ["page-1"];
+    const seed = await context.api.invoke(authorizedActor(), apiRequest(`preview-format-seed-${sample.format}`,
+      "generate", seedPlan, "page-1"));
+    assert.equal(seed.ok, true, JSON.stringify(seed));
+    const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+    const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: selection.design_version_id });
+    const revision = initialComposition(context, design, selection, sample.bytes,
+      { previewMimeType: sample.mime_type });
+    context.ports.composition = {
+      async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+        scope: SCOPE, revision, preview_bytes: Uint8Array.from(sample.bytes) }; },
+      assertCurrent(input) { return compositionCurrentAssertion(input); },
+    };
+    const created = await context.api.invoke(authorizedActor(), compositionRequest(`preview-format-create-${sample.format}`,
+      "composition.create", {}));
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const read = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+    assert.equal(read.ok, true, JSON.stringify(read));
+    assert.equal(read.result.preview_access.mime_type, sample.mime_type);
+    assert.equal(read.result.preview_access.width_px, 16);
+    assert.equal(read.result.preview_access.height_px, 16);
+    assert.deepEqual(Buffer.from(read.result.preview_access.bytes_base64, "base64"), Buffer.from(sample.bytes));
+    assert.equal(read.result.preview_access.sha256, hash(sample.bytes));
+  });
+});
+
+test("composition.create rejects preview bytes that are not the declared decoded image", async (t) => {
+  for (const sample of [
+    { key: "non-image", name: "non-image bytes", bytes: Uint8Array.from(Buffer.from("not an image")),
+      expectedField: "composition.preview.decode" },
+    { key: "truncated", name: "truncated encoded image", bytes: Uint8Array.from(makePng({ width: 16, height: 16 })).subarray(0, 30),
+      expectedField: "composition.preview.decode" },
+    { key: "different-dimensions", name: "different decoded dimensions", bytes: Uint8Array.from(makePng({ width: 17, height: 16 })),
+      expectedField: "composition.preview.metadata" },
+  ]) {
+    await t.test(sample.name, async (t) => {
+      const context = await setup(t);
+      const seedPlan = await jsonFixture("generate-plan");
+      seedPlan.base.brief_hash = canonicalHash(context.brief);
+      seedPlan.source_refs = ["page-1"];
+      seedPlan.steps[0].source_refs = ["page-1"];
+      const seed = await context.api.invoke(authorizedActor(), apiRequest(`preview-invalid-seed-${sample.key}`, "generate", seedPlan, "page-1"));
+      assert.equal(seed.ok, true, JSON.stringify(seed));
+      const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+      const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+        design_version_id: selection.design_version_id });
+      const revision = initialComposition(context, design, selection, sample.bytes);
+      context.ports.composition = {
+        async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+          scope: SCOPE, revision, preview_bytes: sample.bytes }; },
+        assertCurrent(input) { return compositionCurrentAssertion(input); },
+      };
+
+      const result = await context.api.invoke(authorizedActor(), compositionRequest(`preview-invalid-create-${sample.key}`, "composition.create", {}));
+      assert.equal(result.ok, false, JSON.stringify(result));
+      assert.equal(result.error.code, "failed");
+      assert.equal(result.error.field, sample.expectedField);
+      assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 0,
+        "invalid preview bytes never create a durable composition revision");
+      assert.equal(await context.store.getCurrentComposition({ scope: SCOPE,
+        design_version_id: design.design_version_id }), null);
+    });
+  }
+});
+
+test("composition completed replay rejects hash-consistent corrupt preview bytes without rerunning effects", async (t) => {
+  const samples = [
+    { name: "non-image bytes", bytes: Uint8Array.from(Buffer.from("stored text is not a PNG")),
+      options: {}, field: "stored_result.preview.decode" },
+    { name: "truncated PNG", bytes: Uint8Array.from(makePng({ width: 16, height: 16 })).subarray(0, 30),
+      options: {}, field: "stored_result.preview.decode" },
+    { name: "MIME contradicts decoded PNG", bytes: Uint8Array.from(makePng({ width: 16, height: 16 })),
+      options: { previewMimeType: "image/webp" }, field: "stored_result.preview.metadata" },
+    { name: "dimensions contradict decoded PNG", bytes: Uint8Array.from(makePng({ width: 16, height: 16 })),
+      options: { previewWidthPx: 17 }, field: "stored_result.preview.metadata" },
+  ];
+  for (const [index, sample] of samples.entries()) await t.test(sample.name, async (subtest) => {
+    const context = await setup(subtest);
+    const seedPlan = await jsonFixture("generate-plan");
+    seedPlan.base.brief_hash = canonicalHash(context.brief);
+    seedPlan.source_refs = ["page-1"];
+    seedPlan.steps[0].source_refs = ["page-1"];
+    const seed = await context.api.invoke(authorizedActor(), apiRequest(`preview-replay-seed-${index}`,
+      "generate", seedPlan, "page-1"));
+    assert.equal(seed.ok, true, JSON.stringify(seed));
+    const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+    const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: selection.design_version_id });
+    const originalBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+    const originalRevision = initialComposition(context, design, selection, originalBytes);
+    let ownerResolves = 0;
+    let ownerAssertions = 0;
+    context.ports.composition = {
+      async resolveCurrent() { ownerResolves += 1; return { contract: "CreativeCompositionSource", schema_version: "1.1",
+        scope: SCOPE, revision: originalRevision, preview_bytes: Uint8Array.from(originalBytes) }; },
+      assertCurrent(input) { ownerAssertions += 1; return compositionCurrentAssertion(input); },
+    };
+    const actionId = `preview-replay-corrupt-${index}`;
+    const created = await context.api.invoke(authorizedActor(), compositionRequest(actionId, "composition.create", {}));
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const corruptRevision = initialComposition(context, design, selection, sample.bytes, sample.options);
+    replacePublishedCompositionPreviewForIntegrityTest(context, actionId, corruptRevision, sample.bytes);
+    const durableAction = await context.ports.storage.getCompositionAction({ scope: SCOPE, action_id: actionId });
+    assert.equal(durableAction.status, "published");
+    assert.equal(durableAction.revision.revision_sha256, corruptRevision.revision_sha256,
+      "the test corruption retains matching immutable revision and byte hashes");
+    const beforeReplay = { ownerResolves, ownerAssertions, posts: context.counters.provider_posts,
+      reserves: context.counters.reserves, settlements: context.counters.settlements, held: context.counters.held };
+
+    const replay = await context.api.invoke(authorizedActor(), compositionRequest(actionId, "composition.create", {}));
+    assert.equal(replay.ok, false, JSON.stringify(replay));
+    assert.equal(replay.error.code, "failed");
+    assert.equal(replay.error.field, sample.field);
+    assert.equal(replay.error.retryable, false, "corrupt durable preview is a non-retryable integrity failure");
+    assert.equal(replay.result, undefined, "corrupt preview bytes are never returned on replay");
+    assert.deepEqual({ ownerResolves, ownerAssertions, posts: context.counters.provider_posts,
+      reserves: context.counters.reserves, settlements: context.counters.settlements, held: context.counters.held }, beforeReplay,
+    "completed replay does not re-run owner, preview, provider, or billing effects");
+    assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+      "replay validation preserves the existing immutable history");
+  });
+});
+
+test("composition.update rejects a preview provider result whose bytes do not decode to its metadata", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("preview-update-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const initialBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  const initial = initialComposition(context, design, selection, initialBytes);
+  const invalidBytes = Uint8Array.from(Buffer.from("plain text disguised as a preview"));
+  let ownerRevision = initial;
+  let ownerBytes = initialBytes;
+  const previewCalls = [];
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: ownerRevision, preview_bytes: ownerBytes }; },
+    async preparePreview(input) {
+      previewCalls.push(input);
+      const checked_at = NOW - 500;
+      return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+        preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+          preview_id: `preview:${input.action_id}`, preview_sha256: hash(invalidBytes), byte_length: invalidBytes.byteLength,
+          mime_type: "image/webp", width_px: 999, height_px: 998,
+          proof_ref: `preview-proof:${input.action_id}`, state_sha256: input.candidate.state_sha256,
+          checked_at, expires_at: NOW + 60_000 },
+        authority_proof: { proof_ref: `authority-proof:${input.action_id}`, state_sha256: input.candidate.state_sha256,
+          checked_at, expires_at: NOW + 60_000 }, preview_bytes: invalidBytes };
+    },
+    assertCurrent(input) { return compositionCurrentAssertion(input); },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("preview-update-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const storedBefore = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  ownerRevision = storedBefore.revision;
+  ownerBytes = Uint8Array.from(storedBefore.preview_bytes);
+  const plan = createCompositionEditPlan({ plan_id: "composition-plan:invalid-preview-update/1",
+    binding: storedBefore.revision.binding, layer_manifest: storedBefore.revision.layer_manifest,
+    target_composition_revision_id: "composition-revision:invalid-preview-update",
+    operations: [{ operation_id: "invalid-preview-title/1", kind: "set_text",
+      layer_id: "layer:title", value: "Invalid Preview" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+
+  const result = await context.api.invoke(authorizedActor(), compositionRequest("preview-update-invalid", "composition.update", { plan }));
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.equal(result.error.code, "failed");
+  assert.equal(result.error.field, "composition.preview.decode");
+  assert.equal(previewCalls.length, 1);
+  const storedAfter = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(storedAfter.revision.revision_sha256, storedBefore.revision.revision_sha256);
+  assert.deepEqual(storedAfter.preview_bytes, storedBefore.preview_bytes);
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+    "an invalid provider preview cannot publish a child revision");
+});
+
+test("composition.get rejects a locally expired rights proof after an awaited asset read", async (t) => {
+  const context = await setup(t, { compositionLogo: true });
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("preview-expiry-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  const revision = initialComposition(context, design, selection, previewBytes, { includeLogo: true });
+  let expireDuringRead = false;
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision, preview_bytes: previewBytes }; },
+    async readApprovedAssetBytes(input) {
+      if (expireDuringRead) context.advanceClock(60_001);
+      const asset = context.research.assets.items.find((item) => item.asset_id === input.asset_id);
+      return { asset_id: input.asset_id, content_hash: asset.content_hash, mime_type: asset.media_type,
+        bytes: Uint8Array.from(context.referenceAssetBytes.get(input.asset_id)) };
+    },
+    assertCurrent(input) { return { ...compositionCurrentAssertion(input), checked_at: input.checked_at,
+      expires_at: input.checked_at + 60_000 }; },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("preview-expiry-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  expireDuringRead = true;
+
+  const read = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+  assert.equal(read.ok, false, JSON.stringify(read));
+  assert.equal(read.error.code, "stale_version");
+  assert.equal(read.result, undefined, "expired local authority never returns preview access");
+  assert.throws(() => context.store.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id }), (error) => error.code === "stale_version",
+  "the durable store rejects the same expired local proof");
+});
+
+test("composition.get runs a synchronous local fence after the final awaited current read", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-local-fence-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  const revision = initialComposition(context, design, selection, previewBytes);
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision, preview_bytes: Uint8Array.from(previewBytes) }; },
+    assertCurrent(input) { return compositionCurrentAssertion(input); },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-local-fence-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+
+  const originalGet = context.ports.storage.getCurrentComposition.bind(context.ports.storage);
+  let reads = 0;
+  context.ports.storage.getCurrentComposition = async (input) => {
+    const stored = await originalGet(input);
+    reads += 1;
+    if (reads === 2) {
+      // This mutation lands after the final async read resolves but before the
+      // caller resumes from await. The external owner assertion remains fresh;
+      // only a same-connection local fence can detect the selection ABA.
+      queueMicrotask(() => context.store.db.prepare(`UPDATE version_selections SET revision=revision+1
+        WHERE tenant_id=? AND project_id=? AND brief_id=?`)
+        .run(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id));
+    }
+    return stored;
+  };
+  const read = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+  assert.equal(read.ok, false, JSON.stringify(read));
+  assert.equal(read.error.code, "stale_version");
+  assert.equal(read.result, undefined, "a local selection change after the final read cannot expose preview bytes");
+  assert.equal(reads, 2, "the mutation is queued by the final awaited current-pointer read");
+  assert.equal(context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id }).revision,
+    selection.revision + 1, "the fixture completed a same-design selection ABA revision");
+});
+
+test("composition.get preserves final storage integrity errors separately from ordinary unavailability", async (t) => {
+  for (const mode of ["integrity", "unavailable"]) await t.test(mode, async (subtest) => {
+    const context = await setup(subtest);
+    const seedPlan = await jsonFixture("generate-plan");
+    seedPlan.base.brief_hash = canonicalHash(context.brief);
+    seedPlan.source_refs = ["page-1"];
+    seedPlan.steps[0].source_refs = ["page-1"];
+    const seeded = await context.api.invoke(authorizedActor(), apiRequest(`composition-integrity-seed-${mode}`,
+      "generate", seedPlan, "page-1"));
+    assert.equal(seeded.ok, true, JSON.stringify(seeded));
+    const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+    const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+      design_version_id: selection.design_version_id });
+    const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+    const revision = initialComposition(context, design, selection, previewBytes);
+    let corruptAfterInitialRead = false;
+    context.ports.composition = {
+      async resolveCurrent() {
+        if (corruptAfterInitialRead) {
+          const db = context.store.db;
+          const triggers = db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='trigger'
+            AND tbl_name='creative_composition_revisions_v1' ORDER BY name`).all();
+          assert.ok(triggers.length > 0);
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+            const changed = db.prepare(`UPDATE creative_composition_revisions_v1 SET revision_json='{'
+              WHERE tenant_id=? AND project_id=? AND brief_id=? AND composition_id=? AND revision_id=?`)
+              .run(SCOPE.tenant_id, SCOPE.project_id, SCOPE.brief_id, revision.composition_id, revision.revision_id).changes;
+            assert.equal(changed, 1);
+            for (const trigger of triggers) db.exec(trigger.sql);
+            db.exec("COMMIT");
+          } catch (error) {
+            if (db.isTransaction) db.exec("ROLLBACK");
+            throw error;
+          }
+        }
+        return { contract: "CreativeCompositionSource", schema_version: "1.1", scope: SCOPE,
+          revision, preview_bytes: Uint8Array.from(previewBytes) };
+      },
+      assertCurrent(input) { return compositionCurrentAssertion(input); },
+    };
+    const created = await context.api.invoke(authorizedActor(), compositionRequest(`composition-integrity-create-${mode}`,
+      "composition.create", {}));
+    assert.equal(created.ok, true, JSON.stringify(created));
+
+    if (mode === "unavailable") {
+      context.ports.storage.getCurrentComposition = async () => {
+        throw new VersionStoreError("unavailable", "composition.current", true);
+      };
+      const read = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+      assert.equal(read.ok, false, JSON.stringify(read));
+      assert.equal(read.error.code, "unavailable");
+      assert.equal(read.error.field, "composition.current");
+      assert.equal(read.error.retryable, true, "real storage availability remains retryable");
+      return;
+    }
+
+    corruptAfterInitialRead = true;
+    const read = await context.api.invoke(authorizedActor(), compositionRequest(null, "composition.get", {}));
+    assert.equal(read.ok, false, JSON.stringify(read));
+    assert.equal(read.error.code, "failed", "corrupt stored revision is a safe public integrity failure");
+    assert.equal(read.error.field, "composition.revision", "the final GET preserves the sanitized store diagnostic");
+    assert.equal(read.error.retryable, false);
+    assert.equal(read.result, undefined);
+    assert.throws(() => context.store.getCurrentComposition({ scope: SCOPE,
+      design_version_id: design.design_version_id }), (error) => error.code === "integrity_error" &&
+        error.field === "composition.revision",
+    "the direct same-store read reports the distinct integrity classification");
+  });
+});
+
+test("composition publication rechecks queued owner revocation after awaited persistence and before commit", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-fence-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(await context.store.getArtifactBytes({ scope: SCOPE,
+    brief_id: SCOPE.brief_id, design_version_id: design.design_version_id }));
+  const revision = initialComposition(context, design, selection, previewBytes);
+  let ownerCurrent = true;
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision, preview_bytes: Uint8Array.from(previewBytes) }; },
+    assertCurrent(input) {
+      if (!ownerCurrent) throw Object.assign(new Error("selection or rights were revoked"), { code: "stale_version" });
+      return compositionCurrentAssertion(input);
+    },
+  };
+  const complete = context.ports.jobs.completeIfActive.bind(context.ports.jobs);
+  context.ports.jobs.completeIfActive = (input, persist, beforeCommit) => complete(input, async (transaction) => {
+    const result = await persist(transaction);
+    queueMicrotask(() => { ownerCurrent = false; });
+    return result;
+  }, beforeCommit);
+  const result = await context.api.invoke(authorizedActor(), compositionRequest("composition-queued-revoke", "composition.create", {}));
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.equal(result.error.code, "stale_version");
+  assert.equal(result.error.field, "creative_context");
+  assert.equal(ownerCurrent, false, "the fixture revokes owner currentness in the awaited publication gap");
+  assert.equal(await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id }), null, "the final fence rolls back staged revision and job result");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 0);
+});
+
+test("composition publication rechecks proof expiry and job lease after the final owner callback", async (t) => {
+  for (const sample of [
+    { name: "fresh owner assertion cannot revive expired local preview proofs", advance: 60_001,
+      leaseDurationMs: 60_000, error: "stale_version", field: "creative_context" },
+    { name: "fresh owner assertion cannot extend the local job lease", advance: 1_001,
+      leaseDurationMs: 1_000, error: "unavailable" },
+  ]) {
+    await t.test(sample.name, async (subtest) => {
+      const context = await setup(subtest, { leaseDurationMs: sample.leaseDurationMs });
+      const seedPlan = await jsonFixture("generate-plan");
+      seedPlan.base.brief_hash = canonicalHash(context.brief);
+      seedPlan.source_refs = ["page-1"];
+      seedPlan.steps[0].source_refs = ["page-1"];
+      const seed = await context.api.invoke(authorizedActor(), apiRequest(`composition-final-clock-seed-${sample.advance}`,
+        "generate", seedPlan, "page-1"));
+      assert.equal(seed.ok, true, JSON.stringify(seed));
+      const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+      const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+        design_version_id: selection.design_version_id });
+      const sourceBytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+      const sourceRevision = initialComposition(context, design, selection, sourceBytes);
+      const preparedBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+      let assertions = 0;
+      context.ports.composition = {
+        async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+          scope: SCOPE, revision: sourceRevision, preview_bytes: Uint8Array.from(sourceBytes) }; },
+        async preparePreview(input) {
+          const checked_at = NOW - 500;
+          return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+            preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+              preview_id: `preview:${input.action_id}`, preview_sha256: hash(preparedBytes),
+              byte_length: preparedBytes.byteLength, mime_type: "image/png", width_px: 16, height_px: 16,
+              proof_ref: `preview-proof:${input.action_id}`, state_sha256: input.candidate.state_sha256,
+              checked_at, expires_at: NOW + 60_000 },
+            authority_proof: { proof_ref: `authority-proof:${input.action_id}`,
+              state_sha256: input.candidate.state_sha256, checked_at, expires_at: NOW + 60_000 },
+            preview_bytes: Uint8Array.from(preparedBytes) };
+        },
+        assertCurrent(input) {
+          assertions += 1;
+          context.advanceClock(sample.advance);
+          const checked_at = NOW + sample.advance;
+          const expectedId = input.expected_current_revision_id ?? input.target_revision_id;
+          const expectedHash = input.expected_current_revision_sha256 ?? input.target_revision_sha256;
+          return { ...compositionCurrentAssertion(input), current_revision_id: expectedId,
+            current_revision_sha256: expectedHash, checked_at, expires_at: checked_at + 60_000 };
+        },
+      };
+      const actionId = `composition-final-clock-${sample.advance}`;
+      const result = await context.api.invoke(authorizedActor(), compositionRequest(actionId, "composition.create", {}));
+      assert.equal(result.ok, false, JSON.stringify(result));
+      assert.equal(result.error.code, sample.error, JSON.stringify(result));
+      if (sample.field) assert.equal(result.error.field, sample.field);
+      assert.equal(assertions, 1, "the owner assertion succeeds with fresh evidence after advancing the local clock");
+      assert.equal(await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+        design_version_id: design.design_version_id }), null, "the failed final fence publishes no current pointer");
+      assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count,
+        0, "the failed final fence rolls back the staged immutable revision");
+      const job = context.store.db.prepare("SELECT status FROM creative_jobs WHERE action_id=?").get(actionId);
+      assert.notEqual(job.status, "completed", "the public job result does not commit after the clock boundary");
+      const action = await context.ports.storage.getCompositionAction({ scope: SCOPE, action_id: actionId });
+      assert.notEqual(action.status, "published", "the staged action does not become publicly published");
+    });
+  }
+});
+
+test("composition.update applies a typed plan, publishes a child preview once, and replays exact durable bytes", async (t) => {
+  const context = await setup(t, { compositionLogo: true });
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-update-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const artworkBytes = Uint8Array.from(await context.store.getArtifactBytes({ scope: SCOPE,
+    brief_id: SCOPE.brief_id, design_version_id: design.design_version_id }));
+  const initialPreviewBytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  const initial = initialComposition(context, design, selection, initialPreviewBytes, { includeLogo: true });
+  let ownerRevision = initial;
+  let ownerPreviewBytes = initialPreviewBytes;
+  const previewCalls = [];
+  let assertions = 0;
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: ownerRevision, preview_bytes: Uint8Array.from(ownerPreviewBytes) }; },
+    async readApprovedAssetBytes(input) {
+      return { asset_id: input.asset_id, content_hash: context.research.assets.items.find((item) => item.asset_id === input.asset_id)?.content_hash,
+        mime_type: context.research.assets.items.find((item) => item.asset_id === input.asset_id)?.media_type,
+        bytes: Uint8Array.from(context.referenceAssetBytes.get(input.asset_id)) };
+    },
+    async preparePreview(input) {
+      previewCalls.push(input);
+      const bytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: false }));
+      const checked_at = NOW - 500;
+      const state_sha256 = input.candidate.state_sha256;
+      return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+        preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+          preview_id: `preview:${input.action_id}`, preview_sha256: hash(bytes), byte_length: bytes.byteLength,
+          mime_type: "image/png", width_px: 16, height_px: 16, proof_ref: `preview-proof:${input.action_id}`,
+          state_sha256, checked_at, expires_at: NOW + 60_000 },
+        authority_proof: { proof_ref: `authority-proof:${input.action_id}`, state_sha256,
+          checked_at, expires_at: NOW + 60_000 }, preview_bytes: bytes };
+    },
+    assertCurrent(input) {
+      assertions += 1;
+      const result = compositionCurrentAssertion(input);
+      return { ...result, current_revision_id: input.expected_current_revision_id ?? input.target_revision_id,
+        current_revision_sha256: input.expected_current_revision_sha256 ?? input.target_revision_sha256 };
+    },
+  };
+  const before = { dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
+    posts: context.counters.provider_posts, settlements: context.counters.settlements };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  // Both revisions use the fixture clock. Uppercase Z sorts before lowercase a in SQLite BINARY order.
+  const plan = createCompositionEditPlan({ plan_id: "composition-plan:update-title/1", binding: initial.binding,
+    layer_manifest: initial.layer_manifest, target_composition_revision_id: "composition-revision:Z",
+    operations: [
+      { operation_id: "set-title/1", kind: "set_text", layer_id: "layer:title", value: "Updated Festival" },
+      { operation_id: "set-title-size/1", kind: "set_text_size", layer_id: "layer:title", size: { value: "20.5", unit: "pt" } },
+      { operation_id: "set-title-layout/1", kind: "set_layer_layout", layer_id: "layer:title",
+        layout: { x_milli: 125, y_milli: 115, width_milli: 760 } },
+      { operation_id: "position-logo/1", kind: "position_approved_logo", layer_id: "layer:logo",
+        asset_id: "asset-2", layout: { x_milli: 675, y_milli: 720, width_milli: 200, height_milli: 160 } },
+    ],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+  const reusedActionId = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-create",
+    "composition.update", { plan }));
+  assert.equal(reusedActionId.ok, false, JSON.stringify(reusedActionId));
+  assert.equal(reusedActionId.error.code, "conflict", "one action ID cannot be reused for a different operation");
+  assert.equal(previewCalls.length, 0, "a conflicting action ID is rejected before preview work");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1);
+  const stalePlan = { ...plan, base_composition_revision_id: "composition-revision:obsolete" };
+  const stale = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-stale-parent", "composition.update", { plan: stalePlan }));
+  assert.equal(stale.ok, false, JSON.stringify(stale));
+  assert.equal(stale.error.code, "stale_version");
+  assert.equal(previewCalls.length, 0, "a stale parent is rejected before preview preparation");
+  const malformedPlan = { ...plan, unrecognized_extension: "must not be ignored" };
+  const malformed = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-malformed-plan", "composition.update", { plan: malformedPlan }));
+  assert.equal(malformed.ok, false, JSON.stringify(malformed));
+  assert.equal(malformed.error.code, "invalid_request");
+  assert.equal(previewCalls.length, 0, "unknown plan fields are rejected before preview preparation");
+  const request = compositionRequest("composition-update-title", "composition.update", { plan });
+  const updated = await context.api.invoke(authorizedActor(), request);
+  assert.equal(updated.ok, true, JSON.stringify(updated));
+  assert.equal(updated.result.status, "saved");
+  assert.equal(previewCalls.length, 1);
+  assert.equal(previewCalls[0].idempotency_key.length > 30, true);
+  assert.equal(previewCalls[0].base_revision.revision_sha256, initial.revision_sha256);
+  assert.equal(previewCalls[0].candidate.revision_id, plan.target_composition_revision_id);
+  assert.equal(previewCalls[0].candidate.geometry[1].text_size.value, "20.5");
+  assert.deepEqual(artworkBytes, Uint8Array.from(await context.store.getArtifactBytes({ scope: SCOPE,
+    brief_id: SCOPE.brief_id, design_version_id: design.design_version_id })), "composition edits do not rewrite artwork bytes");
+
+  const persisted = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(persisted.revision.parent_revision_id, initial.revision_id);
+  assert.equal(persisted.revision.parent_revision_sha256, initial.revision_sha256);
+  assert.equal(persisted.revision.layer_manifest[1].value, "Updated Festival");
+  assert.equal(persisted.revision.revision_id, plan.target_composition_revision_id);
+  assert.deepEqual(persisted.revision.geometry[1], { layer_id: "layer:title",
+    layout: { x_milli: 125, y_milli: 115, width_milli: 760 }, text_size: { value: "20.5", unit: "pt" } });
+  assert.deepEqual(persisted.revision.geometry[2], { layer_id: "layer:logo",
+    layout: { x_milli: 675, y_milli: 720, width_milli: 200, height_milli: 160 }, text_size: null });
+  assert.notEqual(persisted.revision.binding.composition.sha256, initial.binding.composition.sha256,
+    "the legacy C04 digest changes only with the closed layer manifest");
+  ownerRevision = persisted.revision;
+  ownerPreviewBytes = Uint8Array.from(persisted.preview_bytes);
+  const history = await context.ports.storage.listCompositionRevisions({ scope: SCOPE,
+    composition_id: initial.composition_id, limit: 10 });
+  assert.deepEqual(history.items.map((item) => item.revision_id), [persisted.revision.revision_id, initial.revision_id]);
+  const publicHistory = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 10 }));
+  assert.equal(publicHistory.ok, true, JSON.stringify(publicHistory));
+  assert.deepEqual(publicHistory.result.revisions.map((revision) => revision.revision_id),
+    [persisted.revision.revision_id, initial.revision_id]);
+  const firstHistoryPage = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 1 }));
+  assert.equal(firstHistoryPage.ok, true, JSON.stringify(firstHistoryPage));
+  assert.equal(firstHistoryPage.result.has_more, true);
+  assert.deepEqual(firstHistoryPage.result.revisions.map((revision) => revision.revision_id), [persisted.revision.revision_id]);
+  const secondHistoryPage = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 1, after_revision_id: persisted.revision.revision_id }));
+  assert.equal(secondHistoryPage.ok, true, JSON.stringify(secondHistoryPage));
+  assert.deepEqual(secondHistoryPage.result.revisions.map((revision) => revision.revision_id), [initial.revision_id]);
+  const listCompositionRevisions = context.ports.storage.listCompositionRevisions;
+  context.ports.storage.listCompositionRevisions = async (input) => {
+    const page = await listCompositionRevisions(input);
+    return { ...page, items: [...page.items].reverse() };
+  };
+  const corruptOrder = await context.api.invoke(authorizedActor(), compositionV13Request(null, "composition.history",
+    { design_version_id: design.design_version_id, limit: 10 }));
+  assert.equal(corruptOrder.ok, false, JSON.stringify(corruptOrder));
+  assert.equal(corruptOrder.error.code, "failed");
+  assert.equal(corruptOrder.error.field, "composition.history_record");
+  context.ports.storage.listCompositionRevisions = listCompositionRevisions;
+  assert.equal(assertions, 5, "create, both rejected plans, update pre-preview currentness, and the synchronous commit fence are checked");
+
+  const replay = await context.api.invoke(authorizedActor(), request);
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.result.revision_sha256, persisted.revision.revision_sha256);
+  assert.deepEqual(Buffer.from(replay.result.preview_access.bytes_base64, "base64"), Buffer.from(persisted.preview_bytes));
+  assert.equal(previewCalls.length, 1, "completed action replay does not prepare another preview");
+  assert.deepEqual({ dispatches: context.counters.seed_dispatches, reserves: context.counters.reserves,
+    posts: context.counters.provider_posts, settlements: context.counters.settlements }, before,
+  "composition create/update/replay do not call an image provider or billing port");
+});
+
+test("public composition.update cannot edit a locked asset layer or a factual text layer", async (t) => {
+  const context = await setup(t, { compositionLogo: true });
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-policy-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  let ownerRevision = initialComposition(context, design, selection, previewBytes, { includeLogo: true,
+    lockedLayerIds: ["layer:logo"], factualTextLayers: [{ layer_id: "layer:title", fact_id: "fact-api-1",
+      fact_sha256: canonicalHash(context.brief.facts), text_sha256: hash("Example Event") }], titleValue: "Example Event" });
+  let ownerPreviewBytes = previewBytes;
+  let previewCalls = 0;
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: ownerRevision, preview_bytes: Uint8Array.from(ownerPreviewBytes) }; },
+    async readApprovedAssetBytes(input) {
+      const asset = context.research.assets.items.find((item) => item.asset_id === input.asset_id);
+      return { asset_id: asset.asset_id, content_hash: asset.content_hash, mime_type: asset.media_type,
+        bytes: Uint8Array.from(context.referenceAssetBytes.get(input.asset_id)) };
+    },
+    async preparePreview() { previewCalls += 1; throw new Error("denied edits must not prepare previews"); },
+    assertCurrent(input) {
+      const result = compositionCurrentAssertion(input);
+      return { ...result, current_revision_id: input.expected_current_revision_id ?? input.target_revision_id,
+        current_revision_sha256: input.expected_current_revision_sha256 ?? input.target_revision_sha256 };
+    },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-policy-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const current = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  ownerRevision = current.revision;
+  ownerPreviewBytes = current.preview_bytes;
+
+  const attempts = [
+    { action_id: "composition-policy-locked-logo", operation: { operation_id: "move-locked-logo/1",
+      kind: "position_approved_logo", layer_id: "layer:logo", asset_id: "asset-2",
+      layout: { x_milli: 600, y_milli: 700, width_milli: 200, height_milli: 200 } }, field: "plan.locked_layer" },
+    { action_id: "composition-policy-factual-title", operation: { operation_id: "change-factual-title/1",
+      kind: "set_text", layer_id: "layer:title", value: "Unverified replacement" }, field: "plan.factual_text" },
+  ];
+  for (const [index, sample] of attempts.entries()) {
+    const plan = createCompositionEditPlan({ plan_id: `composition-plan:policy/${index}`, binding: current.revision.binding,
+      layer_manifest: current.revision.layer_manifest,
+      target_composition_revision_id: `composition-revision:policy-${index}`,
+      operations: [sample.operation], trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+    const result = await context.api.invoke(authorizedActor(), compositionRequest(sample.action_id, "composition.update", { plan }));
+    assert.equal(result.ok, false, `${sample.action_id}: ${JSON.stringify(result)}`);
+    assert.equal(result.error.code, "permission_denied");
+    assert.equal(result.error.field, sample.field);
+    assert.equal(previewCalls, 0, "locked and factual edits are denied before preview generation");
+    const stillCurrent = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+      design_version_id: design.design_version_id });
+    assert.equal(stillCurrent.revision.revision_sha256, current.revision.revision_sha256);
+    assert.deepEqual(stillCurrent.preview_bytes, previewBytes);
+    assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+      "a denied edit leaves the original immutable revision as the only history entry");
+  }
+});
+
+test("composition.update rolls back when rights are revoked in the final awaited publication gap", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-update-fence-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const artworkBytes = Uint8Array.from(await context.store.getArtifactBytes({ scope: SCOPE,
+    brief_id: SCOPE.brief_id, design_version_id: design.design_version_id }));
+  let ownerCurrent = true;
+  let ownerRevision;
+  let ownerPreviewBytes;
+  let assertionCount = 0;
+  const createdPreview = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: ownerRevision, preview_bytes: Uint8Array.from(ownerPreviewBytes) }; },
+    async preparePreview(input) {
+      const checked_at = NOW - 500;
+      return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+        preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+          preview_id: `preview:${input.action_id}`, preview_sha256: hash(createdPreview), byte_length: createdPreview.byteLength,
+          mime_type: "image/png", width_px: 16, height_px: 16, proof_ref: `preview-proof:${input.action_id}`,
+          state_sha256: input.candidate.state_sha256, checked_at, expires_at: NOW + 60_000 },
+        authority_proof: { proof_ref: `authority-proof:${input.action_id}`, state_sha256: input.candidate.state_sha256,
+          checked_at, expires_at: NOW + 60_000 }, preview_bytes: Uint8Array.from(createdPreview) };
+    },
+    assertCurrent(input) {
+      assertionCount += 1;
+      if (!ownerCurrent) throw Object.assign(new Error("current rights were revoked"), { code: "stale_version" });
+      const result = compositionCurrentAssertion(input);
+      return { ...result, current_revision_id: input.expected_current_revision_id ?? input.target_revision_id,
+        current_revision_sha256: input.expected_current_revision_sha256 ?? input.target_revision_sha256 };
+    },
+  };
+  const initialPreviewBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  ownerRevision = initialComposition(context, design, selection, initialPreviewBytes);
+  ownerPreviewBytes = initialPreviewBytes;
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-fence-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const initialCurrent = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  const plan = createCompositionEditPlan({ plan_id: "composition-plan:fence-update/1", binding: initialCurrent.revision.binding,
+    layer_manifest: initialCurrent.revision.layer_manifest, target_composition_revision_id: "composition-revision:fence-update",
+    operations: [{ operation_id: "fence-title/1", kind: "set_text", layer_id: "layer:title", value: "Revocation Race" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+  const complete = context.ports.jobs.completeIfActive.bind(context.ports.jobs);
+  context.ports.jobs.completeIfActive = (input, persist, beforeCommit) => complete(input, async (transaction) => {
+    const result = await persist(transaction);
+    queueMicrotask(() => { ownerCurrent = false; });
+    return result;
+  }, beforeCommit);
+  const result = await context.api.invoke(authorizedActor(), compositionRequest("composition-update-fence-race", "composition.update", { plan }));
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.equal(result.error.code, "stale_version");
+  assert.equal(result.error.field, "creative_context");
+  assert.equal(ownerCurrent, false);
+  assert.equal(assertionCount, 3, "create, pre-preview update, and final post-await assertion were invoked");
+  const current = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(current.revision.revision_sha256, initialCurrent.revision.revision_sha256);
+  assert.deepEqual(current.preview_bytes, initialCurrent.preview_bytes);
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+    "a failed final fence leaves no child version visible");
+  assert.deepEqual(Buffer.from(current.preview_bytes), Buffer.from(initialPreviewBytes));
+  assert.deepEqual(artworkBytes, Uint8Array.from(await context.store.getArtifactBytes({ scope: SCOPE,
+    brief_id: SCOPE.brief_id, design_version_id: design.design_version_id })));
+});
+
+test("public cancel recovers a pending composition.update in its brief scope", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-cancel-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  let ownerRevision = initialComposition(context, design, selection, previewBytes);
+  let ownerPreviewBytes = previewBytes;
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: ownerRevision, preview_bytes: Uint8Array.from(ownerPreviewBytes) }; },
+    assertCurrent(input) {
+      const result = compositionCurrentAssertion(input);
+      return { ...result, current_revision_id: input.expected_current_revision_id ?? input.target_revision_id,
+        current_revision_sha256: input.expected_current_revision_sha256 ?? input.target_revision_sha256 };
+    },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-cancel-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const parent = (await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id }));
+  ownerRevision = parent.revision;
+  ownerPreviewBytes = parent.preview_bytes;
+  let resolvePreviewEntered;
+  const previewEntered = new Promise((resolve) => { resolvePreviewEntered = resolve; });
+  let releasePreview;
+  const previewGate = new Promise((resolve) => { releasePreview = resolve; });
+  const nextPreviewBytes = Uint8Array.from(makePng({ width: 17, height: 16 }));
+  context.ports.composition.preparePreview = async (input) => {
+    resolvePreviewEntered(input);
+    return previewGate;
+  };
+  const plan = createCompositionEditPlan({ plan_id: "composition-plan:cancel/1", binding: parent.revision.binding,
+    layer_manifest: parent.revision.layer_manifest, target_composition_revision_id: "composition-revision:cancelled",
+    operations: [{ operation_id: "cancel-title/1", kind: "set_text", layer_id: "layer:title", value: "Cancelled edit" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+  const updateRequest = compositionRequest("composition-cancel-update", "composition.update", { plan });
+  const updatePromise = context.api.invoke(authorizedActor(), updateRequest);
+  const previewInput = await previewEntered;
+  const job = context.store.db.prepare("SELECT job_id,status FROM creative_jobs WHERE action_id=?")
+    .get(updateRequest.action_id);
+  assert.equal(job.status, "running");
+  const restoreBriefId = context.store.db.prepare("SELECT brief_id FROM creative_jobs WHERE job_id=?").get(job.job_id).brief_id;
+  context.store.db.prepare("UPDATE creative_jobs SET brief_id=? WHERE job_id=?").run("brief:corrupt-cancel-scope", job.job_id);
+  const corruptCancel = await context.api.invoke(authorizedActor(), cancelRequest("composition-cancel-corrupt-scope", job.job_id));
+  assert.equal(corruptCancel.ok, false);
+  assert.equal(corruptCancel.error.code, "failed");
+  assert.equal(context.store.db.prepare("SELECT status FROM creative_jobs WHERE job_id=?").get(job.job_id).status, "running",
+    "corrupt persisted action/job brief disagreement is detected before cancellation mutates the job");
+  context.store.db.prepare("UPDATE creative_jobs SET brief_id=? WHERE job_id=?").run(restoreBriefId, job.job_id);
+  const foreignActor = { ...authorizedActor(), tenant_id: "tenant-cancel-foreign", project_id: "project-cancel-foreign" };
+  const foreignCancel = await context.api.invoke(foreignActor, cancelRequest("composition-cancel-foreign-scope", job.job_id));
+  assert.equal(foreignCancel.ok, false);
+  assert.equal(foreignCancel.error.code, "scope_denied");
+  assert.equal(context.store.db.prepare("SELECT status FROM creative_jobs WHERE job_id=?").get(job.job_id).status, "running",
+    "cross-tenant cancellation cannot mutate the persisted composition job");
+  const cancel = cancelRequest("composition-cancel-request", job.job_id);
+  const cancelled = await context.api.invoke(authorizedActor(), cancel);
+  assert.equal(cancelled.ok, true, JSON.stringify(cancelled));
+  assert.equal(cancelled.job.status, "cancelled");
+  const duplicateCancel = await context.api.invoke(authorizedActor(), cancel);
+  assert.equal(duplicateCancel.ok, true, JSON.stringify(duplicateCancel));
+  assert.equal(duplicateCancel.job.status, "cancelled");
+
+  const checkedAt = NOW - 1000;
+  const stateHash = previewInput.candidate.state_sha256;
+  releasePreview({ contract: "CreativeCompositionPreview", schema_version: "1.1",
+    preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+      preview_id: "preview:cancelled-update", preview_sha256: hash(nextPreviewBytes),
+      byte_length: nextPreviewBytes.byteLength, mime_type: "image/png", width_px: 17, height_px: 16,
+      proof_ref: "preview-proof:cancelled-update", state_sha256: stateHash,
+      checked_at: checkedAt, expires_at: NOW + 60_000 },
+    authority_proof: { proof_ref: "authority-proof:cancelled-update", state_sha256: stateHash,
+      checked_at: checkedAt, expires_at: NOW + 60_000 }, preview_bytes: nextPreviewBytes });
+  const update = await updatePromise;
+  assert.equal(update.ok, false, JSON.stringify(update));
+  assert.equal(update.error.code, "cancelled");
+  const persisted = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(persisted.revision.revision_sha256, parent.revision.revision_sha256);
+  assert.deepEqual(persisted.preview_bytes, parent.preview_bytes);
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 1,
+    "cancelled preview preparation cannot publish a child or alter parent history");
+  const action = await context.ports.storage.getCompositionAction({ scope: SCOPE, action_id: updateRequest.action_id });
+  assert.equal(action.status, "cancelled");
+});
+
+test("public cancel recovers a pending composition.create before publishing its initial revision", async (t) => {
+  const context = await setup(t);
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-cancel-create-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const previewBytes = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  const revision = initialComposition(context, design, selection, previewBytes);
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision, preview_bytes: Uint8Array.from(previewBytes) }; },
+    assertCurrent(input) { return compositionCurrentAssertion(input); },
+  };
+  const originalBegin = context.ports.storage.beginCompositionAction;
+  let beginEntered;
+  const entered = new Promise((resolve) => { beginEntered = resolve; });
+  let releaseBegin;
+  const gate = new Promise((resolve) => { releaseBegin = resolve; });
+  context.ports.storage.beginCompositionAction = async (input) => {
+    const action = await originalBegin(input);
+    beginEntered(action);
+    await gate;
+    return action;
+  };
+  const request = compositionRequest("composition-cancel-create-pending", "composition.create", {});
+  const createPromise = context.api.invoke(authorizedActor(), request);
+  const action = await entered;
+  assert.equal(action.status, "pending");
+  const job = context.store.db.prepare("SELECT job_id,status FROM creative_jobs WHERE action_id=?").get(request.action_id);
+  assert.equal(job.status, "running");
+  const cancel = cancelRequest("composition-cancel-create-request", job.job_id);
+  const cancelled = await context.api.invoke(authorizedActor(), cancel);
+  assert.equal(cancelled.ok, true, JSON.stringify(cancelled));
+  assert.equal(cancelled.job.status, "cancelled");
+  releaseBegin();
+  const create = await createPromise;
+  assert.equal(create.ok, false, JSON.stringify(create));
+  assert.equal(create.error.code, "cancelled");
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_revisions_v1").get().count, 0);
+  assert.equal(context.store.db.prepare("SELECT COUNT(*) AS count FROM creative_composition_current_v1").get().count, 0);
+  assert.equal((await context.ports.storage.getCompositionAction({ scope: SCOPE, action_id: request.action_id })).status, "cancelled");
+});
+
+test("composition.update resumes an immutable staged preview after lease recovery without repeating the preview effect", async (t) => {
+  const context = await setup(t, { leaseDurationMs: 1000 });
+  const seedPlan = await jsonFixture("generate-plan");
+  seedPlan.base.brief_hash = canonicalHash(context.brief);
+  seedPlan.source_refs = ["page-1"];
+  seedPlan.steps[0].source_refs = ["page-1"];
+  const seed = await context.api.invoke(authorizedActor(), apiRequest("composition-resume-seed", "generate", seedPlan, "page-1"));
+  assert.equal(seed.ok, true, JSON.stringify(seed));
+  const selection = context.store.getSelection({ scope: SCOPE, brief_id: SCOPE.brief_id });
+  const design = context.store.getDesignVersion({ scope: SCOPE, brief_id: SCOPE.brief_id,
+    design_version_id: selection.design_version_id });
+  const initialPreview = Uint8Array.from(makePng({ width: 16, height: 16, transparent: true }));
+  const initial = initialComposition(context, design, selection, initialPreview);
+  const preparedPreview = Uint8Array.from(makePng({ width: 16, height: 16 }));
+  let previewCalls = 0;
+  context.ports.composition = {
+    async resolveCurrent() { return { contract: "CreativeCompositionSource", schema_version: "1.1",
+      scope: SCOPE, revision: initial, preview_bytes: Uint8Array.from(initialPreview) }; },
+    async preparePreview(input) {
+      previewCalls += 1;
+      const checked_at = NOW - 500;
+      return { contract: "CreativeCompositionPreview", schema_version: "1.1",
+        preview: { contract: "CreativeCompositionPreviewMetadata", schema_version: "1.1",
+          preview_id: `preview:${input.action_id}`, preview_sha256: hash(preparedPreview), byte_length: preparedPreview.byteLength,
+          mime_type: "image/png", width_px: 16, height_px: 16, proof_ref: `preview-proof:${input.action_id}`,
+          state_sha256: input.candidate.state_sha256, checked_at, expires_at: NOW + 60_000 },
+        authority_proof: { proof_ref: `authority-proof:${input.action_id}`, state_sha256: input.candidate.state_sha256,
+          checked_at, expires_at: NOW + 60_000 }, preview_bytes: Uint8Array.from(preparedPreview) };
+    },
+    assertCurrent(input) {
+      const result = compositionCurrentAssertion(input);
+      return { ...result, current_revision_id: input.expected_current_revision_id ?? input.target_revision_id,
+        current_revision_sha256: input.expected_current_revision_sha256 ?? input.target_revision_sha256 };
+    },
+  };
+  const created = await context.api.invoke(authorizedActor(), compositionRequest("composition-resume-create", "composition.create", {}));
+  assert.equal(created.ok, true, JSON.stringify(created));
+  const current = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  const plan = createCompositionEditPlan({ plan_id: "composition-plan:lease-resume/1", binding: current.revision.binding,
+    layer_manifest: current.revision.layer_manifest, target_composition_revision_id: "composition-revision:lease-resume",
+    operations: [{ operation_id: "resume-title/1", kind: "set_text", layer_id: "layer:title", value: "Recovered Preview" }],
+    trustedScope: { tenant_id: SCOPE.tenant_id, project_id: SCOPE.project_id } });
+  const request = compositionRequest("composition-resume-update", "composition.update", { plan });
+  const originalComplete = context.ports.jobs.completeIfActive.bind(context.ports.jobs);
+  const firstPublicationReached = deferred();
+  const releaseFirstPublication = deferred();
+  let publicationCalls = 0;
+  context.ports.jobs.completeIfActive = (input, persist, beforeCommit) => {
+    publicationCalls += 1;
+    if (publicationCalls === 1) {
+      firstPublicationReached.resolve();
+      return releaseFirstPublication.promise.then(() => originalComplete(input, persist, beforeCommit));
+    }
+    return originalComplete(input, persist, beforeCommit);
+  };
+  const interrupted = context.api.invoke(authorizedActor(), request);
+  await firstPublicationReached.promise;
+  const staged = await context.ports.storage.getCompositionAction({ scope: SCOPE, action_id: request.action_id });
+  assert.equal(staged.status, "staged");
+  assert.equal(staged.revision.revision_id, plan.target_composition_revision_id);
+  assert.equal(previewCalls, 1);
+  context.advanceClock(1001);
+  const resumed = await context.api.invoke(authorizedActor(), request);
+  assert.equal(resumed.ok, true, JSON.stringify(resumed));
+  assert.equal(previewCalls, 1, "recovery uses the original staged bytes and does not regenerate a preview");
+  assert.equal(publicationCalls, 2);
+  const persisted = await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id });
+  assert.equal(persisted.revision.revision_id, plan.target_composition_revision_id);
+  assert.equal(persisted.revision.parent_revision_sha256, current.revision.revision_sha256);
+  assert.deepEqual(persisted.preview_bytes, preparedPreview);
+  releaseFirstPublication.resolve();
+  const firstResponse = await interrupted;
+  assert.equal(firstResponse.ok, false, "the expired lease holder cannot overwrite the recovered publication");
+  assert.equal((await context.ports.storage.getCurrentComposition({ scope: SCOPE,
+    design_version_id: design.design_version_id })).revision.revision_sha256, persisted.revision.revision_sha256);
 });

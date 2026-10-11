@@ -265,6 +265,11 @@ function orResponseWith(bytes, usage = FULL_USAGE) {
     "x-request-id": "raw-request-id-that-must-not-be-used" } });
 }
 
+function nestedWideUsage() {
+  const extensions = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`extension_${index}`, `private-extra-${index}`]));
+  return { ...FULL_USAGE, cost_details: { upstream_inference_cost: 0.035, ...extensions } };
+}
+
 async function seedGeneration(context, actionId = "or-parent-generate") {
   const plan = await jsonFixture("generate-plan");
   plan.base.brief_hash = canonicalHash(context.brief);
@@ -416,6 +421,46 @@ test("a response without cost cannot be completed by a profile map: the hold is 
   assert.equal(Object.hasOwn(JSON.parse(row.usage_json), "cost"), false);
 });
 
+test("over-wide nested usage is retained privately on success and error paths without publishing", async (t) => {
+  for (const path of ["success", "unknown-error"]) await t.test(path, async (tt) => {
+    const context = await setup(tt, { idPrefix: `nested-wide-${path}` });
+    context.outputSequence = 0;
+    const usage = nestedWideUsage();
+    context.ports.provider = orProvider({ context, fetchImpl: async () => path === "success"
+      ? orResponseWith(makePng(), usage)
+      : new Response(JSON.stringify({ error: { code: 500, message: `safe-${path}` }, usage }), {
+        status: 500, headers: { "content-type": "application/json" } }) });
+
+    const result = await seedGeneration(context);
+    assert.equal(result.ok, false, "malformed bounded usage never publishes an image");
+    assert.equal(context.counters.held, 1, "the C03 reservation remains held for reconciliation");
+    assert.equal(context.counters.settlements, 0);
+    assert.equal(context.store.listDesignVersions({ scope: SCOPE, brief_id: SCOPE.brief_id, limit: 10 }).items.length, 0);
+
+    const row = context.store.db.prepare(`SELECT transport_attempt_id,dispatch_intent_ref,billable_attempt_id,
+      provider_name,provider_model,target_binding_sha256,usage_json
+      FROM private_provider_usage_attributions`).get();
+    assert.ok(row, "allowlisted observations reach the private usage table on both response paths");
+    const dispatch = context.store.db.prepare(`SELECT dispatch_intent_ref,billable_attempt_id,provider_name,provider_model
+      FROM creative_dispatch_intents
+      WHERE transport_attempt_id=?`).get(row.transport_attempt_id);
+    assert.equal(row.dispatch_intent_ref, dispatch.dispatch_intent_ref);
+    assert.equal(row.billable_attempt_id, dispatch.billable_attempt_id);
+    assert.equal(row.provider_name, dispatch.provider_name);
+    assert.equal(row.provider_model, dispatch.provider_model);
+    assert.equal(context.bindings.length, 1);
+    assert.equal(row.target_binding_sha256, hash(Buffer.from(JSON.stringify(context.bindings[0]))),
+      `the retained observation hash matches the exact target independently authorized before transport: ${JSON.stringify({ binding: context.bindings[0], actual: row.target_binding_sha256 })}`);
+    const raw = JSON.parse(row.usage_json);
+    assert.deepEqual([raw.input_tokens, raw.output_tokens, raw.total_tokens], [12, 34, 46]);
+    assert.deepEqual(raw.cost, { amount: "0.04", currency: "USD", provenance: "provider_reported_unsettled" });
+    assert.deepEqual(raw.cost_details, { upstream_inference_cost: "0.035" });
+    assert.ok(raw.missing_fields.includes("usage.cost_details.too_many_fields"));
+    assert.ok(!row.usage_json.includes("private-extra"), "unknown provider extensions are never retained");
+    assertNoSecrets(result);
+  });
+});
+
 test("provider failures through the API retain the hold on unknown and never publish or leak", async (t) => {
   for (const status of [524, 402, 502]) await t.test(`HTTP ${status}`, async (tt) => {
     const context = await setup(tt, { idPrefix: `fail${status}` });
@@ -511,7 +556,7 @@ test("OpenRouter concepts.create sends only the two authorized references and pu
   assert.equal(seed, undefined);
   const outputs = [makePng({ width: 16, height: 16 }), makePng({ width: 16, height: 16, transparent: true })];
   const posts = [];
-  const provider = orProvider({ context,
+  const provider = orProvider({ context, profile: { configuration: {} },
     promptPort: { async render({ prompt_template }) { return { prompt: "Synthetic integration prompt with no model authority.",
       template_ref: prompt_template.template_ref, template_version: prompt_template.template_version,
       template_sha256: prompt_template.template_sha256 }; } },
@@ -538,6 +583,11 @@ test("OpenRouter concepts.create sends only the two authorized references and pu
     assert.equal(candidate.design_version.parent_version_id, null);
     assert.equal(candidate.creative_concept_lineage.parent_version_id, null);
     assert.equal(candidate.creative_concept_lineage.adapter_snapshot.provider_name, "openrouter");
+    assert.deepEqual(candidate.creative_concept_lineage.adapter_snapshot.configuration, {},
+      "a valid OpenRouter profile can carry an empty optional configuration through public lineage");
+    assert.equal(candidate.creative_concept_lineage.adapter_snapshot.provider_tag, OR_PROVIDER_TAG);
+    assert.deepEqual(candidate.creative_concept_lineage.adapter_snapshot.capabilities,
+      { generation: true, edit: { max_input_references: 3 } });
   }
   const bindings = context.store.db.prepare(`SELECT target_binding_json FROM creative_concept_dispatch_bindings_v1`).all()
     .map((row) => JSON.parse(row.target_binding_json));

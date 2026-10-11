@@ -9,7 +9,7 @@ import {
   computeDesignVersionHash,
 } from "../contracts/index.mjs";
 import { validateUsageObservation } from "../contracts/metering.mjs";
-import { inspectOpenAIImageBytes, readPrivateOpenAIImageRetryDisposition,
+import { OpenAIImagesProviderError, inspectOpenAIImageBytes, readPrivateOpenAIImageRetryDisposition,
   readPrivateOpenAIImageTargetBindingSha256 } from "../models/openai-images.mjs";
 import {
   validateDecisionRequest,
@@ -18,6 +18,7 @@ import {
 } from "../contracts/decision-port/v1.mjs";
 import {
   ApprovalHandoffContractError,
+  createCompositionEditPlan,
   createArtworkHandoff,
   hashCompositionLayerManifest,
   validateArtworkHandoff,
@@ -25,6 +26,18 @@ import {
   validateConsumptionReceipt,
   verifyHandoffApproval,
 } from "../contracts/approval-handoff.mjs";
+import {
+  CreativeCompositionContractError,
+  applyCompositionPlan,
+  compositionPreviewHash,
+  compositionStateHash,
+  createCompositionProductionEnvelope,
+  createCompositionRevision,
+  snapshotCompositionBytesRecord,
+  snapshotCompositionJson,
+  validateCompositionProductionEnvelope,
+  validateCompositionRevision,
+} from "../contracts/composition-authority.mjs";
 import { MeteringContractError, METERING_PROPOSAL_VERSION } from "../contracts/metering.mjs";
 import {
   createUsageObservation,
@@ -64,18 +77,26 @@ import {
 import { imageProviderRoute } from "../models/image-routes.mjs";
 
 export const CREATIVE_API_VERSION = "1.0";
-export const CREATIVE_API_VERSIONS = Object.freeze(["1.0", "1.1"]);
+export const CREATIVE_API_VERSIONS = Object.freeze(["1.0", "1.1", "1.2", "1.3"]);
 export const CREATIVE_API_OPERATIONS = Object.freeze([
-  "generate", "edit", "concepts.create", "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status",
+  "generate", "edit", "concepts.create", "composition.create", "composition.get", "composition.update",
+  "composition.history", "composition.revalidate",
+  "inspect", "list", "compare", "restore", "cancel", "handoff", "job.status",
   "brief.create", "brief.invalidate",
 ]);
 
-const MUTATIONS = new Set(["generate", "edit", "concepts.create", "inspect", "restore", "cancel", "handoff", "brief.create", "brief.invalidate"]);
-const READ_OPERATIONS = new Set(["list", "compare", "job.status"]);
+const MUTATIONS = new Set(["generate", "edit", "concepts.create", "composition.create", "composition.update", "composition.revalidate",
+  "inspect", "restore", "cancel", "handoff", "brief.create", "brief.invalidate"]);
+const READ_OPERATIONS = new Set(["list", "compare", "job.status", "composition.get", "composition.history"]);
 const OPERATION_PERMISSION = Object.freeze({
   generate: "creative.generate",
   edit: "creative.edit",
   "concepts.create": "creative.generate",
+  "composition.create": "creative.edit",
+  "composition.get": "creative.read",
+  "composition.update": "creative.edit",
+  "composition.history": "creative.read",
+  "composition.revalidate": "creative.edit",
   inspect: "creative.read",
   list: "creative.read",
   compare: "creative.read",
@@ -93,7 +114,10 @@ const REQUEST_KEYS = [
 ];
 const REQUEST_CONTRACT = "CreativeApiRequest";
 function responseVersionFor(request) {
-  return request?.operation === "concepts.create" && request?.schema_version === "1.1" ? "1.1" : CREATIVE_API_VERSION;
+  if (request?.operation === "concepts.create" && request?.schema_version === "1.1") return "1.1";
+  if (request?.operation?.startsWith("composition.") && request?.schema_version === "1.3") return "1.3";
+  if (request?.operation?.startsWith("composition.") && request?.schema_version === "1.2") return "1.2";
+  return CREATIVE_API_VERSION;
 }
 const IMAGE_REFERENCE_MANIFEST_KEYS = Object.freeze([
   "contract", "schema_version", "tenant_id", "project_id", "brief_id", "brief_hash",
@@ -103,6 +127,7 @@ const IMAGE_REFERENCE_KEYS = Object.freeze([
   "source_ref", "asset_id", "content_hash", "media_type", "width", "height",
 ]);
 const MAX_IMAGE_REFERENCES = 15;
+const IMAGE_MIME_BY_FORMAT = Object.freeze({ png: "image/png", jpeg: "image/jpeg", webp: "image/webp" });
 const ERROR_MESSAGES = Object.freeze({
   invalid_request: "The request does not match the supported API contract.",
   unsupported_version: "The requested API version is not supported.",
@@ -471,7 +496,10 @@ function validateRequest(request) {
     throw new CreativeApiError("invalid_request", "unknown", "source_refs");
   }
   if (!CREATIVE_API_OPERATIONS.includes(request.operation)) throw new CreativeApiError("invalid_request", "unknown", "operation");
-  if ((request.operation === "concepts.create") !== (request.schema_version === "1.1")) {
+  const expectedVersion = request.operation === "concepts.create" ? "1.1"
+    : ["composition.history", "composition.revalidate"].includes(request.operation) ? "1.3"
+      : request.operation.startsWith("composition.") ? "1.2" : "1.0";
+  if (request.schema_version !== expectedVersion) {
     throw new CreativeApiError("unsupported_version", request.operation, "schema_version");
   }
   if (MUTATIONS.has(request.operation)) boundedString(request.action_id, "action_id");
@@ -484,6 +512,12 @@ function validateRequest(request) {
     edit: ["brief_id", "design_version_id", "plan", "selection_mode", "decision_request", "image_reference_manifest",
       "inspection_repair"],
     "concepts.create": ["brief_id", "plan_id", "requested_count", "references"],
+    "composition.create": ["brief_id", "design_version_id"],
+    "composition.get": ["brief_id", "design_version_id"],
+    "composition.update": ["brief_id", "design_version_id", "plan"],
+    "composition.history": ["brief_id", "design_version_id", "limit", "after_revision_id"],
+    "composition.revalidate": ["brief_id", "design_version_id", "expected_current_revision_id",
+      "expected_current_revision_sha256", "candidate_revision_id"],
     inspect: ["brief_id", "design_version_id"],
     list: ["brief_id", "limit", "cursor"],
     compare: ["brief_id", "left_design_version_id", "right_design_version_id"],
@@ -503,6 +537,12 @@ function validateRequest(request) {
     generate: ["brief_id", "plan"],
     edit: ["brief_id", "design_version_id", "plan"],
     "concepts.create": ["brief_id", "plan_id", "requested_count", "references"],
+    "composition.create": ["brief_id", "design_version_id"],
+    "composition.get": ["brief_id", "design_version_id"],
+    "composition.update": ["brief_id", "design_version_id", "plan"],
+    "composition.history": ["brief_id", "design_version_id"],
+    "composition.revalidate": ["brief_id", "design_version_id", "expected_current_revision_id",
+      "expected_current_revision_sha256", "candidate_revision_id"],
     inspect: ["brief_id", "design_version_id"],
     list: ["brief_id"],
     compare: ["brief_id", "left_design_version_id", "right_design_version_id"],
@@ -539,6 +579,19 @@ function validateRequest(request) {
   if (request.operation === "list" && request.payload.cursor !== undefined &&
     (typeof request.payload.cursor !== "string" || request.payload.cursor.length > 1024)) {
     throw new CreativeApiError("invalid_request", request.operation, "cursor");
+  }
+  if (request.operation === "composition.history" && request.payload.after_revision_id !== undefined) {
+    boundedString(request.payload.after_revision_id, "payload.after_revision_id");
+  }
+  if (request.operation === "composition.revalidate") {
+    for (const key of ["expected_current_revision_id", "candidate_revision_id"]) {
+      boundedString(request.payload[key], `payload.${key}`);
+    }
+    if (request.payload.expected_current_revision_id === request.payload.candidate_revision_id ||
+        typeof request.payload.expected_current_revision_sha256 !== "string" ||
+        !/^sha256:[a-f0-9]{64}$/.test(request.payload.expected_current_revision_sha256)) {
+      throw new CreativeApiError("invalid_request", request.operation, "payload.expected_current");
+    }
   }
   if (request.operation === "brief.create" && request.payload.expected_brief_hash !== undefined &&
     (typeof request.payload.expected_brief_hash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(request.payload.expected_brief_hash))) {
@@ -1092,6 +1145,14 @@ function safeError(error, operation) {
         : error.code.includes("approval") ? "permission_denied" : "invalid_request";
     return new CreativeApiError(code, operation, safeFieldPath(error.field));
   }
+  if (error instanceof CreativeCompositionContractError) {
+    const code = error.code === "unsupported_version" ? "unsupported_version"
+      : error.code.includes("scope") ? "scope_denied"
+        : error.code === "stale_version" ? "stale_version"
+          : error.code === "permission_denied" ? "permission_denied"
+            : error.code === "integrity_error" ? "failed" : "invalid_request";
+    return new CreativeApiError(code, operation, safeFieldPath(error.field));
+  }
   if (error instanceof MeteringContractError) return new CreativeApiError("unavailable", operation, "metering", { retryable: true });
   if (error instanceof TelemetryBoundaryError) return new CreativeApiError("unavailable", operation, "telemetry", { retryable: true });
   if (error instanceof CreativePlanningError) {
@@ -1155,18 +1216,19 @@ function decodeCursor(cursor, scope, brief_id) {
 }
 
 function actionRequestHash(request) {
-  return canonicalHash({
+  const value = {
     contract: request.contract,
     schema_version: request.schema_version,
     tenant_id: request.tenant_id,
     project_id: request.project_id,
     operation: request.operation,
-    action_id: request.action_id,
     environment: request.environment,
     billing_mode: request.billing_mode,
     source_refs: request.source_refs,
     payload: request.payload,
-  });
+  };
+  if (request.action_id !== undefined) value.action_id = request.action_id;
+  return canonicalHash(value);
 }
 
 function compareOrder(a, b) {
@@ -1387,6 +1449,858 @@ export function createCreativeApi(options = {}) {
       }
     }
     return currentBrief;
+  }
+
+  async function readCompositionContext(principal, request, scope) {
+    const operation = request.operation;
+    const brief = await loadBrief(scope, request.payload.brief_id, operation);
+    const design = await loadDesign(scope, brief, request.payload.design_version_id, operation);
+    await assertCurrentCreativeContext(scope, brief, design, operation, design.design_version_id, design.design_hash);
+    const getSelection = requiredPort(ports, "storage.getSelection", operation);
+    const selection = await getSelection(Object.freeze({ scope, brief_id: brief.brief_id }));
+    if (!isRecord(selection)) throw new CreativeApiError("stale_version", operation, "selection");
+    assertScopedRecord(selection, scope, operation, brief.brief_id);
+    if (selection.design_version_id !== design.design_version_id || selection.design_hash !== design.design_hash ||
+        !Number.isSafeInteger(selection.revision) || selection.revision < 1) {
+      throw new CreativeApiError("stale_version", operation, "selection");
+    }
+    const parent = design.parent_version_id === null ? null
+      : await loadDesign(scope, brief, design.parent_version_id, operation, { allowHistorical: true });
+    const getPackage = requiredPort(ports, "planning.getCurrentResearchPackage", operation);
+    let research;
+    try { research = normalizeResearchPackage(immutableRequestSnapshot(await getPackage(Object.freeze({ scope }))), scope); }
+    catch { throw new CreativeApiError("unavailable", operation, "research_package"); }
+    const packageHash = canonicalHash(research);
+    if (research.package_id !== brief.research_package_ref.package_id ||
+        packageHash !== brief.research_package_ref.content_hash) {
+      throw new CreativeApiError("stale_version", operation, "research_package_hash");
+    }
+    const getArtifactBytes = requiredPort(ports, "storage.getArtifactBytes", operation);
+    let artworkBytes;
+    try { artworkBytes = Uint8Array.from(await getArtifactBytes(Object.freeze({ scope, brief_id: brief.brief_id,
+      design_version_id: design.design_version_id }))); }
+    catch { throw new CreativeApiError("unavailable", operation, "artwork_bytes"); }
+    if (hashArtifactBytes(artworkBytes) !== design.artifact.content_hash) {
+      throw new CreativeApiError("failed", operation, "artwork_bytes.hash");
+    }
+    let artworkDimensions;
+    try { artworkDimensions = await inspectOpenAIImageBytes(artworkBytes); }
+    catch { throw new CreativeApiError("failed", operation, "artwork_bytes.decode"); }
+    const scopeWithBrief = Object.freeze({ ...scope, brief_id: brief.brief_id });
+    return Object.freeze({ scope: scopeWithBrief, brief, design, parent, selection, research, package_hash: packageHash,
+      artwork_bytes: artworkBytes, artwork_dimensions: artworkDimensions,
+      actor_id: principal.actor_id, action_id: request.action_id ?? `read:${request.request_id}`,
+      request_hash: actionRequestHash(request) });
+  }
+
+  function compositionOwnerInput(context) {
+    return Object.freeze({ scope: context.scope, actor_id: context.actor_id, action_id: context.action_id,
+      request_hash: context.request_hash, brief: context.brief, brief_hash: canonicalHash(context.brief),
+      selected_design: context.design, selection_revision: context.selection.revision,
+      research_package: context.research, package_hash: context.package_hash });
+  }
+
+  async function validateCompositionOwnerSource(raw, context, operation) {
+    let copied;
+    try { copied = snapshotCompositionBytesRecord(raw); }
+    catch { throw new CreativeApiError("failed", operation, "composition.source"); }
+    const source = copied.metadata;
+    assertOnlyKeys(source, ["contract", "schema_version", "scope", "revision"], "composition.source");
+    if (source.contract !== "CreativeCompositionSource" || source.schema_version !== "1.1" ||
+        !isRecord(source.scope) || source.scope.tenant_id !== context.scope.tenant_id ||
+        source.scope.project_id !== context.scope.project_id || source.scope.brief_id !== context.scope.brief_id) {
+      throw new CreativeApiError("scope_denied", operation, "composition.source.scope");
+    }
+    let revision;
+    revision = validateCurrentCompositionRevision(source.revision, copied.bytes, context.scope, operation);
+    const dependencies = revision.dependencies;
+    const briefHash = canonicalHash(context.brief);
+    const factsHash = canonicalHash(context.brief.facts);
+    const design = context.design;
+    const dimensions = context.artwork_dimensions;
+    let previewDimensions;
+    try { previewDimensions = await inspectOpenAIImageBytes(copied.bytes); }
+    catch { throw new CreativeApiError("failed", operation, "composition.preview.decode"); }
+    const artworkMimeType = IMAGE_MIME_BY_FORMAT[dimensions.format];
+    const previewMimeType = IMAGE_MIME_BY_FORMAT[previewDimensions.format];
+    if (!artworkMimeType || design.artifact.media_type !== artworkMimeType ||
+        revision.artwork.mime_type !== artworkMimeType || revision.artwork.width_px !== dimensions.width ||
+        revision.artwork.height_px !== dimensions.height) {
+      throw new CreativeApiError("failed", operation, "composition.artwork.metadata");
+    }
+    if (!previewMimeType || revision.preview.mime_type !== previewMimeType ||
+        revision.preview.width_px !== previewDimensions.width || revision.preview.height_px !== previewDimensions.height ||
+        revision.preview.byte_length !== copied.bytes.byteLength || revision.preview.preview_sha256 !== hashArtifactBytes(copied.bytes)) {
+      throw new CreativeApiError("failed", operation, "composition.preview.metadata");
+    }
+    if (revision.tenant_id !== context.scope.tenant_id || revision.project_id !== context.scope.project_id ||
+        revision.brief_id !== context.scope.brief_id || revision.binding.brief.sha256 !== briefHash.slice(7) ||
+        revision.binding.facts.sha256 !== factsHash.slice(7) || dependencies.brief_hash !== briefHash ||
+        dependencies.facts_revision_id !== context.research.event_id || dependencies.facts_sha256 !== factsHash ||
+        dependencies.package_id !== context.research.package_id || dependencies.package_sha256 !== context.package_hash ||
+        revision.binding.design_version.design_version_id !== design.design_version_id ||
+        revision.binding.design_version.artwork_sha256 !== design.artifact.content_hash.slice(7) ||
+        dependencies.design_version_id !== design.design_version_id ||
+        dependencies.design_version_sha256 !== design.design_hash || dependencies.artwork_sha256 !== design.artifact.content_hash ||
+        dependencies.parent_version_id !== design.parent_version_id ||
+        dependencies.parent_design_hash !== (context.parent?.design_hash ?? null) ||
+        dependencies.selection_revision !== context.selection.revision ||
+        revision.artwork.sha256 !== design.artifact.content_hash.slice(7) ||
+        revision.artwork.artifact_id !== design.artifact.artifact_id) {
+      throw new CreativeApiError("stale_version", operation, "composition.source.binding");
+    }
+    const permissions = new Map(context.brief.permissions.items.map((item) => [`${item.asset_id}\u0000${item.action}`, item.status]));
+    const researchPermissions = new Map(context.research.permissions.items.map((item) => [`${item.asset_id}\u0000${item.action}`, item.status]));
+    const requiresModify = new Set(revision.layer_manifest.filter((layer) => layer.kind === "approved_asset")
+      .map((layer) => layer.asset_id));
+    for (const asset of revision.binding.assets) {
+      const sourceAsset = context.research.assets.items.find((item) => item.asset_id === asset.asset_id);
+      if (!sourceAsset || sourceAsset.content_hash !== `sha256:${asset.sha256}`) {
+        throw new CreativeApiError("permission_denied", operation, "composition.asset_binding");
+      }
+      const rights = revision.dependencies.asset_rights.filter((item) => item.asset_id === asset.asset_id);
+      const requiredActions = ["display", "reproduce", ...(requiresModify.has(asset.asset_id) ? ["modify"] : [])];
+      for (const action of requiredActions) {
+        const right = rights.find((item) => item.action === action);
+        if (!right || right.source_ref !== sourceAsset.source_id || right.content_hash !== sourceAsset.content_hash ||
+            permissions.get(`${asset.asset_id}\u0000${action}`) !== "granted" ||
+            researchPermissions.get(`${asset.asset_id}\u0000${action}`) !== "granted") {
+          throw new CreativeApiError("permission_denied", operation, "composition.asset_rights");
+        }
+      }
+      const readAsset = requiredPort(ports, "composition.readApprovedAssetBytes", operation);
+      let rawAsset;
+      try { rawAsset = await readAsset(Object.freeze({ scope: context.scope, asset_id: asset.asset_id,
+        content_hash: sourceAsset.content_hash, package_id: context.research.package_id,
+        package_hash: context.package_hash, permission_ref: asset.permission_ref })); }
+      catch { throw new CreativeApiError("unavailable", operation, "composition.asset_bytes"); }
+      let assetBytes;
+      try { assetBytes = snapshotCompositionBytesRecord(rawAsset, "bytes"); }
+      catch { throw new CreativeApiError("failed", operation, "composition.asset_bytes"); }
+      const assetRecord = assetBytes.metadata;
+      assertOnlyKeys(assetRecord, ["asset_id", "content_hash", "mime_type"], "composition.asset_bytes");
+      if (assetRecord.asset_id !== asset.asset_id || assetRecord.content_hash !== sourceAsset.content_hash ||
+          assetRecord.mime_type !== sourceAsset.media_type || hashArtifactBytes(assetBytes.bytes) !== sourceAsset.content_hash) {
+        throw new CreativeApiError("failed", operation, "composition.asset_bytes.hash");
+      }
+      try { await inspectOpenAIImageBytes(assetBytes.bytes); }
+      catch { throw new CreativeApiError("failed", operation, "composition.asset_bytes.decode"); }
+    }
+    // Asset reads are awaited. Revalidate local preview/authority/right proof
+    // windows after the final read so a proof cannot expire during validation.
+    validateCurrentCompositionRevision(revision, copied.bytes, context.scope, operation);
+    return Object.freeze({ revision, preview_bytes: copied.bytes });
+  }
+
+  function assertCompositionAuthorityCurrent(context, revision, expectedCurrent, operation) {
+    const assertCurrent = requiredPort(ports, "composition.assertCurrent", operation);
+    const result = assertCurrent(Object.freeze({ contract: "CreativeCompositionCurrentAssertion", schema_version: "1.1",
+      scope: context.scope, actor_id: context.actor_id, action_id: context.action_id, request_hash: context.request_hash,
+      composition_id: revision.composition_id, expected_current_revision_id: expectedCurrent?.revision_id ?? null,
+      expected_current_revision_sha256: expectedCurrent?.revision_sha256 ?? null,
+      target_revision_id: revision.revision_id, target_revision_sha256: revision.revision_sha256,
+      target_state_sha256: revision.state_sha256, design_version_id: context.design.design_version_id,
+      design_version_sha256: context.design.design_hash, selection_revision: context.selection.revision,
+      facts_revision_id: revision.dependencies.facts_revision_id, facts_sha256: revision.dependencies.facts_sha256,
+      package_id: revision.dependencies.package_id, package_sha256: revision.dependencies.package_sha256, checked_at: now() }));
+    if (result !== null && typeof result === "object" && typeof result.then === "function") {
+      throw new CreativeApiError("failed", operation, "composition.assert_current_async");
+    }
+    let checked;
+    try { checked = immutableRequestSnapshot(result); }
+    catch { throw new CreativeApiError("failed", operation, "composition.assert_current"); }
+    assertOnlyKeys(checked, ["contract", "schema_version", "status", "scope", "composition_id",
+      "current_revision_id", "current_revision_sha256", "selection_revision", "design_version_id",
+      "design_version_sha256", "facts_revision_id", "facts_sha256", "package_id", "package_sha256",
+      "proof_ref", "checked_at", "expires_at"], "composition.assert_current");
+    const expectedRevision = expectedCurrent ?? revision;
+    const checkedAt = checked.checked_at;
+    const expiresAt = checked.expires_at;
+    if (checked.contract !== "CreativeCompositionCurrentAssertionResult" || checked.schema_version !== "1.1" ||
+        checked.status !== "current" || !isRecord(checked.scope) ||
+        checked.scope.tenant_id !== context.scope.tenant_id || checked.scope.project_id !== context.scope.project_id ||
+        checked.scope.brief_id !== context.scope.brief_id || checked.composition_id !== revision.composition_id ||
+        checked.current_revision_id !== expectedRevision.revision_id ||
+        checked.current_revision_sha256 !== expectedRevision.revision_sha256 ||
+        checked.selection_revision !== context.selection.revision || checked.design_version_id !== context.design.design_version_id ||
+        checked.design_version_sha256 !== context.design.design_hash ||
+        checked.facts_revision_id !== revision.dependencies.facts_revision_id ||
+        checked.facts_sha256 !== revision.dependencies.facts_sha256 || checked.package_id !== revision.dependencies.package_id ||
+        checked.package_sha256 !== revision.dependencies.package_sha256 || typeof checked.proof_ref !== "string" ||
+        !Number.isSafeInteger(checkedAt) || checkedAt > now() || !Number.isSafeInteger(expiresAt) || expiresAt <= now()) {
+      throw new CreativeApiError("stale_version", operation, "composition.current_authority");
+    }
+    return checked;
+  }
+
+  function compositionPreviewAccess(revision, bytes) {
+    return Object.freeze({ contract: "CreativeCompositionPreviewAccess", schema_version: "1.1",
+      preview_id: revision.preview.preview_id, sha256: revision.preview.preview_sha256,
+      byte_length: bytes.byteLength, mime_type: revision.preview.mime_type,
+      width_px: revision.preview.width_px, height_px: revision.preview.height_px,
+      bytes_base64: Buffer.from(bytes).toString("base64") });
+  }
+
+  function validateCurrentCompositionRevision(rawRevision, previewBytes, trustedScope, operation) {
+    let revision;
+    try { revision = validateCompositionRevision(rawRevision, { trustedScope, previewBytes }); }
+    catch (error) { throw safeError(error, operation); }
+    const checkedAt = now();
+    const proofs = [revision.preview, revision.dependencies.authority_proof,
+      ...(revision.dependencies.edit_policy ? [revision.dependencies.edit_policy] : []),
+      ...revision.dependencies.asset_rights];
+    if (proofs.some((proof) => proof.checked_at > checkedAt || proof.expires_at <= checkedAt)) {
+      throw new CreativeApiError("stale_version", operation, "composition.proof_expired");
+    }
+    return revision;
+  }
+
+  async function getPublicCompositionHistory(principal, request) {
+    const operation = request.operation;
+    const scope = scopeFor(principal, request.payload.brief_id);
+    const brief = await loadBrief(scope, request.payload.brief_id, operation);
+    const design = await loadDesign(scope, brief, request.payload.design_version_id, operation, { allowHistorical: true });
+    const getSelection = requiredPort(ports, "storage.getSelection", operation);
+    const selection = await getSelection(Object.freeze({ scope, brief_id: brief.brief_id }));
+    if (selection !== null && !isRecord(selection)) throw new CreativeApiError("unavailable", operation, "selection");
+    if (selection) assertScopedRecord(selection, scope, operation, brief.brief_id);
+    const readIdentity = requiredPort(ports, "storage.getCurrentCompositionIdentity", operation);
+    let current;
+    try { current = await readIdentity(Object.freeze({ scope, design_version_id: design.design_version_id })); }
+    catch (error) { throw safeError(error, operation); }
+    const validPublicRef = (value) => {
+      try { assertSafePublicIdentifier(value, { maxLength: 256 }); return true; }
+      catch { return false; }
+    };
+    const validCompositionHash = (value) => typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+    if (current !== null && (!isRecord(current) || !validPublicRef(current.composition_id) ||
+        !validPublicRef(current.revision_id) || !validCompositionHash(current.revision_sha256) ||
+        current.design_version_id !== design.design_version_id || !validCompositionHash(current.design_version_sha256) ||
+        current.design_version_sha256 !== design.design_hash || !Number.isSafeInteger(current.selection_revision) ||
+        current.selection_revision < 1 || timestampMillis(current.updated_at) === null)) {
+      throw new CreativeApiError("failed", operation, "composition.current_identity");
+    }
+    const selection_compatibility = !selection ? "unavailable"
+      : selection.design_version_id !== design.design_version_id || selection.design_hash !== design.design_hash
+        ? "different_design"
+        : current && selection.revision !== current.selection_revision ? "changed" : "current";
+    let items = [];
+    let hasMore = false;
+    if (current) {
+      const list = requiredPort(ports, "storage.listCompositionRevisions", operation);
+      const page = await list(Object.freeze({ scope, composition_id: current.composition_id,
+        limit: request.payload.limit ?? 20,
+        ...(request.payload.after_revision_id !== undefined ? { after_revision_id: request.payload.after_revision_id } : {}) }));
+      if (!isRecord(page) || !Array.isArray(page.items) || typeof page.has_more !== "boolean" ||
+          page.items.length > (request.payload.limit ?? 20) || page.has_more && page.items.length === 0) {
+        throw new CreativeApiError("unavailable", operation, "composition.history");
+      }
+      const seenRevisionIds = new Set();
+      let previousCreatedAt = Number.POSITIVE_INFINITY;
+      let previousRevisionId = "";
+      items = page.items.map((revision) => {
+        const parentPairValid = revision?.parent_revision_id === null && revision?.parent_revision_sha256 === null ||
+          validPublicRef(revision?.parent_revision_id) && validCompositionHash(revision?.parent_revision_sha256);
+        const createdAt = timestampMillis(revision?.created_at);
+        if (!isRecord(revision) || !validPublicRef(revision.revision_id) || seenRevisionIds.has(revision.revision_id) ||
+            !validCompositionHash(revision.revision_sha256) || revision.composition_id !== current.composition_id ||
+            !parentPairValid || !isRecord(revision.dependencies) ||
+            revision.dependencies.design_version_id !== design.design_version_id ||
+            revision.dependencies.design_version_sha256 !== design.design_hash || createdAt === null ||
+            // Safe public IDs are ASCII, so code-unit order matches SQLite's BINARY collation.
+            createdAt > previousCreatedAt || createdAt === previousCreatedAt && revision.revision_id < previousRevisionId) {
+          throw new CreativeApiError("failed", operation, "composition.history_record");
+        }
+        seenRevisionIds.add(revision.revision_id);
+        previousCreatedAt = createdAt;
+        previousRevisionId = revision.revision_id;
+        return Object.freeze({ revision_id: revision.revision_id, revision_sha256: revision.revision_sha256,
+          parent_revision_id: revision.parent_revision_id, parent_revision_sha256: revision.parent_revision_sha256,
+          design_version_id: revision.dependencies.design_version_id,
+          design_version_sha256: revision.dependencies.design_version_sha256, created_at: revision.created_at });
+      });
+      hasMore = page.has_more;
+    }
+    const projectedCurrent = current ? Object.freeze({ composition_id: current.composition_id,
+      revision_id: current.revision_id, revision_sha256: current.revision_sha256,
+      design_version_id: current.design_version_id, design_version_sha256: current.design_version_sha256,
+      selection_revision: current.selection_revision, updated_at: current.updated_at }) : null;
+    return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: "1.3",
+      result: Object.freeze({ contract: "CreativeCompositionHistoryIdentity", schema_version: "1.0",
+        status: current ? "identity_only" : "not_initialized", current: projectedCurrent,
+        selection_compatibility, revisions: Object.freeze(items), has_more: hasMore,
+        next_after_revision_id: hasMore && items.length ? items.at(-1).revision_id : null }) }), operation);
+  }
+
+  async function getPublicComposition(principal, request) {
+    const operation = request.operation;
+    const scope = scopeFor(principal, request.payload.brief_id);
+    const context = await readCompositionContext(principal, request, scope);
+    const getCurrent = requiredPort(ports, "storage.getCurrentComposition", operation);
+    const stored = await getCurrent(Object.freeze({ scope: context.scope, design_version_id: context.design.design_version_id }));
+    if (stored === null) {
+      return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: "1.2",
+        result: Object.freeze({ composition: null, status: "not_initialized" }) }), operation);
+    }
+    let storedSnapshot;
+    try { storedSnapshot = snapshotCompositionBytesRecord(stored); }
+    catch { throw new CreativeApiError("failed", operation, "composition.storage_record"); }
+    let revision;
+    let previewBytes = storedSnapshot.bytes;
+    revision = validateCurrentCompositionRevision(storedSnapshot.metadata.revision, previewBytes, context.scope, operation);
+    const authority = requiredPort(ports, "composition.resolveCurrent", operation);
+    let rawSource;
+    try { rawSource = await authority(compositionOwnerInput(context)); }
+    catch { throw new CreativeApiError("unavailable", operation, "composition.authority"); }
+    const source = await validateCompositionOwnerSource(rawSource, context, operation);
+    if (canonicalSerialize(source.revision) !== canonicalSerialize(revision) ||
+        !Buffer.from(source.preview_bytes).equals(Buffer.from(previewBytes))) {
+      throw new CreativeApiError("stale_version", operation, "composition.owner_revision");
+    }
+    // Re-read the persisted pointer after every external await. This checks
+    // the exact selected design/current revision again after asset-byte reads
+    // and catches proof expiry or a concurrent currentness change.
+    let finalStored;
+    try { finalStored = await getCurrent(Object.freeze({ scope: context.scope, design_version_id: context.design.design_version_id })); }
+    catch (error) { throw safeError(error, operation); }
+    if (finalStored === null) throw new CreativeApiError("stale_version", operation, "composition.current");
+    let finalSnapshot;
+    let finalRevision;
+    try {
+      finalSnapshot = snapshotCompositionBytesRecord(finalStored);
+      finalRevision = validateCurrentCompositionRevision(finalSnapshot.metadata.revision, finalSnapshot.bytes,
+        context.scope, operation);
+    } catch (error) { throw safeError(error, operation); }
+    if (canonicalSerialize(finalRevision) !== canonicalSerialize(revision) ||
+        !Buffer.from(finalSnapshot.bytes).equals(Buffer.from(previewBytes))) {
+      throw new CreativeApiError("stale_version", operation, "composition.current");
+    }
+    assertCompositionAuthorityCurrent(context, revision, revision, operation);
+    // External ownership may still be current while this process has already
+    // observed a local selection/current-pointer change. Run the same-connection
+    // synchronous store fence last, after every await and external assertion.
+    const assertLocalCurrent = requiredPort(ports, "storage.assertCurrentComposition", operation);
+    let localCurrent;
+    try {
+      localCurrent = assertLocalCurrent(Object.freeze({ scope: context.scope,
+        composition_id: revision.composition_id, design_version_id: context.design.design_version_id,
+        revision_id: revision.revision_id, revision_sha256: revision.revision_sha256,
+        selection_revision: revision.dependencies.selection_revision }));
+    } catch (error) { throw safeError(error, operation); }
+    if (localCurrent === null || typeof localCurrent !== "object" ||
+        typeof localCurrent.then === "function" || localCurrent.status !== "current" ||
+        localCurrent.composition_id !== revision.composition_id || localCurrent.revision_id !== revision.revision_id ||
+        localCurrent.revision_sha256 !== revision.revision_sha256 ||
+        localCurrent.design_version_id !== context.design.design_version_id ||
+        localCurrent.selection_revision !== revision.dependencies.selection_revision) {
+      throw new CreativeApiError("stale_version", operation, "composition.current");
+    }
+    const result = Object.freeze({ composition: createCompositionProductionEnvelope(revision), status: "current",
+      preview_access: compositionPreviewAccess(revision, previewBytes) });
+    return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: "1.2",
+      result }), operation);
+  }
+
+  async function executeCompositionMutation(principal, request, started) {
+    const operation = request.operation;
+    const scope = started.scope;
+    // This request crosses several awaits (context reads, owner resolution,
+    // preview preparation, and publication). Copy the caller's typed plan once
+    // so later mutation cannot change the plan that is hashed, staged, or
+    // recorded in the immutable action intent.
+    let requestedPlan = null;
+    if (operation === "composition.update") {
+      try { requestedPlan = snapshotCompositionJson(request.payload.plan); }
+      catch { throw new CreativeApiError("invalid_request", operation, "plan"); }
+    }
+    const context = await readCompositionContext(principal, request, scope);
+    const getCurrent = requiredPort(ports, "storage.getCurrentComposition", operation);
+    const stored = await getCurrent(Object.freeze({ scope: context.scope, design_version_id: context.design.design_version_id }));
+    if (operation === "composition.create" && stored !== null) {
+      throw new CreativeApiError("conflict", operation, "composition.current");
+    }
+    let storedCurrent = null;
+    let storedPreviewBytes = null;
+    if (operation === "composition.update") {
+      let storedSnapshot;
+      try { storedSnapshot = snapshotCompositionBytesRecord(stored); }
+      catch {
+        throw new CreativeApiError("stale_version", operation, "composition.current");
+      }
+      storedPreviewBytes = storedSnapshot.bytes;
+      storedCurrent = validateCurrentCompositionRevision(storedSnapshot.metadata.revision, storedPreviewBytes,
+        context.scope, operation);
+    }
+    const authority = requiredPort(ports, "composition.resolveCurrent", operation);
+    let rawSource;
+    try { rawSource = await authority(compositionOwnerInput(context)); }
+    catch { throw new CreativeApiError("unavailable", operation, "composition.authority"); }
+    const source = await validateCompositionOwnerSource(rawSource, context, operation);
+    const currentRevision = source.revision;
+    let revision = currentRevision;
+    let previewBytes = source.preview_bytes;
+    let expectedCurrent = null;
+    let plan = null;
+    let alreadyStaged = false;
+    if (operation === "composition.create") {
+      if (revision.parent_revision_id !== null || revision.parent_revision_sha256 !== null) {
+        throw new CreativeApiError("unavailable", operation, "composition.initial_history");
+      }
+    } else {
+      if (canonicalSerialize(currentRevision) !== canonicalSerialize(storedCurrent) ||
+          !Buffer.from(source.preview_bytes).equals(Buffer.from(storedPreviewBytes))) {
+        throw new CreativeApiError("stale_version", operation, "composition.owner_revision");
+      }
+      expectedCurrent = Object.freeze({ revision_id: currentRevision.revision_id,
+        revision_sha256: currentRevision.revision_sha256 });
+      assertCompositionAuthorityCurrent(context, currentRevision, currentRevision, operation);
+
+      // Rebuild the plan from the trusted current binding and exact manifest,
+      // then require byte-for-byte canonical equality with the submitted plan.
+      // This applies the C04 closed-manifest rules without placing geometry in
+      // the legacy approval hash.
+      try {
+        plan = createCompositionEditPlan({ plan_id: requestedPlan?.plan_id, binding: currentRevision.binding,
+          layer_manifest: currentRevision.layer_manifest,
+          target_composition_revision_id: requestedPlan?.target_composition_revision_id,
+          operations: requestedPlan?.operations, trustedScope: context.scope });
+      } catch (error) { throw safeError(error, operation); }
+      const stalePlanFields = ["tenant_id", "project_id", "base_design_version_id", "base_artwork_sha256",
+        "base_brief_id", "base_brief_sha256", "base_facts_revision_id", "base_facts_sha256",
+        "base_composition_id", "base_composition_revision_id", "base_composition_sha256"];
+      if (stalePlanFields.some((field) => requestedPlan?.[field] !== plan[field])) {
+        throw new CreativeApiError("stale_version", operation, "plan.base_binding");
+      }
+      if (canonicalSerialize(plan) !== canonicalSerialize(requestedPlan)) {
+        throw new CreativeApiError("invalid_request", operation, "plan");
+      }
+      let applied;
+      try { applied = applyCompositionPlan(currentRevision, plan, context.scope); }
+      catch (error) { throw safeError(error, operation); }
+      const binding = { ...currentRevision.binding,
+        composition: { ...currentRevision.binding.composition, revision_id: applied.revision_id } };
+      binding.composition.sha256 = hashCompositionLayerManifest({ binding, artifact: currentRevision.artwork,
+        layer_manifest: applied.layer_manifest, trustedScope: context.scope });
+      const { preview_sha256: _preview_sha256, ...bindingWithoutPreview } = binding;
+      const candidate = { tenant_id: context.scope.tenant_id, project_id: context.scope.project_id,
+        brief_id: context.scope.brief_id, composition_id: currentRevision.composition_id,
+        revision_id: applied.revision_id, parent_revision_id: currentRevision.revision_id,
+        parent_revision_sha256: currentRevision.revision_sha256, binding: bindingWithoutPreview,
+        artwork: currentRevision.artwork, layer_manifest: applied.layer_manifest, geometry: applied.geometry,
+        dependencies: Object.fromEntries(Object.entries(currentRevision.dependencies)
+          .filter(([key]) => key !== "authority_proof")) };
+      const targetStateHash = compositionStateHash(candidate);
+      const intentCandidate = snapshotCompositionJson(candidate);
+      const intent = Object.freeze({ contract: "CreativeCompositionActionIntent", schema_version: "1.0",
+        operation, composition_id: currentRevision.composition_id, candidate_revision_id: applied.revision_id,
+        source_revision_id: currentRevision.revision_id, source_revision_sha256: currentRevision.revision_sha256,
+        plan });
+      const begin = requiredPort(ports, "storage.beginCompositionAction", operation);
+      const action = await begin(Object.freeze({ scope: context.scope, actor_id: principal.actor_id,
+        job_id: started.job_id, lease_token: started.lease_token, action_id: request.action_id,
+        operation, request_hash: started.request_hash, intent, expected_current: expectedCurrent,
+        expected_design_version_id: context.design.design_version_id,
+        expected_design_hash: context.design.design_hash, expected_selection_revision: context.selection.revision }));
+      if (!isRecord(action) || action.status === "conflict") throw new CreativeApiError("conflict", operation, "action_id");
+      if (action.status === "stale") throw new CreativeApiError("stale_version", operation, "composition.current");
+      if (!["pending", "staged"].includes(action.status) || action.action_id !== request.action_id || action.job_id !== started.job_id ||
+          action.request_hash !== started.request_hash || action.intent?.candidate_revision_id !== applied.revision_id) {
+        throw new CreativeApiError("failed", operation, "composition.action");
+      }
+      if (action.status === "staged") {
+        if (!action.revision || !(action.preview_bytes instanceof Uint8Array) ||
+            action.revision.state_sha256 !== targetStateHash ||
+            action.revision.parent_revision_id !== currentRevision.revision_id ||
+            action.revision.parent_revision_sha256 !== currentRevision.revision_sha256 ||
+            canonicalSerialize(action.intent.plan) !== canonicalSerialize(plan)) {
+          throw new CreativeApiError("failed", operation, "composition.action.staged_identity");
+        }
+        revision = action.revision;
+        try { previewBytes = snapshotCompositionBytesRecord({ preview_bytes: action.preview_bytes }).bytes; }
+        catch { throw new CreativeApiError("failed", operation, "composition.action.preview_bytes"); }
+        alreadyStaged = true;
+      } else {
+        const preparePreview = requiredPort(ports, "composition.preparePreview", operation);
+        let rawPreview;
+        try {
+          rawPreview = await preparePreview(Object.freeze({ contract: "CreativeCompositionPreview", schema_version: "1.1",
+            scope: context.scope, actor_id: principal.actor_id, action_id: request.action_id,
+            request_hash: started.request_hash,
+            idempotency_key: `composition-preview:${canonicalHash({ scope: context.scope,
+              action_id: request.action_id, request_hash: started.request_hash, candidate_sha256: targetStateHash })}`,
+            base_revision: currentRevision,
+            candidate: Object.freeze({ composition_id: intentCandidate.composition_id,
+              revision_id: intentCandidate.revision_id, parent_revision_id: intentCandidate.parent_revision_id,
+              parent_revision_sha256: intentCandidate.parent_revision_sha256, binding: intentCandidate.binding,
+              artwork: intentCandidate.artwork, layer_manifest: intentCandidate.layer_manifest,
+              geometry: intentCandidate.geometry, dependencies: intentCandidate.dependencies,
+              state_sha256: targetStateHash }) }));
+        } catch { throw new CreativeApiError("unavailable", operation, "composition.preview"); }
+        let copiedPreview;
+        try { copiedPreview = snapshotCompositionBytesRecord(rawPreview); }
+        catch { throw new CreativeApiError("failed", operation, "composition.preview"); }
+        const previewResult = copiedPreview.metadata;
+        assertOnlyKeys(previewResult, ["contract", "schema_version", "preview", "authority_proof"], "composition.preview");
+        if (previewResult.contract !== "CreativeCompositionPreview" || previewResult.schema_version !== "1.1" ||
+            !isRecord(previewResult.preview) || !isRecord(previewResult.authority_proof)) {
+          throw new CreativeApiError("unavailable", operation, "composition.preview.contract");
+        }
+        const withPreviewBinding = { ...intentCandidate.binding,
+          preview_sha256: previewResult.preview.preview_sha256?.slice?.("sha256:".length) };
+        const rawRevision = { ...intentCandidate, binding: withPreviewBinding,
+          dependencies: { ...intentCandidate.dependencies, authority_proof: previewResult.authority_proof },
+          preview: previewResult.preview };
+        try { ({ revision, preview_bytes: previewBytes } = createCompositionRevision(rawRevision, {
+          trustedScope: context.scope, previewBytes: copiedPreview.bytes, nowMs: now() })); }
+        catch (error) { throw safeError(error, operation); }
+        let decodedPreview;
+        try { decodedPreview = await inspectOpenAIImageBytes(previewBytes); }
+        catch { throw new CreativeApiError("failed", operation, "composition.preview.decode"); }
+        const expectedMimeType = IMAGE_MIME_BY_FORMAT[decodedPreview.format];
+        if (!expectedMimeType || revision.preview.mime_type !== expectedMimeType ||
+            revision.preview.width_px !== decodedPreview.width || revision.preview.height_px !== decodedPreview.height ||
+            revision.preview.byte_length !== previewBytes.byteLength || revision.preview.preview_sha256 !== hashArtifactBytes(previewBytes)) {
+          throw new CreativeApiError("failed", operation, "composition.preview.metadata");
+        }
+      }
+    }
+
+    if (operation === "composition.create") {
+      const intent = Object.freeze({ contract: "CreativeCompositionActionIntent", schema_version: "1.0",
+        operation, composition_id: revision.composition_id, candidate_revision_id: revision.revision_id,
+        source_revision_id: null, source_revision_sha256: null, plan: null });
+      const begin = requiredPort(ports, "storage.beginCompositionAction", operation);
+      const action = await begin(Object.freeze({ scope: context.scope, actor_id: principal.actor_id,
+        job_id: started.job_id, lease_token: started.lease_token, action_id: request.action_id,
+        operation, request_hash: started.request_hash, intent, expected_current: null,
+        expected_design_version_id: context.design.design_version_id,
+        expected_design_hash: context.design.design_hash, expected_selection_revision: context.selection.revision }));
+      if (!isRecord(action) || action.status === "conflict") throw new CreativeApiError("conflict", operation, "action_id");
+      if (action.status === "stale") throw new CreativeApiError("stale_version", operation, "composition.current");
+      if (!["pending", "staged"].includes(action.status) || action.action_id !== request.action_id || action.job_id !== started.job_id ||
+          action.request_hash !== started.request_hash || action.intent?.candidate_revision_id !== revision.revision_id) {
+        throw new CreativeApiError("failed", operation, "composition.action");
+      }
+      if (action.status === "staged") {
+        if (!action.revision || !(action.preview_bytes instanceof Uint8Array) ||
+            canonicalSerialize(action.revision) !== canonicalSerialize(revision) ||
+            !Buffer.from(action.preview_bytes).equals(Buffer.from(previewBytes))) {
+          throw new CreativeApiError("failed", operation, "composition.action.staged_identity");
+        }
+        revision = action.revision;
+        try { previewBytes = snapshotCompositionBytesRecord({ preview_bytes: action.preview_bytes }).bytes; }
+        catch { throw new CreativeApiError("failed", operation, "composition.action.preview_bytes"); }
+        alreadyStaged = true;
+      }
+    }
+    if (!alreadyStaged) {
+      const stage = requiredPort(ports, "storage.stageCompositionRevision", operation);
+      const staged = await stage(Object.freeze({ scope: context.scope, actor_id: principal.actor_id,
+        job_id: started.job_id, lease_token: started.lease_token, action_id: request.action_id,
+        request_hash: started.request_hash, revision, preview_bytes: previewBytes }));
+      if (!isRecord(staged) || staged.status === "conflict") throw new CreativeApiError("conflict", operation, "composition.stage");
+      if (staged.status !== "staged" || staged.revision?.revision_sha256 !== revision.revision_sha256 ||
+          !(staged.preview_bytes instanceof Uint8Array) || !Buffer.from(snapshotCompositionBytesRecord({
+            preview_bytes: staged.preview_bytes }).bytes).equals(Buffer.from(previewBytes))) {
+        throw new CreativeApiError("failed", operation, "composition.stage");
+      }
+    }
+    const result = Object.freeze({ status: "saved", composition: createCompositionProductionEnvelope(revision),
+      revision_sha256: revision.revision_sha256, selection_revision: context.selection.revision,
+      preview_access: compositionPreviewAccess(revision, previewBytes) });
+    const fence = creativeContextFence(context.brief, context.design, context.design.design_version_id,
+      context.design.design_hash, { composition: Object.freeze({ composition_id: revision.composition_id,
+        action_id: request.action_id, job_id: started.job_id, target_revision_id: revision.revision_id,
+        target_revision_sha256: revision.revision_sha256, expected_current_revision_id: expectedCurrent?.revision_id ?? null,
+        expected_current_revision_sha256: expectedCurrent?.revision_sha256 ?? null }) });
+    const job = await publish(principal, request, started, result, (transaction) => {
+      const commit = requiredPort(ports, "storage.commitCompositionRevision", operation);
+      const committed = commit(Object.freeze({ scope: context.scope, actor_id: principal.actor_id,
+        job_id: started.job_id, action_id: request.action_id, request_hash: started.request_hash,
+        revision_sha256: revision.revision_sha256 }), transaction);
+      if (committed !== null && typeof committed === "object" && typeof committed.then === "function") {
+        throw new CreativeApiError("failed", operation, "composition.commit_async");
+      }
+      if (!isRecord(committed) || committed.status !== "saved" ||
+          committed.composition?.revision_sha256 !== revision.revision_sha256) {
+        throw new CreativeApiError("stale_version", operation, "composition.commit");
+      }
+    }, fence, () => {
+      validateCurrentCompositionRevision(revision, previewBytes, context.scope, operation);
+      assertCompositionAuthorityCurrent(context, revision, expectedCurrent ? currentRevision : null, operation);
+      // The owner assertion is synchronous but may advance a fake clock or
+      // observe a revocation at its boundary. Recheck every local proof window
+      // after that callback; commitCompositionRevision rechecks the active job
+      // lease and same-store context under the publication transaction.
+      validateCurrentCompositionRevision(revision, previewBytes, context.scope, operation);
+      return true;
+    });
+    return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: "1.2",
+      operation_id: job.job_id, job: publicJob(job, job.job_id), result }), operation);
+  }
+
+  async function executeCompositionRevalidation(principal, request, started) {
+    const operation = request.operation;
+    const context = await readCompositionContext(principal, request, started.scope);
+    const getIdentity = requiredPort(ports, "storage.getCurrentCompositionIdentity", operation);
+    const current = await getIdentity(Object.freeze({ scope: context.scope,
+      design_version_id: context.design.design_version_id }));
+    if (!isRecord(current) || current.revision_id !== request.payload.expected_current_revision_id ||
+        current.revision_sha256 !== request.payload.expected_current_revision_sha256 ||
+        current.design_version_id !== context.design.design_version_id || current.design_version_sha256 !== context.design.design_hash) {
+      throw new CreativeApiError("stale_version", operation, "expected_current");
+    }
+    const getRevision = requiredPort(ports, "storage.getCompositionRevision", operation);
+    let storedParent;
+    try {
+      storedParent = await getRevision(Object.freeze({ scope: context.scope, composition_id: current.composition_id,
+        revision_id: current.revision_id }));
+    } catch (error) { throw safeError(error, operation); }
+    if (!isRecord(storedParent) || !(storedParent.preview_bytes instanceof Uint8Array)) {
+      throw new CreativeApiError("failed", operation, "composition.history_revision");
+    }
+    let parent;
+    try { parent = validateCompositionRevision(storedParent.revision, { trustedScope: context.scope,
+      previewBytes: storedParent.preview_bytes, allowExpired: true }); }
+    catch (error) { throw safeError(error, operation); }
+    if (parent.revision_id !== request.payload.expected_current_revision_id ||
+        parent.revision_sha256 !== request.payload.expected_current_revision_sha256 ||
+        parent.composition_id !== current.composition_id || parent.dependencies.design_version_id !== context.design.design_version_id ||
+        parent.dependencies.design_version_sha256 !== context.design.design_hash ||
+        parent.dependencies.brief_hash !== canonicalHash(context.brief) ||
+        parent.dependencies.facts_revision_id !== context.research.event_id ||
+        parent.dependencies.facts_sha256 !== canonicalHash(context.brief.facts) ||
+        parent.dependencies.package_id !== context.research.package_id ||
+        parent.dependencies.package_sha256 !== context.package_hash ||
+        parent.dependencies.artwork_sha256 !== context.design.artifact.content_hash ||
+        parent.dependencies.parent_version_id !== context.design.parent_version_id ||
+        parent.dependencies.parent_design_hash !== (context.parent?.design_hash ?? null) ||
+        parent.artwork.artifact_id !== context.design.artifact.artifact_id ||
+        parent.artwork.sha256 !== context.design.artifact.content_hash.slice(7) ||
+        parent.binding.brief.sha256 !== canonicalHash(context.brief).slice(7) ||
+        parent.binding.facts.revision_id !== context.research.event_id ||
+        parent.binding.facts.sha256 !== canonicalHash(context.brief.facts).slice(7)) {
+      throw new CreativeApiError("stale_version", operation, "composition.revalidation_context");
+    }
+    const candidateRevisionId = boundedString(request.payload.candidate_revision_id, "payload.candidate_revision_id");
+    if (candidateRevisionId === parent.revision_id) throw new CreativeApiError("invalid_request", operation, "candidate_revision_id");
+    const expectedCurrent = Object.freeze({ revision_id: parent.revision_id, revision_sha256: parent.revision_sha256 });
+    const intent = Object.freeze({ contract: "CreativeCompositionActionIntent", schema_version: "1.1",
+      operation, composition_id: parent.composition_id, candidate_revision_id: candidateRevisionId,
+      source_revision_id: parent.revision_id, source_revision_sha256: parent.revision_sha256, plan: null });
+    const begin = requiredPort(ports, "storage.beginCompositionAction", operation);
+    const action = await begin(Object.freeze({ scope: context.scope, actor_id: principal.actor_id,
+      job_id: started.job_id, lease_token: started.lease_token, action_id: request.action_id,
+      operation, request_hash: started.request_hash, intent, expected_current: expectedCurrent,
+      expected_design_version_id: context.design.design_version_id,
+      expected_design_hash: context.design.design_hash, expected_selection_revision: context.selection.revision }));
+    if (!isRecord(action) || action.status === "conflict") throw new CreativeApiError("conflict", operation, "action_id");
+    if (action.status === "stale") throw new CreativeApiError("stale_version", operation, "composition.current");
+    if (!["pending", "staged"].includes(action.status) || action.action_id !== request.action_id ||
+        action.job_id !== started.job_id || action.request_hash !== started.request_hash ||
+        action.operation !== operation || canonicalSerialize(action.intent) !== canonicalSerialize(intent) ||
+        canonicalSerialize(action.expected_current) !== canonicalSerialize(expectedCurrent)) {
+      throw new CreativeApiError("failed", operation, "composition.action");
+    }
+    let revision;
+    let previewBytes;
+    let alreadyStaged = false;
+    if (action.status === "staged") {
+      if (!action.revision || !(action.preview_bytes instanceof Uint8Array) ||
+          action.revision.revision_id !== candidateRevisionId || action.revision.parent_revision_id !== parent.revision_id ||
+          action.revision.parent_revision_sha256 !== parent.revision_sha256 ||
+          canonicalSerialize(action.revision.artwork) !== canonicalSerialize(parent.artwork) ||
+          canonicalSerialize(action.revision.layer_manifest) !== canonicalSerialize(parent.layer_manifest) ||
+          canonicalSerialize(action.revision.geometry) !== canonicalSerialize(parent.geometry)) {
+        throw new CreativeApiError("failed", operation, "composition.action.staged_identity");
+      }
+      revision = action.revision;
+      previewBytes = Uint8Array.from(action.preview_bytes);
+      alreadyStaged = true;
+    } else {
+      const resolve = requiredPort(ports, "composition.resolveRevalidation", operation);
+      let rawEvidence;
+      try {
+        rawEvidence = await resolve(Object.freeze({ contract: "CreativeCompositionRevalidationRequest", schema_version: "1.0",
+          scope: context.scope, actor_id: principal.actor_id, action_id: request.action_id,
+          request_hash: started.request_hash, composition_id: parent.composition_id,
+          expected_current: Object.freeze({ revision_id: parent.revision_id, revision_sha256: parent.revision_sha256 }),
+          candidate_revision_id: candidateRevisionId, base_revision: parent,
+          brief: context.brief, brief_hash: canonicalHash(context.brief), selected_design: context.design,
+          selection_revision: context.selection.revision, research_package: context.research, package_hash: context.package_hash }));
+      } catch (error) {
+        if (error instanceof CreativeApiError || error instanceof CreativeCompositionContractError ||
+            error instanceof CreativePlanningError || error?.module === "creative-engine.versions") {
+          throw safeError(error, operation);
+        }
+        throw new CreativeApiError("unavailable", operation, "composition.revalidation_evidence", { retryable: true });
+      }
+      let evidence;
+      try { evidence = immutableRequestSnapshot(rawEvidence); }
+      catch { throw new CreativeApiError("failed", operation, "composition.revalidation_evidence"); }
+      assertOnlyKeys(evidence, ["contract", "schema_version", "scope", "composition_id", "expected_current",
+        "candidate_revision_id", "brief_hash", "facts_revision_id", "facts_sha256", "package_id", "package_sha256",
+        "design_version_id", "design_version_sha256", "selection_revision", "asset_rights", "edit_policy"],
+      "composition.revalidation_evidence");
+      if (evidence.contract !== "CreativeCompositionRevalidationEvidence" || evidence.schema_version !== "1.0" ||
+          !Array.isArray(evidence.asset_rights) || !isRecord(evidence.edit_policy)) {
+        throw new CreativeApiError("failed", operation, "composition.revalidation_evidence");
+      }
+      if (!isRecord(evidence.scope) || evidence.scope.tenant_id !== context.scope.tenant_id ||
+          evidence.scope.project_id !== context.scope.project_id || evidence.scope.brief_id !== context.scope.brief_id) {
+        throw new CreativeApiError("scope_denied", operation, "composition.revalidation_evidence.scope");
+      }
+      if (evidence.composition_id !== parent.composition_id || evidence.candidate_revision_id !== candidateRevisionId ||
+          canonicalSerialize(evidence.expected_current) !== canonicalSerialize(expectedCurrent) ||
+          evidence.brief_hash !== canonicalHash(context.brief) || evidence.facts_revision_id !== context.research.event_id ||
+          evidence.facts_sha256 !== canonicalHash(context.brief.facts) || evidence.package_id !== context.research.package_id ||
+          evidence.package_sha256 !== context.package_hash || evidence.design_version_id !== context.design.design_version_id ||
+          evidence.design_version_sha256 !== context.design.design_hash || evidence.selection_revision !== context.selection.revision) {
+        throw new CreativeApiError("stale_version", operation, "composition.revalidation_evidence");
+      }
+      const previousPolicy = parent.dependencies.edit_policy;
+      if (previousPolicy) {
+        const nextPolicy = evidence.edit_policy;
+        const preservesRestrictions = Array.isArray(nextPolicy.locked_layer_ids) &&
+          Array.isArray(nextPolicy.factual_text_layers) &&
+          previousPolicy.locked_layer_ids.every((id) => nextPolicy.locked_layer_ids.includes(id)) &&
+          previousPolicy.factual_text_layers.every((priorFact) => nextPolicy.factual_text_layers.some((nextFact) =>
+            canonicalSerialize(nextFact) === canonicalSerialize(priorFact)));
+        if (!preservesRestrictions) {
+          throw new CreativeApiError("permission_denied", operation, "composition.revalidation_policy");
+        }
+      }
+      const binding = { ...parent.binding,
+        composition: { ...parent.binding.composition, revision_id: candidateRevisionId },
+        action_id: request.action_id, actor_id: principal.actor_id };
+      binding.composition.sha256 = hashCompositionLayerManifest({ binding, artifact: parent.artwork,
+        layer_manifest: parent.layer_manifest, trustedScope: context.scope });
+      const { preview_sha256: _previewSha256, ...bindingWithoutPreview } = binding;
+      const dependencies = { ...parent.dependencies, selection_revision: context.selection.revision,
+        asset_rights: evidence.asset_rights, edit_policy: evidence.edit_policy };
+      delete dependencies.authority_proof;
+      const candidate = { tenant_id: context.scope.tenant_id, project_id: context.scope.project_id,
+        brief_id: context.scope.brief_id, composition_id: parent.composition_id, revision_id: candidateRevisionId,
+        parent_revision_id: parent.revision_id, parent_revision_sha256: parent.revision_sha256,
+        binding: bindingWithoutPreview, artwork: parent.artwork, layer_manifest: parent.layer_manifest,
+        geometry: parent.geometry, dependencies };
+      const targetStateHash = compositionStateHash(candidate);
+      const permissions = new Map(context.brief.permissions.items.map((item) => [`${item.asset_id}\u0000${item.action}`, item.status]));
+      const researchPermissions = new Map(context.research.permissions.items.map((item) => [`${item.asset_id}\u0000${item.action}`, item.status]));
+      for (const asset of parent.binding.assets) {
+        const sourceAsset = context.research.assets.items.find((item) => item.asset_id === asset.asset_id);
+        const requiredActions = ["display", "reproduce", ...(parent.layer_manifest.some((layer) =>
+          layer.kind === "approved_asset" && layer.asset_id === asset.asset_id) ? ["modify"] : [])];
+        const rights = evidence.asset_rights.filter((proof) => proof?.asset_id === asset.asset_id);
+        if (!sourceAsset || sourceAsset.content_hash !== `sha256:${asset.sha256}` ||
+            requiredActions.some((actionName) => permissions.get(`${asset.asset_id}\u0000${actionName}`) !== "granted" ||
+              researchPermissions.get(`${asset.asset_id}\u0000${actionName}`) !== "granted" ||
+              !rights.some((proof) => proof.action === actionName && proof.source_ref === sourceAsset.source_id &&
+                proof.content_hash === sourceAsset.content_hash))) {
+          throw new CreativeApiError("permission_denied", operation, "composition.asset_rights");
+        }
+        const isFenced = requiredPort(ports, "storage.isAssetFenced", operation);
+        if (await isFenced(Object.freeze({ scope: context.scope, asset_id: asset.asset_id,
+          content_hash: sourceAsset.content_hash }))) throw new CreativeApiError("permission_denied", operation, "asset_invalidation");
+        const readAsset = requiredPort(ports, "composition.readApprovedAssetBytes", operation);
+        let rawAsset;
+        try { rawAsset = await readAsset(Object.freeze({ scope: context.scope, asset_id: asset.asset_id,
+          content_hash: sourceAsset.content_hash, package_id: context.research.package_id,
+          package_hash: context.package_hash, permission_ref: asset.permission_ref })); }
+        catch { throw new CreativeApiError("unavailable", operation, "composition.asset_bytes"); }
+        let copiedAsset;
+        try { copiedAsset = snapshotCompositionBytesRecord(rawAsset, "bytes"); }
+        catch { throw new CreativeApiError("failed", operation, "composition.asset_bytes"); }
+        const assetRecord = copiedAsset.metadata;
+        assertOnlyKeys(assetRecord, ["asset_id", "content_hash", "mime_type"], "composition.asset_bytes");
+        if (assetRecord.asset_id !== asset.asset_id || assetRecord.content_hash !== sourceAsset.content_hash ||
+            assetRecord.mime_type !== sourceAsset.media_type || hashArtifactBytes(copiedAsset.bytes) !== sourceAsset.content_hash) {
+          throw new CreativeApiError("failed", operation, "composition.asset_bytes.hash");
+        }
+        try { await inspectOpenAIImageBytes(copiedAsset.bytes); }
+        catch { throw new CreativeApiError("failed", operation, "composition.asset_bytes.decode"); }
+      }
+      const preparePreview = requiredPort(ports, "composition.preparePreview", operation);
+      let rawPreview;
+      try {
+        rawPreview = await preparePreview(Object.freeze({ contract: "CreativeCompositionPreview", schema_version: "1.1",
+          scope: context.scope, actor_id: principal.actor_id, action_id: request.action_id,
+          request_hash: started.request_hash,
+          idempotency_key: `composition-preview:${canonicalHash({ scope: context.scope,
+            action_id: request.action_id, request_hash: started.request_hash, candidate_sha256: targetStateHash })}`,
+          base_revision: parent, candidate: Object.freeze({ ...candidate, state_sha256: targetStateHash }) }));
+      } catch { throw new CreativeApiError("unavailable", operation, "composition.preview"); }
+      let copiedPreview;
+      try { copiedPreview = snapshotCompositionBytesRecord(rawPreview); }
+      catch { throw new CreativeApiError("failed", operation, "composition.preview"); }
+      const previewResult = copiedPreview.metadata;
+      assertOnlyKeys(previewResult, ["contract", "schema_version", "preview", "authority_proof"], "composition.preview");
+      if (previewResult.contract !== "CreativeCompositionPreview" || previewResult.schema_version !== "1.1" ||
+          !isRecord(previewResult.preview) || !isRecord(previewResult.authority_proof)) {
+        throw new CreativeApiError("unavailable", operation, "composition.preview.contract");
+      }
+      const withPreviewBinding = { ...candidate.binding,
+        preview_sha256: previewResult.preview.preview_sha256?.slice?.("sha256:".length) };
+      try { ({ revision, preview_bytes: previewBytes } = createCompositionRevision({ ...candidate,
+        binding: withPreviewBinding, dependencies: { ...candidate.dependencies,
+          authority_proof: previewResult.authority_proof }, preview: previewResult.preview },
+      { trustedScope: context.scope, previewBytes: copiedPreview.bytes, nowMs: now() })); }
+      catch (error) { throw safeError(error, operation); }
+      if (canonicalSerialize(revision.artwork) !== canonicalSerialize(parent.artwork) ||
+          canonicalSerialize(revision.layer_manifest) !== canonicalSerialize(parent.layer_manifest) ||
+          canonicalSerialize(revision.geometry) !== canonicalSerialize(parent.geometry)) {
+        throw new CreativeApiError("failed", operation, "composition.revalidation_state");
+      }
+      let decodedPreview;
+      try { decodedPreview = await inspectOpenAIImageBytes(previewBytes); }
+      catch { throw new CreativeApiError("failed", operation, "composition.preview.decode"); }
+      const expectedMimeType = IMAGE_MIME_BY_FORMAT[decodedPreview.format];
+      if (!expectedMimeType || revision.preview.mime_type !== expectedMimeType ||
+          revision.preview.width_px !== decodedPreview.width || revision.preview.height_px !== decodedPreview.height ||
+          revision.preview.byte_length !== previewBytes.byteLength || revision.preview.preview_sha256 !== hashArtifactBytes(previewBytes)) {
+        throw new CreativeApiError("failed", operation, "composition.preview.metadata");
+      }
+    }
+    if (!alreadyStaged) {
+      const stage = requiredPort(ports, "storage.stageCompositionRevision", operation);
+      const staged = await stage(Object.freeze({ scope: context.scope, actor_id: principal.actor_id,
+        job_id: started.job_id, lease_token: started.lease_token, action_id: request.action_id,
+        request_hash: started.request_hash, revision, preview_bytes: previewBytes }));
+      if (!isRecord(staged) || staged.status !== "staged" ||
+          staged.revision?.revision_sha256 !== revision.revision_sha256 || !(staged.preview_bytes instanceof Uint8Array) ||
+          !Buffer.from(staged.preview_bytes).equals(Buffer.from(previewBytes))) {
+        throw new CreativeApiError("failed", operation, "composition.stage");
+      }
+    }
+    const result = Object.freeze({ contract: "CreativeCompositionRevalidationResult", schema_version: "1.0",
+      status: "saved", composition: createCompositionProductionEnvelope(revision),
+      revision_sha256: revision.revision_sha256, selection_revision: context.selection.revision,
+      preview_access: compositionPreviewAccess(revision, previewBytes) });
+    const fence = creativeContextFence(context.brief, context.design, context.design.design_version_id,
+      context.design.design_hash, { composition: Object.freeze({ composition_id: revision.composition_id,
+        action_id: request.action_id, job_id: started.job_id, target_revision_id: revision.revision_id,
+        target_revision_sha256: revision.revision_sha256, expected_current_revision_id: parent.revision_id,
+        expected_current_revision_sha256: parent.revision_sha256 }) });
+    const job = await publish(principal, request, started, result, (transaction) => {
+      const commit = requiredPort(ports, "storage.commitCompositionRevision", operation);
+      const committed = commit(Object.freeze({ scope: context.scope, actor_id: principal.actor_id,
+        job_id: started.job_id, action_id: request.action_id, request_hash: started.request_hash,
+        revision_sha256: revision.revision_sha256 }), transaction);
+      if (committed !== null && typeof committed === "object" && typeof committed.then === "function") {
+        throw new CreativeApiError("failed", operation, "composition.commit_async");
+      }
+      if (!isRecord(committed) || committed.status !== "saved" ||
+          committed.composition?.revision_sha256 !== revision.revision_sha256) {
+        throw new CreativeApiError("stale_version", operation, "composition.commit");
+      }
+    }, fence, () => {
+      validateCurrentCompositionRevision(revision, previewBytes, context.scope, operation);
+      assertCompositionAuthorityCurrent(context, revision, parent, operation);
+      validateCurrentCompositionRevision(revision, previewBytes, context.scope, operation);
+      return true;
+    });
+    return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: "1.3",
+      operation_id: job.job_id, job: publicJob(job, job.job_id), result }), operation);
   }
 
   function inspectionAssetUseSet(design, brief, operation) {
@@ -1690,7 +2604,7 @@ export function createCreativeApi(options = {}) {
     return { replayed: false, scope, request_hash, job_id: record.job_id, lease_token: record.lease_token };
   }
 
-  async function publish(principal, request, started, result, persist, publicationFence) {
+  async function publish(principal, request, started, result, persist, publicationFence, beforeCommit) {
     const completeIfActive = requiredPort(ports, "jobs.completeIfActive", request.operation);
     assertPublicIdentifiers(result, request.operation, "result");
     const record = await completeIfActive(Object.freeze({
@@ -1706,7 +2620,7 @@ export function createCreativeApi(options = {}) {
       const persisted = await persist(transaction);
       assertPublicIdentifiers(result, request.operation, "result");
       return persisted;
-    });
+    }, beforeCommit);
     if (!isRecord(record)) throw new CreativeApiError("unavailable", request.operation);
     if (record.status === "cancelled") throw new CreativeApiError("cancelled", request.operation);
     if (record.status === "stale_context") throw new CreativeApiError("stale_version", request.operation, "creative_context");
@@ -3494,6 +4408,10 @@ export function createCreativeApi(options = {}) {
     const payload = request.payload;
     const scope = started.scope;
     if (operation === "concepts.create") return executeConceptsCreate(principal, request, started);
+    if (["composition.create", "composition.update"].includes(operation)) {
+      return executeCompositionMutation(principal, request, started);
+    }
+    if (operation === "composition.revalidate") return executeCompositionRevalidation(principal, request, started);
     if (operation === "inspect") {
       const brief = await loadBrief(scope, payload.brief_id, operation);
       const design = await loadDesign(scope, brief, payload.design_version_id, operation);
@@ -4286,6 +5204,76 @@ export function createCreativeApi(options = {}) {
       }
       return saved;
     }
+    if (["composition.create", "composition.update", "composition.revalidate"].includes(request.operation)) {
+      assertStoredOnlyKeys(job.result, request.operation === "composition.revalidate"
+        ? ["contract", "schema_version", "status", "composition", "revision_sha256", "selection_revision", "preview_access"]
+        : ["status", "composition", "revision_sha256", "selection_revision", "preview_access"],
+      request.operation, "stored_result.composition");
+      const getAction = requiredPort(ports, "storage.getCompositionAction", request.operation);
+      const action = await getAction(Object.freeze({ scope: started.scope, action_id: request.action_id }));
+      if (!isRecord(action) || action.status !== "published" || action.action_id !== request.action_id ||
+          action.job_id !== job.job_id || action.actor_id !== principal.actor_id ||
+          action.request_hash !== started.request_hash || action.operation !== request.operation ||
+          action.intent?.schema_version !== (request.operation === "composition.revalidate" ? "1.1" : "1.0") ||
+          !isRecord(action.intent) || !isRecord(action.revision) || !(action.preview_bytes instanceof Uint8Array)) {
+        throw new CreativeApiError("unavailable", request.operation, "stored_result.composition_action");
+      }
+      let revision;
+      let envelope;
+      try {
+        revision = validateCompositionRevision(action.revision, { trustedScope: started.scope,
+          previewBytes: action.preview_bytes, allowExpired: true });
+        envelope = validateCompositionProductionEnvelope(job.result.composition, { trustedScope: started.scope,
+          previewBytes: action.preview_bytes });
+      } catch { throw new CreativeApiError("unavailable", request.operation, "stored_result.composition_revision"); }
+      let decodedPreview;
+      try { decodedPreview = await inspectOpenAIImageBytes(action.preview_bytes); }
+      catch (error) {
+        if (error instanceof OpenAIImagesProviderError && error.code === "image_decoder_unavailable") {
+          throw new CreativeApiError("unavailable", request.operation, "stored_result.preview.decoder", { retryable: true });
+        }
+        throw new CreativeApiError("failed", request.operation, "stored_result.preview.decode");
+      }
+      const decodedPreviewMime = IMAGE_MIME_BY_FORMAT[decodedPreview.format];
+      if (!decodedPreviewMime || revision.preview.mime_type !== decodedPreviewMime ||
+          revision.preview.width_px !== decodedPreview.width || revision.preview.height_px !== decodedPreview.height ||
+          revision.preview.byte_length !== action.preview_bytes.byteLength ||
+          revision.preview.preview_sha256 !== hashArtifactBytes(action.preview_bytes)) {
+        throw new CreativeApiError("failed", request.operation, "stored_result.preview.metadata");
+      }
+      const expectedParent = request.operation === "composition.create" ? null : action.expected_current;
+      let expectedPlan = null;
+      if (request.operation === "composition.update") {
+        try { expectedPlan = snapshotCompositionJson(request.payload.plan); }
+        catch { throw new CreativeApiError("unavailable", request.operation, "stored_result.request_plan"); }
+      }
+      if (canonicalSerialize(revision) !== canonicalSerialize(action.revision) ||
+          canonicalSerialize(envelope) !== canonicalSerialize(createCompositionProductionEnvelope(revision)) ||
+          revision.revision_sha256 !== action.revision.revision_sha256 ||
+          revision.revision_sha256 !== job.result.revision_sha256 ||
+          canonicalSerialize(action.result) !== canonicalSerialize({ status: "published",
+            revision_id: revision.revision_id, revision_sha256: revision.revision_sha256 }) ||
+          request.operation === "composition.revalidate" &&
+            (job.result.contract !== "CreativeCompositionRevalidationResult" || job.result.schema_version !== "1.0") ||
+          revision.dependencies.selection_revision !== job.result.selection_revision ||
+          job.result.status !== "saved" || revision.composition_id !== action.intent.composition_id ||
+          revision.revision_id !== action.intent.candidate_revision_id ||
+          revision.parent_revision_id !== (expectedParent?.revision_id ?? null) ||
+          revision.parent_revision_sha256 !== (expectedParent?.revision_sha256 ?? null) ||
+          request.operation === "composition.update" && canonicalSerialize(action.intent.plan) !== canonicalSerialize(expectedPlan) ||
+          request.operation !== "composition.update" && action.intent.plan !== null ||
+          request.operation === "composition.revalidate" &&
+            (action.expected_current?.revision_id !== request.payload.expected_current_revision_id ||
+             action.expected_current?.revision_sha256 !== request.payload.expected_current_revision_sha256 ||
+             revision.revision_id !== request.payload.candidate_revision_id)) {
+        throw new CreativeApiError("unavailable", request.operation, "stored_result.composition_identity");
+      }
+      const expectedAccess = compositionPreviewAccess(revision, action.preview_bytes);
+      if (canonicalSerialize(job.result.preview_access) !== canonicalSerialize(expectedAccess)) {
+        throw new CreativeApiError("unavailable", request.operation, "stored_result.preview_access");
+      }
+      return job.result;
+    }
     if (["generate", "edit"].includes(request.operation)) {
       assertStoredOnlyKeys(job.result, ["design", "usage", "usage_evidence", "attempt_id", "telemetry_evidence",
         "inspection_repair"], request.operation, "stored_result");
@@ -4712,6 +5700,8 @@ export function createCreativeApi(options = {}) {
     try {
       const snapshot = immutableRequestSnapshot(requestInput);
       if (snapshot?.schema_version === "1.1") responseSchemaVersion = "1.1";
+      if (snapshot?.schema_version === "1.2") responseSchemaVersion = "1.2";
+      if (snapshot?.schema_version === "1.3") responseSchemaVersion = "1.3";
       operation = CREATIVE_API_OPERATIONS.includes(snapshot?.operation) ? snapshot.operation : "unknown";
       request = validateRequest(snapshot);
       operation = request.operation;
@@ -4728,6 +5718,8 @@ export function createCreativeApi(options = {}) {
         tenant_id: principal.tenant_id, project_id: principal.project_id, actor_id: principal.actor_id });
       if (operation === "brief.create") return await createBrief(principal, request);
       if (operation === "brief.invalidate") return await invalidateBrief(principal, request);
+      if (operation === "composition.get") return await getPublicComposition(principal, request);
+      if (operation === "composition.history") return await getPublicCompositionHistory(principal, request);
       if (operation === "list") {
         const scope = scopeFor(principal, boundedString(request.payload.brief_id, "brief_id"));
         const limit = request.payload.limit === undefined ? 20 : request.payload.limit;
@@ -4789,6 +5781,28 @@ export function createCreativeApi(options = {}) {
           typeof target.actor_id !== "string" || !CREATIVE_API_OPERATIONS.includes(target.operation)) {
           throw new CreativeApiError("not_found", operation, "job_id");
         }
+        const isCompositionJob = ["composition.create", "composition.update", "composition.revalidate"].includes(target.operation);
+        const compositionBriefId = isCompositionJob ? boundedString(target.brief_id, "brief_id") : null;
+        if (isCompositionJob && typeof ports.storage?.getCompositionActionIdentityByJob === "function") {
+          const identify = ports.storage.getCompositionActionIdentityByJob;
+          const identity = await identify(Object.freeze({ scope, job_id }));
+          if (identity !== null) {
+            const identityKeys = ["tenant_id", "project_id", "brief_id", "job_id", "actor_id", "action_id", "operation", "request_hash"];
+            const identityStringFields = ["tenant_id", "project_id", "brief_id", "job_id", "actor_id", "action_id", "request_hash"];
+            if (!isRecord(identity) || Object.keys(identity).length !== identityKeys.length ||
+                Object.keys(identity).some((key) => !identityKeys.includes(key)) ||
+                identityStringFields.some((field) => typeof identity[field] !== "string" || identity[field].trim() === "" ||
+                  identity[field].length > 256) ||
+                identity.tenant_id !== scope.tenant_id || identity.project_id !== scope.project_id ||
+                identity.brief_id !== compositionBriefId || identity.job_id !== job_id ||
+                identity.actor_id !== target.actor_id || identity.action_id !== target.action_id ||
+                identity.operation !== target.operation ||
+                typeof identity.request_hash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(identity.request_hash) ||
+                identity.request_hash !== target.request_hash) {
+              throw new CreativeApiError("failed", operation, "composition.action_identity");
+            }
+          }
+        }
         const cancel = requiredPort(ports, "jobs.cancel", operation);
         const record = await cancel(Object.freeze({ scope, actor_id: principal.actor_id,
           job_id, target_action_id: target.action_id, action_id: request.action_id,
@@ -4801,11 +5815,27 @@ export function createCreativeApi(options = {}) {
         if (record.job.job_id !== job_id || record.job.action_id !== target.action_id || record.job.request_hash !== target.request_hash) {
           throw new CreativeApiError("scope_denied", operation, "job_id");
         }
+        if (isCompositionJob && record.job.brief_id !== compositionBriefId) {
+          throw new CreativeApiError("scope_denied", operation, "brief_id");
+        }
+        if (isCompositionJob) {
+          const reconcile = requiredPort(ports, "storage.recoverCompositionAction", operation);
+          const compositionScope = Object.freeze({ ...scope, brief_id: compositionBriefId });
+          const recovered = await reconcile(Object.freeze({ scope: compositionScope, action_id: target.action_id }));
+          if (!isRecord(recovered) || !["cancelled", "unknown", "already_final", "not_found", "pending"].includes(recovered.status)) {
+            throw new CreativeApiError("unavailable", operation, "composition_recovery");
+          }
+          if (recovered.status === "unknown") {
+            throw new CreativeApiError(recovered.code === "integrity_error" ? "failed" : "unavailable",
+              operation, "composition_recovery");
+          }
+        }
         return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: CREATIVE_API_VERSION,
           job: publicJob(record.job, record.job.job_id) }), operation);
       }
       let started = await beginMutation(principal, request);
-      if (started.replayed && ["inspect", "concepts.create"].includes(request.operation) && started.job.status === "running" &&
+      if (started.replayed && ["inspect", "concepts.create", "composition.create", "composition.update", "composition.revalidate"].includes(request.operation) &&
+        started.job.status === "running" &&
         typeof ports.jobs?.resumeExpired === "function") {
         const resumed = await ports.jobs.resumeExpired(Object.freeze({ scope: started.scope, actor_id: principal.actor_id,
           job_id: started.job.job_id, action_id: request.action_id, request_hash: started.request_hash }));
@@ -4828,6 +5858,13 @@ export function createCreativeApi(options = {}) {
         }
       }
       if (started.replayed) {
+        if (["composition.create", "composition.update", "composition.revalidate"].includes(request.operation) && started.job.status === "cancelled") {
+          const reconcile = requiredPort(ports, "storage.recoverCompositionAction", request.operation);
+          const recovered = await reconcile(Object.freeze({ scope: started.scope, action_id: request.action_id }));
+          if (!isRecord(recovered) || !["cancelled", "already_final", "not_found"].includes(recovered.status)) {
+            throw new CreativeApiError("failed", request.operation, "composition_recovery");
+          }
+        }
         if (started.job.status === "completed") {
           const replayedResult = await validateReplay(principal, request, started);
           return projectPublicIdentifiers(Object.freeze({ ok: true, contract: "CreativeApiResponse", schema_version: responseVersionFor(request),
@@ -4854,6 +5891,13 @@ export function createCreativeApi(options = {}) {
         }
         if (failed.status === "cancelled") throw new CreativeApiError("cancelled", operation);
         assertScopedRecord(failed.job, started.scope, operation);
+        if (["composition.create", "composition.update", "composition.revalidate"].includes(operation) && failed.status === "failed") {
+          const reconcile = requiredPort(ports, "storage.recoverCompositionAction", operation);
+          const recovered = await reconcile(Object.freeze({ scope: started.scope, action_id: request.action_id }));
+          if (!isRecord(recovered) || !["unknown", "already_final", "not_found"].includes(recovered.status)) {
+            throw new CreativeApiError("unavailable", operation, "composition_recovery");
+          }
+        }
         throw safe;
       }
       await emitTrace({ event: "creative_api.completed", operation, operation_id: response.operation_id,

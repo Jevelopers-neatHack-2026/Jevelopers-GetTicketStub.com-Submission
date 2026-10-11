@@ -242,10 +242,33 @@ function usageFromPayload(payload, transportAttemptId, _rawProviderRequestId, ta
     if (unmapped) findings.push("usage.unmapped_fields");
     projected = Object.create(null);
     for (const key of USAGE_ROOT_KEYS) if (Object.hasOwn(rawUsage, key)) projected[key] = rawUsage[key];
+    if (isRecord(projected.cost_details)) {
+      const rawDetails = projected.cost_details;
+      let detailCount = 0;
+      let detailUnmapped = false;
+      for (const key in rawDetails) {
+        if (!Object.hasOwn(rawDetails, key)) continue;
+        detailCount += 1;
+        if (!COST_DETAIL_KEYS.includes(key)) detailUnmapped = true;
+        if (detailCount > 32) {
+          findings.push("usage.cost_details.too_many_fields");
+          break;
+        }
+      }
+      if (detailUnmapped) findings.push("usage.cost_details.unmapped_fields");
+      const boundedDetails = Object.create(null);
+      // Read only the three documented amount fields. This preserves valid
+      // billing observations even if the provider adds an over-wide extension.
+      for (const key of COST_DETAIL_KEYS) {
+        if (Object.hasOwn(rawDetails, key)) boundedDetails[key] = rawDetails[key];
+      }
+      projected.cost_details = boundedDetails;
+    }
   }
   let usage = attach(normalizeOpenRouterImageUsage(projected, { transport_attempt_id: transportAttemptId }));
   for (const finding of findings) usage = attach(usageWithMissingField(usage, finding, undefined, targetBindingSha256));
-  return Object.freeze({ usage, present: true, unsupported_shape: findings.includes("usage.too_many_fields") });
+  return Object.freeze({ usage, present: true, unsupported_shape: findings.some((finding) =>
+    finding === "usage.too_many_fields" || finding === "usage.cost_details.too_many_fields") });
 }
 
 function classifyError(payload, status) {

@@ -30,7 +30,7 @@ const REQUIRED_TEST_TITLES = Object.freeze([
   "inspection repair remains review-gated when trusted owner usage evidence is unavailable",
   "CE09 acceptance case 4 persists cumulative root limits across restart and blocks a third repair",
   "populated V6 records migrate additively and replay legacy telemetry as unknown without redispatch",
-  "storage schema v2 migrates additively through private provider attribution, inspection, and concepts v10",
+  "storage schema v2 migrates additively through concepts and composition schema v13",
   "public projection rejects sensitive object keys and Basic credentials without echoing diagnostic paths",
 ]);
 

@@ -46,6 +46,10 @@ jobs:
         run: make check TARGET=brief MODE=mock
       - name: CE-03 native Images adapter and actual API/C03/CE08 fixtures
         run: make check TARGET=image-adapter MODE=mock
+      - name: Composition authority contracts, SQLite lifecycle, recovery and strict public types
+        env:
+          COMPOSITION_AUTHORITY_EVIDENCE_DIR: build/composition-authority-evidence
+        run: make check TARGET=composition MODE=mock
       - name: CE-03-OR OpenRouter Images adapter, API/C03/CE08/CE11 and store fixtures
         run: make check TARGET=openrouter-image-adapter MODE=mock
       - name: CE-04 parentless concepts API, recovery, metering, package and type fixtures
@@ -288,6 +292,7 @@ jobs:
             build/concepts-CI-evidence.json
             build/concepts-CI-test.tap
             build/concepts-package-artifacts/
+            build/composition-authority-evidence/
             build/concepts-failclosedlive-evidence.json
             build/concepts-failclosedlive.stdout.json
             build/inspection-evidence.json

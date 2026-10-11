@@ -59,6 +59,7 @@ typecheck-boundary-contracts:
 typecheck-api:
 	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 examples/api/public-consumer.mts
 	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 tests/contracts/metering/public-consumer.mts
+	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck false --module NodeNext --moduleResolution NodeNext --target ES2022 tests/api/composition-public-consumer.mts
 
 typecheck-preflight:
 	node examples/frontend-action-roundtrip/node_modules/typescript/bin/tsc -p tests/preflight/types/tsconfig.json
@@ -95,6 +96,7 @@ check:
 		concepts:mock) node scripts/concepts-check.mjs --mode mock --out build/concepts-mock-evidence.json && $(MAKE) typecheck-concepts && $(MAKE) concepts-package-check ;; \
 		concepts:CI) node scripts/concepts-check.mjs --mode CI --out build/concepts-CI-evidence.json && $(MAKE) typecheck-concepts && $(MAKE) concepts-package-check ;; \
 		concepts:failclosedlive) node scripts/concepts-check.mjs --mode failclosedlive --out build/concepts-failclosedlive-evidence.json ;; \
+		composition:mock) node --test tests/composition/*.test.mjs tests/versions/composition-authority.test.mjs && $(MAKE) typecheck-api ;; \
 		inspection:mock) npm run check:inspection && $(MAKE) typecheck-inspection ;; \
 		inspection:live) node scripts/inspection-check.mjs --mode live --out build/inspection-live-gate.json ;; \
 		brief:mock) npm run check:brief && $(MAKE) typecheck-brief ;; \
@@ -107,8 +109,8 @@ check:
 		handoff-contract:mock) npm run check:handoff-contract && $(MAKE) typecheck-boundary-contracts ;; \
 		api:mock) npm run check:api && $(MAKE) typecheck-api ;; \
 		controls:mock) node fixtures/controls/check.mjs && $(MAKE) controls-runtime-prerequisite && $(MAKE) typecheck-controls && $(MAKE) controls-package-check ;; \
-		all:mock) npm test && npm run check:eval-policy && npm run check:metering-contract && npm run check:handoff-contract && npm run check:access-preflight && node scripts/access-preflight-check.mjs --mode mock --out build/access-preflight-evidence.json && npm run check:models && node scripts/image-adapter-check.mjs --mode mock --out build/image-adapter-evidence.json && node scripts/openrouter-image-adapter-check.mjs --mode mock --out build/openrouter-image-adapter-evidence.json && npm run check:brief && npm run check:versions && npm run check:creative-metering && npm run check:inspection && $(MAKE) typecheck-contracts && $(MAKE) typecheck-api && $(MAKE) typecheck-preflight && $(MAKE) typecheck-brief && $(MAKE) typecheck-telemetry && $(MAKE) typecheck-models && $(MAKE) typecheck-inspection && $(MAKE) check TARGET=controls MODE=mock ;; \
-		*) echo "Unsupported TARGET=$(TARGET) MODE=$(MODE): only offline mock checks are implemented and no live provider dispatch exists; access-preflight, image-adapter, openrouter-image-adapter, and inspection live gates are fail-closed." >&2; exit 2 ;; \
+		all:mock) npm test && npm run check:eval-policy && npm run check:metering-contract && npm run check:handoff-contract && npm run check:access-preflight && node scripts/access-preflight-check.mjs --mode mock --out build/access-preflight-evidence.json && npm run check:models && node scripts/image-adapter-check.mjs --mode mock --out build/image-adapter-evidence.json && node scripts/openrouter-image-adapter-check.mjs --mode mock --out build/openrouter-image-adapter-evidence.json && npm run check:brief && npm run check:versions && $(MAKE) check TARGET=composition MODE=mock && npm run check:creative-metering && npm run check:inspection && $(MAKE) typecheck-contracts && $(MAKE) typecheck-api && $(MAKE) typecheck-preflight && $(MAKE) typecheck-brief && $(MAKE) typecheck-telemetry && $(MAKE) typecheck-models && $(MAKE) typecheck-inspection && $(MAKE) check TARGET=controls MODE=mock ;; \
+		*) echo "Unsupported TARGET=$(TARGET) MODE=$(MODE): only offline mock checks are implemented and no live provider dispatch exists; access-preflight, image-adapter, openrouter-image-adapter, composition, and inspection live gates are fail-closed." >&2; exit 2 ;; \
 	esac
 
 acceptance:

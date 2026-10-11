@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { canonicalHash } from "../../src/contracts/index.mjs";
 import { CreativeVersionStore, readPrivateStoreMigrationDiagnostic } from "../../src/versions/store.mjs";
@@ -34,6 +36,16 @@ function usageInput(row, provider, model, usage) {
 }
 
 const USAGE = { completeness: "unknown", transport_attempt_id: "", input_tokens: 4, missing_fields: ["usage.profile_mapping_pending"] };
+
+function storeMigrationSnapshot(database) {
+  const schema = database.prepare(`SELECT type,name,tbl_name,sql FROM sqlite_master
+    WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name`).all();
+  const tables = schema.filter((row) => row.type === "table").map((row) => row.name);
+  const rows = Object.fromEntries(tables.map((table) => [table, database.prepare(`SELECT * FROM "${table}"`).all()
+    .map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key,
+      value instanceof Uint8Array ? { blob_base64: Buffer.from(value).toString("base64") } : value])))]));
+  return { user_version: database.prepare("PRAGMA user_version").get().user_version, schema, rows };
+}
 
 test("private usage attribution accepts the explicit allowlist and rejects every other provider", async (t) => {
   const { store } = await createStore(t);
@@ -83,11 +95,19 @@ test("cost fields stay OpenRouter-only and must keep the unsettled provider-repo
   }
 });
 
-test("a database with the legacy openai-only CHECK is widened in place without losing rows, triggers, or keys", async (t) => {
+test("a schema-13 database with the legacy openai-only CHECK is widened in place without losing rows, triggers, or keys", async (t) => {
   const { store: original } = await createStore(t);
   let id = 0;
   const makePorts = (store) => createCreativeVersionApiPorts({ store, idFactory: () => `or-widen-port-${++id}` });
   const legacy = await dispatchRow(original, makePorts(original), "legacy-row", "openai", "gpt-image-2.5-sunburst-2026-09-08");
+  const providerRequestId = "fixture-only:legacy-request";
+  assert.equal(original.recordPrivateProviderAttribution({ scope: DEFAULT_SCOPE, actor_id: "actor-1",
+    job_id: legacy.job_id, action_id: legacy.action_id, request_hash: legacy.request_hash, operation: "generate",
+    provider: "openai", model: "gpt-image-2.5-sunburst-2026-09-08", reservation_ref: legacy.reservation_ref,
+    billable_attempt_id: legacy.billable_attempt_id, transport_attempt_id: legacy.transport_attempt_id,
+    dispatch_intent_ref: legacy.dispatch_intent_ref, provider_request_id: providerRequestId,
+    provider_request_ref: `provider-request-${createHash("sha256").update(providerRequestId, "utf8").digest("hex")}` }).status,
+  "recorded");
   original.recordPrivateProviderUsageAttribution(usageInput(legacy, "openai", "gpt-image-2.5-sunburst-2026-09-08",
     { ...USAGE, transport_attempt_id: legacy.transport_attempt_id }));
   // Recreate the tables from the verbatim base (dbbd10d) DDL, including its triggers.
@@ -95,30 +115,44 @@ test("a database with the legacy openai-only CHECK is widened in place without l
   const widened = "CHECK(provider_name IN ('openai','openrouter'))";
   assert.ok(sql("private_provider_usage_attributions").includes(widened), "fresh databases use the allowlist");
   const rows = {};
+  const triggerSql = {};
   for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
     rows[table] = original.db.prepare(`SELECT * FROM ${table}`).all().map((row) => ({ ...row }));
+    triggerSql[table] = original.db.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name=? ORDER BY name")
+      .all(table);
     original.db.exec(`DROP TABLE ${table}`);
   }
   original.db.exec(readFileSync(new URL("../../fixtures/versions/legacy-private-attribution-ddl.sql", import.meta.url), "utf8"));
-  for (const row of rows.private_provider_usage_attributions) {
-    original.db.prepare(`INSERT INTO private_provider_usage_attributions VALUES(${Object.keys(row).map(() => "?").join(",")})`).run(...Object.values(row));
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    for (const row of rows[table]) {
+      original.db.prepare(`INSERT INTO ${table} VALUES(${Object.keys(row).map(() => "?").join(",")})`).run(...Object.values(row));
+    }
   }
   assert.ok(sql("private_provider_usage_attributions").includes("CHECK(provider_name='openai')"));
-  assert.throws(() => original.db.prepare("UPDATE private_provider_usage_attributions SET provider_model='x'").run(), /immutable/);
-  const before = { ...original.db.prepare("SELECT * FROM private_provider_usage_attributions").get() };
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    assert.throws(() => original.db.prepare(`UPDATE ${table} SET provider_model='x'`).run(), /immutable/);
+  }
   const { databasePath, objectRoot } = original;
   original.close();
 
   const migrated = new CreativeVersionStore({ databasePath, objectRoot, now: () => Date.parse("2026-10-11T12:00:00.000Z") });
   t.after(() => migrated.close());
-  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 10, "the storage major is unchanged");
-  assert.deepEqual({ ...migrated.db.prepare("SELECT * FROM private_provider_usage_attributions").get() }, before);
+  assert.equal(migrated.db.prepare("PRAGMA user_version").get().user_version, 13,
+    "the additive private CHECK rebuild does not change the current schema version");
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    assert.deepEqual(migrated.db.prepare(`SELECT * FROM ${table}`).all().map((row) => ({ ...row })), rows[table],
+      `${table} retains every full private record across the independent opener`);
+    assert.deepEqual(migrated.db.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name=? ORDER BY name")
+      .all(table), triggerSql[table], `${table} retains its exact immutability trigger SQL`);
+  }
   for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
     const rebuilt = migrated.db.prepare("SELECT sql FROM sqlite_master WHERE name=?").get(table).sql;
     assert.ok(rebuilt.includes(widened) && !rebuilt.includes("CHECK(provider_name='openai')"), table);
   }
-  assert.throws(() => migrated.db.prepare("UPDATE private_provider_usage_attributions SET provider_model='x'").run(), /immutable/);
-  assert.throws(() => migrated.db.prepare("DELETE FROM private_provider_usage_attributions").run(), /immutable/);
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    assert.throws(() => migrated.db.prepare(`UPDATE ${table} SET provider_model='x'`).run(), /immutable/);
+    assert.throws(() => migrated.db.prepare(`DELETE FROM ${table}`).run(), /immutable/);
+  }
   assert.deepEqual(migrated.db.prepare("PRAGMA foreign_key_check").all(), []);
   const ports = makePorts(migrated);
   const fresh = await dispatchRow(migrated, ports, "after-widen");
@@ -131,17 +165,25 @@ test("a database with the legacy openai-only CHECK is widened in place without l
   migrated.close();
   const reopened = new CreativeVersionStore({ databasePath, objectRoot, now: () => Date.parse("2026-10-11T12:00:00.000Z") });
   t.after(() => reopened.close());
+  assert.equal(reopened.db.prepare("PRAGMA user_version").get().user_version, 13);
+  for (const table of ["private_provider_attributions", "private_provider_usage_attributions"]) {
+    assert.deepEqual(reopened.db.prepare(`SELECT * FROM ${table}`).all().slice(0, rows[table].length).map((row) => ({ ...row })),
+      rows[table], `${table} keeps the same legacy rows after an idempotent second open`);
+    assert.deepEqual(reopened.db.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name=? ORDER BY name")
+      .all(table), triggerSql[table]);
+  }
   assert.equal(reopened.db.prepare("SELECT COUNT(*) AS n FROM private_provider_usage_attributions").get().n, 2,
     "reopening is idempotent and keeps both rows");
 });
 
 test("a failed widening migration reports a generic storage_version error and keeps a sanitized private cause", async (t) => {
   const { store: original } = await createStore(t);
-  original.db.exec("DROP TABLE private_provider_attributions");
-  original.db.exec(readFileSync(new URL("../../fixtures/versions/legacy-private-attribution-ddl.sql", import.meta.url), "utf8")
-    .split("CREATE TABLE private_provider_usage_attributions")[0]);
-  // A conflicting leftover table makes the rename step fail deterministically.
-  original.db.exec("CREATE TABLE private_provider_attributions_widen_old (x TEXT)");
+  original.db.exec("DROP TABLE private_provider_attributions; DROP TABLE private_provider_usage_attributions;");
+  original.db.exec(readFileSync(new URL("../../fixtures/versions/legacy-private-attribution-ddl.sql", import.meta.url), "utf8"));
+  // The first private table can rebuild inside makeSchema's borrowed transaction;
+  // a conflict on the second rebuild must roll back that first change too.
+  original.db.exec("CREATE TABLE private_provider_usage_attributions_widen_old (x TEXT)");
+  const before = storeMigrationSnapshot(original.db);
   const { databasePath, objectRoot } = original;
   original.close();
   let caught;
@@ -151,4 +193,9 @@ test("a failed widening migration reports a generic storage_version error and ke
   assert.ok(diagnostic && typeof diagnostic === "object");
   assert.ok(!JSON.stringify(caught).includes("private_provider_attributions"));
   assert.ok(!String(caught.message).includes("widen_old"));
+  const after = new DatabaseSync(databasePath);
+  assert.deepEqual(storeMigrationSnapshot(after), before,
+    "failure in the second independent table rebuild restores both prior schemas, triggers, rows, and version");
+  assert.deepEqual(after.prepare("PRAGMA foreign_key_check").all(), []);
+  after.close();
 });

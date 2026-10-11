@@ -7,6 +7,7 @@ const publicSubpaths = [
   'contracts/decision-port/v1',
   'contracts/metering',
   'contracts/approval-handoff',
+  'contracts/composition-authority',
   'preflight',
   'planning',
   'versions',

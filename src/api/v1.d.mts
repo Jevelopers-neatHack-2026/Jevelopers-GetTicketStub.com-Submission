@@ -15,9 +15,23 @@ import type {
   ApprovalVerifier,
   ArtworkHandoff,
   ConsumptionReceipt,
+  CompositionEditPlan,
   HandoffArtifact,
   HandoffLayer,
 } from "../contracts/approval-handoff.mjs";
+import type {
+  CreativeCompositionAssetBytesInput,
+  CreativeCompositionAssetBytesResult,
+  CreativeCompositionAssetRight,
+  CreativeCompositionEditPolicy,
+  CreativeCompositionPreviewAccess,
+  CreativeCompositionPreviewInput,
+  CreativeCompositionPreviewResult,
+  CreativeCompositionProductionEnvelope,
+  CreativeCompositionRevision,
+  CreativeCompositionSha256,
+  CreativeCompositionSourceResult,
+} from "../contracts/composition-authority.mjs";
 import type {
   MeteredAttemptRequest,
   MeteredDispatchContext,
@@ -39,7 +53,13 @@ import type {
 
 export type CreativeOperation =
   | "generate" | "edit" | "concepts.create" | "inspect" | "list" | "compare" | "restore" | "cancel" | "handoff" | "job.status"
-  | "brief.create" | "brief.invalidate";
+  | "brief.create" | "brief.invalidate" | "composition.create" | "composition.get" | "composition.update"
+  | "composition.history" | "composition.revalidate";
+/** API 1.2 admits only a non-empty composition plan. The older handoff plan
+ * remains unchanged for consumers of that contract outside this API boundary. */
+export type CreativeCompositionEditPlan = Omit<CompositionEditPlan, "operations"> & Readonly<{
+  operations: readonly [CompositionEditPlan["operations"][number], ...CompositionEditPlan["operations"][number][]];
+}>;
 export type CreativeJobStatus = "queued" | "running" | "completed" | "cancelled" | "failed";
 export type CreativeErrorCode =
   | "invalid_request" | "unsupported_version" | "unauthorized" | "permission_denied"
@@ -347,6 +367,273 @@ export interface CreativeConceptStoragePort {
     readonly CreativeConceptPublishedVersion[] | Promise<readonly CreativeConceptPublishedVersion[]>;
 }
 
+export interface CreativeCompositionStoredPage {
+  readonly items: readonly CreativeCompositionRevision[];
+  readonly has_more: boolean;
+}
+export interface CreativeCompositionCurrentIdentity {
+  readonly composition_id: string;
+  readonly revision_id: string;
+  readonly revision_sha256: CreativeCompositionSha256;
+  readonly design_version_id: string;
+  readonly design_version_sha256: CreativeCompositionSha256;
+  readonly selection_revision: number;
+  readonly updated_at: string;
+}
+export interface CreativeCompositionActionIntentV1_0 {
+  readonly contract: "CreativeCompositionActionIntent";
+  readonly schema_version: "1.0";
+  readonly operation: "composition.create" | "composition.update";
+  readonly composition_id: string;
+  readonly candidate_revision_id: string;
+  readonly source_revision_id: string | null;
+  readonly source_revision_sha256: CreativeCompositionSha256 | null;
+  readonly plan: CreativeCompositionEditPlan | null;
+}
+export interface CreativeCompositionActionIntentV1_1 extends Omit<CreativeCompositionActionIntentV1_0,
+  "schema_version" | "operation"> {
+  readonly schema_version: "1.1";
+  readonly operation: "composition.revalidate";
+  readonly plan: null;
+}
+export type CreativeCompositionActionIntent = CreativeCompositionActionIntentV1_0 | CreativeCompositionActionIntentV1_1;
+export interface CreativeCompositionActionRecord {
+  readonly status: "pending" | "staged" | "published" | "stale" | "cancelled" | "unknown" | "abandoned";
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly action_id: string;
+  readonly operation: "composition.create" | "composition.update" | "composition.revalidate";
+  readonly request_hash: `sha256:${string}`;
+  readonly intent: CreativeCompositionActionIntent;
+  readonly expected_current: Readonly<{ revision_id: string; revision_sha256: `sha256:${string}` }> | null;
+  readonly expected_design_version_id: string;
+  readonly expected_design_hash: `sha256:${string}`;
+  readonly expected_selection_revision: number;
+  readonly revision: CreativeCompositionRevision | null;
+  readonly preview_bytes: Uint8Array | null;
+  readonly result: Readonly<Record<string, unknown>> | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+export interface CreativeCompositionBeginActionInput {
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly lease_token: string;
+  readonly action_id: string;
+  readonly operation: "composition.create" | "composition.update" | "composition.revalidate";
+  readonly request_hash: `sha256:${string}`;
+  readonly intent: CreativeCompositionActionIntent;
+  readonly expected_current: CreativeCompositionActionRecord["expected_current"];
+  readonly expected_design_version_id: string;
+  readonly expected_design_hash: `sha256:${string}`;
+  readonly expected_selection_revision: number;
+}
+export interface CreativeCompositionStageInput {
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly lease_token: string;
+  readonly action_id: string;
+  readonly request_hash: `sha256:${string}`;
+  readonly revision: CreativeCompositionRevision;
+  readonly preview_bytes: Uint8Array;
+}
+export interface CreativeCompositionFinishInput {
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly job_id: string;
+  readonly lease_token: string;
+  readonly action_id: string;
+  readonly request_hash: `sha256:${string}`;
+  readonly status: "abandoned" | "cancelled" | "stale" | "unknown";
+  readonly reason: string;
+}
+export interface CreativeCompositionCommitInput {
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly action_id: string;
+  readonly job_id: string;
+  readonly request_hash: `sha256:${string}`;
+  readonly revision_sha256: CreativeCompositionSha256;
+}
+export interface CreativeCompositionPublicationFence {
+  readonly composition_id: string;
+  readonly action_id: string;
+  readonly job_id: string;
+  readonly target_revision_id: string;
+  readonly target_revision_sha256: CreativeCompositionSha256;
+  readonly expected_current_revision_id: string | null;
+  readonly expected_current_revision_sha256: CreativeCompositionSha256 | null;
+}
+export type CreativeCompositionActionChange = CreativeCompositionActionRecord |
+  Readonly<{ status: "stale" | "conflict" }>;
+export type CreativeCompositionActionIdentity = Readonly<{
+  tenant_id: string;
+  project_id: string;
+  brief_id: string;
+  job_id: string;
+  actor_id: string;
+  action_id: string;
+  operation: "composition.create" | "composition.update" | "composition.revalidate";
+  request_hash: CreativeCompositionSha256;
+}>;
+export type CreativeCompositionRecoveryResult = Readonly<{
+  status: "cancelled" | "unknown" | "pending" | "already_final" | "not_found";
+  code?: string;
+  reason?: string;
+}>;
+export type CreativeCompositionCommitResult = Readonly<{
+  status: "saved" | "replayed";
+  composition: CreativeCompositionRevision;
+}>;
+export interface CreativeCompositionStoragePort {
+  beginCompositionAction(input: CreativeCompositionBeginActionInput): CreativeCompositionActionChange |
+    Promise<CreativeCompositionActionChange>;
+  getCompositionAction(input: Readonly<{ scope: TrustedScope & { brief_id: string }; action_id: string }>):
+    CreativeCompositionActionRecord | null | Promise<CreativeCompositionActionRecord | null>;
+  /** Local immutable action/job identity used to verify composition cancellation scope before mutation. */
+  getCompositionActionIdentityByJob?(input: Readonly<{ scope: TrustedScope; job_id: string }>):
+    CreativeCompositionActionIdentity | null | Promise<CreativeCompositionActionIdentity | null>;
+  stageCompositionRevision(input: CreativeCompositionStageInput): CreativeCompositionActionRecord |
+    Readonly<{ status: "conflict" }> | Promise<CreativeCompositionActionRecord | Readonly<{ status: "conflict" }>>;
+  finishCompositionAction(input: CreativeCompositionFinishInput): CreativeCompositionActionRecord |
+    Readonly<{ status: "conflict" }> | Promise<CreativeCompositionActionRecord | Readonly<{ status: "conflict" }>>;
+  recoverCompositionAction(input: Readonly<{ scope: TrustedScope & { brief_id: string }; action_id: string }>):
+    CreativeCompositionRecoveryResult | Promise<CreativeCompositionRecoveryResult>;
+  getCurrentComposition(input: Readonly<{ scope: TrustedScope & { brief_id: string };
+    design_version_id: string }>): Readonly<{ revision: CreativeCompositionRevision; preview_bytes: Uint8Array }> | null |
+    Promise<Readonly<{ revision: CreativeCompositionRevision; preview_bytes: Uint8Array }> | null>;
+  /** Additive API 1.3 capability. API 1.2 consumers may omit it; API 1.3
+   * history/revalidation operations fail closed when this capability is absent. */
+  getCurrentCompositionIdentity?(input: Readonly<{ scope: TrustedScope & { brief_id: string };
+    design_version_id: string }>): CreativeCompositionCurrentIdentity | null |
+    Promise<CreativeCompositionCurrentIdentity | null>;
+  assertCurrentComposition(input: Readonly<{ scope: TrustedScope & { brief_id: string };
+    composition_id: string; design_version_id: string; revision_id: string;
+    revision_sha256: CreativeCompositionSha256; selection_revision: number }>): Readonly<{
+      status: "current"; composition_id: string; revision_id: string;
+      revision_sha256: CreativeCompositionSha256; design_version_id: string; selection_revision: number }>;
+  getCompositionRevision(input: Readonly<{ scope: TrustedScope & { brief_id: string };
+    composition_id: string; revision_id: string }>): Readonly<{ revision: CreativeCompositionRevision; preview_bytes: Uint8Array }> | null |
+    Promise<Readonly<{ revision: CreativeCompositionRevision; preview_bytes: Uint8Array }> | null>;
+  listCompositionRevisions(input: Readonly<{ scope: TrustedScope & { brief_id: string };
+    composition_id: string; limit: number; after_revision_id?: string }>): CreativeCompositionStoredPage |
+    Promise<CreativeCompositionStoredPage>;
+  commitCompositionRevision(input: CreativeCompositionCommitInput,
+    transaction: CreativePublicationTransaction): CreativeCompositionCommitResult;
+}
+export interface CreativeCompositionVersionStoreMethods extends CreativeCompositionStoragePort {}
+
+export interface CreativeCompositionCurrentInput {
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly action_id: string;
+  readonly request_hash: `sha256:${string}`;
+  readonly brief: CreativeBrief;
+  readonly brief_hash: CreativeCompositionSha256;
+  readonly selected_design: DesignVersion;
+  readonly selection_revision: number;
+  readonly research_package: EventIntelligencePackage;
+  readonly package_hash: CreativeCompositionSha256;
+}
+export interface CreativeCompositionRevalidationRequest {
+  readonly contract: "CreativeCompositionRevalidationRequest";
+  readonly schema_version: "1.0";
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly action_id: string;
+  readonly request_hash: CreativeCompositionSha256;
+  readonly composition_id: string;
+  readonly expected_current: Readonly<{ revision_id: string; revision_sha256: CreativeCompositionSha256 }>;
+  readonly candidate_revision_id: string;
+  readonly base_revision: CreativeCompositionRevision;
+  readonly brief: CreativeBrief;
+  readonly brief_hash: CreativeCompositionSha256;
+  readonly selected_design: DesignVersion;
+  readonly selection_revision: number;
+  readonly research_package: EventIntelligencePackage;
+  readonly package_hash: CreativeCompositionSha256;
+}
+export interface CreativeCompositionRevalidationEvidence {
+  readonly contract: "CreativeCompositionRevalidationEvidence";
+  readonly schema_version: "1.0";
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly composition_id: string;
+  readonly expected_current: Readonly<{ revision_id: string; revision_sha256: CreativeCompositionSha256 }>;
+  readonly candidate_revision_id: string;
+  readonly brief_hash: CreativeCompositionSha256;
+  readonly facts_revision_id: string;
+  readonly facts_sha256: CreativeCompositionSha256;
+  readonly package_id: string;
+  readonly package_sha256: CreativeCompositionSha256;
+  readonly design_version_id: string;
+  readonly design_version_sha256: CreativeCompositionSha256;
+  readonly selection_revision: number;
+  readonly asset_rights: readonly CreativeCompositionAssetRight[];
+  readonly edit_policy: CreativeCompositionEditPolicy;
+}
+export interface CreativeCompositionCurrentAssertionInput {
+  readonly contract: "CreativeCompositionCurrentAssertion";
+  readonly schema_version: "1.1";
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly actor_id: string;
+  readonly action_id: string;
+  readonly request_hash: CreativeCompositionSha256;
+  readonly composition_id: string;
+  readonly expected_current_revision_id: string | null;
+  readonly expected_current_revision_sha256: CreativeCompositionSha256 | null;
+  readonly target_revision_id: string;
+  readonly target_revision_sha256: CreativeCompositionSha256;
+  readonly target_state_sha256: CreativeCompositionSha256;
+  readonly design_version_id: string;
+  readonly design_version_sha256: CreativeCompositionSha256;
+  readonly selection_revision: number;
+  readonly facts_revision_id: string;
+  readonly facts_sha256: CreativeCompositionSha256;
+  readonly package_id: string;
+  readonly package_sha256: CreativeCompositionSha256;
+  readonly checked_at: number;
+}
+export interface CreativeCompositionCurrentAssertionResult {
+  readonly contract: "CreativeCompositionCurrentAssertionResult";
+  readonly schema_version: "1.1";
+  readonly status: "current" | "stale";
+  readonly scope: TrustedScope & { readonly brief_id: string };
+  readonly composition_id: string;
+  readonly current_revision_id: string | null;
+  readonly current_revision_sha256: CreativeCompositionSha256 | null;
+  readonly selection_revision: number;
+  readonly design_version_id: string;
+  readonly design_version_sha256: CreativeCompositionSha256;
+  readonly facts_revision_id: string;
+  readonly facts_sha256: CreativeCompositionSha256;
+  readonly package_id: string;
+  readonly package_sha256: CreativeCompositionSha256;
+  readonly proof_ref: string;
+  readonly checked_at: number;
+  readonly expires_at: number;
+}
+export interface CreativeCompositionAuthorityPorts {
+  /** Trusted C04/current-composition owner read. Its exact returned data is still
+   * scope/currentness/hash/rights checked by the runtime before use. */
+  resolveCurrent(input: CreativeCompositionCurrentInput): CreativeCompositionSourceResult |
+    Promise<CreativeCompositionSourceResult>;
+  /** Additive API 1.3 capability. Existing API 1.2 authority providers remain valid. */
+  resolveRevalidation?(input: CreativeCompositionRevalidationRequest): CreativeCompositionRevalidationEvidence |
+    Promise<CreativeCompositionRevalidationEvidence>;
+  /** Idempotent by the supplied action key; returns exact preview bytes and a proof
+   * bound to the full candidate state digest. It must not issue approval or render artwork. */
+  preparePreview(input: CreativeCompositionPreviewInput): CreativeCompositionPreviewResult |
+    Promise<CreativeCompositionPreviewResult>;
+  /** Reads exact approved source bytes after current scoped rights have been resolved. */
+  readApprovedAssetBytes(input: CreativeCompositionAssetBytesInput): CreativeCompositionAssetBytesResult |
+    Promise<CreativeCompositionAssetBytesResult>;
+  /** Synchronous owner-backed final read after the last awaited preview operation. */
+  assertCurrent(input: CreativeCompositionCurrentAssertionInput): CreativeCompositionCurrentAssertionResult;
+}
+
 /** Exact synchronous/asynchronous behavior of the corresponding CreativeVersionStore methods. */
 export interface CreativeConceptVersionStoreMethods {
   beginConceptBatch(input: CreativeConceptBeginBatchInput): CreativeConceptBeginBatchResult;
@@ -481,6 +768,8 @@ export interface CreativeContextFence {
   inspection_rights?: CreativeAssetPermissionFence;
   /** Root inspection repair claim and its cumulative deadline. */
   inspection_repair?: CreativeInspectionRepairFence;
+  /** Versioned composition action/current-pointer compare-and-swap fence. */
+  composition?: CreativeCompositionPublicationFence;
 }
 
 /** A transaction capability owned by a durable jobs/storage adapter. Runtime
@@ -489,6 +778,11 @@ export interface CreativePublicationTransaction {
   readonly job_id: string;
   readonly lease_token: string;
 }
+
+/** A final publication check is synchronous and returns the literal sentinel.
+ * The sentinel keeps Promise-returning `async` callbacks out of the type
+ * surface while still distinguishing this fence from ordinary void callbacks. */
+export type CreativeSynchronousBeforeCommit = (transaction?: CreativePublicationTransaction) => true;
 
 export interface CreativeVersionCreationEvidence {
   job_id: string;
@@ -530,6 +824,16 @@ export interface CreativeApiRequestEnvelope {
 /** Concepts uses a separate, exact request envelope. Existing operations remain on 1.0. */
 export interface CreativeApiRequestV1_1Envelope extends Omit<CreativeApiRequestEnvelope, "schema_version"> {
   schema_version: "1.1";
+}
+
+/** Composition authority has an independent, additive request envelope. Legacy 1.0
+ * and concepts 1.1 request shapes remain closed and unchanged. */
+export interface CreativeApiRequestV1_2Envelope extends Omit<CreativeApiRequestEnvelope, "schema_version"> {
+  schema_version: "1.2";
+}
+/** API 1.3 adds metadata-only stale history and immutable proof renewal. */
+export interface CreativeApiRequestV1_3Envelope extends Omit<CreativeApiRequestEnvelope, "schema_version"> {
+  schema_version: "1.3";
 }
 
 export type CreativeDecisionInput = Pick<DecisionPortRequest, "execution_mode" | "state" | "questions">;
@@ -596,7 +900,22 @@ export type CreativeApiRequestV1_1 = CreativeApiRequestV1_1Envelope & {
     references: readonly Readonly<{ asset_id: string; role_ref: string }>[] };
 };
 
-export type CreativeApiRequest = CreativeApiRequestV1_0 | CreativeApiRequestV1_1;
+export type CreativeApiRequestV1_2 =
+  | (CreativeApiRequestV1_2Envelope & { operation: "composition.create"; action_id: string;
+      payload: { brief_id: string; design_version_id: string } })
+  | (CreativeApiRequestV1_2Envelope & { operation: "composition.get"; action_id?: string;
+      payload: { brief_id: string; design_version_id: string } })
+  | (CreativeApiRequestV1_2Envelope & { operation: "composition.update"; action_id: string;
+      payload: { brief_id: string; design_version_id: string; plan: CreativeCompositionEditPlan } });
+
+export type CreativeApiRequestV1_3 =
+  | (CreativeApiRequestV1_3Envelope & { operation: "composition.history"; action_id?: string;
+      payload: { brief_id: string; design_version_id: string; limit?: number; after_revision_id?: string } })
+  | (CreativeApiRequestV1_3Envelope & { operation: "composition.revalidate"; action_id: string;
+      payload: { brief_id: string; design_version_id: string; expected_current_revision_id: string;
+        expected_current_revision_sha256: CreativeCompositionSha256; candidate_revision_id: string } });
+
+export type CreativeApiRequest = CreativeApiRequestV1_0 | CreativeApiRequestV1_1 | CreativeApiRequestV1_2 | CreativeApiRequestV1_3;
 
 export interface TrustedCreativeActor extends TrustedScope {
   actor_id: string;
@@ -736,7 +1055,7 @@ export interface CreativeRuntimePorts {
       transaction?: CreativePublicationTransaction): Promise<{ status: "completed" | "replayed"; result_hash: string }> |
       { status: "completed" | "replayed"; result_hash: string };
     inspectionRepair?: InspectionRepairPort;
-  } & Partial<CreativeConceptStoragePort>;
+  } & Partial<CreativeConceptStoragePort> & Partial<CreativeCompositionStoragePort>;
   jobs?: {
     /** Fail closed before job creation or any operation-specific external port calls. */
     assertOperationAvailable?(input: { operation: CreativeOperation }):
@@ -746,7 +1065,8 @@ export interface CreativeRuntimePorts {
     /** The adapter must compare this fence in the same transaction that publishes the completed result. */
     completeIfActive(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;
       action_id: string; operation: CreativeOperation; result: unknown; publication_fence: CreativeContextFence },
-      publish: (transaction?: CreativePublicationTransaction) => Promise<unknown> | unknown):
+      publish: (transaction?: CreativePublicationTransaction) => Promise<unknown> | unknown,
+      beforeCommit?: CreativeSynchronousBeforeCommit):
       Promise<CompletedJob | CancelledJob | StaleContextJob> | CompletedJob | CancelledJob | StaleContextJob;
     failIfActive(input: { scope: TrustedScope; actor_id: string; job_id: string; lease_token: string;
       error: CreativeApiErrorShape }): Promise<FailedJobResult> | FailedJobResult;
@@ -799,6 +1119,7 @@ export interface CreativeRuntimePorts {
         adapter_snapshot: Readonly<Record<string, unknown>> }>> |
       Readonly<{ policy_snapshot: Readonly<Record<string, unknown>>; adapter_snapshot: Readonly<Record<string, unknown>> }>;
   };
+  composition?: CreativeCompositionAuthorityPorts;
   metering?: MeteringPort;
   /** Required by generate/edit/inspect and JEV-backed operations. The outbox shares durable API SQLite state. */
   telemetry?: CreativeTelemetryConfiguration;
@@ -1178,15 +1499,7 @@ export interface CreativeConceptLineage {
     maximum_single_reference_bytes: number; maximum_aggregate_reference_bytes: number;
     budget_scope_id: string; budget_snapshot_ref: string; budget_expires_at: string;
   }>>;
-  readonly adapter_snapshot: DeepReadonly<Readonly<{
-    capability_ref: string; capability_schema_version: string; provider_name: string; model: string;
-    endpoint: string; provider_operation: "edit"; operation_mapping_ref: string; operation_kind: string;
-    target_ref: string; sdk_name: string; sdk_version: string; configuration_ref: string;
-    configuration_sha256: `sha256:${string}`; configuration: Readonly<{
-      quality: string; size: string; output_format: string; background: string; moderation: string;
-    }>;
-    prompt_template_ref: string; prompt_template_version: string; prompt_template_sha256: `sha256:${string}`;
-  }>>;
+  readonly adapter_snapshot: CreativeConceptAdapterSnapshot;
   readonly source_assets: readonly DeepReadonly<Readonly<{
     asset_id: string; source_ref: string; content_hash: `sha256:${string}`; media_type: string;
     role_ref: string; package_id: string; package_sha256: `sha256:${string}`;
@@ -1234,7 +1547,15 @@ export interface CreativeConceptBatchResult {
   }>[];
 }
 
-export type CreativeApiResult = CreativeApiResultV1_0 | CreativeConceptBatchResult;
+export type CreativeApiResultV1_2 =
+  | Readonly<{ composition: null; status: "not_initialized" }>
+  | Readonly<{ composition: CreativeCompositionProductionEnvelope; status: "current";
+      preview_access: CreativeCompositionPreviewAccess }>
+  | Readonly<{ composition: CreativeCompositionProductionEnvelope;
+      status: "saved"; revision_sha256: CreativeCompositionSha256; selection_revision: number;
+      preview_access: CreativeCompositionPreviewAccess }>;
+
+export type CreativeApiResult = CreativeApiResultV1_0 | CreativeConceptBatchResult | CreativeApiResultV1_2;
 
 export interface CreativeInvalidationResult {
   event_id: string;
@@ -1260,6 +1581,12 @@ export interface CreativeApiErrorResponse {
 export interface CreativeApiV1_1ErrorResponse extends Omit<CreativeApiErrorResponse, "schema_version"> {
   schema_version: "1.1";
 }
+export interface CreativeApiV1_2ErrorResponse extends Omit<CreativeApiErrorResponse, "schema_version"> {
+  schema_version: "1.2";
+}
+export interface CreativeApiV1_3ErrorResponse extends Omit<CreativeApiErrorResponse, "schema_version"> {
+  schema_version: "1.3";
+}
 
 export interface CreativeApiSuccessResponse {
   ok: true;
@@ -1275,9 +1602,47 @@ export interface CreativeApiV1_1SuccessResponse extends Omit<CreativeApiSuccessR
   schema_version: "1.1";
   result?: CreativeConceptBatchResult;
 }
+export interface CreativeApiV1_2SuccessResponse extends Omit<CreativeApiSuccessResponse, "schema_version" | "result"> {
+  schema_version: "1.2";
+  result?: CreativeApiResultV1_2;
+}
+export interface CreativeCompositionHistoryRevisionIdentity {
+  readonly revision_id: string;
+  readonly revision_sha256: CreativeCompositionSha256;
+  readonly parent_revision_id: string | null;
+  readonly parent_revision_sha256: CreativeCompositionSha256 | null;
+  readonly design_version_id: string;
+  readonly design_version_sha256: CreativeCompositionSha256;
+  readonly created_at: string;
+}
+export interface CreativeCompositionHistoryResult {
+  readonly contract: "CreativeCompositionHistoryIdentity";
+  readonly schema_version: "1.0";
+  readonly status: "identity_only" | "not_initialized";
+  readonly current: CreativeCompositionCurrentIdentity | null;
+  readonly selection_compatibility: "current" | "changed" | "different_design" | "unavailable";
+  readonly revisions: readonly CreativeCompositionHistoryRevisionIdentity[];
+  readonly has_more: boolean;
+  readonly next_after_revision_id: string | null;
+}
+export interface CreativeCompositionRevalidationResult {
+  readonly contract: "CreativeCompositionRevalidationResult";
+  readonly schema_version: "1.0";
+  readonly status: "saved";
+  readonly composition: CreativeCompositionProductionEnvelope;
+  readonly revision_sha256: CreativeCompositionSha256;
+  readonly selection_revision: number;
+  readonly preview_access: CreativeCompositionPreviewAccess;
+}
+export interface CreativeApiV1_3SuccessResponse extends Omit<CreativeApiSuccessResponse, "schema_version" | "result"> {
+  schema_version: "1.3";
+  result?: CreativeCompositionHistoryResult | CreativeCompositionRevalidationResult;
+}
 
 export type CreativeApiResponse = CreativeApiSuccessResponse | CreativeApiErrorResponse |
-  CreativeApiV1_1SuccessResponse | CreativeApiV1_1ErrorResponse;
+  CreativeApiV1_1SuccessResponse | CreativeApiV1_1ErrorResponse |
+  CreativeApiV1_2SuccessResponse | CreativeApiV1_2ErrorResponse |
+  CreativeApiV1_3SuccessResponse | CreativeApiV1_3ErrorResponse;
 
 export declare class CreativeApiError extends Error {
   constructor(code: CreativeErrorCode, operation?: CreativeOperation | "unknown", field?: string,
@@ -1291,7 +1656,7 @@ export declare class CreativeApiError extends Error {
 }
 
 export declare const CREATIVE_API_VERSION: "1.0";
-export declare const CREATIVE_API_VERSIONS: readonly ["1.0", "1.1"];
+export declare const CREATIVE_API_VERSIONS: readonly ["1.0", "1.1", "1.2", "1.3"];
 export declare const CREATIVE_API_OPERATIONS: readonly CreativeOperation[];
 export declare function createCreativeApi(options?: {
   ports?: CreativeRuntimePorts;
@@ -1312,3 +1677,27 @@ export type OpenRouterConceptConfiguration = Readonly<{
 export type OpenRouterConceptCapabilities = Readonly<{
   generation: boolean; edit: false | Readonly<{ max_input_references: number }>;
 }>;
+
+type CreativeConceptAdapterSnapshotBase = Readonly<{
+  capability_ref: string; capability_schema_version: string; model: string;
+  endpoint: string; provider_operation: "edit"; operation_mapping_ref: string; operation_kind: string;
+  target_ref: string; sdk_name: string; sdk_version: string; configuration_ref: string;
+  configuration_sha256: `sha256:${string}`;
+  prompt_template_ref: string; prompt_template_version: string; prompt_template_sha256: `sha256:${string}`;
+}>;
+
+/** Provider-discriminated lineage keeps direct OpenAI guarantees and the narrower OpenRouter profile truthful. */
+export type CreativeConceptAdapterSnapshot = DeepReadonly<
+  | (CreativeConceptAdapterSnapshotBase & Readonly<{
+      provider_name: "openai";
+      configuration: OpenAIConceptConfiguration;
+      provider_tag?: never;
+      capabilities?: never;
+    }>)
+  | (CreativeConceptAdapterSnapshotBase & Readonly<{
+      provider_name: "openrouter";
+      provider_tag: string;
+      capabilities: OpenRouterConceptCapabilities;
+      configuration: OpenRouterConceptConfiguration;
+    }>)
+>;

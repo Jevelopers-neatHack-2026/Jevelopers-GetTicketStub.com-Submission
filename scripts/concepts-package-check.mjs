@@ -76,6 +76,8 @@ function copyPublicApiJourneyFixtures() {
   cpSync(join(repoRoot, "fixtures/contracts/creative"), join(consumerDir, "fixtures/contracts/creative"), { recursive: true });
   mkdirSync(join(consumerDir, "fixtures/models"), { recursive: true });
   copyFileSync(join(repoRoot, "fixtures/models/png.mjs"), join(consumerDir, "fixtures/models/png.mjs"));
+  copyFileSync(join(repoRoot, "fixtures/models/valid-16x16.jpg"), join(consumerDir, "fixtures/models/valid-16x16.jpg"));
+  copyFileSync(join(repoRoot, "fixtures/models/valid-16x16.webp"), join(consumerDir, "fixtures/models/valid-16x16.webp"));
   mkdirSync(join(consumerDir, "fixtures/planning"), { recursive: true });
   copyFileSync(join(repoRoot, "fixtures/planning/research-packages.mjs"),
     join(consumerDir, "fixtures/planning/research-packages.mjs"));
@@ -85,6 +87,8 @@ function copyPublicApiJourneyFixtures() {
   for (const [before, after, label] of [
     ['"../../src/api/v1.mjs"', '"creative-engine/api/v1"', "installed API import"],
     ['"../../src/contracts/index.mjs"', '"creative-engine/contracts"', "installed contracts import"],
+    ['"../../src/contracts/composition-authority.mjs"', '"creative-engine/contracts/composition-authority"', "installed composition contract import"],
+    ['"../../src/contracts/approval-handoff.mjs"', '"creative-engine/contracts/approval-handoff"', "installed approval handoff import"],
     ['"../../src/versions/api-ports.mjs"', '"creative-engine/versions"', "installed version ports import"],
     ['"../../src/versions/store.mjs"', '"creative-engine/versions"', "installed version store import"],
     ['"../../src/telemetry/index.mjs"', '"creative-engine/telemetry"', "installed telemetry import"],
@@ -144,16 +148,25 @@ try {
 
   writeFileSync(join(consumerDir, "package.json"), `${JSON.stringify({ name: "concepts-installed-consumer",
     version: "1.0.0", private: true, type: "module" }, null, 2)}\n`);
-  copyFileSync(join(repoRoot, "tests/api/concepts-public-consumer.mts"), join(consumerDir, "public-consumer.mts"));
+  copyFileSync(join(repoRoot, "tests/api/concepts-public-consumer.mts"), join(consumerDir, "concepts-public-consumer.mts"));
+  copyFileSync(join(repoRoot, "tests/api/composition-public-consumer.mts"), join(consumerDir, "composition-public-consumer.mts"));
   copyPublicApiJourneyFixtures();
   writeFileSync(join(consumerDir, "tsconfig.json"), `${JSON.stringify({ compilerOptions: {
     noEmit: true, strict: true, skipLibCheck: false, module: "NodeNext", moduleResolution: "NodeNext",
-    target: "ES2022" }, files: ["public-consumer.mts"] }, null, 2)}\n`, { mode: 0o600 });
+    noUncheckedIndexedAccess: true, target: "ES2022" },
+    files: ["concepts-public-consumer.mts", "composition-public-consumer.mts"] }, null, 2)}\n`, { mode: 0o600 });
   writeFileSync(join(consumerDir, "runtime-consumer.mjs"), `import assert from "node:assert/strict";\n` +
     `import { CREATIVE_API_VERSIONS, createCreativeApi } from "creative-engine/api/v1";\n` +
-    `assert.deepEqual(CREATIVE_API_VERSIONS, ["1.0", "1.1"]);\n` +
+    `import { snapshotCompositionBytesRecord } from "creative-engine/contracts/composition-authority";\n` +
+    `assert.deepEqual(CREATIVE_API_VERSIONS, ["1.0", "1.1", "1.2", "1.3"]);\n` +
     `assert.equal(typeof createCreativeApi().invoke, "function");\n` +
-    `process.stdout.write(JSON.stringify({ versions: CREATIVE_API_VERSIONS, concepts_runtime_imported: true }) + "\\n");\n`);
+    `const hostile = new Uint8Array([1,2,3]); let byteLengthReads = 0; let iteratorReads = 0;\n` +
+    `Object.defineProperty(hostile, "byteLength", { configurable: true, get() { byteLengthReads++; hostile[0]=99; return 1; } });\n` +
+    `Object.defineProperty(hostile, Symbol.iterator, { configurable: true, get() { iteratorReads++; hostile[0]=88; return function*(){yield 77;}; } });\n` +
+    `const copied = snapshotCompositionBytesRecord({preview_bytes:hostile,mime_type:"image/png"});\n` +
+    `assert.deepEqual([...copied.bytes], [1,2,3]); assert.equal(byteLengthReads,0); assert.equal(iteratorReads,0);\n` +
+    `process.stdout.write(JSON.stringify({ versions: CREATIVE_API_VERSIONS, concepts_runtime_imported: true,\n` +
+    `  composition_runtime_imported:true, exact_hostile_byte_snapshot:true }) + "\\n");\n`);
   run("offline-package-install", "npm", ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund",
     "--package-lock=false", "--no-save", tarballPath], consumerDir);
   const installedPackageRoot = join(consumerDir, "node_modules/creative-engine");
@@ -161,23 +174,48 @@ try {
   run("offline-installed-codec-dependencies", "npm", ["ci", "--offline", "--ignore-scripts", "--prefix", codecRoot], consumerDir);
   const runtime = run("installed-package-import-smoke", process.execPath, ["runtime-consumer.mjs"], consumerDir);
   const runtimeResult = JSON.parse(runtime.stdout.trim());
-  assert.deepEqual(runtimeResult, { versions: ["1.0", "1.1"], concepts_runtime_imported: true });
+  assert.deepEqual(runtimeResult, { versions: ["1.0", "1.1", "1.2", "1.3"], concepts_runtime_imported: true,
+    composition_runtime_imported: true, exact_hostile_byte_snapshot: true });
 
-  const installedJourney = run("installed-public-concepts-api-journey", process.execPath,
-    ["--test", "--test-concurrency=1", "--test-reporter=tap",
-      "--test-name-pattern=actual Creative API v1\\.1 concepts\\.create edits two authorized references and publishes parentless siblings|concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST|a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen|concept publication rejects a forged slot ordinal before either generic sibling becomes visible|completed concepts replay validates its retained brief after a legitimate brief revision|durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend",
-      "tests/models/creative-api-integration.test.mjs"], consumerDir);
-  assert.match(installedJourney.stdout, /# tests 19\n# suites 0\n# pass 19\n# fail 0/,
-    "The retained installed-package fixture must execute the public journey and the F1/F2/F3 API regressions.");
-  for (const title of [
+  const installedJourneyTitles = [
     "actual Creative API v1.1 concepts.create edits two authorized references and publishes parentless siblings",
     "concept request, trusted policy, and rights negatives stop before any C03 reservation or native POST",
     "a settled per-slot request conflict preserves the other immutable ordinal across replay and reopen",
     "concept publication rejects a forged slot ordinal before either generic sibling becomes visible",
     "completed concepts replay validates its retained brief after a legitimate brief revision",
     "durable native authorization, quota, policy, permission, and malformed-request hard stops prevent more concept spend",
-  ]) assert.ok(installedJourney.stdout.includes(`# Subtest: ${title}`), `Installed TAP is missing ${title}`);
-  assert.match(installedJourney.stdout, /19 tests? passed|# pass 19/);
+    "API 1.2 composition.get remains null until explicit create publishes exact owner bytes",
+    "API 1.3 history exposes identity only and fresh revalidation restores current service after expiry and same-design restore",
+    "composition create/get validate exact decoded PNG, JPEG, and WebP preview metadata",
+    "composition.create rejects preview bytes that are not the declared decoded image",
+    "composition completed replay rejects hash-consistent corrupt preview bytes without rerunning effects",
+    "composition.update rejects a preview provider result whose bytes do not decode to its metadata",
+    "composition.get rejects a locally expired rights proof after an awaited asset read",
+    "composition.get runs a synchronous local fence after the final awaited current read",
+    "composition.get preserves final storage integrity errors separately from ordinary unavailability",
+    "composition publication rechecks queued owner revocation after awaited persistence and before commit",
+    "composition.update applies a typed plan, publishes a child preview once, and replays exact durable bytes",
+    "composition.update rolls back when rights are revoked in the final awaited publication gap",
+    "public cancel recovers a pending composition.update in its brief scope",
+    "composition.update resumes an immutable staged preview after lease recovery without repeating the preview effect",
+  ];
+  const installedJourneyPattern = installedJourneyTitles
+    .map((title) => title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const installedJourney = run("installed-public-composition-and-concepts-api-journey", process.execPath,
+    ["--test", "--test-concurrency=1", "--test-reporter=tap", `--test-name-pattern=${installedJourneyPattern}`,
+      "tests/models/creative-api-integration.test.mjs"], consumerDir);
+  assert.match(installedJourney.stdout, /^# fail 0$/m, "The installed API and composition journeys must pass.");
+  assert.match(installedJourney.stdout, /^# skipped 0$/m, "The installed API and composition journeys must not skip cases.");
+  assert.match(installedJourney.stdout, /^# cancelled 0$/m, "The installed API and composition journeys must finish all cases.");
+  for (const title of installedJourneyTitles) {
+    assert.ok(installedJourney.stdout.includes(`# Subtest: ${title}`), `Installed TAP is missing ${title}`);
+  }
+  const installedTestCounts = {
+    tests: Number(installedJourney.stdout.match(/^# tests (\d+)$/m)?.[1] ?? 0),
+    passed: Number(installedJourney.stdout.match(/^# pass (\d+)$/m)?.[1] ?? 0),
+  };
+  assert.ok(installedTestCounts.tests > 19 && installedTestCounts.passed === installedTestCounts.tests,
+    "The installed package must execute the concepts and composition journeys, not merely resolve imports.");
   assert.doesNotMatch(installedJourney.stdout, /not ok /);
   const publicJourneyLine = installedJourney.stdout.split("\n").find(line => line.includes("INSTALLED_CONCEPTS_PUBLIC_JOURNEY "));
   const negativeJourneyLine = installedJourney.stdout.split("\n").find(line => line.includes("INSTALLED_CONCEPTS_NEGATIVES "));
@@ -217,11 +255,12 @@ try {
         "completed replay fails closed against missing or hash-tampered retained brief history",
         "auth, permission, quota, moderation, and malformed-request hard stops block fresh sibling spend and replay"],
       measured: { ...publicJourney, negatives: negativeJourney }, tap_sha256: sha256(Buffer.from(installedJourney.stdout)),
-      selected_journey_count: 6, test_summary: "6 selected API journeys; 19 TAP tests passed, 0 failed" },
-      typescript: compilerVersion.stdout.trim(), typecheck: "strict NodeNext/ES2022 with expected-negative version and authority assertions",
+      selected_journey_count: installedJourneyTitles.length, test_summary: `${installedTestCounts.tests} TAP tests passed, 0 failed/skipped/cancelled`,
+      composition_journey_count: 14 },
+      typescript: compilerVersion.stdout.trim(), typecheck: "strict NodeNext/ES2022/noUncheckedIndexedAccess against installed package with expected-negative version, plan, and async-fence assertions",
       fixture_tree_sha256: treeSha256(consumerDir) },
     install_mode: "fresh local tarball install; offline; lifecycle scripts disabled; intercepted fixture provider; no credentials or network",
-    evidence_retention: "This run's tarball, installed package, copied consumer/type fixture, TAP stream, and every nested command's raw stdout/stderr remain under artifact_dir." };
+    evidence_retention: "This run's tarball, installed package, copied consumers/type fixtures and image fixtures, TAP stream, and every nested command's raw stdout/stderr remain under artifact_dir." };
 } catch (error) {
   summary = { ...summary, status: "failed", error: `${error.name}: ${error.message}` };
   process.exitCode = 1;
