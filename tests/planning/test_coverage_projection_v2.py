@@ -560,7 +560,11 @@ class CoverageProjectionV2Tests(unittest.TestCase):
         revision_a = "a" * 40
         revision_b = "b" * 40
 
-        def make_manifest(receipt_revision: str | None) -> tuple[dict[str, Any], dict[Path, str]]:
+        def make_manifest(
+            receipt_revision: str | None,
+            *,
+            selected_revision: str = revision_b,
+        ) -> tuple[dict[str, Any], dict[Path, str]]:
             release, expected_paths = self._release_manifest()
             self.coverage["source_stage_rows"][0]["required_owner_receipt_ids"] = [receipt_id] if receipt_revision else []
             self.coverage["stage_relations"][0]["required_owner_receipt_ids"] = [receipt_id] if receipt_revision else []
@@ -568,8 +572,8 @@ class CoverageProjectionV2Tests(unittest.TestCase):
             release["tested_revisions"].append({"repository": "agent-harness", "revision": revision_b})
             selected_artifact = next(item for item in release["evidence"] if item["id"] == "ev-stage-ah")
             selected_digest = selected_artifact["sha256"]
-            selected_artifact["source_revision"] = revision_b
-            release["stage_evidence"][0]["producer_revision"] = revision_b
+            selected_artifact["source_revision"] = selected_revision
+            release["stage_evidence"][0]["producer_revision"] = selected_revision
             release["stage_evidence"][0]["producer_content_sha256"] = selected_digest
             ah_outcome = next(item for item in release["outcomes"] if item["leaf_key"] == "AH-LEAF")
             self.assertEqual(ah_outcome["revision"], revision_a)
@@ -588,7 +592,7 @@ class CoverageProjectionV2Tests(unittest.TestCase):
                     "receipt_binding": {
                         "relation_id": "STG-000", "receipt_id": receipt_id,
                         "owner_leaf_key": "AH-LEAF", "external_artifact_id": None,
-                        "producer_evidence_id": "ev-stage-ah", "producer_revision": revision_b,
+                        "producer_evidence_id": "ev-stage-ah", "producer_revision": selected_revision,
                         "producer_mode": "mock", "producer_content_sha256": selected_digest,
                     },
                 })
@@ -638,6 +642,88 @@ class CoverageProjectionV2Tests(unittest.TestCase):
                 if label == "arbitrary_receipt_identity":
                     self.assertIn("EVIDENCE_REVISION_MISMATCH", changed_codes)
 
+        # A receipt declared independently on the producer leaf still has to
+        # match the producer outcome at A. It cannot inherit the relation's B
+        # exception merely because the relation reuses the same receipt ID.
+        self.coverage["entries"][0]["required_owner_receipts"] = [receipt_id]
+        self.write()
+        self.paths["release"].write_bytes(_bytes(exact_revision))
+        overlap_codes = self.codes(self.validate(release_path=self.paths["release"], require_specialists=False))
+        self.assertIn("EVIDENCE_REVISION_MISMATCH", overlap_codes)
+        self.assertIn("REQUIRED_OWNER_RECEIPT_MISSING", overlap_codes)
+
+        # If both declarations name the same revision, ordinary validation
+        # can satisfy both scopes without granting the revision exception.
+        same_revision, expected_paths = make_manifest(revision_a, selected_revision=revision_a)
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        self.paths["release"].write_bytes(_bytes(same_revision))
+        self.assertEqual(
+            self.validate(release_path=self.paths["release"], require_specialists=False)["status"],
+            "SCOPED_RELEASE_EVIDENCE_READY",
+        )
+
+        # Separate receipts preserve strict A leaf evidence while the relation
+        # receipt remains bound to the selected B artifact.
+        ordinary_receipt_id = "receipt-ordinary-outcome"
+        self.coverage["entries"][0]["required_owner_receipts"] = [ordinary_receipt_id]
+        separate_receipts, expected_paths = make_manifest(revision_b)
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        ordinary_content = "ordinary producer outcome receipt"
+        ordinary_path = self.work / "ordinary-outcome-receipt.txt"
+        ordinary_path.write_text(ordinary_content, encoding="utf-8")
+        ordinary_evidence_id = "ev-ordinary-outcome-receipt"
+        separate_receipts["evidence"].append({
+            "id": ordinary_evidence_id, "path": str(ordinary_path),
+            "sha256": _sha(ordinary_content.encode()), "producer": "synthetic-control",
+            "source_revision": revision_a, "captured_at": "2026-10-11T17:00:00Z",
+            "mode": "mock", "kind": "receipt",
+        })
+        ah_outcome = next(item for item in separate_receipts["outcomes"] if item["leaf_key"] == "AH-LEAF")
+        ah_outcome["evidence_ids"].append(ordinary_evidence_id)
+        ah_outcome["required_owner_receipts"] = [ordinary_receipt_id, receipt_id]
+        ah_outcome["owner_receipt_ids"] = [ordinary_receipt_id, receipt_id]
+        separate_receipts["owner_receipts"].append({
+            "id": ordinary_receipt_id, "status": "accepted", "source_revision": revision_a,
+            "evidence_id": ordinary_evidence_id, "owner_role": "Agent and research",
+            "action": "Provide ordinary producer outcome receipt",
+        })
+        self.paths["release"].write_bytes(_bytes(separate_receipts))
+        self.assertEqual(
+            self.validate(release_path=self.paths["release"], require_specialists=False)["status"],
+            "SCOPED_RELEASE_EVIDENCE_READY",
+        )
+
+        # With no declared relation receipt, an ordinary B receipt must stay at
+        # the outcome revision A and cannot acquire a relation exception.
+        self.coverage["entries"][0]["required_owner_receipts"] = [ordinary_receipt_id]
+        ordinary_only, expected_paths = make_manifest(None)
+        for path, content in expected_paths.items():
+            path.write_text(content, encoding="utf-8")
+        ordinary_content_b = "ordinary receipt from another revision"
+        ordinary_path.write_text(ordinary_content_b, encoding="utf-8")
+        ordinary_only["evidence"].append({
+            "id": ordinary_evidence_id, "path": str(ordinary_path),
+            "sha256": _sha(ordinary_content_b.encode()), "producer": "synthetic-control",
+            "source_revision": revision_b, "captured_at": "2026-10-11T17:00:00Z",
+            "mode": "mock", "kind": "receipt",
+        })
+        ah_outcome = next(item for item in ordinary_only["outcomes"] if item["leaf_key"] == "AH-LEAF")
+        ah_outcome["evidence_ids"].append(ordinary_evidence_id)
+        ah_outcome["required_owner_receipts"] = [ordinary_receipt_id]
+        ah_outcome["owner_receipt_ids"] = [ordinary_receipt_id]
+        ordinary_only["owner_receipts"] = [{
+            "id": ordinary_receipt_id, "status": "accepted", "source_revision": revision_b,
+            "evidence_id": ordinary_evidence_id, "owner_role": "Agent and research",
+            "action": "Provide ordinary producer outcome receipt",
+        }]
+        self.paths["release"].write_bytes(_bytes(ordinary_only))
+        ordinary_codes = self.codes(self.validate(release_path=self.paths["release"], require_specialists=False))
+        self.assertIn("EVIDENCE_REVISION_MISMATCH", ordinary_codes)
+        self.assertIn("REQUIRED_OWNER_RECEIPT_MISSING", ordinary_codes)
+
+        self.coverage["entries"][0]["required_owner_receipts"] = []
         receipt_free, expected_paths = make_manifest(None)
         for path, content in expected_paths.items():
             path.write_text(content, encoding="utf-8")

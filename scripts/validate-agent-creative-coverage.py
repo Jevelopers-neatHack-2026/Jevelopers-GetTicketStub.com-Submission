@@ -2380,7 +2380,7 @@ def _validate_release(
             relation_outcomes.setdefault(candidate_leaf, item)
     relation_receipt_contexts, relation_receipt_evidence_contexts = _validated_internal_relation_receipt_contexts(
         manifest, projection_relations, evidence_by_id, relation_outcomes,
-        leaves, receipt_by_id, tested,
+        leaves, receipt_by_id, tested, staged_edges,
     )
 
     outcomes: dict[str, dict[str, Any]] = {}
@@ -2888,6 +2888,7 @@ def _validated_internal_relation_receipt_contexts(
     leaves: dict[str, dict[str, Any]],
     receipt_by_id: dict[str, dict[str, Any]],
     tested: set[tuple[str, str]],
+    staged_edges: Any,
 ) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[tuple[str, str], dict[str, Any]]]:
     """Return only completely validated internal-relation receipt bindings.
 
@@ -2901,6 +2902,70 @@ def _validated_internal_relation_receipt_contexts(
     rows = manifest.get("stage_evidence", [])
     if not isinstance(rows, list) or len(rows) > MAX_RELEASE_RECORDS:
         return {}, {}
+
+    # Keep the provenance of receipt requirements. A receipt can be required
+    # both by an internal relation and independently by its producer leaf or
+    # a required staged edge. The selected-artifact revision exception cannot
+    # discharge those ordinary obligations. Repeated declarations with the
+    # same relation binding remain eligible; a distinct relation is a separate
+    # binding and must not inherit this relation's exception.
+    strict_receipt_uses: set[tuple[str, str]] = set()
+    for leaf_key, leaf in leaves.items():
+        required = leaf.get("required_owner_receipts")
+        if isinstance(required, list):
+            strict_receipt_uses.update(
+                (leaf_key, receipt_id)
+                for receipt_id in required
+                if isinstance(receipt_id, str)
+            )
+    if isinstance(staged_edges, list):
+        for edge in staged_edges:
+            if not isinstance(edge, dict) or edge.get("required_for_v1") is not True:
+                continue
+            producer = edge.get("prerequisite_key")
+            consumer = edge.get("consumer_key")
+            consumer_leaf = leaves.get(consumer) if isinstance(consumer, str) else None
+            receipt_ids = edge.get("required_owner_receipt_ids")
+            if (
+                not isinstance(producer, str)
+                or producer not in leaves
+                or not isinstance(consumer_leaf, dict)
+                or edge.get("consumer_stage") != consumer_leaf.get("required_release_stage")
+                or not isinstance(receipt_ids, list)
+            ):
+                continue
+            strict_receipt_uses.update(
+                (producer, receipt_id)
+                for receipt_id in receipt_ids
+                if isinstance(receipt_id, str)
+            )
+
+    declared_relation_uses: dict[tuple[str, str], list[Any]] = {}
+    for relation in relations:
+        if not isinstance(relation, dict) or relation.get("applicability") != "required":
+            continue
+        consumer = relation.get("consumer_key")
+        consumer_leaf = leaves.get(consumer) if isinstance(consumer, str) else None
+        consumer_stage = relation.get("consumer_stage")
+        selected_stage = consumer_leaf.get("required_release_stage") if isinstance(consumer_leaf, dict) else None
+        if (
+            consumer_leaf is None
+            or consumer_stage not in PROJECTION_STAGE_ORDER
+            or selected_stage not in PROJECTION_STAGE_ORDER
+            or PROJECTION_STAGE_ORDER[consumer_stage] > PROJECTION_STAGE_ORDER[selected_stage]
+            or (relation.get("application_scope") == "live_only" and consumer_leaf.get("required_mode") != "live")
+        ):
+            continue
+        receipt_owner = consumer if relation.get("external_artifact_id") is not None else relation.get("producer_key")
+        receipt_ids = relation.get("required_owner_receipt_ids", [])
+        if not isinstance(receipt_owner, str) or not isinstance(receipt_ids, list):
+            continue
+        for receipt_id in receipt_ids:
+            if isinstance(receipt_id, str):
+                declared_relation_uses.setdefault((receipt_owner, receipt_id), []).append(
+                    relation.get("relation_id")
+                )
+
     by_relation: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         if isinstance(row, dict) and _safe_key(row.get("relation_id")):
@@ -3093,6 +3158,14 @@ def _validated_internal_relation_receipt_contexts(
         if len(distinct) != 1:
             continue
         value = values[0]
+        if (
+            key in strict_receipt_uses
+            or any(
+                relation_id != value["relation_id"]
+                for relation_id in declared_relation_uses.get(key, [])
+            )
+        ):
+            continue
         contexts[key] = value
         evidence_bindings.setdefault((key[0], value["evidence_id"]), []).append(value)
     safe_evidence_bindings: dict[tuple[str, str], dict[str, Any]] = {}
