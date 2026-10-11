@@ -1,0 +1,29 @@
+# Private correction-history and scoped-cache binding
+
+This document describes the EI-local composition seam in `src/review/history/cache-binding.mjs`. It binds a private scoped-cache profile to one immutable correction-history version so a supported composed read cannot return the old profile after a correction or source refresh commits. The module is an internal implementation seam; it adds no public route, package export, authentication contract, Finance allocation, or Creative-use approval.
+
+## Exact binding
+
+A binding is issued only after the composed facade has authenticated both store scopes and confirmed the same tenant and actor. The history database stores the binding and matching downstream reference as authenticated ciphertext. Its payload ties together the event ID, current history version ID and content hash, deterministic projection hash, cache-issued profile reference, private cache scope, cache entry version, identity, all version pins, source content hash, and the minimum history/cache expiry. The cache entry carries a keyed binding digest and the same history coordinates. Opaque profile references and correction references remain distinct identifiers; neither can be substituted for the other.
+
+On read, the facade first resolves the current history head and finds exactly one unexpired binding whose event, version, content hash, projection, identity, pins, and source hash match the request. It then checks the cache entry, latest observation, freshness, permission references, and cache version. A synchronous host disclosure guard makes the final current-request and permission decision. Both clocks are sampled again after that guard. The history fence then validates the exact current head and binding, and the cache transaction validates the exact entry and observation immediately before facts are returned. Missing, duplicate, mismatched, expired, or malformed bindings fail closed.
+
+## Correction and recovery ordering
+
+The history database is the durable barrier. A bind or revision operation first commits its immutable operation fingerprint, operation ID, base version/hash, monotone fence, and pending phase. While that phase is incomplete, composed history reads and cache reads are blocked. A bind writes the cache profile with the binding digest, then records the encrypted binding and reference in history, and only then completes the operation.
+
+A correction or `refreshSources` commits the new history version and exact operation target while leaving the barrier active. For each old binding, the facade acquires the history writer transaction first, then the cache writer transaction. The cache commit checks the live history operation ID/fence/phase in the history transaction and atomically marks only the exact cache version ineligible, converts its reserved capacity into encrypted outbox events, and writes an idempotency receipt. The history transaction is then committed. A later short history transaction marks the binding reconciled. The final history transaction clears the barrier only after every target binding has an exact receipt and target version/hash.
+
+These two SQLite files do not have a global atomic commit. If the process dies after the history revision commits, its durable pending barrier prevents composed reads from using the old profile. Exact retry resumes the same operation and never rebinds to a newer unrelated version. If the cache commit succeeds before history records its receipt, the cache receipt makes retry idempotent and prevents duplicate outbox events. The same-process queue and zero-timeout SQLite writer attempts use bounded asynchronous retry; no host callback or event-loop-blocking busy wait runs while a paired writer lock is held. The live operation fence is checked synchronously at the inner commit boundary, so a late continuation cannot commit after an exact retry takes over.
+
+The guarantee covers calls through this composed facade. Independent direct calls to either standalone store, manual database edits, filesystem restoration from inconsistent snapshots, or another writer that bypasses these stores are outside the paired protocol. The history barrier and cache eligibility guard must be deployed together and persisted in their respective local databases.
+
+## Authorization, retention, and invalidation delivery
+
+The injected tenant, actor, authorization, key, retention, source-observation, permission, and final-disclosure adapters are trusted host preconditions. Their presence or a successful test callback does not establish production authentication or an external approval. The final disclosure guard must be synchronous; a promise or denial fails closed. No auth adapter runs inside a SQLite transaction. Retention uses the earlier of the cache and history deadlines. An expiry discovered after asynchronous key or authorization work is persisted by a separate short history cleanup transaction before the typed expiry error is returned.
+
+The cache transaction makes a bound row locally ineligible and persists its invalidation outbox work. Local ineligibility is separate from external acknowledgement: a missing, unknown, rejected, or unverified acknowledgement stays pending and continues to block readiness. Retrying a correction does not duplicate a receipt or outbox event. This local behavior does not assert that an external consumer acted, that a permission was issued, or that a Finance usage or hold is resolved; unknown Finance usage remains unknown.
+
+## Evidence boundary
+
+Tests use temporary local SQLite databases and synthetic host callbacks. Cross-process writer contention and process termination are exercised locally. These tests do not prove production identity, permission or retention adapters, external consumer delivery, live provider behavior, Finance settlement, Creative acceptance, or whole-issue closure. Those remain separate acceptance evidence.

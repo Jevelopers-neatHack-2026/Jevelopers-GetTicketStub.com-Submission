@@ -1,0 +1,55 @@
+name: correction cache binding
+
+on:
+  push:
+    paths:
+      - 'src/review/history/**'
+      - 'src/cache/reuse/**'
+      - 'tests/review/history/**'
+      - 'tests/cache/reuse/**'
+      - 'tests/integration/review-cache-binding/**'
+      - 'docs/review/correction-cache-binding.md'
+      - 'docs/review/immutable-history.md'
+      - 'docs/cache/scoped-reuse.md'
+      - '.github/workflows/correction-cache-binding.yml'
+  pull_request:
+    paths:
+      - 'src/review/history/**'
+      - 'src/cache/reuse/**'
+      - 'tests/review/history/**'
+      - 'tests/cache/reuse/**'
+      - 'tests/integration/review-cache-binding/**'
+      - 'docs/review/correction-cache-binding.md'
+      - 'docs/review/immutable-history.md'
+      - 'docs/cache/scoped-reuse.md'
+      - '.github/workflows/correction-cache-binding.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  correction-cache-binding:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - run: npm ci
+      - name: Install the locked host TypeScript compiler
+        run: node tools/install-typescript-host.mjs
+      - name: Test immutable correction history
+        run: node --test tests/review/history/*.test.mjs
+      - name: Test scoped cache reuse
+        run: node --test tests/cache/reuse/*.test.mjs
+      - name: Test correction-cache composition and crash recovery
+        run: node --test tests/integration/review-cache-binding/*.test.mjs
+      - name: Check repository TypeScript consumers
+        run: npm run typecheck
+      - name: Strict correction-cache binding consumer
+        run: >-
+          ./node_modules/.bin/tsc --noEmit --strict --target ES2022 --module NodeNext
+          --moduleResolution NodeNext --lib ES2022,DOM --types node --skipLibCheck false
+          tests/integration/review-cache-binding/types-consumer.mts

@@ -38,6 +38,12 @@ export type PrivateFact = Readonly<{
   value: string;
   reason?: string;
   supportRefs?: readonly string[];
+  /** Source alternatives retained beside an authoritative customer correction. */
+  candidates?: readonly Readonly<{
+    status: 'sourced' | 'inferred' | 'customer_supplied';
+    value: string;
+    supportRefs: readonly string[];
+  }>[];
 }> | Readonly<{
   status: 'missing';
   reason?: string;

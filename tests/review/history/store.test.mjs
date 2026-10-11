@@ -139,6 +139,20 @@ async function waitFor(filePath, timeoutMs = 10_000) {
   throw new Error('worker did not reach its synchronization point');
 }
 
+async function waitForSignal(signal, label, timeoutMs = 3_000) {
+  let timer;
+  try {
+    await Promise.race([
+      signal,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function inspectDatabase(root, tenantId = 'tenant-a') {
   const tenantHash = createHash('sha256').update(`event-intelligence:review-tenant:v1:${tenantId}`).digest('hex');
   const database = new DatabaseSync(path.join(root, tenantHash, 'history.sqlite'));
@@ -441,16 +455,25 @@ test('same-key duplicate requests commit once and replay across store instances'
   assert.equal((await inspectDatabase(harness.root)).idempotencyCount, 2);
 });
 
-test('queued cancellation rolls back, commits expiry cleanup, and releases later tenant work', async (t) => {
+test('late cancellation after asynchronous host boundaries cannot write and expired history cleanup still commits', async (t) => {
   let harness;
   let armed = false;
-  let blockedAuthorizations = 0;
+  let shortSeedPermit;
+  let blockingRetentionHandle;
+  let blockedRetentionCalls = 0;
   let resolveBlockedBoundary;
   let releaseBlockedBoundary;
   let resolveQueuedAuthorization;
+  let releaseQueuedAuthorization;
   const blockedBoundary = new Promise((resolve) => { resolveBlockedBoundary = resolve; });
-  const releaseGate = new Promise((resolve) => { releaseBlockedBoundary = resolve; });
+  const releaseRetention = new Promise((resolve) => { releaseBlockedBoundary = resolve; });
   const queuedAuthorization = new Promise((resolve) => { resolveQueuedAuthorization = resolve; });
+  const releaseQueued = new Promise((resolve) => { releaseQueuedAuthorization = resolve; });
+  const releaseAllBoundaries = () => {
+    releaseQueuedAuthorization();
+    releaseBlockedBoundary();
+  };
+  t.after(releaseAllBoundaries);
   harness = await createHarness(t, {
     lockTimeoutMs: 25,
     async authorize({ tenantId, actorId, action, request }) {
@@ -459,22 +482,32 @@ test('queued cancellation rolls back, commits expiry cleanup, and releases later
         && request?.principal?.tenantId === tenantId
         && request?.principal?.actorId === actorId
         && actorId !== 'outsider';
-      if (armed && action === 'apply_correction' && actorId === 'customer-block') {
-        blockedAuthorizations += 1;
-        if (blockedAuthorizations === 7) {
-          resolveBlockedBoundary();
-          await releaseGate;
-        }
+      if (armed && action === 'apply_correction' && actorId === 'customer-a') {
+        resolveQueuedAuthorization();
+        await releaseQueued;
       }
-      if (armed && action === 'apply_correction' && actorId === 'customer-a') resolveQueuedAuthorization();
       return allowed;
     },
+    async resolveRetention({ tenantId, nowMs, sourceExpiresAtMs, retentionHandle }) {
+      if (armed && retentionHandle === blockingRetentionHandle && blockedRetentionCalls++ === 0) {
+        resolveBlockedBoundary();
+        await releaseRetention;
+      }
+      return {
+        expiresAtMs: Math.min(retentionHandle === shortSeedPermit ? EPOCH + 1_000 : nowMs + 60_000,
+          sourceExpiresAtMs ?? Number.MAX_SAFE_INTEGER),
+        policyId: 'synthetic-private-history',
+        policyVersion: '1',
+        accessPolicy: 'tenant_private',
+      };
+    },
   });
+  shortSeedPermit = harness.createPermit('tenant-a', 1_000);
   const initial = (await harness.store.createHistory(harness.scope, {
     eventId: EVENT_ID,
     sourceFacts: initialFacts(),
     idempotencyKey: 'queued-expiring-initialize',
-    retentionHandle: harness.createPermit('tenant-a', 1_000),
+    retentionHandle: shortSeedPermit,
   }, harness.request)).snapshot;
   await harness.store.registerDownstreamReference(harness.scope, {
     eventId: EVENT_ID,
@@ -488,36 +521,52 @@ test('queued cancellation rolls back, commits expiry cleanup, and releases later
   const blockingScope = await harness.store.scopeForAuthenticatedRequest(blockingRequest);
   const otherStore = harness.openStore();
   const otherScope = await otherStore.scopeForAuthenticatedRequest(harness.request);
+  blockingRetentionHandle = harness.createPermit();
   armed = true;
-  const blockedWrite = harness.store.applyCorrection(blockingScope, {
-    eventId: EVENT_ID,
-    baseVersionId: initial.versionId,
-    baseContentHash: initial.contentHash,
-    field: 'event_date',
-    value: { precision: 'date', value: '2027-06-20' },
-    idempotencyKey: 'queued-blocked-write',
-    retentionHandle: harness.createPermit(),
-  }, blockingRequest);
-  await blockedBoundary;
-
   const controller = new AbortController();
-  const queuedWrite = otherStore.applyCorrection(otherScope, {
-    eventId: EVENT_ID,
-    baseVersionId: initial.versionId,
-    baseContentHash: initial.contentHash,
-    field: 'event_date',
-    value: { precision: 'date', value: '2027-06-21' },
-    idempotencyKey: 'queued-cancelled-write',
-    retentionHandle: harness.createPermit(),
-  }, harness.request, { signal: controller.signal });
-  await queuedAuthorization;
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  controller.abort();
-  harness.clock.value = EPOCH + 1_000;
-  releaseBlockedBoundary();
+  try {
+    const blockedWrite = harness.store.applyCorrection(blockingScope, {
+      eventId: EVENT_ID,
+      baseVersionId: initial.versionId,
+      baseContentHash: initial.contentHash,
+      field: 'event_date',
+      value: { precision: 'date', value: '2027-06-20' },
+      idempotencyKey: 'queued-blocked-write',
+      retentionHandle: blockingRetentionHandle,
+    }, blockingRequest);
+    const blockedRejection = assert.rejects(blockedWrite, assertReviewError('REVIEW_EXPIRED'));
+    await waitForSignal(blockedBoundary, 'suspended retention callback');
 
-  await assert.rejects(blockedWrite, assertReviewError('REVIEW_EXPIRED'));
-  await assert.rejects(queuedWrite, assertReviewError('REVIEW_ABORTED'));
+    // A trusted retention callback may suspend, but no SQLite transaction may span it.
+    const tenantHash = createHash('sha256').update('event-intelligence:review-tenant:v1:tenant-a').digest('hex');
+    const probe = new DatabaseSync(path.join(harness.root, tenantHash, 'history.sqlite'));
+    try {
+      probe.exec('BEGIN IMMEDIATE');
+      probe.exec('ROLLBACK');
+    } finally { probe.close(); }
+
+    const queuedWrite = otherStore.applyCorrection(otherScope, {
+      eventId: EVENT_ID,
+      baseVersionId: initial.versionId,
+      baseContentHash: initial.contentHash,
+      field: 'event_date',
+      value: { precision: 'date', value: '2027-06-21' },
+      idempotencyKey: 'queued-cancelled-write',
+      retentionHandle: harness.createPermit(),
+    }, harness.request, { signal: controller.signal });
+    const queuedRejection = assert.rejects(queuedWrite, assertReviewError('REVIEW_ABORTED'));
+    await waitForSignal(queuedAuthorization, 'queued actor authorization callback');
+    controller.abort();
+    harness.clock.value = EPOCH + 1_000;
+    releaseQueuedAuthorization();
+    releaseBlockedBoundary();
+
+    await blockedRejection;
+    await queuedRejection;
+  } finally {
+    // Always unblock host callbacks if an expected phase is missing so the test fails boundedly.
+    releaseAllBoundaries();
+  }
   assert.equal(await otherStore.purgeExpired(otherScope, harness.request), 0);
   const disk = await inspectDatabase(harness.root);
   assert.equal(disk.heads[0].state, 'expired');

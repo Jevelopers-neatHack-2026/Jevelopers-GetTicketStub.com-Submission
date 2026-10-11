@@ -10,6 +10,8 @@ Each write compares both the current version ID and content hash while holding a
 
 The explicit materiality rule is based on the visible projected facts, their source claims and evidence references, and open review questions. A change to that projection is material. Repeating the same customer value can create a new immutable revision whose material hash is unchanged. Every new revision invalidates all local downstream references tied to the exact prior version ID and hash, including on a nonmaterial revision. This prevents a reference from silently inheriting applicability. The invalidation record is descriptive local history only: an `approval_reference` is not an approval, and this module cannot authorize artwork use or validate an external authority’s signed decision.
 
+The private cache-composition seam is documented in [correction-cache-binding.md](correction-cache-binding.md). It adds a separate durable barrier and encrypted exact binding for composed history/cache reads; the standalone history store does not claim a global transaction with the cache database.
+
 ## Trusted host preconditions
 
 The application composition root must provide:
