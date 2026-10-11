@@ -102,6 +102,400 @@ function admit(store, tenantId, projectId, idempotencyKey, work = PLAN, configIn
   });
 }
 
+function recoverySnapshot(databasePath, jobId, nextJobId, workflowId, attemptId) {
+  const raw = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const work = raw.prepare(`SELECT tenant_id, project_id, state, worker_id, runner_pid,
+      generation, fence_token, lease_expires_ms, work_bytes,
+      reserved_event_slots, reserved_disk_bytes, reason_code
+      FROM operations_work WHERE job_id=?`).get(jobId);
+    const nextWork = raw.prepare(`SELECT state, worker_id, generation, fence_token, work_bytes,
+      reserved_event_slots, reserved_disk_bytes
+      FROM operations_work WHERE job_id=?`).get(nextJobId);
+    const workflow = raw.prepare(`SELECT state, revision, fence_token, cancellation_requested,
+      lease_owner, lease_expires_ms FROM workflows WHERE workflow_id=?`).get(workflowId);
+    const meta = raw.prepare(`SELECT pending_records, pending_bytes, in_flight,
+      reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1`).get();
+    const tenant = raw.prepare(`SELECT pending_records, in_flight FROM operations_tenants WHERE tenant_id=?`)
+      .get(work.tenant_id);
+    const nextTenant = raw.prepare(`SELECT pending_records, in_flight FROM operations_tenants WHERE tenant_id=?`)
+      .get('public-next-tenant');
+    const project = raw.prepare(`SELECT pending_records, in_flight FROM operations_projects
+      WHERE tenant_id=? AND project_id=?`).get(work.tenant_id, work.project_id);
+    const attempt = attemptId === null ? null : raw.prepare(`SELECT state, authority_hold_ref
+      FROM operation_attempts WHERE attempt_id=?`).get(attemptId) ?? null;
+    const events = Object.fromEntries(raw.prepare(`SELECT event_type, COUNT(*) AS count
+      FROM workflow_events WHERE workflow_id=? GROUP BY event_type ORDER BY event_type`)
+      .all(workflowId).map(row => [row.event_type, Number(row.count)]));
+    const allWork = raw.prepare(`SELECT job_id, tenant_id, project_id, state, worker_id, runner_pid,
+      generation, fence_token, lease_expires_ms, work_bytes, reserved_event_slots, reserved_disk_bytes
+      FROM operations_work ORDER BY job_id`).all().map(row => ({ ...row,
+      generation: Number(row.generation), fence_token: row.fence_token === null ? null : Number(row.fence_token),
+      lease_expires_ms: row.lease_expires_ms === null ? null : Number(row.lease_expires_ms),
+      work_bytes: Number(row.work_bytes), reserved_event_slots: Number(row.reserved_event_slots),
+      reserved_disk_bytes: Number(row.reserved_disk_bytes) }));
+    const allTenants = raw.prepare(`SELECT tenant_id, pending_records, pending_bytes, in_flight
+      FROM operations_tenants ORDER BY tenant_id`).all().map(row => ({ ...row,
+      pending_records: Number(row.pending_records), pending_bytes: Number(row.pending_bytes),
+      in_flight: Number(row.in_flight) }));
+    const allProjects = raw.prepare(`SELECT tenant_id, project_id, pending_records, pending_bytes, in_flight
+      FROM operations_projects ORDER BY tenant_id, project_id`).all().map(row => ({ ...row,
+      pending_records: Number(row.pending_records), pending_bytes: Number(row.pending_bytes),
+      in_flight: Number(row.in_flight) }));
+    const reservationTotals = raw.prepare(`SELECT
+      (SELECT SUM(reserved_disk_bytes) FROM operations_work) AS work_disk,
+      (SELECT SUM(reserved_event_slots) FROM operations_work) AS work_events`).get();
+    return {
+      work: { ...work, generation: Number(work.generation), fence_token: Number(work.fence_token),
+        lease_expires_ms: work.lease_expires_ms === null ? null : Number(work.lease_expires_ms),
+        work_bytes: Number(work.work_bytes),
+        reserved_event_slots: Number(work.reserved_event_slots), reserved_disk_bytes: Number(work.reserved_disk_bytes) },
+      nextWork: { ...nextWork, generation: Number(nextWork.generation), fence_token: Number(nextWork.fence_token),
+        work_bytes: Number(nextWork.work_bytes),
+        reserved_event_slots: Number(nextWork.reserved_event_slots), reserved_disk_bytes: Number(nextWork.reserved_disk_bytes) },
+      workflow: { ...workflow, revision: Number(workflow.revision), fence_token: Number(workflow.fence_token),
+        lease_expires_ms: workflow.lease_expires_ms === null ? null : Number(workflow.lease_expires_ms) },
+      meta: { ...meta, pending_records: Number(meta.pending_records), pending_bytes: Number(meta.pending_bytes),
+        in_flight: Number(meta.in_flight), reserved_event_slots: Number(meta.reserved_event_slots),
+        reserved_disk_bytes: Number(meta.reserved_disk_bytes) },
+      tenant: { ...tenant, pending_records: Number(tenant.pending_records), in_flight: Number(tenant.in_flight) },
+      nextTenant: { ...nextTenant, pending_records: Number(nextTenant.pending_records), in_flight: Number(nextTenant.in_flight) },
+      project: { ...project, pending_records: Number(project.pending_records), in_flight: Number(project.in_flight) },
+      attempt: attempt ? { ...attempt } : null,
+      events,
+      allWork,
+      allTenants,
+      allProjects,
+      reservationTotals: { work_disk: Number(reservationTotals.work_disk), work_events: Number(reservationTotals.work_events) }
+    };
+  } finally {
+    raw.close();
+  }
+}
+
+async function assertUnknownRecoveryFailsClosedAtResourceBoundary() {
+  const directory = tempDirectory('ah11-unknown-recovery-resource-floor-');
+  const configInput = {
+    workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1
+  };
+  const config = readOperationsConfig(configInput);
+  const policy = operationsStoragePolicy(config);
+  let now = 120_000;
+  let store = openStore(directory.databasePath, { clock: () => now });
+  try {
+    const expired = admit(store, 'public-expired-tenant', 'public-expired-project',
+      'resource-floor-expired', PLAN, configInput);
+    const next = admit(store, 'public-next-tenant', 'public-next-project',
+      'resource-floor-next', PLAN, configInput);
+    const later = admit(store, 'public-next-tenant', 'public-later-project',
+      'resource-floor-later', PLAN, configInput);
+    const prior = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'resource-floor-prior-owner', policy
+    }).claim;
+    assert.equal(prior.jobId, expired.jobId);
+    store.close();
+    store = null;
+    const attemptId = 'resource-floor-attempt';
+    const holdRef = 'resource-floor-synthetic-hold';
+    crashAfterPublicWorkflowMutation(directory.databasePath, {
+      mutation: 'unknown', now, workflowId: prior.workflowId, ownerId: prior.ownerId,
+      fence: prior.fence, revision: prior.revision, attemptId, holdRef
+    });
+    now = prior.leaseExpiresAtMs + 1;
+    const beforeFailure = recoverySnapshot(directory.databasePath, expired.jobId, next.jobId,
+      expired.workflowId, attemptId);
+    assert.equal(beforeFailure.meta.reserved_disk_bytes, beforeFailure.reservationTotals.work_disk);
+    assert.ok(beforeFailure.meta.reserved_disk_bytes > 16_777_216,
+      'three accepted jobs reserve more than the minimum permitted store ceiling');
+    assert.equal(beforeFailure.allWork.find(row => row.job_id === later.jobId).state, 'queued');
+
+    let restricted = openStore(directory.databasePath, { clock: () => now });
+    try {
+      restricted._operationsSetResourceCeilings(OPERATIONS_STORAGE_CAPABILITY, {
+        maxStoreBytes: 16_777_216,
+        maxWalBytes: config.maxWalBytes,
+        minFreeDiskBytes: config.minFreeDiskBytes
+      });
+      assert.throws(() => restricted._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        ownerId: 'resource-floor-failing-recovery', policy, recoverableJobIds: [expired.jobId]
+      }), error => error.code === 'STORE_WRITE_FAILED');
+      assert.deepEqual(recoverySnapshot(directory.databasePath, expired.jobId, next.jobId,
+        expired.workflowId, attemptId), beforeFailure,
+      'capacity refusal must roll back workflow, work, events, counters, and every reservation');
+    } finally {
+      restricted.close();
+      restricted = null;
+    }
+
+    const retry = openStore(directory.databasePath, { clock: () => now });
+    let stillQueuedJob;
+    try {
+      const recovered = retry._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        ownerId: 'resource-floor-retry-owner', policy, recoverableJobIds: [expired.jobId]
+      });
+      assert.ok([next.jobId, later.jobId].includes(recovered.claim?.jobId));
+      stillQueuedJob = recovered.claim.jobId === next.jobId ? later : next;
+      const afterRetry = recoverySnapshot(directory.databasePath, expired.jobId, recovered.claim.jobId,
+        expired.workflowId, attemptId);
+      assert.equal(afterRetry.work.state, 'unknown');
+      assert.equal(afterRetry.attempt.state, 'outcome_unknown');
+      assert.equal(afterRetry.attempt.authority_hold_ref, holdRef);
+      assert.equal(afterRetry.allWork.find(row => row.job_id === stillQueuedJob.jobId).state, 'queued');
+      assert.equal(afterRetry.meta.pending_records, 3);
+      assert.equal(afterRetry.meta.in_flight, 1);
+      assert.equal(afterRetry.meta.reserved_disk_bytes, afterRetry.reservationTotals.work_disk);
+      assert.equal(afterRetry.meta.reserved_event_slots, afterRetry.reservationTotals.work_events);
+      assert.equal(afterRetry.events.operations_work_unknown, 1);
+      assert.equal(retry._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        ownerId: 'resource-floor-repeated-recovery', policy, recoverableJobIds: [expired.jobId]
+      }), null);
+      assert.deepEqual(recoverySnapshot(directory.databasePath, expired.jobId, recovered.claim.jobId,
+        expired.workflowId, attemptId), afterRetry,
+      'a repeated recovery does not charge capacity or duplicate the durable unknown event');
+    } finally {
+      retry.close();
+    }
+    const independentlyReopened = openStore(directory.databasePath, { clock: () => now });
+    try {
+      assert.equal(independentlyReopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+        tenantId: 'public-expired-tenant', projectId: 'public-expired-project', jobId: expired.jobId
+      }).state, 'unknown');
+      assert.equal(independentlyReopened.getAttempt(attemptId).authorityHoldRef, holdRef);
+      assert.equal(independentlyReopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+        tenantId: 'public-next-tenant',
+        projectId: stillQueuedJob.jobId === later.jobId ? 'public-later-project' : 'public-next-project',
+        jobId: stillQueuedJob.jobId
+      }).state, 'queued');
+    } finally {
+      independentlyReopened.close();
+    }
+  } finally {
+    try { store?.close(); } catch {}
+    directory.cleanup();
+  }
+}
+
+function crashAfterPublicWorkflowMutation(databasePath, payload) {
+  const source = `
+import { writeSync } from 'node:fs';
+import { DurableWorkflowStore } from '@jevelopers/agent-harness-runtime';
+const [databasePath, payloadText] = process.argv.slice(1);
+const input = JSON.parse(payloadText);
+const store = DurableWorkflowStore.open({ databasePath, busyTimeoutMs: 20, clock: () => input.now });
+const lease = { workflowId: input.workflowId, ownerId: input.ownerId, fence: input.fence };
+let result;
+if (input.mutation === 'unknown' || input.mutation === 'intent') {
+  const intent = store.recordDispatchIntent({ ...lease, expectedRevision: input.revision,
+    attemptId: input.attemptId, logicalOperationRef: input.attemptId + '-logical',
+    authorityHoldRef: input.holdRef, transportAttemptId: input.attemptId + '-transport',
+    eventId: input.attemptId + '-intent' });
+  result = input.mutation === 'intent' ? intent : store.markOutcomeUnknown({ ...lease,
+    expectedRevision: intent.revision, attemptId: input.attemptId, eventId: input.attemptId + '-unknown' });
+} else if (input.mutation === 'succeeded' || input.mutation === 'failed') {
+  result = store.transitionWorkflow({ ...lease, expectedRevision: input.revision,
+    toState: input.mutation, eventId: input.attemptId + '-transition' });
+} else if (input.mutation === 'cancelled') {
+  result = store.requestCancellation({ ...lease, expectedRevision: input.revision,
+    eventId: input.attemptId + '-cancel' });
+} else {
+  throw new Error('unsupported synthetic workflow mutation');
+}
+writeSync(1, JSON.stringify({ mutation: input.mutation, result }) + '\\n');
+process.kill(process.pid, 'SIGKILL');
+`;
+  METRICS.processRuns += 1;
+  const child = spawnSync(process.execPath, ['--input-type=module', '--eval', source,
+    databasePath, JSON.stringify(payload)], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    timeout: 8_000,
+    env: baseEnvironment()
+  });
+  assert.equal(child.signal, 'SIGKILL', child.stderr);
+  assert.equal(child.status, null);
+  METRICS.processSigkillSignalsSent += 1;
+  const lines = child.stdout.trim().split(/\r?\n/u);
+  assert.equal(lines.length, 1, child.stderr);
+  return JSON.parse(lines[0]);
+}
+
+async function assertExpiredCurrentFenceReconciles(t, {
+  caseName,
+  mutation,
+  expectedWorkflowState,
+  expectedWorkflowStateAfterRecovery = expectedWorkflowState,
+  expectedWorkState,
+  expectedEventType,
+  expectedAttemptState = null,
+  afterRecovery
+}) {
+  const directory = tempDirectory('ah11-public-expired-reconciliation-');
+  const configInput = {
+    workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1
+  };
+  const policy = operationsStoragePolicy(readOperationsConfig(configInput));
+  let now = 110_000;
+  let store = openStore(directory.databasePath, { clock: () => now });
+  try {
+    const expired = admit(store, 'public-expired-tenant', 'public-expired-project', `${caseName}-expired`, PLAN, configInput);
+    const prior = store._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: `${caseName}-prior-owner`, policy
+    }).claim;
+    assert.equal(prior.jobId, expired.jobId);
+    const queued = admit(store, 'public-next-tenant', 'public-next-project', `${caseName}-queued`, PLAN, configInput);
+    store.close();
+    store = null;
+    const attemptId = mutation === 'unknown' || mutation === 'intent' ? `${caseName}-attempt` : null;
+    const holdRef = attemptId ? `${caseName}-synthetic-hold` : null;
+    const mutationResult = crashAfterPublicWorkflowMutation(directory.databasePath, {
+      mutation, now, workflowId: prior.workflowId, ownerId: prior.ownerId,
+      fence: prior.fence, revision: prior.revision, attemptId, holdRef
+    });
+    assert.equal(mutationResult.mutation, mutation);
+    if (mutation === 'cancelled') {
+      assert.equal(mutationResult.result.accepted, true);
+      assert.equal(mutationResult.result.state, 'cancelled');
+    }
+    const beforeRecovery = recoverySnapshot(directory.databasePath, expired.jobId, queued.jobId,
+      expired.workflowId, attemptId);
+    assert.equal(beforeRecovery.work.state, 'running');
+    assert.equal(beforeRecovery.work.worker_id, prior.ownerId);
+    assert.equal(beforeRecovery.work.generation, prior.generation);
+    assert.equal(beforeRecovery.work.fence_token, prior.fence);
+    assert.equal(beforeRecovery.work.lease_expires_ms, prior.leaseExpiresAtMs);
+    assert.equal(beforeRecovery.workflow.state, expectedWorkflowState);
+    assert.equal(beforeRecovery.workflow.fence_token, prior.fence);
+    assert.equal(beforeRecovery.meta.pending_records, 2);
+    assert.equal(beforeRecovery.meta.pending_bytes, beforeRecovery.work.work_bytes + beforeRecovery.nextWork.work_bytes);
+    assert.equal(beforeRecovery.meta.in_flight, 1);
+    assert.equal(beforeRecovery.tenant.pending_records, 1);
+    assert.equal(beforeRecovery.tenant.in_flight, 1);
+    assert.equal(beforeRecovery.project.pending_records, 1);
+    assert.equal(beforeRecovery.nextTenant.in_flight, 0);
+    assert.equal(beforeRecovery.nextWork.state, 'queued');
+    assert.ok(beforeRecovery.work.reserved_disk_bytes > 0);
+    assert.ok(beforeRecovery.work.reserved_event_slots > 0);
+    assert.equal(beforeRecovery.meta.reserved_disk_bytes, beforeRecovery.reservationTotals.work_disk);
+    assert.equal(beforeRecovery.meta.reserved_event_slots, beforeRecovery.reservationTotals.work_events);
+    if (mutation === 'cancelled') {
+      assert.equal(beforeRecovery.workflow.lease_owner, null, 'the public cancellation API must clear the workflow lease');
+      assert.equal(beforeRecovery.workflow.lease_expires_ms, null);
+    } else {
+      assert.equal(beforeRecovery.workflow.lease_owner, prior.ownerId);
+      assert.equal(beforeRecovery.workflow.lease_expires_ms, prior.leaseExpiresAtMs);
+    }
+    if (attemptId) {
+      assert.deepEqual(beforeRecovery.attempt, {
+        state: mutation === 'unknown' ? 'outcome_unknown' : 'intent', authority_hold_ref: holdRef
+      });
+    }
+    now = prior.leaseExpiresAtMs + 1;
+    let reopened = openStore(directory.databasePath, { clock: () => now });
+    const expiredClaims = reopened._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy });
+    assert.equal(expiredClaims.incomplete, false);
+    assert.equal(expiredClaims.items[0].jobId, expired.jobId);
+    try {
+      const recovery = reopened._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+        ownerId: `${caseName}-recovery-owner`, policy, recoverableJobIds: [expired.jobId]
+      });
+      assert.equal(recovery.claim?.jobId, queued.jobId,
+        'reconciliation must release only the expired generation before the next tenant claims');
+
+      const workflow = reopened.getWorkflow(expired.workflowId);
+      assert.equal(workflow.state, expectedWorkflowStateAfterRecovery);
+      assert.equal(workflow.fence, prior.fence);
+      if (expectedAttemptState) {
+        assert.equal(workflow.cancellationRequested, false);
+        const attempt = reopened.getAttempt(attemptId);
+        assert.equal(attempt.state, expectedAttemptState);
+        assert.equal(attempt.authorityHoldRef, holdRef);
+      }
+      const recoveredSnapshot = recoverySnapshot(directory.databasePath, expired.jobId, queued.jobId,
+        expired.workflowId, attemptId);
+      assert.equal(recoveredSnapshot.work.state, expectedWorkState);
+      assert.equal(recoveredSnapshot.work.worker_id, null);
+      assert.equal(recoveredSnapshot.work.runner_pid, null);
+      assert.equal(recoveredSnapshot.work.lease_expires_ms, null);
+      assert.equal(recoveredSnapshot.work.generation, prior.generation);
+      assert.equal(recoveredSnapshot.work.fence_token, prior.fence);
+      assert.equal(recoveredSnapshot.workflow.state, expectedWorkflowStateAfterRecovery);
+      assert.equal(recoveredSnapshot.workflow.lease_owner, null);
+      assert.equal(recoveredSnapshot.workflow.lease_expires_ms, null);
+      assert.equal(recoveredSnapshot.nextWork.state, 'running');
+      assert.equal(recoveredSnapshot.nextWork.worker_id, recovery.claim.ownerId);
+      const unresolved = expectedWorkState === 'unknown';
+      const expectedPending = unresolved ? 2 : 1;
+      assert.equal(recoveredSnapshot.meta.pending_records, expectedPending);
+      assert.equal(recoveredSnapshot.meta.pending_bytes, unresolved
+        ? beforeRecovery.meta.pending_bytes
+        : beforeRecovery.meta.pending_bytes - beforeRecovery.work.work_bytes);
+      assert.equal(recoveredSnapshot.meta.in_flight, 1);
+      assert.equal(recoveredSnapshot.tenant.pending_records, unresolved ? 1 : 0);
+      assert.equal(recoveredSnapshot.tenant.in_flight, 0);
+      assert.equal(recoveredSnapshot.project.pending_records, unresolved ? 1 : 0);
+      assert.equal(recoveredSnapshot.nextTenant.in_flight, 1);
+      assert.equal(recoveredSnapshot.project.in_flight, 0);
+      assert.equal(recoveredSnapshot.meta.reserved_disk_bytes, recoveredSnapshot.reservationTotals.work_disk);
+      assert.equal(recoveredSnapshot.meta.reserved_event_slots, recoveredSnapshot.reservationTotals.work_events);
+      if (unresolved) {
+        assert.equal(recoveredSnapshot.work.reserved_disk_bytes,
+          beforeRecovery.work.reserved_disk_bytes - 16_384,
+          'clearing the expired workflow lease consumes one bounded lifecycle-write reserve');
+        assert.equal(recoveredSnapshot.work.reserved_event_slots, beforeRecovery.work.reserved_event_slots - 1,
+          'the durable unknown event consumes one reserved event slot while the opaque hold remains');
+        assert.equal(recoveredSnapshot.nextWork.reserved_disk_bytes,
+          beforeRecovery.nextWork.reserved_disk_bytes - 16_384,
+          'the queued tenant claim consumes its own lifecycle-write reserve');
+        assert.equal(recoveredSnapshot.nextWork.reserved_event_slots,
+          beforeRecovery.nextWork.reserved_event_slots - 1,
+          'the next claim event consumes its own reserved slot');
+        assert.equal(recoveredSnapshot.meta.reserved_disk_bytes,
+          beforeRecovery.meta.reserved_disk_bytes
+            - (beforeRecovery.work.reserved_disk_bytes - recoveredSnapshot.work.reserved_disk_bytes)
+            - (beforeRecovery.nextWork.reserved_disk_bytes - recoveredSnapshot.nextWork.reserved_disk_bytes));
+        assert.equal(recoveredSnapshot.meta.reserved_event_slots,
+          beforeRecovery.meta.reserved_event_slots
+            - (beforeRecovery.work.reserved_event_slots - recoveredSnapshot.work.reserved_event_slots)
+            - (beforeRecovery.nextWork.reserved_event_slots - recoveredSnapshot.nextWork.reserved_event_slots));
+        assert.equal(recoveredSnapshot.attempt.authority_hold_ref, holdRef);
+      } else {
+        assert.equal(recoveredSnapshot.work.reserved_disk_bytes, 0);
+        assert.equal(recoveredSnapshot.work.reserved_event_slots, 0);
+      }
+      assert.equal(recoveredSnapshot.events[expectedEventType] ?? 0, (beforeRecovery.events[expectedEventType] ?? 0) + 1);
+      assert.equal(Object.values(recoveredSnapshot.events).reduce((sum, value) => sum + value, 0),
+        Object.values(beforeRecovery.events).reduce((sum, value) => sum + value, 0) + 1,
+        'recovery appends exactly one workflow event');
+      reopened.close();
+
+      const independentlyReopened = openStore(directory.databasePath, { clock: () => now });
+      try {
+        assert.equal(independentlyReopened._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+          tenantId: 'public-expired-tenant', projectId: 'public-expired-project', jobId: expired.jobId
+        }).state, expectedWorkState);
+        assert.equal(independentlyReopened.getWorkflow(expired.workflowId).state, expectedWorkflowStateAfterRecovery);
+        assert.deepEqual(recoverySnapshot(directory.databasePath, expired.jobId, queued.jobId,
+          expired.workflowId, attemptId), recoveredSnapshot, 'a second independent reopen must preserve the reconciled snapshot');
+        assert.equal(independentlyReopened._operationsExpiredClaims(OPERATIONS_STORAGE_CAPABILITY, { policy }).items.length, 0);
+        assert.equal(independentlyReopened._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+          ownerId: `${caseName}-repeat-recovery`, policy, recoverableJobIds: [expired.jobId]
+        }), null, 'repeated recovery cannot duplicate terminal/unknown events or bypass occupied caps');
+        if (expectedAttemptState) {
+          assert.equal(independentlyReopened.getAttempt(attemptId).authorityHoldRef, holdRef);
+        }
+      } finally {
+        independentlyReopened.close();
+      }
+      await afterRecovery?.({ databasePath: directory.databasePath, caseName, expired, queued, prior, now, attemptId, holdRef });
+    } finally {
+      try { reopened.close(); } catch {}
+    }
+  } finally {
+    try { store?.close(); } catch {}
+    directory.cleanup();
+  }
+}
+
 function planAtWorkByteLength(targetBytes, seedPlan = PLAN, configInput = undefined) {
   const config = readOperationsConfig(configInput);
   const initial = validateLocalPlanWork({ planJson: seedPlan, limitsJson: '{}' }, 'ops-validation-workflow', config);
@@ -1701,6 +2095,104 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
       tenantId: 'tenant-c', projectId: 'project-c', jobId: third.jobId
     }).state, 'queued');
     reopened.close();
+
+    // Two independent supervisors must serialize the terminal-public-API
+    // cleanup and let exactly one claim the next tenant at a cap of one.
+    const terminalRaceDir = tempDirectory('ah11-terminal-recovery-race-');
+    t.after(() => terminalRaceDir.cleanup());
+    const terminalConfigInput = {
+      workerCount: 1, maxInFlightGlobal: 1, maxInFlightTenant: 1, maxInFlightProject: 1
+    };
+    const terminalConfig = readOperationsConfig(terminalConfigInput);
+    const terminalPolicy = operationsStoragePolicy(terminalConfig);
+    let terminalNow = 90_000;
+    const terminalStore = openStore(terminalRaceDir.databasePath, { clock: () => terminalNow });
+    const terminal = admit(terminalStore, 'public-expired-tenant', 'public-expired-project',
+      'terminal-race-expired', PLAN, terminalConfigInput);
+    const terminalPrior = terminalStore._operationsClaim(OPERATIONS_STORAGE_CAPABILITY, {
+      ownerId: 'terminal-race-prior-owner', policy: terminalPolicy
+    }).claim;
+    const nextTenantJob = admit(terminalStore, 'public-next-tenant', 'public-next-project',
+      'terminal-race-next', PLAN, terminalConfigInput);
+    terminalStore.close();
+    const terminalCrash = crashAfterPublicWorkflowMutation(terminalRaceDir.databasePath, {
+      mutation: 'succeeded', now: terminalNow, workflowId: terminalPrior.workflowId,
+      ownerId: terminalPrior.ownerId, fence: terminalPrior.fence, revision: terminalPrior.revision,
+      attemptId: 'terminal-race-transition', holdRef: null
+    });
+    assert.equal(terminalCrash.mutation, 'succeeded');
+    terminalNow = terminalPrior.leaseExpiresAtMs + 1;
+    const terminalGate = join(terminalRaceDir.directory, 'release-terminal-recovery-race');
+    const terminalSupervisors = ['terminal-race-supervisor-a', 'terminal-race-supervisor-b'].map(ownerId => {
+      const readyPath = join(terminalRaceDir.directory, `${ownerId}.ready`);
+      const child = spawn(process.execPath, [
+        join(ROOT, 'tests/operations/fixtures/recovery-claim-child.mjs'),
+        terminalRaceDir.databasePath, String(terminalNow), ownerId, terminal.jobId,
+        readyPath, terminalGate, JSON.stringify(terminalConfigInput)
+      ], { cwd: ROOT, env: baseEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', chunk => { stdout += chunk; });
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+      return { ownerId, readyPath, child, closed, get stdout() { return stdout; }, get stderr() { return stderr; } };
+    });
+    METRICS.processRuns += terminalSupervisors.length;
+    try {
+      for (const supervisor of terminalSupervisors) await waitForPath(supervisor.readyPath, supervisor.child, 5_000);
+      writeFileSync(terminalGate, 'released');
+      const outcomes = await Promise.all(terminalSupervisors.map(async supervisor => ({
+        supervisor, exit: await waitForCloseBounded(supervisor.closed, 5_000)
+      })));
+      assert.ok(outcomes.every(item => item.exit), 'Both terminal recovery supervisors must finish within the bound.');
+      const results = outcomes.map(({ supervisor, exit }) => {
+        assert.equal(exit.code, 0, supervisor.stderr);
+        const result = JSON.parse(supervisor.stdout.trim());
+        assert.equal(result.ownerId, supervisor.ownerId);
+        assert.equal(result.incomplete, false);
+        assert.equal(result.ownedRunnerCount, 0);
+        return result;
+      });
+      assert.equal(results.filter(result => result.claim?.jobId === nextTenantJob.jobId).length, 1,
+        'exactly one supervisor can claim the queued next tenant');
+      assert.equal(results.filter(result => result.claim === null).length, 1,
+        'the losing supervisor observes the committed terminal reconciliation and occupied cap');
+    } finally {
+      if (!existsSync(terminalGate)) writeFileSync(terminalGate, 'released');
+      for (const supervisor of terminalSupervisors) {
+        if (supervisor.child.exitCode === null && supervisor.child.signalCode === null) {
+          try { supervisor.child.kill('SIGKILL'); } catch {}
+          await waitForCloseBounded(supervisor.closed, 1_000);
+        }
+      }
+    }
+    const terminalRaw = new DatabaseSync(terminalRaceDir.databasePath, { readOnly: true });
+    try {
+      assert.equal(terminalRaw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(terminal.jobId).state,
+        'completed');
+      assert.deepEqual({ ...terminalRaw.prepare(`SELECT pending_records, in_flight,
+        reserved_event_slots, reserved_disk_bytes FROM operations_meta WHERE singleton=1`).get() }, {
+        pending_records: 1, in_flight: 1,
+        reserved_event_slots: Number(terminalRaw.prepare('SELECT reserved_event_slots FROM operations_work WHERE job_id=?')
+          .get(nextTenantJob.jobId).reserved_event_slots),
+        reserved_disk_bytes: Number(terminalRaw.prepare('SELECT reserved_disk_bytes FROM operations_work WHERE job_id=?')
+          .get(nextTenantJob.jobId).reserved_disk_bytes)
+      });
+      assert.equal(Number(terminalRaw.prepare(`SELECT COUNT(*) AS count FROM workflow_events
+        WHERE workflow_id=? AND event_type='operations_work_completed'`).get(terminal.workflowId).count), 1);
+      assert.equal(terminalRaw.prepare('SELECT state FROM operations_work WHERE job_id=?').get(nextTenantJob.jobId).state,
+        'running');
+    } finally {
+      terminalRaw.close();
+    }
+    const terminalReopen = openStore(terminalRaceDir.databasePath, { clock: () => terminalNow });
+    assert.equal(terminalReopen.getWorkflow(terminal.workflowId).leaseOwner, null);
+    assert.equal(terminalReopen._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+      tenantId: 'public-expired-tenant', projectId: 'public-expired-project', jobId: terminal.jobId
+    }).state, 'completed');
+    terminalReopen.close();
   });
 
   await t.test('OPS05.C13 expired cancellation reconciliation releases capacity before later queued work', () => {
@@ -1799,6 +2291,106 @@ test('OPS05_LOCAL_CRASH_CANCEL_FENCE executes and checkpoints an actual child pl
     assert.equal(store._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
       tenantId: 'a-tenant', projectId: 'a-project', jobId: expired.jobId
     }).state, 'unknown');
+  });
+
+  await t.test('OPS05.C15 expired current-fence outcome-unknown work reconciles after reopen without releasing its hold', async t => {
+    await assertExpiredCurrentFenceReconciles(t, {
+      caseName: 'public-unknown',
+      mutation: 'unknown',
+      expectedWorkflowState: 'reconciliation_pending',
+      expectedWorkState: 'unknown',
+      expectedEventType: 'operations_work_unknown',
+      expectedAttemptState: 'outcome_unknown',
+      async afterRecovery({ databasePath, caseName, expired, queued, now, attemptId, holdRef }) {
+        let lateStore = openStore(databasePath, { clock: () => now });
+        try {
+          const lateLease = lateStore.acquireLease({
+            workflowId: expired.workflowId, ownerId: `${caseName}-late-owner`, ttlMs: 5_000,
+            eventId: `${caseName}-late-lease`
+          });
+          const receipt = lateStore.recordResponseReceipt({
+            workflowId: expired.workflowId, ownerId: lateLease.ownerId, fence: lateLease.fence,
+            expectedRevision: lateLease.revision, attemptId,
+            receiptId: `${caseName}-late-receipt`, outcome: 'completed', nextState: 'succeeded',
+            responseBytes: Buffer.from('synthetic late result receipt'),
+            nextCheckpoint: lateStore.getCheckpoint(expired.workflowId).data,
+            eventId: `${caseName}-late-response`
+          });
+          assert.ok(receipt.receiptId.endsWith('-late-receipt'));
+          const lateSnapshot = recoverySnapshot(databasePath, expired.jobId, queued.jobId,
+            expired.workflowId, attemptId);
+          assert.equal(lateSnapshot.work.state, 'unknown');
+          assert.equal(lateSnapshot.work.reserved_disk_bytes > 0, true);
+          assert.equal(lateSnapshot.work.reserved_event_slots > 0, true);
+          assert.equal(lateSnapshot.meta.pending_records, 2);
+          assert.equal(lateSnapshot.meta.in_flight, 1);
+          assert.equal(lateSnapshot.attempt.state, 'response_received');
+          assert.equal(lateSnapshot.attempt.authority_hold_ref, holdRef);
+          assert.equal(lateSnapshot.workflow.state, 'reconciliation_pending');
+          lateStore.close();
+          lateStore = null;
+          const lateReopen = openStore(databasePath, { clock: () => now });
+          try {
+            assert.equal(lateReopen._operationsGetScopedJob(OPERATIONS_STORAGE_CAPABILITY, {
+              tenantId: 'public-expired-tenant', projectId: 'public-expired-project', jobId: expired.jobId
+            }).state, 'unknown');
+            assert.equal(lateReopen.getAttempt(attemptId).state, 'response_received');
+            assert.equal(lateReopen.getAttempt(attemptId).authorityHoldRef, holdRef);
+            assert.equal(recoverySnapshot(databasePath, expired.jobId, queued.jobId,
+              expired.workflowId, attemptId).work.reserved_disk_bytes,
+            lateSnapshot.work.reserved_disk_bytes);
+          } finally {
+            lateReopen.close();
+          }
+        } finally {
+          try { lateStore?.close(); } catch {}
+        }
+      }
+    });
+
+    // A committed dispatch intent is the complementary unresolved control: it
+    // enters recovery from awaiting_response and remains an intent until an
+    // authoritative local receipt exists.
+    await assertExpiredCurrentFenceReconciles(t, {
+      caseName: 'public-intent-control',
+      mutation: 'intent',
+      expectedWorkflowState: 'awaiting_response',
+      expectedWorkflowStateAfterRecovery: 'reconciliation_pending',
+      expectedWorkState: 'unknown',
+      expectedEventType: 'operations_work_unknown',
+      expectedAttemptState: 'intent'
+    });
+    await assertUnknownRecoveryFailsClosedAtResourceBoundary();
+  });
+
+  await t.test('OPS05.C16 expired succeeded current-fence work reconciles to completed after reopen', async t => {
+    await assertExpiredCurrentFenceReconciles(t, {
+      caseName: 'public-succeeded',
+      mutation: 'succeeded',
+      expectedWorkflowState: 'succeeded',
+      expectedWorkState: 'completed',
+      expectedEventType: 'operations_work_completed'
+    });
+  });
+
+  await t.test('OPS05.C17 expired failed current-fence work reconciles to failed after reopen', async t => {
+    await assertExpiredCurrentFenceReconciles(t, {
+      caseName: 'public-failed',
+      mutation: 'failed',
+      expectedWorkflowState: 'failed',
+      expectedWorkState: 'failed',
+      expectedEventType: 'operations_work_failed'
+    });
+  });
+
+  await t.test('OPS05.C18 expired cancellation with cleared workflow lease reconciles after reopen', async t => {
+    await assertExpiredCurrentFenceReconciles(t, {
+      caseName: 'public-cancelled',
+      mutation: 'cancelled',
+      expectedWorkflowState: 'cancelled',
+      expectedWorkState: 'cancelled',
+      expectedEventType: 'operations_work_cancelled'
+    });
   });
 
   await t.test('OPS05.C06 cancellation of already-reconciliation-pending unknown work persists its flag without settling its hold', () => {
@@ -3776,8 +4368,13 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
     assert.match(evidenceVerifier, /processCloseElapsedMs/u);
     assert.match(evidenceVerifier, /runnerDeadlineCloseElapsedMsMax/u);
     assert.match(evidenceVerifier, /resourceHighWaterSamples/u);
-    assert.match(readFileSync(join(ROOT, '.github/workflows/runtime-foundation.yml'), 'utf8'),
-      /\.runtime-artifacts\/AH-11-OPS-\*\.jsonl/u);
+    const workflow = readFileSync(join(ROOT, '.github/workflows/runtime-foundation.yml'), 'utf8');
+    assert.match(workflow, /include-hidden-files: true/u);
+    assert.match(workflow, /if-no-files-found: error/u);
+    assert.doesNotMatch(workflow, /AH-11-OPS-\*/u);
+    assert.match(evidenceVerifier, /EXPECTED_UPLOAD_MEMBERS/u);
+    assert.match(evidenceVerifier, /uploadUsesExactAllowlist/u);
+    assert.match(evidenceVerifier, /requiredEvidenceSetComplete/u);
     assert.equal(METRICS.providerCalls, 0);
   });
 });

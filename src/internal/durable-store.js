@@ -2130,10 +2130,16 @@ export class DurableWorkflowStore {
           let workflow = this.#workflow(workRow.workflow_id, operation);
           if (Number(workRow.fence_token) !== Number(workflow.fence_token)) continue;
           if (workRow.state === 'running') {
-            if (!['running', 'awaiting_response'].includes(workflow.state)
-                || workflow.lease_owner !== workRow.worker_id || workflow.lease_expires_ms === null
-                || workRow.lease_expires_ms === null
-                || Number(workflow.lease_expires_ms) !== Number(workRow.lease_expires_ms)) continue;
+            const workflowLeaseMatchesQueueClaim = workflow.lease_owner === workRow.worker_id
+              && workflow.lease_expires_ms !== null && workRow.lease_expires_ms !== null
+              && Number(workflow.lease_expires_ms) === Number(workRow.lease_expires_ms);
+            const workflowLeaseWasReleased = workflow.lease_owner === null
+              && workflow.lease_expires_ms === null;
+            // A public transition may make this exact fenced generation terminal or
+            // unresolved, and cancellation/release may clear its workflow lease.
+            // The queue row plus matching monotonic fence still identifies the
+            // generation to reconcile; a different non-null owner/lease is stale.
+            if (!workflowLeaseMatchesQueueClaim && !workflowLeaseWasReleased) continue;
           } else if (!['queued', 'running'].includes(workflow.state) || workflow.lease_owner !== null
               || workflow.lease_expires_ms !== null) {
             continue;
@@ -2145,18 +2151,25 @@ export class DurableWorkflowStore {
           `).get(workRow.workflow_id);
           if (unresolved) {
             if (recoverable && workRow.state === 'running') {
-              let nextRevision = Number(workflow.revision);
-              let nextWorkflowState = workflow.state;
-              if (!['reconciliation_pending', 'review_required', 'succeeded', 'failed', 'cancelled'].includes(workflow.state)) {
-                nextRevision += 1;
-                nextWorkflowState = 'reconciliation_pending';
+              const needsReconciliationState = ![
+                'reconciliation_pending', 'review_required', 'succeeded', 'failed', 'cancelled'
+              ].includes(workflow.state);
+              const needsLeaseClear = workflow.lease_owner !== null || workflow.lease_expires_ms !== null;
+              const nextWorkflowState = needsReconciliationState ? 'reconciliation_pending' : workflow.state;
+              const nextRevision = Number(workflow.revision) + (needsReconciliationState || needsLeaseClear ? 1 : 0);
+              if (needsReconciliationState || needsLeaseClear) {
+                consumeOperationsStorageReservation(
+                  this.#db, this.#databasePath, this.#operationsResourceCeilings,
+                  workflow.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
+                  OPS_GENERATION_WRITE_RESERVE_BYTES
+                );
                 const changed = this.#db.prepare(`
-                  UPDATE workflows SET state = 'reconciliation_pending', revision = ?,
+                  UPDATE workflows SET state = ?, revision = ?,
                     lease_owner = NULL, lease_expires_ms = NULL, updated_at_ms = ?
                   WHERE workflow_id = ? AND revision = ? AND fence_token = ?
-                    AND lease_owner = ? AND lease_expires_ms = ?
-                `).run(nextRevision, now, workflow.workflow_id, Number(workflow.revision),
-                  Number(workflow.fence_token), workflow.lease_owner, Number(workflow.lease_expires_ms));
+                    AND lease_owner IS ? AND lease_expires_ms IS ?
+                `).run(nextWorkflowState, nextRevision, now, workflow.workflow_id, Number(workflow.revision),
+                  Number(workflow.fence_token), workflow.lease_owner, workflow.lease_expires_ms);
                 if (Number(changed.changes) !== 1) {
                   fail(operation, 'STALE_FENCE', 'The expired unresolved operation no longer owns its workflow revision.');
                 }
@@ -2193,22 +2206,26 @@ export class DurableWorkflowStore {
               : workflow.state === 'failed' ? 'failed' : 'cancelled';
             const wasRunning = workRow.state === 'running';
             const cancelledWorkflow = workflow.cancellation_requested && !TERMINAL.has(workflow.state);
+            const terminalLeaseNeedsClear = TERMINAL.has(workflow.state)
+              && (workflow.lease_owner !== null || workflow.lease_expires_ms !== null);
             const nextWorkflowState = cancelledWorkflow ? 'cancelled' : workflow.state;
-            const nextRevision = cancelledWorkflow ? Number(workflow.revision) + 1 : Number(workflow.revision);
-            if (cancelledWorkflow) {
+            const nextRevision = Number(workflow.revision)
+              + (cancelledWorkflow || terminalLeaseNeedsClear ? 1 : 0);
+            if (cancelledWorkflow || terminalLeaseNeedsClear) {
               consumeOperationsStorageReservation(
                 this.#db, this.#databasePath, this.#operationsResourceCeilings,
                 workflow.workflow_id, OPS_GENERATION_WRITE_RESERVE_BYTES, operation,
                 OPS_GENERATION_WRITE_RESERVE_BYTES
               );
               const changed = this.#db.prepare(`
-                UPDATE workflows SET state = 'cancelled', cancellation_requested = 1,
+                UPDATE workflows SET state = ?, cancellation_requested = ?,
                   revision = ?, lease_owner = NULL, lease_expires_ms = NULL, updated_at_ms = ?
                 WHERE workflow_id = ? AND revision = ? AND fence_token = ?
-                  AND lease_owner = ? AND lease_expires_ms = ?
-              `).run(nextRevision, now, workflow.workflow_id,
+                  AND lease_owner IS ? AND lease_expires_ms IS ?
+              `).run(nextWorkflowState, workflow.cancellation_requested || cancelledWorkflow ? 1 : 0,
+                nextRevision, now, workflow.workflow_id,
                 Number(workflow.revision), Number(workflow.fence_token),
-                workflow.lease_owner, Number(workflow.lease_expires_ms));
+                workflow.lease_owner, workflow.lease_expires_ms);
               if (Number(changed.changes) !== 1) {
                 fail(operation, 'STALE_FENCE', 'The expired cancellation no longer owns its workflow revision.');
               }

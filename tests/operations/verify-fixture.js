@@ -15,6 +15,7 @@ const REQUIRED_LOCAL_CASES = Object.freeze([
   'OPS04.C01', 'OPS04.C02',
   'OPS05.C01', 'OPS05.C02', 'OPS05.C03', 'OPS05.C04', 'OPS05.C05', 'OPS05.C06', 'OPS05.C07', 'OPS05.C08', 'OPS05.C09', 'OPS05.C10',
   'OPS05.C11', 'OPS05.C12', 'OPS05.C13', 'OPS05.C14',
+  'OPS05.C15', 'OPS05.C16', 'OPS05.C17', 'OPS05.C18',
   'OPS06.C01', 'OPS06.C02', 'OPS06.C03',
   'OPS07.C01', 'OPS07.C02', 'OPS07.C03', 'OPS07.C04', 'OPS07.C05',
   'OPS08.C01', 'OPS08.C02', 'OPS08.C03',
@@ -25,6 +26,22 @@ const REQUIRED_LOCAL_CASES = Object.freeze([
   'OPS13.C01'
 ]);
 const FIXTURES = new Set(['quota-shutdown-restart', 'runbook-clean-start']);
+const EXPECTED_UPLOAD_MEMBERS = Object.freeze([
+  '.runtime-artifacts/runtime-foundation.tap',
+  '.runtime-artifacts/ACV1-AH05-jev-phase-b-offline.tap',
+  '.runtime-artifacts/ACV1-AH05-jev-phase-b-offline.json',
+  '.runtime-artifacts/ACV1-AH05-jev-phase-b-offline.json.sha256',
+  '.runtime-artifacts/neatlogs-sdk-local.tap',
+  '.runtime-artifacts/neatlogs-sdk-local-capture.json',
+  '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.tap',
+  '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json',
+  '.runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json.sha256',
+  '.runtime-artifacts/AH-11-OPS-runbook-clean-start.tap',
+  '.runtime-artifacts/AH-11-OPS-runbook-clean-start.json',
+  '.runtime-artifacts/AH-11-OPS-runbook-clean-start.json.sha256',
+  '.runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl',
+  '.runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl'
+]);
 
 function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -233,11 +250,23 @@ const artifactMembersIntegrity = referencedArtifactMembers.every(artifact => {
     return false;
   }
 });
+const uploadPathBlock = uploadWorkflow.match(/\n          path: \|\n([\s\S]*?)\n          if-no-files-found:/u)?.[1] ?? '';
+const uploadedMembers = uploadPathBlock.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+const uploadUsesExactAllowlist = uploadedMembers.length === EXPECTED_UPLOAD_MEMBERS.length
+  && EXPECTED_UPLOAD_MEMBERS.every((path, index) => uploadedMembers[index] === path)
+  && uploadedMembers.every(path => !/[*?{}\[\]]/u.test(path));
+const requiredEvidenceStep = uploadWorkflow.match(/- name: Require the complete sanitized evidence set\n([\s\S]*?)(?=\n      - name: Upload sanitized test evidence)/u)?.[1] ?? '';
+const requiredEvidenceMembers = [...requiredEvidenceStep.matchAll(/\.runtime-artifacts\/[A-Za-z0-9._-]+/gu)]
+  .map(match => match[0]);
+const requiredEvidenceSetComplete = requiredEvidenceMembers.length === EXPECTED_UPLOAD_MEMBERS.length
+  && EXPECTED_UPLOAD_MEMBERS.every((path, index) => requiredEvidenceMembers[index] === path);
+const uploadActionOptions = uploadWorkflow.match(/\n          if-no-files-found: ([^\r\n]+)\n          include-hidden-files: ([^\r\n]+)/u);
+const hiddenArtifactUploadConfigured = uploadActionOptions?.[1].trim() === 'error'
+  && uploadActionOptions?.[2].trim() === 'true';
 const jsonlMembersIncludedInUpload = runbookJsonlMembers.every(artifact =>
   artifact.path.startsWith(`${artifactDirectory}/`)
-  && basename(artifact.path).startsWith('AH-11-OPS-')
-  && basename(artifact.path).endsWith('.jsonl'))
-  && /\.runtime-artifacts\/AH-11-OPS-\*\.jsonl/u.test(uploadWorkflow);
+  && EXPECTED_UPLOAD_MEMBERS.includes(`.runtime-artifacts/${basename(artifact.path)}`))
+  && uploadUsesExactAllowlist && hiddenArtifactUploadConfigured && requiredEvidenceSetComplete;
 const resourceMetricsComplete = metrics !== null
   && metrics.ownedRunnerStarts >= 1
   && metrics.ownedRunnerTermSignals >= 1
@@ -308,7 +337,10 @@ const manifest = {
   artifactIntegrity: {
     referencedMembers: referencedArtifactMembers,
     allReferencedMembersPresentAndDigestCorrect: artifactMembersIntegrity,
-    jsonlMembersIncludedInWorkflowUpload: jsonlMembersIncludedInUpload
+    jsonlMembersIncludedInWorkflowUpload: jsonlMembersIncludedInUpload,
+    exactUploadAllowlist: uploadUsesExactAllowlist,
+    requiredOutputSetChecked: requiredEvidenceSetComplete,
+    hiddenArtifactUploadConfigured
   },
   resourceAndNetworkEvidence: {
     ...metrics,
@@ -321,7 +353,7 @@ const manifest = {
   artifacts: { tap: tapArtifact },
   passed: resultCode === 0 && tapSummary.complete && tapSummary.skippedCount === 0
     && allNetworkCallCountsZero && resourceMetricsComplete
-    && artifactMembersIntegrity && jsonlMembersIncludedInUpload
+    && artifactMembersIntegrity && jsonlMembersIncludedInUpload && requiredEvidenceSetComplete
     && (fixture !== 'runbook-clean-start' || (runbookCode === 0 && runbookArtifact !== null
       && recoveryResult?.status === 0 && runbookRecoveryArtifact !== null))
 };

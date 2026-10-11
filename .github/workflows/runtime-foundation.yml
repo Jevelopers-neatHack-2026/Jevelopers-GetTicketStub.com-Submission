@@ -18,6 +18,7 @@ jobs:
         with:
           node-version-file: .node-version
       - name: Verify pinned toolchain and locked package
+        id: install
         run: |
           node --version
           npm --version
@@ -29,13 +30,42 @@ jobs:
           mkdir -p .runtime-artifacts
           npm test > .runtime-artifacts/runtime-foundation.tap
       - name: Run isolated Neatlogs SDK local-capture conformance
+        if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run test:neatlogs-sdk > .runtime-artifacts/neatlogs-sdk-local.tap
       - name: Produce revision-bound JEV offline evidence
+        if: ${{ always() && steps.install.outcome == 'success' }}
         run: make verify CASE=ACV1-AH05 MODE=mock FIXTURE=jev-phase-b-offline
       - name: Verify worker operations quota and shutdown fixture
+        if: ${{ always() && steps.install.outcome == 'success' }}
         run: make verify CASE=AH-11-OPS MODE=mock FIXTURE=quota-shutdown-restart
       - name: Verify worker operations clean-start runbook
+        if: ${{ always() && steps.install.outcome == 'success' }}
         run: make verify CASE=AH-11-OPS MODE=mock FIXTURE=runbook-clean-start
+      - name: Require the complete sanitized evidence set
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: |
+          missing=0
+          for path in \
+            .runtime-artifacts/runtime-foundation.tap \
+            .runtime-artifacts/ACV1-AH05-jev-phase-b-offline.tap \
+            .runtime-artifacts/ACV1-AH05-jev-phase-b-offline.json \
+            .runtime-artifacts/ACV1-AH05-jev-phase-b-offline.json.sha256 \
+            .runtime-artifacts/neatlogs-sdk-local.tap \
+            .runtime-artifacts/neatlogs-sdk-local-capture.json \
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.tap \
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json \
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json.sha256 \
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.tap \
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.json \
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.json.sha256 \
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl \
+            .runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl; do
+            if [ ! -f "$path" ]; then
+              printf 'Required evidence file is missing: %s\n' "$path"
+              missing=1
+            fi
+          done
+          test "$missing" -eq 0
       - name: Upload sanitized test evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -48,8 +78,13 @@ jobs:
             .runtime-artifacts/ACV1-AH05-jev-phase-b-offline.json.sha256
             .runtime-artifacts/neatlogs-sdk-local.tap
             .runtime-artifacts/neatlogs-sdk-local-capture.json
-            .runtime-artifacts/AH-11-OPS-*.tap
-            .runtime-artifacts/AH-11-OPS-*.json
-            .runtime-artifacts/AH-11-OPS-*.jsonl
-            .runtime-artifacts/AH-11-OPS-*.json.sha256
-          if-no-files-found: warn
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.tap
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json
+            .runtime-artifacts/AH-11-OPS-quota-shutdown-restart.json.sha256
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.tap
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.json
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.json.sha256
+            .runtime-artifacts/AH-11-OPS-runbook-clean-start.jsonl
+            .runtime-artifacts/AH-11-OPS-runbook-recovery.jsonl
+          if-no-files-found: error
+          include-hidden-files: true
