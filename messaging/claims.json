@@ -106,7 +106,7 @@
       "sponsor": "CFO.ai",
       "status": "pending",
       "evidenceRef": "SPN-CFOAI-001",
-      "requiredEvidence": "Actual CFO.ai business-plan evidence and finance owner review; do not substitute a placeholder or estimate.",
+      "requiredEvidence": "Actual CFO.ai business-plan evidence and finance owner review; do not substitute a placeholder or estimate. An authentic saved plan is now available as producer evidence at integration-evals commit e5f9604fdbf2fad24adf3681275e5eb10c873801, but availability is not acceptance: Finance returned REQUEST_CHANGES on that exact commit, so acceptance still needs a repaired native artifact, a new immutable export, intended-engine recalculation and input-propagation evidence, and independent Finance re-review. See the limitations of CLAIM-SPN-03-CFO-001.",
       "requiredIssue": "https://github.com/Jevelopers-neatHack-2026/cost-intelligence/issues/3"
     }
   ],
@@ -341,7 +341,10 @@
       "reviewStatus": "blocked",
       "limitations": [
         "Requires the actual CFO.ai business plan and finance owner review.",
-        "An estimate or placeholder does not satisfy this requirement."
+        "An estimate or placeholder does not satisfy this requirement.",
+        "Source availability, supplemental: an authentic saved CFO.ai plan and a sanitized evidence package exist at integration-evals commit e5f9604fdbf2fad24adf3681275e5eb10c873801, proposed in integration-evals PR #24 (open at that commit). Producer receipt: https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20#issuecomment-6106716361. Immutable public locator: https://github.com/Jevelopers-neatHack-2026/integration-evals/tree/e5f9604fdbf2fad24adf3681275e5eb10c873801/evidence/cfo-ai/2026-10-11. This supersedes only the earlier missing-artifact status; the original cost-intelligence issue 3 and its operational financial authority are unchanged.",
+        "Finance review limitation: Finance independently returned REQUEST_CHANGES on that exact producer commit (https://github.com/Jevelopers-neatHack-2026/integration-evals/issues/20#issuecomment-6106859877). Open findings are CFO-001 (zero-order aggregate calculations), CFO-002 (advertised editable inputs that do not drive results) and CFO-003 (unknown opening-cash handling). These findings qualify the producer README assertions. Acceptance needs a repaired native artifact, a new immutable export, intended-engine recalculation and input-propagation evidence, and independent Finance re-review.",
+        "Marketing has not opened, recalculated or independently verified the workbook and imports none of its numeric or forecast results. Actual cash, demand, usage and supplier economics are not established here. Availability does not show Finance acceptance, plan acceptance, sponsor satisfaction, a delivered final demo or publication authorization; the earlier synthetic rehearsal and its pending financial copy stay historical and do not show authentic CFO.ai screens."
       ],
       "reReviewTrigger": [
         "Business-plan inputs, actuals, financial definitions, or source revision changes."
