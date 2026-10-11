@@ -20,6 +20,8 @@ The private FC-04 quote normalizer is exported from the package root and covered
 
 The FC-06 attempt persistence implementation is exported from the package root for local development, exercised by `npm test` / `npm run test:attempt-store`, and reported by `npm run verify:attempt-store`. Its private JSON store supplies restart-safe local claims through the existing `AttemptPersistence` port and is tested with the deterministic simulator and synthetic authorization and budget ports. This is partial issue 11 evidence only: the issue remains open, with no canonical shared schema, issuer or finance authority, provider reconciliation or retry authority, transport-intent/CAS protocol, or production encrypted storage. Sandbox, live, and release readiness remain false. See [local attempt store semantics and limits](docs/attempt-store.md).
 
+The private FC-09 quote comparison projection is exported from the package root and covered by `npm test` / `npm run test:comparison`; `npm run verify:comparison` writes its simulated evidence result. It preserves exact source quote terms and reports unknown or incompatible bases without ranking, choosing a provider, or submitting an order. Currentness uses one captured trusted clock value, so a consumer must recheck at use time. The shared-contracts #25 mapping and application consumer review remain pending; issue 14 stays partial/open, and sandbox, live, and release readiness remain false. See [comparison field semantics and evidence limits](docs/comparison.md).
+
 ## Architecture and delivery
 
 - [Repository responsibilities and interfaces](docs/architecture/OWNERSHIP.md)
