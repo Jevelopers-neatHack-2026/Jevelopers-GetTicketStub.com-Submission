@@ -52,3 +52,6 @@ jobs:
 
       - name: Verify the deterministic simulated runtime
         run: npm run verify:mock
+
+      - name: Verify private offline quote fixtures
+        run: npm run verify:quote
