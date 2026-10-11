@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { canonicalHash } from '../../src/contracts/validation.mjs';
 import {
   createOpenRouterImagesAdapter,
   executeAuthorizedAccessCell,
@@ -200,24 +201,137 @@ test('invalid targets and credentials stop before any request, and construction 
     (error) => error.code === 'adapter_unavailable');
 });
 
+const GRANT = 'grant:test:1';
+const deadline = (offsetMs = 120_000) => new Date(Date.now() + offsetMs).toISOString();
+const billable = (cellId = 'image_generation', overrides = {}) => ({ run_id: 'test:run', cell_id: cellId, target: target(cellId),
+  configuration: target(cellId).configuration, scope: fixtureScope, grant_ref: GRANT, deadline_at: deadline(), ...overrides });
+// A credential port that honors grant_ref like a real resolver would, with per-test mutation of the answer.
+function grantCredentialPort({ mutate = (value) => value, calls = [] } = {}) {
+  return credentialPort({ calls, mutate: (value) => mutate({ ...value,
+    binding: { ...value.binding, ...(calls.at(-1)?.grant_ref ? { grant_ref: calls.at(-1).grant_ref } : {}) },
+    expires_at: new Date(Date.now() + 600_000).toISOString() }) });
+}
+
 test('billable dispatch exists only through a trusted host port and re-checks the OpenRouter pin', async () => {
   const { fetchImpl, requests } = interceptedFetch();
   const bare = createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl });
   assert.equal(bare.prepare, undefined);
   await assert.rejects(bare.dispatch({ cell_id: 'image_generation', target: target() }), (error) => error.code === 'adapter_unavailable');
   const seen = [];
-  const composed = createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl, dispatchPort: {
-    async prepare(input) { seen.push(['prepare', input.cell_id]); return { ok: true }; },
-    async dispatch(input) { seen.push(['dispatch', input.cell_id]); return { host: 'result' }; },
+  const calls = [];
+  const composed = createOpenRouterImagesAdapter({ credentialPort: grantCredentialPort({ calls }), fetchImpl, dispatchPort: {
+    async prepare(input) { seen.push(['prepare', input.cell_id, input.credential.token]); return { host_prepared: input.cell_id }; },
+    async dispatch(input) { seen.push(['dispatch', input.cell_id, input.credential.token, input.prepared, input.signal instanceof AbortSignal]); return { host: 'result' }; },
   } });
-  assert.deepEqual(await composed.dispatch({ cell_id: 'image_edit', target: target('image_edit') }), { host: 'result' });
-  await composed.prepare({ cell_id: 'image_generation', target: target() });
-  const wrong = target();
-  wrong.service = 'openai';
-  await assert.rejects(composed.dispatch({ cell_id: 'image_generation', target: wrong }), (error) => error.code === 'unsupported_image_configuration');
-  await assert.rejects(composed.prepare({ cell_id: 'image_generation', target: wrong }));
-  assert.deepEqual(seen, [['dispatch', 'image_edit'], ['prepare', 'image_generation']]);
+  const input = billable('image_edit');
+  const prepared = await composed.prepare(input);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].purpose, 'authorized_billable_operation', 'the OpenAI billable purpose');
+  assert.equal(calls[0].grant_ref, GRANT);
+  assert.ok(!JSON.stringify(prepared).includes(TOKEN_CANARY), 'the credential is not in the value the runner holds');
+  assert.deepEqual(await composed.dispatch({ ...input, prepared }), { host: 'result' });
+  assert.deepEqual(seen, [['prepare', 'image_edit', TOKEN_CANARY], ['dispatch', 'image_edit', TOKEN_CANARY, { host_prepared: 'image_edit' }, true]]);
+  // The pin is re-checked on both entry points, and a dispatch needs a prepared value this adapter minted.
+  const wrong = billable('image_generation');
+  wrong.target.service = 'openai';
+  await assert.rejects(composed.prepare(wrong), (error) => error.code === 'unsupported_image_configuration');
+  const before = seen.length;
+  const ok = billable('image_generation');
+  const okPrepared = await composed.prepare(ok);
+  for (const [name, bad] of [
+    ['no prepared value', { ...ok, prepared: undefined }],
+    ['forged prepared value', { ...ok, prepared: { prepared: true } }],
+    ['prepared from another cell', { ...ok, prepared }],
+    ['different grant', { ...ok, prepared: okPrepared, grant_ref: 'grant:other' }],
+    ['different deadline', { ...ok, prepared: okPrepared, deadline_at: deadline(10_000) }],
+    ['different target object', { ...ok, prepared: okPrepared, target: target('image_generation') }],
+    ['mismatched pin', { ...ok, prepared: okPrepared, target: wrong.target }],
+  ]) await assert.rejects(composed.dispatch(bad), (error) => ['credential_unavailable', 'unsupported_image_configuration'].includes(error.code), name);
+  assert.equal(seen.filter(([kind]) => kind === 'dispatch').length, 1, 'no rejected dispatch reached the host port');
+  assert.equal(seen.length, before + 1, 'only the one valid prepare ran after the rejections');
   assert.equal(requests.length, 0, 'the metadata adapter never sends a paid request');
+  // A port without prepare still gets a credential-bound prepare step.
+  const noPrepare = createOpenRouterImagesAdapter({ credentialPort: grantCredentialPort(), fetchImpl, dispatchPort: {
+    async dispatch(input) { return { token_seen: input.credential.token === TOKEN_CANARY, prepared: input.prepared }; } } });
+  assert.deepEqual(await noPrepare.dispatch({ ...ok, prepared: await noPrepare.prepare(ok) }), { token_seen: true, prepared: undefined });
+});
+
+test('billable prepare resolves a grant-bound credential through the deadline, or no host port runs', async () => {
+  const { fetchImpl } = interceptedFetch();
+  const hostCalls = [];
+  const dispatchPort = { async prepare() { hostCalls.push('prepare'); return {}; }, async dispatch() { hostCalls.push('dispatch'); return {}; } };
+  const adapterFor = (mutate) => createOpenRouterImagesAdapter({ credentialPort: grantCredentialPort({ mutate }), fetchImpl, dispatchPort });
+  const bound = (value) => ({ ...value, binding: { ...value.binding } });
+  const cases = [
+    ['mismatched grant in the binding', adapterFor((value) => ({ ...bound(value), binding: { ...value.binding, grant_ref: 'grant:other' } })), billable()],
+    ['binding without any grant', adapterFor((value) => { const copy = bound(value); delete copy.binding.grant_ref; return copy; }), billable()],
+    ['expiry before the deadline', adapterFor((value) => ({ ...value, expires_at: new Date(Date.now() + 30_000).toISOString() })),
+      billable('image_generation', { deadline_at: deadline(90_000) })],
+    ['already expired', adapterFor((value) => ({ ...value, expires_at: new Date(Date.now() - 1000).toISOString() })), billable()],
+    ['wrong purpose refused by the resolver', createOpenRouterImagesAdapter({ fetchImpl, dispatchPort, credentialPort: {
+      evidence_mode: 'live', async resolveCredential(input) { return { decision: input.purpose === 'read_only_account_check' ? 'resolved' : 'denied' }; } } }), billable()],
+    ['wrong account', adapterFor((value) => ({ ...value, binding: { ...value.binding, account_ref: 'other-account' } })), billable()],
+    ['missing grant reference', adapterFor((value) => value), billable('image_generation', { grant_ref: undefined })],
+    ['missing deadline', adapterFor((value) => value), billable('image_generation', { deadline_at: undefined })],
+    ['deadline already passed', adapterFor((value) => value), billable('image_generation', { deadline_at: deadline(-1000) })],
+  ];
+  for (const [name, adapter, input] of cases) {
+    await assert.rejects(adapter.prepare(input), (error) => error.code === 'credential_unavailable' && !String(error.message).includes(TOKEN_CANARY), name);
+  }
+  assert.deepEqual(hostCalls, [], 'no host port call for any rejected credential');
+  // A credential expiring exactly at the deadline is accepted; one second earlier is not.
+  const at = deadline(90_000);
+  const exact = adapterFor((value) => ({ ...value, expires_at: at }));
+  await assert.doesNotReject(exact.prepare(billable('image_generation', { deadline_at: at })));
+  assert.deepEqual(hostCalls, ['prepare']);
+  // The deadline can also pass between prepare and dispatch.
+  const soon = deadline(50);
+  const late = adapterFor((value) => ({ ...value, expires_at: new Date(Date.now() + 600_000).toISOString() }));
+  const input = billable('image_generation', { deadline_at: soon });
+  const prepared = await late.prepare(input);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  await assert.rejects(late.dispatch({ ...input, prepared }), (error) => error.code === 'preflight_deadline_passed');
+  assert.deepEqual(hostCalls, ['prepare', 'prepare']);
+});
+
+test('model_listing is tag presence unless the target pins the catalog entry hash; a different live entry is unknown', async () => {
+  const run = async (mutateTarget, handlers) => {
+    const { fetchImpl } = interceptedFetch(handlers);
+    const adapter = createOpenRouterImagesAdapter({ credentialPort: credentialPort(), fetchImpl });
+    const pinned = target();
+    mutateTarget(pinned);
+    return adapter.inspect({ run_id: 'test:run', cell_id: 'image_generation', target: pinned, scope: fixtureScope });
+  };
+  const absent = await run(() => {});
+  assert.equal(absent.model_listing, 'listed', 'without a pinned hash, listed means the provider tag is present');
+  // The pin is the hash this module computes over the fixture's live entry.
+  const entry = catalogBody.data.endpoints[1];
+  const expected = canonicalHash({ provider_tag: entry.provider_tag, supported_parameters: entry.supported_parameters, pricing: entry.pricing });
+  const matched = await run((t) => { t.configuration.catalog_entry_sha256 = expected; });
+  assert.equal(matched.model_listing, 'listed');
+  const changed = { data: { endpoints: [{ ...entry, pricing: { image: '0.99' } }] } };
+  const mismatch = await run((t) => { t.configuration.catalog_entry_sha256 = expected; }, { [CATALOG_URL]: { body: changed } });
+  assert.equal(mismatch.model_listing, 'unknown');
+  assert.notEqual(mismatch.evidence.sha256, matched.evidence.sha256);
+  const unpinnedChanged = await run(() => {}, { [CATALOG_URL]: { body: changed } });
+  assert.equal(unpinnedChanged.model_listing, 'listed', 'documented: tag presence only without a pinned hash');
+  // A tag that is absent stays not_listed, pinned or not; the pin must be a sha256 string and is bound into the config hash.
+  const gone = await run((t) => { t.configuration.catalog_entry_sha256 = expected; }, { [CATALOG_URL]: { body: { data: { endpoints: [] } } } });
+  assert.equal(gone.model_listing, 'not_listed');
+  for (const bad of ['latest', [expected], 5, null]) {
+    const candidate = target();
+    candidate.configuration.catalog_entry_sha256 = bad;
+    assert.throws(() => validateOpenRouterImageTarget('image_generation', candidate), (error) => error.code === 'unsupported_image_configuration');
+  }
+  for (const key of ['profile_sha256', 'prompt_template_sha256']) {
+    const candidate = target();
+    candidate.configuration[key] = [candidate.configuration[key]];
+    assert.throws(() => validateOpenRouterImageTarget('image_generation', candidate), (error) => error.code === 'unsupported_image_configuration', `${key} array`);
+  }
+  // The runner derives the target's configuration_sha256 from the whole configuration, so the pin is bound by it.
+  const withPin = target();
+  withPin.configuration.catalog_entry_sha256 = expected;
+  assert.notEqual(canonicalHash(withPin.configuration), target().configuration_sha256);
 });
 
 test('OpenRouter generation and edit are separate cells with independent evidence in the fixed eight-cell matrix', async () => {
