@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -24,9 +24,7 @@ import {
 } from "../../src/exporters/private-policy.js";
 import { digest } from "../../src/composition/primitives.js";
 
-test("binds complete source paint and rejects actual artwork, geometry and state mutations", {
-	timeout: 30000,
-}, async () => {
+async function prepareSource() {
 	const f = await fixtureArtifact("Alice", "Seat 0007");
 	const result = await exportPrivateFiles({
 		artifact: f.artifact,
@@ -37,6 +35,56 @@ test("binds complete source paint and rejects actual artwork, geometry and state
 	});
 	const file = result.files.find((f) => f.name === "output.pdf");
 	assert.ok(file);
+	const parent = process.env["PP_OUTPUT_EVIDENCE_DIR"];
+	const root = parent ? join(parent, "pdf-paint") : null;
+	if (root) {
+		await mkdir(root, { recursive: true });
+		await writeFile(join(root, "baseline.pdf"), file.bytes);
+	}
+	return Object.freeze({ f, result, file, root });
+}
+
+let source: Awaited<ReturnType<typeof prepareSource>>;
+const cases: {
+	readonly id: string;
+	readonly digest: string;
+	readonly inspectorAccepted: false;
+	readonly finalFileEvidenceIssued: false;
+}[] = [];
+
+before(
+	async () => {
+		source = await prepareSource();
+	},
+	{ timeout: 30000 },
+);
+
+after(
+	async () => {
+		const { f, file, root } = source;
+		if (!root) return;
+		const inspected = await inspectPdf(file.bytes, f.artifact);
+		await writeFile(
+			join(root, "attacks.json"),
+			JSON.stringify(
+				{
+					executionNonce: process.env["PP_DURABILITY_EXECUTION_NONCE"] ?? null,
+					baselineDigest: digest(file.bytes),
+					sourcePaint: inspected.semantics.sourcePaint,
+					cases,
+				},
+				null,
+				2,
+			),
+		);
+	},
+	{ timeout: 30000 },
+);
+
+test("binds complete source paint to the exact source graph", {
+	timeout: 30000,
+}, async () => {
+	const { f, result, file } = source;
 	const inspected = await inspectPdf(file.bytes, f.artifact);
 	assert.deepEqual(inspected.semantics.lines, ["Alice", "Seat 0007"]);
 	assert.equal(
@@ -44,14 +92,11 @@ test("binds complete source paint and rejects actual artwork, geometry and state
 		inspected.semantics.sourcePaint.reference.graphDigest,
 	);
 	assert.equal(result.report.draftReady, true);
-	const parent = process.env["PP_OUTPUT_EVIDENCE_DIR"];
-	const root = parent ? join(parent, "pdf-paint") : null;
-	if (root) {
-		await mkdir(root, { recursive: true });
-		await writeFile(join(root, "baseline.pdf"), file.bytes);
-	}
-	const cases = [];
-	for (const attack of paintAttacks) {
+});
+
+for (const attack of paintAttacks) {
+	test(`rejects paint mutation: ${attack.id}`, { timeout: 30000 }, async () => {
+		const { f, result, file, root } = source;
 		const bytes = await mutatePaint(file.bytes, attack);
 		const rejects = (e: unknown) =>
 			e instanceof OutputError &&
@@ -76,11 +121,23 @@ test("binds complete source paint and rejects actual artwork, geometry and state
 			finalFileEvidenceIssued: false,
 		});
 		if (root) await writeFile(join(root, `${attack.id}.pdf`), bytes);
-	}
+	});
+}
+
+test("accepts metadata changes with unchanged paint", {
+	timeout: 30000,
+}, async () => {
+	const { f, file } = source;
 	const doc = await PDFDocument.load(file.bytes, { updateMetadata: false });
 	doc.setTitle("Correct metadata never replaces paint evidence");
 	await inspectPdf(await doc.save({ useObjectStreams: false }), f.artifact);
-	for (const id of ["shifted", "added", "changed"] as const) {
+});
+
+for (const id of ["shifted", "added", "changed"] as const) {
+	test(`rejects original paint and accepts the ${id} source logo`, {
+		timeout: 30000,
+	}, async () => {
+		const { f, file } = source;
 		const logo = Buffer.from(
 			safeLogo
 				.toString()
@@ -122,20 +179,43 @@ test("binds complete source paint and rejects actual artwork, geometry and state
 			policy: defaultOutputPolicy,
 		});
 		assert.equal(changed.report.draftReady, true);
-	}
-	for (const bytes of [
-		Buffer.concat([file.bytes, Buffer.from("\n%%EOF")]),
-		Buffer.from(
-			Buffer.from(file.bytes)
-				.toString("latin1")
-				.replace("/Tabs /S", "/Tabs /S /Tabs /S"),
-			"latin1",
-		),
-	])
+	});
+}
+
+for (const envelope of [
+	{
+		id: "extra EOF marker",
+		mutate: (bytes: Uint8Array) =>
+			Buffer.concat([bytes, Buffer.from("\n%%EOF")]),
+	},
+	{
+		id: "duplicate Tabs entry",
+		mutate: (bytes: Uint8Array) =>
+			Buffer.from(
+				Buffer.from(bytes)
+					.toString("latin1")
+					.replace("/Tabs /S", "/Tabs /S /Tabs /S"),
+				"latin1",
+			),
+	},
+] as const) {
+	test(`rejects malformed envelope: ${envelope.id}`, {
+		timeout: 30000,
+	}, async () => {
+		const { f, file } = source;
 		await assert.rejects(
-			inspectPdf(bytes, f.artifact),
+			inspectPdf(envelope.mutate(file.bytes), f.artifact),
 			(e) => e instanceof OutputError,
 		);
+	});
+}
+
+test("accepts inherited page resources with unchanged paint", {
+	timeout: 30000,
+}, async () => {
+	const { f, file } = source;
+	const doc = await PDFDocument.load(file.bytes, { updateMetadata: false });
+	doc.setTitle("Correct metadata never replaces paint evidence");
 	const parentNode = doc.getPage(0).node.Parent();
 	assert.ok(parentNode);
 	const resources = doc.getPage(0).node.get(PDFName.of("Resources"));
@@ -143,18 +223,4 @@ test("binds complete source paint and rejects actual artwork, geometry and state
 	parentNode.set(PDFName.of("Resources"), resources);
 	doc.getPage(0).node.delete(PDFName.of("Resources"));
 	await inspectPdf(await doc.save({ useObjectStreams: false }), f.artifact);
-	if (root)
-		await writeFile(
-			join(root, "attacks.json"),
-			JSON.stringify(
-				{
-					executionNonce: process.env["PP_DURABILITY_EXECUTION_NONCE"] ?? null,
-					baselineDigest: digest(file.bytes),
-					sourcePaint: inspected.semantics.sourcePaint,
-					cases,
-				},
-				null,
-				2,
-			),
-		);
 });

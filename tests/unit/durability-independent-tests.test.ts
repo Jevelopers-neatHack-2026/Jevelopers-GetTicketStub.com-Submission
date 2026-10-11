@@ -41,6 +41,7 @@ test("executes a passing canary with fresh evidence from nested node --test", as
 	});
 	assert.equal(result.tests, 1);
 	assert.equal(result.passed, 1);
+	assert.ok(result.command.includes("--test-concurrency=4"));
 	const evidence: unknown = JSON.parse(
 		await readFile(join(result.evidenceDir, "canary-executed.json"), "utf8"),
 	);

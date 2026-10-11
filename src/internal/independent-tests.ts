@@ -121,6 +121,7 @@ export async function runIndependentTests(options: {
 	const command = [
 		process.execPath,
 		"--test",
+		"--test-concurrency=4",
 		"--test-reporter=tap",
 		...options.paths,
 	];
