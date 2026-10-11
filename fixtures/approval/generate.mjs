@@ -62,10 +62,11 @@ const record = (over = {}) => ({
 const out = {};
 /**
  * held: what the consumer has in hand (art bytes, base64). expect: the scope it names. state: the issuer's current answer, when the case needs it.
- * outcome: what a correct verifier must answer. The consumer computes artHash from `held` itself; it never takes it from the token.
+ * outcome: what a correct verifier must answer. The consumer computes every hash itself (artHash from `held`, the rest from content.json); it never takes one from the token.
+ * consumer: optional, changes what the consumer supplies: { omit, override, empty, clock } (see runFixture in verify.mjs). Default: all four hashes and the verifyAt clock.
  */
-function add(name, description, token, { purpose = "print.compose", tenant = TENANT, project = PROJECT, held = ART_BYTES, state, verifyAt = NOW + HOUR, outcome, extra = {} }) {
-  out[name] = { fixture: name, description, verifyAt: iso(verifyAt), token, held: { artBase64: held.toString("base64") }, expect: { tenant, project, purpose }, ...(state ? { state } : {}), outcome, ...extra };
+function add(name, description, token, { purpose = "print.compose", tenant = TENANT, project = PROJECT, held = ART_BYTES, state, verifyAt = NOW + HOUR, outcome, consumer, extra = {} }) {
+  out[name] = { fixture: name, description, verifyAt: iso(verifyAt), token, held: { artBase64: held.toString("base64") }, expect: { tenant, project, purpose }, ...(state ? { state } : {}), ...(consumer ? { consumer } : {}), outcome, ...extra };
 }
 const live = { known: true, revoked: false, membershipRevision: 3, current: hashesOf(binding) };
 const ok = { ok: true };
@@ -108,6 +109,17 @@ add(
 );
 add("content-mismatch", "A valid approval, but the consumer holds different art bytes than the ones bound (the file changed after approval).", signApproval(record(), FIXTURE_KEY), { held: OTHER_BYTES, state: live, outcome: no("content_mismatch") });
 add("unsupported-version", "A correctly signed record with a schema this verifier does not know.", signApproval(record({ schema: "ticketstub.approval/2" }), FIXTURE_KEY), { state: live, outcome: no("unsupported_version") });
+
+// "All that apply": print.compose must hold and compare every commitment, artifact.download the art. Each case below is otherwise a valid, live approval.
+const PRINT_ALL = ["designHash", "artHash", "factsHash", "compositionHash"];
+const download = () => signApproval(record({ id: "apr_FIXTURE_0002", purpose: "artifact.download" }), FIXTURE_KEY);
+add("content-empty", "A valid print.compose approval, but the consumer supplies no content at all (expect.content = {}). Nothing was compared, so nothing passes.", signApproval(record(), FIXTURE_KEY), { state: live, consumer: { empty: true }, outcome: no("content_missing") });
+for (const k of PRINT_ALL) add(`content-missing-${k.replace("Hash", "")}`, `A valid print.compose approval, but the consumer leaves out ${k}. print.compose must hold and compare all four commitments.`, signApproval(record(), FIXTURE_KEY), { state: live, consumer: { omit: [k] }, outcome: no("content_missing") });
+add("content-missing-art-download", "A valid artifact.download approval, but the consumer supplies no artHash (the one commitment this purpose requires), only the other three.", download(), { purpose: "artifact.download", state: live, consumer: { omit: ["artHash"] }, outcome: no("content_missing") });
+add("content-art-only-download", "An artifact.download approval where the consumer supplies only artHash. That is all this purpose requires, so it passes.", download(), { purpose: "artifact.download", state: live, consumer: { omit: ["designHash", "factsHash", "compositionHash"] }, outcome: ok });
+add("content-malformed-hash", "A valid print.compose approval, but one supplied hash is not 64 lower-case hex characters.", signApproval(record(), FIXTURE_KEY), { state: live, consumer: { override: { factsHash: "NOT-A-HASH" } }, outcome: no("content_mismatch") });
+add("content-uppercase-hash", "A valid approval, but the consumer supplies the right art hash in upper case. Hashes are lower-case hex; anything else is refused.", signApproval(record(), FIXTURE_KEY), { state: live, consumer: { override: { artHash: binding.artHash.toUpperCase() } }, outcome: no("content_mismatch") });
+for (const [tag, label] of [["nan", "NaN"], ["infinity", "Infinity"], ["negative", "-1"], ["string", "a string"]]) add(`clock-${tag}`, `The valid-print-compose case, but the consumer's trusted clock is ${label}. A clock that is not a finite number above zero cannot judge expiry, so the answer is invalid_clock.`, signApproval(record(), FIXTURE_KEY), { state: live, consumer: { clock: tag }, outcome: no("invalid_clock") });
 
 mkdirSync(here, { recursive: true });
 for (const [name, f] of Object.entries(out)) writeFileSync(join(here, `${name}.json`), `${JSON.stringify(f, null, 2)}\n`);

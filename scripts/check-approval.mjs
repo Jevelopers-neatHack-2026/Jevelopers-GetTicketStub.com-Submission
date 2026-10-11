@@ -9,7 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { APPROVAL_FAILURES, APPROVAL_PURPOSES, NOT_AUTHORIZED, bindStub, verifyApproval } from "../src/server/approval-token.ts";
 import { changesSince, printedLines } from "../src/customer/studio/approval/printed.ts";
-import { runFixture } from "../fixtures/approval/verify.mjs";
+import { consumerInputs, runFixture, verifyApproval as refVerify } from "../fixtures/approval/verify.mjs";
 
 const BASE = (process.argv[2] ?? process.env.SMOKE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const DB = process.env.TICKETSTUB_DB ?? "./data/ticketstub.sqlite";
@@ -99,20 +99,44 @@ async function main() {
   const files = readdirSync(FIXTURES).filter((n) => n.endsWith(".json") && !["fixture-key.json", "index.json", "content.json"].includes(n));
   check("fixtures: the index lists every fixture file", index.fixtures.length === files.length && index.fixtures.every((f) => files.includes(f)));
   check("fixtures: the key is marked fixture only and contains FIXTURE-ONLY", /fixture only|never production/i.test(keyFile.warning) && keyFile.key.includes("FIXTURE-ONLY"));
-  const wanted = ["valid-print-compose", "valid-artifact-download", "unknown-malformed", "unknown-no-record", "forged", "forged-edited-binding", "expired", "revoked", "revoked-bytes-retained", "stale-facts", "stale-composition", "stale-membership", "wrong-scope-tenant", "wrong-scope-project", "wrong-purpose", "not-a-purchase-authorization", "content-mismatch", "unsupported-version"];
+  const wanted = ["content-empty", "content-missing-design", "content-missing-art", "content-missing-facts", "content-missing-composition", "content-missing-art-download", "content-art-only-download", "content-malformed-hash", "clock-nan", "clock-infinity", "clock-negative", "clock-string", "valid-print-compose", "valid-artifact-download", "unknown-malformed", "unknown-no-record", "forged", "forged-edited-binding", "expired", "revoked", "revoked-bytes-retained", "stale-facts", "stale-composition", "stale-membership", "wrong-scope-tenant", "wrong-scope-project", "wrong-purpose", "not-a-purchase-authorization", "content-mismatch", "unsupported-version"];
   check("fixtures: every required case is published", wanted.every((n) => files.includes(`${n}.json`)));
   const fx = {};
   const bad = [];
   for (const f of files) {
     const x = JSON.parse(readFileSync(join(FIXTURES, f), "utf8"));
     fx[x.fixture] = x;
-    const held = { artHash: sha(Buffer.from(x.held.artBase64, "base64")) };
-    const a = verifyApproval(x.token, keyFile.key, { ...x.expect, content: held }, Date.parse(x.verifyAt), x.state); // the code the server runs
+    const inputs = consumerInputs(x); // every hash the consumer computes, and its clock
+    const a = verifyApproval(x.token, keyFile.key, inputs.expect, inputs.now, x.state); // the code the server runs
     const b = runFixture(x, keyFile.key); // the reference verifier a consumer copies
     const good = (r) => r.ok === x.outcome.ok && (r.ok || r.reason === x.outcome.reason);
     if (!good(a) || !good(b)) bad.push(x.fixture);
   }
   check("fixtures: the server verifier and the reference verifier give each fixture its expected outcome", bad.length === 0, bad.join());
+  // Parity on the content and clock rules: the server verifier and the reference helper answer alike for every content shape, both purposes and every clock.
+  {
+    const v = fx["valid-print-compose"];
+    const d = fx["valid-artifact-download"];
+    const { expect: pe } = consumerInputs(v);
+    const full4 = pe.content;
+    const parity = [];
+    const shapes = { full: full4, empty: {}, "art only": { artHash: full4.artHash }, "no design": { ...full4, designHash: undefined }, "no art": { ...full4, artHash: undefined }, "no facts": { ...full4, factsHash: undefined }, "no composition": { ...full4, compositionHash: undefined }, "bad hash": { ...full4, factsHash: "nope" }, "upper art": { ...full4, artHash: full4.artHash.toUpperCase() }, "number hash": { ...full4, artHash: 7 }, "wrong hash": { ...full4, designHash: "0".repeat(64) } };
+    for (const [label, content] of Object.entries(shapes)) {
+      for (const f of [v, d]) {
+        const e = { ...f.expect, content };
+        const inA = verifyApproval(f.token, keyFile.key, e, Date.parse(f.verifyAt), f.state);
+        const inB = refVerify(f.token, keyFile.key, e, { now: Date.parse(f.verifyAt), state: f.state });
+        if (JSON.stringify([inA.ok, inA.reason]) !== JSON.stringify([inB.ok, inB.reason])) parity.push(`${f.expect.purpose}/${label}: server ${inA.reason ?? "ok"} vs reference ${inB.reason ?? "ok"}`);
+      }
+    }
+    for (const now of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, 0, "1791633600000", null, "x"]) {
+      const inA = verifyApproval(v.token, keyFile.key, pe, now, v.state);
+      const inB = refVerify(v.token, keyFile.key, pe, { now, state: v.state });
+      if (inA.ok || inB.ok || inA.reason !== "invalid_clock" || inB.reason !== "invalid_clock") parity.push(`clock ${String(now)}: server ${inA.reason ?? "ok"} vs reference ${inB.reason ?? "ok"}`);
+    }
+    check("fixtures: the server verifier and the reference helper agree on every content shape, both purposes and every bad clock", parity.length === 0, parity.join("; "));
+    check("fixtures: print.compose with empty content or any one hash missing never passes, on both verifiers", ["empty", "no design", "no art", "no facts", "no composition", "art only"].every((k) => verifyApproval(v.token, keyFile.key, { ...v.expect, content: shapes[k] }, Date.parse(v.verifyAt), v.state).reason === "content_missing"));
+  }
   const seen = new Set(Object.values(fx).map((x) => (x.outcome.ok ? "ok" : x.outcome.reason)));
   check("fixtures: the outcomes cover ok and every reason", seen.has("ok") && APPROVAL_FAILURES.every((r) => seen.has(r)), APPROVAL_FAILURES.filter((r) => !seen.has(r)).join());
   check("fixtures: the retained-bytes case revokes authority but the bytes still hash to the bound artHash", fx["revoked-bytes-retained"].retained.mayUse === false && sha(Buffer.from(fx["revoked-bytes-retained"].retained.artBase64, "base64")) === fx["revoked-bytes-retained"].retained.mustStillHashTo);
@@ -211,7 +235,9 @@ async function main() {
 
   // --- the consumer
   const verify = (token, expect, opts) => consumer.api("POST", "/api/approvals/verify", { token, expect }, { origin: null, noCookie: true, ...opts });
-  const want = (over = {}) => ({ tenant: ap1.tenant.id, project: `stub:${S1}`, purpose: "print.compose", content: { artHash }, ...over });
+  // What a print consumer computes: all four commitments (print.compose must hold and compare every one).
+  const full = (b, over = {}) => ({ designHash: b.designHash, artHash: b.artHash, factsHash: b.factsHash, compositionHash: b.compositionHash, ...over });
+  const want = (over = {}) => ({ tenant: ap1.tenant.id, project: `stub:${S1}`, purpose: "print.compose", content: full(ap1.binding), ...over });
   const ok1 = await verify(r1.json.token, want());
   check("verify: the exact scope and the exact bytes verify, with the record back", ok1.status === 200 && ok1.json.ok === true && ok1.json.approval.id === ap1.id && Date.parse(ok1.json.checkedAt) > 0, ok1.text.slice(0, 160));
   check("verify: it needs no cookie and no Origin (a consumer is not a browser)", ok1.status === 200);
@@ -220,9 +246,17 @@ async function main() {
   check("verify: wrong project is wrong_scope", reasonOf(await verify(r1.json.token, want({ project: `stub:${SB}` }))) === "wrong_scope");
   check("verify: B's approval presented for A's stub is wrong_scope", reasonOf(await verify(bOwn.json.token, want())) === "wrong_scope");
   check("verify: wrong purpose is wrong_purpose, and a purchase purpose is never accepted", reasonOf(await verify(r1.json.token, want({ purpose: "artifact.download" }))) === "wrong_purpose" && reasonOf(await verify(r1.json.token, want({ purpose: "order.purchase" }))) === "wrong_purpose" && reasonOf(await verify(r1.json.token, want({ purpose: "payment.authorize" }))) === "wrong_purpose");
-  check("verify: bytes that differ from the bound hash are content_mismatch", reasonOf(await verify(r1.json.token, want({ content: { artHash: sha(Buffer.concat([bytes, Buffer.from("x")])) } }))) === "content_mismatch");
-  check("verify: any wrong content hash (design, facts, composition) is content_mismatch", reasonOf(await verify(r1.json.token, want({ content: { artHash, factsHash: "0".repeat(64) } }))) === "content_mismatch" && reasonOf(await verify(r1.json.token, want({ content: { compositionHash: "f".repeat(64) } }))) === "content_mismatch");
+  check("verify: bytes that differ from the bound hash are content_mismatch", reasonOf(await verify(r1.json.token, want({ content: full(ap1.binding, { artHash: sha(Buffer.concat([bytes, Buffer.from("x")])) }) }))) === "content_mismatch");
+  check("verify: any wrong content hash (design, facts, composition) is content_mismatch", reasonOf(await verify(r1.json.token, want({ content: full(ap1.binding, { factsHash: "0".repeat(64) }) }))) === "content_mismatch" && reasonOf(await verify(r1.json.token, want({ content: full(ap1.binding, { compositionHash: "f".repeat(64) }) }))) === "content_mismatch");
   check("verify: the right facts, design and composition hashes alongside the art verify", (await verify(r1.json.token, want({ content: { artHash, designHash: ap1.binding.designHash, factsHash: ap1.binding.factsHash, compositionHash: ap1.binding.compositionHash } }))).json?.ok === true);
+  // --- "all that apply": print.compose holds and compares every commitment, artifact.download the art
+  const without = (...ks) => Object.fromEntries(Object.entries(full(ap1.binding)).filter(([k]) => !ks.includes(k)));
+  check("verify: print.compose with every missing hash, one at a time, is content_missing (403)", (await Promise.all(["designHash", "artHash", "factsHash", "compositionHash"].map((k) => verify(r1.json.token, want({ content: without(k) }))))).every((r) => r.status === 403 && reasonOf(r) === "content_missing"));
+  check("verify: print.compose with only the art hash is content_missing, not ok", reasonOf(await verify(r1.json.token, want({ content: { artHash } }))) === "content_missing");
+  check("verify: empty content is refused and never passes", (await verify(r1.json.token, want({ content: {} }))).json?.ok !== true);
+  check("verify: a malformed or upper-case hash is refused", (await verify(r1.json.token, want({ content: full(ap1.binding, { factsHash: "xyz" }) }))).json?.ok !== true && (await verify(r1.json.token, want({ content: full(ap1.binding, { artHash: artHash.toUpperCase() }) }))).json?.ok !== true && (await verify(r1.json.token, want({ content: full(ap1.binding, { artHash: 7 }) }))).json?.ok !== true);
+  const dlAp = await A.api("POST", "/api/approvals", { stubId: S1, purpose: "artifact.download", expectedVersionId: `${S1}-v1` });
+  check("verify: artifact.download with only the art hash is ok, and with no art hash is content_missing", dlAp.status === 200 && (await verify(dlAp.json.token, want({ purpose: "artifact.download", content: { artHash } }))).json?.ok === true && reasonOf(await verify(dlAp.json.token, want({ purpose: "artifact.download", content: without("artHash") }))) === "content_missing" && reasonOf(await verify(dlAp.json.token, want({ purpose: "artifact.download", content: { artHash: sha(Buffer.from("other")) } }))) === "content_mismatch");
   const [h, p, s] = r1.json.token.split(".");
   const flip = (x) => x.slice(0, -2) + (x.slice(-2) === "AA" ? "BB" : "AA");
   check("verify: a flipped signature is forged", reasonOf(await verify(`${h}.${p}.${flip(s)}`, want())) === "forged");
@@ -252,7 +286,7 @@ async function main() {
   check("stale: re-approving makes a new approval with a different factsHash; the old one is kept and still stale", re.status === 200 && re.json.created === true && re.json.approval.id !== ap1.id && re.json.approval.binding.factsHash !== ap1.binding.factsHash && re.json.approval.binding.artHash === artHash);
   const lsRe = await list(A, S1);
   check("stale: the list holds the history (3 records), the newest active and the old ones stale", lsRe.json.approvals.length === 3 && lsRe.json.approvals[0].status === "active" && lsRe.json.approvals.filter((a) => a.status === "stale").length === 2);
-  check("stale: the new approval verifies against the new facts", (await verify(re.json.token, want({ content: { artHash, factsHash: re.json.approval.binding.factsHash } }))).json?.ok === true && reasonOf(await verify(re.json.token, want({ content: { factsHash: ap1.binding.factsHash } }))) === "content_mismatch");
+  check("stale: the new approval verifies against the new facts", (await verify(re.json.token, want({ content: full(re.json.approval.binding) }))).json?.ok === true && reasonOf(await verify(re.json.token, want())) === "content_mismatch");
 
   // --- other edits stale it: material/size, selected version, art
   await sync(A, [stub(S1, "Approval smoke", t + 6000, { event: edit.event, versions: stubA.versions, material: "framed" })]);
@@ -264,7 +298,7 @@ async function main() {
   const v2 = await approve(A, S1, { expectedVersionId: `${S1}-v2` });
   check("stale: v2 (procedural art) is approved by reference, not bytes", v2.status === 200 && v2.json.approval.binding.artSource === "ref" && v2.json.approval.binding.versionId === `${S1}-v2`);
   await sync(A, [stub(S1, "Approval smoke", t + 9000, { event: edit.event, versions: stubA.versions, currentVersionId: `${S1}-v1`, personal: stubA.personal })]);
-  check("stale: undoing every edit makes the exact original binding valid again (the binding is content, not time)", (await verify(re.json.token, want({ content: { artHash } }))).json?.ok === true);
+  check("stale: undoing every edit makes the exact original binding valid again (the binding is content, not time)", (await verify(re.json.token, want({ content: full(re.json.approval.binding) }))).json?.ok === true);
   const friends = await sync(A, [stub(S1, "Approval smoke", t + 10000, { event: edit.event, versions: stubA.versions, personal: { ...stubA.personal, friends: [{ name: "Pat", claimed: false }] }, wallAngle: 3 })]);
   check("stale: friends and wall position are not printed, so editing them does not stale an approval", friends.status === 200 && (await list(A, S1)).json.approvals.some((a) => a.approval.id === re.json.approval.id && a.status === "active"));
 
@@ -275,14 +309,14 @@ async function main() {
   check("revoke: the owner revokes it", rv.status === 200 && rv.json.revoked === true && rv.json.already === false, rv.text);
   const rvAgain = await A.api("POST", "/api/approvals/revoke", { stubId: S1, approvalId: re.json.approval.id });
   check("revoke: revoking twice is idempotent (already true)", rvAgain.status === 200 && rvAgain.json.already === true);
-  const revoked = await verify(re.json.token, want({ content: { artHash } }));
+  const revoked = await verify(re.json.token, want({ content: full(re.json.approval.binding) }));
   check("revoke: the verifier now says revoked, 403", reasonOf(revoked) === "revoked" && revoked.status === 403);
   check("revoke: the list keeps the record, with status revoked and a revokedAt", (await list(A, S1)).json.approvals.some((a) => a.approval.id === re.json.approval.id && a.status === "revoked" && typeof a.revokedAt === "string"));
   const afterRevoke = await fetch(`${BASE}/api/files/${artName}`);
   check("revoke: the stored art bytes are kept and still hash to the bound artHash", afterRevoke.status === 200 && sha(Buffer.from(await afterRevoke.arrayBuffer())) === re.json.approval.binding.artHash);
   const reissue = await approve(A, S1);
   check("revoke: approving the same content again after a revoke is a new approval (the revoked one is not resurrected)", reissue.status === 200 && reissue.json.created === true && reissue.json.approval.id !== re.json.approval.id);
-  check("revoke: that new approval verifies and the revoked one still does not", (await verify(reissue.json.token, want({ content: { artHash } }))).json?.ok === true && reasonOf(await verify(re.json.token, want({ content: { artHash } }))) === "revoked");
+  check("revoke: that new approval verifies and the revoked one still does not", (await verify(reissue.json.token, want({ content: full(reissue.json.approval.binding) }))).json?.ok === true && reasonOf(await verify(re.json.token, want({ content: full(re.json.approval.binding) }))) === "revoked");
 
   // --- the review sheet's owner-only projection (GT-06B.1): what was printed, and what differs now
   const hist = (await list(A, S1)).json.approvals;

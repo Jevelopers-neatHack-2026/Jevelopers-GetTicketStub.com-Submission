@@ -16,8 +16,15 @@ export type ApprovalPurpose = (typeof APPROVAL_PURPOSES)[number];
 export const NOT_AUTHORIZED = ["purchase", "payment", "order", "asset_rights"] as const;
 export const APPROVAL_TTL_MS = 7 * 24 * 3600_000;
 
-export type ApprovalFailure = "unknown" | "forged" | "expired" | "revoked" | "stale" | "wrong_scope" | "wrong_purpose" | "content_mismatch" | "unsupported_version";
-export const APPROVAL_FAILURES: readonly ApprovalFailure[] = ["unknown", "forged", "expired", "revoked", "stale", "wrong_scope", "wrong_purpose", "content_mismatch", "unsupported_version"];
+export type ApprovalFailure = "unknown" | "forged" | "expired" | "revoked" | "stale" | "wrong_scope" | "wrong_purpose" | "content_mismatch" | "content_missing" | "invalid_clock" | "unsupported_version";
+export const APPROVAL_FAILURES: readonly ApprovalFailure[] = ["unknown", "forged", "expired", "revoked", "stale", "wrong_scope", "wrong_purpose", "content_mismatch", "content_missing", "invalid_clock", "unsupported_version"];
+
+/** The commitments a consumer must hold and compare for each purpose ("all that apply"). Others are optional but must match if supplied. */
+export const REQUIRED_CONTENT: Record<ApprovalPurpose, readonly (keyof ApprovalHashes)[]> = {
+  "print.compose": ["designHash", "artHash", "factsHash", "compositionHash"],
+  "artifact.download": ["artHash"],
+};
+const CONTENT_KEYS = ["designHash", "artHash", "factsHash", "compositionHash"] as const;
 
 /** The hashes an approval binds. All SHA-256, lower-case hex, over canonical JSON (see canonicalJson) except artHash for source "bytes". */
 export interface ApprovalHashes {
@@ -74,7 +81,7 @@ export interface ApprovalExpectation {
   tenant?: string;
   project?: { kind: string; id: string };
   purpose?: string;
-  /** Hashes the consumer computed itself, from the bytes or inputs it holds. Any it names must equal the bound one. */
+  /** Hashes the consumer computed itself, from the bytes or inputs it holds. print.compose needs all four, artifact.download needs artHash; any it names must equal the bound one. */
   content?: Partial<ApprovalHashes>;
 }
 
@@ -200,13 +207,16 @@ export function approvalIdOf(token: string): string | null {
 
 /**
  * Checks in this order, first failure wins:
- *   unknown (not a token, or the issuer has no such record) -> forged (HMAC, constant time) -> unsupported_version
+ *   invalid_clock (`now` is not a finite number > 0: the verifier's own clock is bad, nothing can be judged)
+ *   -> unknown (not a token, or the issuer has no such record) -> forged (HMAC, constant time) -> unsupported_version
  *   -> wrong_scope (tenant or project differs from the consumer's) -> wrong_purpose -> expired -> revoked
- *   -> stale (the stub or the account moved on since) -> content_mismatch (the consumer's hashes differ from the bound ones).
+ *   -> stale (the stub or the account moved on since) -> content_missing (a hash this purpose requires was not supplied)
+ *   -> content_mismatch (a supplied hash is malformed or differs from the bound one).
  * revoked, stale and `known` need `state`; without it they are not checked, so a consumer that wants them asks the issuer
  * (POST /api/approvals/verify) or supplies state it got from the issuer.
  */
 export function verifyApproval(token: string, key: string | Buffer, expect: ApprovalExpectation, now = Date.now(), state?: ApprovalState): ApprovalVerifyResult {
+  if (typeof now !== "number" || !Number.isFinite(now) || now <= 0) return { ok: false, reason: "invalid_clock" };
   if (typeof token !== "string" || token.length > MAX_TOKEN_CHARS) return { ok: false, reason: "unknown" };
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((p) => !/^[A-Za-z0-9_-]+$/.test(p))) return { ok: false, reason: "unknown" };
@@ -229,7 +239,10 @@ export function verifyApproval(token: string, key: string | Buffer, expect: Appr
   if (state?.known === false) return { ok: false, reason: "unknown" };
   if (expect.tenant !== rec.tenant.id || expect.project?.kind !== rec.project.kind || expect.project?.id !== rec.project.id) return { ok: false, reason: "wrong_scope" };
   if (expect.purpose !== rec.purpose || !(APPROVAL_PURPOSES as readonly string[]).includes(rec.purpose)) return { ok: false, reason: "wrong_purpose" };
-  if (Date.parse(rec.expiresAt) <= now) return { ok: false, reason: "expired" };
+  const issuedMs = Date.parse(rec.issuedAt);
+  const expiresMs = Date.parse(rec.expiresAt);
+  if (!Number.isFinite(issuedMs) || !Number.isFinite(expiresMs)) return { ok: false, reason: "unknown" };
+  if (expiresMs <= now) return { ok: false, reason: "expired" };
   if (state?.revoked) return { ok: false, reason: "revoked" };
   if (state) {
     if (state.membershipRevision !== undefined && state.membershipRevision !== rec.membershipRevision) return { ok: false, reason: "stale" };
@@ -239,9 +252,14 @@ export function verifyApproval(token: string, key: string | Buffer, expect: Appr
       if (!c || c.versionId !== b.versionId || c.designHash !== b.designHash || c.artHash !== b.artHash || c.factsHash !== b.factsHash || c.compositionHash !== b.compositionHash) return { ok: false, reason: "stale" };
     }
   }
-  for (const k of ["designHash", "artHash", "factsHash", "compositionHash"] as const) {
-    const held = expect.content?.[k];
-    if (held !== undefined && held !== rec.binding[k]) return { ok: false, reason: "content_mismatch" };
+  // Every commitment this purpose applies to must be supplied; any supplied hash must be 64 lower-case hex and equal the bound one.
+  const content: Record<string, unknown> = isObj(expect.content) ? expect.content : {};
+  const need = REQUIRED_CONTENT[rec.purpose];
+  if (need.some((k) => content[k] === undefined)) return { ok: false, reason: "content_missing" };
+  for (const k of CONTENT_KEYS) {
+    const held = content[k];
+    if (held === undefined) continue;
+    if (typeof held !== "string" || !HEX64.test(held) || held !== rec.binding[k]) return { ok: false, reason: "content_mismatch" };
   }
   return { ok: true, approval: rec };
 }

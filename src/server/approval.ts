@@ -134,7 +134,9 @@ async function viewOf(row: ApprovalRow, key: string, now: number): Promise<Appro
   const token = signApproval(record, key);
   // The record checked against its own scope: only expiry, revocation and staleness can fail here.
   const state = await stateOf(row, record);
-  const r = verifyApproval(token, key, { tenant: record.tenant.id, project: record.project, purpose: record.purpose }, now, state);
+  // The issuer's own view of its record: the content it holds is the binding itself, so only expiry, revocation and staleness can fail.
+  const { designHash, artHash, factsHash, compositionHash } = record.binding;
+  const r = verifyApproval(token, key, { tenant: record.tenant.id, project: record.project, purpose: record.purpose, content: { designHash, artHash, factsHash, compositionHash } }, now, state);
   const status: ApprovalStatus = r.ok ? "active" : (STATUS_OF[r.reason] ?? "stale");
   const b = record.binding;
   const c = state.current;
@@ -167,7 +169,7 @@ export async function verifyApprovalLive(token: string, expect: ApprovalExpectat
     return { ok: false, reason: "forged" }; // no key, nothing can be valid
   }
   const first = verifyApproval(token, key, expect, now);
-  if (!first.ok && (first.reason === "unknown" || first.reason === "forged" || first.reason === "unsupported_version")) return first;
+  if (!first.ok && (first.reason === "invalid_clock" || first.reason === "unknown" || first.reason === "forged" || first.reason === "unsupported_version")) return first;
   // Past here the signature and shape are good, so the id is the issuer's own.
   const id = approvalIdOf(token);
   const row = id ? await getStorage().getApproval(id) : null;

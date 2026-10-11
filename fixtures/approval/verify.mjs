@@ -1,9 +1,13 @@
 // Reference verifier for a ticketstub.approval/1 token. No dependencies: copy these functions into a consumer.
 //   node fixtures/approval/verify.mjs        checks every fixture in this folder against its expected outcome
 // verifyApproval(token, key, expect, { now, state }) -> { ok: true, approval } | { ok: false, reason }
-// reason is one of: unknown | forged | expired | revoked | stale | wrong_scope | wrong_purpose | content_mismatch | unsupported_version
+// reason is one of: unknown | forged | expired | revoked | stale | wrong_scope | wrong_purpose | content_mismatch | content_missing
+//   | invalid_clock | unsupported_version
 // expect MUST name { tenant, project: { kind, id }, purpose, content } where content holds the hashes the consumer computed
-// from what it holds (hashBytes(art bytes) for artHash). Without `state` it proves signature, version, scope, purpose, content
+// from what it holds (hashBytes(art bytes) for artHash, contentHashes(stub, size) for the rest). The consumer must hold and compare
+// EVERY commitment that applies: print.compose needs designHash, artHash, factsHash and compositionHash; artifact.download needs
+// artHash. A missing one is content_missing, a malformed or different one is content_mismatch, and content = {} never passes.
+// `now` must be a finite number > 0 (ms since epoch) or the answer is invalid_clock. Without `state` it proves signature, version, scope, purpose, content
 // and expiry only. revoked, stale and unknown need the issuer's current answer (README.md: POST /api/approvals/verify).
 // An approval is NOT a purchase authorization: no purpose here authorizes buying anything.
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
@@ -14,6 +18,9 @@ import { fileURLToPath } from "node:url";
 const SCHEMA = "ticketstub.approval/1";
 const PURPOSES = ["print.compose", "artifact.download"];
 const HEX64 = /^[a-f0-9]{64}$/;
+const HASH_KEYS = ["designHash", "artHash", "factsHash", "compositionHash"];
+/** The commitments each purpose requires the consumer to supply and compare ("all that apply"). */
+const REQUIRED_CONTENT = { "print.compose": HASH_KEYS, "artifact.download": ["artHash"] };
 const isObj = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 const dec = (s) => Buffer.from(s, "base64url");
 const isIso = (v) => typeof v === "string" && !Number.isNaN(Date.parse(v));
@@ -54,6 +61,7 @@ export function contentHashes(stub, size) {
 }
 
 export function verifyApproval(token, key, expect, { now = Date.now(), state } = {}) {
+  if (typeof now !== "number" || !Number.isFinite(now) || now <= 0) return { ok: false, reason: "invalid_clock" };
   if (typeof token !== "string" || token.length > 8192) return { ok: false, reason: "unknown" };
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((p) => !/^[A-Za-z0-9_-]+$/.test(p))) return { ok: false, reason: "unknown" };
@@ -81,7 +89,9 @@ export function verifyApproval(token, key, expect, { now = Date.now(), state } =
   if (state?.known === false) return { ok: false, reason: "unknown" };
   if (expect.tenant !== r.tenant.id || expect.project?.kind !== r.project.kind || expect.project?.id !== r.project.id) return { ok: false, reason: "wrong_scope" };
   if (expect.purpose !== r.purpose || !PURPOSES.includes(r.purpose)) return { ok: false, reason: "wrong_purpose" };
-  if (Date.parse(r.expiresAt) <= now) return { ok: false, reason: "expired" };
+  const expiresMs = Date.parse(r.expiresAt);
+  if (!Number.isFinite(expiresMs) || !Number.isFinite(Date.parse(r.issuedAt))) return { ok: false, reason: "unknown" };
+  if (expiresMs <= now) return { ok: false, reason: "expired" };
   if (state?.revoked) return { ok: false, reason: "revoked" };
   if (state) {
     if (state.membershipRevision !== undefined && state.membershipRevision !== r.membershipRevision) return { ok: false, reason: "stale" };
@@ -90,16 +100,35 @@ export function verifyApproval(token, key, expect, { now = Date.now(), state } =
       if (!c || c.versionId !== b.versionId || c.designHash !== b.designHash || c.artHash !== b.artHash || c.factsHash !== b.factsHash || c.compositionHash !== b.compositionHash) return { ok: false, reason: "stale" };
     }
   }
-  for (const k of ["designHash", "artHash", "factsHash", "compositionHash"]) {
-    if (expect.content?.[k] !== undefined && expect.content[k] !== b[k]) return { ok: false, reason: "content_mismatch" };
+  const content = isObj(expect.content) ? expect.content : {};
+  if (REQUIRED_CONTENT[r.purpose].some((k) => content[k] === undefined)) return { ok: false, reason: "content_missing" };
+  for (const k of HASH_KEYS) {
+    if (content[k] === undefined) continue;
+    if (typeof content[k] !== "string" || !HEX64.test(content[k]) || content[k] !== b[k]) return { ok: false, reason: "content_mismatch" };
   }
   return { ok: true, approval: r };
 }
 
-/** Runs one fixture the way a consumer would: hash the bytes it holds, name its scope, ask. */
-export function runFixture(fx, key) {
-  const content = { artHash: hashBytes(Buffer.from(fx.held.artBase64, "base64")) };
-  return verifyApproval(fx.token, key, { ...fx.expect, content }, { now: Date.parse(fx.verifyAt), state: fx.state });
+/** The clocks a fixture may name by tag, because JSON cannot hold NaN or Infinity. */
+export const CLOCKS = { nan: Number.NaN, infinity: Number.POSITIVE_INFINITY, negative: -1, string: "1791633600000" };
+
+/**
+ * Runs one fixture the way a consumer would: hash the bytes it holds, recompute the other commitments from the stub it holds
+ * (content.json), name its scope, ask. A fixture may carry `consumer` to change what the consumer supplies:
+ *   { omit: [hash names left out], override: { hash name: value }, empty: true, clock: a key of CLOCKS }
+ */
+export function consumerInputs(fx, contentDoc) {
+  const c = contentDoc ?? JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "content.json"), "utf8"));
+  const content = { ...contentHashes(c.stub, c.size), artHash: hashBytes(Buffer.from(fx.held.artBase64, "base64")), ...(fx.consumer?.override ?? {}) };
+  for (const k of fx.consumer?.omit ?? []) delete content[k];
+  if (fx.consumer?.empty) for (const k of Object.keys(content)) delete content[k];
+  const now = fx.consumer?.clock !== undefined ? CLOCKS[fx.consumer.clock] : Date.parse(fx.verifyAt);
+  return { expect: { ...fx.expect, content }, now };
+}
+
+export function runFixture(fx, key, contentDoc) {
+  const { expect, now } = consumerInputs(fx, contentDoc);
+  return verifyApproval(fx.token, key, expect, { now, state: fx.state });
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

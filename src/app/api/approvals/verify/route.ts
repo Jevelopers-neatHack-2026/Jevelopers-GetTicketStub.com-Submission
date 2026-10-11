@@ -5,7 +5,8 @@ import { requireStorage } from "@/server/index";
 
 // The verification port for a consumer (print-production, the harness) that can't hold the signing key. It answers
 // what the issuer says about an approval token right now: ok with the record, or the one reason it fails closed.
-// A consumer MUST name the tenant, project and purpose it is acting for and the hash of the content it holds.
+// A consumer MUST name the tenant, project and purpose it is acting for and the hashes of the content it holds: every one
+// that applies (print.compose: design, art, facts, composition; artifact.download: art). A missing one is content_missing.
 // It uses no cookie and no Origin (a consumer is not a browser), so there is nothing for a cross-site page to ride.
 // It is read-only and never changes an approval.
 const HASH_KEYS = ["designHash", "artHash", "factsHash", "compositionHash"] as const;

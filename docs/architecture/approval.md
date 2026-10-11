@@ -37,6 +37,10 @@ States an approval reads as (computed, never stored): `active`, `expired`, `revo
 
 `stale`: a change to the selected version, the art, any printed fact (title, venue, date, seat, kept facts), edition, material, finish, size, type font or colour, foil, hidden fields, note or guest name; or a `membershipRevision` change (signed out everywhere, email change, staff flip). Friends, wall position, photos and timestamps are not printed and do not stale it. Undoing every edit makes the original binding valid again, since the binding is content. `revoked`: the owner revoked it. `expired`: seven days.
 
+## What a consumer must hold and compare
+
+An approval is only as good as the comparison behind it. `print.compose` must supply and match all four commitments (`designHash`, `artHash`, `factsHash`, `compositionHash`); `artifact.download` must supply and match `artHash`, and anything else it supplies must match too. A missing required hash is `content_missing`, a malformed (not 64 lower-case hex) or different one is `content_mismatch`, and empty content never passes. The verifier's clock must be a finite number above zero or the answer is `invalid_clock`; an unparseable `issuedAt` or `expiresAt` is `unknown`. The offline reference (`fixtures/approval/verify.mjs`) and the server apply the same rules, and `scripts/check-approval.mjs` checks they agree. The reasons, in order: `invalid_clock`, `unknown`, `forged`, `unsupported_version`, `wrong_scope`, `wrong_purpose`, `expired`, `revoked`, `stale`, `content_missing`, `content_mismatch`.
+
 ## Trust and keys
 
 HMAC-SHA256 with the same key handling as context tokens (`CONTEXT_SECRET`, at least 32 characters). In live mode without it the server refuses to issue (503 `context_unavailable`) and the verify port answers `forged`; outside live mode a per-process random key is used and records say `mode: "sandbox"`. A `CONTEXT_SECRET` containing `FIXTURE-ONLY` is treated as unset, so the published fixture key never works on a server. The token is derived from the stored record on demand and is never stored. The header `typ` differs from a context token's, so neither verifies as the other.

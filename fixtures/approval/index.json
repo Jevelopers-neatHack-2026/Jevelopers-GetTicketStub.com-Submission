@@ -25,6 +25,19 @@
     "wrong-purpose.json",
     "not-a-purchase-authorization.json",
     "content-mismatch.json",
-    "unsupported-version.json"
+    "unsupported-version.json",
+    "content-empty.json",
+    "content-missing-design.json",
+    "content-missing-art.json",
+    "content-missing-facts.json",
+    "content-missing-composition.json",
+    "content-missing-art-download.json",
+    "content-art-only-download.json",
+    "content-malformed-hash.json",
+    "content-uppercase-hash.json",
+    "clock-nan.json",
+    "clock-infinity.json",
+    "clock-negative.json",
+    "clock-string.json"
   ]
 }
