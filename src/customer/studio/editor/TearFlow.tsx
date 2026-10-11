@@ -1,7 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavHidden } from "@/customer/nav/navState";
 import type { Stub } from "../types";
 import { upsertStub } from "../store";
 import { TearGesture } from "@/customer/studio/stub/TearGesture";
@@ -12,12 +11,11 @@ import styles from "./TearFlow.module.css";
 const FADE_MS = 600;
 
 /**
- * Full-screen stage for the tear. The lights go down, you tear the stub off, it flies up and out,
+ * Full-screen stage for the tear. The paper desk fades in, you tear the stub off, it flies up and out,
  * and the wall takes over (/wall?pinned=<id> plays the landing and the pin). No sheet, no dimmed
  * editor: the torn state is saved here, so the Editor's onTorn is not needed for the hand-off.
  */
 export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; onCancel: () => void }) {
-  useNavHidden(true);
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,7 +27,7 @@ export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; 
     };
   }, [router]);
 
-  // lights come back up, then the editor is back
+  // the desk fades back out, then the editor is back
   const cancel = useCallback(() => {
     setLeaving((was) => {
       if (!was) timer.current = setTimeout(onCancel, FADE_MS);
@@ -51,7 +49,7 @@ export function TearStage({ stub, onCancel }: { stub: Stub; onTorn: () => void; 
   };
 
   return (
-    <div className={`ts-stage desk-surface ${styles.stage} ${leaving ? styles.leaving : ""}`} role="dialog" aria-modal="true" aria-label="Tear off your stub">
+    <div className={`desk-surface ${styles.stage} ${leaving ? styles.leaving : ""}`} role="dialog" aria-modal="true" aria-label="Tear off your stub">
       <PathTrack current="tear" stubId={stub.id} className={styles.track} />
       <div className={styles.area}>
         <TearGesture stub={stub} onTorn={torn} />

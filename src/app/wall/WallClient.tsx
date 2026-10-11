@@ -14,7 +14,6 @@ import { FINISHES, materialPrice } from "@/customer/pages/commerce";
 import { copyText, absoluteUrl, encodeWall, memoryPath, formatDate, WALL_TOKEN_MAX } from "@/customer/pages/share";
 import { useMounted } from "@/customer/pages/useMounted";
 import { LeavesMark } from "@/customer/pages/ui";
-import { useNavHidden } from "@/customer/nav/navState";
 import { PathTrack } from "@/customer/wayfinding/PathTrack";
 import { PaperButton, SandboxStrip, Stamp, Stamped, Switch, Tag, Tags, TearLink, Tool, Tools } from "@/customer/desk/Desk";
 import { FlipIcon } from "@/customer/desk/icons";
@@ -309,7 +308,7 @@ export default function WallClient({ emailSent, pinnedId, liftId }: { emailSent:
 
   return (
     <DeskPage>
-      {landing ? <div className={`ts-stage desk-surface ${s.lights}`} aria-hidden="true" /> : null}
+      {landing ? <div className={`desk-surface ${s.lights}`} aria-hidden="true" /> : null}
 
       {banner ? (
         <div className={s.banner} role="status">
@@ -524,10 +523,9 @@ function NextSteps({ stub }: { stub: Stub }) {
   );
 }
 
-/** A stub lifted under the lamp: the room dims to the stage, the stub tilts toward you, its tools sit on the cork. */
+/** A stub lifted under the lamp: the rest of the wall dims under a warm paper scrim, the stub tilts toward you, its tools sit on the cork. */
 function Lamp({ stub, lift, onPutBack, onDelete }: { stub: Stub; lift: Lift; onPutBack: () => void; onDelete: (id: string) => void }) {
   const router = useRouter();
-  useNavHidden(true);
   const [flipped, setFlipped] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [status, setStatus] = useState("");
@@ -558,7 +556,7 @@ function Lamp({ stub, lift, onPutBack, onDelete }: { stub: Stub; lift: Lift; onP
     <div ref={rootRef} tabIndex={-1} role="dialog" aria-label={`${stub.event.title}, lifted off the wall`} className={`${s.lamp} ${lift.leaving ? s.lampOff : ""}`} style={style}>
       <button type="button" className={s.scrim} aria-label="Pin it back" tabIndex={-1} onClick={onPutBack} />
       <div className={s.lampBody}>
-        <div className={`ts-stage ${s.lampHead}`}>
+        <div className={s.lampHead}>
           <h2 className={s.lampTitle}>{stub.event.title}</h2>
           <p className={s.lampMeta}>{[formatDate(stub.event.dateISO), stub.event.venue, stub.event.city].filter(Boolean).join(" · ")}</p>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 // The printing reveal, shared by /new and the start section. It paints no ground of its own: the parent
-// supplies the stage (ts-stage desk-surface). The stub feeds out of the printer slot with a slight curl and
+// supplies the paper desk (desk-surface). The stub feeds out of the printer slot with a slight curl and
 // the ink settles, while researched facts arrive as receipt lines. Tap a line to stamp it "Kept".
 // Minimum 2.5s on screen, then the ink settles and onDone fires.
 

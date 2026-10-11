@@ -2,7 +2,7 @@
 // Whether the desktop sidebar is open. The choice outside the editor is remembered in localStorage
 // (guarded: storage can throw). Inside the editor the sidebar starts as a rail, and opening it there
 // lasts only for the visit, so the cutting mat keeps its room next time.
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 const KEY = "ticketstub.nav.v1";
 
@@ -44,30 +44,6 @@ export function useNavOpen(inStudio: boolean): [boolean, () => void] {
   };
   return [open, toggle];
 }
-
-// Stage moments (a stub lifted under the lamp, the tear, the printing stage, the finish picker) dim the nav
-// to the night palette with a 600 ms fade, but it stays usable. Ref-counted, so two stages overlapping
-// never lift the lights early.
-let stagers = 0;
-
-/** While `active`, the nav switches to the stage palette. Sets data-nav-stage on <html>; NavFrame reads it in CSS. */
-export function useNavStage(active: boolean) {
-  useEffect(() => {
-    if (!active) return;
-    stagers += 1;
-    document.documentElement.setAttribute("data-nav-stage", "");
-    return () => {
-      stagers -= 1;
-      if (stagers <= 0) {
-        stagers = 0;
-        document.documentElement.removeAttribute("data-nav-stage");
-      }
-    };
-  }, [active]);
-}
-
-/** The old name, kept so callers still compile. */
-export const useNavHidden = useNavStage;
 
 const DESKTOP = "(min-width: 960px)";
 

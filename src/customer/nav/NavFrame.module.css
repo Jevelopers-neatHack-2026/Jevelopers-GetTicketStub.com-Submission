@@ -2,7 +2,7 @@
    phone with the full sidebar sliding over the content as a drawer. Stacking: the sidebar sits at 110, above
    every stage (the lowest is 40, the highest 100), because the stages start at its right edge (--nav-w on
    <html>) and the flyout must reach over them. The drawer and its scrim sit at 120-121. Paper and ink come
-   from the desk tokens; during a stage moment the sidebar takes the night values with a 600 ms fade. */
+   from the desk tokens, and it never changes: there is no dark stage. */
 
 .frame {
   --side-w: 244px;
@@ -45,25 +45,6 @@
   background-size: 3px 6px;
   background-repeat: repeat-y;
   pointer-events: none;
-}
-
-/* stage moments: the same tokens as .ts-stage, set on the sidebar alone */
-:global(html[data-nav-stage]) .side {
-  --desk-paper: #17140f;
-  --desk-paper-raised: #26302a;
-  --desk-paper-sunk: #0f0d0a;
-  --desk-ink: #f4ecdd;
-  --desk-ink-soft: rgb(244 236 221 / 0.66);
-  --desk-rule: rgb(244 236 221 / 0.14);
-  --desk-rule-strong: rgb(244 236 221 / 0.4);
-  --desk-ledge: rgb(0 0 0 / 0.45);
-  --desk-scrim: rgb(0 0 0 / 0.55);
-  color-scheme: dark;
-}
-:global(html[data-nav-stage]) .item,
-:global(html[data-nav-stage]) .handle,
-:global(html[data-nav-stage]) .chev {
-  transition-duration: 600ms;
 }
 
 .head {

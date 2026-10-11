@@ -258,15 +258,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* lights come back up after the tear (the stage was dark on the way here) */
+/* the paper desk of the tear fades off the wall as the stub lands */
 .lights.lights {
   position: fixed;
   inset: 0 0 0 var(--nav-w, 0px);
   z-index: 80;
   pointer-events: none;
-  animation: lightsUp 600ms var(--ts-ease-standard) 120ms both;
+  animation: deskOff 600ms var(--ts-ease-standard) 120ms both;
 }
-@keyframes lightsUp {
+@keyframes deskOff {
   to {
     opacity: 0;
     visibility: hidden;
@@ -287,7 +287,8 @@
   border: 0;
   padding: 0;
   cursor: pointer;
-  background: radial-gradient(70% 55% at 50% 42%, rgb(23 20 15 / 0.62), rgb(10 9 7 / 0.94));
+  /* a warm pool of light under the lifted stub; the rest of the wall sits back behind cream paper */
+  background: radial-gradient(70% 55% at 50% 42%, rgb(251 246 236 / 0.72), rgb(226 211 182 / 0.9));
   animation: lampOn 600ms var(--ts-ease-standard) both;
 }
 .lampOff .scrim {
@@ -343,7 +344,8 @@
   touch-action: pan-y;
   user-select: none;
   animation: lift 560ms var(--desk-spring) both;
-  filter: drop-shadow(0 30px 30px rgb(0 0 0 / 0.5));
+  /* raised off the cork: a tight contact line, then a deep soft shadow */
+  filter: drop-shadow(0 2px 2px rgb(23 20 15 / 0.3)) drop-shadow(0 30px 28px rgb(60 38 12 / 0.38));
 }
 .lampOff .lampStub,
 .lampOff .lampHead,
@@ -393,7 +395,7 @@
 
 @media (max-width: 959px) {
   .scrim {
-    background: rgb(12 10 8 / 0.92);
+    background: radial-gradient(90% 60% at 50% 42%, rgb(251 246 236 / 0.8), rgb(226 211 182 / 0.94));
   }
 }
 

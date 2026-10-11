@@ -1,4 +1,4 @@
-/* The start section. Paper desk by day; the lights go down (600 ms, from .desk-surface) when it prints.
+/* The start section. Always the paper desk: it prints in place, on the same cream, with no change of ground.
    Phone first, then 960px and up. It assumes nothing about what sits above or below it. */
 .section {
   --gutter: 16px;
@@ -9,24 +9,18 @@
   padding: var(--pad-t) var(--gutter) var(--pad-b);
   overflow-x: clip;
   transition:
-    background-color 600ms var(--ts-ease-standard),
-    color 600ms var(--ts-ease-standard),
     min-height 600ms var(--ts-ease-standard);
 }
 /* By day the section sits on whatever ground the page gives it, so there is no seam under a hero.
-   It only paints a ground of its own once the lights go down. */
-.section:not(.down) {
+   It keeps that while it prints, so the paper never changes under the printer. */
+.section {
   background-color: transparent;
 }
 .section::before,
 .section::after {
-  transition: opacity 600ms var(--ts-ease-standard);
-}
-.section:not(.down)::before,
-.section:not(.down)::after {
   opacity: 0;
 }
-.down {
+.press {
   min-height: 100dvh;
 }
 /* /make: the section is the whole page, and its content is centred in the height that is there */
@@ -247,6 +241,7 @@
   height: 10px;
   border-radius: 5px;
   background: linear-gradient(#2a251d, #0c0a07);
+  box-shadow: 0 1px 0 rgb(23 20 15 / 0.5), 0 8px 10px -4px rgb(23 20 15 / 0.4);
   opacity: 0;
   transition: opacity 200ms ease;
 }
@@ -284,7 +279,7 @@
 
 /* ---------- Printing in place ---------- */
 .printing {
-  /* the stage runs edge to edge: take back the padding the desk needs */
+  /* the press runs edge to edge: take back the padding the desk needs */
   margin: calc(var(--pad-t) * -1) calc(var(--gutter) * -1) calc(var(--pad-b) * -1);
   min-height: 100dvh;
   display: grid;
@@ -296,21 +291,6 @@
   opacity: 0;
 }
 @keyframes lightsDown {
-  from {
-    opacity: 0;
-  }
-}
-
-/* the studio takes over: the stage deepens to the studio's ground before the route changes */
-.curtain {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: #17140f;
-  pointer-events: none;
-  animation: curtain 420ms var(--ts-ease-standard) both;
-}
-@keyframes curtain {
   from {
     opacity: 0;
   }
@@ -389,8 +369,7 @@
   .feeding .ticket {
     transform: none;
   }
-  .printing,
-  .curtain {
+  .printing {
     animation: none;
   }
   .section,

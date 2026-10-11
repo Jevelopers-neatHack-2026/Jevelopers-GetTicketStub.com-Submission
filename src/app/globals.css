@@ -1,7 +1,7 @@
 @import "../brand/tokens.css";
 @import "../customer/desk/desk.css";
 
-/* TicketStub studio base. Paper by day (default), stage by night (.ts-night, prefers-color-scheme: dark). */
+/* TicketStub studio base. Always cream paper: the app has no dark stage. */
 *,
 *::before,
 *::after {

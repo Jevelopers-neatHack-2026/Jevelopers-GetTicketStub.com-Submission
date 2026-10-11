@@ -1,5 +1,5 @@
 "use client";
-// Review board for the desk parts. Each part is shown on paper and on the stage, live: press,
+// Review board for the desk parts. Each part is shown on the cream paper desk, live: press,
 // pick and toggle them to hear and feel them. Nothing here is a product screen.
 import { useState } from "react";
 import {
@@ -38,7 +38,7 @@ const MATERIALS: { value: Material; label: string; sub: string }[] = [
   { value: "framed", label: "Framed", sub: "$89" },
 ];
 
-function Specimen({ stage }: { stage?: boolean }) {
+function Specimen() {
   const [material, setMaterial] = useState<Material>("print");
   const [finish, setFinish] = useState<FinishValue>("foil");
   const [filter, setFilter] = useState("all");
@@ -49,8 +49,8 @@ function Specimen({ stage }: { stage?: boolean }) {
   const price = MATERIALS.find((m) => m.value === material)!.sub;
 
   return (
-    <div className={`${s.col} desk-surface ${stage ? "ts-stage" : ""}`}>
-      <p className={s.colName}>{stage ? "Stage · for the moments" : "Paper · every screen"}</p>
+    <div className={`${s.col} desk-surface`}>
+      <p className={s.colName}>Paper · every screen, every moment</p>
 
       <Part name="Stamp" job="The one main action on a screen. It presses down with a stamp thunk. The price rides on its own perforated stub.">
         <Stamp block price={price} onClick={() => setStamped((n) => n + 1)}>
@@ -124,7 +124,7 @@ function Specimen({ stage }: { stage?: boolean }) {
       </Part>
 
       <Part name="Field" job="Organizers and checkout only, since fans never fill in a form. You write on the line, and it turns orange while you type.">
-        <Field id={stage ? "org-stage" : "org-paper"} label="Organizer name" placeholder="Your organization" hint="Printed on every guest's stub" />
+        <Field id="org-paper" label="Organizer name" placeholder="Your organization" hint="Printed on every guest's stub" />
       </Part>
 
       <Part name="Source marks" job="Where each fact came from (EVAL-03), shown as small printer's marks with one legend line per screen.">
@@ -281,7 +281,7 @@ function Part({ name, job, children }: { name: string; job: string; children: Re
 }
 
 export default function PartsBoard() {
-  const [sheet, setSheet] = useState<null | "paper" | "stage">(null);
+  const [sheet, setSheet] = useState(false);
   return (
     <main className={`${s.page} desk-surface`}>
       <SandboxStrip>Desk parts for review. Nothing here is a product screen.</SandboxStrip>
@@ -309,26 +309,24 @@ export default function PartsBoard() {
 
       <div className={s.cols}>
         <Specimen />
-        <Specimen stage />
       </div>
 
       <section className={s.sheets}>
         <p className="desk-label">Paper sheet</p>
         <p className={s.body}>Slides up on phones with a torn top edge, and comes in from the side on desktop. Esc or tapping outside closes it.</p>
         <div className={s.row}>
-          <PaperButton onClick={() => setSheet("paper")}>Open a paper sheet</PaperButton>
-          <PaperButton onClick={() => setSheet("stage")}>Open a stage sheet</PaperButton>
+          <PaperButton onClick={() => setSheet(true)}>Open a paper sheet</PaperButton>
         </div>
       </section>
 
-      <PaperSheet open={sheet !== null} onClose={() => setSheet(null)} title={sheet === "stage" ? "Pick a finish" : "Pinned to your wall"} stage={sheet === "stage"}>
+      <PaperSheet open={sheet} onClose={() => setSheet(false)} title="Pinned to your wall">
         <div className={s.sheetBody}>
           <p className={s.body}>Your stub is finished. Share it, print it, or keep it on your phone.</p>
           <Stamp block price="$49">
             Print it
           </Stamp>
           <PaperButton block>Share your stub</PaperButton>
-          <TearLink onClick={() => setSheet(null)}>Back to the stub</TearLink>
+          <TearLink onClick={() => setSheet(false)}>Back to the stub</TearLink>
         </div>
       </PaperSheet>
     </main>

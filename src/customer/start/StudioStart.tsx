@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { PaperButton, Stamp, Tag, Tags, TearLink } from "@/customer/desk/Desk";
 import { LeavesMark } from "@/customer/pages/ui";
-import { useNavStage } from "@/customer/nav/navState";
 import {
   PALE_HOURS,
   demoStubId,
@@ -78,8 +77,8 @@ export function StudioStart({ fill = false }: { fill?: boolean } = {}) {
     return () => t.forEach((id) => window.clearTimeout(id));
   }, []);
 
-  const lightsDown = phase !== "idle";
-  useNavStage(lightsDown);
+  // Printing happens in place, on the same paper: the section only grows to the height of the screen.
+  const inPress = phase !== "idle";
 
   const open = (id: string) => {
     setPhase("leaving");
@@ -154,10 +153,9 @@ export function StudioStart({ fill = false }: { fill?: boolean } = {}) {
       ref={section}
       className={cx(
         "desk-surface",
-        lightsDown && "ts-stage",
         s.section,
         fill && s.fill,
-        lightsDown && s.down,
+        inPress && s.press,
       )}
       aria-labelledby={titleId}
     >

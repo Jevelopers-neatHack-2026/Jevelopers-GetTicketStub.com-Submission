@@ -1,4 +1,4 @@
-/* Tear stage: the lights go down (600 ms), then the stub flies out and the wall takes over. */
+/* The tear: the paper desk fades in (600 ms), then the stub flies out and the wall takes over. */
 .stage {
   position: fixed;
   inset: 0 0 0 var(--nav-w, 0px);
@@ -10,10 +10,10 @@
   gap: 16px;
   padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
   overflow: hidden;
-  animation: lightsDown 600ms var(--ts-ease-standard) both;
+  animation: paperIn 600ms var(--ts-ease-standard) both;
 }
 .leaving {
-  animation: lightsUp 600ms var(--ts-ease-standard) both;
+  animation: paperOut 600ms var(--ts-ease-standard) both;
   pointer-events: none;
 }
 .area {
@@ -23,12 +23,12 @@
   place-items: center;
   min-height: 0;
 }
-@keyframes lightsDown {
+@keyframes paperIn {
   from {
     opacity: 0;
   }
 }
-@keyframes lightsUp {
+@keyframes paperOut {
   to {
     opacity: 0;
   }
@@ -41,5 +41,6 @@
 }
 .track {
   flex: none;
-  padding-top: env(safe-area-inset-top);
+  /* below the corner cart button on narrow screens */
+  padding-top: max(env(safe-area-inset-top), calc(var(--corner-reserve, 0px) * 0.62 - 16px));
 }

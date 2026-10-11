@@ -1,6 +1,6 @@
 /* Desk parts. Every control is a print-shop object: it has a ledge it sits on, it sinks when
    pressed and it makes a sound (see Desk.tsx). Colours come only from desk.css tokens, so the
-   same part works on paper and on the stage. */
+   same part always sits on paper. */
 
 /* ---------- Stamp: the one main action per screen ---------- */
 .stamp {

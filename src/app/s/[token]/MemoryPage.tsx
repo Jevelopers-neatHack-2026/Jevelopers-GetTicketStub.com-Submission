@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/customer/account/api";
 import { sharePath } from "@/customer/account/share";
-import { useNavHidden } from "@/customer/nav/navState";
 import d from "@/customer/desk/Desk.module.css";
 import { PaperButton, Rule, Stamp, Stamped, Tool, Tools } from "@/customer/desk/Desk";
 import { FlipIcon } from "@/customer/desk/icons";
@@ -52,7 +51,6 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
   const setOwned = (next: Stub) => setOwnedState({ id: next.id, stub: next });
   const [flipped, setFlipped] = useState(false);
   const [wrapped, setWrapped] = useState(gift);
-  useNavHidden(wrapped);
   const [opening, setOpening] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [status, setStatus] = useState<{ text: string; ok?: boolean }>({ text: "" });
@@ -288,7 +286,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
                 <p className={ui.muted}>Your stub as a still image and as a link preview. Anyone with the link can open this page.</p>
                 <div className={s.previews}>
                   <figure className={s.previewFig}>
-                    <div className={`ts-stage desk-surface ${s.story}`} aria-hidden="true">
+                    <div className={`desk-surface ${s.story}`} aria-hidden="true">
                       <StubView stub={stub} size="sm" />
                       <p className={s.storyTitle}>{e.title}</p>
                       <p className={s.storyMeta}>{meta}</p>
@@ -340,7 +338,7 @@ export default function MemoryPage({ token, gift, giftTo }: { token: string; gif
       </PageShell>
 
       {wrapped ? (
-        <div className={`ts-stage desk-surface ${s.giftStage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="A gift for you">
+        <div className={`desk-surface ${s.giftStage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="A gift for you">
           <div className={`${s.giftBox} ${opening ? s.giftOpening : ""}`}>
             <p className="desk-label">{giftTo ? `For ${giftTo}` : "A gift for you"}</p>
             <h1 className={s.giftTitle}>Someone made you a stub.</h1>

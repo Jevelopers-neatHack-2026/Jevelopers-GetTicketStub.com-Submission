@@ -75,15 +75,6 @@
   }
 }
 
-/* stage moments: the same night tokens the sidebar takes */
-:global(html[data-nav-stage]) .btn {
-  --desk-paper-raised: #26302a;
-  --desk-ink: #f4ecdd;
-  --desk-ink-soft: rgb(244 236 221 / 0.66);
-  --desk-rule-strong: rgb(244 236 221 / 0.4);
-  --desk-ledge: rgb(0 0 0 / 0.45);
-}
-
 /* the stub in the air */
 .flight {
   position: fixed;

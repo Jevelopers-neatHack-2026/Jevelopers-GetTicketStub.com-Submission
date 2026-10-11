@@ -1,5 +1,5 @@
 /* Studio overlays: the floating toolbar and its pickers, the material frame, small shared pieces.
-   Colour only from the desk tokens (desk.css). Sheets are PaperSheet; the tear stage is TearFlow. */
+   Colour only from the desk tokens (desk.css). Sheets are PaperSheet; the tear is TearFlow. */
 
 .iconBtn {
   display: inline-grid;
@@ -254,31 +254,4 @@
   .picker {
     animation: none;
   }
-}
-
-/* Tear stage */
-.tearStage {
-  position: fixed;
-  inset: 0 0 0 var(--nav-w, 0px);
-  z-index: 70;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ts-space-5);
-  padding: var(--ts-space-5) var(--ts-space-4) calc(var(--ts-space-5) + env(safe-area-inset-bottom));
-  background: var(--ts-bg);
-  color: var(--ts-text);
-  animation: fade var(--ts-dur-base) var(--ts-ease-enter);
-}
-.tearHint {
-  color: var(--ts-text-muted);
-  text-align: center;
-}
-.tearArea {
-  flex: 1;
-  width: 100%;
-  display: grid;
-  place-items: center;
-  min-height: 0;
 }

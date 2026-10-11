@@ -2,6 +2,8 @@
 
 The customer-facing studio. Give it an event link, watch the agent research the night, then shuffle styles, edit, tilt the foil, tear the stub off and pin it to your wall.
 
+The studio is always cream paper. There is no dark stage: printing, the finish picker, the tear and a lifted stub all stay on the desk.
+
 Design docs, wireframes and the coverage matrix are in `docs/studio/` (PR "Add ticket studio design docs"). Brand assets come from the `brand-kit` repo (`src/brand/tokens.css`, `public/brand/`).
 
 ## Run it

@@ -433,7 +433,7 @@
   padding: 18px 14px;
   border-radius: 6px;
   text-align: center;
-  box-shadow: 0 1px 0 var(--desk-ledge), 0 14px 22px -12px rgb(23 20 15 / 0.6);
+  box-shadow: inset 0 0 0 1px var(--desk-rule), 0 1px 0 var(--desk-ledge), 0 14px 22px -12px rgb(23 20 15 / 0.45);
   overflow: hidden;
 }
 .storyTitle {
@@ -512,7 +512,7 @@
   }
 }
 
-/* The gift: the lights go down, you tear it open, the lights come back up (600 ms each way) */
+/* The gift: the paper desk fades in over the page, you tear it open, it fades away (600 ms each way) */
 .giftStage.giftStage {
   position: fixed;
   inset: 0 0 0 var(--nav-w, 0px);
@@ -521,14 +521,14 @@
   place-items: center;
   padding: 24px 16px;
   overflow: hidden;
-  animation: lightsDown 600ms var(--ts-ease-standard) both;
+  animation: deskIn 600ms var(--ts-ease-standard) both;
   transition: opacity 600ms var(--ts-ease-standard);
 }
 .giftStage[data-leaving] {
   opacity: 0;
   pointer-events: none;
 }
-@keyframes lightsDown {
+@keyframes deskIn {
   from {
     opacity: 0;
   }
@@ -557,7 +557,7 @@
   margin: 10px 0 14px;
   border-radius: 4px;
   background: var(--desk-paper-raised);
-  box-shadow: 0 1px 0 var(--desk-ledge), 0 30px 40px -20px rgb(0 0 0 / 0.7);
+  box-shadow: 0 1px 0 var(--desk-ledge), 0 2px 2px rgb(23 20 15 / 0.2), 0 30px 36px -20px rgb(60 38 12 / 0.5);
   transform: rotate(-3deg);
   transition: transform 650ms var(--ts-ease-enter), opacity 650ms var(--ts-ease-exit);
 }

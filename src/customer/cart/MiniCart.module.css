@@ -56,15 +56,6 @@
   background-repeat: repeat-y;
   pointer-events: none;
 }
-:global(html[data-nav-stage]) .sheet {
-  --desk-paper-raised: #26302a;
-  --desk-paper-sunk: #0f0d0a;
-  --desk-ink: #f4ecdd;
-  --desk-ink-soft: rgb(244 236 221 / 0.66);
-  --desk-rule: rgb(244 236 221 / 0.14);
-  --desk-rule-strong: rgb(244 236 221 / 0.4);
-  --desk-ledge: rgb(0 0 0 / 0.45);
-}
 
 .head {
   display: flex;

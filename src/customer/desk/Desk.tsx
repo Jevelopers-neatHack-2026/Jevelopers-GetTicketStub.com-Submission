@@ -2,7 +2,6 @@
 // Desk parts: the print-shop controls every studio screen is built from (review page: /parts).
 // Each part owns its press, its motion and its sound, so screens never wire feedback by hand.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { useNavHidden } from "@/customer/nav/navState";
 import { haptic, play, type Cue, type PlayOptions } from "@/customer/studio/feedback";
 import type { Provenance } from "@/customer/studio/types";
 import s from "./Desk.module.css";
@@ -323,9 +322,8 @@ export function SandboxStrip({ children = "Sandbox prices. Nothing is charged." 
 }
 
 /** A sheet of paper that slides up (phone) or in from the side (desktop). */
-export function PaperSheet({ open, onClose, title, children, stage }: { open: boolean; onClose: () => void; title: string; children: ReactNode; stage?: boolean }) {
+export function PaperSheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const opened = useRef(false);
-  useNavHidden(open && !!stage);
   useEffect(() => {
     if (open && !opened.current) play("open");
     if (!open && opened.current) play("close");
@@ -339,7 +337,7 @@ export function PaperSheet({ open, onClose, title, children, stage }: { open: bo
   return (
     <>
       <div className={s.scrim} onClick={onClose} aria-hidden />
-      <section role="dialog" aria-modal="true" aria-label={title} className={cx(s.sheet, stage && "ts-stage")}>
+      <section role="dialog" aria-modal="true" aria-label={title} className={s.sheet}>
         <span className={s.sheetGrip} aria-hidden />
         <header className={s.sheetHead}>
           <h2 className={s.sheetTitle}>{title}</h2>

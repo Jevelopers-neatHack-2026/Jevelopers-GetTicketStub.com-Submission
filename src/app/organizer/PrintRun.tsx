@@ -1,9 +1,8 @@
 "use client";
-// The print run: the stage goes dark and every guest's stub feeds out of the printer slot, one after
+// The print run: the paper desk fades in and every guest's stub feeds out of the printer slot, one after
 // another, with the printer running. They pile up under the slot; then "Published" lands.
-// Same printer, slot and stage as the fan reveal (research/Printing.tsx), run once per guest.
+// Same printer and slot as the fan reveal (research/Printing.tsx), run once per guest.
 import { useEffect, useState, type CSSProperties } from "react";
-import { useNavHidden } from "@/customer/nav/navState";
 import { PaperButton, Stamped, TearLink } from "@/customer/desk/Desk";
 import { StubView } from "@/customer/studio/stub/StubView";
 import { haptic, play, stopPrint } from "@/customer/studio/feedback";
@@ -16,7 +15,6 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export function PrintRun({ stubs, names, orderId, onClose, onClaim }: { stubs: Stub[]; names: string[]; orderId: string; onClose: () => void; onClaim: () => void }) {
-  useNavHidden(true);
   const n = stubs.length;
   const [count, setCount] = useState(0);
   const [done, setDone] = useState(false);
@@ -61,7 +59,7 @@ export function PrintRun({ stubs, names, orderId, onClose, onClaim }: { stubs: S
   const current = count > 0 ? names[count - 1] : "";
 
   return (
-    <section className={`ts-stage desk-surface ${s.stage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="Printing every guest's stub" style={{ "--feed": `${Math.min(per * 0.9, 560)}ms` } as CSSProperties}>
+    <section className={`desk-surface ${s.stage}`} data-leaving={leaving ? "" : undefined} role="dialog" aria-modal="true" aria-label="Printing every guest's stub" style={{ "--feed": `${Math.min(per * 0.9, 560)}ms` } as CSSProperties}>
       <div className={s.status} role="status" aria-live="polite">
         {done ? <Stamped>Published</Stamped> : <span className={s.count}>{count === 0 ? "Warming up the printer…" : `Printing ${count} of ${n}`}</span>}
       </div>
