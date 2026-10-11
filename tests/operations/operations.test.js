@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, rmSync, writeFileSync, existsSync, writeSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, writeFileSync, existsSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -36,6 +36,7 @@ import { createOperationsWorker } from '../../src/worker/private/worker.js';
 import { readStoreCompatibility, readOperationsHealth, requestOwnerRetention } from '../../src/health/private/health.js';
 import { runBoundedLocalPlan } from '../../src/orchestrator/internal/controller.js';
 import { buildSafeFailureDiagnostics } from './failure-diagnostics.js';
+import { createAdmissionFailureDiagnostic } from './fixtures/admission-store-child.mjs';
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
 const PLAN = JSON.stringify({
@@ -88,7 +89,8 @@ const METRICS = {
   ci1PhaseCaptureBytes: 0,
   ci1PhaseCaptureOverflow: false,
   ci1PhaseCaptureIncomplete: false,
-  ci1PhaseCaptureChildCloseUnconfirmed: false
+  ci1PhaseCaptureChildCloseUnconfirmed: false,
+  ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
 };
 
 const CI1_PHASES = new Set([
@@ -107,10 +109,17 @@ const CI1_PARENT_PHASE_STAGES = new Set([
   'shutdown_spawned', 'shutdown_marker_observed', 'sigterm_sent', 'shutdown_child_closed',
   'restart_spawned', 'restart_escalation_sent', 'restart_child_closed',
   'shutdown_escalation_sent', 'cleanup_escalation_sent', 'child_close_unconfirmed',
+  'owned_group_empty', 'owned_group_close_unconfirmed',
   'child_capture_missing', 'child_capture_invalid', 'child_capture_partial', 'child_capture_overflow'
 ]);
 const CI1_MAX_PHASE_RECORDS = 256;
 const CI1_MAX_PHASE_BYTES = 24_576;
+const CI1_LOCAL_WATCHDOG_POLL_MS = 20;
+const CI1_LOCAL_WATCHDOG_SIGNAL_PHASE_MS = 500;
+const CI1_LOCAL_WATCHDOG_RESULT_CLOSE_MARGIN_MS = 1_000;
+const CI1_LOCAL_WATCHDOG_CLEANUP_COMPLETION_MS = CI1_LOCAL_WATCHDOG_POLL_MS
+  + (2 * CI1_LOCAL_WATCHDOG_SIGNAL_PHASE_MS)
+  + CI1_LOCAL_WATCHDOG_RESULT_CLOSE_MARGIN_MS;
 
 function ci1CaptureCanAppend(recordCount, currentBytes, nextBytes) {
   return recordCount < CI1_MAX_PHASE_RECORDS && currentBytes + nextBytes <= CI1_MAX_PHASE_BYTES;
@@ -286,7 +295,10 @@ async function waitCi1ChildClose({ timeoutMs, escalationStage, waitForClose, rea
   return { closeResult, timedOut: true };
 }
 
-async function finalizeCi1ChildCapture({ phase, role, closeResult, closeOwnedChild, readCapture, captureParent, state = METRICS }) {
+async function finalizeCi1ChildCapture({
+  phase, role, closeResult, closeOwnedChild, cleanupOwnedChild,
+  readCapture, captureParent, state = METRICS
+}) {
   const safeParentCapture = stage => {
     try {
       if (captureParent(stage) === false) state.ci1PhaseCaptureIncomplete = true;
@@ -296,20 +308,44 @@ async function finalizeCi1ChildCapture({ phase, role, closeResult, closeOwnedChi
   };
   let finalCloseResult = closeResult ?? null;
   let captureResult = null;
-  if (!finalCloseResult) {
+  let ownedGroupEmpty = true;
+  if (cleanupOwnedChild) {
+    let cleanupResult;
+    try { cleanupResult = await cleanupOwnedChild(); } catch { cleanupResult = null; }
+    if (cleanupResult && typeof cleanupResult === 'object') {
+      if (!finalCloseResult && cleanupResult.closeResult) finalCloseResult = cleanupResult.closeResult;
+      ownedGroupEmpty = cleanupResult.groupEmpty === true;
+    } else {
+      ownedGroupEmpty = false;
+    }
+  } else if (!finalCloseResult) {
     safeParentCapture('cleanup_escalation_sent');
     try { finalCloseResult = await closeOwnedChild(); } catch { finalCloseResult = null; }
   }
-  if (!finalCloseResult) {
+  if (!ownedGroupEmpty) {
     state.ci1PhaseCaptureIncomplete = true;
-    state.ci1PhaseCaptureChildCloseUnconfirmed = true;
-    safeParentCapture('child_close_unconfirmed');
+    state.ci1PhaseCaptureOwnedGroupCloseUnconfirmed = true;
+    safeParentCapture('owned_group_close_unconfirmed');
+  }
+  if (!finalCloseResult || !ownedGroupEmpty) {
+    state.ci1PhaseCaptureIncomplete = true;
+    if (!finalCloseResult) {
+      state.ci1PhaseCaptureChildCloseUnconfirmed = true;
+      safeParentCapture('child_close_unconfirmed');
+    }
     try { captureResult = readCapture(); } catch { state.ci1PhaseCaptureIncomplete = true; }
-    if (captureResult?.complete) captureResult = { ...captureResult, complete: false, failureCode: 'close_unconfirmed' };
+    if (captureResult?.complete) {
+      captureResult = {
+        ...captureResult,
+        complete: false,
+        failureCode: ownedGroupEmpty ? 'close_unconfirmed' : 'owned_group_close_unconfirmed'
+      };
+    }
     if (!captureResult || !captureResult.complete) state.ci1PhaseCaptureIncomplete = true;
-    return { closeResult: null, captureResult, reaped: false };
+    return { closeResult: finalCloseResult, captureResult, reaped: false, ownedGroupEmpty };
   }
   safeParentCapture(`${role}_child_closed`);
+  safeParentCapture('owned_group_empty');
   try { captureResult = readCapture(); } catch { state.ci1PhaseCaptureIncomplete = true; }
   if (!captureResult || !captureResult.complete) {
     state.ci1PhaseCaptureIncomplete = true;
@@ -323,7 +359,7 @@ async function finalizeCi1ChildCapture({ phase, role, closeResult, closeOwnedChi
           : 'child_capture_invalid';
     safeParentCapture(stage);
   }
-  return { closeResult: finalCloseResult, captureResult, reaped: true };
+  return { closeResult: finalCloseResult, captureResult, reaped: true, ownedGroupEmpty };
 }
 
 async function executeCi1ChildWithFinalization(execute, finalize, state = METRICS) {
@@ -912,12 +948,12 @@ function startOwnedChild(script, args, { timeoutMs = 8_000, env = {} } = {}) {
 }
 
 async function waitForPath(path, child, timeoutMs = 6_000) {
-  const end = Date.now() + timeoutMs;
+  const end = performance.now() + timeoutMs;
   while (!existsSync(path)) {
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error(`The owned fixture exited before its barrier (exit=${child.exitCode}; signal=${child.signalCode}).`);
     }
-    if (Date.now() >= end) throw new Error('The owned fixture did not reach its barrier.');
+    if (performance.now() >= end) throw new Error('The owned fixture did not reach its barrier.');
     await new Promise(resolvePromise => setTimeout(resolvePromise, 5));
   }
 }
@@ -933,32 +969,42 @@ async function waitForCloseBounded(closed, timeoutMs) {
 }
 
 function ownedProcessGroupMembers(groupId) {
-  const result = spawnSync('pgrep', ['-g', String(groupId)], { encoding: 'utf8' });
+  const result = spawnSync('pgrep', ['-g', String(groupId)], {
+    encoding: 'utf8', timeout: 100, killSignal: 'SIGKILL'
+  });
   if (result.status === 1) return [];
   if (result.status !== 0) throw new Error('The isolated fixture process group could not be inspected.');
   return result.stdout.trim().split(/\s+/u).filter(Boolean).map(Number);
 }
 
-async function waitForOwnedProcessGroupEmpty(groupId, timeoutMs = 2_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+async function waitForOwnedProcessGroupEmpty(groupId, maxElapsedMs = 2_000) {
+  const probeTimeoutMs = 100;
+  const intervalMs = 100;
+  const maxProbes = Math.max(1, Math.floor((maxElapsedMs + intervalMs) / (probeTimeoutMs + intervalMs)));
+  for (let probe = 0; probe < maxProbes; probe += 1) {
     if (ownedProcessGroupMembers(groupId).length === 0) return true;
-    await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
+    if (probe + 1 < maxProbes) await new Promise(resolvePromise => setTimeout(resolvePromise, intervalMs));
   }
-  return ownedProcessGroupMembers(groupId).length === 0;
+  return false;
 }
 
-async function cleanupOwnedProcessGroup(child, closed) {
+async function cleanupOwnedProcessGroup(child, closed, captureEscalation = () => {}, state = METRICS) {
   if (!Number.isSafeInteger(child.pid) || child.pid < 2) return false;
   const groupId = child.pid;
+  try {
+    if (await waitForOwnedProcessGroupEmpty(groupId, 100)) return true;
+  } catch {}
+  try {
+    if (captureEscalation('cleanup_escalation_sent') === false) state.ci1PhaseCaptureIncomplete = true;
+  } catch { state.ci1PhaseCaptureIncomplete = true; }
   try { process.kill(-groupId, 'SIGCONT'); } catch {}
-  try { process.kill(-groupId, 'SIGTERM'); } catch {}
+  try { process.kill(-groupId, 'SIGTERM'); METRICS.processSigtermSignalsSent += 1; } catch {}
   await waitForCloseBounded(closed, 1_000);
-  if (await waitForOwnedProcessGroupEmpty(groupId, 1_000)) return true;
+  try { if (await waitForOwnedProcessGroupEmpty(groupId, 1_000)) return true; } catch {}
   try { process.kill(-groupId, 'SIGCONT'); } catch {}
-  try { process.kill(-groupId, 'SIGKILL'); } catch {}
+  try { process.kill(-groupId, 'SIGKILL'); METRICS.processSigkillSignalsSent += 1; } catch {}
   await waitForCloseBounded(closed, 1_000);
-  return waitForOwnedProcessGroupEmpty(groupId, 1_000);
+  try { return await waitForOwnedProcessGroupEmpty(groupId, 1_000); } catch { return false; }
 }
 
 function readRunnerPidFromOwnedDatabase(databasePath, idempotencyKey) {
@@ -979,15 +1025,238 @@ function readRunnerPidFromOwnedDatabase(databasePath, idempotencyKey) {
 }
 
 function processGroupId(pid) {
-  const result = spawnSync('ps', ['-o', 'pgid=', '-p', String(pid)], { encoding: 'utf8' });
+  const result = spawnSync('ps', ['-o', 'pgid=', '-p', String(pid)], {
+    encoding: 'utf8', timeout: 100, killSignal: 'SIGKILL'
+  });
   if (result.status !== 0) return null;
   const value = Number(result.stdout.trim());
   return Number.isSafeInteger(value) && value > 1 ? value : null;
 }
 
+function readCi1OwnedGroupRegistry(registryPath) {
+  if (!registryPath || !existsSync(registryPath)) return null;
+  try {
+    const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
+    if (!registry || registry.schema !== 'ops-ci1-owned-groups.v1'
+        || Object.keys(registry).sort().join(',') !== 'groups,pendingLaunches,schema'
+        || !Array.isArray(registry.groups) || !Array.isArray(registry.pendingLaunches)
+        || registry.groups.length > 16 || registry.pendingLaunches.length > 16
+        || registry.groups.some(value => !Number.isSafeInteger(value) || value < 2)
+        || new Set(registry.groups).size !== registry.groups.length
+        || registry.pendingLaunches.some(value => typeof value !== 'string'
+          || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value))
+        || new Set(registry.pendingLaunches).size !== registry.pendingLaunches.length) return null;
+    return {
+      schema: registry.schema,
+      groups: registry.groups,
+      pendingLaunches: registry.pendingLaunches
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCi1OwnedGroupRegistry(registryPath, registry) {
+  const temporaryPath = `${registryPath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, JSON.stringify(registry), { flag: 'w', mode: 0o600 });
+    renameSync(temporaryPath, registryPath);
+    return true;
+  } catch {
+    try { rmSync(temporaryPath, { force: true }); } catch {}
+    return false;
+  }
+}
+
+function beginCi1OwnedGroupLaunch(launchToken) {
+  const registryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+  if (!registryPath) return true;
+  if (typeof launchToken !== 'string'
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(launchToken)) return false;
+  const registry = readCi1OwnedGroupRegistry(registryPath);
+  if (!registry || registry.pendingLaunches.length >= 16) return false;
+  if (!registry.pendingLaunches.includes(launchToken)) registry.pendingLaunches.push(launchToken);
+  return writeCi1OwnedGroupRegistry(registryPath, registry);
+}
+
+function updateCi1OwnedGroupRegistry(groupId, register, launchToken = null) {
+  const registryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+  if (!registryPath) return true;
+  if (!Number.isSafeInteger(groupId) || groupId < 2) return false;
+  const registry = readCi1OwnedGroupRegistry(registryPath);
+  if (!registry) return false;
+  const next = new Set(registry.groups);
+  if (register) {
+    if (typeof launchToken !== 'string' || !registry.pendingLaunches.includes(launchToken)) return false;
+    next.add(groupId);
+  } else if (!next.has(groupId) && !registry.pendingLaunches.includes(launchToken)) {
+    return false;
+  } else {
+    next.delete(groupId);
+  }
+  if (next.size > 16) return false;
+  registry.groups = [...next];
+  if (typeof launchToken === 'string') {
+    registry.pendingLaunches = registry.pendingLaunches.filter(token => token !== launchToken);
+  }
+  return writeCi1OwnedGroupRegistry(registryPath, registry);
+}
+
+async function verifyRegisterCi1OwnedGroupBeforeReady({
+  child, launchToken, readyPath,
+  verifyGroup = verifyOwnedProcessGroup,
+  registerGroup = updateCi1OwnedGroupRegistry,
+  releaseReady = (path, ready) => writeFileSync(path, JSON.stringify(ready), { flag: 'wx', mode: 0o600 })
+}) {
+  const groupId = await verifyGroup(child);
+  if (groupId !== child.pid) return { groupId: null, registered: false, readyReleased: false, stage: 'group_unverified' };
+  const registered = registerGroup(groupId, true, launchToken);
+  if (!registered) return { groupId, registered: false, readyReleased: false, stage: 'registration_failed' };
+  try {
+    await releaseReady(readyPath, {
+      schema: 'ops-ci1-group-ready.v1', pid: child.pid,
+      groupId, registryConfirmed: true
+    });
+  } catch {
+    return { groupId, registered: true, readyReleased: false, stage: 'ready_release_failed' };
+  }
+  return { groupId, registered: true, readyReleased: true, stage: 'ready' };
+}
+
+async function verifyOwnedProcessGroup(child, timeoutMs = 1_000) {
+  if (!Number.isSafeInteger(child.pid) || child.pid < 2) return null;
+  const probeTimeoutMs = 100;
+  const intervalMs = 5;
+  const maxProbes = Math.max(1, Math.floor((timeoutMs + intervalMs) / (probeTimeoutMs + intervalMs)));
+  for (let probe = 0; probe < maxProbes; probe += 1) {
+    if (processGroupId(child.pid) === child.pid) return child.pid;
+    if (child.exitCode !== null || child.signalCode !== null) return null;
+    if (probe + 1 < maxProbes) await new Promise(resolvePromise => setTimeout(resolvePromise, intervalMs));
+  }
+  return null;
+}
+
+async function cleanupVerifiedCi1ProcessGroup(child, closed, groupId, captureEscalation = () => {}, state = METRICS) {
+  if (groupId !== child.pid) {
+    // The child PID is exact ownership even if group verification failed; never
+    // signal a possibly shared group. Group absence remains explicitly unknown.
+    try {
+      if (captureEscalation('cleanup_escalation_sent') === false) state.ci1PhaseCaptureIncomplete = true;
+    } catch { state.ci1PhaseCaptureIncomplete = true; }
+    try { child.kill('SIGCONT'); } catch {}
+    try { child.kill('SIGTERM'); METRICS.processSigtermSignalsSent += 1; } catch {}
+    let closeResult = await waitForCloseBounded(closed, 1_000);
+    if (!closeResult) {
+      try { child.kill('SIGCONT'); } catch {}
+      try { child.kill('SIGKILL'); METRICS.processSigkillSignalsSent += 1; } catch {}
+      closeResult = await waitForCloseBounded(closed, 1_000);
+    }
+    return { closeResult, groupEmpty: false };
+  }
+  const groupEmpty = await cleanupOwnedProcessGroup(child, closed, captureEscalation, state);
+  const closeResult = await waitForCloseBounded(closed, 500);
+  return { closeResult, groupEmpty };
+}
+
+async function finishCi1OwnedGroupWatchdog(watchdog, watchdogGroupId) {
+  let closeResult = null;
+  try {
+    closeResult = await waitForCloseBounded(
+      watchdog.closed, CI1_LOCAL_WATCHDOG_CLEANUP_COMPLETION_MS
+    );
+  } catch {}
+  if (watchdogGroupId !== watchdog.child.pid) {
+    return { closeResult, groupEmpty: false, completionWaitExpired: !closeResult };
+  }
+  let cleanupResult;
+  try {
+    cleanupResult = await cleanupVerifiedCi1ProcessGroup(
+      watchdog.child, watchdog.closed, watchdogGroupId
+    );
+  } catch {
+    cleanupResult = null;
+  }
+  return {
+    closeResult: cleanupResult?.closeResult ?? closeResult,
+    groupEmpty: cleanupResult?.groupEmpty === true,
+    completionWaitExpired: !closeResult
+  };
+}
+
+function startPrelaunchedOwnedGroupWatchdog(controlPath, timeoutMs = 15_000) {
+  const readyPath = `${controlPath}.ready`;
+  const watchAckPath = `${controlPath}.watch-ack`;
+  const resultPath = `${controlPath}.result`;
+  const source = `
+import { readFileSync, writeFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
+const controlPath = process.argv[1];
+const readyPath = process.argv[2];
+const watchAckPath = process.argv[3];
+const resultPath = process.argv[4];
+const timeoutMs = Number(process.argv[5]);
+const deadline = performance.now() + timeoutMs;
+let groupId = null;
+let targetAckSent = false;
+const startedAt = performance.now();
+writeFileSync(readyPath, JSON.stringify({ schema: 'ops-owned-group-watchdog-ready.v1', pid: process.pid, groupId: process.pid }), { flag: 'wx', mode: 0o600 });
+let timedOut = true;
+let cleanupRequested = false;
+while (performance.now() < deadline) {
+  try {
+    const control = JSON.parse(readFileSync(controlPath, 'utf8'));
+    if (Number.isSafeInteger(control.groupId) && control.groupId > 1) groupId = control.groupId;
+    if (control.state === 'watch' && groupId !== null && !targetAckSent) {
+      try {
+        process.kill(-groupId, 0);
+        writeFileSync(watchAckPath, JSON.stringify({
+          schema: 'ops-owned-group-watchdog-target-ack.v1',
+          pid: process.pid, groupId, verified: true
+        }), { flag: 'wx', mode: 0o600 });
+        targetAckSent = true;
+      } catch {}
+    }
+    if (control.state === 'done') { timedOut = false; break; }
+    if (control.state === 'cleanup') { timedOut = false; cleanupRequested = true; break; }
+  } catch {}
+  await new Promise(resolvePromise => setTimeout(resolvePromise, ${CI1_LOCAL_WATCHDOG_POLL_MS}));
+}
+let targetGroupEmpty = null;
+if (groupId !== null && (timedOut || cleanupRequested)) {
+  const signalAndWait = async (signal, timeoutMs) => {
+    try { process.kill(-groupId, 'SIGCONT'); } catch {}
+    try { process.kill(-groupId, signal); } catch {}
+    const end = performance.now() + timeoutMs;
+    while (performance.now() < end) {
+      try { process.kill(-groupId, 0); } catch (error) {
+        if (error?.code === 'ESRCH') return true;
+      }
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 10));
+    }
+    try { process.kill(-groupId, 0); } catch (error) { return error?.code === 'ESRCH'; }
+    return false;
+  };
+  targetGroupEmpty = await signalAndWait('SIGTERM', ${CI1_LOCAL_WATCHDOG_SIGNAL_PHASE_MS});
+  if (!targetGroupEmpty) targetGroupEmpty = await signalAndWait('SIGKILL', ${CI1_LOCAL_WATCHDOG_SIGNAL_PHASE_MS});
+}
+writeFileSync(resultPath, JSON.stringify({ schema: 'ops-owned-group-watchdog-result.v1', pid: process.pid,
+  groupId: process.pid, timedOut, cleanupRequested, targetAckSent, targetGroupId: groupId,
+  targetGroupEmpty, elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)) }), { flag: 'wx', mode: 0o600 });
+`;
+  const child = spawn(process.execPath, ['--input-type=module', '--eval', source, controlPath, readyPath, watchAckPath, resultPath, String(timeoutMs)], {
+    cwd: ROOT, env: baseEnvironment(), stdio: 'ignore', detached: true
+  });
+  const spawned = new Promise((resolvePromise, reject) => {
+    child.once('spawn', resolvePromise);
+    child.once('error', reject);
+  });
+  const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
+  return { child, spawned, closed, readyPath, watchAckPath, resultPath };
+}
+
 async function waitForPidExit(pid, timeoutMs = 1_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
     try { process.kill(pid, 0); } catch (error) {
       if (error?.code === 'ESRCH') return true;
       throw error;
@@ -1013,8 +1282,8 @@ async function killOwnedChildAndReap(child, closed) {
 }
 
 async function waitForStatus(worker, scope, jobId, expected, timeoutMs = 6_000) {
-  const end = Date.now() + timeoutMs;
-  while (Date.now() < end) {
+  const end = performance.now() + timeoutMs;
+  while (performance.now() < end) {
     const page = worker.readScopedWorkPage({ trustedSyntheticScope: scope, limit: 100 });
     const item = page.items.find(row => row.jobId === jobId);
     if (item?.state === expected) return item;
@@ -1564,6 +1833,46 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
   await t.test('OPS02.C02 races distinct global/project record and byte caps across processes', async t => {
     const capDirectory = tempDirectory('ah11-global-cap-race-');
     t.after(() => capDirectory.cleanup());
+    const diagnosticKnown = createAdmissionFailureDiagnostic('admission', Object.assign(
+      new Error('diagnostic-canary-message'), { code: 'STORE_BUSY' }
+    ));
+    assert.deepEqual(diagnosticKnown, {
+      schema: 'ops-admission-failure.v1', stage: 'admission', code: 'STORE_BUSY'
+    });
+    const diagnosticUnknown = createAdmissionFailureDiagnostic('resource', {
+      code: 'diagnostic-canary-code', message: 'diagnostic-canary-message'
+    });
+    assert.deepEqual(diagnosticUnknown, {
+      schema: 'ops-admission-failure.v1', stage: 'resource', code: 'UNKNOWN'
+    });
+    assert.equal(JSON.stringify([diagnosticKnown, diagnosticUnknown]).includes('diagnostic-canary'), false);
+    let proxyCodeReads = 0;
+    const diagnosticProxy = new Proxy({}, {
+      getOwnPropertyDescriptor() {
+        proxyCodeReads += 1;
+        throw new Error('diagnostic-canary-proxy');
+      }
+    });
+    assert.deepEqual(createAdmissionFailureDiagnostic('diagnostic-canary-stage', diagnosticProxy), {
+      schema: 'ops-admission-failure.v1', stage: 'unknown', code: 'UNKNOWN'
+    });
+    assert.equal(proxyCodeReads, 0);
+
+    const script = join(ROOT, 'tests/operations/fixtures/admission-store-child.mjs');
+    const diagnosticFailure = await runChild(script, [
+      capDirectory.databasePath, 'tenant-unused', 'project-unused', 'key-unused', PLAN,
+      'diagnostic-canary-invalid-json', join(capDirectory.directory, 'diagnostic-unused.json')
+    ]);
+    assert.equal(diagnosticFailure.code, 2);
+    assert.equal(diagnosticFailure.stdout, '');
+    const diagnosticLines = diagnosticFailure.stderr.trim().split('\n');
+    assert.equal(diagnosticLines.length, 1);
+    assert.ok(diagnosticLines[0].startsWith('OPS_ADMISSION_FAILURE '));
+    assert.deepEqual(JSON.parse(diagnosticLines[0].slice('OPS_ADMISSION_FAILURE '.length)), {
+      schema: 'ops-admission-failure.v1', stage: 'config', code: 'UNKNOWN'
+    });
+    assert.equal(diagnosticFailure.stderr.includes('diagnostic-canary'), false);
+
     const config = {
       maxQueueRecords: 2, maxPerTenantRecords: 1, maxPerProjectRecords: 1,
       maxQueueBytes: 65_536, maxPerTenantBytes: 32_768, maxPerProjectBytes: 16_384,
@@ -1573,7 +1882,6 @@ test('OPS02_ATOMIC_ADMISSION commits scope, workflow, queue, quota, event, and o
     assert.equal(admit(store, 'tenant-seed', 'project-seed', 'seed', PLAN, config).accepted, true);
     store.close();
     const outputs = [join(capDirectory.directory, 'cap-a.json'), join(capDirectory.directory, 'cap-b.json')];
-    const script = join(ROOT, 'tests/operations/fixtures/admission-store-child.mjs');
     const races = await Promise.all(outputs.map((output, index) => runChild(script, [
       capDirectory.databasePath, `tenant-cap-${index}`, `project-cap-${index}`, `cap-key-${index}`,
       PLAN, JSON.stringify(config), output
@@ -2209,11 +2517,23 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const resultPath = join(temporary.directory, `${phase}.${role}.json`);
     const metricsPath = join(temporary.directory, `${phase}.${role}.metrics.jsonl`);
     const phaseCapturePath = `${metricsPath}.${role}.phases.jsonl`;
+    const groupReadyPath = `${metricsPath}.${role}.group-ready.json`;
+    const launchToken = randomUUID();
+    assert.equal(beginCi1OwnedGroupLaunch(launchToken), true, `${phase}/${role} launch intent is recorded before spawn`);
     const child = spawn(process.execPath, [
       join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
       temporary.databasePath, phase, marker, resultPath, metricsPath, role,
       ...(role === 'restart' ? [expectedWorkflowId] : [])
-    ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'] });
+    ], {
+      cwd: ROOT,
+      env: {
+        ...baseEnvironment(),
+        JEV_OFFLINE_METRICS_FILE: metricsPath,
+        OPS_CI1_GROUP_READY_FILE: groupReadyPath
+      },
+      stdio: ['ignore', 'ignore', 'pipe'],
+      detached: true
+    });
     let childStderr = '';
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', chunk => { childStderr += chunk; });
@@ -2222,10 +2542,23 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       closeResult = { code, signal };
       resolvePromise(closeResult);
     }));
-    captureParentPhase(phase, role, `${role}_spawned`);
     let durationMs = null;
     let childResult;
+    let ownedGroupId = null;
+    const cleanupOwnedGroup = async () => {
+      const cleanup = await cleanupVerifiedCi1ProcessGroup(
+        child, closed, ownedGroupId, stage => captureParentPhase(phase, role, stage)
+      );
+      if (cleanup.groupEmpty && !updateCi1OwnedGroupRegistry(child.pid, false, launchToken)) {
+        METRICS.ci1PhaseCaptureIncomplete = true;
+      }
+      return cleanup;
+    };
     const lifecycle = await executeCi1ChildWithFinalization(async () => {
+      const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({ child, launchToken, readyPath: groupReadyPath });
+      ownedGroupId = ownership.groupId;
+      assert.equal(ownership.stage, 'ready', `${phase}/${role} group verification, registration, or gate release failed`);
+      captureParentPhase(phase, role, `${role}_spawned`);
       if (role === 'shutdown') {
         await waitForPath(marker, child);
         const barrier = JSON.parse(readFileSync(marker, 'utf8'));
@@ -2239,7 +2572,10 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         const shutdownClose = await waitCi1ChildClose({
           timeoutMs: 3_000, escalationStage: 'shutdown_escalation_sent',
           waitForClose: timeoutMs => waitForCloseBounded(closed, timeoutMs),
-          reapOwnedChild: () => killOwnedChildAndReap(child, closed),
+          reapOwnedChild: async () => {
+            const cleanup = await cleanupOwnedGroup();
+            return cleanup.groupEmpty ? cleanup.closeResult : null;
+          },
           captureParent: stage => captureParentPhase(phase, role, stage), state: METRICS
         });
         closeResult = shutdownClose.closeResult;
@@ -2253,7 +2589,10 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         const restartClose = await waitCi1ChildClose({
           timeoutMs: 8_000, escalationStage: 'restart_escalation_sent',
           waitForClose: timeoutMs => waitForCloseBounded(closed, timeoutMs),
-          reapOwnedChild: () => killOwnedChildAndReap(child, closed),
+          reapOwnedChild: async () => {
+            const cleanup = await cleanupOwnedGroup();
+            return cleanup.groupEmpty ? cleanup.closeResult : null;
+          },
           captureParent: stage => captureParentPhase(phase, role, stage), state: METRICS
         });
         closeResult = restartClose.closeResult;
@@ -2266,7 +2605,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       return { durationMs };
     }, async () => finalizeCi1ChildCapture({
         phase, role, closeResult,
-        closeOwnedChild: () => killOwnedChildAndReap(child, closed),
+        cleanupOwnedChild: cleanupOwnedGroup,
         readCapture: () => readCi1ChildPhaseCapture(phaseCapturePath, phase, role, closeResult?.code === 0),
         captureParent: stage => captureParentPhase(phase, role, stage),
         state: METRICS
@@ -2275,6 +2614,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     closeResult = finalization.closeResult;
     try {
       assert.equal(finalization.reaped, true, `The owned ${phase}/${role} child close could not be confirmed.`);
+      assert.equal(finalization.ownedGroupEmpty, true, `The dedicated ${phase}/${role} process group could not be confirmed empty.`);
       assert.equal(closeResult.code, 0, `${phase}/${role}: child stderr=${childStderr.slice(0, 2048)}`);
       childResult = JSON.parse(readFileSync(resultPath, 'utf8'));
       assert.equal(childResult.phaseCaptureComplete, true, `${phase}/${role} fixture reported incomplete phase capture`);
@@ -2334,6 +2674,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
   assert.equal(METRICS.ci1PhaseCaptureOverflow, false);
   assert.equal(METRICS.ci1PhaseCaptureIncomplete, false);
   assert.equal(METRICS.ci1PhaseCaptureChildCloseUnconfirmed, false);
+  assert.equal(METRICS.ci1PhaseCaptureOwnedGroupCloseUnconfirmed, false);
   assert.ok(METRICS.ci1PhaseCaptures.length > 0 && METRICS.ci1PhaseCaptureBytes <= 24_576);
   const retainedStopResults = METRICS.ci1PhaseCaptures.filter(record => record.source === 'child'
     && ['stop_settled', 'restart_stop_settled'].includes(record.stage));
@@ -2368,18 +2709,32 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     mkdirSync(markerDirectory);
     const resultPath = join(failureDir.directory, 'failure-result.json');
     const metricsPath = join(failureDir.directory, 'failure-metrics.json');
+    const groupReadyPath = `${metricsPath}.group-ready.json`;
+    const launchToken = randomUUID();
+    assert.equal(beginCi1OwnedGroupLaunch(launchToken), true, 'the failure fixture launch intent is recorded before spawn');
     const child = spawn(process.execPath, [
       join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
       join(failureDir.directory, 'failure.sqlite'), 'failure-after-runner-pause',
       markerDirectory, resultPath, metricsPath
-    ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+    ], {
+      cwd: ROOT,
+      env: {
+        ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath,
+        OPS_CI1_GROUP_READY_FILE: groupReadyPath
+      },
+      stdio: ['ignore', 'ignore', 'pipe'], detached: true
+    });
     let stderr = '';
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', chunk => { stderr += chunk; });
     const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
     let runnerPid = null;
+    let ownedGroupId = null;
     let ownedGroupEmpty = false;
     try {
+      const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({ child, launchToken, readyPath: groupReadyPath });
+      ownedGroupId = ownership.groupId;
+      assert.equal(ownership.stage, 'ready', 'the failure fixture process group was verified and registered before release');
       const runnerMarker = `${metricsPath}.runner`;
       await waitForPath(runnerMarker, child, 5_000);
       runnerPid = Number(JSON.parse(readFileSync(runnerMarker, 'utf8')).runnerPid);
@@ -2404,10 +2759,12 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       raw.close();
       ownedGroupEmpty = await waitForOwnedProcessGroupEmpty(child.pid);
       assert.equal(ownedGroupEmpty, true, 'the fixture group is empty before outer cleanup');
+      if (ownedGroupEmpty) assert.equal(updateCi1OwnedGroupRegistry(child.pid, false, launchToken), true);
     } finally {
       if (!ownedGroupEmpty) {
-        ownedGroupEmpty = await cleanupOwnedProcessGroup(child, closed);
-        assert.equal(ownedGroupEmpty, true, 'the dedicated fixture process group is reaped');
+        const cleanup = await cleanupVerifiedCi1ProcessGroup(child, closed, ownedGroupId);
+        ownedGroupEmpty = cleanup.groupEmpty;
+        if (ownedGroupEmpty) updateCi1OwnedGroupRegistry(child.pid, false, launchToken);
       }
     }
 
@@ -2419,17 +2776,31 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
       const markerPath = join(markerDir.directory, 'marker-control.json');
       const resultPath = join(markerDir.directory, 'marker-result.json');
       const metricsPath = join(markerDir.directory, 'marker-metrics.json');
+      const groupReadyPath = `${metricsPath}.group-ready.json`;
+      const launchToken = randomUUID();
+      assert.equal(beginCi1OwnedGroupLaunch(launchToken), true, 'the marker-control launch intent is recorded before spawn');
       const child = spawn(process.execPath, [
         join(ROOT, 'tests/operations/fixtures/jev-sigterm-child.mjs'),
         databasePath, mode, markerPath, resultPath, metricsPath
-      ], { cwd: ROOT, env: { ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath }, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+      ], {
+        cwd: ROOT,
+        env: {
+          ...baseEnvironment(), JEV_OFFLINE_METRICS_FILE: metricsPath,
+          OPS_CI1_GROUP_READY_FILE: groupReadyPath
+        },
+        stdio: ['ignore', 'ignore', 'pipe'], detached: true
+      });
       let stderr = '';
       child.stderr.setEncoding('utf8');
       child.stderr.on('data', chunk => { stderr += chunk; });
       const closed = new Promise(resolvePromise => child.once('close', (code, signal) => resolvePromise({ code, signal })));
       let runnerPid = null;
+      let ownedGroupId = null;
       let ownedGroupEmpty = false;
       try {
+        const ownership = await verifyRegisterCi1OwnedGroupBeforeReady({ child, launchToken, readyPath: groupReadyPath });
+        ownedGroupId = ownership.groupId;
+        assert.equal(ownership.stage, 'ready', 'the marker-control group was verified and registered before release');
         await waitForPath(markerPath, child, 5_000);
         assert.deepEqual(JSON.parse(readFileSync(markerPath, 'utf8')), {
           phase: mode, stage: 'runner-marker-ready'
@@ -2452,6 +2823,7 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         assert.equal(await waitForPidExit(runnerPid), true, 'fixture finally reaps the exact durable runner PID');
         ownedGroupEmpty = await waitForOwnedProcessGroupEmpty(child.pid);
         assert.equal(ownedGroupEmpty, true, 'no owned descendants remain before outer cleanup');
+        if (ownedGroupEmpty) assert.equal(updateCi1OwnedGroupRegistry(child.pid, false, launchToken), true);
 
         const reopened = new DatabaseSync(databasePath, { readOnly: true });
         const job = reopened.prepare(
@@ -2470,8 +2842,9 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
         assert.equal(existsSync(metricsPath), false);
       } finally {
         if (!ownedGroupEmpty) {
-          ownedGroupEmpty = await cleanupOwnedProcessGroup(child, closed);
-          assert.equal(ownedGroupEmpty, true, 'the dedicated marker-failure process group is reaped');
+          const cleanup = await cleanupVerifiedCi1ProcessGroup(child, closed, ownedGroupId);
+          ownedGroupEmpty = cleanup.groupEmpty;
+          if (ownedGroupEmpty) updateCi1OwnedGroupRegistry(child.pid, false, launchToken);
         }
       }
     }
@@ -2479,8 +2852,152 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     const freshCaptureState = () => ({
       ci1PhaseCaptures: [], ci1PhaseCaptureBytes: 0,
       ci1PhaseCaptureOverflow: false, ci1PhaseCaptureIncomplete: false,
-      ci1PhaseCaptureChildCloseUnconfirmed: false
+      ci1PhaseCaptureChildCloseUnconfirmed: false,
+      ci1PhaseCaptureOwnedGroupCloseUnconfirmed: false
     });
+    const simulatedToken = randomUUID();
+    const simulatedRegistryPath = join(failureDir.directory, 'registry-protocol-control.json');
+    const savedRegistryPath = process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+    process.env.OPS_CI1_OWNED_GROUP_REGISTRY = simulatedRegistryPath;
+    try {
+    writeFileSync(simulatedRegistryPath, JSON.stringify({
+      schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: []
+    }), { mode: 0o600 });
+    assert.equal(beginCi1OwnedGroupLaunch(simulatedToken), true,
+      'the launch token is durable before the child spawn boundary');
+    const simulatedPending = readCi1OwnedGroupRegistry(simulatedRegistryPath).pendingLaunches;
+    assert.deepEqual(readCi1OwnedGroupRegistry(simulatedRegistryPath), {
+      schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: [simulatedToken]
+    }, 'begin preserves the validated registry schema while recording a launch token');
+    const simulatedOrder = [];
+    let simulatedDescendantCreated = false;
+    const simulatedChild = { pid: 812_345 };
+    const simulatedPreRegistrationDeath = {
+      groups: [], pendingLaunches: simulatedPending
+    };
+    assert.deepEqual(simulatedPreRegistrationDeath, {
+      groups: [], pendingLaunches: [simulatedToken]
+    }, 'a controller death between spawn and group registration leaves only an unresolved launch token');
+    assert.equal(simulatedDescendantCreated, false,
+      'the finite child readiness gate has not released descendant creation');
+
+    const unverifiedOwnership = await verifyRegisterCi1OwnedGroupBeforeReady({
+      child: simulatedChild,
+      launchToken: simulatedToken,
+      readyPath: 'inert-ready-path',
+      verifyGroup: async () => { simulatedOrder.push('verify-leader-exit'); return null; },
+      registerGroup: () => { simulatedOrder.push('register'); return true; },
+      releaseReady: () => { simulatedDescendantCreated = true; }
+    });
+    assert.deepEqual(unverifiedOwnership, {
+      groupId: null, registered: false, readyReleased: false, stage: 'group_unverified'
+    }, 'an exited or unverified leader never releases the child gate');
+    assert.deepEqual(simulatedOrder, ['verify-leader-exit']);
+    assert.deepEqual(simulatedPending, [simulatedToken], 'unverified ownership keeps the pending token');
+    assert.equal(simulatedDescendantCreated, false);
+
+    const registrationOrder = [];
+    const failedRegistration = await verifyRegisterCi1OwnedGroupBeforeReady({
+      child: simulatedChild,
+      launchToken: simulatedToken,
+      readyPath: 'inert-ready-path',
+      verifyGroup: async child => { registrationOrder.push('verify'); return child.pid; },
+      registerGroup: (groupId, register, token) => {
+        registrationOrder.push(`register:${groupId}:${register}:${token === simulatedToken}`);
+        return false;
+      },
+      releaseReady: () => { simulatedDescendantCreated = true; }
+    });
+    assert.deepEqual(failedRegistration, {
+      groupId: simulatedChild.pid, registered: false, readyReleased: false, stage: 'registration_failed'
+    }, 'registry failure retains the pending token and blocks the ready gate');
+    assert.deepEqual(registrationOrder, ['verify', `register:${simulatedChild.pid}:true:true`]);
+    assert.deepEqual(simulatedPending, [simulatedToken]);
+    assert.equal(simulatedDescendantCreated, false);
+
+    writeFileSync(simulatedRegistryPath, '{truncated', { mode: 0o600 });
+    assert.equal(beginCi1OwnedGroupLaunch(randomUUID()), false,
+      'a malformed ownership registry blocks new launches without being overwritten');
+    const unreadableRegistryOwnership = await verifyRegisterCi1OwnedGroupBeforeReady({
+      child: simulatedChild,
+      launchToken: simulatedToken,
+      readyPath: 'inert-ready-path',
+      verifyGroup: async child => child.pid,
+      registerGroup: updateCi1OwnedGroupRegistry,
+      releaseReady: () => { simulatedDescendantCreated = true; }
+    });
+    assert.deepEqual(unreadableRegistryOwnership, {
+      groupId: simulatedChild.pid, registered: false, readyReleased: false, stage: 'registration_failed'
+    }, 'an unreadable ownership registry does not discard the unknown token or release the child');
+    assert.equal(readCi1OwnedGroupRegistry(simulatedRegistryPath), null);
+    assert.equal(simulatedDescendantCreated, false);
+    writeFileSync(simulatedRegistryPath, JSON.stringify({
+      schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: [simulatedToken]
+    }), { mode: 0o600 });
+
+    const readyReleaseToken = randomUUID();
+    assert.equal(beginCi1OwnedGroupLaunch(readyReleaseToken), true);
+    const readyReleaseFailure = await verifyRegisterCi1OwnedGroupBeforeReady({
+      child: simulatedChild,
+      launchToken: readyReleaseToken,
+      readyPath: 'inert-ready-path',
+      verifyGroup: async child => child.pid,
+      registerGroup: (groupId, register, token) => updateCi1OwnedGroupRegistry(groupId, register, token),
+      releaseReady: () => { throw new Error('fixture-ready-write-failed'); }
+    });
+    assert.deepEqual(readyReleaseFailure, {
+      groupId: simulatedChild.pid, registered: true, readyReleased: false, stage: 'ready_release_failed'
+    }, 'a ready-file write failure retains the registered group for bounded cleanup');
+    assert.deepEqual(readCi1OwnedGroupRegistry(simulatedRegistryPath), {
+      schema: 'ops-ci1-owned-groups.v1',
+      groups: [simulatedChild.pid], pendingLaunches: [simulatedToken]
+    }, 'registering one token preserves an unrelated unresolved launch');
+    assert.equal(updateCi1OwnedGroupRegistry(simulatedChild.pid, false, readyReleaseToken), true,
+      'the ready-release failure record is removed only after its simulated group absence proof');
+    assert.deepEqual(readCi1OwnedGroupRegistry(simulatedRegistryPath), {
+      schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: [simulatedToken]
+    }, 'removing the failed group preserves the unrelated unresolved launch and schema');
+
+    const successfulOrder = [];
+    const verifiedOwnership = await verifyRegisterCi1OwnedGroupBeforeReady({
+      child: simulatedChild,
+      launchToken: simulatedToken,
+      readyPath: 'inert-ready-path',
+      verifyGroup: async child => { successfulOrder.push('verify'); return child.pid; },
+      registerGroup: (groupId, register, token) => {
+        successfulOrder.push(`register:${groupId}:${register}:${token === simulatedToken}`);
+        return updateCi1OwnedGroupRegistry(groupId, register, token);
+      },
+      releaseReady: (path, value) => {
+        successfulOrder.push(`ready:${path}`);
+        assert.deepEqual(value, {
+          schema: 'ops-ci1-group-ready.v1', pid: simulatedChild.pid,
+          groupId: simulatedChild.pid, registryConfirmed: true
+        });
+        simulatedDescendantCreated = true;
+      }
+    });
+    assert.deepEqual(verifiedOwnership, {
+      groupId: simulatedChild.pid, registered: true, readyReleased: true, stage: 'ready'
+    });
+    assert.deepEqual(successfulOrder, [
+      'verify', `register:${simulatedChild.pid}:true:true`, 'ready:inert-ready-path'
+    ], 'registration is complete before the readiness gate is released');
+    assert.equal(simulatedDescendantCreated, true);
+    assert.deepEqual(readCi1OwnedGroupRegistry(simulatedRegistryPath), {
+      schema: 'ops-ci1-owned-groups.v1',
+      groups: [simulatedChild.pid], pendingLaunches: []
+    }, 'the durable pending token is replaced by the verified group before readiness release');
+    assert.equal(updateCi1OwnedGroupRegistry(simulatedChild.pid, false, simulatedToken), true,
+      'the verified group record clears only after the test has established absence');
+    assert.deepEqual(readCi1OwnedGroupRegistry(simulatedRegistryPath), {
+      schema: 'ops-ci1-owned-groups.v1', groups: [], pendingLaunches: []
+    });
+    } finally {
+      if (savedRegistryPath === undefined) delete process.env.OPS_CI1_OWNED_GROUP_REGISTRY;
+      else process.env.OPS_CI1_OWNED_GROUP_REGISTRY = savedRegistryPath;
+    }
+
     const shutdownStages = [
       'fixture_started', 'store_opened', 'worker_started', 'runner_claimed', 'workflow_opened', 'marker_written',
       'signal_seen', 'stop_requested', 'stop_settled', 'loop_settled', 'shutdown_verified',
@@ -2759,6 +3276,211 @@ test('OPS04_REAL_SIGTERM_JEV_TELEMETRY preserves each controlled transport bound
     assert.equal(unconfirmedState.ci1PhaseCaptureChildCloseUnconfirmed, true);
     assert.equal(unconfirmedState.ci1PhaseCaptureIncomplete, true,
       'unconfirmed close is explicit rather than a zero-survivor claim');
+
+    const inertGroupDir = tempDirectory('ah11-jev-owned-group-finalizer-');
+    t.after(() => inertGroupDir.cleanup());
+    const watchdogControlPath = join(inertGroupDir.directory, 'watchdog-control.json');
+    writeFileSync(watchdogControlPath, JSON.stringify({ state: 'armed' }), { mode: 0o600 });
+    const watchdogStartedAt = performance.now();
+    const watchdogLaunchToken = randomUUID();
+    assert.equal(beginCi1OwnedGroupLaunch(watchdogLaunchToken), true,
+      'the local watchdog launch intent is registered before spawn');
+    const watchdog = startPrelaunchedOwnedGroupWatchdog(watchdogControlPath, 15_000);
+    await watchdog.spawned;
+    const watchdogSpawnedAt = performance.now();
+    await waitForPath(watchdog.readyPath, watchdog.child, 2_000);
+    const watchdogReady = JSON.parse(readFileSync(watchdog.readyPath, 'utf8'));
+    assert.deepEqual(watchdogReady, {
+      schema: 'ops-owned-group-watchdog-ready.v1',
+      pid: watchdog.child.pid,
+      groupId: watchdog.child.pid
+    }, 'the independent local watchdog publishes an exact ready acknowledgement');
+    const watchdogGroupId = await verifyOwnedProcessGroup(watchdog.child);
+    assert.equal(watchdogGroupId, watchdog.child.pid,
+      'the independent watchdog is itself in a separate owned group');
+    assert.equal(updateCi1OwnedGroupRegistry(watchdogGroupId, true, watchdogLaunchToken), true,
+      'the ready local watchdog group is registered before inert descendants can be created');
+
+    const inertMarkerPath = join(inertGroupDir.directory, 'paused-descendant.json');
+    const inertReadyPath = join(inertGroupDir.directory, 'inert-group-ready.json');
+    const descendantSource = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000);";
+    const inertParentSource = `
+import { spawn } from 'node:child_process';
+import { existsSync, writeFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
+const markerPath = process.argv[1];
+const readyPath = process.argv[2];
+const readyDeadline = performance.now() + 2000;
+while (!existsSync(readyPath) && performance.now() < readyDeadline) await new Promise(resolvePromise => setTimeout(resolvePromise, 5));
+if (!existsSync(readyPath)) process.exit(24);
+const descendant = spawn(process.execPath, ['--input-type=module', '--eval', ${JSON.stringify(descendantSource)}], { stdio: 'ignore' });
+descendant.once('spawn', () => {
+  process.kill(descendant.pid, 'SIGSTOP');
+  writeFileSync(markerPath, JSON.stringify({ parentPid: process.pid, descendantPid: descendant.pid, groupId: process.pid }), { mode: 0o600 });
+  process.exit(23);
+});
+`;
+    const inertChildLaunchAt = performance.now();
+    const inertLaunchToken = randomUUID();
+    assert.equal(beginCi1OwnedGroupLaunch(inertLaunchToken), true,
+      'the inert parent launch intent is registered before spawn');
+    const inertParent = spawn(process.execPath, ['--input-type=module', '--eval', inertParentSource, inertMarkerPath, inertReadyPath], {
+      cwd: ROOT, env: baseEnvironment(), stdio: 'ignore', detached: true
+    });
+    const inertClosed = new Promise(resolvePromise => inertParent.once('close', (code, signal) => resolvePromise({ code, signal })));
+    let inertGroupId = null;
+    let inertGroupEmpty = false;
+    let watchdogGroupEmpty = false;
+    let watchdogExit = null;
+    let watchdogCompletionWaitExpired = false;
+    let watchdogResultValid = false;
+    const inertState = freshCaptureState();
+    let inertFinalization;
+    try {
+      const inertOwnership = await verifyRegisterCi1OwnedGroupBeforeReady({
+        child: inertParent, launchToken: inertLaunchToken, readyPath: inertReadyPath,
+        releaseReady: async (readyPath, ready) => {
+          writeFileSync(watchdogControlPath, JSON.stringify({ state: 'watch', groupId: ready.groupId }), { mode: 0o600 });
+          await waitForPath(watchdog.watchAckPath, watchdog.child, 2_000);
+          assert.deepEqual(JSON.parse(readFileSync(watchdog.watchAckPath, 'utf8')), {
+            schema: 'ops-owned-group-watchdog-target-ack.v1',
+            pid: watchdog.child.pid, groupId: ready.groupId, verified: true
+          }, 'the external watchdog confirms the exact registered target before the fixture gate opens');
+          writeFileSync(readyPath, JSON.stringify(ready), { flag: 'wx', mode: 0o600 });
+        }
+      });
+      inertGroupId = inertOwnership.groupId;
+      assert.equal(inertOwnership.stage, 'ready', 'the inert group is registered before releasing its descendant gate');
+      assert.deepEqual(JSON.parse(readFileSync(watchdog.watchAckPath, 'utf8')), {
+        schema: 'ops-owned-group-watchdog-target-ack.v1',
+        pid: watchdog.child.pid, groupId: inertGroupId, verified: true
+      });
+      await waitForPath(inertMarkerPath, inertParent, 2_000);
+      const inertMarker = JSON.parse(readFileSync(inertMarkerPath, 'utf8'));
+      assert.equal(inertMarker.parentPid, inertParent.pid);
+      assert.equal(inertMarker.groupId, inertGroupId);
+      assert.equal(processGroupId(inertMarker.descendantPid), inertGroupId,
+        'the stopped descendant belongs to the exact parent group');
+      const inertExit = await waitForCloseBounded(inertClosed, 2_000);
+      assert.deepEqual(inertExit, { code: 23, signal: null }, 'the injected early parent failure is preserved');
+      assert.ok(ownedProcessGroupMembers(inertGroupId).includes(inertMarker.descendantPid),
+        'the inert stopped descendant remains after its parent exits');
+      assert.ok(watchdogStartedAt < watchdogSpawnedAt && watchdogSpawnedAt < inertChildLaunchAt,
+        'the external cleanup watchdog was running before the owned child launched');
+
+      const inertPrimaryFailure = new Error('injected inert parent marker failure');
+      const inertOrder = [];
+      const inertParentCapture = stage => {
+        inertOrder.push(stage);
+        return stage !== 'cleanup_escalation_sent';
+      };
+      let inertCaptureReads = 0;
+      let observedInertFailure;
+      try {
+        await executeCi1ChildWithFinalization(
+          async () => { inertOrder.push('parent-failure'); throw inertPrimaryFailure; },
+          async () => {
+            inertFinalization = await finalizeCi1ChildCapture({
+              phase: 'after-write', role: 'shutdown', closeResult: inertExit,
+              cleanupOwnedChild: async () => {
+                inertOrder.push('owned-group-cleanup');
+                const result = await cleanupVerifiedCi1ProcessGroup(
+                  inertParent, inertClosed, inertGroupId,
+                  inertParentCapture, inertState
+                );
+                inertGroupEmpty = result.groupEmpty;
+                if (result.groupEmpty && !updateCi1OwnedGroupRegistry(inertParent.pid, false, inertLaunchToken)) {
+                  inertState.ci1PhaseCaptureIncomplete = true;
+                }
+                return result;
+              },
+              readCapture: () => {
+                inertCaptureReads += 1;
+                inertOrder.push('capture');
+                assert.deepEqual(ownedProcessGroupMembers(inertGroupId), [],
+                  'capture follows bounded whole-group cleanup and absence proof');
+                return { complete: false, failureCode: 'injected_parent_failure' };
+              },
+              captureParent: inertParentCapture,
+              state: inertState
+            });
+            return inertFinalization;
+          },
+          inertState
+        );
+      } catch (error) { observedInertFailure = error; }
+      assert.equal(observedInertFailure, inertPrimaryFailure,
+        'whole-group cleanup and capture cannot replace the original parent failure');
+      assert.equal(inertFinalization.reaped, true);
+      assert.equal(inertFinalization.ownedGroupEmpty, true);
+      assert.equal(inertCaptureReads, 1, 'the bounded capture reader runs once after cleanup');
+      assert.ok(inertOrder.indexOf('owned-group-cleanup') < inertOrder.indexOf('capture'));
+      assert.equal(inertState.ci1PhaseCaptureOwnedGroupCloseUnconfirmed, false);
+      assert.equal(inertState.ci1PhaseCaptureIncomplete, true,
+        'the injected aggregate failure remains explicit even though whole-group cleanup and capture complete');
+      assert.deepEqual(ownedProcessGroupMembers(inertGroupId), [], 'the exact owned process group is absent');
+    } finally {
+      try {
+        if (!inertGroupEmpty && inertGroupId === inertParent.pid) {
+          inertGroupEmpty = await cleanupOwnedProcessGroup(inertParent, inertClosed);
+        }
+      } catch { inertState.ci1PhaseCaptureIncomplete = true; }
+      if (inertGroupEmpty && inertGroupId === inertParent.pid) {
+        try {
+          if (!updateCi1OwnedGroupRegistry(inertParent.pid, false, inertLaunchToken)) {
+            inertState.ci1PhaseCaptureIncomplete = true;
+          }
+        } catch { inertState.ci1PhaseCaptureIncomplete = true; }
+      }
+      let controlState = inertGroupEmpty ? 'done' : 'cleanup';
+      try {
+        writeFileSync(watchdogControlPath, JSON.stringify({
+          state: controlState,
+          ...(inertGroupId === inertParent.pid ? { groupId: inertGroupId } : {})
+        }), { mode: 0o600 });
+      } catch {
+        inertState.ci1PhaseCaptureIncomplete = true;
+        controlState = 'write_failed';
+      }
+      const watchdogFinalization = await finishCi1OwnedGroupWatchdog(watchdog, watchdogGroupId);
+      watchdogExit = watchdogFinalization.closeResult;
+      watchdogGroupEmpty = watchdogFinalization.groupEmpty;
+      watchdogCompletionWaitExpired = watchdogFinalization.completionWaitExpired;
+      if (watchdogCompletionWaitExpired) inertState.ci1PhaseCaptureIncomplete = true;
+      if (watchdogExit?.code !== 0 || !watchdogExit || !watchdogGroupEmpty) {
+        inertState.ci1PhaseCaptureIncomplete = true;
+      }
+      if (watchdogGroupEmpty && watchdogGroupId === watchdog.child.pid) {
+        try {
+          if (!updateCi1OwnedGroupRegistry(watchdogGroupId, false, watchdogLaunchToken)) {
+            inertState.ci1PhaseCaptureIncomplete = true;
+          }
+        } catch { inertState.ci1PhaseCaptureIncomplete = true; }
+      }
+      if (!inertGroupEmpty && inertGroupId === inertParent.pid && controlState !== 'write_failed') {
+        try { inertGroupEmpty = await waitForOwnedProcessGroupEmpty(inertGroupId, 1_000); }
+        catch { inertGroupEmpty = false; }
+      }
+      try {
+        if (existsSync(watchdog.resultPath)) {
+          const result = JSON.parse(readFileSync(watchdog.resultPath, 'utf8'));
+          watchdogResultValid = !watchdogCompletionWaitExpired
+            && result.schema === 'ops-owned-group-watchdog-result.v1'
+            && result.pid === watchdog.child.pid
+            && result.groupId === watchdog.child.pid
+            && result.timedOut === false
+            && result.targetAckSent === true
+            && result.cleanupRequested === (controlState === 'cleanup')
+            && result.targetGroupId === (inertGroupId === inertParent.pid ? inertGroupId : null)
+            && (result.targetGroupEmpty === null || result.targetGroupEmpty === true);
+        }
+      } catch { watchdogResultValid = false; }
+      if (!watchdogResultValid) inertState.ci1PhaseCaptureIncomplete = true;
+    }
+    assert.equal(inertGroupEmpty, true, 'finite cleanup or the prelaunched watchdog proves group absence');
+    assert.equal(watchdogExit?.code, 0, 'the local watchdog exits successfully after finite cleanup');
+    assert.equal(watchdogGroupEmpty, true, 'the local watchdog group is confirmed absent');
+    assert.equal(watchdogResultValid, true, 'the local watchdog result records exact target and cleanup state');
   });
   const reopened = openStore(temporary.databasePath);
   for (const result of results.filter(item => item.attemptCount > 0)) {
@@ -5585,10 +6307,11 @@ test('OPS13_EVIDENCE_GATES binds all required groups to the current source and r
       'ownedRunnerCountHighWater', 'supervisorOpenFileDescriptors', 'runnerOpenFileDescriptors',
       'processSigintSignalsSent', 'maxSupervisorRssBytes', 'maxRunnerRssBytes',
       'ci1PhaseCaptures', 'ci1PhaseCaptureBytes', 'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete',
-      'ci1PhaseCaptureChildCloseUnconfirmed'
+      'ci1PhaseCaptureChildCloseUnconfirmed', 'ci1PhaseCaptureOwnedGroupCloseUnconfirmed'
   ].sort());
   for (const key of [
-    'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete', 'ci1PhaseCaptureChildCloseUnconfirmed'
+    'ci1PhaseCaptureOverflow', 'ci1PhaseCaptureIncomplete', 'ci1PhaseCaptureChildCloseUnconfirmed',
+    'ci1PhaseCaptureOwnedGroupCloseUnconfirmed'
   ]) {
     assert.equal(typeof METRICS[key], 'boolean', `${key} must remain an explicit boolean custody metric`);
   }

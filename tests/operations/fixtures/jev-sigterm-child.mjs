@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import https from 'node:https';
 import { Resolver } from 'node:dns/promises';
 import { EventEmitter } from 'node:events';
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
@@ -80,6 +80,28 @@ function capturePhase(stage, details) {
     phaseCaptureComplete = false;
     return false;
   }
+}
+
+const groupReadyPath = process.env.OPS_CI1_GROUP_READY_FILE;
+if (typeof groupReadyPath === 'string' && groupReadyPath.length > 0) {
+  const groupRegistrationDeadline = performance.now() + 2_000;
+  let registeredGroupReady = false;
+  while (performance.now() < groupRegistrationDeadline) {
+    try {
+      if (existsSync(groupReadyPath)) {
+        const registration = JSON.parse(readFileSync(groupReadyPath, 'utf8'));
+        if (registration?.schema === 'ops-ci1-group-ready.v1'
+            && registration.pid === process.pid
+            && registration.groupId === process.pid
+            && registration.registryConfirmed === true) {
+          registeredGroupReady = true;
+          break;
+        }
+      }
+    } catch {}
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 5));
+  }
+  if (!registeredGroupReady) throw new Error('The fixture group was not registered before fixture startup.');
 }
 capturePhase('fixture_started');
 
