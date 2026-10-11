@@ -330,23 +330,51 @@ export function createOpenRouterImagesAdapter({ credentialPort, fetchImpl, dispa
     // dispatch cannot reach the host port without a credential that was resolved for this grant and deadline.
     const preparedState = new WeakMap();
     adapter.prepare = async (input) => {
-      validateOpenRouterImageTarget(input.cell_id, input.target);
-      if (typeof input.grant_ref !== 'string' || !SAFE_REF.test(input.grant_ref)
-        || typeof input.deadline_at !== 'string' || !Number.isFinite(Date.parse(input.deadline_at))
-        || Date.parse(input.deadline_at) <= readClock(now)) {
+      // Binding fields are snapshotted once, before any await. The host receives these values (scope as a frozen copy)
+      // and nothing after the first await reads them from `input`, so neither the caller nor the host port can move
+      // the binding to another project by mutating a live object. The target keeps identity semantics for dispatch,
+      // so its content is pinned by a canonical digest instead and re-checked after each await.
+      const { cell_id, target, grant_ref, deadline_at } = input;
+      validateOpenRouterImageTarget(cell_id, target);
+      if (typeof grant_ref !== 'string' || !SAFE_REF.test(grant_ref)
+        || typeof deadline_at !== 'string' || !Number.isFinite(Date.parse(deadline_at))
+        || Date.parse(deadline_at) <= readClock(now)) {
         throw error('credential_unavailable', 'A billable credential needs the authorized grant reference and an unexpired operation deadline.');
       }
-      const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope: input.scope,
-        target: input.target, grantRef: input.grant_ref, deadlineAt: input.deadline_at, now });
+      const liveScope = input.scope;
+      if (!isRecord(liveScope) || typeof liveScope.account_ref !== 'string' || typeof liveScope.project_ref !== 'string') {
+        throw error('credential_unavailable', 'A billable credential needs a provider account and project scope.');
+      }
+      const scope = Object.freeze({ account_ref: liveScope.account_ref, project_ref: liveScope.project_ref });
+      // The host keeps seeing any other scope fields (tenant, budget) as before, but as a frozen copy.
+      const hostScope = Object.freeze({ ...liveScope, account_ref: scope.account_ref, project_ref: scope.project_ref });
+      let targetDigest;
+      try { targetDigest = canonicalHash(target); } catch {
+        throw error('unsupported_image_configuration', 'The OpenRouter image target cannot be canonically hashed.');
+      }
+      const assertTargetUnchanged = () => {
+        let current;
+        try {
+          validateOpenRouterImageTarget(cell_id, target);
+          current = canonicalHash(target);
+        } catch { current = undefined; }
+        if (current !== targetDigest) {
+          throw error('unsupported_image_configuration', 'The OpenRouter image target changed after it was validated.');
+        }
+      };
+      const token = await resolveCredential(credentialPort, { purpose: 'authorized_billable_operation', scope,
+        target, grantRef: grant_ref, deadlineAt: deadline_at, now });
       const credential = Object.freeze({ token });
+      assertTargetUnchanged();
       // The credential await may outlast the deadline (or the clock may fault), so re-check before the host prepare.
-      if (Date.parse(input.deadline_at) <= readClock(now)) {
+      if (Date.parse(deadline_at) <= readClock(now)) {
         throw error('preflight_deadline_passed', 'The approved operation deadline passed while the credential was resolved.');
       }
-      const hostPrepared = dispatchPort.prepare ? await dispatchPort.prepare({ ...input, credential }) : undefined;
+      const hostPrepared = dispatchPort.prepare
+        ? await dispatchPort.prepare({ ...input, cell_id, target, grant_ref, deadline_at, scope: hostScope, credential }) : undefined;
+      assertTargetUnchanged();
       const prepared = Object.freeze({ prepared: true });
-      preparedState.set(prepared, { cell_id: input.cell_id, target: input.target, grant_ref: input.grant_ref,
-        scope: Object.freeze({ account_ref: input.scope.account_ref, project_ref: input.scope.project_ref }), deadline_at: input.deadline_at, credential, hostPrepared });
+      preparedState.set(prepared, { cell_id, target, grant_ref, scope, deadline_at, credential, hostPrepared });
       return prepared;
     };
     adapter.dispatch = async (input) => {

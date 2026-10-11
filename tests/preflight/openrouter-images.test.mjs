@@ -513,3 +513,79 @@ test('prepare stores a copy of the scope, so later mutation of the caller object
   await adapter.dispatch({ ...input, scope: original, prepared });
   assert.equal(dispatches, 1);
 });
+
+test('a host prepare that mutates the scope it received cannot move the binding, and the host scope is frozen', async () => {
+  let dispatches = 0;
+  let hostScope;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare(args) {
+      hostScope = args.scope;
+      assert.ok(Object.isFrozen(args.scope), 'the host gets a frozen snapshot, not the caller object');
+      assert.notEqual(args.scope, input.scope);
+      assert.throws(() => { 'use strict'; args.scope.project_ref = 'project:host'; }, TypeError);
+      // The caller's live object is the only mutable path left; mutating it during the host await must not matter.
+      input.scope.account_ref = 'account:host';
+      input.scope.project_ref = 'project:host';
+      return {};
+    },
+    async dispatch() { dispatches += 1; return {}; } } });
+  const input = billable('image_generation', { scope: { ...fixtureScope } });
+  const original = { ...fixtureScope };
+  const prepared = await adapter.prepare(input);
+  assert.deepEqual({ ...hostScope }, original, 'the host saw the original refs, not the mutated ones');
+  await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 0, 'the mutated scope no longer matches the bound scope');
+  await adapter.dispatch({ ...input, scope: original, prepared });
+  assert.equal(dispatches, 1);
+});
+
+test('a host prepare that mutates the validated target fails closed, and replacing its own target property changes nothing', async () => {
+  let dispatches = 0;
+  const mutations = [
+    ['model field', (t) => { t.model = 'other-author/other-model'; }],
+    ['configuration field', (t) => { t.configuration.provider_tag = 'other-tag'; }],
+    ['target made invalid', (t) => { t.endpoint = 'https://example.invalid/'; }]];
+  for (const [name, mutate] of mutations) {
+    const input = billable();
+    const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+      async prepare() { mutate(input.target); return {}; },
+      async dispatch() { dispatches += 1; return {}; } } });
+    await assert.rejects(adapter.prepare(input), (error) => error.code === 'unsupported_image_configuration', name);
+  }
+  assert.equal(dispatches, 0);
+  const input = billable();
+  const bound = input.target;
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare(args) { args.target = { ...args.target, model: 'other-author/other-model' }; args.grant_ref = 'grant:other'; return {}; },
+    async dispatch() { dispatches += 1; return {}; } } });
+  const prepared = await adapter.prepare(input);
+  await adapter.dispatch({ ...input, target: bound, prepared });
+  assert.equal(dispatches, 1, 'a host that rewrites its own copy of the input leaves the binding on the validated target and grant');
+});
+
+test('a caller mutating input.scope while the credential resolver is awaiting does not change the binding', async () => {
+  let dispatches = 0;
+  const inner = grantCredentialPort();
+  const input = billable('image_generation', { scope: { ...fixtureScope } });
+  const original = { ...fixtureScope };
+  const credentialSource = { evidence_mode: 'live', async resolveCredential(args) {
+    const result = inner.resolveCredential(args);
+    input.scope.project_ref = 'project:swapped';
+    return result;
+  } };
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: credentialSource, fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async dispatch() { dispatches += 1; return {}; } } });
+  const prepared = await adapter.prepare(input);
+  await assert.rejects(adapter.dispatch({ ...input, prepared }), (error) => error.code === 'credential_unavailable');
+  assert.equal(dispatches, 0);
+  await adapter.dispatch({ ...input, scope: original, prepared });
+  assert.equal(dispatches, 1);
+});
+
+test('prepare fails closed with credential_unavailable when the scope is not a record of string refs', async () => {
+  const adapter = createOpenRouterImagesAdapter({ now: clock, credentialPort: grantCredentialPort(), fetchImpl: interceptedFetch().fetchImpl, dispatchPort: {
+    async prepare() { throw new Error('host prepare must not run'); }, async dispatch() { return {}; } } });
+  for (const scope of [undefined, null, [], { account_ref: 1, project_ref: 'p' }, { account_ref: 'a' }]) {
+    await assert.rejects(adapter.prepare(billable('image_generation', { scope })), (error) => error.code === 'credential_unavailable');
+  }
+});
